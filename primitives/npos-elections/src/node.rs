@@ -176,9 +176,9 @@ mod tests {
 
 	#[test]
 	fn get_root_works() {
-		//	D <-- A <-- B <-- C
-		//			\
-		//			 <-- E
+		// 	D <-- A <-- B <-- C
+		// 			\
+		// 			 <-- E
 		let a = Node::new(id(1)).into_ref();
 		let b = Node::new(id(2)).into_ref();
 		let c = Node::new(id(3)).into_ref();
@@ -197,9 +197,9 @@ mod tests {
 
 		assert_eq!(Node::root(&c), (d.clone(), vec![c.clone(), b.clone(), a.clone(), d.clone()]),);
 
-		//	D 	    A <-- B <-- C
-		//	F <-- /	\
-		//			 <-- E
+		// 	D 	    A <-- B <-- C
+		// 	F <-- /	\
+		// 			 <-- E
 		Node::set_parent_of(&a, &f);
 
 		assert_eq!(Node::root(&a), (f.clone(), vec![a.clone(), f.clone()]),);

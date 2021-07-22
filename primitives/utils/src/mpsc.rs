@@ -34,7 +34,7 @@ mod inner {
 
 #[cfg(feature = "metered")]
 mod inner {
-	//tracing implementation
+	// tracing implementation
 	use crate::metrics::UNBOUNDED_CHANNELS_COUNTER;
 	use futures::{
 		channel::mpsc::{

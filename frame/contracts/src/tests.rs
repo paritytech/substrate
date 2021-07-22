@@ -878,7 +878,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn(AccountIdOf<Test>) -> bool
 /// * if balance is reached and balance > subsistence threshold
 /// * if allowance is exceeded
 /// * if balance is reached and balance < subsistence threshold
-///	    * this case cannot be triggered by a contract: we check whether a tombstone is left
+/// 	    * this case cannot be triggered by a contract: we check whether a tombstone is left
 fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 	let (wasm, code_hash) = compile_module::<Test>("set_rent").unwrap();
 
@@ -891,7 +891,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			70_000,
 			GAS_LIMIT,
 			wasm.clone(),
-			<Test as pallet_balances::Config>::Balance::from(100_000u32).encode(), // rent allowance
+			<Test as pallet_balances::Config>::Balance::from(100_000u32).encode(), /* rent allowance */
 			vec![],
 		));
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -2448,7 +2448,7 @@ fn not_deployed_if_endowment_too_low_for_first_rent() {
 				30_000,
 				GAS_LIMIT,
 				wasm,
-				(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32)).encode(), // rent allowance
+				(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32)).encode(), /* rent allowance */
 				vec![],
 			),
 			Error::<Test>::NewContractNotFunded,

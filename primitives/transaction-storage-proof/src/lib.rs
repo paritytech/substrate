@@ -193,7 +193,7 @@ pub mod registration {
 		buf.copy_from_slice(&random_hash[0..8]);
 		let random_u64 = u64::from_be_bytes(buf);
 		let target_chunk_index = random_u64 % total_chunks;
-		//Generate tries for each transaction.
+		// Generate tries for each transaction.
 		let mut chunk_index = 0;
 		for transaction in transactions {
 			let mut transaction_root = sp_trie::empty_trie_root::<TrieLayout>();

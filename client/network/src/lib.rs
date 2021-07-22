@@ -243,7 +243,6 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
 mod chain;

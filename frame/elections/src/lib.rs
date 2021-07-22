@@ -244,14 +244,14 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		/// The chunk size of the voter vector.
 		#[allow(non_snake_case)]
 		fn VOTER_SET_SIZE() -> u32 {
 			VOTER_SET_SIZE as u32
 		}
 
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		/// The chunk size of the approval vector.
 		#[allow(non_snake_case)]
 		fn APPROVAL_SET_SIZE() -> u32 {
@@ -297,7 +297,6 @@ pub mod pallet {
 	// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
 	// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 	// `APPROVAL_SET_SIZE`.
-	///
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash and `SetIndex` is not
 	/// attacker-controlled.
 	#[pallet::storage]

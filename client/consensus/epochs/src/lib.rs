@@ -694,7 +694,6 @@ mod tests {
 
 	#[test]
 	fn genesis_epoch_is_created_but_not_imported() {
-		//
 		// A - B
 		//  \
 		//   — C
@@ -736,7 +735,6 @@ mod tests {
 
 	#[test]
 	fn epoch_changes_between_blocks() {
-		//
 		// A - B
 		//  \
 		//   — C

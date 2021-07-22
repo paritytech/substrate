@@ -560,7 +560,7 @@ mod tests {
 		// emit event
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 
-		//exit span
+		// exit span
 		drop(_guard1);
 		drop(span1);
 

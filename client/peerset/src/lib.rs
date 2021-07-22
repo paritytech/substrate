@@ -596,7 +596,6 @@ impl Peerset {
 	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
 	/// connection implicitly means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
-	///
 	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.

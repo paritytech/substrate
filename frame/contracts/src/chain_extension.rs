@@ -87,7 +87,7 @@ pub trait ChainExtension<C: Config> {
 	///
 	/// # Parameters
 	/// - `func_id`: The first argument to `seal_call_chain_extension`. Usually used to
-	///		determine which function to realize.
+	/// 		determine which function to realize.
 	/// - `env`: Access to the remaining arguments and the execution environment.
 	///
 	/// # Return

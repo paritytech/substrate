@@ -63,10 +63,10 @@ pub enum Error {
 	#[display(fmt = "{}", _0)]
 	#[from(ignore)]
 	StringError(String),
-	///send error
+	/// send error
 	#[display(fmt = "Consensus process is terminating")]
 	Canceled(oneshot::Canceled),
-	///send error
+	/// send error
 	#[display(fmt = "Consensus process is terminating")]
 	SendError(SendError),
 	/// Some other error.

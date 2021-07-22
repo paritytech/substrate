@@ -554,7 +554,6 @@ where
 	}
 
 	/// Retrieve our public keys within the current and next authority set.
-	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
 	// one for the upcoming session. In addition it could be participating in the current and (/ or)
 	// next authority set with two keys. The function does not return all of the local authority

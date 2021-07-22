@@ -733,11 +733,10 @@ impl ProtocolsHandler for NotifsHandler {
 					// available in `notifications_sink_rx`. This avoids waking up the task when
 					// a substream is ready to send if there isn't actually something to send.
 					match Pin::new(&mut *notifications_sink_rx).as_mut().poll_peek(cx) {
-						Poll::Ready(Some(&NotificationsSinkMessage::ForceClose)) => {
+						Poll::Ready(Some(&NotificationsSinkMessage::ForceClose)) =>
 							return Poll::Ready(ProtocolsHandlerEvent::Close(
 								NotifsHandlerError::SyncNotificationsClogged,
-							))
-						},
+							)),
 						Poll::Ready(Some(&NotificationsSinkMessage::Notification { .. })) => {},
 						Poll::Ready(None) | Poll::Pending => break,
 					}

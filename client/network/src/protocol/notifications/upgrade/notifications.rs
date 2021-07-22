@@ -35,7 +35,6 @@ use asynchronous_codec::Framed;
 ///
 /// Notification substreams are unidirectional. If A opens a substream with B, then B is
 /// encouraged but not required to open a substream to A as well.
-///
 use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};

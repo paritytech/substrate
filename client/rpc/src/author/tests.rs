@@ -107,7 +107,7 @@ fn submit_rich_transaction_should_not_cause_error() {
 
 #[test]
 fn should_watch_extrinsic() {
-	//given
+	// given
 	let setup = TestSetup::default();
 	let p = setup.author();
 
@@ -160,7 +160,7 @@ fn should_watch_extrinsic() {
 
 #[test]
 fn should_return_watch_validation_error() {
-	//given
+	// given
 	let setup = TestSetup::default();
 	let p = setup.author();
 

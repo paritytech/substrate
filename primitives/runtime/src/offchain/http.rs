@@ -343,7 +343,7 @@ impl Response {
 ///
 /// Note that reading the body may return `None` in following cases:
 /// 1. Either the deadline you've set is reached (check via `#error`;
-///	   In such case you can resume the reader by setting a new deadline)
+/// 	   In such case you can resume the reader by setting a new deadline)
 /// 2. Or because of IOError. In such case the reader is not resumable and will keep
 ///    returning `None`.
 /// 3. The body has been returned. The reader will keep returning `None`.
@@ -414,9 +414,7 @@ impl Iterator for ResponseBody {
 					self.error = Some(e);
 					return None
 				},
-				Ok(0) => {
-					return None
-				},
+				Ok(0) => return None,
 				Ok(size) => {
 					self.position = 0;
 					self.filled_up_to = Some(size as usize);

@@ -91,7 +91,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
-		//TODO: liveness: ExistenceRequirement,
+		// TODO: liveness: ExistenceRequirement,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError>;
 
 	/// The balance of `who` is increased in order to counter `credit`. If the whole of `credit`
@@ -120,7 +120,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn settle(
 		who: &AccountId,
 		debt: DebtOf<AccountId, Self>,
-		//TODO: liveness: ExistenceRequirement,
+		// TODO: liveness: ExistenceRequirement,
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let credit = match Self::withdraw(who, amount) {
@@ -344,7 +344,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	fn withdraw(
 		who: &AccountId,
 		amount: Self::Balance,
-		//TODO: liveness: ExistenceRequirement,
+		// TODO: liveness: ExistenceRequirement,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		let decrease = U::decrease_balance(who, amount)?;
 		Ok(credit(decrease))

@@ -116,7 +116,7 @@ where
 	/// eg
 	/// ```ignore
 	/// 	let request = r#"{"jsonrpc":"2.0","method":"engine_createBlock","params": [true, true],"id":1}"#;
-	///		let response = node.rpc_handler()
+	/// 		let response = node.rpc_handler()
 	/// 		.handle_request_sync(request, Default::default());
 	/// ```
 	pub fn rpc_handler(

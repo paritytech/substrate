@@ -191,14 +191,12 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 
 	/// `NeighborPacketWorker` processing packets sent through the `NeighborPacketSender`.
-	//
 	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
 	// thus one has to wrap `neighbor_packet_worker` with an `Arc` `Mutex`.
 	neighbor_packet_worker: Arc<Mutex<periodic::NeighborPacketWorker<B>>>,
 
 	/// Receiver side of the peer report stream populated by the gossip validator, forwarded to the
 	/// gossip engine.
-	//
 	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
 	// thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given that it is
 	// just an `UnboundedReceiver`, one could also switch to a multi-producer-*multi*-consumer

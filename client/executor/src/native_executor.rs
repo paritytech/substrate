@@ -599,7 +599,6 @@ impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeE
 ///
 /// When you have multiple interfaces, you can give the host functions as a tuple e.g.:
 /// `(my_interface::HostFunctions, my_interface2::HostFunctions)`
-///
 #[macro_export]
 macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {

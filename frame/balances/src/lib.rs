@@ -1549,7 +1549,7 @@ where
 						account.reserved -= reserved_slash; // Safe because of above check
 						Ok((
 							NegativeImbalance::new(free_slash + reserved_slash),
-							value - free_slash - reserved_slash, // Safe because value is gt or eq total slashed
+							value - free_slash - reserved_slash, /* Safe because value is gt or eq total slashed */
 						))
 					} else {
 						// Else we are done!

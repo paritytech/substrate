@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
+/// ! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
 mod host;
 mod imports;
 mod instance_wrapper;

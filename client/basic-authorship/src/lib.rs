@@ -41,12 +41,12 @@
 //! # );
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory::new(
-//!		spawner,
-//!		client.clone(),
-//!		txpool.clone(),
-//!		None,
-//!		None,
-//!	);
+//! 		spawner,
+//! 		client.clone(),
+//! 		txpool.clone(),
+//! 		None,
+//! 		None,
+//! 	);
 //!
 //! // From this factory, we create a `Proposer`.
 //! let proposer = proposer_factory.init(
@@ -69,7 +69,6 @@
 //! let block = futures::executor::block_on(future).unwrap();
 //! println!("Generated block: {:?}", block.block);
 //! ```
-//!
 
 mod basic_authorship;
 

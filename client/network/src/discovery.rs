@@ -45,7 +45,6 @@
 //! **Important**: In order for the discovery mechanism to work properly, there needs to be an
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
-//!
 
 use crate::{config::ProtocolId, utils::LruHashSet};
 use futures::prelude::*;
@@ -416,7 +415,6 @@ impl DiscoveryBehaviour {
 	/// Can the given `Multiaddr` be put into the DHT?
 	///
 	/// This test is successful only for global IP addresses and DNS names.
-	//
 	// NB: Currently all DNS names are allowed and no check for TLD suffixes is done
 	// because the set of valid domains is highly dynamic and would require frequent
 	// updates, for example by utilising publicsuffix.org or IANA.
@@ -859,7 +857,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
 				NetworkBehaviourAction::DialPeer { peer_id, condition } =>
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
-				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, // `event` is an enum with no variant
+				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
 				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 						address,

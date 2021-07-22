@@ -1263,13 +1263,13 @@ mod test {
 	}
 
 	// Denoting
-	//	C: unfinalized_slack
-	//	M: authoring_bias
-	//	X: max_interval
+	// 	C: unfinalized_slack
+	// 	M: authoring_bias
+	// 	X: max_interval
 	// then the number of slots to reach the max interval can be computed from
-	//	(start_slot + C) + M * sum(n, 1, X)
+	// 	(start_slot + C) + M * sum(n, 1, X)
 	// or
-	//	(start_slot + C) + M * X*(X+1)/2
+	// 	(start_slot + C) + M * X*(X+1)/2
 	fn expected_time_to_reach_max_interval(
 		param: &BackoffAuthoringOnFinalizedHeadLagging<u64>,
 	) -> (u64, u64) {

@@ -25,7 +25,6 @@
 //! configuration as an extra peers set.
 //! - Use [`TransactionsHandlerPrototype::build`] then [`TransactionsHandler::run`] to obtain a
 //! `Future` that processes transactions.
-//!
 
 use crate::{
 	config::{self, ProtocolId, TransactionImport, TransactionImportFuture, TransactionPool},

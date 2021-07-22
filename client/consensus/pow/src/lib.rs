@@ -48,10 +48,7 @@ use futures::{Future, StreamExt};
 use log::*;
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use sc_client_api::{
-	self,
-	{backend::AuxStore, BlockOf, BlockchainEvents},
-};
+use sc_client_api::{self, backend::AuxStore, BlockOf, BlockchainEvents};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};

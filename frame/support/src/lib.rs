@@ -115,7 +115,7 @@ impl TypeId for PalletId {
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
-///```
+/// ```
 /// # use frame_support::generate_storage_alias;
 /// use frame_support::codec;
 /// use frame_support::Twox64Concat;
@@ -553,14 +553,14 @@ pub use frame_support_procedural::__generate_dummy_part_checker;
 /// ```
 /// # use frame_support::CloneNoBound;
 /// trait Config {
-///		type C: Clone;
+/// 		type C: Clone;
 /// }
 ///
 /// // Foo implements [`Clone`] because `C` bounds [`Clone`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Clone`].
 /// #[derive(CloneNoBound)]
 /// struct Foo<T: Config> {
-///		c: T::C,
+/// 		c: T::C,
 /// }
 /// ```
 pub use frame_support_procedural::CloneNoBound;
@@ -571,14 +571,14 @@ pub use frame_support_procedural::CloneNoBound;
 /// ```
 /// # use frame_support::{EqNoBound, PartialEqNoBound};
 /// trait Config {
-///		type C: Eq;
+/// 		type C: Eq;
 /// }
 ///
 /// // Foo implements [`Eq`] because `C` bounds [`Eq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Eq`].
 /// #[derive(PartialEqNoBound, EqNoBound)]
 /// struct Foo<T: Config> {
-///		c: T::C,
+/// 		c: T::C,
 /// }
 /// ```
 pub use frame_support_procedural::EqNoBound;
@@ -589,14 +589,14 @@ pub use frame_support_procedural::EqNoBound;
 /// ```
 /// # use frame_support::PartialEqNoBound;
 /// trait Config {
-///		type C: PartialEq;
+/// 		type C: PartialEq;
 /// }
 ///
 /// // Foo implements [`PartialEq`] because `C` bounds [`PartialEq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`PartialEq`].
 /// #[derive(PartialEqNoBound)]
 /// struct Foo<T: Config> {
-///		c: T::C,
+/// 		c: T::C,
 /// }
 /// ```
 pub use frame_support_procedural::PartialEqNoBound;
@@ -608,14 +608,14 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// # use frame_support::DebugNoBound;
 /// # use core::fmt::Debug;
 /// trait Config {
-///		type C: Debug;
+/// 		type C: Debug;
 /// }
 ///
 /// // Foo implements [`Debug`] because `C` bounds [`Debug`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
 /// #[derive(DebugNoBound)]
 /// struct Foo<T: Config> {
-///		c: T::C,
+/// 		c: T::C,
 /// }
 /// ```
 pub use frame_support_procedural::DebugNoBound;
@@ -627,14 +627,14 @@ pub use frame_support_procedural::DebugNoBound;
 /// # use frame_support::DefaultNoBound;
 /// # use core::default::Default;
 /// trait Config {
-///		type C: Default;
+/// 		type C: Default;
 /// }
 ///
 /// // Foo implements [`Default`] because `C` bounds [`Default`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Default`].
 /// #[derive(DefaultNoBound)]
 /// struct Foo<T: Config> {
-///		c: T::C,
+/// 		c: T::C,
 /// }
 /// ```
 pub use frame_support_procedural::DefaultNoBound;
@@ -803,7 +803,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use sp_io::TestExternalities;
-	use sp_std::result;
+	use sp_std::{marker::PhantomData, result};
 
 	/// A PalletInfo implementation which just panics.
 	pub struct PanicPalletInfo;
@@ -1326,9 +1326,9 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet]
 /// pub mod pallet {
-///		use frame_support::pallet_prelude::*;
-///		use frame_system::pallet_prelude::*;
-///		...
+/// 		use frame_support::pallet_prelude::*;
+/// 		use frame_system::pallet_prelude::*;
+/// 		...
 /// }
 /// ```
 ///
@@ -1355,8 +1355,8 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::config]
 /// pub trait Config: frame_system::Config {
-///		#[pallet::constant]
-///		type Foo: Get<u32>;
+/// 		#[pallet::constant]
+/// 		type Foo: Get<u32>;
 /// }
 /// ```
 ///
@@ -2358,5 +2358,4 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 /// * use the newest nightly possible.
-///
 pub use frame_support_procedural::pallet;

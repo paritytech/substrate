@@ -361,7 +361,6 @@ macro_rules! implement_fixed {
 		$title:expr $(,)?
 	) => {
 		/// A fixed point number representation in the range.
-		///
 		#[doc = $title]
 		#[derive(
 			Encode,

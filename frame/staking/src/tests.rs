@@ -959,7 +959,7 @@ fn reward_destination_works() {
 			})
 		);
 
-		//Change RewardDestination to Stash
+		// Change RewardDestination to Stash
 		<Payee<Test>>::insert(&11, RewardDestination::Stash);
 
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3366,7 +3366,7 @@ fn payout_stakers_handles_weight_refund() {
 		let balance = 1000;
 		bond_validator(11, 10, balance);
 
-		/* Era 1 */
+		// Era 1
 		start_active_era(1);
 
 		// Reward just the validator.
@@ -3378,7 +3378,7 @@ fn payout_stakers_handles_weight_refund() {
 			bond_nominator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
 		}
 
-		/* Era 2 */
+		// Era 2
 		start_active_era(2);
 
 		// Collect payouts when there are no nominators
@@ -3391,7 +3391,7 @@ fn payout_stakers_handles_weight_refund() {
 
 		// The validator is not rewarded in this era; so there will be zero payouts to claim for this era.
 
-		/* Era 3 */
+		// Era 3
 		start_active_era(3);
 
 		// Collect payouts for an era where the validator did not receive any points.
@@ -3405,7 +3405,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Reward the validator and its nominators.
 		Staking::reward_by_ids(vec![(11, 1)]);
 
-		/* Era 4 */
+		// Era 4
 		start_active_era(4);
 
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
@@ -3422,14 +3422,14 @@ fn payout_stakers_handles_weight_refund() {
 			bond_nominator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
 		}
 
-		/* Era 5 */
+		// Era 5
 		start_active_era(5);
 		// We now have `max_nom_rewarded` nominators actively nominating our validator.
 
 		// Reward the validator so we can collect for everyone in the next era.
 		Staking::reward_by_ids(vec![(11, 1)]);
 
-		/* Era 6 */
+		// Era 6
 		start_active_era(6);
 
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.

@@ -154,7 +154,7 @@ impl<T: Config> Pallet<T> {
 		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned { solution, .. } = &call {
+				if let Call::submit_unsigned(solution, _) = &call {
 					// prevent errors arising from state changes in a forkful chain
 					Self::basic_checks(solution, "restored")?;
 					Ok(call)
@@ -547,9 +547,7 @@ impl<T: Config> Pallet<T> {
 					voters = next;
 				},
 				// we are out of bounds, break out of the loop.
-				Err(()) => {
-					break
-				},
+				Err(()) => break,
 				// we found the right value - early exit the function.
 				Ok(next) => return next,
 			}

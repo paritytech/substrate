@@ -131,7 +131,7 @@ struct SharedDataInner<T> {
 /// # Example
 ///
 /// ```
-///# use sc_consensus::shared_data::SharedData;
+/// # use sc_consensus::shared_data::SharedData;
 ///
 /// let shared_data = SharedData::new(String::from("hello world"));
 ///

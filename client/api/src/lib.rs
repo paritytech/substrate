@@ -43,7 +43,6 @@ pub use sp_state_machine::{ExecutionStrategy, StorageProof};
 pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
 
 /// Usage Information Provider interface
-///
 pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 	/// Get usage info about current client.
 	fn usage_info(&self) -> ClientInfo<Block>;

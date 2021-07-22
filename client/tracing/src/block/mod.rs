@@ -312,7 +312,6 @@ fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
 
 /// Filter out spans that do not match our targets and if the span is from WASM update its `name`
 /// and `target` fields to the WASM values for those fields.
-//
 // The `tracing` crate requires trace metadata to be static. This does not work for wasm code in
 // substrate, as it is regularly updated with new code from on-chain events. The workaround for this
 // is for substrate's WASM tracing wrappers to put the `name` and `target` data in the `values` map

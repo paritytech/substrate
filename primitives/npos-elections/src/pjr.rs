@@ -93,7 +93,6 @@ pub fn pjr_check<AccountId: IdentifierT>(
 /// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
 ///
 /// [NPoS]: https://arxiv.org/pdf/2004.12990v1.pdf
-//
 // ### Implementation Notes
 //
 // The paper uses mathematical notation, which priorities single-symbol names. For programmer ease,

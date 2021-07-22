@@ -35,18 +35,17 @@
 // --output=./frame/bounties/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_bounties.
 pub trait WeightInfo {
-	fn propose_bounty(d: u32) -> Weight;
+	fn propose_bounty(d: u32, ) -> Weight;
 	fn approve_bounty() -> Weight;
 	fn propose_curator() -> Weight;
 	fn unassign_curator() -> Weight;
@@ -56,13 +55,13 @@ pub trait WeightInfo {
 	fn close_bounty_proposed() -> Weight;
 	fn close_bounty_active() -> Weight;
 	fn extend_bounty_expiry() -> Weight;
-	fn spend_funds(b: u32) -> Weight;
+	fn spend_funds(b: u32, ) -> Weight;
 }
 
 /// Weights for pallet_bounties using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn propose_bounty(d: u32) -> Weight {
+	fn propose_bounty(d: u32, ) -> Weight {
 		(44_351_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
@@ -114,7 +113,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn spend_funds(b: u32) -> Weight {
+	fn spend_funds(b: u32, ) -> Weight {
 		(351_000 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((58_724_000 as Weight).saturating_mul(b as Weight))
@@ -127,7 +126,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn propose_bounty(d: u32) -> Weight {
+	fn propose_bounty(d: u32, ) -> Weight {
 		(44_351_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
@@ -179,7 +178,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn spend_funds(b: u32) -> Weight {
+	fn spend_funds(b: u32, ) -> Weight {
 		(351_000 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((58_724_000 as Weight).saturating_mul(b as Weight))

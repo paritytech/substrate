@@ -52,7 +52,7 @@ use sp_storage::{StorageData, StorageKey};
 /// # struct TestRuntime;
 /// #
 /// # decl_module! {
-///	#     pub struct Module<T: Config> for enum Call where origin: T::Origin {}
+/// 	#     pub struct Module<T: Config> for enum Call where origin: T::Origin {}
 /// # }
 /// #
 /// pub type Loc = (i64, i64, i64);

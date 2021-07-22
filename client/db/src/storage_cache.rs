@@ -948,7 +948,7 @@ mod tests {
 
 	#[test]
 	fn smoke() {
-		//init_log();
+		// init_log();
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
 		let h0 = H256::random();

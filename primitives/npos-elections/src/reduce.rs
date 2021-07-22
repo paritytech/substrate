@@ -646,9 +646,9 @@ mod tests {
 
 	#[test]
 	fn merging_works() {
-		//	D <-- A <-- B <-- C
+		// 	D <-- A <-- B <-- C
 		//
-		//		F <-- E
+		// 		F <-- E
 		let d = Node::new(NodeId::from(1, NodeRole::Target)).into_ref();
 		let a = Node::new(NodeId::from(2, NodeRole::Target)).into_ref();
 		let b = Node::new(NodeId::from(3, NodeRole::Target)).into_ref();
@@ -665,17 +665,17 @@ mod tests {
 		let path2 = vec![e.clone(), f.clone()];
 
 		merge(path1, path2);
-		//	D <-- A <-- B <-- C
-		//					  |
-		//		F --> E --> -->
+		// 	D <-- A <-- B <-- C
+		// 					  |
+		// 		F --> E --> -->
 		assert_eq!(e.borrow().clone().parent.unwrap().borrow().id.who, 4u32); // c
 	}
 
 	#[test]
 	fn merge_with_len_one() {
-		//	D <-- A <-- B <-- C
+		// 	D <-- A <-- B <-- C
 		//
-		//		F <-- E
+		// 		F <-- E
 		let d = Node::new(NodeId::from(1, NodeRole::Target)).into_ref();
 		let a = Node::new(NodeId::from(2, NodeRole::Target)).into_ref();
 		let b = Node::new(NodeId::from(3, NodeRole::Target)).into_ref();
@@ -690,9 +690,9 @@ mod tests {
 		let path2 = vec![f.clone()];
 
 		merge(path1, path2);
-		//	D <-- A <-- B <-- C
-		//					  |
-		//			F -->  -->
+		// 	D <-- A <-- B <-- C
+		// 					  |
+		// 			F -->  -->
 		assert_eq!(f.borrow().clone().parent.unwrap().borrow().id.who, 4u32); // c
 	}
 

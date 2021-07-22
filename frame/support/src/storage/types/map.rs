@@ -35,8 +35,8 @@ use sp_std::prelude::*;
 /// Each value is stored at:
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix())
-///		++ Twox128(Prefix::STORAGE_PREFIX)
-///		++ Hasher1(encode(key))
+/// 		++ Twox128(Prefix::STORAGE_PREFIX)
+/// 		++ Hasher1(encode(key))
 /// ```
 ///
 /// # Warning

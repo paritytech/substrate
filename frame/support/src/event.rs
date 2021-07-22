@@ -33,7 +33,7 @@
 ///    }
 /// );
 ///
-///# fn main() {}
+/// # fn main() {}
 /// ```
 ///
 /// # Generic Event Example:
@@ -73,7 +73,7 @@
 ///     );
 /// }
 ///
-///# fn main() {}
+/// # fn main() {}
 /// ```
 ///
 /// The syntax for generic events requires the `where`.
@@ -81,9 +81,9 @@
 /// # Generic Event with Instance Example:
 ///
 /// ```rust
-///# struct DefaultInstance;
-///# trait Instance {}
-///# impl Instance for DefaultInstance {}
+/// # struct DefaultInstance;
+/// # trait Instance {}
+/// # impl Instance for DefaultInstance {}
 /// trait Config<I: Instance=DefaultInstance> {
 ///     type Balance;
 ///     type Token;
@@ -98,7 +98,7 @@
 ///       Message(Balance, Token),
 ///    }
 /// );
-///# fn main() {}
+/// # fn main() {}
 /// ```
 #[macro_export]
 macro_rules! decl_event {

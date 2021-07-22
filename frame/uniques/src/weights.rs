@@ -35,24 +35,23 @@
 // --output=./frame/uniques/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_uniques.
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(n: u32, m: u32, a: u32) -> Weight;
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
-	fn redeposit(i: u32) -> Weight;
+	fn redeposit(i: u32, ) -> Weight;
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
 	fn freeze_class() -> Weight;
@@ -83,7 +82,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn destroy(n: u32, m: u32, a: u32) -> Weight {
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((16_619_000 as Weight).saturating_mul(n as Weight))
@@ -113,7 +112,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	fn redeposit(i: u32) -> Weight {
+	fn redeposit(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((26_322_000 as Weight).saturating_mul(i as Weight))
@@ -211,7 +210,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn destroy(n: u32, m: u32, a: u32) -> Weight {
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((16_619_000 as Weight).saturating_mul(n as Weight))
@@ -241,7 +240,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	fn redeposit(i: u32) -> Weight {
+	fn redeposit(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((26_322_000 as Weight).saturating_mul(i as Weight))

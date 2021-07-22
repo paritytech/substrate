@@ -26,7 +26,7 @@ use frame_support::{
 		schedule::DispatchTime, Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
 	},
 };
-use frame_system::{self, Pallet as System, RawOrigin};
+use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{BadOrigin, Bounded, One};
 
 use crate::Pallet as Democracy;

@@ -40,7 +40,6 @@ use wasm_timer::Instant;
 ///
 /// Call `InformantDisplay::new` to initialize the state, then regularly call `display` with the
 /// information to display.
-///
 pub struct InformantDisplay<B: BlockT> {
 	/// Head of chain block number from the last time `display` has been called.
 	/// `None` if `display` has never been called.

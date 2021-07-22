@@ -49,7 +49,6 @@
 //!
 //! When allowing unbounded parallelism, malicious transactions can exploit it and partition
 //! network consensus based on how much resources nodes have.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

@@ -44,37 +44,36 @@
 // --template
 // ./.maintain/frame-weight-template.hbs
 
+
+#![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_example.
 pub trait WeightInfo {
-	fn set_dummy_benchmark(b: u32) -> Weight;
-	fn accumulate_dummy(b: u32) -> Weight;
-	fn sort_vector(x: u32) -> Weight;
+	fn set_dummy_benchmark(b: u32, ) -> Weight;
+	fn accumulate_dummy(b: u32, ) -> Weight;
+	fn sort_vector(x: u32, ) -> Weight;
 }
 
 /// Weights for pallet_example using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn set_dummy_benchmark(b: u32) -> Weight {
+	fn set_dummy_benchmark(b: u32, ) -> Weight {
 		(5_834_000 as Weight)
 			.saturating_add((24_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn accumulate_dummy(b: u32) -> Weight {
+	fn accumulate_dummy(b: u32, ) -> Weight {
 		(51_353_000 as Weight)
 			.saturating_add((14_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn sort_vector(x: u32) -> Weight {
+	fn sort_vector(x: u32, ) -> Weight {
 		(2_569_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((4_000 as Weight).saturating_mul(x as Weight))
@@ -83,18 +82,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn set_dummy_benchmark(b: u32) -> Weight {
+	fn set_dummy_benchmark(b: u32, ) -> Weight {
 		(5_834_000 as Weight)
 			.saturating_add((24_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn accumulate_dummy(b: u32) -> Weight {
+	fn accumulate_dummy(b: u32, ) -> Weight {
 		(51_353_000 as Weight)
 			.saturating_add((14_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn sort_vector(x: u32) -> Weight {
+	fn sort_vector(x: u32, ) -> Weight {
 		(2_569_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((4_000 as Weight).saturating_mul(x as Weight))

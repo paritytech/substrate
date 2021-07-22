@@ -83,7 +83,6 @@ pub(crate) enum DiscardWaitOrReady<Block: BlockT, W, R> {
 }
 
 /// Prometheus metrics for the `UntilImported` queue.
-//
 // At a given point in time there can be more than one `UntilImported` queue. One can not register a
 // metric twice, thus queues need to share the same Prometheus metrics instead of instantiating
 // their own ones.

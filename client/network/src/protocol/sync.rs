@@ -27,7 +27,6 @@
 //! The `ChainSync` struct maintains the state of the block requests. Whenever something happens on
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
-//!
 
 use crate::{
 	protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},

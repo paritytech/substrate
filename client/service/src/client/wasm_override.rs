@@ -35,7 +35,6 @@
 //! A custom WASM blob will override on-chain WASM if the spec version matches. If it is
 //! required to overrides multiple runtimes, multiple WASM blobs matching each of the spec versions
 //! needed must be provided in the given directory.
-//!
 use sc_executor::RuntimeInfo;
 use sp_blockchain::Result;
 use sp_core::traits::{FetchRuntimeCode, RuntimeCode};

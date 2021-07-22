@@ -1088,7 +1088,6 @@ macro_rules! impl_benchmark_test {
 ///
 /// - It must be the name of a method applied to the output of the `new_test_ext` argument.
 /// - That method must have a signature capable of receiving a single argument of the form `impl FnOnce()`.
-///
 // ## Notes (not for rustdoc)
 //
 // The biggest challenge for this macro is communicating the actual test functions to be run. We

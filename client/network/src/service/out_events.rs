@@ -30,7 +30,6 @@
 //! [`OutChannels::push`] to put the sender within a [`OutChannels`].
 //! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
-//!
 
 use crate::Event;
 

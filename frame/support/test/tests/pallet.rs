@@ -108,7 +108,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
-		<Self::AccountId as SomeAssociation1>::_1: scale_info::TypeInfo,
 	{
 		/// Some comment
 		/// Some comment

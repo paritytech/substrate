@@ -72,7 +72,7 @@ mod test {
 		// not 10_000 due to rounding error.
 		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).1, 9_993);
 
-		//super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
+		// super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
 		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).0, 2_498);
 		assert_eq!(super::compute_total_payout(&I_NPOS, 5_000, 100_000u64, YEAR).0, 3_248);
 		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, YEAR).0, 6_246);

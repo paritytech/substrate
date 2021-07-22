@@ -51,18 +51,18 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 /// fn create_schedule<T: Config>() -> Schedule<T> {
 ///     Schedule {
 ///         limits: Limits {
-///		        globals: 3,
-///		        parameters: 3,
-///		        memory_pages: 16,
-///		        table_size: 3,
-///		        br_table_size: 3,
-///		        .. Default::default()
-///	        },
+/// 		        globals: 3,
+/// 		        parameters: 3,
+/// 		        memory_pages: 16,
+/// 		        table_size: 3,
+/// 		        br_table_size: 3,
+/// 		        .. Default::default()
+/// 	        },
 ///         instruction_weights: InstructionWeights {
-///	            version: 5,
+/// 	            version: 5,
 ///             .. Default::default()
 ///         },
-///	        .. Default::default()
+/// 	        .. Default::default()
 ///     }
 /// }
 /// ```

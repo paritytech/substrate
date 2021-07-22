@@ -583,7 +583,6 @@ enum Error {
 }
 
 /// The data to send back to the light client over the oneshot channel.
-//
 // It is unified here in order to be able to return it as a function
 // result instead of delivering it to the client as a side effect of
 // response processing.
@@ -622,7 +621,6 @@ enum PeerStatus {
 ///
 /// The associated `oneshot::Sender` will be used to convey the result of
 /// their request back to them (cf. `Reply`).
-//
 // This is modeled after light_dispatch.rs's `RequestData` which is not
 // used because we currently only support a subset of those.
 #[derive(Debug)]

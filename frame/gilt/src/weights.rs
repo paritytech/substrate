@@ -35,31 +35,30 @@
 // --output=./frame/gilt/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_gilt.
 pub trait WeightInfo {
-	fn place_bid(l: u32) -> Weight;
+	fn place_bid(l: u32, ) -> Weight;
 	fn place_bid_max() -> Weight;
-	fn retract_bid(l: u32) -> Weight;
+	fn retract_bid(l: u32, ) -> Weight;
 	fn set_target() -> Weight;
 	fn thaw() -> Weight;
 	fn pursue_target_noop() -> Weight;
-	fn pursue_target_per_item(b: u32) -> Weight;
-	fn pursue_target_per_queue(q: u32) -> Weight;
+	fn pursue_target_per_item(b: u32, ) -> Weight;
+	fn pursue_target_per_queue(q: u32, ) -> Weight;
 }
 
 /// Weights for pallet_gilt using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn place_bid(l: u32) -> Weight {
+	fn place_bid(l: u32, ) -> Weight {
 		(60_401_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((146_000 as Weight).saturating_mul(l as Weight))
@@ -71,7 +70,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn retract_bid(l: u32) -> Weight {
+	fn retract_bid(l: u32, ) -> Weight {
 		(61_026_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((119_000 as Weight).saturating_mul(l as Weight))
@@ -89,9 +88,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn pursue_target_noop() -> Weight {
-		(3_449_000 as Weight).saturating_add(T::DbWeight::get().reads(1 as Weight))
+		(3_449_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
-	fn pursue_target_per_item(b: u32) -> Weight {
+	fn pursue_target_per_item(b: u32, ) -> Weight {
 		(58_182_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((10_005_000 as Weight).saturating_mul(b as Weight))
@@ -99,7 +99,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(b as Weight)))
 	}
-	fn pursue_target_per_queue(q: u32) -> Weight {
+	fn pursue_target_per_queue(q: u32, ) -> Weight {
 		(21_740_000 as Weight)
 			// Standard Error: 7_000
 			.saturating_add((16_849_000 as Weight).saturating_mul(q as Weight))
@@ -112,7 +112,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn place_bid(l: u32) -> Weight {
+	fn place_bid(l: u32, ) -> Weight {
 		(60_401_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((146_000 as Weight).saturating_mul(l as Weight))
@@ -124,7 +124,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn retract_bid(l: u32) -> Weight {
+	fn retract_bid(l: u32, ) -> Weight {
 		(61_026_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((119_000 as Weight).saturating_mul(l as Weight))
@@ -142,9 +142,10 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn pursue_target_noop() -> Weight {
-		(3_449_000 as Weight).saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		(3_449_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-	fn pursue_target_per_item(b: u32) -> Weight {
+	fn pursue_target_per_item(b: u32, ) -> Weight {
 		(58_182_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((10_005_000 as Weight).saturating_mul(b as Weight))
@@ -152,7 +153,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(b as Weight)))
 	}
-	fn pursue_target_per_queue(q: u32) -> Weight {
+	fn pursue_target_per_queue(q: u32, ) -> Weight {
 		(21_740_000 as Weight)
 			// Standard Error: 7_000
 			.saturating_add((16_849_000 as Weight).saturating_mul(q as Weight))

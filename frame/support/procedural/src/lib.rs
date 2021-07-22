@@ -200,14 +200,14 @@ impl Counter {
 ///
 /// 		// Your storage items
 /// 	}
-///		add_extra_genesis {
-///			config(genesis_field): GenesisFieldType;
-///			config(genesis_field2): GenesisFieldType;
-///			...
-///			build(|_: &Self| {
-///				// Modification of storage
-///			})
-///		}
+/// 		add_extra_genesis {
+/// 			config(genesis_field): GenesisFieldType;
+/// 			config(genesis_field2): GenesisFieldType;
+/// 			...
+/// 			build(|_: &Self| {
+/// 				// Modification of storage
+/// 			})
+/// 		}
 /// }
 /// ```
 ///
@@ -219,7 +219,7 @@ impl Counter {
 ///         ...,
 ///         Example: example::{Pallet, Storage, ..., Config<T>},
 ///         ...,
-///	}
+/// 	}
 /// );
 /// ```
 ///

@@ -92,11 +92,11 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// 	s = previous block weight
 /// 	s'= ideal block weight
 /// 	m = maximum block weight
-///		diff = (s - s')/m
-///		v = 0.00001
-///		t1 = (v * diff)
-///		t2 = (v * diff)^2 / 2
-///	then:
+/// 		diff = (s - s')/m
+/// 		v = 0.00001
+/// 		t1 = (v * diff)
+/// 		t2 = (v * diff)^2 / 2
+/// 	then:
 /// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
 ///
 /// Where `(s', v)` must be given as the `Get` implementation of the `T` generic type. Moreover, `M`
@@ -273,7 +273,7 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		#[allow(non_snake_case)]
 		/// The polynomial that is applied in order to derive fee from weight.
 		fn WeightToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {

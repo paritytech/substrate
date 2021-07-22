@@ -124,7 +124,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					"storage_notification_subscribers",
 					"Number of subscribers in storage notification sytem",
 				),
-				&["action"], //added | removed
+				&["action"], // added | removed
 			)
 			.and_then(|g| register(g, &r))
 			.ok()

@@ -376,9 +376,9 @@ where
 /// The point of this trait is to be able to easily convert between `RuntimeAppPublic`, the wrapped
 /// (generic = non application-specific) crypto types and the `Public` type required by the runtime.
 ///
-///	Example (pseudo-)implementation:
+/// Example (pseudo-)implementation:
 /// ```ignore
-///	// im-online specific crypto
+/// // im-online specific crypto
 /// type RuntimeAppPublic = ImOnline(sr25519::Public);
 ///
 /// // wrapped "raw" crypto
@@ -441,7 +441,6 @@ pub trait AppCrypto<Public, Signature> {
 ///
 /// This trait adds extra bounds to `Public` and `Signature` types of the runtime
 /// that are necessary to use these types for signing.
-///
 // TODO [#5663] Could this be just `T::Signature as traits::Verify>::Signer`?
 // Seems that this may cause issues with bounds resolution.
 pub trait SigningTypes: crate::Config {

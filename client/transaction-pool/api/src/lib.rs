@@ -58,20 +58,20 @@ impl PoolStatus {
 ///
 /// The status events can be grouped based on their kinds as:
 /// 1. Entering/Moving within the pool:
-///		- `Future`
-///		- `Ready`
+/// 		- `Future`
+/// 		- `Ready`
 /// 2. Inside `Ready` queue:
-///		- `Broadcast`
+/// 		- `Broadcast`
 /// 3. Leaving the pool:
-///		- `InBlock`
-///		- `Invalid`
-///		- `Usurped`
-///		- `Dropped`
-///	4. Re-entering the pool:
-///		- `Retracted`
-///	5. Block finalized:
-///		- `Finalized`
-///		- `FinalityTimeout`
+/// 		- `InBlock`
+/// 		- `Invalid`
+/// 		- `Usurped`
+/// 		- `Dropped`
+/// 	4. Re-entering the pool:
+/// 		- `Retracted`
+/// 	5. Block finalized:
+/// 		- `Finalized`
+/// 		- `FinalityTimeout`
 ///
 /// The events will always be received in the order described above, however
 /// there might be cases where transactions alternate between `Future` and `Ready`

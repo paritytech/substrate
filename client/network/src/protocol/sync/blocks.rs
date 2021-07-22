@@ -126,10 +126,10 @@ impl<B: BlockT> BlockCollection<B> {
 						(*start..*start + *len, downloading),
 					(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len()..cmp::min(*next_start, *start + r.len() + count), 0), // gap
-					(Some((start, r)), None) => (*start + r.len()..*start + r.len() + count, 0), // last range
-					(None, None) => (first_different..first_different + count, 0),               // empty
+					(Some((start, r)), None) => (*start + r.len()..*start + r.len() + count, 0), /* last range */
+					(None, None) => (first_different..first_different + count, 0),               /* empty */
 					(None, Some((start, _))) if *start > first_different =>
-						(first_different..cmp::min(first_different + count, *start), 0), // gap at the start
+						(first_different..cmp::min(first_different + count, *start), 0), /* gap at the start */
 					_ => {
 						prev = next;
 						continue

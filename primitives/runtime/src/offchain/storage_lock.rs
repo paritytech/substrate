@@ -38,8 +38,8 @@
 //! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
 //! use sp_runtime::offchain::{
-//!		storage::StorageValueRef,
-//!		storage_lock::{StorageLock, Time},
+//! 		storage::StorageValueRef,
+//! 		storage_lock::{StorageLock, Time},
 //! };
 //!
 //! fn append_to_in_storage_vec<'a, T>(key: &'a [u8], _: T) where T: Codec {

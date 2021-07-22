@@ -1,4 +1,4 @@
-///! Traits and default implementation for paying transaction fees.
+/// ! Traits and default implementation for paying transaction fees.
 use crate::Config;
 
 use codec::FullCodec;

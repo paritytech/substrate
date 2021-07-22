@@ -121,7 +121,7 @@
 //! This call can only be made by the `ExternalMajorityOrigin`.
 //!
 //! - `external_propose_majority` - Schedules a proposal to become a majority-carries
-//!	 referendum once it is legal for an externally proposed referendum.
+//! 	 referendum once it is legal for an externally proposed referendum.
 //!
 //! #### External Default Origin
 //!

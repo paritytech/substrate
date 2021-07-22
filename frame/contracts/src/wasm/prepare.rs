@@ -346,14 +346,12 @@ fn get_memory_limits<T: Config>(
 		// Inspect the module to extract the initial and maximum page count.
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
-			(initial, Some(maximum)) if initial > maximum => {
+			(initial, Some(maximum)) if initial > maximum =>
 				return Err(
 					"Requested initial number of pages should not exceed the requested maximum",
-				)
-			},
-			(_, Some(maximum)) if maximum > schedule.limits.memory_pages => {
-				return Err("Maximum number of pages should not exceed the configured maximum.")
-			},
+				),
+			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
+				return Err("Maximum number of pages should not exceed the configured maximum."),
 			(initial, Some(maximum)) => Ok((initial, maximum)),
 			(_, None) => {
 				// Maximum number of pages should be always declared.

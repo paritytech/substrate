@@ -35,39 +35,38 @@
 // --output=./frame/proxy/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_proxy.
 pub trait WeightInfo {
-	fn proxy(p: u32) -> Weight;
-	fn proxy_announced(a: u32, p: u32) -> Weight;
-	fn remove_announcement(a: u32, p: u32) -> Weight;
-	fn reject_announcement(a: u32, p: u32) -> Weight;
-	fn announce(a: u32, p: u32) -> Weight;
-	fn add_proxy(p: u32) -> Weight;
-	fn remove_proxy(p: u32) -> Weight;
-	fn remove_proxies(p: u32) -> Weight;
-	fn anonymous(p: u32) -> Weight;
-	fn kill_anonymous(p: u32) -> Weight;
+	fn proxy(p: u32, ) -> Weight;
+	fn proxy_announced(a: u32, p: u32, ) -> Weight;
+	fn remove_announcement(a: u32, p: u32, ) -> Weight;
+	fn reject_announcement(a: u32, p: u32, ) -> Weight;
+	fn announce(a: u32, p: u32, ) -> Weight;
+	fn add_proxy(p: u32, ) -> Weight;
+	fn remove_proxy(p: u32, ) -> Weight;
+	fn remove_proxies(p: u32, ) -> Weight;
+	fn anonymous(p: u32, ) -> Weight;
+	fn kill_anonymous(p: u32, ) -> Weight;
 }
 
 /// Weights for pallet_proxy using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn proxy(p: u32) -> Weight {
+	fn proxy(p: u32, ) -> Weight {
 		(22_645_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((162_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
-	fn proxy_announced(a: u32, p: u32) -> Weight {
+	fn proxy_announced(a: u32, p: u32, ) -> Weight {
 		(53_259_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((543_000 as Weight).saturating_mul(a as Weight))
@@ -76,7 +75,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn remove_announcement(a: u32, p: u32) -> Weight {
+	fn remove_announcement(a: u32, p: u32, ) -> Weight {
 		(37_983_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((545_000 as Weight).saturating_mul(a as Weight))
@@ -85,7 +84,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn reject_announcement(a: u32, p: u32) -> Weight {
+	fn reject_announcement(a: u32, p: u32, ) -> Weight {
 		(37_922_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((541_000 as Weight).saturating_mul(a as Weight))
@@ -94,7 +93,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn announce(a: u32, p: u32) -> Weight {
+	fn announce(a: u32, p: u32, ) -> Weight {
 		(51_355_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((534_000 as Weight).saturating_mul(a as Weight))
@@ -103,35 +102,35 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn add_proxy(p: u32) -> Weight {
+	fn add_proxy(p: u32, ) -> Weight {
 		(35_798_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((228_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn remove_proxy(p: u32) -> Weight {
+	fn remove_proxy(p: u32, ) -> Weight {
 		(35_554_000 as Weight)
 			// Standard Error: 3_000
 			.saturating_add((250_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn remove_proxies(p: u32) -> Weight {
+	fn remove_proxies(p: u32, ) -> Weight {
 		(33_911_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((165_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn anonymous(p: u32) -> Weight {
+	fn anonymous(p: u32, ) -> Weight {
 		(48_695_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((53_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn kill_anonymous(p: u32) -> Weight {
+	fn kill_anonymous(p: u32, ) -> Weight {
 		(35_904_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((159_000 as Weight).saturating_mul(p as Weight))
@@ -142,13 +141,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn proxy(p: u32) -> Weight {
+	fn proxy(p: u32, ) -> Weight {
 		(22_645_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((162_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-	fn proxy_announced(a: u32, p: u32) -> Weight {
+	fn proxy_announced(a: u32, p: u32, ) -> Weight {
 		(53_259_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((543_000 as Weight).saturating_mul(a as Weight))
@@ -157,7 +156,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn remove_announcement(a: u32, p: u32) -> Weight {
+	fn remove_announcement(a: u32, p: u32, ) -> Weight {
 		(37_983_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((545_000 as Weight).saturating_mul(a as Weight))
@@ -166,7 +165,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn reject_announcement(a: u32, p: u32) -> Weight {
+	fn reject_announcement(a: u32, p: u32, ) -> Weight {
 		(37_922_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((541_000 as Weight).saturating_mul(a as Weight))
@@ -175,7 +174,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn announce(a: u32, p: u32) -> Weight {
+	fn announce(a: u32, p: u32, ) -> Weight {
 		(51_355_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((534_000 as Weight).saturating_mul(a as Weight))
@@ -184,35 +183,35 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn add_proxy(p: u32) -> Weight {
+	fn add_proxy(p: u32, ) -> Weight {
 		(35_798_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((228_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn remove_proxy(p: u32) -> Weight {
+	fn remove_proxy(p: u32, ) -> Weight {
 		(35_554_000 as Weight)
 			// Standard Error: 3_000
 			.saturating_add((250_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn remove_proxies(p: u32) -> Weight {
+	fn remove_proxies(p: u32, ) -> Weight {
 		(33_911_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((165_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn anonymous(p: u32) -> Weight {
+	fn anonymous(p: u32, ) -> Weight {
 		(48_695_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((53_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn kill_anonymous(p: u32) -> Weight {
+	fn kill_anonymous(p: u32, ) -> Weight {
 		(35_904_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((159_000 as Weight).saturating_mul(p as Weight))

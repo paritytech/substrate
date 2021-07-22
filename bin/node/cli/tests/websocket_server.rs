@@ -116,7 +116,6 @@ impl WsServer {
 	/// # Panic
 	///
 	/// Panics if no connection is pending.
-	///
 	pub fn accept(&mut self) {
 		let pending_incoming = self.pending_incoming.take().expect("no pending socket");
 
@@ -148,7 +147,6 @@ impl WsServer {
 	/// # Panic
 	///
 	/// Panics if no connection is pending.
-	///
 	pub fn reject(&mut self) {
 		let _ = self.pending_incoming.take().expect("no pending socket");
 	}

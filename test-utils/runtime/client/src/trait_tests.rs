@@ -42,9 +42,9 @@ where
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
-	//		A1 -> B2 -> B3 -> B4
-	//			  B2 -> C3
-	//		A1 -> D2
+	// 		A1 -> B2 -> B3 -> B4
+	// 			  B2 -> C3
+	// 		A1 -> D2
 
 	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
@@ -183,9 +183,9 @@ where
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
-	//		A1 -> B2 -> B3 -> B4
-	//			  B2 -> C3
-	//		A1 -> D2
+	// 		A1 -> B2 -> B3 -> B4
+	// 			  B2 -> C3
+	// 		A1 -> D2
 
 	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
@@ -317,9 +317,9 @@ where
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
-	//		A1 -> B2 -> B3 -> B4
-	//			  B2 -> C3
-	//		A1 -> D2
+	// 		A1 -> B2 -> B3 -> B4
+	// 			  B2 -> C3
+	// 		A1 -> D2
 	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 

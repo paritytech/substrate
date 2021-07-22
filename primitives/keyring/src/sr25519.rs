@@ -144,9 +144,9 @@ impl std::str::FromStr for Keyring {
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> =
-		{ Keyring::iter().map(|i| (i, i.pair())).collect() };
+		Keyring::iter().map(|i| (i, i.pair())).collect();
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> =
-		{ PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect() };
+		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
 }
 
 impl From<Keyring> for AccountId32 {

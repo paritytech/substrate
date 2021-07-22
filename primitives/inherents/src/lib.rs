@@ -140,7 +140,7 @@
 //! 	let block_production = if is_validator {
 //! 		// For block production we want to provide our inherent data provider
 //! 		cool_consensus_block_production(|_parent, ()| async {
-//!			Ok(InherentDataProvider)
+//! 			Ok(InherentDataProvider)
 //! 		}).boxed()
 //! 	} else {
 //! 		futures::future::pending().boxed()

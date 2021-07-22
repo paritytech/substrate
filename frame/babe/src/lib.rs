@@ -473,7 +473,6 @@ impl<T: Config> Pallet<T> {
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	//
 	// ## IMPORTANT NOTE
 	//
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to

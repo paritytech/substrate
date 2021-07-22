@@ -48,7 +48,7 @@
 //!
 //! ### Signed Phase
 //!
-//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
+//! In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
 //! maximum of `pallet::Config::MaxSignedSubmissions` solutions are stored. The queue is always
@@ -1065,9 +1065,7 @@ pub mod pallet {
 				// Discard solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
-					_ => {
-						return InvalidTransaction::Call.into()
-					},
+					_ => return InvalidTransaction::Call.into(),
 				}
 
 				let _ = Self::unsigned_pre_dispatch_checks(solution)

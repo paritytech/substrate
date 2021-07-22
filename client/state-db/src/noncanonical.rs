@@ -42,8 +42,8 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	parents: HashMap<BlockHash, BlockHash>,
 	pending_canonicalizations: Vec<BlockHash>,
 	pending_insertions: Vec<BlockHash>,
-	values: HashMap<Key, (u32, DBValue)>, //ref counted
-	//would be deleted but kept around because block is pinned, ref counted.
+	values: HashMap<Key, (u32, DBValue)>, // ref counted
+	// would be deleted but kept around because block is pinned, ref counted.
 	pinned: HashMap<BlockHash, u32>,
 	pinned_insertions: HashMap<BlockHash, (Vec<Key>, u32)>,
 }

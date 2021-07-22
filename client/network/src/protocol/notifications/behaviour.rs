@@ -99,7 +99,6 @@ use wasm_timer::Instant;
 /// the time of this writing, there may be at most two connections to a peer
 /// and only as a result of simultaneous dialing. However, the implementation
 /// accommodates for any number of connections.
-///
 pub struct Notifications {
 	/// Notification protocols. Entries never change after initialization.
 	notif_protocols: Vec<handler::ProtocolConfig>,

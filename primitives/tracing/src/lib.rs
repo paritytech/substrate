@@ -76,19 +76,18 @@ pub use crate::types::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 /// ```rust
 /// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "fn wide span");
 /// {
-///		sp_tracing::enter_span!(sp_tracing::trace_span!("outer-span"));
-///		{
-///			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
-///			// ..
-///		}  // inner span exists here
-///	} // outer span exists here
+/// 		sp_tracing::enter_span!(sp_tracing::trace_span!("outer-span"));
+/// 		{
+/// 			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
+/// 			// ..
+/// 		}  // inner span exists here
+/// 	} // outer span exists here
 ///
 /// sp_tracing::within_span! {
-///		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
+/// 		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
 ///     1 + 1;
 ///     // some other complex code
 /// } // debug span ends here
-///
 /// ```
 ///
 ///
@@ -127,20 +126,20 @@ pub fn try_init_simple() {
 ///
 /// ```
 /// sp_tracing::within_span! {
-///		sp_tracing::Level::TRACE,
+/// 		sp_tracing::Level::TRACE,
 ///     "test-span";
 ///     1 + 1;
 ///     // some other complex code
 /// }
 ///
 /// sp_tracing::within_span! {
-///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span", you_can_pass="any params");
+/// 		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span", you_can_pass="any params");
 ///     1 + 1;
 ///     // some other complex code
 /// }
 ///
 /// sp_tracing::within_span! {
-///		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
+/// 		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
 ///     1 + 1;
 ///     // some other complex code
 /// }
@@ -214,13 +213,12 @@ macro_rules! enter_span {
 /// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
 ///
 /// {
-///		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "outer-span");
-///		{
-///			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
-///			// ..
-///		}  // inner span exists here
-///	} // outer span exists here
-///
+/// 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "outer-span");
+/// 		{
+/// 			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
+/// 			// ..
+/// 		}  // inner span exists here
+/// 	} // outer span exists here
 /// ```
 #[cfg(any(feature = "std", feature = "with-tracing"))]
 #[macro_export]

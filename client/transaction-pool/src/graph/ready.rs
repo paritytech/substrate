@@ -145,7 +145,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	///
 	/// Transactions are returned in order:
 	/// 1. First by the dependencies:
-	///	- never return transaction that requires a tag, which was not provided by one of the previously
+	/// 	- never return transaction that requires a tag, which was not provided by one of the previously
 	/// returned transactions
 	/// 2. Then by priority:
 	/// - If there are two transactions with all requirements satisfied the one with higher priority goes first.

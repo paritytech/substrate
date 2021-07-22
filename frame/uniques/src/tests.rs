@@ -441,7 +441,7 @@ fn force_asset_status_should_work() {
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 65);
 
-		//force asset status to be free holding
+		// force asset status to be free holding
 		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, true, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 142, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 169, 2));

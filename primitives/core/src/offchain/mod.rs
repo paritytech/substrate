@@ -351,7 +351,6 @@ pub trait Externalities: Send {
 	/// Returns an error if:
 	/// - No new request identifier could be allocated.
 	/// - The method or URI contain invalid characters.
-	///
 	fn http_request_start(
 		&mut self,
 		method: &str,
@@ -371,7 +370,6 @@ pub trait Externalities: Send {
 	///
 	/// An error doesn't poison the request, and you can continue as if the call had never been
 	/// made.
-	///
 	fn http_request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
@@ -393,7 +391,6 @@ pub trait Externalities: Send {
 	/// - The deadline is reached.
 	/// - An I/O error has happened, for example the remote has closed our
 	///   request. The request is then considered invalid.
-	///
 	fn http_request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -446,7 +443,6 @@ pub trait Externalities: Send {
 	/// - The deadline is reached.
 	/// - An I/O error has happened, for example the remote has closed our
 	///   request. The request is then considered invalid.
-	///
 	fn http_response_read_body(
 		&mut self,
 		request_id: HttpRequestId,

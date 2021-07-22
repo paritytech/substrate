@@ -721,7 +721,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// The protocol must have been registered with
 	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
-	///
 	pub fn write_notification(
 		&self,
 		target: PeerId,
@@ -800,9 +799,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// // Do NOT do this
 	/// for peer in peers {
 	/// 	if let Ok(n) = network.notification_sender(peer, ...) {
-	///			if let Ok(s) = n.ready().await {
-	///				let _ = s.send(...);
-	///			}
+	/// 			if let Ok(s) = n.ready().await {
+	/// 				let _ = s.send(...);
+	/// 			}
 	/// 	}
 	/// }
 	/// ```
@@ -829,7 +828,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// See also the [`gossip`](crate::gossip) module for a higher-level way to send
 	/// notifications.
-	///
 	pub fn notification_sender(
 		&self,
 		target: PeerId,
@@ -1123,7 +1121,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	//
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
 	pub fn remove_peers_from_reserved_set(
 		&self,
@@ -1192,7 +1189,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	//
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
 	pub fn remove_from_peers_set(
 		&self,
@@ -1778,15 +1774,15 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					// acceptable, this bug is at the moment intentionally left there and is
 					// intended to be fixed at the same time as
 					// https://github.com/paritytech/substrate/issues/6403.
-					/*this.event_streams.send(Event::NotificationStreamClosed {
-						remote,
-						protocol,
-					});
-					this.event_streams.send(Event::NotificationStreamOpened {
-						remote,
-						protocol,
-						role,
-					});*/
+					// this.event_streams.send(Event::NotificationStreamClosed {
+					// remote,
+					// protocol,
+					// });
+					// this.event_streams.send(Event::NotificationStreamOpened {
+					// remote,
+					// protocol,
+					// role,
+					// });
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamClosed {
 					remote,

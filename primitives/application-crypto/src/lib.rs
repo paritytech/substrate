@@ -52,7 +52,7 @@ pub use traits::*;
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
-///# use sp_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+/// # use sp_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
@@ -82,7 +82,7 @@ macro_rules! app_crypto {
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
-///# use sp_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+/// # use sp_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));

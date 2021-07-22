@@ -518,8 +518,8 @@ fn uncles_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//      A1 -> B2 -> B3 -> B4
-	//	          B2 -> C3
-	//	    A1 -> D2
+	// 	          B2 -> C3
+	// 	    A1 -> D2
 	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
@@ -691,8 +691,8 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//      A1 -> B2 -> B3 -> B4
-	//	          B2 -> C3
-	//	    A1 -> D2
+	// 	          B2 -> C3
+	// 	    A1 -> D2
 	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1

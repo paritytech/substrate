@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//!
 //! An opt-in utility module for reporting equivocations.
 //!
 //! This module defines an offence type for BABE equivocations
@@ -33,7 +32,6 @@
 //! When using this module for enabling equivocation reporting it is required
 //! that the `ValidateUnsigned` for the BABE pallet is used in the runtime
 //! definition.
-//!
 
 use frame_support::traits::{Get, KeyOwnerProofSystem};
 use sp_consensus_babe::{EquivocationProof, Slot};

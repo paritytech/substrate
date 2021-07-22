@@ -17,4 +17,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(Template, crate::mock::new_test_ext(), crate::mock::Test,);
+impl_benchmark_test_suite!(Template, crate::mock::new_test_ext(), crate::mock::Test);

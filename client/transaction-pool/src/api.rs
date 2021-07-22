@@ -394,7 +394,7 @@ where
 		let fetcher = self.fetcher.clone();
 		async move {
 			let transactions = fetcher
-				.remote_body({ RemoteBodyRequest { header, retry_count: None } })
+				.remote_body(RemoteBodyRequest { header, retry_count: None })
 				.await
 				.unwrap_or_else(|e| {
 					log::warn!(target: "txpool", "Failed to fetch block body: {:?}", e);

@@ -187,12 +187,12 @@
 //! fn simple_balances_test() {
 //! 	// given
 //! 	let config = NodeConfig {
-//!			execution_strategies: ExecutionStrategies {
-//!				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 			execution_strategies: ExecutionStrategies {
+//! 				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 //! 		},
 //! 		chain_spec: Box::new(development_config()),
 //! 		log_targets: vec![],

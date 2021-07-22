@@ -45,7 +45,6 @@ use wasm_timer::Instant;
 ///
 /// This struct is nothing more but a data structure containing a list of nodes, where each node
 /// has a reputation and is either connected to us or not.
-///
 #[derive(Debug, Clone)]
 pub struct PeersState {
 	/// List of nodes that we know about.
@@ -185,7 +184,6 @@ impl PeersState {
 	/// # Panic
 	///
 	/// `set` must be within range of the sets passed to [`PeersState::new`].
-	///
 	pub fn peer<'a>(&'a mut self, set: usize, peer_id: &'a PeerId) -> Peer<'a> {
 		// The code below will panic anyway if this happens to be false, but this earlier assert
 		// makes it explicit what is wrong.
@@ -216,7 +214,6 @@ impl PeersState {
 	/// # Panic
 	///
 	/// `set` must be within range of the sets passed to [`PeersState::new`].
-	///
 	// Note: this method could theoretically return a `ConnectedPeer`, but implementing that
 	// isn't simple.
 	pub fn connected_peers(&self, set: usize) -> impl Iterator<Item = &PeerId> {
@@ -237,7 +234,6 @@ impl PeersState {
 	/// # Panic
 	///
 	/// `set` must be within range of the sets passed to [`PeersState::new`].
-	///
 	pub fn highest_not_connected_peer(&mut self, set: usize) -> Option<NotConnectedPeer> {
 		// The code below will panic anyway if this happens to be false, but this earlier assert
 		// makes it explicit what is wrong.

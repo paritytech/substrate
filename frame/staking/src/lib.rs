@@ -926,7 +926,7 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		#[allow(non_snake_case)]
 		fn MaxNominations() -> u32 {
 			T::MAX_NOMINATIONS
@@ -2263,7 +2263,6 @@ pub mod pallet {
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
-		///
 		// TODO: Maybe we can deprecate `chill` in the future.
 		// https://github.com/paritytech/substrate/issues/9111
 		#[pallet::weight(T::WeightInfo::chill_other())]
@@ -2383,7 +2382,7 @@ impl<T: Config> Pallet<T> {
 
 		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
-		/* Input data seems good, no errors allowed after this point */
+		// Input data seems good, no errors allowed after this point
 
 		<Ledger<T>>::insert(&controller, &ledger);
 

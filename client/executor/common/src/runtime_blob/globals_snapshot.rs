@@ -50,7 +50,6 @@ pub trait InstanceGlobals {
 /// a runtime blob that was instrumented by
 /// [`RuntimeBlob::expose_mutable_globals`](super::RuntimeBlob::expose_mutable_globals`).
 
-///
 /// If the code wasn't instrumented then it would be empty and snapshot would do nothing.
 pub struct ExposedMutableGlobalsSet(Vec<String>);
 

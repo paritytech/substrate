@@ -35,29 +35,28 @@
 // --output=./frame/tips/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_tips.
 pub trait WeightInfo {
-	fn report_awesome(r: u32) -> Weight;
+	fn report_awesome(r: u32, ) -> Weight;
 	fn retract_tip() -> Weight;
-	fn tip_new(r: u32, t: u32) -> Weight;
-	fn tip(t: u32) -> Weight;
-	fn close_tip(t: u32) -> Weight;
-	fn slash_tip(t: u32) -> Weight;
+	fn tip_new(r: u32, t: u32, ) -> Weight;
+	fn tip(t: u32, ) -> Weight;
+	fn close_tip(t: u32, ) -> Weight;
+	fn slash_tip(t: u32, ) -> Weight;
 }
 
 /// Weights for pallet_tips using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn report_awesome(r: u32) -> Weight {
+	fn report_awesome(r: u32, ) -> Weight {
 		(49_844_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(r as Weight))
@@ -69,7 +68,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn tip_new(r: u32, t: u32) -> Weight {
+	fn tip_new(r: u32, t: u32, ) -> Weight {
 		(31_777_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(r as Weight))
@@ -78,21 +77,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn tip(t: u32) -> Weight {
+	fn tip(t: u32, ) -> Weight {
 		(22_361_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((584_000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn close_tip(t: u32) -> Weight {
+	fn close_tip(t: u32, ) -> Weight {
 		(84_470_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((326_000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	fn slash_tip(t: u32) -> Weight {
+	fn slash_tip(t: u32, ) -> Weight {
 		(25_214_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(t as Weight))
@@ -103,7 +102,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn report_awesome(r: u32) -> Weight {
+	fn report_awesome(r: u32, ) -> Weight {
 		(49_844_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(r as Weight))
@@ -115,7 +114,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn tip_new(r: u32, t: u32) -> Weight {
+	fn tip_new(r: u32, t: u32, ) -> Weight {
 		(31_777_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(r as Weight))
@@ -124,21 +123,21 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn tip(t: u32) -> Weight {
+	fn tip(t: u32, ) -> Weight {
 		(22_361_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((584_000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn close_tip(t: u32) -> Weight {
+	fn close_tip(t: u32, ) -> Weight {
 		(84_470_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((326_000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	fn slash_tip(t: u32) -> Weight {
+	fn slash_tip(t: u32, ) -> Weight {
 		(25_214_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(t as Weight))

@@ -36,7 +36,6 @@
 //! 	std::task::Poll::Pending::<()>
 //! });
 //! ```
-//!
 
 use crate::import_queue::{BlockImportError, BlockImportResult, Link, Origin};
 use futures::prelude::*;
