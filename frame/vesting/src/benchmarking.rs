@@ -33,8 +33,8 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 // Minimum vested transfer to create a new account.
-fn min_new_account_transfer<T: Config>() {
-	T::MinVestedTransfer.max(T::Currency::minimum_balance())
+fn min_new_account_transfer<T: Config>() -> BalanceOf<T> {
+	T::MinVestedTransfer::get().max(T::Currency::minimum_balance())
 }
 
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
