@@ -508,7 +508,7 @@ mod tests {
 	#[test]
 	fn contract_transfer() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(CODE_TRANSFER, vec![], &mut mock_ext,));
+		assert_ok!(execute(CODE_TRANSFER, vec![], &mut mock_ext));
 
 		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: ALICE, value: 153 }]);
 	}
@@ -562,7 +562,7 @@ mod tests {
 	#[test]
 	fn contract_call() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(CODE_CALL, vec![], &mut mock_ext,));
+		assert_ok!(execute(CODE_CALL, vec![], &mut mock_ext));
 
 		assert_eq!(
 			&mock_ext.calls,
@@ -788,7 +788,7 @@ mod tests {
 	#[test]
 	fn contract_instantiate() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(CODE_INSTANTIATE, vec![], &mut mock_ext,));
+		assert_ok!(execute(CODE_INSTANTIATE, vec![], &mut mock_ext));
 
 		assert_matches!(
 			&mock_ext.instantiates[..],
@@ -885,7 +885,7 @@ mod tests {
 	#[test]
 	fn contract_call_limited_gas() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(&CODE_TRANSFER_LIMITED_GAS, vec![], &mut mock_ext,));
+		assert_ok!(execute(&CODE_TRANSFER_LIMITED_GAS, vec![], &mut mock_ext));
 
 		assert_eq!(
 			&mock_ext.calls,
@@ -1015,7 +1015,7 @@ mod tests {
 
 	#[test]
 	fn caller() {
-		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
 	}
 
 	/// calls `seal_address` and compares the result with the constant 69.
@@ -1063,7 +1063,7 @@ mod tests {
 
 	#[test]
 	fn address() {
-		assert_ok!(execute(CODE_ADDRESS, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_ADDRESS, vec![], MockExt::default()));
 	}
 
 	const CODE_BALANCE: &str = r#"
@@ -1109,7 +1109,7 @@ mod tests {
 
 	#[test]
 	fn balance() {
-		assert_ok!(execute(CODE_BALANCE, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_BALANCE, vec![], MockExt::default()));
 	}
 
 	const CODE_GAS_PRICE: &str = r#"
@@ -1155,7 +1155,7 @@ mod tests {
 
 	#[test]
 	fn gas_price() {
-		assert_ok!(execute(CODE_GAS_PRICE, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_GAS_PRICE, vec![], MockExt::default()));
 	}
 
 	const CODE_GAS_LEFT: &str = r#"
@@ -1253,7 +1253,7 @@ mod tests {
 
 	#[test]
 	fn value_transferred() {
-		assert_ok!(execute(CODE_VALUE_TRANSFERRED, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_VALUE_TRANSFERRED, vec![], MockExt::default()));
 	}
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
@@ -1333,7 +1333,7 @@ mod tests {
 
 	#[test]
 	fn now() {
-		assert_ok!(execute(CODE_TIMESTAMP_NOW, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_TIMESTAMP_NOW, vec![], MockExt::default()));
 	}
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
@@ -1378,7 +1378,7 @@ mod tests {
 
 	#[test]
 	fn minimum_balance() {
-		assert_ok!(execute(CODE_MINIMUM_BALANCE, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_MINIMUM_BALANCE, vec![], MockExt::default()));
 	}
 
 	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
@@ -1423,7 +1423,7 @@ mod tests {
 
 	#[test]
 	fn tombstone_deposit() {
-		assert_ok!(execute(CODE_TOMBSTONE_DEPOSIT, vec![], MockExt::default(),));
+		assert_ok!(execute(CODE_TOMBSTONE_DEPOSIT, vec![], MockExt::default()));
 	}
 
 	const CODE_RANDOM: &str = r#"
@@ -1597,7 +1597,7 @@ mod tests {
 	#[test]
 	fn deposit_event() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(CODE_DEPOSIT_EVENT, vec![], &mut mock_ext,));
+		assert_ok!(execute(CODE_DEPOSIT_EVENT, vec![], &mut mock_ext));
 
 		assert_eq!(
 			mock_ext.events,
@@ -2034,7 +2034,7 @@ mod tests {
 		let call = Call::System(frame_system::Call::remark(b"Hello World".to_vec()));
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
-		assert_eq!(*ext.runtime_calls.borrow(), vec![call],);
+		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);
 		// 0 = ReturnCode::Success
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
 	}
@@ -2051,6 +2051,6 @@ mod tests {
 				origin: ErrorOrigin::Caller,
 			})
 		);
-		assert_eq!(*ext.runtime_calls.borrow(), vec![],);
+		assert_eq!(*ext.runtime_calls.borrow(), vec![]);
 	}
 }

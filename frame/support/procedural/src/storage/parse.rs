@@ -380,7 +380,7 @@ fn get_module_instance(
 		(None, None, None) => Ok(None),
 		(Some(instance), None, _) => Err(syn::Error::new(
 			instance.span(),
-			format!("Expect instantiable trait bound for instance: {}. {}", instance, right_syntax,),
+			format!("Expect instantiable trait bound for instance: {}. {}", instance, right_syntax),
 		)),
 		(None, Some(instantiable), _) => Err(syn::Error::new(
 			instantiable.span(),
