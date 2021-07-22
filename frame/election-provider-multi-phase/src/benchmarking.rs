@@ -344,7 +344,7 @@ frame_benchmarking::benchmarks! {
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
-		let encoded_call = <Call<T>>::submit_unsigned(raw_solution.clone(), witness).encode();
+		let encoded_call = Call::<T>::submit_unsigned { solution: raw_solution.clone(), witness }.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
 		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)

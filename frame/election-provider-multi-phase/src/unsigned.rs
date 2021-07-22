@@ -773,7 +773,7 @@ mod tests {
 	fn validate_unsigned_retracts_wrong_phase() {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned { solution: solution.clone(), witness: witness() };
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -842,7 +842,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned { solution: solution.clone(), witness: witness() };
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -879,7 +879,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned { solution: solution.clone(), witness: witness() };
 			assert_eq!(solution.compact.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -905,7 +905,7 @@ mod tests {
 
 				let solution =
 					RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-				let call = Call::submit_unsigned(solution.clone(), witness());
+				let call = Call::submit_unsigned { solution: solution.clone(), witness: witness() };
 
 				assert_eq!(
 					<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -931,7 +931,7 @@ mod tests {
 
 			// This is in itself an invalid BS solution.
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned { solution: solution.clone(), witness: witness() };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -951,7 +951,7 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned(solution.clone(), correct_witness);
+			let call = Call::submit_unsigned { solution: solution.clone(), witness: correct_witness };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -1346,7 +1346,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(..))));
+			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned { .. })));
 		})
 	}
 
@@ -1363,7 +1363,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
 			let call = match extrinsic.call {
-				OuterCall::MultiPhase(call @ Call::submit_unsigned(..)) => call,
+				OuterCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
 				_ => panic!("bad call: unexpected submission"),
 			};
 

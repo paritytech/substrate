@@ -357,10 +357,10 @@ mod test {
 
 		assert_eq!(
 			pallet_old::Call::<Runtime>::decode(
-				&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]
+				&mut &pallet::Call::<Runtime>::set_dummy { new_value: 10 }.encode()[..]
 			)
 			.unwrap(),
-			pallet_old::Call::<Runtime>::set_dummy(10),
+			pallet_old::Call::<Runtime>::set_dummy { new_value: 10 },
 		);
 	}
 }

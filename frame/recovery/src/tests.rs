@@ -75,11 +75,11 @@ fn recovery_life_cycle_works() {
 		assert_ok!(Recovery::claim_recovery(Origin::signed(1), 5));
 		// Account 1 can use account 5 to close the active recovery process, claiming the deposited
 		// funds used to initiate the recovery process into account 5.
-		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery(1)));
+		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery { rescuer: 1 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 can then use account 5 to remove the recovery configuration, claiming the
 		// deposited funds used to create the recovery configuration into account 5.
-		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery()));
+		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery { }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 should now be able to make a call through account 5 to get all of their funds
 		assert_eq!(Balances::free_balance(5), 110);

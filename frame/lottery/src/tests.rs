@@ -106,7 +106,7 @@ fn set_calls_works() {
 		let too_many_calls = vec![
 			Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }),
 			Call::Balances(BalancesCall::transfer { dest: 0, value: 0 }),
-			Call::System(SystemCall::remark(vec![])),
+			Call::System(SystemCall::remark { _remark: vec![] }),
 		];
 
 		assert_noop!(
@@ -180,7 +180,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 		assert_noop!(Lottery::buy_ticket(Origin::signed(1), bad_origin_call), BadOrigin,);
 
 		// User can call other txs, but doesn't get a ticket
-		let remark_call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));
+		let remark_call = Box::new(Call::System(SystemCall::remark { _remark: b"hello, world!".to_vec() }));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), remark_call));
 		assert_eq!(TicketsCount::<Test>::get(), 0);
 
@@ -195,7 +195,7 @@ fn buy_ticket_works() {
 	new_test_ext().execute_with(|| {
 		// Set calls for the lottery.
 		let calls = vec![
-			Call::System(SystemCall::remark(vec![])),
+			Call::System(SystemCall::remark { _remark: vec![] }),
 			Call::Balances(BalancesCall::transfer { dest: 0, value: 0 }),
 		];
 		assert_ok!(Lottery::set_calls(Origin::root(), calls));
@@ -219,7 +219,7 @@ fn buy_ticket_works() {
 		assert_eq!(TicketsCount::<Test>::get(), 1);
 
 		// Buy ticket for remark
-		let call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));
+		let call = Box::new(Call::System(SystemCall::remark { _remark: b"hello, world!".to_vec() }));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		assert_eq!(TicketsCount::<Test>::get(), 2);
 
