@@ -30,6 +30,7 @@ mod partial_eq_no_bound;
 mod default_no_bound;
 mod key_prefix;
 mod dummy_part_checker;
+mod test_setup;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
@@ -376,6 +377,11 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+}
+
+#[proc_macro_attribute]
+pub fn setup_default_test_parameters(attr: TokenStream, item: TokenStream) -> TokenStream {
+	test_setup::setup_default_test_parameters(attr, item).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.

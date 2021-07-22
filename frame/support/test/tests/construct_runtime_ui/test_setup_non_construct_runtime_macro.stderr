@@ -1,0 +1,5 @@
+error: Invalid test setup attribute macro: expected `construct_runtime!` macro call
+ --> $DIR/test_setup_non_construct_runtime_macro.rs:2:1
+  |
+2 | parameter_types! {
+  | ^^^^^^^^^^^^^^^

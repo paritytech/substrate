@@ -444,34 +444,8 @@ frame_support::parameter_types!(
 	pub const MyGetParam: u32= 10;
 	pub const MyGetParam2: u32= 11;
 	pub const MyGetParam3: u32= 12;
-	pub const BlockHashCount: u32 = 250;
 );
 
-impl frame_system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::AllowAll;
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u32;
-	type Call = Call;
-	type Hash = sp_runtime::testing::H256;
-	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-	type OnSetCode = ();
-}
 impl pallet::Config for Runtime {
 	type Event = Event;
 	type MyGetParam = MyGetParam;
@@ -488,6 +462,7 @@ pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo2
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
 
+#[frame_support::setup_default_test_parameters]
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,

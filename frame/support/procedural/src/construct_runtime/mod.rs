@@ -16,7 +16,7 @@
 // limitations under the License.
 
 mod expand;
-mod parse;
+pub(crate) mod parse;
 
 use frame_support_procedural_tools::syn_ext as ext;
 use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
@@ -116,7 +116,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		.into()
 }
 
-fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
+pub(crate) fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
 		where_section: WhereSection {

@@ -1300,6 +1300,8 @@ pub mod pallet_prelude {
 	};
 }
 
+pub use frame_support_procedural::setup_default_test_parameters;
+
 /// `pallet` attribute macro allows to define a pallet to be used in `construct_runtime!`.
 ///
 /// It is define by a module item:
