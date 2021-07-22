@@ -134,7 +134,8 @@ impl BenchmarkCmd {
 					&self.extrinsic,
 					self.lowest_range_values.clone(),
 					self.highest_range_values.clone(),
-					self.steps.clone(),
+					(self.steps, self.steps),
+					(r, self.repeat),
 					!self.no_verify,
 					self.extra,
 				)
