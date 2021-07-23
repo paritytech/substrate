@@ -15,12 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
-	Never,
+	hash::{StorageHasher, Twox128},
 	storage::{self, unhashed, StorageAppend},
-	hash::{Twox128, StorageHasher},
+	Never,
 };
+use codec::{Decode, Encode, EncodeLike, FullCodec};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -78,7 +78,8 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 
 		// attempt to get the length directly.
 		let maybe_old = unhashed::get_raw(&key)
-			.map(|old_data| O::decode(&mut &old_data[..]).map_err(|_| ())).transpose()?;
+			.map(|old_data| O::decode(&mut &old_data[..]).map_err(|_| ()))
+			.transpose()?;
 		let maybe_new = f(maybe_old);
 		if let Some(new) = maybe_new.as_ref() {
 			new.using_encoded(|d| unhashed::put_raw(&key, d));

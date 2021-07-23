@@ -26,7 +26,7 @@
 //!
 //! See [`balance`] for more information.
 
-use crate::{IdentifierT, Voter, ExtendedBalance, Edge};
+use crate::{Edge, ExtendedBalance, IdentifierT, Voter};
 use sp_arithmetic::traits::Zero;
 use sp_std::prelude::*;
 
@@ -57,19 +57,23 @@ pub fn balance<AccountId: IdentifierT>(
 	iterations: usize,
 	tolerance: ExtendedBalance,
 ) -> usize {
-	if iterations == 0 { return 0; }
+	if iterations == 0 {
+		return 0
+	}
 
 	let mut iter = 0;
 	loop {
 		let mut max_diff = 0;
 		for voter in voters.iter_mut() {
 			let diff = balance_voter(voter, tolerance);
-			if diff > max_diff { max_diff = diff; }
+			if diff > max_diff {
+				max_diff = diff;
+			}
 		}
 
 		iter += 1;
 		if max_diff <= tolerance || iter >= iterations {
-			break iter;
+			break iter
 		}
 	}
 }
@@ -80,7 +84,8 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	tolerance: ExtendedBalance,
 ) -> ExtendedBalance {
 	// create a shallow copy of the elected ones. The original one will not be used henceforth.
-	let mut elected_edges = voter.edges
+	let mut elected_edges = voter
+		.edges
 		.iter_mut()
 		.filter(|e| e.candidate.borrow().elected)
 		.collect::<Vec<&mut Edge<AccountId>>>();
@@ -91,9 +96,8 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	}
 
 	// amount of stake from this voter that is used in edges.
-	let stake_used = elected_edges
-		.iter()
-		.fold(0, |a: ExtendedBalance, e| a.saturating_add(e.weight));
+	let stake_used =
+		elected_edges.iter().fold(0, |a: ExtendedBalance, e| a.saturating_add(e.weight));
 
 	// backed stake of each of the elected edges.
 	let backed_stakes = elected_edges
@@ -104,13 +108,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	// backed stake of all the edges for whom we've spent some stake.
 	let backing_backed_stake = elected_edges
 		.iter()
-		.filter_map(|e|
-			if e.weight > 0 {
-				Some(e.candidate.borrow().backed_stake)
-			} else {
-				None
-			}
-		)
+		.filter_map(|e| if e.weight > 0 { Some(e.candidate.borrow().backed_stake) } else { None })
 		.collect::<Vec<_>>();
 
 	let difference = if backing_backed_stake.len() > 0 {
@@ -125,7 +123,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		let mut difference = max_stake.saturating_sub(*min_stake);
 		difference = difference.saturating_add(voter.budget.saturating_sub(stake_used));
 		if difference < tolerance {
-			return difference;
+			return difference
 		}
 		difference
 	} else {
@@ -156,12 +154,18 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		cumulative_backed_stake = cumulative_backed_stake.saturating_add(backed_stake);
 	}
 
-	let last_stake = elected_edges.get(last_index).expect(
-		"length of elected_edges is greater than or equal 2; last_index index is at \
-		the minimum elected_edges.len() - 1; index is within range; qed"
-	).candidate.borrow().backed_stake;
+	let last_stake = elected_edges
+		.get(last_index)
+		.expect(
+			"length of elected_edges is greater than or equal 2; last_index index is at \
+		the minimum elected_edges.len() - 1; index is within range; qed",
+		)
+		.candidate
+		.borrow()
+		.backed_stake;
 	let ways_to_split = last_index + 1;
-	let excess = voter.budget
+	let excess = voter
+		.budget
 		.saturating_add(cumulative_backed_stake)
 		.saturating_sub(last_stake.saturating_mul(ways_to_split as ExtendedBalance));
 
