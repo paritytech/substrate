@@ -162,4 +162,4 @@ fn check_membership_proof_setup<T: Config>(
 	(key, Historical::<T>::prove(key).unwrap())
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false,);
+impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);

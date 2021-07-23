@@ -127,7 +127,7 @@ fn should_return_child_storage() {
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None,).wait(), Ok(Some(1)));
+	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None).wait(), Ok(Some(1)));
 }
 
 #[test]

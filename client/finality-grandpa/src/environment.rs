@@ -1376,7 +1376,7 @@ where
 					set_ref.len(),
 				);
 			} else {
-				afg_log!(initial_sync, "👴 Applying GRANDPA set change to new set {:?}", set_ref,);
+				afg_log!(initial_sync, "👴 Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
 			telemetry!(

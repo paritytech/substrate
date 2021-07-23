@@ -341,7 +341,7 @@ mod tests {
 
 	#[test]
 	fn macro_gen_signature() {
-		assert_eq!(gen_signature!((i32)), FunctionType::new(vec![ValueType::I32], vec![]),);
+		assert_eq!(gen_signature!((i32)), FunctionType::new(vec![ValueType::I32], vec![]));
 
 		assert_eq!(
 			gen_signature!( (i32, u32) -> u32 ),

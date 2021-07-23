@@ -374,7 +374,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
-			ensure!(actual_count as u32 <= candidate_count, Error::<T>::InvalidWitnessData,);
+			ensure!(actual_count as u32 <= candidate_count, Error::<T>::InvalidWitnessData);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
@@ -1677,7 +1677,7 @@ mod tests {
 			assert_eq!(candidate_ids(), Vec::<u64>::new());
 			assert_ok!(submit_candidacy(Origin::signed(1)));
 			assert_eq!(candidate_ids(), vec![1]);
-			assert_noop!(submit_candidacy(Origin::signed(1)), Error::<Test>::DuplicatedCandidate,);
+			assert_noop!(submit_candidacy(Origin::signed(1)), Error::<Test>::DuplicatedCandidate);
 		});
 	}
 
@@ -1695,7 +1695,7 @@ mod tests {
 			assert!(Elections::runners_up().is_empty());
 			assert!(candidate_ids().is_empty());
 
-			assert_noop!(submit_candidacy(Origin::signed(5)), Error::<Test>::MemberSubmit,);
+			assert_noop!(submit_candidacy(Origin::signed(5)), Error::<Test>::MemberSubmit);
 		});
 	}
 
@@ -1715,7 +1715,7 @@ mod tests {
 			assert_eq!(members_ids(), vec![4, 5]);
 			assert_eq!(runners_up_ids(), vec![3]);
 
-			assert_noop!(submit_candidacy(Origin::signed(3)), Error::<Test>::RunnerUpSubmit,);
+			assert_noop!(submit_candidacy(Origin::signed(3)), Error::<Test>::RunnerUpSubmit);
 		});
 	}
 
@@ -1850,7 +1850,7 @@ mod tests {
 	#[test]
 	fn cannot_vote_for_no_candidate() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_noop!(vote(Origin::signed(2), vec![], 20), Error::<Test>::NoVotes,);
+			assert_noop!(vote(Origin::signed(2), vec![], 20), Error::<Test>::NoVotes);
 		});
 	}
 
@@ -2004,7 +2004,7 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
 
-			assert_noop!(vote(Origin::signed(2), vec![4], 1), Error::<Test>::LowBalance,);
+			assert_noop!(vote(Origin::signed(2), vec![4], 1), Error::<Test>::LowBalance);
 		})
 	}
 

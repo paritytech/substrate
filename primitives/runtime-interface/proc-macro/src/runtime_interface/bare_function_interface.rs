@@ -190,7 +190,7 @@ fn generate_call_to_trait(
 	let crate_ = generate_crate_access();
 	let method_name = create_function_ident_with_version(&method.sig.ident, version);
 	let expect_msg =
-		format!("`{}` called outside of an Externalities-provided environment.", method_name,);
+		format!("`{}` called outside of an Externalities-provided environment.", method_name);
 	let arg_names = get_function_argument_names(&method.sig);
 
 	if takes_self_argument(&method.sig) {

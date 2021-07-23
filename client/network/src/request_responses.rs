@@ -788,7 +788,7 @@ pub enum ResponseFailure {
 /// Implements the libp2p [`RequestResponseCodec`] trait. Defines how streams of bytes are turned
 /// into requests and responses and vice-versa.
 #[derive(Debug, Clone)]
-#[doc(hidden)] // Needs to be public in order to satisfy the Rust compiler.
+#[doc(hidden)]// Needs to be public in order to satisfy the Rust compiler.
 pub struct GenericCodec {
 	max_request_size: u64,
 	max_response_size: u64,
