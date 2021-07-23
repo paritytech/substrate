@@ -308,8 +308,7 @@ where
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: config.state_cache_size,
-			state_cache_ratios:
-			config.state_cache_child_ratio.map(|v| sc_client_db::CacheRatios {
+			state_cache_ratios: config.state_cache_child_ratio.map(|v| sc_client_db::CacheRatios {
 				values_top: 100usize.saturating_sub(v),
 				values_children: v,
 				ordered_keys: 0, // TODO put this in params!! (do saturating sub for top)

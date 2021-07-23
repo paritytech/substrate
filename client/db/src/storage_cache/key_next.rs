@@ -19,12 +19,13 @@
 //! Structure and implementation used for caching `next_key` calls.
 //! This uses ordered mapping with key intervals, see `CachedInterval`.
 
-
-use std::collections::{HashMap, BTreeMap};
-use sp_core::storage::ChildInfo;
 use super::EstimateSize;
-use std::sync::Arc;
-use std::borrow::Borrow;
+use sp_core::storage::ChildInfo;
+use std::{
+	borrow::Borrow,
+	collections::{BTreeMap, HashMap},
+	sync::Arc,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default, Hash)]
 struct RcKey<K>(Arc<K>);
@@ -68,7 +69,7 @@ impl<K: Eq> PartialEq<K> for RcKey<K> {
 }
 
 impl<K: Ord> PartialOrd<K> for RcKey<K> {
-  fn partial_cmp(&self, other: &K) -> Option<std::cmp::Ordering> {
+	fn partial_cmp(&self, other: &K) -> Option<std::cmp::Ordering> {
 		self.0.as_ref().partial_cmp(other)
 	}
 }
@@ -93,7 +94,7 @@ impl<K> LRUList<K> {
 		let to_rem = self.lru_bound.lru_pos.next;
 
 		if to_rem == self.lru_bound.as_mut() {
-			return None; // empty
+			return None // empty
 		}
 
 		let child = unsafe { (*to_rem).child_storage_key.as_ref() };
@@ -101,10 +102,7 @@ impl<K> LRUList<K> {
 		Some((key, child))
 	}
 
-	fn touched(
-		self: &mut LRUList<K>,
-		entry: &mut LRUEntry<K>,
-	) {
+	fn touched(self: &mut LRUList<K>, entry: &mut LRUEntry<K>) {
 		let s = entry.detach();
 		unsafe {
 			let ptr: *mut KeyOrderedEntry<K> = self.lru_bound.as_mut();
@@ -117,9 +115,7 @@ impl<K> LRUList<K> {
 }
 
 impl<K> LRUEntry<K> {
-	fn detach(
-		&mut self,
-	) -> *mut KeyOrderedEntry<K> {
+	fn detach(&mut self) -> *mut KeyOrderedEntry<K> {
 		let prev = self.prev;
 		let next = self.next;
 		unsafe {
@@ -133,19 +129,17 @@ impl<K> LRUEntry<K> {
 	}
 }
 
-unsafe impl<K: Send> Send for LRUList<K> { }
-unsafe impl<K: Sync> Sync for LRUList<K> { }
-unsafe impl<K: Send> Send for LRUEntry<K> { }
-unsafe impl<K: Sync> Sync for LRUEntry<K> { }
+unsafe impl<K: Send> Send for LRUList<K> {}
+unsafe impl<K: Sync> Sync for LRUList<K> {}
+unsafe impl<K: Send> Send for LRUEntry<K> {}
+unsafe impl<K: Sync> Sync for LRUEntry<K> {}
 
 pub(super) struct LRUOrderedKeys<K> {
 	/// We use a BTreeMap for storage internally.
 	intervals: BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 	/// Intervals for child storages.
-	child_intervals: HashMap<
-		RcKey<Vec<u8>>,
-		(BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>, RcKey<Vec<u8>>),
-	>,
+	child_intervals:
+		HashMap<RcKey<Vec<u8>>, (BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>, RcKey<Vec<u8>>)>,
 	/// Current total size of contents.
 	used_size: usize,
 	/// Limit size of contents.
@@ -161,7 +155,7 @@ pub(super) struct LocalOrderedKeys<K: Ord> {
 	/// Intervals for child storages.
 	child_intervals: HashMap<Vec<u8>, BTreeMap<RcKey<K>, Option<RcKey<K>>>>,
 }
-	
+
 struct KeyOrderedEntry<K> {
 	/// Position in LRUList.
 	lru_pos: LRUEntry<K>,
@@ -178,10 +172,7 @@ struct KeyOrderedEntry<K> {
 impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 	fn empty() -> Box<Self> {
 		let mut lru_bound = Box::new(KeyOrderedEntry {
-			lru_pos: LRUEntry {
-				prev: std::ptr::null_mut(),
-				next: std::ptr::null_mut(),
-			},
+			lru_pos: LRUEntry { prev: std::ptr::null_mut(), next: std::ptr::null_mut() },
 			key: Default::default(),
 			child_storage_key: None,
 			next_key: None,
@@ -200,16 +191,10 @@ impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 }
 
 impl<K> KeyOrderedEntry<K> {
-	fn lru_touched(
-		&mut self,
-		lru_bound: &mut LRUList<K>,
-	) {
+	fn lru_touched(&mut self, lru_bound: &mut LRUList<K>) {
 		lru_bound.touched(&mut self.lru_pos)
 	}
-	fn lru_touched_opt(
-		&mut self,
-		lru_bound: &mut Option<&mut LRUList<K>>,
-	) {
+	fn lru_touched_opt(&mut self, lru_bound: &mut Option<&mut LRUList<K>>) {
 		lru_bound.as_mut().map(|b| self.lru_touched(b));
 	}
 }
@@ -221,19 +206,18 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			child_intervals: HashMap::new(),
 			used_size: 0,
 			limit,
-			lru: LRUList {
-				lru_bound: KeyOrderedEntry::empty()
-			},
+			lru: LRUList { lru_bound: KeyOrderedEntry::empty() },
 		}
 	}
 
-	fn lru_pop(
-		&mut self
-	) -> bool {
+	fn lru_pop(&mut self) -> bool {
 		if let Some((key, child)) = self.lru.next_pop() {
 			let intervals = if let Some(child) = child {
-				&mut self.child_intervals.get_mut(child.as_ref())
-					.expect("Removed only when no entry").0
+				&mut self
+					.child_intervals
+					.get_mut(child.as_ref())
+					.expect("Removed only when no entry")
+					.0
 			} else {
 				&mut self.intervals
 			};
@@ -245,12 +229,16 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		}
 	}
 
-	pub(super) fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<K>> {
+	pub(super) fn next_storage_key(
+		&mut self,
+		key: &K,
+		child: Option<&ChildInfo>,
+	) -> Option<Option<K>> {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
 				&mut intervals.0
 			} else {
-				return None;
+				return None
 			}
 		} else {
 			&mut self.intervals
@@ -265,14 +253,15 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	) -> Option<Option<K>> {
 		let mut iter = intervals.range_mut::<K, _>(..=key);
 		if let Some((prev_key, state)) = iter.next_back() {
-			let do_match = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
-				key < next_key.borrow()
-			} else {
-				true
-			};
+			let do_match = prev_key == key ||
+				if let Some(next_key) = state.next_key.as_ref() {
+					key < next_key.borrow()
+				} else {
+					true
+				};
 			if do_match {
 				state.lru_touched_opt(lru);
-				return Some(state.next_key.as_ref().map(|k| k.clone_key()));
+				return Some(state.next_key.as_ref().map(|k| k.clone_key()))
 			}
 		}
 		None
@@ -300,14 +289,21 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			} else {
 				let child_key = RcKey::new(info.clone());
 				self.child_intervals.insert(child_key.clone(), (Default::default(), child_key));
-				return self.merge_local_cache_inner(keys, child);
+				return self.merge_local_cache_inner(keys, child)
 			}
 		} else {
 			(&mut self.intervals, None)
 		};
 
 		for (k, next_key) in keys {
-			Self::add_valid_interval_no_lru(intervals, k, child, next_key, &mut self.lru, &mut self.used_size);
+			Self::add_valid_interval_no_lru(
+				intervals,
+				k,
+				child,
+				next_key,
+				&mut self.lru,
+				&mut self.used_size,
+			);
 		}
 		self.apply_lru_limit();
 	}
@@ -325,15 +321,12 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		let mut rc_next_key = None;
 		let mut iter = intervals.range::<K, _>(..=key.as_ref());
 		if let Some((prev_key, state)) = iter.next_back() {
-			let do_match = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
-				key < next_key
-			} else {
-				true
-			};
+			let do_match = prev_key == key ||
+				if let Some(next_key) = state.next_key.as_ref() { key < next_key } else { true };
 
 			if do_match {
 				debug_assert!(&state.next_key == next_key);
-				return;
+				return
 			}
 			if let Some(next_key) = state.next_key.as_ref() {
 				if next_key == key {
@@ -341,15 +334,12 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 				}
 			}
 		}
-	
+
 		let mut iter = intervals.range::<K, _>(key.as_ref()..);
 		let mut do_remove = None;
 		if let Some((prev_key, state)) = iter.next() {
-			let do_match = if let Some(next_key) = next_key.as_ref() {
-				prev_key < next_key
-			} else {
-				true
-			};
+			let do_match =
+				if let Some(next_key) = next_key.as_ref() { prev_key < next_key } else { true };
 			if do_match {
 				debug_assert!(&state.next_key == next_key);
 				do_remove = Some(prev_key.clone());
@@ -365,11 +355,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 		let mut entry = KeyOrderedEntry::empty();
 		let key = rc_key.unwrap_or_else(|| key.clone());
-		let next_key = if rc_next_key.is_some() {
-			rc_next_key
-		} else {
-			next_key.clone()
-		};
+		let next_key = if rc_next_key.is_some() { rc_next_key } else { next_key.clone() };
 		entry.key = key.clone();
 		entry.child_storage_key = child.cloned();
 		entry.next_key = next_key.clone();
@@ -387,12 +373,16 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	}
 
 	/// Update cached intervals from block change delta.
-	pub(super) fn enact_value_changes<'a>(&mut self, key: impl Iterator<Item = (&'a K, bool)>, child: Option<&Vec<u8>>) {
+	pub(super) fn enact_value_changes<'a>(
+		&mut self,
+		key: impl Iterator<Item = (&'a K, bool)>,
+		child: Option<&Vec<u8>>,
+	) {
 		let (intervals, child) = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
 				(&mut intervals.0, Some(&intervals.1))
 			} else {
-				return;
+				return
 			}
 		} else {
 			(&mut self.intervals, None)
@@ -434,10 +424,10 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 				*used_size += state.estimate_size();
 				(end, key)
 			} else {
-				return;
+				return
 			}
 		} else {
-			return;
+			return
 		};
 		let mut entry = KeyOrderedEntry::empty();
 		entry.key = key.clone();
@@ -460,12 +450,16 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		Self::remove_interval_entry(intervals, key, true, used_size)
 	}
 
-	pub(super) fn retract_value_changes<'a>(&mut self, keys: impl Iterator<Item = &'a K>, child: Option<&Vec<u8>>) {
+	pub(super) fn retract_value_changes<'a>(
+		&mut self,
+		keys: impl Iterator<Item = &'a K>,
+		child: Option<&Vec<u8>>,
+	) {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
 				&mut intervals.0
 			} else {
-				return;
+				return
 			}
 		} else {
 			&mut self.intervals
@@ -477,10 +471,19 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			match Self::next_storage_key_inner(intervals, key, &mut None) {
 				Some(_) => {
 					// get prev
-					let prev = intervals.range::<K, _>(..=key).next_back()
-						.expect("If cached there is previous value.").0.clone();
+					let prev = intervals
+						.range::<K, _>(..=key)
+						.next_back()
+						.expect("If cached there is previous value.")
+						.0
+						.clone();
 
-					Self::remove_interval_entry(intervals, prev.as_ref(), false, &mut self.used_size);
+					Self::remove_interval_entry(
+						intervals,
+						prev.as_ref(),
+						false,
+						&mut self.used_size,
+					);
 				},
 				None => (),
 			}
@@ -496,18 +499,19 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	) {
 		let mut iter = intervals.range_mut::<K, _>(..=key);
 		let (do_remove, can_merge) = if let Some((prev_key, state)) = iter.next_back() {
-			let do_remove = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
-				key < next_key.as_ref()
-			} else {
-				true
-			};
+			let do_remove = prev_key == key ||
+				if let Some(next_key) = state.next_key.as_ref() {
+					key < next_key.as_ref()
+				} else {
+					true
+				};
 			if do_remove {
 				(prev_key.clone(), (do_merge && prev_key == key).then(|| state.next_key.clone()))
 			} else {
-				return;
+				return
 			}
 		} else {
-			return;
+			return
 		};
 		if let Some(next_next) = can_merge {
 			if let Some((_prev_key, state)) = iter.next_back() {
@@ -541,20 +545,21 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			if let Some(intervals) = self.child_intervals.get(info.storage_key()) {
 				intervals
 			} else {
-				return None;
+				return None
 			}
 		} else {
 			&self.intervals
 		};
 		let mut iter = intervals.range::<K, _>(..=key);
 		if let Some((prev_key, next_key)) = iter.next_back() {
-			let do_match = prev_key == key ||	if let Some(next_key) = next_key.as_ref() {
-				key < next_key.as_ref()
-			} else {
-				true
-			};
+			let do_match = prev_key == key ||
+				if let Some(next_key) = next_key.as_ref() {
+					key < next_key.as_ref()
+				} else {
+					true
+				};
 			if do_match {
-				return Some(next_key.as_ref().map(|k| k.as_ref().clone()));
+				return Some(next_key.as_ref().map(|k| k.as_ref().clone()))
 			}
 		}
 		None
@@ -568,7 +573,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 				intervals
 			} else {
 				self.child_intervals.insert(info.storage_key().to_vec(), Default::default());
-				return self.insert(key, child, next);
+				return self.insert(key, child, next)
 			}
 		} else {
 			&mut self.intervals
@@ -576,15 +581,16 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 
 		let mut iter = intervals.range::<K, _>(..=&key);
 		if let Some((prev_key, next_key)) = iter.next_back() {
-			let do_match = prev_key == &key ||	if let Some(next_key) = next_key.as_ref() {
-				&key < next_key.as_ref()
-			} else {
-				true
-			};
+			let do_match = prev_key == &key ||
+				if let Some(next_key) = next_key.as_ref() {
+					&key < next_key.as_ref()
+				} else {
+					true
+				};
 
 			if do_match {
 				debug_assert!(next_key.as_ref().map(|k| k.as_ref()) == next.as_ref());
-				return;
+				return
 			}
 			if let Some(next_key) = next_key.as_ref() {
 				if next_key.as_ref() == &key {
@@ -592,15 +598,12 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 				}
 			}
 		}
-	
+
 		let mut iter = intervals.range::<K, _>(&key..);
 		let mut do_remove = None;
 		if let Some((prev_key, next_key)) = iter.next() {
-			let do_match = if let Some(next_key) = next.as_ref() {
-				prev_key < next_key
-			} else {
-				true
-			};
+			let do_match =
+				if let Some(next_key) = next.as_ref() { prev_key < next_key } else { true };
 			if do_match {
 				debug_assert!(next_key.as_ref().map(|k| k.as_ref()) == next.as_ref());
 				do_remove = Some(prev_key.clone());
@@ -613,11 +616,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 
 		intervals.insert(
 			rc_key.unwrap_or_else(|| RcKey::new(key)),
-			if rc_next_key.is_some() {
-				rc_next_key
-			} else {
-				next.map(|n| RcKey::new(n))
-			},
+			if rc_next_key.is_some() { rc_next_key } else { next.map(|n| RcKey::new(n)) },
 		);
 	}
 
@@ -629,7 +628,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
 				intervals
 			} else {
-				return;
+				return
 			}
 		} else {
 			&mut self.intervals
@@ -637,18 +636,19 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 
 		let mut iter = intervals.range_mut::<K, _>(..=&key);
 		let (do_remove, can_merge) = if let Some((prev_key, next_key)) = iter.next_back() {
-			let do_remove = prev_key == &key ||	if let Some(next_key) = next_key.as_ref() {
-				&key < next_key.as_ref()
-			} else {
-				true
-			};
+			let do_remove = prev_key == &key ||
+				if let Some(next_key) = next_key.as_ref() {
+					&key < next_key.as_ref()
+				} else {
+					true
+				};
 			if do_remove {
 				(prev_key.clone(), (prev_key == &key).then(|| next_key.clone()))
 			} else {
-				return;
+				return
 			}
 		} else {
-			return;
+			return
 		};
 		if let Some(next_next) = can_merge {
 			if let Some((_prev_key, next_key)) = iter.next_back() {
@@ -681,11 +681,10 @@ mod tests {
 			}
 			None
 		};
-		use rand::{SeedableRng, Rng};
+		use rand::{Rng, SeedableRng};
 		let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
 		for _ in 0..nb_test {
-
 			let mut l = LocalOrderedKeys::<usize>::default();
 
 			let mut ixs: Vec<_> = (0..query_range).collect();
@@ -733,7 +732,7 @@ mod tests {
 
 	#[test]
 	fn interval_lru_works() {
-		// estimate size for entry is 
+		// estimate size for entry is
 		let entry_size = 30;
 
 		let mut input = LocalOrderedKeys::<u32>::default();

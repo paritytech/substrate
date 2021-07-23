@@ -110,11 +110,8 @@ const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const CACHE_HEADERS: usize = 8;
 
 /// Default value for different lru ration storage.
-const DEFAULT_RATIOS: CacheRatios = CacheRatios {
-	values_top: 8,
-	values_children: 1,
-	ordered_keys: 1,
-};
+const DEFAULT_RATIOS: CacheRatios =
+	CacheRatios { values_top: 8, values_children: 1, ordered_keys: 1 };
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> =
@@ -2514,18 +2511,22 @@ pub(crate) mod tests {
 			db.storage.db.clone()
 		};
 
-		let backend = Backend::<Block>::new(DatabaseSettings {
-			state_cache_size: 16777216,
-			state_cache_ratios: Some(CacheRatios {
-				values_top: 1,
-				values_children: 1,
-				ordered_keys: 1,
-			}),
-			state_pruning: PruningMode::keep_blocks(1),
-			source: DatabaseSettingsSrc::Custom(backing),
-			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorageMode::BlockBody,
-		}, 0).unwrap();
+		let backend = Backend::<Block>::new(
+			DatabaseSettings {
+				state_cache_size: 16777216,
+				state_cache_ratios: Some(CacheRatios {
+					values_top: 1,
+					values_children: 1,
+					ordered_keys: 1,
+				}),
+				state_pruning: PruningMode::keep_blocks(1),
+				source: DatabaseSettingsSrc::Custom(backing),
+				keep_blocks: KeepBlocks::All,
+				transaction_storage: TransactionStorageMode::BlockBody,
+			},
+			0,
+		)
+		.unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
