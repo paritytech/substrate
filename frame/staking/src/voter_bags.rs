@@ -260,7 +260,12 @@ impl<T: Config> VoterList<T> {
 			let new_idx = notional_bag_for::<T>(weight_of(&node.voter.id));
 			node.bag_upper = new_idx;
 			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
+			println!("update_position_fr bag BEFORe insert: {:#?}", bag);
+
 			bag.insert_node(node);
+
+			// TODO remove this
+			println!("update_position_fr bag AFTER insert: {:#?}", bag);
 			bag.put();
 
 			(old_idx, new_idx)
@@ -471,8 +476,14 @@ impl<T: Config> Bag<T> {
 	fn insert_node(&mut self, mut node: Node<T>) {
 		let id = node.voter.id.clone();
 
+		// if let Some(tail_id) = self.tail {
+		// 	debug_assert!(id != tail_id, "Should never insert a node into a bag where it already exists")
+		//
+		// } else {
+		node.prev = self.tail.clone();
 		node.prev = self.tail.clone();
 		node.next = None;
+		println!("insert_node before node.put() (id {:#?}) {:#?}", node.voter.id, node);
 		node.put();
 
 		// update the previous tail
@@ -924,6 +935,7 @@ pub mod make_bags {
 mod voter_list {
 	use super::*;
 	use crate::mock::*;
+	use frame_support::{assert_ok, assert_storage_noop, traits::Currency};
 
 	#[test]
 	fn basic_setup_works() {
@@ -1040,12 +1052,9 @@ mod voter_list {
 
 	#[test]
 	fn insert_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
 			// given
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![11, 21, 101, 31]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 			// TODO maybe checking the actual bags here is overkill since this is aimed at VoterList
 			// api and not bags? (same Q for other tests here)
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
@@ -1056,37 +1065,28 @@ mod voter_list {
 			VoterList::<Test>::insert(Voter::<_>::nominator(42), Pallet::<Test>::weight_of_fn());
 
 			// then
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![11, 21, 101, 42, 31]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 42, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42])]);
 
-			// TODO maybe this scenario is overkill and instead
-			// should be tested on the bags abstraction level? (same Q for other tests here)
 			// Insert into a non-existent bag:
 			// when
 			bond(422, 433, 1_001);
 			VoterList::<Test>::insert(Voter::<_>::nominator(422), Pallet::<Test>::weight_of_fn());
 
 			// then
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![422, 11, 21, 101, 88, 31]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![422, 11, 21, 101, 42, 31]);
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![31]), (1_000, vec![11, 21, 101, 88]), (2_000, vec![422])]
+				vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42]), (2_000, vec![422])]
 			);
 		});
 	}
 
 	#[test]
 	fn insert_as_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
 			// given
-			let actual =
-				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			let actual = get_voter_list_as_voters();
 			let mut expected: Vec<Voter<u64>> = vec![
 				Voter::<_>::validator(11),
 				Voter::<_>::validator(21),
@@ -1100,8 +1100,7 @@ mod voter_list {
 			VoterList::<Test>::insert_as(&42, VoterType::Nominator);
 
 			// then
-			let actual =
-				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			let actual = get_voter_list_as_voters();
 			expected.push(Voter::<_>::nominator(42));
 			assert_eq!(actual, expected);
 
@@ -1110,8 +1109,7 @@ mod voter_list {
 			VoterList::<Test>::insert_as(&42, VoterType::Validator);
 
 			// then
-			let actual =
-				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			let actual = get_voter_list_as_voters();
 			expected[4] = Voter::<_>::validator(42);
 			assert_eq!(actual, expected);
 		});
@@ -1119,12 +1117,9 @@ mod voter_list {
 
 	#[test]
 	fn remove_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
 			// given
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![11, 21, 101, 31]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
 
 			// Remove a non-existent voter:
@@ -1132,10 +1127,7 @@ mod voter_list {
 			VoterList::<Test>::remove(&42);
 
 			// then nothing changes
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![11, 21, 101, 31]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
 
 			// Remove from a bag with multiple nodes:
@@ -1143,21 +1135,17 @@ mod voter_list {
 			VoterList::<Test>::remove(&11);
 
 			// then
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![21, 101, 31]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![21, 101, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![21, 101])]);
 
 			// Remove from a bag with only one node:
 			VoterList::<Test>::remove(&31);
 
 			// then
-			assert_eq!(
-				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
-				vec![21, 101]
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![21, 101]);
 			assert_eq!(get_bags(), vec![(10, vec![]), (1_000, vec![21, 101])]);
+
+			// TODO check storage is cleaned up
 		});
 	}
 
@@ -1165,7 +1153,81 @@ mod voter_list {
 	fn update_position_for_works() {
 		// alter the genesis state to require a re-bag, then ensure this fixes it. Might be similar
 		// `rebag_works()`
-		todo!();
+
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			// given a correctly placed account 31
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+
+			let weight_of = Staking::weight_of_fn();
+
+			let node_31 = Node::<Test>::from_id(&31).unwrap();
+			assert!(!node_31.is_misplaced(&weight_of));
+			assert_eq!(weight_of(&31), 1);
+
+			// when account 31 bonds extra and needs to be moved to a non-existing higher bag
+			// (we can't call bond_extra, because that implicitly calls update_position_for)
+			Balances::make_free_balance_be(&31, 11);
+			let controller = Staking::bonded(&31).unwrap();
+			let mut ledger = Staking::ledger(&controller).unwrap();
+			ledger.total = 11;
+			ledger.active = 11;
+			Staking::update_ledger(&controller, &ledger);
+
+			assert!(node_31.is_misplaced(&weight_of));
+			assert_eq!(weight_of(&31), 11);
+
+			// then updating position moves it to the correct bag
+			assert_eq!(VoterList::<Test>::update_position_for(node_31, &weight_of), Some((10, 20)));
+			assert_eq!(get_bags(), vec![(10, vec![]), (20, vec![31]), (1_000, vec![11, 21, 101])]);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+
+			// and if you try and update the position with no change in active stake nothing changes
+			let node_31 = Node::<Test>::from_id(&31).unwrap();
+			assert_storage_noop!(assert_eq!(
+				VoterList::<Test>::update_position_for(node_31, &weight_of),
+				None,
+			));
+
+			// when account 31 bonds extra and needs to be moved to an existent higher bag
+			Balances::make_free_balance_be(&31, 1_000);
+			let mut ledger = Staking::ledger(&controller).unwrap();
+			ledger.total = 61;
+			ledger.active = 61;
+			Staking::update_ledger(&controller, &ledger);
+
+			// then updating positions moves it to the correct bag
+			let node_31 = Node::<Test>::from_id(&31).unwrap();
+			assert_eq!(
+				VoterList::<Test>::update_position_for(node_31, &weight_of),
+				Some((20, 1_000))
+			);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![]), (20, vec![]), (1_000, vec![11, 21, 101, 31])]
+			);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+
+			// when account 31 bonds extra but should not change bags
+			let mut ledger = Staking::ledger(&controller).unwrap();
+			ledger.total = 1_000;
+			ledger.active = 1_000;
+			Staking::update_ledger(&controller, &ledger);
+
+			// then nothing changes
+			let node_31 = Node::<Test>::from_id(&31).unwrap();
+			assert_storage_noop!(assert_eq!(
+				VoterList::<Test>::update_position_for(node_31, &weight_of),
+				None,
+			));
+		});
+	}
+
+	fn update_position_failure_edge_case() {
+		// let weight_of = Staking::weight_of_fn();
+
+		// Balances::make_free_balance_be(&31, 11);
+		// assert_ok!(Staking::bond_extra(Origin::signed(31), 11));
 	}
 }
 

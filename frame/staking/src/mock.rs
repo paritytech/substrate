@@ -493,31 +493,33 @@ impl ExtBuilder {
 		ext.execute_with(test);
 		ext.execute_with(post_conditions);
 	}
+	/// WARNING: This should only be use for testing `VoterList` api or lower.
+	pub fn build_and_execute_without_check_count(self, test: impl FnOnce() -> ()) {
+		let mut ext = self.build();
+		ext.execute_with(test);
+		ext.execute_with(post_conditions_without_check_count);
+	}
 }
 
 fn post_conditions() {
-	check_nominators();
-	check_exposures();
-	check_ledgers();
+	post_conditions_without_check_count();
 	check_count();
 }
 
+fn post_conditions_without_check_count() {
+	check_nominators();
+	check_exposures();
+	check_ledgers();
+}
+
 fn check_count() {
-	// @kianenigma
-	// TODO: checking this is good for tests of top level staking api, but when
-	// unit testing parts of voter_bags we can't expect this to update properly
-	// (unless we manually do it in the test, which might be ok?).
-	// Instead I think the debug_asserts should be enough?
-	// Otherwise maybe we can have a `build_and_execute_without_check_count`, but that
-	// is just more code.
+	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let validator_count = Validators::<Test>::iter().count() as u32;
+	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
+	assert_eq!(validator_count, CounterForValidators::<Test>::get());
 
-	// let nominator_count = Nominators::<Test>::iter().count() as u32;
-	// let validator_count = Validators::<Test>::iter().count() as u32;
-	// assert_eq!(nominator_count, CounterForNominators::<Test>::get());
-	// assert_eq!(validator_count, CounterForValidators::<Test>::get());
-
-	// let voters_count = CounterForVoters::<Test>::get();
-	// assert_eq!(voters_count, nominator_count + validator_count);
+	let voters_count = CounterForVoters::<Test>::get();
+	assert_eq!(voters_count, nominator_count + validator_count);
 }
 
 fn check_ledgers() {
@@ -842,4 +844,12 @@ pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
 				.map(|bag| (*t, bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()))
 		})
 		.collect::<Vec<_>>()
+}
+
+pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
+	VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>()
+}
+
+pub(crate) fn get_voter_list_as_voters() -> Vec<voter_bags::Voter<AccountId>> {
+	VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>()
 }
