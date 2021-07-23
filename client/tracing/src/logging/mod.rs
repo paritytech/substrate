@@ -33,10 +33,9 @@ use std::io;
 use tracing::Subscriber;
 use tracing_subscriber::{
 	filter::LevelFilter,
-	fmt::time::ChronoLocal,
 	fmt::{
-		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
-		SubscriberBuilder,
+		format, time::ChronoLocal, FormatEvent, FormatFields, Formatter, Layer as FmtLayer,
+		MakeWriter, SubscriberBuilder,
 	},
 	layer::{self, SubscriberExt},
 	registry::LookupSpan,
@@ -153,9 +152,7 @@ where
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
 	let max_level = to_log_level_filter(max_level_hint);
 
-	tracing_log::LogTracer::builder()
-		.with_max_level(max_level)
-		.init()?;
+	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
 	let simple = match max_level_hint {
@@ -276,23 +273,19 @@ impl LoggerBuilder {
 			}
 		} else {
 			if self.log_reloading {
-				let subscriber = prepare_subscriber(
-					&self.directives,
-					None,
-					self.force_colors,
-					|builder| enable_log_reloading!(builder),
-				)?;
+				let subscriber =
+					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
+						enable_log_reloading!(builder)
+					})?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
 				Ok(())
 			} else {
-				let subscriber = prepare_subscriber(
-					&self.directives,
-					None,
-					self.force_colors,
-					|builder| builder,
-				)?;
+				let subscriber =
+					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
+						builder
+					})?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
@@ -410,12 +403,7 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(
-			re.is_match(output.trim()),
-			"Expected:\n{}\nGot:\n{}",
-			re,
-			output,
-		);
+		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output);
 	}
 
 	/// This is not an actual test, it is used by the `prefix_in_log_lines` test.
@@ -460,12 +448,7 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(
-			re.is_match(output.trim()),
-			"Expected:\n{}\nGot:\n{}",
-			re,
-			output,
-		);
+		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output);
 	}
 
 	#[test]
@@ -503,18 +486,9 @@ mod tests {
 			eprint!("MAX_LOG_LEVEL={:?}", log::max_level());
 		} else {
 			assert_eq!("MAX_LOG_LEVEL=Info", run_test(None, None));
-			assert_eq!(
-				"MAX_LOG_LEVEL=Trace",
-				run_test(Some("test=trace".into()), None)
-			);
-			assert_eq!(
-				"MAX_LOG_LEVEL=Debug",
-				run_test(Some("test=debug".into()), None)
-			);
-			assert_eq!(
-				"MAX_LOG_LEVEL=Trace",
-				run_test(None, Some("test=info".into()))
-			);
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(Some("test=trace".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Debug", run_test(Some("test=debug".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(None, Some("test=info".into())));
 		}
 	}
 }

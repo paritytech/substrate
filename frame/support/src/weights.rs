@@ -127,15 +127,20 @@
 //! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
+use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use codec::{Encode, Decode};
-use sp_runtime::{RuntimeDebug, traits::SignedExtension};
-use sp_runtime::generic::{CheckedExtrinsic, UncheckedExtrinsic};
-use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
-use sp_runtime::traits::SaturatedConversion;
-use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
+use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
+use sp_arithmetic::{
+	traits::{BaseArithmetic, Saturating, Unsigned},
+	Perbill,
+};
+use sp_runtime::{
+	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+	traits::{SaturatedConversion, SignedExtension},
+	RuntimeDebug,
+};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -152,7 +157,7 @@ pub mod constants {
 	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
 	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
 	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
-	pub const WEIGHT_PER_NANOS:  Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
@@ -267,13 +272,17 @@ pub trait OneOrMany<T> {
 }
 
 impl OneOrMany<DispatchClass> for DispatchClass {
-    type Iter = sp_std::iter::Once<DispatchClass>;
-    fn into_iter(self) -> Self::Iter { sp_std::iter::once(self) }
+	type Iter = sp_std::iter::Once<DispatchClass>;
+	fn into_iter(self) -> Self::Iter {
+		sp_std::iter::once(self)
+	}
 }
 
 impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
-    type Iter = sp_std::iter::Cloned<sp_std::slice::Iter<'a, DispatchClass>>;
-    fn into_iter(self) -> Self::Iter { self.iter().cloned() }
+	type Iter = sp_std::iter::Cloned<sp_std::slice::Iter<'a, DispatchClass>>;
+	fn into_iter(self) -> Self::Iter {
+		self.iter().cloned()
+	}
 }
 
 /// Primitives related to priority management of Frame.
@@ -365,43 +374,32 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 	match result {
 		Ok(post_info) => &post_info,
 		Err(err) => &err.post_info,
-	}.calc_actual_weight(info)
+	}
+	.calc_actual_weight(info)
 }
 
 impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
 		let (actual_weight, pays_fee) = post_weight_info;
-		Self {
-			actual_weight,
-			pays_fee,
-		}
+		Self { actual_weight, pays_fee }
 	}
 }
 
 impl From<Pays> for PostDispatchInfo {
 	fn from(pays_fee: Pays) -> Self {
-		Self {
-			actual_weight: None,
-			pays_fee,
-		}
+		Self { actual_weight: None, pays_fee }
 	}
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {
 	fn from(actual_weight: Option<Weight>) -> Self {
-		Self {
-			actual_weight,
-			pays_fee: Default::default(),
-		}
+		Self { actual_weight, pays_fee: Default::default() }
 	}
 }
 
 impl From<()> for PostDispatchInfo {
 	fn from(_: ()) -> Self {
-		Self {
-			actual_weight: None,
-			pays_fee: Default::default(),
-		}
+		Self { actual_weight: None, pays_fee: Default::default() }
 	}
 }
 
@@ -434,8 +432,9 @@ pub trait WithPostDispatchInfo {
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
 }
 
-impl<T> WithPostDispatchInfo for T where
-	T: Into<DispatchError>
+impl<T> WithPostDispatchInfo for T
+where
+	T: Into<DispatchError>,
 {
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
 		DispatchErrorWithPostInfo {
@@ -542,8 +541,9 @@ impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 
 // `WeighData` as a closure
 #[allow(deprecated)]
-impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
-	WD : Fn(Args) -> Weight
+impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF>
+where
+	WD: Fn(Args) -> Weight,
 {
 	fn weigh_data(&self, args: Args) -> Weight {
 		(self.0)(args)
@@ -560,8 +560,9 @@ impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> 
 
 // `ClassifyDispatch` as a raw value
 #[allow(deprecated)]
-impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
-	CD : Fn(Args) -> DispatchClass
+impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF>
+where
+	CD: Fn(Args) -> DispatchClass,
 {
 	fn classify_dispatch(&self, args: Args) -> DispatchClass {
 		(self.1)(args)
@@ -578,8 +579,9 @@ impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 
 // `PaysFee` as a closure
 #[allow(deprecated)]
-impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF> where
-	PF : Fn(Args) -> Pays
+impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF>
+where
+	PF: Fn(Args) -> Pays,
 {
 	fn pays_fee(&self, args: Args) -> Pays {
 		(self.2)(args)
@@ -599,8 +601,7 @@ where
 }
 
 /// Implementation for checked extrinsic.
-impl<AccountId, Call, Extra> GetDispatchInfo
-	for CheckedExtrinsic<AccountId, Call, Extra>
+impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
 where
 	Call: GetDispatchInfo,
 {
@@ -614,11 +615,7 @@ where
 impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		DispatchInfo {
-			weight: self.encode().len() as _,
-			pays_fee: Pays::Yes,
-			..Default::default()
-		}
+		DispatchInfo { weight: self.encode().len() as _, pays_fee: Pays::Yes, ..Default::default() }
 	}
 }
 
@@ -690,32 +687,35 @@ pub trait WeightToFeePolynomial {
 	/// This should not be overriden in most circumstances. Calculation is done in the
 	/// `Balance` type and never overflows. All evaluation is saturating.
 	fn calc(weight: &Weight) -> Self::Balance {
-		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
-			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
+		Self::polynomial()
+			.iter()
+			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
+				let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
 
-			// The sum could get negative. Therefore we only sum with the accumulator.
-			// The Perbill Mul implementation is non overflowing.
-			let frac = args.coeff_frac * w;
-			let integer = args.coeff_integer.saturating_mul(w);
+				// The sum could get negative. Therefore we only sum with the accumulator.
+				// The Perbill Mul implementation is non overflowing.
+				let frac = args.coeff_frac * w;
+				let integer = args.coeff_integer.saturating_mul(w);
 
-			if args.negative {
-				acc = acc.saturating_sub(frac);
-				acc = acc.saturating_sub(integer);
-			} else {
-				acc = acc.saturating_add(frac);
-				acc = acc.saturating_add(integer);
-			}
+				if args.negative {
+					acc = acc.saturating_sub(frac);
+					acc = acc.saturating_sub(integer);
+				} else {
+					acc = acc.saturating_add(frac);
+					acc = acc.saturating_add(integer);
+				}
 
-			acc
-		})
+				acc
+			})
 	}
 }
 
 /// Implementor of `WeightToFeePolynomial` that maps one unit of weight to one unit of fee.
 pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
 
-impl<T> WeightToFeePolynomial for IdentityFee<T> where
-	T: BaseArithmetic + From<u32> + Copy + Unsigned
+impl<T> WeightToFeePolynomial for IdentityFee<T>
+where
+	T: BaseArithmetic + From<u32> + Copy + Unsigned,
 {
 	type Balance = T;
 
@@ -813,8 +813,8 @@ impl PerDispatchClass<Weight> {
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
+	use crate::{decl_module, parameter_types, traits::Get};
 
 	pub trait Config: 'static {
 		type Origin;
@@ -925,24 +925,15 @@ mod tests {
 
 	#[test]
 	fn extract_actual_weight_works() {
-		let pre = DispatchInfo {
-			weight: 1000,
-			.. Default::default()
-		};
+		let pre = DispatchInfo { weight: 1000, ..Default::default() };
 		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), 7);
 		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), 1000);
-		assert_eq!(
-			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre),
-			9
-		);
+		assert_eq!(extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre), 9);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
-		let pre = DispatchInfo {
-			weight: 1000,
-			.. Default::default()
-		};
+		let pre = DispatchInfo { weight: 1000, ..Default::default() };
 		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), 1000);
 		assert_eq!(
 			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),

@@ -38,9 +38,9 @@
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
 //! limited. Currently, the maximum size of an allocation is 32 MiB.
 //!
-//! When the allocator serves an allocation request it first checks the linked list for the respective
-//! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
-//! In any case the order is stored in the header of the allocation.
+//! When the allocator serves an allocation request it first checks the linked list for the
+//! respective order. If it doesn't have any free chunks, the allocator requests memory from the
+//! bump allocator. In any case the order is stored in the header of the allocation.
 //!
 //! Upon deallocation we get the order of the allocation from its header and then add that
 //! allocation to the linked list for the respective order.
@@ -59,16 +59,21 @@
 //!   allocator was consumed by the 32 MiB allocation, allocations of all sizes except 32 MiB will
 //!   fail.
 //!
-//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
-//!   will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will take
-//!   up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount in use
-//!   of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilisation is going to be around
-//!   75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be wasted.
-//!   This is more pronounced (in terms of absolute heap amounts) with larger allocation sizes.
+//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001
+//!   MiB will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will
+//!   take up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount
+//!   in use of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilization is going to
+//!   be around 75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be
+//!   wasted. This is more pronounced (in terms of absolute heap amounts) with larger allocation
+//!   sizes.
 
 use crate::Error;
-use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
+use std::{
+	convert::{TryFrom, TryInto},
+	mem,
+	ops::{Index, IndexMut, Range},
+};
 
 /// The minimal alignment guaranteed by this allocator.
 ///
@@ -85,16 +90,7 @@ fn error(msg: &'static str) -> Error {
 	Error::Other(msg)
 }
 
-/// A custom "trace" implementation that is only activated when `feature = std`.
-///
-/// Uses `wasm-heap` as default target.
-macro_rules! trace {
-	( $( $args:expr ),+ ) => {
-		sp_std::if_std! {
-			log::trace!(target: "wasm-heap", $( $args ),+);
-		}
-	}
-}
+const LOG_TARGET: &'static str = "wasm-heap";
 
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.
@@ -146,7 +142,8 @@ impl Order {
 	/// `MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION`
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
-			return Err(Error::RequestedAllocationTooLarge);
+			log::warn!(target: LOG_TARGET, "going to fail due to allocating {:?}", size);
+			return Err(Error::RequestedAllocationTooLarge)
 		} else if size < MIN_POSSIBLE_ALLOCATION {
 			MIN_POSSIBLE_ALLOCATION
 		} else {
@@ -223,7 +220,6 @@ impl Link {
 /// ```
 ///
 /// ## Occupied header
-///
 /// ```ignore
 /// 64             32                  0
 //  +--------------+-------------------+
@@ -297,9 +293,7 @@ struct FreeLists {
 impl FreeLists {
 	/// Creates the free empty lists.
 	fn new() -> Self {
-		Self {
-			heads: [Link::Nil; N_ORDERS]
-		}
+		Self { heads: [Link::Nil; N_ORDERS] }
 	}
 
 	/// Replaces a given link for the specified order and returns the old one.
@@ -331,6 +325,19 @@ pub struct FreeingBumpHeapAllocator {
 	free_lists: FreeLists,
 	total_size: u32,
 	poisoned: bool,
+	max_total_size: u32,
+	max_bumper: u32,
+}
+
+impl Drop for FreeingBumpHeapAllocator {
+	fn drop(&mut self) {
+		log::debug!(
+			target: LOG_TARGET,
+			"allocator being destroyed, max_total_size {}, max_bumper {}",
+			self.max_total_size,
+			self.max_bumper,
+		)
+	}
 }
 
 impl FreeingBumpHeapAllocator {
@@ -347,6 +354,8 @@ impl FreeingBumpHeapAllocator {
 			free_lists: FreeLists::new(),
 			total_size: 0,
 			poisoned: false,
+			max_total_size: 0,
+			max_bumper: aligned_heap_base,
 		}
 	}
 
@@ -389,22 +398,32 @@ impl FreeingBumpHeapAllocator {
 				self.free_lists[order] = next_free;
 
 				header_ptr
-			}
+			},
 			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
-				Self::bump(
-					&mut self.bumper,
-					order.size() + HEADER_SIZE,
-					mem.size(),
-				)?
-			}
+				Self::bump(&mut self.bumper, order.size() + HEADER_SIZE, mem.size())?
+			},
 		};
 
 		// Write the order in the occupied header.
 		Header::Occupied(order).write_into(mem, header_ptr)?;
 
 		self.total_size += order.size() + HEADER_SIZE;
-		trace!("Heap size is {} bytes after allocation", self.total_size);
+
+		log::trace!(
+			target: LOG_TARGET,
+			"after allocation, total_size = {}, bumper = {}.",
+			self.total_size,
+			self.bumper,
+		);
+
+		// update trackers if needed.
+		if self.total_size > self.max_total_size {
+			self.max_total_size = self.total_size;
+		}
+		if self.bumper > self.max_bumper {
+			self.max_bumper = self.bumper;
+		}
 
 		bomb.disarm();
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
@@ -418,7 +437,11 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
+	pub fn deallocate<M: Memory + ?Sized>(
+		&mut self,
+		mem: &mut M,
+		ptr: Pointer<u8>,
+	) -> Result<(), Error> {
 		if self.poisoned {
 			return Err(error("the allocator has been poisoned"))
 		}
@@ -442,7 +465,11 @@ impl FreeingBumpHeapAllocator {
 			.total_size
 			.checked_sub(order.size() + HEADER_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
-		trace!("Heap size is {} bytes after deallocation", self.total_size);
+		log::trace!(
+			"after deallocation, total_size = {}, bumper = {}.",
+			self.total_size,
+			self.bumper,
+		);
 
 		bomb.disarm();
 		Ok(())
@@ -450,12 +477,17 @@ impl FreeingBumpHeapAllocator {
 
 	/// Increases the `bumper` by `size`.
 	///
-	/// Returns the `bumper` from before the increase.
-	/// Returns an `Error::AllocatorOutOfSpace` if the operation
-	/// would exhaust the heap.
+	/// Returns the `bumper` from before the increase. Returns an `Error::AllocatorOutOfSpace` if
+	/// the operation would exhaust the heap.
 	fn bump(bumper: &mut u32, size: u32, heap_end: u32) -> Result<u32, Error> {
 		if *bumper + size > heap_end {
-			return Err(Error::AllocatorOutOfSpace);
+			log::error!(
+				target: LOG_TARGET,
+				"running out of space with current bumper {}, mem size {}",
+				bumper,
+				heap_end
+			);
+			return Err(Error::AllocatorOutOfSpace)
 		}
 
 		let res = *bumper;

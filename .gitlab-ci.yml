@@ -40,7 +40,7 @@ variables:                         &default-vars
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.11"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 default:
@@ -233,6 +233,14 @@ cargo-deny:
   # FIXME: Temorarily allow to fail.
   allow_failure:                   true
 
+cargo-fmt:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - cargo +nightly fmt --all -- --check
+  allow_failure:                   true
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
@@ -326,13 +334,14 @@ test-linux-stable:                 &test-linux
 unleash-check:
   stage:                           test
   <<:                              *docker-env
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+  <<:                              *test-refs-no-trigger
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash de-dev-deps
+    # Reuse build artifacts when running checks (cuts down check time by 3x)
+    # TODO: Implement this optimization in cargo-unleash rather than here
+    - mkdir -p target/unleash
+    - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
 test-frame-examples-compile-to-wasm:
@@ -530,6 +539,7 @@ build-rust-doc:
   script:
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
@@ -642,6 +652,7 @@ publish-s3-doc:
         echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
         exit 1
       )
+    - ls -lah crate-docs
     - aws s3 sync --delete --size-only --only-show-errors
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
@@ -707,8 +718,8 @@ trigger-simnet:
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}
     TRGR_REF:                      ${CI_COMMIT_REF_NAME}
-    # simnet project ID
+    # Simnet project ID
     DWNSTRM_ID:                    332
   script:
-    # API trigger for a simnet job
+    # API trigger for a Simnet job
     - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
