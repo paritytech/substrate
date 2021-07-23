@@ -4084,7 +4084,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			// We should never insert into the validators or nominators map directly as this will
 			// not keep track of the count. This test should panic as we verify the count is accurate
-			// after every test using the `post_checks` in `mock`.
+			// after every test using the `post_conditions` in `mock`.
 			Validators::<Test>::insert(987654321, ValidatorPrefs::default());
 		})
 	}
@@ -4095,7 +4095,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			// We should never insert into the validators or nominators map directly as this will
 			// not keep track of the count. This test should panic as we verify the count is accurate
-			// after every test using the `post_checks` in `mock`.
+			// after every test using the `post_conditions` in `mock`.
 			Nominators::<Test>::insert(
 				987654321,
 				Nominations {
