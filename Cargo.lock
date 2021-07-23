@@ -6273,9 +6273,9 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.10.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
+checksum = "e90f6931e6b3051e208a449c342246cb7c786ef300789b95619f46f1dd75d9b0"
 dependencies = [
  "fixed-hash",
  "impl-codec",
@@ -6449,9 +6449,9 @@ dependencies = [
 
 [[package]]
 name = "pwasm-utils"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0e517f47d9964362883182404b68d0b6949382c0baa40aa5ffca94f5f1e3481"
+checksum = "f0c1a2f10b47d446372a4f397c58b329aaea72b2daf9395a623a411cb8ccb54f"
 dependencies = [
  "byteorder",
  "log",
