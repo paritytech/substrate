@@ -74,28 +74,28 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+mod tests;
 pub mod weights;
 
 use sp_std::prelude::*;
 
-use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
+use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure};
 
 use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
-	ReservableCurrency};
+	Currency, ExistenceRequirement::AllowDeath, Get, Imbalance, OnUnbalanced, ReservableCurrency,
+};
 
-use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
-	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
-}};
+use sp_runtime::{
+	traits::{AccountIdConversion, BadOrigin, Saturating, StaticLookup, Zero},
+	DispatchResult, Permill, RuntimeDebug,
+};
 
-use frame_support::dispatch::DispatchResultWithPostInfo;
-use frame_support::traits::{EnsureOrigin};
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::EnsureOrigin};
 
-use frame_support::weights::{Weight};
+use frame_support::weights::Weight;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
@@ -104,7 +104,6 @@ type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 type PositiveImbalanceOf<T> = pallet_treasury::PositiveImbalanceOf<T>;
 
 pub trait Config: frame_system::Config + pallet_treasury::Config {
-
 	/// The amount held on deposit for placing a bounty proposal.
 	type BountyDepositBase: Get<BalanceOf<Self>>;
 
@@ -692,14 +691,17 @@ impl<T: Config> Module<T> {
 		description: Vec<u8>,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
+		ensure!(
+			description.len() <= T::MaximumReasonLength::get() as usize,
+			Error::<T>::ReasonTooBig
+		);
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
 
 		let index = Self::bounty_count();
 
 		// reserve deposit for new bounty
-		let bond = T::BountyDepositBase::get()
-			+ T::DataDepositPerByte::get() * (description.len() as u32).into();
+		let bond = T::BountyDepositBase::get() +
+			T::DataDepositPerByte::get() * (description.len() as u32).into();
 		T::Currency::reserve(&proposer, bond)
 			.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
@@ -721,7 +723,6 @@ impl<T: Config> Module<T> {
 
 		Ok(())
 	}
-
 }
 
 impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
@@ -729,7 +730,7 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 		budget_remaining: &mut BalanceOf<T>,
 		imbalance: &mut PositiveImbalanceOf<T>,
 		total_weight: &mut Weight,
-		missed_any: &mut bool
+		missed_any: &mut bool,
 	) {
 		let bounties_len = BountyApprovals::mutate(|v| {
 			let bounties_approval_len = v.len() as u32;
@@ -747,7 +748,10 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 							debug_assert!(err_amount.is_zero());
 
 							// fund the bounty account
-							imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
+							imbalance.subsume(T::Currency::deposit_creating(
+								&Self::bounty_account_id(index),
+								bounty.value,
+							));
 
 							Self::deposit_event(RawEvent::BountyBecameActive(index));
 							false

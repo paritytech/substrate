@@ -18,10 +18,8 @@
 
 use crate::transport::BandwidthSinks;
 use prometheus_endpoint::{
-	self as prometheus,
-	Counter, CounterVec, Gauge, GaugeVec, HistogramOpts,
-	PrometheusError, Registry, U64, Opts,
-	SourcedCounter, SourcedGauge, MetricSource,
+	self as prometheus, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, MetricSource, Opts,
+	PrometheusError, Registry, SourcedCounter, SourcedGauge, U64,
 };
 use std::{
 	str,
@@ -267,13 +265,14 @@ impl BandwidthCounters {
 	/// Registers the `BandwidthCounters` metric whose values are
 	/// obtained from the given sinks.
 	fn register(registry: &Registry, sinks: Arc<BandwidthSinks>) -> Result<(), PrometheusError> {
-		prometheus::register(SourcedCounter::new(
-			&Opts::new(
-				"sub_libp2p_network_bytes_total",
-				"Total bandwidth usage"
-			).variable_label("direction"),
-			BandwidthCounters(sinks),
-		)?, registry)?;
+		prometheus::register(
+			SourcedCounter::new(
+				&Opts::new("sub_libp2p_network_bytes_total", "Total bandwidth usage")
+					.variable_label("direction"),
+				BandwidthCounters(sinks),
+			)?,
+			registry,
+		)?;
 
 		Ok(())
 	}
@@ -296,13 +295,16 @@ impl MajorSyncingGauge {
 	/// Registers the `MajorSyncGauge` metric whose value is
 	/// obtained from the given `AtomicBool`.
 	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
-		prometheus::register(SourcedGauge::new(
-			&Opts::new(
-				"sub_libp2p_is_major_syncing",
-				"Whether the node is performing a major sync or not.",
-			),
-			MajorSyncingGauge(value),
-		)?, registry)?;
+		prometheus::register(
+			SourcedGauge::new(
+				&Opts::new(
+					"sub_libp2p_is_major_syncing",
+					"Whether the node is performing a major sync or not.",
+				),
+				MajorSyncingGauge(value),
+			)?,
+			registry,
+		)?;
 
 		Ok(())
 	}
@@ -324,13 +326,13 @@ impl NumConnectedGauge {
 	/// Registers the `MajorSyncingGauge` metric whose value is
 	/// obtained from the given `AtomicUsize`.
 	fn register(registry: &Registry, value: Arc<AtomicUsize>) -> Result<(), PrometheusError> {
-		prometheus::register(SourcedGauge::new(
-			&Opts::new(
-				"sub_libp2p_peers_count",
-				"Number of connected peers",
-			),
-			NumConnectedGauge(value),
-		)?, registry)?;
+		prometheus::register(
+			SourcedGauge::new(
+				&Opts::new("sub_libp2p_peers_count", "Number of connected peers"),
+				NumConnectedGauge(value),
+			)?,
+			registry,
+		)?;
 
 		Ok(())
 	}

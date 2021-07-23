@@ -19,10 +19,12 @@
 //! Implementation of libp2p's `NetworkBehaviour` trait that establishes communications and opens
 //! notifications substreams.
 
-pub use self::behaviour::{Notifications, NotificationsOut, ProtocolConfig};
-pub use self::handler::{NotifsHandlerError, NotificationsSink, Ready};
+pub use self::{
+	behaviour::{Notifications, NotificationsOut, ProtocolConfig},
+	handler::{NotificationsSink, NotifsHandlerError, Ready},
+};
 
 mod behaviour;
 mod handler;
-mod upgrade;
 mod tests;
+mod upgrade;

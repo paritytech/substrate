@@ -17,12 +17,13 @@
 
 //! Migrations to version [`3.0.0`], as denoted by the changelog.
 
-use codec::{Encode, Decode, FullCodec};
-use sp_std::prelude::*;
+use codec::{Decode, Encode, FullCodec};
 use frame_support::{
-	RuntimeDebug, weights::Weight, Twox64Concat,
 	traits::{GetPalletVersion, PalletVersion},
+	weights::Weight,
+	RuntimeDebug, Twox64Concat,
 };
+use sp_std::prelude::*;
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 struct SeatHolder<AccountId, Balance> {
@@ -89,7 +90,7 @@ pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balan
 			migrate_runners_up_to_recorded_deposit::<T>(old_candidacy_bond);
 			migrate_members_to_recorded_deposit::<T>(old_candidacy_bond);
 			Weight::max_value()
-		}
+		},
 		_ => {
 			log::warn!(
 				target: "runtime::elections-phragmen",
@@ -103,15 +104,9 @@ pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balan
 
 /// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
 pub fn migrate_voters_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
-	<Voting<T>>::translate::<(T::Balance, Vec<T::AccountId>), _>(
-		|_who, (stake, votes)| {
-			Some(Voter {
-				votes,
-				stake,
-				deposit: old_deposit,
-			})
-		},
-	);
+	<Voting<T>>::translate::<(T::Balance, Vec<T::AccountId>), _>(|_who, (stake, votes)| {
+		Some(Voter { votes, stake, deposit: old_deposit })
+	});
 
 	log::info!(
 		target: "runtime::elections-phragmen",
@@ -122,50 +117,39 @@ pub fn migrate_voters_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
 
 /// Migrate all candidates to recorded deposit.
 pub fn migrate_candidates_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
-	let _ = <Candidates<T>>::translate::<Vec<T::AccountId>, _>(
-		|maybe_old_candidates| {
-			maybe_old_candidates.map(|old_candidates| {
-				log::info!(
-					target: "runtime::elections-phragmen",
-					"migrated {} candidate accounts.",
-					old_candidates.len(),
-				);
-				old_candidates
-					.into_iter()
-					.map(|c| (c, old_deposit))
-					.collect::<Vec<_>>()
-			})
-		},
-	);
+	let _ = <Candidates<T>>::translate::<Vec<T::AccountId>, _>(|maybe_old_candidates| {
+		maybe_old_candidates.map(|old_candidates| {
+			log::info!(
+				target: "runtime::elections-phragmen",
+				"migrated {} candidate accounts.",
+				old_candidates.len(),
+			);
+			old_candidates.into_iter().map(|c| (c, old_deposit)).collect::<Vec<_>>()
+		})
+	});
 }
 
 /// Migrate all members to recorded deposit.
 pub fn migrate_members_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
-	let _ = <Members<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(
-		|maybe_old_members| {
-			maybe_old_members.map(|old_members| {
-				log::info!(
-					target: "runtime::elections-phragmen",
-					"migrated {} member accounts.",
-					old_members.len(),
-				);
-				old_members
-					.into_iter()
-					.map(|(who, stake)| SeatHolder {
-						who,
-						stake,
-						deposit: old_deposit,
-					})
-					.collect::<Vec<_>>()
-			})
-		},
-	);
+	let _ = <Members<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(|maybe_old_members| {
+		maybe_old_members.map(|old_members| {
+			log::info!(
+				target: "runtime::elections-phragmen",
+				"migrated {} member accounts.",
+				old_members.len(),
+			);
+			old_members
+				.into_iter()
+				.map(|(who, stake)| SeatHolder { who, stake, deposit: old_deposit })
+				.collect::<Vec<_>>()
+		})
+	});
 }
 
 /// Migrate all runners-up to recorded deposit.
 pub fn migrate_runners_up_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
-	let _ = <RunnersUp<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(
-		|maybe_old_runners_up| {
+	let _ =
+		<RunnersUp<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(|maybe_old_runners_up| {
 			maybe_old_runners_up.map(|old_runners_up| {
 				log::info!(
 					target: "runtime::elections-phragmen",
@@ -174,13 +158,8 @@ pub fn migrate_runners_up_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance
 				);
 				old_runners_up
 					.into_iter()
-					.map(|(who, stake)| SeatHolder {
-						who,
-						stake,
-						deposit: old_deposit,
-					})
+					.map(|(who, stake)| SeatHolder { who, stake, deposit: old_deposit })
 					.collect::<Vec<_>>()
 			})
-		},
-	);
+		});
 }

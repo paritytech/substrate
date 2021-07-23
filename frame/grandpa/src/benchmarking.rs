@@ -19,7 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use super::{*, Pallet as Grandpa};
+use super::{Pallet as Grandpa, *};
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 use sp_core::H256;
@@ -106,10 +106,7 @@ mod tests {
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
+			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 		});
 	}
 }

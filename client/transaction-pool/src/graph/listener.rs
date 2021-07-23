@@ -1,4 +1,3 @@
-
 // This file is part of Substrate.
 
 // Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
@@ -17,16 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	collections::HashMap, hash, fmt::Debug,
-};
+use std::{collections::HashMap, fmt::Debug, hash};
 
 use linked_hash_map::LinkedHashMap;
-use serde::Serialize;
 use log::{debug, trace};
+use serde::Serialize;
 use sp_runtime::traits;
 
-use super::{watcher, ChainApi, ExtrinsicHash, BlockHash};
+use super::{watcher, BlockHash, ChainApi, ExtrinsicHash};
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {
@@ -39,15 +36,15 @@ const MAX_FINALITY_WATCHERS: usize = 512;
 
 impl<H: hash::Hash + Eq + Debug, C: ChainApi> Default for Listener<H, C> {
 	fn default() -> Self {
-		Self {
-			watchers: Default::default(),
-			finality_watchers: Default::default(),
-		}
+		Self { watchers: Default::default(), finality_watchers: Default::default() }
 	}
 }
 
 impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
-	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, ExtrinsicHash<C>>) {
+	fn fire<F>(&mut self, hash: &H, fun: F)
+	where
+		F: FnOnce(&mut watcher::Sender<H, ExtrinsicHash<C>>),
+	{
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
