@@ -191,18 +191,10 @@ fn as_derivative_works() {
 		let sub_1_0 = Utility::derivative_account_id(1, 0);
 		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
 		assert_err_ignore_postinfo!(
-			Utility::as_derivative(
-				Origin::signed(1),
-				1,
-				Box::new(call_transfer(6, 3)),
-			),
+			Utility::as_derivative(Origin::signed(1), 1, Box::new(call_transfer(6, 3)),),
 			BalancesError::<Test, _>::InsufficientBalance
 		);
-		assert_ok!(Utility::as_derivative(
-			Origin::signed(1),
-			0,
-			Box::new(call_transfer(2, 3)),
-		));
+		assert_ok!(Utility::as_derivative(Origin::signed(1), 0, Box::new(call_transfer(2, 3)),));
 		assert_eq!(Balances::free_balance(sub_1_0), 2);
 		assert_eq!(Balances::free_balance(2), 13);
 	});
@@ -217,7 +209,8 @@ fn as_derivative_handles_weight_refund() {
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
-		let call = Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
+		let call =
+			Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
@@ -225,7 +218,8 @@ fn as_derivative_handles_weight_refund() {
 
 		// Refund weight when ok
 		let inner_call = call_foobar(false, start_weight, Some(end_weight));
-		let call = Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
+		let call =
+			Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
@@ -234,7 +228,8 @@ fn as_derivative_handles_weight_refund() {
 
 		// Full weight when err
 		let inner_call = call_foobar(true, start_weight, None);
-		let call = Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
+		let call =
+			Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_noop!(
@@ -251,7 +246,8 @@ fn as_derivative_handles_weight_refund() {
 
 		// Refund weight when err
 		let inner_call = call_foobar(true, start_weight, Some(end_weight));
-		let call = Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
+		let call =
+			Call::Utility(UtilityCall::as_derivative { index: 0, call: Box::new(inner_call) });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_noop!(
@@ -275,7 +271,10 @@ fn as_derivative_filters() {
 			Utility::as_derivative(
 				Origin::signed(1),
 				1,
-				Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })),
+				Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive {
+					dest: 2,
+					value: 1
+				})),
 			),
 			DispatchError::BadOrigin
 		);
@@ -286,7 +285,8 @@ fn as_derivative_filters() {
 fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		let k = b"a".to_vec();
-		let call = Call::System(frame_system::Call::set_storage { items: vec![(k.clone(), k.clone())] });
+		let call =
+			Call::System(frame_system::Call::set_storage { items: vec![(k.clone(), k.clone())] });
 		assert!(!TestBaseCallFilter::filter(&call));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
@@ -311,10 +311,7 @@ fn batch_with_signed_works() {
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch(
 			Origin::signed(1),
-			vec![
-				call_transfer(2, 5),
-				call_transfer(2, 5)
-			]
+			vec![call_transfer(2, 5), call_transfer(2, 5)]
 		),);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
@@ -341,11 +338,7 @@ fn batch_early_exit_works() {
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch(
 			Origin::signed(1),
-			vec![
-				call_transfer(2, 5),
-				call_transfer(2, 10),
-				call_transfer(2, 5),
-			]
+			vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5),]
 		),);
 		assert_eq!(Balances::free_balance(1), 5);
 		assert_eq!(Balances::free_balance(2), 15);
@@ -360,11 +353,9 @@ fn batch_weight_calculation_doesnt_overflow() {
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
 
 		// 3 * 50% saturates to 100%
-		let batch_call = Call::Utility(crate::Call::batch { calls: vec![
-			big_call.clone(),
-			big_call.clone(),
-			big_call.clone(),
-		]});
+		let batch_call = Call::Utility(crate::Call::batch {
+			calls: vec![big_call.clone(), big_call.clone(), big_call.clone()],
+		});
 
 		assert_eq!(batch_call.get_dispatch_info().weight, Weight::max_value());
 	});
@@ -451,10 +442,7 @@ fn batch_all_works() {
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch_all(
 			Origin::signed(1),
-			vec![
-				call_transfer(2, 5),
-				call_transfer(2, 5)
-			]
+			vec![call_transfer(2, 5), call_transfer(2, 5)]
 		),);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
@@ -472,11 +460,7 @@ fn batch_all_revert() {
 		assert_noop!(
 			Utility::batch_all(
 				Origin::signed(1),
-				vec![
-					call_transfer(2, 5),
-					call_transfer(2, 10),
-					call_transfer(2, 5),
-				]
+				vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5),]
 			),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
@@ -561,11 +545,9 @@ fn batch_all_handles_weight_refund() {
 #[test]
 fn batch_all_does_not_nest() {
 	new_test_ext().execute_with(|| {
-		let batch_all = Call::Utility(UtilityCall::batch_all { calls: vec![
-			call_transfer(2, 1),
-			call_transfer(2, 1),
-			call_transfer(2, 1),
-		]});
+		let batch_all = Call::Utility(UtilityCall::batch_all {
+			calls: vec![call_transfer(2, 1), call_transfer(2, 1), call_transfer(2, 1)],
+		});
 
 		let info = batch_all.get_dispatch_info();
 

@@ -689,11 +689,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
-		let inner =
-			Call::report_equivocation_unsigned {
-				equivocation_proof: equivocation_proof.clone(),
-				key_owner_proof: key_owner_proof.clone()
-			};
+		let inner = Call::report_equivocation_unsigned {
+			equivocation_proof: equivocation_proof.clone(),
+			key_owner_proof: key_owner_proof.clone(),
+		};
 
 		// only local/inblock reports are allowed
 		assert_eq!(

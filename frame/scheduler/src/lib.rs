@@ -1371,7 +1371,10 @@ mod tests {
 				None,
 				126,
 				root(),
-				Call::Logger(LoggerCall::log { i: 2600, weight: MaximumSchedulerWeight::get() / 2 })
+				Call::Logger(LoggerCall::log {
+					i: 2600,
+					weight: MaximumSchedulerWeight::get() / 2
+				})
 			));
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
@@ -1425,7 +1428,10 @@ mod tests {
 				Some((1000, 3)),
 				126,
 				root(),
-				Call::Logger(LoggerCall::log { i: 2600, weight: MaximumSchedulerWeight::get() / 2 })
+				Call::Logger(LoggerCall::log {
+					i: 2600,
+					weight: MaximumSchedulerWeight::get() / 2
+				})
 			));
 
 			// Will include the named periodic only
@@ -1575,8 +1581,10 @@ mod tests {
 	#[test]
 	fn should_check_orign_for_cancel() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(LoggerCall::log_without_filter { i: 69, weight: 1000 }));
-			let call2 = Box::new(Call::Logger(LoggerCall::log_without_filter { i: 42, weight: 1000 }));
+			let call =
+				Box::new(Call::Logger(LoggerCall::log_without_filter { i: 69, weight: 1000 }));
+			let call2 =
+				Box::new(Call::Logger(LoggerCall::log_without_filter { i: 42, weight: 1000 }));
 			assert_ok!(Scheduler::schedule_named(
 				system::RawOrigin::Signed(1).into(),
 				1u32.encode(),

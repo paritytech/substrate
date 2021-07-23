@@ -681,8 +681,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key_owner_proof =
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
-		let call =
-			Call::report_equivocation_unsigned { equivocation_proof: equivocation_proof.clone(), key_owner_proof: key_owner_proof.clone() };
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof: equivocation_proof.clone(),
+			key_owner_proof: key_owner_proof.clone(),
+		};
 
 		// only local/inblock reports are allowed
 		assert_eq!(

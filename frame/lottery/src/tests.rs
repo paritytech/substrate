@@ -176,15 +176,18 @@ fn buy_ticket_works_as_simple_passthrough() {
 			BalancesError::<Test, _>::InsufficientBalance,
 		);
 
-		let bad_origin_call = Box::new(Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }));
+		let bad_origin_call =
+			Box::new(Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }));
 		assert_noop!(Lottery::buy_ticket(Origin::signed(1), bad_origin_call), BadOrigin,);
 
 		// User can call other txs, but doesn't get a ticket
-		let remark_call = Box::new(Call::System(SystemCall::remark { _remark: b"hello, world!".to_vec() }));
+		let remark_call =
+			Box::new(Call::System(SystemCall::remark { _remark: b"hello, world!".to_vec() }));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), remark_call));
 		assert_eq!(TicketsCount::<Test>::get(), 0);
 
-		let successful_call = Box::new(Call::Balances(BalancesCall::transfer { dest: 2, value: 1 }));
+		let successful_call =
+			Box::new(Call::Balances(BalancesCall::transfer { dest: 2, value: 1 }));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), successful_call));
 		assert_eq!(TicketsCount::<Test>::get(), 1);
 	});
@@ -219,7 +222,8 @@ fn buy_ticket_works() {
 		assert_eq!(TicketsCount::<Test>::get(), 1);
 
 		// Buy ticket for remark
-		let call = Box::new(Call::System(SystemCall::remark { _remark: b"hello, world!".to_vec() }));
+		let call =
+			Box::new(Call::System(SystemCall::remark { _remark: b"hello, world!".to_vec() }));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		assert_eq!(TicketsCount::<Test>::get(), 2);
 

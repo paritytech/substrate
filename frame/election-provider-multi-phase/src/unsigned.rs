@@ -951,7 +951,8 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned { solution: solution.clone(), witness: correct_witness };
+			let call =
+				Call::submit_unsigned { solution: solution.clone(), witness: correct_witness };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})

@@ -2570,9 +2570,8 @@ mod tests {
 	#[test]
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
-		let expected_metadata = PalletCallMetadata {
-			ty: scale_info::meta_type::<Call<TraitImpl>>(),
-		};
+		let expected_metadata =
+			PalletCallMetadata { ty: scale_info::meta_type::<Call<TraitImpl>>() };
 		assert_eq!(expected_metadata, metadata);
 	}
 

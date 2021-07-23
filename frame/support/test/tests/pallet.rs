@@ -376,16 +376,16 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType6); // Test for where clause
-			Some(Call::foo_no_post_info { })
+			Some(Call::foo_no_post_info {})
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::foo_no_post_info { } | Call::foo { .. })
+			matches!(call, Call::foo_no_post_info {} | Call::foo { .. })
 		}
 
 		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 			match call {
-				Call::foo_no_post_info { } => Ok(()),
+				Call::foo_no_post_info {} => Ok(()),
 				Call::foo { _foo: 0, _bar: 0 } => Err(InherentError::Fatal),
 				Call::foo { .. } => Ok(()),
 				_ => unreachable!("other calls are not inherents"),
@@ -624,7 +624,7 @@ fn inherent_expand() {
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: Call::Example(pallet::Call::foo_no_post_info { }),
+		function: Call::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -639,7 +639,7 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info { }),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
@@ -661,7 +661,7 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info { }),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
@@ -700,7 +700,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_no_post_info { }),
+			function: Call::Example(pallet::Call::foo_no_post_info {}),
 			signature: Some((1, (), ())),
 		}],
 	);
@@ -749,7 +749,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info { }),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -775,7 +775,7 @@ fn inherent_expand() {
 				signature: Some((1, (), ())),
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info { }),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -790,7 +790,7 @@ fn validate_unsigned_expand() {
 		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction,
 		ValidateUnsigned,
 	};
-	let call = pallet::Call::<Runtime>::foo_no_post_info { };
+	let call = pallet::Call::<Runtime>::foo_no_post_info {};
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
 	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
@@ -814,7 +814,9 @@ fn trait_store_expand() {
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
-		pallet::Call::<Runtime>::foo { _foo: 3, _bar: 0 }.dispatch_bypass_filter(None.into()).unwrap();
+		pallet::Call::<Runtime>::foo { _foo: 3, _bar: 0 }
+			.dispatch_bypass_filter(None.into())
+			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Example(pallet::Event::Something(3)),

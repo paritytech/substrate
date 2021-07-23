@@ -1170,8 +1170,11 @@ mod tests {
 	#[test]
 	fn proposal_weight_limit_works_on_approve() {
 		new_test_ext().execute_with(|| {
-			let proposal =
-				Call::Collective(crate::Call::set_members { new_members: vec![1, 2, 3], prime: None, old_count: MaxMembers::get() });
+			let proposal = Call::Collective(crate::Call::set_members {
+				new_members: vec![1, 2, 3],
+				prime: None,
+				old_count: MaxMembers::get(),
+			});
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -1209,8 +1212,11 @@ mod tests {
 	#[test]
 	fn proposal_weight_limit_ignored_on_disapprove() {
 		new_test_ext().execute_with(|| {
-			let proposal =
-				Call::Collective(crate::Call::set_members { new_members: vec![1, 2, 3], prime: None, old_count: MaxMembers::get() });
+			let proposal = Call::Collective(crate::Call::set_members {
+				new_members: vec![1, 2, 3],
+				prime: None,
+				old_count: MaxMembers::get(),
+			});
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -1552,8 +1558,11 @@ mod tests {
 	#[test]
 	fn correct_validate_and_get_proposal() {
 		new_test_ext().execute_with(|| {
-			let proposal =
-				Call::Collective(crate::Call::set_members { new_members: vec![1, 2, 3], prime: None, old_count: MaxMembers::get() });
+			let proposal = Call::Collective(crate::Call::set_members {
+				new_members: vec![1, 2, 3],
+				prime: None,
+				old_count: MaxMembers::get(),
+			});
 			let length = proposal.encode().len() as u32;
 			assert_ok!(Collective::propose(
 				Origin::signed(1),

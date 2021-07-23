@@ -304,7 +304,11 @@ pub mod pallet {
 					return InvalidTransaction::BadProof.into()
 				}
 				Self::validate_transaction_parameters(&payload.block_number, &payload.price)
-			} else if let Call::submit_price_unsigned { _block_number: block_number, price: new_price } = call {
+			} else if let Call::submit_price_unsigned {
+				_block_number: block_number,
+				price: new_price,
+			} = call
+			{
 				Self::validate_transaction_parameters(block_number, new_price)
 			} else {
 				InvalidTransaction::Call.into()
