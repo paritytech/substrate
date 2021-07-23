@@ -1044,10 +1044,13 @@ mod voter_list {
 	#[test]
 	fn insert_works() {
 		ExtBuilder::default().build_and_execute(|| {
+			// given
 			assert_eq!(
 				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
 				vec![11, 21, 101, 31]
 			);
+			// TODO maybe checking the actual bags here is overkill since this is aimed at VoterList
+			// api and not bags? (same Q for other tests here)
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
 
 			// Insert into an existing bag:
@@ -1063,7 +1066,7 @@ mod voter_list {
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42])]);
 
 			// TODO maybe this is overkill since its not api behavior driven testing and instead
-			// should be tested on the bags abstraction level
+			// should be tested on the bags abstraction level? (same Q for other tests here)
 			// Insert into a non-existent bag:
 			// when
 			bond(422, 433, 1_001);
@@ -1084,6 +1087,7 @@ mod voter_list {
 	#[test]
 	fn insert_as_works() {
 		ExtBuilder::default().build_and_execute(|| {
+			// give
 			let actual =
 				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
 			let mut expected: Vec<Voter<u64>> = vec![
@@ -1118,7 +1122,47 @@ mod voter_list {
 
 	#[test]
 	fn remove_works() {
-		todo!()
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![11, 21, 101, 31]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+
+			// Removing non-existent voter does not change anything:
+			// when
+			VoterList::<Test>::remove(&42);
+
+			// then
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![11, 21, 101, 31]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+
+			// Remove from a bag with multiple nodes:
+			// when
+			VoterList::<Test>::remove(&11);
+
+			// then
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![21, 101, 31]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![21, 101])]);
+
+
+			// Remove from a bag with only one node:
+			VoterList::<Test>::remove(&31);
+
+			// then
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![21, 101]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![]), (1_000, vec![21, 101])]);
+		});
 	}
 
 	#[test]
