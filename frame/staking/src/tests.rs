@@ -4006,9 +4006,21 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn respects_len_limits() {
-		ExtBuilder::default().build_and_execute(|| {
+	fn respects_snapshot_len_limits() {
+		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
+			// sum of all validators and nominators who'd be voters.
+			assert_eq!(VoterList::<Test>::decode_len().unwrap(), 5);
+
+			// if limits is less..
 			assert_eq!(Staking::voters(Some(1)).unwrap().0.len(), 1);
+
+			// if limit is equal..
+			assert_eq!(Staking::voters(Some(5)).unwrap().0.len(), 5);
+
+			// if limit is more.
+			assert_eq!(Staking::voters(Some(55)).unwrap().0.len(), 5);
+
+			// if target limit is less, then we return an error.
 			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
 		});
 	}
@@ -4068,12 +4080,22 @@ mod election_data_provider {
 
 	#[test]
 	#[should_panic]
-	fn count_check_works() {
+	fn count_check_prevents_validator_insert() {
 		ExtBuilder::default().build_and_execute(|| {
 			// We should never insert into the validators or nominators map directly as this will
 			// not keep track of the count. This test should panic as we verify the count is accurate
-			// after every test using the `post_checks` in `mock`.
+			// after every test using the `post_conditions` in `mock`.
 			Validators::<Test>::insert(987654321, ValidatorPrefs::default());
+		})
+	}
+
+	#[test]
+	#[should_panic]
+	fn count_check_prevents_nominator_insert() {
+		ExtBuilder::default().build_and_execute(|| {
+			// We should never insert into the validators or nominators map directly as this will
+			// not keep track of the count. This test should panic as we verify the count is accurate
+			// after every test using the `post_conditions` in `mock`.
 			Nominators::<Test>::insert(
 				987654321,
 				Nominations {

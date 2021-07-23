@@ -632,6 +632,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
+		/// The number of snapshot voters to fetch per block.
+		///
+		/// In the future, this value will make more sense with multi-block snapshot.
+		///
+		/// Also, note the data type: If the voters are represented by a `u32` in `type
+		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
+		#[pallet::constant]
+		type VoterSnapshotPerBlock: Get<CompactVoterIndexOf<Self>>;
+
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -1285,8 +1294,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(consumed_weight)` if operation is okay.
 	pub fn create_snapshot() -> Result<Weight, ElectionError> {
+		// we don't impose any limits on the targets for now, the assumption is that
+		// `T::DataProvider` will sensibly return small values to use.
 		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
+		// for now we have just a single block snapshot.
+		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
 
 		let (targets, w1) =
 			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
@@ -1970,8 +1982,8 @@ mod tests {
 		})
 	}
 
-	#[test]
-	fn snapshot_creation_fails_if_too_big() {
+	fn snapshot_too_big_failure_onchain_fallback() {
+		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
@@ -1987,6 +1999,49 @@ mod tests {
 			roll_to(29);
 			let (supports, _) = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+		});
+	}
+
+	#[test]
+	fn snapshot_too_big_failure_no_fallback() {
+		// and if the backup mode is nothing, we go into the emergency mode..
+		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
+			crate::mock::Targets::set(
+				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+			);
+
+			// Signed phase failed to open.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// Unsigned phase failed to open.
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(29);
+			let err = MultiPhase::elect().unwrap_err();
+			assert_eq!(err, ElectionError::NoFallbackConfigured);
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+		});
+	}
+
+	#[test]
+	fn snapshot_too_big_truncate() {
+		// but if there are too many voters, we simply truncate them.
+		ExtBuilder::default().build_and_execute(|| {
+			// we have 8 voters in total.
+			assert_eq!(crate::mock::Voters::get().len(), 8);
+			// but we want to take 4.
+			crate::mock::VoterSnapshotPerBlock::set(2);
+
+			// Signed phase opens just fine.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			assert_eq!(
+				MultiPhase::snapshot_metadata().unwrap(),
+				SolutionOrSnapshotSize { voters: 2, targets: 4 }
+			);
 		})
 	}
 
