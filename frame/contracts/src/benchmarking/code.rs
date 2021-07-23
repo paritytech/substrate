@@ -25,21 +25,20 @@
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
 use crate::Config;
+use frame_support::traits::Get;
 use pwasm_utils::{
-	stack_height::inject_limiter,
 	parity_wasm::{
-		elements::{
-			self, Instruction, Instructions, FuncBody, ValueType, BlockType, Section,
-			CustomSection,
-		},
 		builder,
+		elements::{
+			self, BlockType, CustomSection, FuncBody, Instruction, Instructions, Section, ValueType,
+		},
 	},
+	stack_height::inject_limiter,
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
-use sp_std::{prelude::*, convert::TryFrom, borrow::ToOwned};
-use frame_support::traits::Get;
+use sp_std::{borrow::ToOwned, convert::TryFrom, prelude::*};
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -117,7 +116,7 @@ pub struct ImportedFunction {
 
 /// A wasm module ready to be put on chain.
 #[derive(Clone)]
-pub struct WasmModule<T:Config> {
+pub struct WasmModule<T: Config> {
 	pub code: Vec<u8>,
 	pub hash: <T::Hashing as Hash>::Output,
 	memory: Option<ImportedMemory>,
@@ -136,27 +135,37 @@ where
 		let mut contract = builder::module()
 			// deploy function (first internal function)
 			.function()
-				.signature().build()
-				.with_body(def.deploy_body.unwrap_or_else(||
-					FuncBody::new(Vec::new(), Instructions::empty())
-				))
-				.build()
+			.signature()
+			.build()
+			.with_body(
+				def.deploy_body
+					.unwrap_or_else(|| FuncBody::new(Vec::new(), Instructions::empty())),
+			)
+			.build()
 			// call function (second internal function)
 			.function()
-				.signature().build()
-				.with_body(def.call_body.unwrap_or_else(||
-					FuncBody::new(Vec::new(), Instructions::empty())
-				))
-				.build()
-			.export().field("deploy").internal().func(func_offset).build()
-			.export().field("call").internal().func(func_offset + 1).build();
+			.signature()
+			.build()
+			.with_body(
+				def.call_body
+					.unwrap_or_else(|| FuncBody::new(Vec::new(), Instructions::empty())),
+			)
+			.build()
+			.export()
+			.field("deploy")
+			.internal()
+			.func(func_offset)
+			.build()
+			.export()
+			.field("call")
+			.internal()
+			.func(func_offset + 1)
+			.build();
 
 		// If specified we add an additional internal function
 		if let Some(body) = def.aux_body {
-			let mut signature = contract
-				.function()
-				.signature();
-			for _ in 0 .. def.aux_arg_num {
+			let mut signature = contract.function().signature();
+			for _ in 0..def.aux_arg_num {
 				signature = signature.with_param(ValueType::I64);
 			}
 			contract = signature.build().with_body(body).build();
@@ -164,9 +173,12 @@ where
 
 		// Grant access to linear memory.
 		if let Some(memory) = &def.memory {
-			contract = contract.import()
-				.module("env").field("memory")
-				.external().memory(memory.min_pages, Some(memory.max_pages))
+			contract = contract
+				.import()
+				.module("env")
+				.field("memory")
+				.external()
+				.memory(memory.min_pages, Some(memory.max_pages))
 				.build();
 		}
 
@@ -177,7 +189,8 @@ where
 				.with_results(func.return_type.into_iter().collect())
 				.build_sig();
 			let sig = contract.push_signature(sig);
-			contract = contract.import()
+			contract = contract
+				.import()
 				.module(func.module)
 				.field(func.name)
 				.with_external(elements::External::Function(sig))
@@ -186,7 +199,8 @@ where
 
 		// Initialize memory
 		for data in def.data_segments {
-			contract = contract.data()
+			contract = contract
+				.data()
 				.offset(Instruction::I32Const(data.offset as i32))
 				.value(data.value)
 				.build()
@@ -194,12 +208,13 @@ where
 
 		// Add global variables
 		if def.num_globals > 0 {
-			use rand::{prelude::*, distributions::Standard};
+			use rand::{distributions::Standard, prelude::*};
 			let rng = rand_pcg::Pcg32::seed_from_u64(3112244599778833558);
 			for val in rng.sample_iter(Standard).take(def.num_globals as usize) {
 				contract = contract
 					.global()
-					.value_type().i64()
+					.value_type()
+					.i64()
 					.mutable()
 					.init_expr(Instruction::I64Const(val))
 					.build()
@@ -218,31 +233,22 @@ where
 
 		// Add the dummy section
 		if def.dummy_section > 0 {
-			contract = contract.with_section(
-				Section::Custom(
-					CustomSection::new("dummy".to_owned(), vec![42; def.dummy_section as usize])
-				)
-			);
+			contract = contract.with_section(Section::Custom(CustomSection::new(
+				"dummy".to_owned(),
+				vec![42; def.dummy_section as usize],
+			)));
 		}
 
 		let mut code = contract.build();
 
 		// Inject stack height metering
 		if def.inject_stack_metering {
-			code = inject_limiter(
-				code,
-				T::Schedule::get().limits.stack_height
-			)
-			.unwrap();
+			code = inject_limiter(code, T::Schedule::get().limits.stack_height).unwrap();
 		}
 
 		let code = code.to_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
-		Self {
-			code,
-			hash,
-			memory: def.memory,
-		}
+		Self { code, hash, memory: def.memory }
 	}
 }
 
@@ -266,7 +272,7 @@ where
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			dummy_section: dummy_bytes.saturating_sub(module_overhead),
-			.. Default::default()
+			..Default::default()
 		}
 		.into()
 	}
@@ -275,23 +281,18 @@ where
 	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
 	pub fn sized(target_bytes: u32) -> Self {
-		use self::elements::Instruction::{If, I32Const, Return, End};
+		use self::elements::Instruction::{End, I32Const, If, Return};
 		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
 		// size fields inside the binary wasm module representation which are leb128 encoded
 		// and therefore grow in size when the contract grows. We are not allowed to overshoot
 		// because of the maximum code size that is enforced by `instantiate_with_code`.
 		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
-		const EXPANSION: [Instruction; 4] = [
-			I32Const(0),
-			If(BlockType::NoResult),
-			Return,
-			End,
-		];
+		const EXPANSION: [Instruction; 4] = [I32Const(0), If(BlockType::NoResult), Return, End];
 		ModuleDefinition {
 			call_body: Some(body::repeated(expansions, &EXPANSION)),
 			memory: Some(ImportedMemory::max::<T>()),
-			.. Default::default()
+			..Default::default()
 		}
 		.into()
 	}
@@ -317,12 +318,15 @@ where
 				offset: 0,
 				value: (pages * 64 * 1024 - 4).to_le_bytes().to_vec(),
 			}],
-			call_body: Some(body::repeated(repeat, &[
-				Instruction::I32Const(4), // ptr where to store output
-				Instruction::I32Const(0), // ptr to length
-				Instruction::Call(0), // call the imported function
-			])),
-			.. Default::default()
+			call_body: Some(body::repeated(
+				repeat,
+				&[
+					Instruction::I32Const(4), // ptr where to store output
+					Instruction::I32Const(0), // ptr to length
+					Instruction::Call(0),     // call the imported function
+				],
+			)),
+			..Default::default()
 		}
 		.into()
 	}
@@ -339,13 +343,16 @@ where
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
 			}],
-			call_body: Some(body::repeated(repeat, &[
-				Instruction::I32Const(0), // input_ptr
-				Instruction::I32Const(data_size as i32), // input_len
-				Instruction::I32Const(0), // output_ptr
-				Instruction::Call(0),
-			])),
-			.. Default::default()
+			call_body: Some(body::repeated(
+				repeat,
+				&[
+					Instruction::I32Const(0),                // input_ptr
+					Instruction::I32Const(data_size as i32), // input_len
+					Instruction::I32Const(0),                // output_ptr
+					Instruction::Call(0),
+				],
+			)),
+			..Default::default()
 		}
 		.into()
 	}
@@ -354,11 +361,7 @@ where
 	/// and adds it to `env`. A reference to that memory is returned so that it can be used to
 	/// access the memory contents from the supervisor.
 	pub fn add_memory<S>(&self, env: &mut EnvironmentDefinitionBuilder<S>) -> Option<Memory> {
-		let memory = if let Some(memory) = &self.memory {
-			memory
-		} else {
-			return None;
-		};
+		let memory = if let Some(memory) = &self.memory { memory } else { return None };
 		let memory = Memory::new(memory.min_pages, Some(memory.max_pages)).unwrap();
 		env.add_memory("env", "memory", memory.clone());
 		Some(memory)
@@ -367,25 +370,25 @@ where
 	pub fn unary_instr(instr: Instruction, repeat: u32) -> Self {
 		use body::DynInstr::{RandomI64Repeated, Regular};
 		ModuleDefinition {
-			call_body: Some(body::repeated_dyn(repeat, vec![
-				RandomI64Repeated(1),
-				Regular(instr),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}.into()
+			call_body: Some(body::repeated_dyn(
+				repeat,
+				vec![RandomI64Repeated(1), Regular(instr), Regular(Instruction::Drop)],
+			)),
+			..Default::default()
+		}
+		.into()
 	}
 
 	pub fn binary_instr(instr: Instruction, repeat: u32) -> Self {
 		use body::DynInstr::{RandomI64Repeated, Regular};
 		ModuleDefinition {
-			call_body: Some(body::repeated_dyn(repeat, vec![
-				RandomI64Repeated(2),
-				Regular(instr),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}.into()
+			call_body: Some(body::repeated_dyn(
+				repeat,
+				vec![RandomI64Repeated(2), Regular(instr), Regular(Instruction::Drop)],
+			)),
+			..Default::default()
+		}
+		.into()
 	}
 }
 
@@ -426,7 +429,7 @@ pub mod body {
 		RandomGetGlobal(u32, u32),
 		/// Insert a SetGlobal with a random offset in [low, high).
 		/// (low, high)
-		RandomSetGlobal(u32, u32)
+		RandomSetGlobal(u32, u32),
 	}
 
 	pub fn plain(instructions: Vec<Instruction>) -> FuncBody {
@@ -441,13 +444,13 @@ pub mod body {
 				.take(instructions.len() * usize::try_from(repetitions).unwrap())
 				.cloned()
 				.chain(sp_std::iter::once(Instruction::End))
-				.collect()
+				.collect(),
 		);
 		FuncBody::new(Vec::new(), instructions)
 	}
 
 	pub fn repeated_dyn(repetitions: u32, mut instructions: Vec<DynInstr>) -> FuncBody {
-		use rand::{prelude::*, distributions::Standard};
+		use rand::{distributions::Standard, prelude::*};
 
 		// We do not need to be secure here.
 		let mut rng = rand_pcg::Pcg32::seed_from_u64(8446744073709551615);
@@ -456,50 +459,46 @@ pub mod body {
 		let body = (0..instructions.len())
 			.cycle()
 			.take(instructions.len() * usize::try_from(repetitions).unwrap())
-			.flat_map(|idx|
-				match &mut instructions[idx] {
-					DynInstr::Regular(instruction) => vec![instruction.clone()],
-					DynInstr::Counter(offset, increment_by) => {
-						let current = *offset;
-						*offset += *increment_by;
-						vec![Instruction::I32Const(current as i32)]
-					},
-					DynInstr::RandomUnaligned(low, high) => {
-						let unaligned = rng.gen_range(*low..*high) | 1;
-						vec![Instruction::I32Const(unaligned as i32)]
-					},
-					DynInstr::RandomI32(low, high) => {
-						vec![Instruction::I32Const(rng.gen_range(*low..*high))]
-					},
-					DynInstr::RandomI32Repeated(num) => {
-						(&mut rng).sample_iter(Standard).take(*num).map(|val|
-							Instruction::I32Const(val)
-						)
-						.collect()
-					},
-					DynInstr::RandomI64Repeated(num) => {
-						(&mut rng).sample_iter(Standard).take(*num).map(|val|
-							Instruction::I64Const(val)
-						)
-						.collect()
-					},
-					DynInstr::RandomGetLocal(low, high) => {
-						vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
-					},
-					DynInstr::RandomSetLocal(low, high) => {
-						vec![Instruction::SetLocal(rng.gen_range(*low..*high))]
-					},
-					DynInstr::RandomTeeLocal(low, high) => {
-						vec![Instruction::TeeLocal(rng.gen_range(*low..*high))]
-					},
-					DynInstr::RandomGetGlobal(low, high) => {
-						vec![Instruction::GetGlobal(rng.gen_range(*low..*high))]
-					},
-					DynInstr::RandomSetGlobal(low, high) => {
-						vec![Instruction::SetGlobal(rng.gen_range(*low..*high))]
-					},
-				}
-			)
+			.flat_map(|idx| match &mut instructions[idx] {
+				DynInstr::Regular(instruction) => vec![instruction.clone()],
+				DynInstr::Counter(offset, increment_by) => {
+					let current = *offset;
+					*offset += *increment_by;
+					vec![Instruction::I32Const(current as i32)]
+				},
+				DynInstr::RandomUnaligned(low, high) => {
+					let unaligned = rng.gen_range(*low..*high) | 1;
+					vec![Instruction::I32Const(unaligned as i32)]
+				},
+				DynInstr::RandomI32(low, high) => {
+					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
+				},
+				DynInstr::RandomI32Repeated(num) => (&mut rng)
+					.sample_iter(Standard)
+					.take(*num)
+					.map(|val| Instruction::I32Const(val))
+					.collect(),
+				DynInstr::RandomI64Repeated(num) => (&mut rng)
+					.sample_iter(Standard)
+					.take(*num)
+					.map(|val| Instruction::I64Const(val))
+					.collect(),
+				DynInstr::RandomGetLocal(low, high) => {
+					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
+				},
+				DynInstr::RandomSetLocal(low, high) => {
+					vec![Instruction::SetLocal(rng.gen_range(*low..*high))]
+				},
+				DynInstr::RandomTeeLocal(low, high) => {
+					vec![Instruction::TeeLocal(rng.gen_range(*low..*high))]
+				},
+				DynInstr::RandomGetGlobal(low, high) => {
+					vec![Instruction::GetGlobal(rng.gen_range(*low..*high))]
+				},
+				DynInstr::RandomSetGlobal(low, high) => {
+					vec![Instruction::SetGlobal(rng.gen_range(*low..*high))]
+				},
+			})
 			.chain(sp_std::iter::once(Instruction::End))
 			.collect();
 		FuncBody::new(Vec::new(), Instructions::new(body))

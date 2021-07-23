@@ -26,7 +26,7 @@ use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
@@ -163,7 +163,7 @@ pub enum Code<Hash> {
 #[cfg(feature = "std")]
 mod as_string {
 	use super::*;
-	use serde::{Serializer, Deserializer, ser::Error};
+	use serde::{ser::Error, Deserializer, Serializer};
 
 	pub fn serialize<S: Serializer>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
 		std::str::from_utf8(bytes)

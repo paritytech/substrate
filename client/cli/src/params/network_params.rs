@@ -16,13 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::params::node_key_params::NodeKeyParams;
-use crate::arg_enums::SyncMode;
+use crate::{arg_enums::SyncMode, params::node_key_params::NodeKeyParams};
 use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig},
+	config::{
+		NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig,
+	},
 	multiaddr::Protocol,
 };
-use sc_service::{ChainSpec, ChainType, config::{Multiaddr, MultiaddrWithPeerId}};
+use sc_service::{
+	config::{Multiaddr, MultiaddrWithPeerId},
+	ChainSpec, ChainType,
+};
 use std::{borrow::Cow, path::PathBuf};
 use structopt::StructOpt;
 
@@ -97,11 +101,7 @@ pub struct NetworkParams {
 	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[structopt(
-		long = "max-parallel-downloads",
-		value_name = "COUNT",
-		default_value = "5"
-	)]
+	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
@@ -184,15 +184,16 @@ impl NetworkParams {
 		let chain_type = chain_spec.chain_type();
 		// Activate if the user explicitly requested local discovery, `--dev` is given or the
 		// chain type is `Local`/`Development`
-		let allow_non_globals_in_dht = self.discover_local
-			|| is_dev
-			|| matches!(chain_type, ChainType::Local | ChainType::Development);
+		let allow_non_globals_in_dht =
+			self.discover_local ||
+				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
 
 		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
 			(true, true) => unreachable!("`*_private_ipv4` flags are mutually exclusive; qed"),
 			(true, false) => true,
 			(false, true) => false,
-			(false, false) => is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
+			(false, false) =>
+				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
 		};
 
 		NetworkConfiguration {

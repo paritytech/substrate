@@ -187,12 +187,12 @@
 //! fn simple_balances_test() {
 //! 	// given
 //! 	let config = NodeConfig {
-//!			execution_strategies: ExecutionStrategies {
-//!				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 			execution_strategies: ExecutionStrategies {
+//! 				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 //! 		},
 //! 		chain_spec: Box::new(development_config()),
 //! 		log_targets: vec![],
@@ -227,23 +227,23 @@
 //! }
 //! ```
 
+use sc_consensus::BlockImport;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::TFullClient;
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::SelectChain;
-use sc_consensus::BlockImport;
 use sp_inherents::InherentDataProvider;
 use sp_runtime::traits::{Block as BlockT, SignedExtension};
 
 mod client;
+mod host_functions;
 mod node;
 mod utils;
-mod host_functions;
 
+pub use client::*;
 pub use host_functions::*;
 pub use node::*;
 pub use utils::*;
-pub use client::*;
 
 /// Wrapper trait for concrete type required by this testing framework.
 pub trait ChainInfo: Sized {
@@ -272,7 +272,10 @@ pub trait ChainInfo: Sized {
 		+ BlockImport<
 			Self::Block,
 			Error = sp_consensus::Error,
-			Transaction = TransactionFor<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>, Self::Block>,
+			Transaction = TransactionFor<
+				TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+				Self::Block,
+			>,
 		> + 'static;
 
 	/// The signed extras required by the runtime
@@ -282,5 +285,7 @@ pub trait ChainInfo: Sized {
 	type InherentDataProviders: InherentDataProvider + 'static;
 
 	/// Signed extras, this function is caled in an externalities provided environment.
-	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras;
+	fn signed_extras(
+		from: <Self::Runtime as frame_system::Config>::AccountId,
+	) -> Self::SignedExtras;
 }

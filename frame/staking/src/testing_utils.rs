@@ -18,12 +18,14 @@
 //! Testing utils for staking. Provides some common functions to setup staking state, such as
 //! bonding validators, nominators, and generating different types of solutions.
 
-use crate::*;
-use crate::Pallet as Staking;
+use crate::{Pallet as Staking, *};
 use frame_benchmarking::account;
 use frame_system::RawOrigin;
+use rand_chacha::{
+	rand_core::{RngCore, SeedableRng},
+	ChaChaRng,
+};
 use sp_io::hashing::blake2_256;
-use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 
 const SEED: u32 = 0;
 
@@ -54,14 +56,18 @@ pub fn create_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
-)
-	-> Result<(T::AccountId, T::AccountId), &'static str>
-{
+) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	let controller = create_funded_user::<T>("controller", n, balance_factor);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let controller_lookup: <T::Lookup as StaticLookup>::Source =
+		T::Lookup::unlookup(controller.clone());
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, destination)?;
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		controller_lookup,
+		amount,
+		destination,
+	)?;
 	return Ok((stash, controller))
 }
 
@@ -71,15 +77,19 @@ pub fn create_stash_and_dead_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
-)
-	-> Result<(T::AccountId, T::AccountId), &'static str>
-{
+) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	// controller has no funds
 	let controller = create_funded_user::<T>("controller", n, 0);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let controller_lookup: <T::Lookup as StaticLookup>::Source =
+		T::Lookup::unlookup(controller.clone());
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, destination)?;
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		controller_lookup,
+		amount,
+		destination,
+	)?;
 	return Ok((stash, controller))
 }
 
@@ -89,12 +99,11 @@ pub fn create_validators<T: Config>(
 	balance_factor: u32,
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
-	for i in 0 .. max {
-		let (stash, controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
-		let validator_prefs = ValidatorPrefs {
-			commission: Perbill::from_percent(50),
-			.. Default::default()
-		};
+	for i in 0..max {
+		let (stash, controller) =
+			create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
+		let validator_prefs =
+			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash);
 		validators.push(stash_lookup);
@@ -126,20 +135,20 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	clear_validators_and_nominators::<T>();
 
-	let mut validators_stash: Vec<<T::Lookup as StaticLookup>::Source>
-		= Vec::with_capacity(validators as usize);
+	let mut validators_stash: Vec<<T::Lookup as StaticLookup>::Source> =
+		Vec::with_capacity(validators as usize);
 	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
 
 	// Create validators
-	for i in 0 .. validators {
+	for i in 0..validators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
-		let validator_prefs = ValidatorPrefs {
-			commission: Perbill::from_percent(50),
-			.. Default::default()
-		};
+		let (v_stash, v_controller) =
+			create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
+		let validator_prefs =
+			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
+		let stash_lookup: <T::Lookup as StaticLookup>::Source =
+			T::Lookup::unlookup(v_stash.clone());
 		validators_stash.push(stash_lookup.clone());
 	}
 
@@ -147,25 +156,25 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	let validator_chosen = validators_stash[0..to_nominate].to_vec();
 
 	// Create nominators
-	for j in 0 .. nominators {
+	for j in 0..nominators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (_n_stash, n_controller) = create_stash_controller::<T>(
-			u32::MAX - j,
-			balance_factor,
-			RewardDestination::Staked,
-		)?;
+		let (_n_stash, n_controller) =
+			create_stash_controller::<T>(u32::MAX - j, balance_factor, RewardDestination::Staked)?;
 
 		// Have them randomly validate
 		let mut available_validators = validator_chosen.clone();
 		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
 			Vec::with_capacity(edge_per_nominator);
 
-		for _ in 0 .. validators.min(edge_per_nominator as u32) {
+		for _ in 0..validators.min(edge_per_nominator as u32) {
 			let selected = rng.next_u32() as usize % available_validators.len();
 			let validator = available_validators.remove(selected);
 			selected_validators.push(validator);
 		}
-		Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), selected_validators)?;
+		Staking::<T>::nominate(
+			RawOrigin::Signed(n_controller.clone()).into(),
+			selected_validators,
+		)?;
 	}
 
 	ValidatorCount::<T>::put(validators);

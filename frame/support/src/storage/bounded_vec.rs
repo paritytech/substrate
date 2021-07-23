@@ -18,17 +18,16 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
-use sp_std::prelude::*;
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode, EncodeLike, MaxEncodedLen};
+use crate::{
+	storage::{StorageDecodeLength, StorageTryAppend},
+	traits::Get,
+};
+use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use crate::{
-	traits::Get,
-	storage::{StorageDecodeLength, StorageTryAppend},
-};
+use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 
 /// A bounded vector.
 ///
@@ -71,7 +70,7 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedVec exceeds its limit".into());
+			return Err("BoundedVec exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -341,9 +340,9 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
+	use crate::Twox128;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

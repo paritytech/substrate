@@ -78,17 +78,17 @@
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
+#![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "512")]
 
 #[macro_use]
 mod gas;
-mod storage;
-mod exec;
-mod wasm;
-mod rent;
 mod benchmarking;
-mod schedule;
+mod exec;
 mod migration;
+mod rent;
+mod schedule;
+mod storage;
+mod wasm;
 
 pub mod chain_extension;
 pub mod weights;
@@ -97,49 +97,48 @@ pub mod weights;
 mod tests;
 
 pub use crate::{
-	pallet::*,
-	schedule::{Schedule, Limits, InstructionWeights, HostFnWeights},
 	exec::Frame,
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
 use crate::{
+	exec::{Executable, Stack as ExecStack},
 	gas::GasMeter,
-	exec::{Stack as ExecStack, Executable},
 	rent::Rent,
-	storage::{Storage, DeletedContract, ContractInfo, AliveContractInfo, TombstoneContractInfo},
-	weights::WeightInfo,
+	storage::{AliveContractInfo, ContractInfo, DeletedContract, Storage, TombstoneContractInfo},
 	wasm::PrefabWasmModule,
-};
-use sp_core::{Bytes, crypto::UncheckedFrom};
-use sp_std::prelude::*;
-use sp_runtime::{
-	traits::{
-		Hash, StaticLookup, Convert, Saturating, Zero,
-	},
-	Perbill,
+	weights::WeightInfo,
 };
 use frame_support::{
-	traits::{OnUnbalanced, Currency, Get, Time, Randomness, Filter},
-	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo, GetDispatchInfo},
 	dispatch::Dispatchable,
+	traits::{Currency, Filter, Get, OnUnbalanced, Randomness, Time},
+	weights::{GetDispatchInfo, PostDispatchInfo, Weight, WithPostDispatchInfo},
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
-	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
-	ContractInstantiateResult, Code, InstantiateReturnValue,
+	Code, ContractAccessError, ContractExecResult, ContractInstantiateResult, GetStorageResult,
+	InstantiateReturnValue, RentProjectionResult,
 };
+use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_runtime::{
+	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
+	Perbill,
+};
+use sp_std::prelude::*;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -156,11 +155,10 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The overarching call type.
-		type Call:
-			Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> +
-			GetDispatchInfo +
-			codec::Decode +
-			IsType<<Self as frame_system::Config>::Call>;
+		type Call: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ codec::Decode
+			+ IsType<<Self as frame_system::Config>::Call>;
 
 		/// Filter that is applied to calls dispatched by contracts.
 		///
@@ -263,7 +261,7 @@ pub mod pallet {
 		/// The allowed depth is `CallStack::size() + 1`.
 		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
 		/// In other words only the origin called "root contract" is allowed to execute then.
-		type CallStack: smallvec::Array<Item=Frame<Self>>;
+		type CallStack: smallvec::Array<Item = Frame<Self>>;
 
 		/// The maximum number of tries that can be queued for deletion.
 		#[pallet::constant]
@@ -286,7 +284,8 @@ pub mod pallet {
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
 			// We do not want to go above the block limit and rather avoid lazy deletion
 			// in that case. This should only happen on runtime upgrades.
-			let weight_limit = T::BlockWeights::get().max_block
+			let weight_limit = T::BlockWeights::get()
+				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
@@ -317,14 +316,20 @@ pub mod pallet {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			data: Vec<u8>
+			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-				origin, dest, &mut gas_meter, &schedule, value, data, None,
+				origin,
+				dest,
+				&mut gas_meter,
+				&schedule,
+				value,
+				data,
+				None,
 			);
 			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
@@ -374,11 +379,19 @@ pub mod pallet {
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
-			).map(|(_address, output)| output);
+				origin,
+				executable,
+				&mut gas_meter,
+				&schedule,
+				endowment,
+				data,
+				&salt,
+				None,
+			)
+			.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024)
+				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024),
 			)
 		}
 
@@ -403,12 +416,18 @@ pub mod pallet {
 			let schedule = T::Schedule::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
-			).map(|(_address, output)| output);
-			gas_meter.into_dispatch_result(
-				result,
-				T::WeightInfo::instantiate(salt.len() as u32 / 1024),
+				origin,
+				executable,
+				&mut gas_meter,
+				&schedule,
+				endowment,
+				data,
+				&salt,
+				None,
 			)
+			.map(|(_address, output)| output);
+			gas_meter
+				.into_dispatch_result(result, T::WeightInfo::instantiate(salt.len() as u32 / 1024))
 		}
 
 		/// Allows block producers to claim a small reward for evicting a contract. If a block
@@ -424,44 +443,33 @@ pub mod pallet {
 		pub fn claim_surcharge(
 			origin: OriginFor<T>,
 			dest: T::AccountId,
-			aux_sender: Option<T::AccountId>
+			aux_sender: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
-				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
-					(true, account)
-				},
-				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => {
-					(false, aux_sender)
-				},
+				(Ok(frame_system::RawOrigin::Signed(account)), None) => (true, account),
+				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => (false, aux_sender),
 				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
 			// adding a handicap: for signed extrinsics we use a slightly older block number
 			// for the eviction check. This can be viewed as if we pushed regular users back in past.
-			let handicap = if signed {
-				T::SignedClaimHandicap::get()
-			} else {
-				Zero::zero()
-			};
+			let handicap = if signed { T::SignedClaimHandicap::get() } else { Zero::zero() };
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_paid), code_len) => {
-					T::Currency::deposit_into_existing(
-						&rewarded,
-						T::SurchargeReward::get().min(rent_paid),
-					)
-					.map(|_| PostDispatchInfo {
-						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
-						pays_fee: Pays::No,
-					})
-					.map_err(Into::into)
-				}
-				(None, code_len) => Err(Error::<T>::ContractNotEvictable.with_weight(
-					T::WeightInfo::claim_surcharge(code_len / 1024)
-				)),
+				(Some(rent_paid), code_len) => T::Currency::deposit_into_existing(
+					&rewarded,
+					T::SurchargeReward::get().min(rent_paid),
+				)
+				.map(|_| PostDispatchInfo {
+					actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
+					pays_fee: Pays::No,
+				})
+				.map_err(Into::into),
+				(None, code_len) => Err(Error::<T>::ContractNotEvictable
+					.with_weight(T::WeightInfo::claim_surcharge(code_len / 1024))),
 			}
 		}
 	}
@@ -638,7 +646,8 @@ pub mod pallet {
 
 	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
 	#[pallet::storage]
-	pub(crate) type CodeStorage<T: Config> = StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
+	pub(crate) type CodeStorage<T: Config> =
+		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
 	/// The subtrie counter.
 	#[pallet::storage]
@@ -648,7 +657,8 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	pub(crate) type ContractInfoOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
+	pub(crate) type ContractInfoOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
 
 	/// Evicted contracts that await child trie deletion.
 	///
@@ -684,13 +694,15 @@ where
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let schedule = T::Schedule::get();
-		let mut debug_message = if debug {
-			Some(Vec::new())
-		} else {
-			None
-		};
+		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin, dest, &mut gas_meter, &schedule, value, input_data, debug_message.as_mut(),
+			origin,
+			dest,
+			&mut gas_meter,
+			&schedule,
+			value,
+			input_data,
+			debug_message.as_mut(),
 		);
 		ContractExecResult {
 			result: result.map_err(|r| r.error),
@@ -734,34 +746,36 @@ where
 		};
 		let executable = match executable {
 			Ok(executable) => executable,
-			Err(error) => return ContractInstantiateResult {
-				result: Err(error.into()),
-				gas_consumed: gas_meter.gas_consumed(),
-				gas_required: gas_meter.gas_required(),
-				debug_message: Vec::new(),
-			}
+			Err(error) =>
+				return ContractInstantiateResult {
+					result: Err(error.into()),
+					gas_consumed: gas_meter.gas_consumed(),
+					gas_required: gas_meter.gas_required(),
+					debug_message: Vec::new(),
+				},
 		};
-		let mut debug_message = if debug {
-			Some(Vec::new())
-		} else {
-			None
-		};
+		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-			origin, executable, &mut gas_meter, &schedule,
-			endowment, data, &salt, debug_message.as_mut(),
-		).and_then(|(account_id, result)| {
+			origin,
+			executable,
+			&mut gas_meter,
+			&schedule,
+			endowment,
+			data,
+			&salt,
+			debug_message.as_mut(),
+		)
+		.and_then(|(account_id, result)| {
 			let rent_projection = if compute_projection {
-				Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
-					.map_err(|_| <Error<T>>::NewContractNotFunded)?)
+				Some(
+					Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
+						.map_err(|_| <Error<T>>::NewContractNotFunded)?,
+				)
 			} else {
 				None
 			};
 
-			Ok(InstantiateReturnValue {
-				result,
-				account_id,
-				rent_projection,
-			})
+			Ok(InstantiateReturnValue { result, account_id, rent_projection })
 		});
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),
@@ -800,9 +814,10 @@ where
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
 		salt: &[u8],
-	) -> T::AccountId
-	{
-		let buf: Vec<_> = deploying_address.as_ref().iter()
+	) -> T::AccountId {
+		let buf: Vec<_> = deploying_address
+			.as_ref()
+			.iter()
 			.chain(code_hash.as_ref())
 			.chain(salt)
 			.cloned()
@@ -847,7 +862,7 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn reinstrument_module(
 		module: &mut PrefabWasmModule<T>,
-		schedule: &Schedule<T>
+		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
 		self::wasm::reinstrument(module, schedule)
 	}

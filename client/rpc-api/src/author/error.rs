@@ -32,33 +32,33 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
+	#[display(fmt = "Client error: {}", _0)]
 	#[from(ignore)]
 	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
-	#[display(fmt="Transaction pool error: {}", _0)]
+	#[display(fmt = "Transaction pool error: {}", _0)]
 	Pool(sc_transaction_pool_api::error::Error),
 	/// Verification error
-	#[display(fmt="Extrinsic verification error: {}", _0)]
+	#[display(fmt = "Extrinsic verification error: {}", _0)]
 	#[from(ignore)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
-	#[display(fmt="Invalid extrinsic format: {}", _0)]
+	#[display(fmt = "Invalid extrinsic format: {}", _0)]
 	BadFormat(codec::Error),
 	/// Incorrect seed phrase.
-	#[display(fmt="Invalid seed phrase/SURI")]
+	#[display(fmt = "Invalid seed phrase/SURI")]
 	BadSeedPhrase,
 	/// Key type ID has an unknown format.
-	#[display(fmt="Invalid key type ID format (should be of length four)")]
+	#[display(fmt = "Invalid key type ID format (should be of length four)")]
 	BadKeyType,
 	/// Key type ID has some unsupported crypto.
-	#[display(fmt="The crypto of key type ID is unknown")]
+	#[display(fmt = "The crypto of key type ID is unknown")]
 	UnsupportedKeyType,
 	/// Some random issue with the key store. Shouldn't happen.
-	#[display(fmt="The key store is unavailable")]
+	#[display(fmt = "The key store is unavailable")]
 	KeyStoreUnavailable,
 	/// Invalid session keys encoding.
-	#[display(fmt="Session keys are not encoded correctly")]
+	#[display(fmt = "Session keys are not encoded correctly")]
 	InvalidSessionKeys,
 	/// Call to an unsafe RPC was denied.
 	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
@@ -105,7 +105,7 @@ const POOL_UNACTIONABLE: i64 = POOL_INVALID_TX + 8;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
-		use sc_transaction_pool_api::error::{Error as PoolError};
+		use sc_transaction_pool_api::error::Error as PoolError;
 
 		match e {
 			Error::BadFormat(e) => rpc::Error {

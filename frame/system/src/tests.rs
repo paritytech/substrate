@@ -16,11 +16,14 @@
 // limitations under the License.
 
 use crate::*;
-use mock::{*, Origin};
-use sp_core::H256;
-use sp_runtime::{DispatchError, DispatchErrorWithPostInfo, traits::{Header, BlakeTwo256}};
 use frame_support::{
-	assert_noop, assert_ok, weights::WithPostDispatchInfo, dispatch::PostDispatchInfo
+	assert_noop, assert_ok, dispatch::PostDispatchInfo, weights::WithPostDispatchInfo,
+};
+use mock::{Origin, *};
+use sp_core::H256;
+use sp_runtime::{
+	traits::{BlakeTwo256, Header},
+	DispatchError, DispatchErrorWithPostInfo,
 };
 
 #[test]
@@ -36,13 +39,10 @@ fn stored_map_works() {
 		assert_ok!(System::insert(&0, 42));
 		assert!(!System::is_provider_required(&0));
 
-		assert_eq!(Account::<Test>::get(0), AccountInfo {
-			nonce: 0,
-			providers: 1,
-			consumers: 0,
-			sufficients: 0,
-			data: 42,
-		});
+		assert_eq!(
+			Account::<Test>::get(0),
+			AccountInfo { nonce: 0, providers: 1, consumers: 0, sufficients: 0, data: 42 }
+		);
 
 		assert_ok!(System::inc_consumers(&0));
 		assert!(System::is_provider_required(&0));
@@ -154,40 +154,25 @@ fn provider_required_to_support_consumer() {
 #[test]
 fn deposit_event_should_work() {
 	new_test_ext().execute_with(|| {
-		System::initialize(
-			&1,
-			&[0u8; 32].into(),
-			&Default::default(),
-			InitKind::Full,
-		);
+		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
 		System::note_finished_extrinsics();
 		System::deposit_event(SysEvent::CodeUpdated);
 		System::finalize();
 		assert_eq!(
 			System::events(),
-			vec![
-				EventRecord {
-					phase: Phase::Finalization,
-					event: SysEvent::CodeUpdated.into(),
-					topics: vec![],
-				}
-			]
+			vec![EventRecord {
+				phase: Phase::Finalization,
+				event: SysEvent::CodeUpdated.into(),
+				topics: vec![],
+			}]
 		);
 
-		System::initialize(
-			&2,
-			&[0u8; 32].into(),
-			&Default::default(),
-			InitKind::Full,
-		);
+		System::initialize(&2, &[0u8; 32].into(), &Default::default(), InitKind::Full);
 		System::deposit_event(SysEvent::NewAccount(32));
 		System::note_finished_initialize();
 		System::deposit_event(SysEvent::KilledAccount(42));
 		System::note_applied_extrinsic(&Ok(().into()), Default::default());
-		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.into()),
-			Default::default()
-		);
+		System::note_applied_extrinsic(&Err(DispatchError::BadOrigin.into()), Default::default());
 		System::note_finished_extrinsics();
 		System::deposit_event(SysEvent::NewAccount(3));
 		System::finalize();
@@ -214,7 +199,8 @@ fn deposit_event_should_work() {
 					event: SysEvent::ExtrinsicFailed(
 						DispatchError::BadOrigin.into(),
 						Default::default()
-					).into(),
+					)
+					.into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -230,78 +216,56 @@ fn deposit_event_should_work() {
 #[test]
 fn deposit_event_uses_actual_weight() {
 	new_test_ext().execute_with(|| {
-		System::initialize(
-			&1,
-			&[0u8; 32].into(),
-			&Default::default(),
-			InitKind::Full,
-		);
+		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
 		System::note_finished_initialize();
 
-		let pre_info = DispatchInfo {
-			weight: 1000,
-			.. Default::default()
-		};
-		System::note_applied_extrinsic(
-			&Ok(Some(300).into()),
-			pre_info,
-		);
-		System::note_applied_extrinsic(
-			&Ok(Some(1000).into()),
-			pre_info,
-		);
+		let pre_info = DispatchInfo { weight: 1000, ..Default::default() };
+		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
+		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
 		System::note_applied_extrinsic(
 			// values over the pre info should be capped at pre dispatch value
 			&Ok(Some(1200).into()),
 			pre_info,
 		);
-		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.with_weight(999)),
-			pre_info,
-		);
+		System::note_applied_extrinsic(&Err(DispatchError::BadOrigin.with_weight(999)), pre_info);
 
 		assert_eq!(
 			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(
-						DispatchInfo {
-							weight: 300,
-							.. Default::default()
-						},
-					).into(),
+					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
+						weight: 300,
+						..Default::default()
+					},)
+					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: SysEvent::ExtrinsicSuccess(
-						DispatchInfo {
-							weight: 1000,
-							.. Default::default()
-						},
-					).into(),
+					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
+						weight: 1000,
+						..Default::default()
+					},)
+					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: SysEvent::ExtrinsicSuccess(
-						DispatchInfo {
-							weight: 1000,
-							.. Default::default()
-						},
-					).into(),
+					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
+						weight: 1000,
+						..Default::default()
+					},)
+					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(3),
 					event: SysEvent::ExtrinsicFailed(
 						DispatchError::BadOrigin.into(),
-						DispatchInfo {
-							weight: 999,
-							.. Default::default()
-						},
-					).into(),
+						DispatchInfo { weight: 999, ..Default::default() },
+					)
+					.into(),
 					topics: vec![]
 				},
 			]
@@ -314,19 +278,10 @@ fn deposit_event_topics() {
 	new_test_ext().execute_with(|| {
 		const BLOCK_NUMBER: u64 = 1;
 
-		System::initialize(
-			&BLOCK_NUMBER,
-			&[0u8; 32].into(),
-			&Default::default(),
-			InitKind::Full,
-		);
+		System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &Default::default(), InitKind::Full);
 		System::note_finished_extrinsics();
 
-		let topics = vec![
-			H256::repeat_byte(1),
-			H256::repeat_byte(2),
-			H256::repeat_byte(3),
-		];
+		let topics = vec![H256::repeat_byte(1), H256::repeat_byte(2), H256::repeat_byte(3)];
 
 		// We deposit a few events with different sets of topics.
 		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1).into());
@@ -359,18 +314,9 @@ fn deposit_event_topics() {
 
 		// Check that the topic-events mapping reflects the deposited topics.
 		// Note that these are indexes of the events.
-		assert_eq!(
-			System::event_topics(&topics[0]),
-			vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
-		);
-		assert_eq!(
-			System::event_topics(&topics[1]),
-			vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
-		);
-		assert_eq!(
-			System::event_topics(&topics[2]),
-			vec![(BLOCK_NUMBER, 0)],
-		);
+		assert_eq!(System::event_topics(&topics[0]), vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)]);
+		assert_eq!(System::event_topics(&topics[1]), vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)]);
+		assert_eq!(System::event_topics(&topics[2]), vec![(BLOCK_NUMBER, 0)]);
 	});
 }
 
@@ -390,30 +336,19 @@ fn prunes_block_hash_mappings() {
 	new_test_ext().execute_with(|| {
 		// simulate import of 15 blocks
 		for n in 1..=15 {
-			System::initialize(
-				&n,
-				&[n as u8 - 1; 32].into(),
-				&Default::default(),
-				InitKind::Full,
-			);
+			System::initialize(&n, &[n as u8 - 1; 32].into(), &Default::default(), InitKind::Full);
 
 			System::finalize();
 		}
 
 		// first 5 block hashes are pruned
 		for n in 0..5 {
-			assert_eq!(
-				System::block_hash(n),
-				H256::zero(),
-			);
+			assert_eq!(System::block_hash(n), H256::zero());
 		}
 
 		// the remaining 10 are kept
 		for n in 5..15 {
-			assert_eq!(
-				System::block_hash(n),
-				[n as u8; 32].into(),
-			);
+			assert_eq!(System::block_hash(n), [n as u8; 32].into());
 		}
 	})
 }
@@ -453,10 +388,7 @@ fn set_code_checks_works() {
 		let mut ext = new_test_ext();
 		ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(read_runtime_version));
 		ext.execute_with(|| {
-			let res = System::set_code(
-				RawOrigin::Root.into(),
-				vec![1, 2, 3, 4],
-			);
+			let res = System::set_code(RawOrigin::Root.into(), vec![1, 2, 3, 4]);
 
 			assert_eq!(expected.map_err(DispatchErrorWithPostInfo::from), res);
 		});
@@ -473,7 +405,8 @@ fn set_code_with_real_wasm_blob() {
 		System::set_code(
 			RawOrigin::Root.into(),
 			substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec(),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			System::events(),
@@ -496,9 +429,10 @@ fn runtime_upgraded_with_set_storage() {
 			RawOrigin::Root.into(),
 			vec![(
 				well_known_keys::CODE.to_vec(),
-				substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec()
+				substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec(),
 			)],
-		).unwrap();
+		)
+		.unwrap();
 	});
 }
 
@@ -531,20 +465,12 @@ fn ensure_one_of_works() {
 #[test]
 fn extrinsics_root_is_calculated_correctly() {
 	new_test_ext().execute_with(|| {
-		System::initialize(
-			&1,
-			&[0u8; 32].into(),
-			&Default::default(),
-			InitKind::Full,
-		);
+		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
 		System::note_finished_initialize();
 		System::note_extrinsic(vec![1]);
 		System::note_applied_extrinsic(&Ok(().into()), Default::default());
 		System::note_extrinsic(vec![2]);
-		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.into()),
-			Default::default()
-		);
+		System::note_applied_extrinsic(&Err(DispatchError::BadOrigin.into()), Default::default());
 		System::note_finished_extrinsics();
 		let header = System::finalize();
 

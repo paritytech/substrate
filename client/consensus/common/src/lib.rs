@@ -18,20 +18,21 @@
 
 //! Collection of common consensus specific implementations
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
-pub mod import_queue;
 pub mod block_import;
+pub mod import_queue;
 pub mod metrics;
 
-pub use import_queue::{
-    BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, import_single_block,
-    BlockImportError, BlockImportStatus, IncomingBlock, ImportQueue, Link, DefaultImportQueue
-};
 pub use block_import::{
-    BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy,
-    ImportResult, ImportedAux, ImportedState, JustificationImport,
-    JustificationSyncLink, StateAction, StorageChanges
+	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
+	ImportedAux, ImportedState, JustificationImport, JustificationSyncLink, StateAction,
+	StorageChanges,
+};
+pub use import_queue::{
+	import_single_block, BasicQueue, BlockImportError, BlockImportStatus, BoxBlockImport,
+	BoxJustificationImport, DefaultImportQueue, ImportQueue, IncomingBlock, Link, Verifier,
 };
 
 mod longest_chain;

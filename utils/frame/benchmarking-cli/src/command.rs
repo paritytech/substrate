@@ -19,7 +19,7 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
 use frame_support::traits::StorageInfo;
-use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
+use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -49,11 +49,15 @@ impl BenchmarkCmd {
 		}
 
 		if let Some(header_file) = &self.header {
-			if !header_file.is_file() { return Err("Header file is invalid!".into()) };
+			if !header_file.is_file() {
+				return Err("Header file is invalid!".into())
+			};
 		}
 
 		if let Some(handlebars_template_file) = &self.template {
-			if !handlebars_template_file.is_file() { return Err("Handlebars template file is invalid!".into()) };
+			if !handlebars_template_file.is_file() {
+				return Err("Handlebars template file is invalid!".into())
+			};
 		}
 
 		let spec = config.chain_spec;
@@ -93,7 +97,8 @@ impl BenchmarkCmd {
 				self.repeat,
 				!self.no_verify,
 				self.extra,
-			).encode(),
+			)
+				.encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
@@ -126,20 +131,25 @@ impl BenchmarkCmd {
 					);
 
 					// Skip raw data + analysis if there are no results
-					if batch.results.is_empty() { continue }
+					if batch.results.is_empty() {
+						continue
+					}
 
 					if self.raw_data {
 						// Print the table header
-						batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
+						batch.results[0]
+							.components
+							.iter()
+							.for_each(|param| print!("{:?},", param.0));
 
 						print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
 						// Print the values
 						batch.results.iter().for_each(|result| {
-
 							let parameters = &result.components;
 							parameters.iter().for_each(|param| print!("{:?},", param.1));
 							// Print extrinsic time and storage root time
-							print!("{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
+							print!(
+								"{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
 								result.extrinsic_time,
 								result.storage_root_time,
 								result.reads,
@@ -156,25 +166,39 @@ impl BenchmarkCmd {
 					// Conduct analysis.
 					if !self.no_median_slopes {
 						println!("Median Slopes Analysis\n========");
-						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+						if let Some(analysis) = Analysis::median_slopes(
+							&batch.results,
+							BenchmarkSelector::ExtrinsicTime,
+						) {
 							println!("-- Extrinsic Time --\n{}", analysis);
 						}
-						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+						if let Some(analysis) =
+							Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads)
+						{
 							println!("Reads = {:?}", analysis);
 						}
-						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+						if let Some(analysis) =
+							Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes)
+						{
 							println!("Writes = {:?}", analysis);
 						}
 					}
 					if !self.no_min_squares {
 						println!("Min Squares Analysis\n========");
-						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+						if let Some(analysis) = Analysis::min_squares_iqr(
+							&batch.results,
+							BenchmarkSelector::ExtrinsicTime,
+						) {
 							println!("-- Extrinsic Time --\n{}", analysis);
 						}
-						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+						if let Some(analysis) =
+							Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads)
+						{
 							println!("Reads = {:?}", analysis);
 						}
-						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+						if let Some(analysis) =
+							Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes)
+						{
 							println!("Writes = {:?}", analysis);
 						}
 					}

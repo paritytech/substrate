@@ -18,7 +18,7 @@
 use crate::construct_runtime::Pallet;
 use inflector::Inflector;
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::Ident;
 
 pub fn expand_outer_config(
@@ -37,15 +37,18 @@ pub fn expand_outer_config(
 			let pallet_name = &decl.name;
 			let path_str = path.into_token_stream().to_string();
 			let config = format_ident!("{}Config", pallet_name);
-			let field_name = &Ident::new(
-				&pallet_name.to_string().to_snake_case(),
-				decl.name.span(),
-			);
+			let field_name =
+				&Ident::new(&pallet_name.to_string().to_snake_case(), decl.name.span());
 			let part_is_generic = !pallet_entry.generics.params.is_empty();
 
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
-			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
+			build_storage_calls.extend(expand_config_build_storage_call(
+				scrate,
+				runtime,
+				decl,
+				&field_name,
+			));
 			query_genesis_config_part_macros.push(quote! {
 				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
 				#[cfg(feature = "std")]
@@ -97,15 +100,15 @@ fn expand_config_types(
 	let path = &decl.path;
 
 	match (decl.instance.as_ref(), part_is_generic) {
-		(Some(inst), true) => quote!{
+		(Some(inst), true) => quote! {
 			#[cfg(any(feature = "std", test))]
 			pub type #config = #path::GenesisConfig<#runtime, #path::#inst>;
 		},
-		(None, true) => quote!{
+		(None, true) => quote! {
 			#[cfg(any(feature = "std", test))]
 			pub type #config = #path::GenesisConfig<#runtime>;
 		},
-		(_, false) => quote!{
+		(_, false) => quote! {
 			#[cfg(any(feature = "std", test))]
 			pub type #config = #path::GenesisConfig;
 		},
@@ -125,7 +128,7 @@ fn expand_config_build_storage_call(
 		quote!(#path::__InherentHiddenInstance)
 	};
 
-	quote!{
+	quote! {
 		#scrate::sp_runtime::BuildModuleGenesisStorage::
 			<#runtime, #instance>::build_module_genesis_storage(&self.#field_name, storage)?;
 	}

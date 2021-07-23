@@ -28,17 +28,20 @@
 
 use std::collections::HashMap;
 
-use sp_runtime::{Justifications, traits::{Block as BlockT, Header as _, NumberFor}};
+use sp_runtime::{
+	traits::{Block as BlockT, Header as _, NumberFor},
+	Justifications,
+};
 
-use sp_consensus::{BlockOrigin, error::Error as ConsensusError, import_queue::CacheKeyId};
 use crate::{
 	block_import::{
-		BlockImport, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-		BlockCheckParams, ImportedState, StateAction,
+		BlockCheckParams, BlockImport, BlockImportParams, ImportResult, ImportedAux, ImportedState,
+		JustificationImport, StateAction,
 	},
 	metrics::Metrics,
 };
 pub use basic_queue::BasicQueue;
+use sp_consensus::{error::Error as ConsensusError, import_queue::CacheKeyId, BlockOrigin};
 
 /// A commonly-used Import Queue type.
 ///
@@ -50,14 +53,12 @@ mod basic_queue;
 pub mod buffered_link;
 
 /// Shared block import struct used by the queue.
-pub type BoxBlockImport<B, Transaction> = Box<
-	dyn BlockImport<B, Error = ConsensusError, Transaction = Transaction> + Send + Sync
->;
+pub type BoxBlockImport<B, Transaction> =
+	Box<dyn BlockImport<B, Error = ConsensusError, Transaction = Transaction> + Send + Sync>;
 
 /// Shared justification import struct used by the queue.
-pub type BoxJustificationImport<B> = Box<
-	dyn JustificationImport<B, Error=ConsensusError> + Send + Sync
->;
+pub type BoxJustificationImport<B> =
+	Box<dyn JustificationImport<B, Error = ConsensusError> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = libp2p::PeerId;
@@ -115,7 +116,7 @@ pub trait ImportQueue<B: BlockT>: Send {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justifications: Justifications
+		justifications: Justifications,
 	);
 	/// Polls for actions to perform on the network.
 	///
@@ -133,8 +134,9 @@ pub trait Link<B: BlockT>: Send {
 		&mut self,
 		_imported: usize,
 		_count: usize,
-		_results: Vec<(BlockImportResult<B>, B::Hash)>
-	) {}
+		_results: Vec<(BlockImportResult<B>, B::Hash)>,
+	) {
+	}
 
 	/// Justification import result.
 	fn justification_imported(
@@ -142,7 +144,9 @@ pub trait Link<B: BlockT>: Send {
 		_who: Origin,
 		_hash: &B::Hash,
 		_number: NumberFor<B>,
-		_success: bool) {}
+		_success: bool,
+	) {
+	}
 
 	/// Request a justification for the given block.
 	fn request_justification(&mut self, _hash: &B::Hash, _number: NumberFor<B>) {}
@@ -192,8 +196,8 @@ pub async fn import_single_block<B: BlockT, V: Verifier<B>, Transaction: Send + 
 pub(crate) async fn import_single_block_metered<
 	B: BlockT,
 	V: Verifier<B>,
-	Transaction: Send + 'static>
-(
+	Transaction: Send + 'static,
+>(
 	import_handle: &mut impl BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
@@ -220,64 +224,63 @@ pub(crate) async fn import_single_block_metered<
 	let hash = header.hash();
 	let parent_hash = header.parent_hash().clone();
 
-	let import_handler = |import| {
-		match import {
-			Ok(ImportResult::AlreadyInChain) => {
-				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
-				Ok(BlockImportStatus::ImportedKnown(number, peer.clone()))
-			},
-			Ok(ImportResult::Imported(aux)) => {
-				Ok(BlockImportStatus::ImportedUnknown(number, aux, peer.clone()))
-			},
-			Ok(ImportResult::MissingState) => {
-				debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}",
+	let import_handler = |import| match import {
+		Ok(ImportResult::AlreadyInChain) => {
+			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
+			Ok(BlockImportStatus::ImportedKnown(number, peer.clone()))
+		},
+		Ok(ImportResult::Imported(aux)) =>
+			Ok(BlockImportStatus::ImportedUnknown(number, aux, peer.clone())),
+		Ok(ImportResult::MissingState) => {
+			debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}",
 					number, hash, parent_hash);
-				Err(BlockImportError::MissingState)
-			},
-			Ok(ImportResult::UnknownParent) => {
-				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}",
+			Err(BlockImportError::MissingState)
+		},
+		Ok(ImportResult::UnknownParent) => {
+			debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}",
 					number, hash, parent_hash);
-				Err(BlockImportError::UnknownParent)
-			},
-			Ok(ImportResult::KnownBad) => {
-				debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
-				Err(BlockImportError::BadBlock(peer.clone()))
-			},
-			Err(e) => {
-				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-				Err(BlockImportError::Other(e))
-			}
-		}
+			Err(BlockImportError::UnknownParent)
+		},
+		Ok(ImportResult::KnownBad) => {
+			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
+			Err(BlockImportError::BadBlock(peer.clone()))
+		},
+		Err(e) => {
+			debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
+			Err(BlockImportError::Other(e))
+		},
 	};
 
-	match import_handler(import_handle.check_block(BlockCheckParams {
-		hash,
-		number,
-		parent_hash,
-		allow_missing_state: block.allow_missing_state,
-		import_existing: block.import_existing,
-	}).await)? {
+	match import_handler(
+		import_handle
+			.check_block(BlockCheckParams {
+				hash,
+				number,
+				parent_hash,
+				allow_missing_state: block.allow_missing_state,
+				import_existing: block.import_existing,
+			})
+			.await,
+	)? {
 		BlockImportStatus::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
 	let started = wasm_timer::Instant::now();
-	let (mut import_block, maybe_keys) = verifier.verify(
-		block_origin,
-		header,
-		justifications,
-		block.body
-	).await.map_err(|msg| {
-		if let Some(ref peer) = peer {
-			trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
-		} else {
-			trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
-		}
-		if let Some(metrics) = metrics.as_ref() {
-			metrics.report_verification(false, started.elapsed());
-		}
-		BlockImportError::VerificationFailed(peer.clone(), msg)
-	})?;
+	let (mut import_block, maybe_keys) = verifier
+		.verify(block_origin, header, justifications, block.body)
+		.await
+		.map_err(|msg| {
+			if let Some(ref peer) = peer {
+				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
+			} else {
+				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
+			}
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.report_verification(false, started.elapsed());
+			}
+			BlockImportError::VerificationFailed(peer.clone(), msg)
+		})?;
 
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification(true, started.elapsed());
