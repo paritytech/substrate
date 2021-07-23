@@ -419,8 +419,12 @@ pub mod pallet {
 		Transfer(T::AccountId, T::AccountId, T::Balance),
 		/// A balance was set by root. \[who, free, reserved\]
 		BalanceSet(T::AccountId, T::Balance, T::Balance),
-		/// Some amount was deposited (e.g. for transaction fees). \[who, deposit\]
+		/// Some amount was deposited into the account (e.g. for transaction fees). \[who, deposit\]
 		Deposit(T::AccountId, T::Balance),
+		/// Some amount was withdrawn from the account (e.g. for transaction fees). \[who, value\]
+		Withdraw(T::AccountId, T::Balance),
+		/// Some amount was removed from the account (e.g. for misbehavior). \[who, amount_slashed\]
+		Slashed(T::AccountId, T::Balance),
 		/// Some balance was reserved (moved from free to reserved). \[who, value\]
 		Reserved(T::AccountId, T::Balance),
 		/// Some balance was unreserved (moved from reserved to free). \[who, value\]
@@ -1037,6 +1041,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			Ok(())
 		})?;
 		TotalIssuance::<T, I>::mutate(|t| *t += amount);
+		Self::deposit_event(Event::Deposit(who.clone(), amount));
 		Ok(())
 	}
 
@@ -1049,6 +1054,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			Ok(actual)
 		})?;
 		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
+		Self::deposit_event(Event::Withdraw(who.clone(), amount));
 		Ok(actual)
 	}
 }
@@ -1068,7 +1074,10 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-		Self::mutate_account(who, |account| account.free = amount)?;
+		Self::mutate_account(who, |account| {
+			account.free = amount;
+			Self::deposit_event(Event::BalanceSet(who.clone(), account.free, account.reserved));
+		})?;
 		Ok(())
 	}
 
@@ -1480,7 +1489,10 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 					}
 				}
 			) {
-				Ok(r) => return r,
+				Ok((imbalance, not_slashed)) => {
+					Self::deposit_event(Event::Slashed(who.clone(), value.saturating_sub(not_slashed)));
+					return (imbalance, not_slashed);
+				},
 				Err(_) => (),
 			}
 		}
@@ -1501,6 +1513,8 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 			ensure!(!is_new, Error::<T, I>::DeadAccount);
 			account.free = account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
+
+			Self::deposit_event(Event::Deposit(who.clone(), value));
 			Ok(PositiveImbalance::new(value))
 		})
 	}
@@ -1530,6 +1544,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 				None => return Ok(Self::PositiveImbalance::zero()),
 			};
 
+			Self::deposit_event(Event::Deposit(who.clone(), value));
 			Ok(PositiveImbalance::new(value))
 		}).unwrap_or_else(|_| Self::PositiveImbalance::zero());
 
@@ -1563,6 +1578,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 
 			account.free = new_free_account;
 
+			Self::deposit_event(Event::Withdraw(who.clone(), value));
 			Ok(NegativeImbalance::new(value))
 		})
 	}
@@ -1591,6 +1607,8 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 				SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
 			};
 			account.free = value;
+
+			Self::deposit_event(Event::BalanceSet(who.clone(), account.free, account.reserved));
 			Ok(imbalance)
 		}).unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
@@ -1688,7 +1706,10 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 				// underflow should never happen, but it if does, there's nothing to be done here.
 				(NegativeImbalance::new(actual), value - actual)
 			}) {
-				Ok(r) => return r,
+				Ok((imbalance, not_slashed)) => {
+					Self::deposit_event(Event::Slashed(who.clone(), value.saturating_sub(not_slashed)));
+					return (imbalance, not_slashed);
+				},
 				Err(_) => (),
 			}
 		}
@@ -1816,6 +1837,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[index].amount -= actual;
 
+					Self::deposit_event(Event::Slashed(who.clone(), actual));
 					(imb, value - actual)
 				},
 				Err(_) => {
