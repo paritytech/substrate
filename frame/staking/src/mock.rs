@@ -505,8 +505,8 @@ fn post_conditions() {
 fn check_count() {
 	// @kianenigma
 	// TODO: checking this is good for tests of top level staking api, but when
-	// unit testing parts of voter_bags we can't be expecting this to update properly
-	// (unless we manually do it).
+	// unit testing parts of voter_bags we can't expect this to update properly
+	// (unless we manually do it in the test, which might be ok?).
 	// Instead I think the debug_asserts should be enough?
 	// Otherwise maybe we can have a `build_and_execute_without_check_count`, but that
 	// is just more code.

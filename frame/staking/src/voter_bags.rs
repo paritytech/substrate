@@ -975,7 +975,7 @@ mod voter_list {
 		assert_eq!(max_explicit_threshold, 10_000);
 		// if the max explicit threshold is less than VoteWeight::MAX,
 		assert!(VoteWeight::MAX > max_explicit_threshold);
-		// anything above it will have belong to the threshold VoteWeight::MAX.
+		// anything above it will belong to the VoteWeight::MAX bag.
 		assert_eq!(notional_bag_for::<Test>(max_explicit_threshold + 1), VoteWeight::MAX);
 	}
 
@@ -1065,7 +1065,7 @@ mod voter_list {
 			);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42])]);
 
-			// TODO maybe this is overkill since its not api behavior driven testing and instead
+			// TODO maybe this scenario is overkill and instead
 			// should be tested on the bags abstraction level? (same Q for other tests here)
 			// Insert into a non-existent bag:
 			// when
@@ -1087,7 +1087,7 @@ mod voter_list {
 	#[test]
 	fn insert_as_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// give
+			// given
 			let actual =
 				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
 			let mut expected: Vec<Voter<u64>> = vec![
@@ -1098,7 +1098,7 @@ mod voter_list {
 			];
 			assert_eq!(actual, expected);
 
-			// Insert a new account with role:
+			// Insert a new voter with role:
 			// when
 			VoterList::<Test>::insert_as(&42, VoterType::Nominator);
 
@@ -1108,7 +1108,7 @@ mod voter_list {
 			expected.push(Voter::<_>::nominator(42));
 			assert_eq!(actual, expected);
 
-			// Update the status of already existing one:
+			// Update the voter type of an already existing voter:
 			// when
 			VoterList::<Test>::insert_as(&42, VoterType::Validator);
 
@@ -1130,11 +1130,11 @@ mod voter_list {
 			);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
 
-			// Removing non-existent voter does not change anything:
+			// Remove a non-existent voter:
 			// when
 			VoterList::<Test>::remove(&42);
 
-			// then
+			// then nothing changes
 			assert_eq!(
 				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
 				vec![11, 21, 101, 31]
@@ -1151,7 +1151,6 @@ mod voter_list {
 				vec![21, 101, 31]
 			);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![21, 101])]);
-
 
 			// Remove from a bag with only one node:
 			VoterList::<Test>::remove(&31);
