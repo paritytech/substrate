@@ -260,12 +260,7 @@ impl<T: Config> VoterList<T> {
 			let new_idx = notional_bag_for::<T>(weight_of(&node.voter.id));
 			node.bag_upper = new_idx;
 			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
-			println!("update_position_fr bag BEFORe insert: {:#?}", bag);
-
 			bag.insert_node(node);
-
-			// TODO remove this
-			println!("update_position_fr bag AFTER insert: {:#?}", bag);
 			bag.put();
 
 			(old_idx, new_idx)
@@ -476,14 +471,8 @@ impl<T: Config> Bag<T> {
 	fn insert_node(&mut self, mut node: Node<T>) {
 		let id = node.voter.id.clone();
 
-		// if let Some(tail_id) = self.tail {
-		// 	debug_assert!(id != tail_id, "Should never insert a node into a bag where it already exists")
-		//
-		// } else {
-		node.prev = self.tail.clone();
 		node.prev = self.tail.clone();
 		node.next = None;
-		println!("insert_node before node.put() (id {:#?}) {:#?}", node.voter.id, node);
 		node.put();
 
 		// update the previous tail
@@ -1151,9 +1140,6 @@ mod voter_list {
 
 	#[test]
 	fn update_position_for_works() {
-		// alter the genesis state to require a re-bag, then ensure this fixes it. Might be similar
-		// `rebag_works()`
-
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
 			// given a correctly placed account 31
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
@@ -1223,11 +1209,59 @@ mod voter_list {
 		});
 	}
 
-	fn update_position_failure_edge_case() {
-		// let weight_of = Staking::weight_of_fn();
+	// TODO: should probs remove this; Just wanted to document an edge case
+	// I ran into where I read in a node, called bond_extra, and then called
+	// update_position_for(node). The underlying issue is we insert a node with
+	// the same ID twice.
+	// When we insert we set node.prev = tail.id
+	// and then old_tail.next = node.id. Which creates a cycle since old_tail
+	// was the same node
+	// long story short, don't insert the same id into a bag twice
+	#[test]
+	fn node_reference_invalid_after_implicit_update_position() {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let weight_of = Staking::weight_of_fn();
 
-		// Balances::make_free_balance_be(&31, 11);
-		// assert_ok!(Staking::bond_extra(Origin::signed(31), 11));
+			// starts out in the correct place.
+			let node_31 = Node::<Test>::from_id(&31).unwrap();
+			assert!(!node_31.is_misplaced(&weight_of));
+
+			Balances::make_free_balance_be(&31, 11);
+			// when we call bond_extra
+			assert_ok!(Staking::bond_extra(Origin::signed(31), 11));
+
+			// then now the reference is outdated
+			assert!(node_31.is_misplaced(&weight_of));
+			// but we can expect the list is correct
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![]), (20, vec![31]), (1_000, vec![11, 21, 101])]
+			);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+
+			assert_eq!(
+				VoterList::<Test>::update_position_for(node_31, &weight_of),
+				Some((10, 20))
+			);
+
+			let bag = Bag::<Test>::get(20).unwrap();
+			// there is a cycle,
+			// the bags head/tail are the same node, and that node has its own
+			// id for prev & next so when we iterate we will infinitely keep
+			// reading the same node from storage.
+			assert_eq!(
+				bag.head().unwrap().voter().id,
+				bag.head().unwrap().next().unwrap().voter().id
+			);
+			assert_eq!(
+				bag.head().unwrap().voter().id,
+				bag.head().unwrap().prev().unwrap().voter().id
+			);
+			assert_eq!(
+				bag.head().unwrap().voter().id,
+				bag.tail().unwrap().voter().id,
+			)
+		});
 	}
 }
 
