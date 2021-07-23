@@ -1879,7 +1879,8 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 						Reserves::<T, I>::try_mutate(beneficiary, |reserves| -> Result<T::Balance, DispatchError> {
 							match reserves.binary_search_by_key(id, |data| data.id) {
 								Ok(index) => {
-									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(
+										slashed, beneficiary, to_change, status)?;
 
 									// remain should always be zero but just to be defensive here
 									let actual = to_change.saturating_sub(remain);
@@ -1890,7 +1891,8 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 									Ok(actual)
 								},
 								Err(index) => {
-									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(
+										slashed, beneficiary, to_change, status)?;
 
 									// remain should always be zero but just to be defensive here
 									let actual = to_change.saturating_sub(remain);
@@ -1905,7 +1907,8 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 							}
 						})?
 					} else {
-						let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+						let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(
+							slashed, beneficiary, to_change, status)?;
 
 						// remain should always be zero but just to be defensive here
 						to_change.saturating_sub(remain)
