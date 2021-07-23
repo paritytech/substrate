@@ -270,6 +270,7 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
+	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
 
 	pub static EpochLength: u64 = 30;
 }
@@ -379,6 +380,7 @@ impl crate::Config for Runtime {
 	type Fallback = Fallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type CompactSolution = TestCompact;
+	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -410,9 +412,9 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
-		let voters = Voters::get();
-		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
-			return Err("Voters too big")
+		let mut voters = Voters::get();
+		if let Some(max_len) = maybe_max_len {
+			voters.truncate(max_len)
 		}
 
 		Ok((voters, 0))

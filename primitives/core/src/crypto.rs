@@ -586,6 +586,8 @@ ss58_address_format!(
 		(67, "equilibrium", "Equilibrium Network, standard account (*25519).")
 	SoraAccount =>
 		(69, "sora", "SORA Network, standard account (*25519).")
+  ZeitgeistAccount =>
+		(73, "zeitgeist", "Zeitgeist network, standard account (*25519).")
 	MantaAccount =>
 		(77, "manta", "Manta Network, standard account (*25519).")
 	CalamariAccount =>

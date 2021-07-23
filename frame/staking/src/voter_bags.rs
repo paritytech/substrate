@@ -620,15 +620,13 @@ impl<T: Config> Node<T> {
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
 		slashing_spans: &BTreeMap<AccountIdOf<T>, SlashingSpans>,
 	) -> Option<VotingDataOf<T>> {
+		let voter_weight = weight_of(&self.voter.id);
 		match self.voter.voter_type {
-			VoterType::Validator => Some((
-				self.voter.id.clone(),
-				weight_of(&self.voter.id),
-				sp_std::vec![self.voter.id.clone()],
-			)),
+			VoterType::Validator =>
+				Some((self.voter.id.clone(), voter_weight, sp_std::vec![self.voter.id.clone()])),
 			VoterType::Nominator => {
 				let Nominations { submitted_in, mut targets, .. } =
-					Nominators::<T>::get(self.voter.id.clone())?;
+					Nominators::<T>::get(&self.voter.id)?;
 				// Filter out nomination targets which were nominated before the most recent
 				// slashing span.
 				targets.retain(|stash| {
@@ -637,8 +635,7 @@ impl<T: Config> Node<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 
-				(!targets.is_empty())
-					.then(move || (self.voter.id.clone(), weight_of(&self.voter.id), targets))
+				(!targets.is_empty()).then(move || (self.voter.id.clone(), voter_weight, targets))
 			},
 		}
 	}
