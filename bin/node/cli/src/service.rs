@@ -787,7 +787,7 @@ mod tests {
 				};
 				let signer = charlie.clone();
 
-				let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
+				let function = Call::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
 
 				let check_spec_version = frame_system::CheckSpecVersion::new();
 				let check_tx_version = frame_system::CheckTxVersion::new();
