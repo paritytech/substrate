@@ -51,6 +51,8 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	pub deposit: Balance,
 	/// The raw solution itself.
 	pub solution: RawSolution<CompactSolution>,
+	/// The reward that should potentially be paid for this solution, if accepted.
+	pub reward: Balance,
 }
 
 impl<AccountId, Balance, CompactSolution> Ord
@@ -351,10 +353,8 @@ impl<T: Config> Pallet<T> {
 		let SolutionOrSnapshotSize { voters, targets } =
 			Self::snapshot_metadata().unwrap_or_default();
 
-		let reward = T::SignedRewardBase::get();
-
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { solution, who, deposit } = best;
+			let SignedSubmission { solution, who, deposit, reward } = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
@@ -567,7 +567,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase().0);
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 		})
 	}
 
@@ -616,7 +616,7 @@ mod tests {
 			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 gets everything back.
 			assert_eq!(balances(&999), (100, 0));
 		})
@@ -807,7 +807,7 @@ mod tests {
 			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 is slashed.
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back.
