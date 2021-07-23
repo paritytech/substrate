@@ -968,7 +968,7 @@ mod voter_list {
 		assert_eq!(notional_bag_for::<Test>(9), 10);
 		assert_eq!(notional_bag_for::<Test>(11), 20);
 
-		// at a threshold gives the threshold.
+		// at a threshold gives that threshold.
 		assert_eq!(notional_bag_for::<Test>(10), 10);
 
 		let max_explicit_threshold = *<Test as Config>::VoterBagThresholds::get().last().unwrap();
@@ -1037,18 +1037,83 @@ mod voter_list {
 	}
 
 	#[test]
-	fn storage_is_cleaned_up_as_voters_are_removed() {}
-
-	#[test]
-	fn insert_works() {
+	fn storage_is_cleaned_up_as_voters_are_removed() {
 		todo!()
 	}
 
 	#[test]
+	fn insert_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![11, 21, 101, 31]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+
+			// Insert into an existing bag:
+			// when
+			bond(42, 43, 999);
+			VoterList::<Test>::insert(Voter::<_>::nominator(42), Pallet::<Test>::weight_of_fn());
+
+			// then
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![11, 21, 101, 42, 31]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42])]);
+
+			// TODO maybe this is overkill since its not api behavior driven testing and instead
+			// should be tested on the bags abstraction level
+			// Insert into a non-existent bag:
+			// when
+			bond(422, 433, 1_001);
+			VoterList::<Test>::insert(Voter::<_>::nominator(422), Pallet::<Test>::weight_of_fn());
+
+			// then
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![422, 11, 21, 101, 88, 31]
+			);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1_000, vec![11, 21, 101, 88]), (2_000, vec![422])]
+			);
+		});
+	}
+
+	#[test]
 	fn insert_as_works() {
-		// insert a new one with role
-		// update the status of already existing one.
-		todo!()
+		ExtBuilder::default().build_and_execute(|| {
+			let actual =
+				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			let mut expected: Vec<Voter<u64>> = vec![
+				Voter::<_>::validator(11),
+				Voter::<_>::validator(21),
+				Voter::<_>::nominator(101),
+				Voter::<_>::validator(31),
+			];
+			assert_eq!(actual, expected);
+
+			// Insert a new account with role:
+			// when
+			VoterList::<Test>::insert_as(&42, VoterType::Nominator);
+
+			// then
+			let actual =
+				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			expected.push(Voter::<_>::nominator(42));
+			assert_eq!(actual, expected);
+
+			// Update the status of already existing one:
+			// when
+			VoterList::<Test>::insert_as(&42, VoterType::Validator);
+
+			// then
+			let actual =
+				VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			expected[4] = Voter::<_>::validator(42);
+			assert_eq!(actual, expected);
+		});
 	}
 
 	#[test]
@@ -1100,103 +1165,6 @@ mod voter_node {
 // complicated test setups. Please see my versions above, we can test the same properties, easily,
 // without the need to alter the stakers so much.
 /*
-#[cfg(test)]
-mod tests {
-	use frame_support::traits::Currency;
-
-	use super::*;
-	use crate::mock::*;
-
-	const GENESIS_VOTER_IDS: [u64; 5] = [11, 21, 31, 41, 101];
-
-	/// This tests the property that when iterating through the `VoterList`, we iterate from higher
-	/// bags to lower.
-	#[test]
-	fn iteration_is_semi_sorted() {
-		use rand::seq::SliceRandom;
-		let mut rng = rand::thread_rng();
-
-		// Randomly sort the list of voters. Later we'll give each of these a stake such that it
-		// fits into a different bag.
-		let voters = {
-			let mut v = vec![0; GENESIS_VOTER_IDS.len()];
-			v.copy_from_slice(&GENESIS_VOTER_IDS);
-			v.shuffle(&mut rng);
-			v
-		};
-
-		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
-			// initialize the voters' deposits
-			let mut balance = 10;
-			for voter_id in voters.iter().rev() {
-				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
-				let controller = Staking::bonded(voter_id).unwrap();
-				let mut ledger = Staking::ledger(&controller).unwrap();
-				ledger.total = balance;
-				ledger.active = balance;
-				Staking::update_ledger(&controller, &ledger);
-				Staking::do_rebag(voter_id);
-
-				// Increase balance to the next threshold.
-				balance += 10;
-			}
-
-			let have_voters: Vec<_> = VoterList::<Test>::iter().map(|node| node.voter.id).collect();
-			assert_eq!(voters, have_voters);
-		});
-	}
-
-	/// This tests that we can `take` x voters, even if that quantity ends midway through a list.
-	#[test]
-	fn take_works() {
-		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
-			// initialize the voters' deposits
-			let mut balance = 0; // This will be 10 on the first loop iteration because 0 % 3 == 0
-			for (idx, voter_id) in GENESIS_VOTER_IDS.iter().enumerate() {
-				if idx % 3 == 0 {
-					// This increases the balance by 10, which is the amount each threshold
-					// increases by. Thus this will increase the balance by 1 bag.
-					//
-					// This will create 2 bags, the lower threshold bag having
-					// 3 voters with balance 10, and the higher threshold bag having
-					// 2 voters with balance 20.
-					balance += 10;
-				}
-
-				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
-				let controller = Staking::bonded(voter_id).unwrap();
-				let mut ledger = Staking::ledger(&controller).unwrap();
-				ledger.total = balance;
-				ledger.active = balance;
-				Staking::update_ledger(&controller, &ledger);
-				Staking::do_rebag(voter_id);
-			}
-
-			let bag_thresh10 = Bag::<Test>::get(10)
-				.unwrap()
-				.iter()
-				.map(|node| node.voter.id)
-				.collect::<Vec<_>>();
-			assert_eq!(bag_thresh10, vec![11, 21, 31]);
-
-			let bag_thresh20 = Bag::<Test>::get(20)
-				.unwrap()
-				.iter()
-				.map(|node| node.voter.id)
-				.collect::<Vec<_>>();
-			assert_eq!(bag_thresh20, vec![41, 101]);
-
-			let voters: Vec<_> = VoterList::<Test>::iter()
-				// take 4/5 from [41, 101],[11, 21, 31], demonstrating that we can do a
-				// take that stops mid bag.
-				.take(4)
-				.map(|node| node.voter.id)
-				.collect();
-
-			assert_eq!(voters, vec![41, 101, 11, 21]);
-		});
-	}
-
 	#[test]
 	fn storage_is_cleaned_up_as_voters_are_removed() {
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
