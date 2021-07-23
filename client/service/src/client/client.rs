@@ -830,6 +830,18 @@ where
 						None
 					},
 				};
+				// Ensure parent chain is finalized to maintain invariant that
+				// finality is called sequentially. This will also send finality
+				// notifications for top 250 newly finalized blocks.
+				if finalized && parent_exists {
+					self.apply_finality_with_block_hash(
+						operation,
+						parent_hash,
+						None,
+						info.best_hash,
+						make_notifications,
+					)?;
+				}
 
 				operation.op.update_cache(new_cache);
 				storage_changes
