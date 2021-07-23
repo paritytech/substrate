@@ -15,19 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Weight, Pallet};
-use frame_support::{storage::migration, traits::{StorageVersion, PalletInfoAccess, Get}};
+use crate::{Config, Pallet, Weight};
+use frame_support::{
+	storage::migration,
+	traits::{Get, PalletInfoAccess, StorageVersion},
+};
 
 pub fn migrate<T: Config>() -> Weight {
 	let mut weight: Weight = 0;
 
 	if StorageVersion::get::<Pallet<T>>() == 3 {
 		weight = weight.saturating_add(T::DbWeight::get().writes(1));
-		migration::remove_storage_prefix(
-			<Pallet<T>>::name().as_bytes(),
-			b"CurrentSchedule",
-			b"",
-		);
+		migration::remove_storage_prefix(<Pallet<T>>::name().as_bytes(), b"CurrentSchedule", b"");
 
 		StorageVersion::new(4).put::<Pallet<T>>();
 	}

@@ -18,7 +18,7 @@
 use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{token, Ident, Generics};
+use syn::{token, Generics, Ident};
 
 pub fn expand_outer_origin(
 	runtime: &Ident,
@@ -26,13 +26,14 @@ pub fn expand_outer_origin(
 	pallets_token: token::Brace,
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
-	let system_pallet = pallets.iter()
-		.find(|decl| decl.name == SYSTEM_PALLET_NAME)
-		.ok_or_else(|| syn::Error::new(
-			pallets_token.span,
-			"`System` pallet declaration is missing. \
+	let system_pallet =
+		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
+			syn::Error::new(
+				pallets_token.span,
+				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-		))?;
+			)
+		})?;
 
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
@@ -52,15 +53,23 @@ pub fn expand_outer_origin(
 					 be constructed: pallet `{}` must have generic `Origin`",
 					name
 				);
-				return Err(syn::Error::new(name.span(), msg));
+				return Err(syn::Error::new(name.span(), msg))
 			}
 
-			caller_variants.extend(
-				expand_origin_caller_variant(runtime, pallet_decl, index, instance, generics),
-			);
-			pallet_conversions.extend(
-				expand_origin_pallet_conversions(scrate, runtime, pallet_decl, instance, generics),
-			);
+			caller_variants.extend(expand_origin_caller_variant(
+				runtime,
+				pallet_decl,
+				index,
+				instance,
+				generics,
+			));
+			pallet_conversions.extend(expand_origin_pallet_conversions(
+				scrate,
+				runtime,
+				pallet_decl,
+				instance,
+				generics,
+			));
 			query_origin_part_macros.push(quote! {
 				#path::__substrate_origin_check::is_origin_part_defined!(#name);
 			});
@@ -270,16 +279,16 @@ fn expand_origin_caller_variant(
 	match instance {
 		Some(inst) if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime, #path::#inst>),)
-		}
+		},
 		Some(inst) => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#path::#inst>),)
-		}
+		},
 		None if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime>),)
-		}
+		},
 		None => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin),)
-		}
+		},
 	}
 }
 
@@ -301,7 +310,7 @@ fn expand_origin_pallet_conversions(
 		None => quote!(#path::Origin),
 	};
 
-	quote!{
+	quote! {
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
 				OriginCaller::#variant_name(x)

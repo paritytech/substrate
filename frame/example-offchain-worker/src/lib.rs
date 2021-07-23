@@ -42,24 +42,28 @@
 //! one unsigned transaction floating in the network.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
+use frame_support::traits::Get;
 use frame_system::{
 	self as system,
 	offchain::{
-		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SendSignedTransaction,
-		SignedPayload, SigningTypes, Signer, SubmitTransaction,
-	}
+		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
+		SignedPayload, Signer, SigningTypes, SubmitTransaction,
+	},
 };
-use frame_support::traits::Get;
+use lite_json::json::JsonValue;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	RuntimeDebug,
-	offchain::{http, Duration, storage::{MutateStorageError, StorageRetrievalError, StorageValueRef}},
+	offchain::{
+		http,
+		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+		Duration,
+	},
 	traits::Zero,
-	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
+	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
+	RuntimeDebug,
 };
-use codec::{Encode, Decode};
 use sp_std::vec::Vec;
-use lite_json::json::JsonValue;
 
 #[cfg(test)]
 mod tests;
@@ -78,15 +82,17 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
 /// the types with this pallet-specific identifier.
 pub mod crypto {
 	use super::KEY_TYPE;
+	use sp_core::sr25519::Signature as Sr25519Signature;
 	use sp_runtime::{
 		app_crypto::{app_crypto, sr25519},
 		traits::Verify,
 	};
-	use sp_core::sr25519::Signature as Sr25519Signature;
 	app_crypto!(sr25519, KEY_TYPE);
 
 	pub struct TestAuthId;
-	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for TestAuthId {
+	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+		for TestAuthId
+	{
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
 		type GenericPublic = sp_core::sr25519::Public;
@@ -97,9 +103,9 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	/// This pallet's configuration trait
 	#[pallet::config]
@@ -179,8 +185,10 @@ pub mod pallet {
 			let should_send = Self::choose_transaction_type(block_number);
 			let res = match should_send {
 				TransactionType::Signed => Self::fetch_price_and_send_signed(),
-				TransactionType::UnsignedForAny => Self::fetch_price_and_send_unsigned_for_any_account(block_number),
-				TransactionType::UnsignedForAll => Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
+				TransactionType::UnsignedForAny =>
+					Self::fetch_price_and_send_unsigned_for_any_account(block_number),
+				TransactionType::UnsignedForAll =>
+					Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
 				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
 				TransactionType::None => Ok(()),
 			};
@@ -236,7 +244,7 @@ pub mod pallet {
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
 			_block_number: T::BlockNumber,
-			price: u32
+			price: u32,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
@@ -283,17 +291,15 @@ pub mod pallet {
 		/// By default unsigned transactions are disallowed, but implementing the validator
 		/// here we make sure that some particular calls (the ones produced by offchain worker)
 		/// are being whitelisted and marked as valid.
-		fn validate_unsigned(
-			_source: TransactionSource,
-			call: &Self::Call,
-		) -> TransactionValidity {
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			// Firstly let's check that we call the right function.
-			if let Call::submit_price_unsigned_with_signed_payload(
-				ref payload, ref signature
-			) = call {
-				let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+			if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
+				call
+			{
+				let signature_valid =
+					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into();
+					return InvalidTransaction::BadProof.into()
 				}
 				Self::validate_transaction_parameters(&payload.block_number, &payload.price)
 			} else if let Call::submit_price_unsigned(block_number, new_price) = call {
@@ -370,11 +376,10 @@ impl<T: Config> Pallet<T> {
 			match last_send {
 				// If we already have a value in storage and the block number is recent enough
 				// we avoid sending another transaction at this time.
-				Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
-					Err(RECENTLY_SENT)
-				},
+				Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
+					Err(RECENTLY_SENT),
 				// In every other case we attempt to acquire the lock and send a transaction.
-				_ => Ok(block_number)
+				_ => Ok(block_number),
 			}
 		});
 
@@ -396,10 +401,15 @@ impl<T: Config> Pallet<T> {
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
 				let transaction_type = block_number % 3u32.into();
-				if transaction_type == Zero::zero() { TransactionType::Signed }
-				else if transaction_type == T::BlockNumber::from(1u32) { TransactionType::UnsignedForAny }
-				else if transaction_type == T::BlockNumber::from(2u32) { TransactionType::UnsignedForAll }
-				else { TransactionType::Raw }
+				if transaction_type == Zero::zero() {
+					TransactionType::Signed
+				} else if transaction_type == T::BlockNumber::from(1u32) {
+					TransactionType::UnsignedForAny
+				} else if transaction_type == T::BlockNumber::from(2u32) {
+					TransactionType::UnsignedForAll
+				} else {
+					TransactionType::Raw
+				}
 			},
 			// We are in the grace period, we should not send a transaction this time.
 			Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => TransactionType::None,
@@ -417,7 +427,7 @@ impl<T: Config> Pallet<T> {
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
 		if !signer.can_sign() {
 			return Err(
-				"No local accounts available. Consider adding one via `author_insertKey` RPC."
+				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
 			)?
 		}
 		// Make an external HTTP request to fetch the current price.
@@ -428,14 +438,12 @@ impl<T: Config> Pallet<T> {
 		// representing the call, we've just created.
 		// Submit signed will return a vector of results for all accounts that were found in the
 		// local keystore with expected `KEY_TYPE`.
-		let results = signer.send_signed_transaction(
-			|_account| {
-				// Received price is wrapped into a call to `submit_price` public function of this pallet.
-				// This means that the transaction, when executed, will simply call that function passing
-				// `price` as an argument.
-				Call::submit_price(price)
-			}
-		);
+		let results = signer.send_signed_transaction(|_account| {
+			// Received price is wrapped into a call to `submit_price` public function of this pallet.
+			// This means that the transaction, when executed, will simply call that function passing
+			// `price` as an argument.
+			Call::submit_price(price)
+		});
 
 		for (acc, res) in &results {
 			match res {
@@ -480,7 +488,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn fetch_price_and_send_unsigned_for_any_account(
+		block_number: T::BlockNumber,
+	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -493,23 +503,23 @@ impl<T: Config> Pallet<T> {
 		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
 		// -- Sign using any account
-		let (_, result) = Signer::<T, T::AuthorityId>::any_account().send_unsigned_transaction(
-			|account| PricePayload {
-				price,
-				block_number,
-				public: account.public.clone()
-			},
-			|payload, signature| {
-				Call::submit_price_unsigned_with_signed_payload(payload, signature)
-			}
-		).ok_or("No local accounts accounts available.")?;
+		let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+			.send_unsigned_transaction(
+				|account| PricePayload { price, block_number, public: account.public.clone() },
+				|payload, signature| {
+					Call::submit_price_unsigned_with_signed_payload(payload, signature)
+				},
+			)
+			.ok_or("No local accounts accounts available.")?;
 		result.map_err(|()| "Unable to submit transaction")?;
 
 		Ok(())
 	}
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned_for_all_accounts(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn fetch_price_and_send_unsigned_for_all_accounts(
+		block_number: T::BlockNumber,
+	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -524,18 +534,14 @@ impl<T: Config> Pallet<T> {
 		// -- Sign using all accounts
 		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
 			.send_unsigned_transaction(
-				|account| PricePayload {
-					price,
-					block_number,
-					public: account.public.clone()
-				},
+				|account| PricePayload { price, block_number, public: account.public.clone() },
 				|payload, signature| {
 					Call::submit_price_unsigned_with_signed_payload(payload, signature)
-				}
+				},
 			);
 		for (_account_id, result) in transaction_results.into_iter() {
 			if result.is_err() {
-				return Err("Unable to submit transaction");
+				return Err("Unable to submit transaction")
 			}
 		}
 
@@ -554,16 +560,12 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let request = http::Request::get(
-			"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD"
-		);
+		let request =
+			http::Request::get("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD");
 		// We set the deadline for sending of the request, note that awaiting response can
 		// have a separate deadline. Next we send the request, before that it's also possible
 		// to alter request headers or stream body content in case of non-GET requests.
-		let pending = request
-			.deadline(deadline)
-			.send()
-			.map_err(|_| http::Error::IoError)?;
+		let pending = request.deadline(deadline).send().map_err(|_| http::Error::IoError)?;
 
 		// The request is already being processed by the host, we are free to do anything
 		// else in the worker (we can send multiple concurrent requests too).
@@ -571,12 +573,11 @@ impl<T: Config> Pallet<T> {
 		// so we can block current thread and wait for it to finish.
 		// Note that since the request is being driven by the host, we don't have to wait
 		// for the request to have it complete, we will just not read the response.
-		let response = pending.try_wait(deadline)
-			.map_err(|_| http::Error::DeadlineReached)??;
+		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			log::warn!("Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
+			return Err(http::Error::Unknown)
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes.
@@ -595,7 +596,7 @@ impl<T: Config> Pallet<T> {
 			None => {
 				log::warn!("Unable to extract price from the response: {:?}", body_str);
 				Err(http::Error::Unknown)
-			}
+			},
 		}?;
 
 		log::warn!("Got price: {} cents", price);
@@ -610,8 +611,7 @@ impl<T: Config> Pallet<T> {
 		let val = lite_json::parse_json(price_str);
 		let price = match val.ok()? {
 			JsonValue::Object(obj) => {
-				let (_, v) = obj.into_iter()
-					.find(|(k, _)| k.iter().copied().eq("USD".chars()))?;
+				let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("USD".chars()))?;
 				match v {
 					JsonValue::Number(number) => number,
 					_ => return None,
@@ -661,12 +661,12 @@ impl<T: Config> Pallet<T> {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if &next_unsigned_at > block_number {
-			return InvalidTransaction::Stale.into();
+			return InvalidTransaction::Stale.into()
 		}
 		// Let's make sure to reject transactions from the future.
 		let current_block = <system::Pallet<T>>::block_number();
 		if &current_block < block_number {
-			return InvalidTransaction::Future.into();
+			return InvalidTransaction::Future.into()
 		}
 
 		// We prioritize transactions that are more far away from current average.

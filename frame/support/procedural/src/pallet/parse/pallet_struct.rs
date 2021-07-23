@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use super::helper;
-use syn::spanned::Spanned;
 use quote::ToTokens;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -53,16 +53,9 @@ pub struct PalletStructDef {
 /// * `#[pallet::generate_storage_info]`
 /// * `#[pallet::storage_version(STORAGE_VERSION)]`
 pub enum PalletStructAttr {
-	GenerateStore {
-		span: proc_macro2::Span,
-		vis: syn::Visibility,
-		keyword: keyword::Store,
-	},
+	GenerateStore { span: proc_macro2::Span, vis: syn::Visibility, keyword: keyword::Store },
 	GenerateStorageInfoTrait(proc_macro2::Span),
-	StorageVersion {
-		storage_version: syn::Path,
-		span: proc_macro2::Span,
-	}
+	StorageVersion { storage_version: syn::Path, span: proc_macro2::Span },
 }
 
 impl PalletStructAttr {
@@ -120,7 +113,7 @@ impl PalletStructDef {
 			item
 		} else {
 			let msg = "Invalid pallet::pallet, expected struct definition";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
 		let mut store = None;
@@ -133,17 +126,19 @@ impl PalletStructDef {
 				PalletStructAttr::GenerateStore { vis, keyword, .. } if store.is_none() => {
 					store = Some((vis, keyword));
 				},
-				PalletStructAttr::GenerateStorageInfoTrait(span) if generate_storage_info.is_none() => {
+				PalletStructAttr::GenerateStorageInfoTrait(span)
+					if generate_storage_info.is_none() =>
+				{
 					generate_storage_info = Some(span);
-				},
+				}
 				PalletStructAttr::StorageVersion { storage_version, .. }
 					if storage_version_found.is_none() =>
 				{
 					storage_version_found = Some(storage_version);
-				},
+				}
 				attr => {
 					let msg = "Unexpected duplicated attribute";
-					return Err(syn::Error::new(attr.span(), msg));
+					return Err(syn::Error::new(attr.span(), msg))
 				},
 			}
 		}
@@ -152,12 +147,12 @@ impl PalletStructDef {
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::pallet, Pallet must be public";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		if item.generics.where_clause.is_some() {
 			let msg = "Invalid pallet::pallet, where clause not supported on Pallet declaration";
-			return Err(syn::Error::new(item.generics.where_clause.span(), msg));
+			return Err(syn::Error::new(item.generics.where_clause.span(), msg))
 		}
 
 		let mut instances = vec![];

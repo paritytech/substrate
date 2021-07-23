@@ -16,14 +16,14 @@
 // limitations under the License.
 
 use codec::Encode;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 use syn::{
-	Expr, ExprLit, FieldValue, ItemConst, Lit,
-	parse::{Result, Error},
+	parse::{Error, Result},
 	parse_macro_input,
 	spanned::Spanned as _,
+	Expr, ExprLit, FieldValue, ItemConst, Lit,
 };
-use quote::quote;
-use proc_macro2::{TokenStream, Span};
 
 /// This macro accepts a `const` item that has a struct initializer expression of `RuntimeVersion`-like type.
 /// The macro will pass through this declaration and append an item declaration that will
@@ -78,12 +78,8 @@ impl ParseRuntimeVersion {
 	fn parse_expr(init_expr: &Expr) -> Result<ParseRuntimeVersion> {
 		let init_expr = match init_expr {
 			Expr::Struct(ref e) => e,
-			_ => {
-				return Err(Error::new(
-					init_expr.span(),
-					"expected a struct initializer expression",
-				));
-			}
+			_ =>
+				return Err(Error::new(init_expr.span(), "expected a struct initializer expression")),
 		};
 
 		let mut parsed = ParseRuntimeVersion::default();
@@ -96,12 +92,8 @@ impl ParseRuntimeVersion {
 	fn parse_field_value(&mut self, field_value: &FieldValue) -> Result<()> {
 		let field_name = match field_value.member {
 			syn::Member::Named(ref ident) => ident,
-			syn::Member::Unnamed(_) => {
-				return Err(Error::new(
-					field_value.span(),
-					"only named members must be used",
-				));
-			}
+			syn::Member::Unnamed(_) =>
+				return Err(Error::new(field_value.span(), "only named members must be used")),
 		};
 
 		fn parse_once<T>(
@@ -110,10 +102,7 @@ impl ParseRuntimeVersion {
 			parser: impl FnOnce(&Expr) -> Result<T>,
 		) -> Result<()> {
 			if value.is_some() {
-				return Err(Error::new(
-					field.span(),
-					"field is already initialized before",
-				));
+				return Err(Error::new(field.span(), "field is already initialized before"))
 			} else {
 				*value = Some(parser(&field.expr)?);
 				Ok(())
@@ -125,21 +114,13 @@ impl ParseRuntimeVersion {
 		} else if field_name == "impl_name" {
 			parse_once(&mut self.impl_name, field_value, Self::parse_str_literal)?;
 		} else if field_name == "authoring_version" {
-			parse_once(
-				&mut self.authoring_version,
-				field_value,
-				Self::parse_num_literal,
-			)?;
+			parse_once(&mut self.authoring_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "spec_version" {
 			parse_once(&mut self.spec_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "impl_version" {
 			parse_once(&mut self.impl_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "transaction_version" {
-			parse_once(
-				&mut self.transaction_version,
-				field_value,
-				Self::parse_num_literal,
-			)?;
+			parse_once(&mut self.transaction_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "apis" {
 			// Intentionally ignored
 			//
@@ -147,7 +128,7 @@ impl ParseRuntimeVersion {
 			// the "runtime_version" custom section. `impl_runtime_apis` is responsible for generating
 			// a custom section with the supported runtime apis descriptor.
 		} else {
-			return Err(Error::new(field_name.span(), "unknown field"));
+			return Err(Error::new(field_name.span(), "unknown field"))
 		}
 
 		Ok(())
@@ -155,16 +136,12 @@ impl ParseRuntimeVersion {
 
 	fn parse_num_literal(expr: &Expr) -> Result<u32> {
 		let lit = match *expr {
-			Expr::Lit(ExprLit {
-				lit: Lit::Int(ref lit),
-				..
-			}) => lit,
-			_ => {
+			Expr::Lit(ExprLit { lit: Lit::Int(ref lit), .. }) => lit,
+			_ =>
 				return Err(Error::new(
 					expr.span(),
 					"only numeric literals (e.g. `10`) are supported here",
-				));
-			}
+				)),
 		};
 		lit.base10_parse::<u32>()
 	}
@@ -172,44 +149,28 @@ impl ParseRuntimeVersion {
 	fn parse_str_literal(expr: &Expr) -> Result<String> {
 		let mac = match *expr {
 			Expr::Macro(syn::ExprMacro { ref mac, .. }) => mac,
-			_ => {
-				return Err(Error::new(
-					expr.span(),
-					"a macro expression is expected here",
-				));
-			}
+			_ => return Err(Error::new(expr.span(), "a macro expression is expected here")),
 		};
 
 		let lit: ExprLit = mac.parse_body().map_err(|e| {
 			Error::new(
 				e.span(),
-				format!(
-					"a single literal argument is expected, but parsing is failed: {}",
-					e
-				),
+				format!("a single literal argument is expected, but parsing is failed: {}", e),
 			)
 		})?;
 
 		match lit.lit {
 			Lit::Str(ref lit) => Ok(lit.value()),
-			_ => Err(Error::new(
-				lit.span(),
-				"only string literals are supported here",
-			)),
+			_ => Err(Error::new(lit.span(), "only string literals are supported here")),
 		}
 	}
 
 	fn build(self, span: Span) -> Result<RuntimeVersion> {
 		macro_rules! required {
 			($e:expr) => {
-				$e.ok_or_else(||
-					{
-						Error::new(
-							span,
-							format!("required field '{}' is missing", stringify!($e)),
-						)
-					}
-				)?
+				$e.ok_or_else(|| {
+					Error::new(span, format!("required field '{}' is missing", stringify!($e)))
+				})?
 			};
 		}
 

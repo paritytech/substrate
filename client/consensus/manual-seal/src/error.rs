@@ -19,10 +19,10 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-use sp_consensus::{Error as ConsensusError, ImportResult};
+use futures::channel::{mpsc::SendError, oneshot};
 use sp_blockchain::Error as BlockchainError;
+use sp_consensus::{Error as ConsensusError, ImportResult};
 use sp_inherents::Error as InherentsError;
-use futures::channel::{oneshot, mpsc::SendError};
 
 /// Error code for rpc
 mod codes {
@@ -63,14 +63,14 @@ pub enum Error {
 	#[display(fmt = "{}", _0)]
 	#[from(ignore)]
 	StringError(String),
-	///send error
+	/// send error
 	#[display(fmt = "Consensus process is terminating")]
 	Canceled(oneshot::Canceled),
-	///send error
+	/// send error
 	#[display(fmt = "Consensus process is terminating")]
 	SendError(SendError),
 	/// Some other error.
-	#[display(fmt="Other error: {}", _0)]
+	#[display(fmt = "Other error: {}", _0)]
 	Other(Box<dyn std::error::Error + Send>),
 }
 
@@ -85,7 +85,7 @@ impl Error {
 			InherentError(_) => codes::INHERENTS_ERROR,
 			BlockchainError(_) => codes::BLOCKCHAIN_ERROR,
 			SendError(_) | Canceled(_) => codes::SERVER_SHUTTING_DOWN,
-			_ => codes::UNKNOWN_ERROR
+			_ => codes::UNKNOWN_ERROR,
 		}
 	}
 }
@@ -95,7 +95,7 @@ impl std::convert::From<Error> for jsonrpc_core::Error {
 		jsonrpc_core::Error {
 			code: jsonrpc_core::ErrorCode::ServerError(error.to_code()),
 			message: format!("{}", error),
-			data: None
+			data: None,
 		}
 	}
 }

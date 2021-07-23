@@ -17,7 +17,7 @@
 
 //! Traits for managing information attached to pallets and their constituents.
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 
 /// Provides information about the pallet setup in the runtime.

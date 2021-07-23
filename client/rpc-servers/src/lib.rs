@@ -22,10 +22,10 @@
 
 mod middleware;
 
-use std::io;
 use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
 use pubsub::PubSubMetadata;
+use std::io;
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -42,7 +42,7 @@ const HTTP_THREADS: usize = 4;
 pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
 pub use self::inner::*;
-pub use middleware::{RpcMiddleware, RpcMetrics};
+pub use middleware::{RpcMetrics, RpcMiddleware};
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<M: PubSubMetadata>(
@@ -60,10 +60,12 @@ pub fn rpc_handler<M: PubSubMetadata>(
 		let methods = serde_json::to_value(&methods)
 			.expect("Serialization of Vec<String> is infallible; qed");
 
-		move |_| Ok(serde_json::json!({
-			"version": 1,
-			"methods": methods.clone(),
-		}))
+		move |_| {
+			Ok(serde_json::json!({
+				"version": 1,
+				"methods": methods.clone(),
+			}))
+		}
 	});
 	io
 }
@@ -89,17 +91,14 @@ mod inner {
 		io: RpcHandler<M>,
 		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<http::Server> {
-		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+		let max_request_body_size = maybe_max_payload_mb
+			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		http::ServerBuilder::new(io)
 			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
 			.health_api(("/health", "system_health"))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.rest_api(if cors.is_some() {
-				http::RestApi::Secure
-			} else {
-				http::RestApi::Unsecure
-			})
+			.rest_api(if cors.is_some() { http::RestApi::Secure } else { http::RestApi::Unsecure })
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 			.max_request_body_size(max_request_body_size)
 			.start_http(addr)
@@ -134,28 +133,32 @@ mod inner {
 		io: RpcHandler<M>,
 		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<ws::Server> {
-		let rpc_max_payload = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+		let rpc_max_payload = maybe_max_payload_mb
+			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(rpc_max_payload)
-			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
-			.allowed_origins(map_cors(cors))
-			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.start(addr)
-			.map_err(|err| match err {
-				ws::Error::Io(io) => io,
-				ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
-				e => {
-					error!("{}", e);
-					io::ErrorKind::Other.into()
-				}
-			})
+		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
+			context.sender().into()
+		})
+		.max_payload(rpc_max_payload)
+		.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
+		.allowed_origins(map_cors(cors))
+		.allowed_hosts(hosts_filtering(cors.is_some()))
+		.start(addr)
+		.map_err(|err| match err {
+			ws::Error::Io(io) => io,
+			ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
+			e => {
+				error!("{}", e);
+				io::ErrorKind::Other.into()
+			},
+		})
 	}
 
 	fn map_cors<T: for<'a> From<&'a str>>(
-		cors: Option<&Vec<String>>
+		cors: Option<&Vec<String>>,
 	) -> http::DomainsValidation<T> {
-		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
+		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>())
+			.into()
 	}
 
 	fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
@@ -171,5 +174,4 @@ mod inner {
 }
 
 #[cfg(target_os = "unknown")]
-mod inner {
-}
+mod inner {}

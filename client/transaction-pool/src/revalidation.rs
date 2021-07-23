@@ -18,13 +18,19 @@
 
 //! Pool periodic revalidation.
 
-use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
+use std::{
+	collections::{BTreeMap, HashMap, HashSet},
+	pin::Pin,
+	sync::Arc,
+};
 
-use crate::graph::{ChainApi, Pool, ExtrinsicHash, NumberFor, ValidatedTransaction};
-use sp_runtime::traits::{Zero, SaturatedConversion};
-use sp_runtime::generic::BlockId;
-use sp_runtime::transaction_validity::TransactionValidityError;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use crate::graph::{ChainApi, ExtrinsicHash, NumberFor, Pool, ValidatedTransaction};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{SaturatedConversion, Zero},
+	transaction_validity::TransactionValidityError,
+};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use futures::prelude::*;
 use std::time::Duration;
@@ -63,19 +69,18 @@ async fn batch_revalidate<Api: ChainApi>(
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
 	at: NumberFor<Api>,
-	batch: impl IntoIterator<Item=ExtrinsicHash<Api>>,
+	batch: impl IntoIterator<Item = ExtrinsicHash<Api>>,
 ) {
 	let mut invalid_hashes = Vec::new();
 	let mut revalidated = HashMap::new();
 
-	let validation_results = futures::future::join_all(
-		batch.into_iter().filter_map(|ext_hash| {
-			pool.validated_pool().ready_by_hash(&ext_hash).map(|ext| {
-				api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
-					.map(move |validation_result| (validation_result, ext_hash, ext))
-			})
+	let validation_results = futures::future::join_all(batch.into_iter().filter_map(|ext_hash| {
+		pool.validated_pool().ready_by_hash(&ext_hash).map(|ext| {
+			api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
+				.map(move |validation_result| (validation_result, ext_hash, ext))
 		})
-	).await;
+	}))
+	.await;
 
 	for (validation_result, ext_hash, ext) in validation_results {
 		match validation_result {
@@ -98,7 +103,7 @@ async fn batch_revalidate<Api: ChainApi>(
 						ext.data.clone(),
 						api.hash_and_length(&ext.data).1,
 						validity,
-					)
+					),
 				);
 			},
 			Err(validation_err) => {
@@ -109,7 +114,7 @@ async fn batch_revalidate<Api: ChainApi>(
 					validation_err
 				);
 				invalid_hashes.push(ext_hash);
-			}
+			},
 		}
 	}
 
@@ -120,10 +125,7 @@ async fn batch_revalidate<Api: ChainApi>(
 }
 
 impl<Api: ChainApi> RevalidationWorker<Api> {
-	fn new(
-		api: Arc<Api>,
-		pool: Arc<Pool<Api>>,
-	) -> Self {
+	fn new(api: Arc<Api>, pool: Arc<Pool<Api>>) -> Self {
 		Self {
 			api,
 			pool,
@@ -135,7 +137,8 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 	fn prepare_batch(&mut self) -> Vec<ExtrinsicHash<Api>> {
 		let mut queued_exts = Vec::new();
-		let mut left = std::cmp::max(MIN_BACKGROUND_REVALIDATION_BATCH_SIZE, self.members.len() / 4);
+		let mut left =
+			std::cmp::max(MIN_BACKGROUND_REVALIDATION_BATCH_SIZE, self.members.len() / 4);
 
 		// Take maximum of count transaction by order
 		// which they got into the pool
@@ -188,11 +191,14 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 					ext_hash,
 				);
 
-				continue;
+				continue
 			}
 
-			self.block_ordered.entry(block_number)
-				.and_modify(|value| { value.insert(ext_hash.clone()); })
+			self.block_ordered
+				.entry(block_number)
+				.and_modify(|value| {
+					value.insert(ext_hash.clone());
+				})
 				.or_insert_with(|| {
 					let mut bt = HashSet::new();
 					bt.insert(ext_hash.clone());
@@ -211,7 +217,10 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		mut self,
 		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
 		interval: R,
-	) where R: Send, R::Guard: Send {
+	) where
+		R: Send,
+		R::Guard: Send,
+	{
 		let interval = interval.into_stream().fuse();
 		let from_queue = from_queue.fuse();
 		futures::pin_mut!(interval, from_queue);
@@ -269,7 +278,6 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	}
 }
 
-
 /// Revalidation queue.
 ///
 /// Can be configured background (`new_background`)
@@ -286,11 +294,7 @@ where
 {
 	/// New revalidation queue without background worker.
 	pub fn new(api: Arc<Api>, pool: Arc<Pool<Api>>) -> Self {
-		Self {
-			api,
-			pool,
-			background: None,
-		}
+		Self { api, pool, background: None }
 	}
 
 	/// New revalidation queue with background worker.
@@ -298,34 +302,40 @@ where
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
 		interval: R,
-	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>) where R: Send + 'static, R::Guard: Send {
+	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>)
+	where
+		R: Send + 'static,
+		R::Guard: Send,
+	{
 		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 
-		let queue =
-			Self {
-				api,
-				pool,
-				background: Some(to_worker),
-			};
+		let queue = Self { api, pool, background: Some(to_worker) };
 
 		(queue, worker.run(from_queue, interval).boxed())
 	}
 
 	/// New revalidation queue with background worker.
-	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
-		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
-	{
-		Self::new_with_interval(api, pool, intervalier::Interval::new(BACKGROUND_REVALIDATION_INTERVAL))
+	pub fn new_background(
+		api: Arc<Api>,
+		pool: Arc<Pool<Api>>,
+	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
+		Self::new_with_interval(
+			api,
+			pool,
+			intervalier::Interval::new(BACKGROUND_REVALIDATION_INTERVAL),
+		)
 	}
 
 	/// New revalidation queue with background worker and test signal.
 	#[cfg(feature = "test-helpers")]
-	pub fn new_test(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
-		(Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl)
-	{
-		let (interval, notifier) = intervalier::BackSignalInterval::new(BACKGROUND_REVALIDATION_INTERVAL);
+	pub fn new_test(
+		api: Arc<Api>,
+		pool: Arc<Pool<Api>>,
+	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>, intervalier::BackSignalControl) {
+		let (interval, notifier) =
+			intervalier::BackSignalInterval::new(BACKGROUND_REVALIDATION_INTERVAL);
 		let (queue, background) = Self::new_with_interval(api, pool, interval);
 
 		(queue, background, notifier)
@@ -361,6 +371,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}

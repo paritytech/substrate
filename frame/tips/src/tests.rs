@@ -19,21 +19,19 @@
 
 #![cfg(test)]
 
-use crate as tips;
 use super::*;
-use std::cell::RefCell;
+use crate as tips;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
-	weights::Weight, traits::SortedMembers,
-	PalletId, pallet_prelude::GenesisBuild,
+	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::SortedMembers,
+	weights::Weight, PalletId,
 };
-use sp_runtime::Permill;
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	Perbill, Permill,
 };
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -102,9 +100,7 @@ thread_local! {
 pub struct TenToFourteen;
 impl SortedMembers<u128> for TenToFourteen {
 	fn sorted_members() -> Vec<u128> {
-		TEN_TO_FOURTEEN.with(|v| {
-			v.borrow().clone()
-		})
+		TEN_TO_FOURTEEN.with(|v| v.borrow().clone())
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(new: &u128) {
@@ -119,7 +115,9 @@ impl ContainsLengthBound for TenToFourteen {
 	fn max_len() -> usize {
 		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
 	}
-	fn min_len() -> usize { 0 }
+	fn min_len() -> usize {
+		0
+	}
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
@@ -142,7 +140,7 @@ impl pallet_treasury::Config for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type BurnDestination = ();  // Just gets burned.
+	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
 	type MaxApprovals = MaxApprovals;
@@ -165,19 +163,21 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
 	t.into()
 }
 
 fn last_event() -> RawEvent<u64, u128, H256> {
-	System::events().into_iter().map(|r| r.event)
-		.filter_map(|e| {
-			if let Event::TipsModTestInst(inner) = e { Some(inner) } else { None }
-		})
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::TipsModTestInst(inner) = e { Some(inner) } else { None })
 		.last()
 		.unwrap()
 }
@@ -267,13 +267,19 @@ fn close_tip_works() {
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
+		assert_noop!(
+			TipsModTestInst::close_tip(Origin::signed(0), h.into()),
+			Error::<Test>::StillOpen
+		);
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
 
 		assert_eq!(last_event(), RawEvent::TipClosing(h));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
+		assert_noop!(
+			TipsModTestInst::close_tip(Origin::signed(0), h.into()),
+			Error::<Test>::Premature
+		);
 
 		System::set_block_number(2);
 		assert_noop!(TipsModTestInst::close_tip(Origin::none(), h.into()), BadOrigin);
@@ -282,7 +288,10 @@ fn close_tip_works() {
 
 		assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
+		assert_noop!(
+			TipsModTestInst::close_tip(Origin::signed(100), h.into()),
+			Error::<Test>::UnknownTip
+		);
 	});
 }
 
@@ -305,10 +314,7 @@ fn slash_tip_works() {
 		assert_eq!(last_event(), RawEvent::NewTip(h));
 
 		// can't remove from any origin
-		assert_noop!(
-			TipsModTestInst::slash_tip(Origin::signed(0), h.clone()),
-			BadOrigin,
-		);
+		assert_noop!(TipsModTestInst::slash_tip(Origin::signed(0), h.clone()), BadOrigin);
 
 		// can remove from root.
 		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));
@@ -330,10 +336,16 @@ fn retract_tip_works() {
 		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()), Error::<Test>::NotFinder);
+		assert_noop!(
+			TipsModTestInst::retract_tip(Origin::signed(10), h.clone()),
+			Error::<Test>::NotFinder
+		);
 		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
+		assert_noop!(
+			TipsModTestInst::close_tip(Origin::signed(0), h.into()),
+			Error::<Test>::UnknownTip
+		);
 
 		// with tip new
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
@@ -341,10 +353,16 @@ fn retract_tip_works() {
 		let h = tip_hash();
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()), Error::<Test>::NotFinder);
+		assert_noop!(
+			TipsModTestInst::retract_tip(Origin::signed(0), h.clone()),
+			Error::<Test>::NotFinder
+		);
 		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(10), h.into()), Error::<Test>::UnknownTip);
+		assert_noop!(
+			TipsModTestInst::close_tip(Origin::signed(10), h.into()),
+			Error::<Test>::UnknownTip
+		);
 	});
 }
 
@@ -416,7 +434,7 @@ fn test_last_reward_migration() {
 		who: 10,
 		finder: Some((20, 30)),
 		closes: Some(13),
-		tips: vec![(40, 50), (60, 70)]
+		tips: vec![(40, 50), (60, 70)],
 	};
 
 	let reason2 = BlakeTwo256::hash(b"reason2");
@@ -427,24 +445,17 @@ fn test_last_reward_migration() {
 		who: 20,
 		finder: None,
 		closes: Some(13),
-		tips: vec![(40, 50), (60, 70)]
+		tips: vec![(40, 50), (60, 70)],
 	};
 
 	let data = vec![
-		(
-			Tips::<Test>::hashed_key_for(hash1),
-			old_tip_finder.encode().to_vec()
-		),
-		(
-			Tips::<Test>::hashed_key_for(hash2),
-			old_tip_no_finder.encode().to_vec()
-		),
+		(Tips::<Test>::hashed_key_for(hash1), old_tip_finder.encode().to_vec()),
+		(Tips::<Test>::hashed_key_for(hash2), old_tip_no_finder.encode().to_vec()),
 	];
 
 	s.top = data.into_iter().collect();
 
 	sp_io::TestExternalities::new(s).execute_with(|| {
-
 		TipsModTestInst::migrate_retract_tip_for_tip_new();
 
 		// Test w/ finder
@@ -481,10 +492,12 @@ fn test_last_reward_migration() {
 fn genesis_funding_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let initial_funding = 100;
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 

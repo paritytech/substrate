@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{weights::Weight, traits::{Get, StorageVersion}};
+use frame_support::{
+	traits::{Get, StorageVersion},
+	weights::Weight,
+};
 use sp_io::hashing::twox_128;
 
 /// The old prefix.
@@ -28,16 +31,13 @@ pub const OLD_PREFIX: &[u8] = b"GrandpaFinality";
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<GrandpaPallet>`.
 ///
 /// The old storage prefix, `GrandpaFinality` is hardcoded in the migration code.
-pub fn migrate<
-	T: crate::Config,
-	N: AsRef<str>,
->(new_pallet_name: N) -> Weight {
+pub fn migrate<T: crate::Config, N: AsRef<str>>(new_pallet_name: N) -> Weight {
 	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
 		log::info!(
 			target: "runtime::afg",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return 0;
+		return 0
 	}
 	let storage_version = StorageVersion::get::<crate::Pallet<T>>();
 	log::info!(
@@ -65,10 +65,7 @@ pub fn migrate<
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<
-	T: crate::Config,
-	N: AsRef<str>,
->(new: N) {
+pub fn pre_migration<T: crate::Config, N: AsRef<str>>(new: N) {
 	let new = new.as_ref();
 	log::info!("pre-migration grandpa test with new = {}", new);
 
@@ -108,10 +105,6 @@ pub fn post_migration() {
 	log::info!("post-migration grandpa");
 
 	// Assert that nothing remains at the old prefix
-	assert!(
-		sp_io::storage::next_key(&twox_128(OLD_PREFIX)).map_or(
-			true,
-			|next_key| !next_key.starts_with(&twox_128(OLD_PREFIX))
-		)
-	);
+	assert!(sp_io::storage::next_key(&twox_128(OLD_PREFIX))
+		.map_or(true, |next_key| !next_key.starts_with(&twox_128(OLD_PREFIX))));
 }
