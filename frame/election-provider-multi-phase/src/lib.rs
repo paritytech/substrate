@@ -1333,10 +1333,7 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(buffer.len() == size && size == buffer.capacity());
 
 		sp_io::storage::set(&<Snapshot<T>>::hashed_key(), &buffer);
-		Ok(w1
-			.saturating_add(w2)
-			.saturating_add(w3)
-			.saturating_add(T::DbWeight::get().writes(3)))
+		Ok(w1.saturating_add(w2).saturating_add(w3).saturating_add(T::DbWeight::get().writes(3)))
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
