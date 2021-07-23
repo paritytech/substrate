@@ -399,7 +399,7 @@ impl<T: Config> VoterList<T> {
 /// iteration so that there's no incentive to churn voter positioning to improve the chances of
 /// appearing within the voter set.
 #[derive(DefaultNoBound, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, PartialEq))]
 pub struct Bag<T: Config> {
 	head: Option<AccountIdOf<T>>,
 	tail: Option<AccountIdOf<T>>,
@@ -1042,11 +1042,7 @@ mod voter_list {
 	#[test]
 	fn insert_works() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// given
-			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
-			// TODO maybe checking the actual bags here is overkill since this is aimed at VoterList
-			// api and not bags? (same Q for other tests here)
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+			// given basic_setup_works
 
 			// Insert into an existing bag:
 			// when
@@ -1107,9 +1103,7 @@ mod voter_list {
 	#[test]
 	fn remove_works() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// given
-			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+			// given basic_setup_works
 
 			// Remove a non-existent voter:
 			// when
@@ -1141,12 +1135,9 @@ mod voter_list {
 	#[test]
 	fn update_position_for_works() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// given a correctly placed account 31
-			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
-
 			let weight_of = Staking::weight_of_fn();
 
+			// given basic_setup_works with a correctly placed account 31
 			let node_31 = Node::<Test>::from_id(&31).unwrap();
 			assert!(!node_31.is_misplaced(&weight_of));
 			assert_eq!(weight_of(&31), 1);
@@ -1233,16 +1224,10 @@ mod voter_list {
 			// then now the reference is outdated
 			assert!(node_31.is_misplaced(&weight_of));
 			// but we can expect the list is correct
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![]), (20, vec![31]), (1_000, vec![11, 21, 101])]
-			);
+			assert_eq!(get_bags(), vec![(10, vec![]), (20, vec![31]), (1_000, vec![11, 21, 101])]);
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 
-			assert_eq!(
-				VoterList::<Test>::update_position_for(node_31, &weight_of),
-				Some((10, 20))
-			);
+			assert_eq!(VoterList::<Test>::update_position_for(node_31, &weight_of), Some((10, 20)));
 
 			let bag = Bag::<Test>::get(20).unwrap();
 			// there is a cycle,
@@ -1257,19 +1242,55 @@ mod voter_list {
 				bag.head().unwrap().voter().id,
 				bag.head().unwrap().prev().unwrap().voter().id
 			);
-			assert_eq!(
-				bag.head().unwrap().voter().id,
-				bag.tail().unwrap().voter().id,
-			)
+			assert_eq!(bag.head().unwrap().voter().id, bag.tail().unwrap().voter().id,)
 		});
 	}
 }
 
 #[cfg(test)]
 mod bags {
+	use super::*;
+	use crate::mock::*;
+	use frame_support::{assert_ok, assert_storage_noop, traits::Currency};
+
 	#[test]
 	fn get_works() {
-		todo!()
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let check_bag = |bag_upper, head, tail, ids| {
+				assert_storage_noop!(Bag::<Test>::get(bag_upper));
+				let bag = Bag::<Test>::get(bag_upper).unwrap();
+				let bag_ids = bag.iter().map(|n| n.voter().id).collect::<Vec<_>>();
+				assert_eq!(bag, Bag::<Test> { head, tail, bag_upper });
+				assert_eq!(bag_ids, ids);
+			};
+
+			// given uppers of bags that exist.
+			let existing_bag_uppers = vec![10, 1_000];
+
+			// we can fetch them
+			check_bag(existing_bag_uppers[0], Some(31), Some(31), vec![31]);
+			// (getting the same bag twice has the same results)
+			check_bag(existing_bag_uppers[0], Some(31), Some(31), vec![31]);
+			check_bag(existing_bag_uppers[1], Some(11), Some(101), vec![11, 21, 101]);
+
+			// and all other uppers don't get bags.
+			<Test as Config>::VoterBagThresholds::get()
+				.iter()
+				.chain(iter::once(&VoteWeight::MAX))
+				.filter(|bag_upper| !existing_bag_uppers.contains(bag_upper))
+				.for_each(|bag_upper| {
+					assert_storage_noop!(assert_eq!(Bag::<Test>::get(*bag_upper), None));
+				});
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn get_panics_with_a_bad_threshold() {
+		// NOTE: panic is only expected with debug compilation
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			Bag::<Test>::get(11);
+		});
 	}
 
 	#[test]
