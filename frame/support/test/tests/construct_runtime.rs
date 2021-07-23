@@ -310,8 +310,8 @@ mod origin_test {
 
 	#[test]
 	fn origin_default_filter() {
-		let accepted_call = nested::module3::Call::fail().into();
-		let rejected_call = module3::Call::fail().into();
+		let accepted_call = nested::module3::Call::fail { }.into();
+		let rejected_call = module3::Call::fail { }.into();
 
 		assert_eq!(Origin::root().filter_call(&accepted_call), true);
 		assert_eq!(Origin::root().filter_call(&rejected_call), true);
@@ -473,28 +473,28 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop()).encode()[0], 30);
-	assert_eq!(Call::Module1_1(module1::Call::fail()).encode()[0], 31);
-	assert_eq!(Call::Module2(module2::Call::fail()).encode()[0], 32);
-	assert_eq!(Call::Module1_2(module1::Call::fail()).encode()[0], 33);
-	assert_eq!(Call::NestedModule3(nested::module3::Call::fail()).encode()[0], 34);
-	assert_eq!(Call::Module3(module3::Call::fail()).encode()[0], 35);
-	assert_eq!(Call::Module1_4(module1::Call::fail()).encode()[0], 3);
-	assert_eq!(Call::Module1_6(module1::Call::fail()).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail()).encode()[0], 2);
-	assert_eq!(Call::Module1_8(module1::Call::fail()).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail()).encode()[0], 13);
+	assert_eq!(Call::System(system::Call::noop { }).encode()[0], 30);
+	assert_eq!(Call::Module1_1(module1::Call::fail { }).encode()[0], 31);
+	assert_eq!(Call::Module2(module2::Call::fail { }).encode()[0], 32);
+	assert_eq!(Call::Module1_2(module1::Call::fail { }).encode()[0], 33);
+	assert_eq!(Call::NestedModule3(nested::module3::Call::fail { }).encode()[0], 34);
+	assert_eq!(Call::Module3(module3::Call::fail { }).encode()[0], 35);
+	assert_eq!(Call::Module1_4(module1::Call::fail { }).encode()[0], 3);
+	assert_eq!(Call::Module1_6(module1::Call::fail { }).encode()[0], 1);
+	assert_eq!(Call::Module1_7(module1::Call::fail { }).encode()[0], 2);
+	assert_eq!(Call::Module1_8(module1::Call::fail { }).encode()[0], 12);
+	assert_eq!(Call::Module1_9(module1::Call::fail { }).encode()[0], 13);
 }
 
 #[test]
 fn call_compact_attr() {
 	use codec::Encode;
-	let call: module3::Call<Runtime> = module3::Call::aux_1(1);
+	let call: module3::Call<Runtime> = module3::Call::aux_1 { _data: 1 };
 	let encoded = call.encode();
 	assert_eq!(2, encoded.len());
 	assert_eq!(vec![1, 4], encoded);
 
-	let call: module3::Call<Runtime> = module3::Call::aux_2(1, 2);
+	let call: module3::Call<Runtime> = module3::Call::aux_2 { _data: 1, _data2: 2 };
 	let encoded = call.encode();
 	assert_eq!(6, encoded.len());
 	assert_eq!(vec![2, 1, 0, 0, 0, 8], encoded);
@@ -503,13 +503,13 @@ fn call_compact_attr() {
 #[test]
 fn call_encode_is_correct_and_decode_works() {
 	use codec::{Decode, Encode};
-	let call: module3::Call<Runtime> = module3::Call::fail();
+	let call: module3::Call<Runtime> = module3::Call::fail { };
 	let encoded = call.encode();
 	assert_eq!(vec![0], encoded);
 	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(decoded, call);
 
-	let call: module3::Call<Runtime> = module3::Call::aux_3(32, "hello".into());
+	let call: module3::Call<Runtime> = module3::Call::aux_3 { _data: 32, _data2: "hello".into() };
 	let encoded = call.encode();
 	assert_eq!(vec![3, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
 	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
@@ -524,12 +524,12 @@ fn call_weight_should_attach_to_call_enum() {
 	};
 	// operational.
 	assert_eq!(
-		module3::Call::<Runtime>::operational().get_dispatch_info(),
+		module3::Call::<Runtime>::operational { }.get_dispatch_info(),
 		DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
 	);
 	// custom basic
 	assert_eq!(
-		module3::Call::<Runtime>::aux_4().get_dispatch_info(),
+		module3::Call::<Runtime>::aux_4 { }.get_dispatch_info(),
 		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
 	);
 }
@@ -537,14 +537,14 @@ fn call_weight_should_attach_to_call_enum() {
 #[test]
 fn call_name() {
 	use frame_support::dispatch::GetCallName;
-	let name = module3::Call::<Runtime>::aux_4().get_call_name();
+	let name = module3::Call::<Runtime>::aux_4 { }.get_call_name();
 	assert_eq!("aux_4", name);
 }
 
 #[test]
 fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4());
+	let call = Call::Module3(module3::Call::<Runtime>::aux_4 { });
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
 	assert_eq!(metadata, expected);
@@ -582,10 +582,10 @@ fn get_module_names() {
 #[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
-	let call = Call::Module3(module3::Call::<Runtime>::fail());
+	let call = Call::Module3(module3::Call::<Runtime>::fail { });
 	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
 	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
-	assert_eq!(Some(&module3::Call::<Runtime>::fail()), subcall);
+	assert_eq!(Some(&module3::Call::<Runtime>::fail { }), subcall);
 	assert_eq!(None, subcall_none);
 
 	let from = Call::from(subcall.unwrap().clone());
