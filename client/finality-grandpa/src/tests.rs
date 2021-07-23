@@ -34,6 +34,7 @@ use sc_network_test::{
 	PeersFullClient, TestClient, TestNetFactory,
 };
 use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_blockchain::Result;
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_finality_grandpa::{

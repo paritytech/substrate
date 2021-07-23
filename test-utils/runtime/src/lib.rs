@@ -1241,6 +1241,8 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 
 #[cfg(test)]
 mod tests {
+	use codec::Encode;
+	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;

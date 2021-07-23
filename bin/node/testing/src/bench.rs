@@ -39,7 +39,7 @@ use node_runtime::{
 	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
 	Signature, SystemCall, UncheckedExtrinsic,
 };
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	BlockBackend, ExecutionStrategy,
@@ -48,6 +48,7 @@ use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sp_api::ProvideRuntimeApi;
+use sp_block_builder::BlockBuilder;
 use sp_consensus::BlockOrigin;
 use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
 use sp_inherents::InherentData;

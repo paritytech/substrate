@@ -30,10 +30,7 @@ use sc_consensus::{
 use sc_executor::native_executor_instance;
 use sc_service::client::{self, new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, BlockStatus,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, SelectChain,
-};
+use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -50,6 +47,16 @@ use std::{
 	sync::Arc,
 };
 use substrate_test_runtime::TestAPI;
+use substrate_test_runtime_client::{
+	prelude::*,
+	runtime::{
+		self,
+		genesismap::{insert_genesis_block, GenesisConfig},
+		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
+	},
+	AccountKeyring, BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
+	Sr25519Keyring, TestClientBuilder, TestClientBuilderExt,
+};
 
 mod db;
 mod light;

@@ -260,7 +260,6 @@ mod tests {
 	use sc_consensus::ImportedAux;
 	use sc_transaction_pool::{BasicPool, Options, RevalidationType};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
-	use sp_consensus::ImportedAux;
 	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime_client::{
 		AccountKeyring::*, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,

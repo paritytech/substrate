@@ -36,6 +36,12 @@ use sc_network::config::ProtocolConfig;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
+use sp_consensus_babe::{
+	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
+	AuthorityPair, Slot,
+};
+use sp_core::crypto::Pair;
+use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{Block as BlockT, DigestFor},

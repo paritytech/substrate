@@ -18,6 +18,7 @@
 
 //! Testing block import logic.
 
+use super::*;
 use futures::executor::block_on;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::{

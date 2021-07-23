@@ -568,8 +568,7 @@ mod tests {
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
 	use sp_consensus::{
-		import_queue::BoxJustificationImport, AlwaysCanAuthor, DisableProofRecording,
-		NoNetwork as DummyOracle, Proposal, SlotData,
+		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal, SlotData,
 	};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
