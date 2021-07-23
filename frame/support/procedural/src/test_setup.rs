@@ -131,7 +131,7 @@ impl Parse for TestSetupAttr {
 	}
 }
 
-pub fn setup_default_test_parameters(
+pub fn setup_default_system_test_config(
 	attr: TokenStream,
 	item: TokenStream,
 ) -> syn::Result<TokenStream> {

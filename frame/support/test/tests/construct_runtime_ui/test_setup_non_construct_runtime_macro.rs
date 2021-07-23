@@ -1,4 +1,4 @@
-#[frame_support::setup_default_test_parameters]
+#[frame_support::setup_default_system_test_config]
 parameter_types! {
     pub const Foo: u32 = 1337;
 }

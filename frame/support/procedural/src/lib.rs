@@ -380,8 +380,8 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn setup_default_test_parameters(attr: TokenStream, item: TokenStream) -> TokenStream {
-	test_setup::setup_default_test_parameters(attr, item)
+pub fn setup_default_system_test_config(attr: TokenStream, item: TokenStream) -> TokenStream {
+	test_setup::setup_default_system_test_config(attr, item)
 		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 

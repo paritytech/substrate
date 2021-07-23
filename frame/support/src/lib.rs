@@ -1320,7 +1320,7 @@ pub mod pallet_prelude {
 	pub use sp_std::marker::PhantomData;
 }
 
-pub use frame_support_procedural::setup_default_test_parameters;
+pub use frame_support_procedural::setup_default_system_test_config;
 
 /// `pallet` attribute macro allows to define a pallet to be used in `construct_runtime!`.
 ///
