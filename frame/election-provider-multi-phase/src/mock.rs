@@ -261,7 +261,6 @@ parameter_types! {
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
-	pub static SignedRewardMax: Balance = 10;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
@@ -356,6 +355,7 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
+	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
