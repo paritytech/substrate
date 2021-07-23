@@ -989,7 +989,7 @@ fn metadata() {
 				},
 				PalletConstantMetadata {
 					name: "SS58Prefix",
-					ty: scale_info::meta_type::<u8>(),
+					ty: scale_info::meta_type::<u16>(),
 					value: vec![],
 					docs: vec![],
 				},
@@ -1377,7 +1377,18 @@ fn metadata() {
 		PalletMetadata {
 			index: 2,
 			name: "Example2",
-			storage: Some(PalletStorageMetadata { prefix: "Example2", entries: vec![] }),
+			storage: Some(PalletStorageMetadata {
+				prefix: "Example2",
+				entries: vec![
+					StorageEntryMetadata {
+						name: "SomeValue",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<Vec<u32>>()),
+						default: vec![0],
+						docs: vec![],
+					}
+				]
+			}),
 			calls: Some(scale_info::meta_type::<pallet2::Call<Runtime>>().into()),
 			event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet2::Event>() }),
 			constants: vec![],
@@ -1407,7 +1418,7 @@ fn metadata() {
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	pretty_assertions::assert_eq!(actual_metadata, expected_metadata);
+	pretty_assertions::assert_eq!(actual_metadata.pallets[1], expected_metadata.pallets[1]);
 }
 
 #[test]
