@@ -846,6 +846,10 @@ pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
 		.collect::<Vec<_>>()
 }
 
+pub(crate) fn bag_as_ids(bag: &Bag<Test>) -> Vec<AccountId> {
+	bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()
+}
+
 pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
 	VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>()
 }

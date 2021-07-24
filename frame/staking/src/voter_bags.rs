@@ -399,7 +399,8 @@ impl<T: Config> VoterList<T> {
 /// iteration so that there's no incentive to churn voter positioning to improve the chances of
 /// appearing within the voter set.
 #[derive(DefaultNoBound, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, PartialEq))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct Bag<T: Config> {
 	head: Option<AccountIdOf<T>>,
 	tail: Option<AccountIdOf<T>>,
@@ -562,6 +563,7 @@ impl<T: Config> Bag<T> {
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
+#[cfg_attr(test, derive(PartialEq, Clone))]
 pub struct Node<T: Config> {
 	voter: Voter<AccountIdOf<T>>,
 	prev: Option<AccountIdOf<T>>,
@@ -1042,8 +1044,6 @@ mod voter_list {
 	#[test]
 	fn insert_works() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// given basic_setup_works
-
 			// Insert into an existing bag:
 			// when
 			bond(42, 43, 999);
@@ -1103,8 +1103,6 @@ mod voter_list {
 	#[test]
 	fn remove_works() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// given basic_setup_works
-
 			// Remove a non-existent voter:
 			// when
 			VoterList::<Test>::remove(&42);
@@ -1137,10 +1135,9 @@ mod voter_list {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
 			let weight_of = Staking::weight_of_fn();
 
-			// given basic_setup_works with a correctly placed account 31
+			// given a correctly placed account 31
 			let node_31 = Node::<Test>::from_id(&31).unwrap();
 			assert!(!node_31.is_misplaced(&weight_of));
-			assert_eq!(weight_of(&31), 1);
 
 			// when account 31 bonds extra and needs to be moved to a non-existing higher bag
 			// (we can't call bond_extra, because that implicitly calls update_position_for)
@@ -1207,7 +1204,8 @@ mod voter_list {
 	// When we insert we set node.prev = tail.id
 	// and then old_tail.next = node.id. Which creates a cycle since old_tail
 	// was the same node
-	// long story short, don't insert the same id into a bag twice
+	// tl;dr, don't insert the same id into a bag twice, especially if its tail
+	// cover this explicitly in insert_node_bad_paths_documented
 	#[test]
 	fn node_reference_invalid_after_implicit_update_position() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
@@ -1251,7 +1249,7 @@ mod voter_list {
 mod bags {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::{assert_ok, assert_storage_noop, traits::Currency};
+	use frame_support::{assert_storage_noop, assert_ok};
 
 	#[test]
 	fn get_works() {
@@ -1294,13 +1292,195 @@ mod bags {
 	}
 
 	#[test]
-	fn insert_works() {
-		todo!()
+	fn insert_node_happy_paths_works() {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let node = |voter, bag_upper| Node::<Test> { voter, prev: None, next: None, bag_upper };
+
+			// when inserting into a bag with 1 node
+			let mut bag_10 = Bag::<Test>::get(10).unwrap();
+			// (note: 42 has no balance or ledger: bags api does not care)
+			bag_10.insert_node(node(Voter::<_>::nominator(42), bag_10.bag_upper));
+			// then
+			assert_eq!(bag_as_ids(&bag_10), vec![31, 42]);
+
+			// when inserting into a bag with 3 nodes
+			let mut bag_1000 = Bag::<Test>::get(1_000).unwrap();
+			bag_1000.insert_node(node(Voter::<_>::nominator(52), bag_1000.bag_upper));
+			// then
+			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 101, 52]);
+
+			// when inserting into a new bag
+			let mut bag_20 = Bag::<Test>::get_or_make(20);
+			bag_20.insert_node(node(Voter::<_>::nominator(62), bag_20.bag_upper));
+			// then
+			assert_eq!(bag_as_ids(&bag_20), vec![20]);
+
+			// when inserting a node pointing to the accounts not in the bag
+			let voter_62 = Voter::<_>::validator(62);
+			let node_62 = Node::<Test> { voter: voter_62.clone(), prev: Some(21), next: Some(101), bag_upper: 20 };
+			bag_20.insert_node(node_62);
+			// then ids are in order
+			assert_eq!(bag_as_ids(&bag_20), vec![20, 62]);
+			// and when the node is re-fetched all the info is correct
+			assert_eq!(
+				Node::<Test>::get(20, &62).unwrap(),
+				Node::<Test> { voter: voter_62, prev: Some(20), next: None, bag_upper: 20 }
+			);
+		});
+	}
+
+	// Document improper ways `insert_node` may be getting used.
+	#[test]
+	fn insert_node_bad_paths_documented() {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let node = |voter, prev, next, bag_upper| Node::<Test> { voter, prev, next, bag_upper };
+			// insert some validators into genesis state
+			bond_validator(51, 50, 2_000);
+			bond_validator(61, 60, 2_000);
+			bond_validator(71, 70, 2_000);
+
+			// when inserting a node with both prev & next pointing at an account in the bag
+			// in the bag and a incorrect bag_upper
+			let mut bag_1000 = Bag::<Test>::get(1_000).unwrap();
+			let voter_42 = Voter::<_>::nominator(42);
+			bag_1000.insert_node(node(voter_42.clone(), Some(11), Some(11), 0));
+			// then the ids are in the correct order
+			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 101, 42]);
+			// and when the node is re-fetched all the info is correct
+			assert_eq!(
+				Node::<Test>::get(1_000, &42).unwrap(),
+				node(voter_42, Some(101), None, bag_1000.bag_upper)
+			);
+
+			// given 21 is a validator in bag_1000 (and not a tail node)
+			let bag_1000_voter = bag_1000.iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
+			assert_eq!(bag_1000_voter[1], Voter::<_>::validator(21));
+			// when inserting a node with id 21 but as a nominator
+			let voter_21_nom = Voter::<_>::nominator(21);
+			bag_1000.insert_node(node(voter_21_nom.clone(), None, None, bag_1000.bag_upper));
+			// then all the nodes after the duplicate are lost (because it is set as the tail)
+			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21]);
+			// and the re-fetched node is a nominator with an **incorrect** prev pointer.
+			assert_eq!(
+				Node::<Test>::get(1_000, &21).unwrap(),
+				node(voter_21_nom, Some(42), None, bag_1000.bag_upper)
+			);
+
+			// TODO: this exact issue could be avoided at this level of abstraction if we check if
+			// an id is already the bags tail before inserting
+
+
+			// given a bag we are confident is in valid state
+			let mut bag_2000 = Bag::<Test>::get(2_000).unwrap();
+			assert_eq!(bag_as_ids(&bag_2000), vec![51, 61, 71]);
+			// when inserting a duplicate id that is already the tail
+			assert_eq!(bag_2000.tail, Some(71));
+			let voter_71 = Voter::<_>::validator(71);
+			bag_2000.insert_node(node(voter_71.clone(), None, None, bag_2000.bag_upper));
+			// then a cycle is created
+			assert_eq!(bag_2000.tail, Some(71));
+			assert_eq!(
+				Node::<Test>::get(2_000, &71).unwrap(),
+				node(voter_71, Some(71), Some(71), bag_2000.bag_upper)
+			);
+		})
 	}
 
 	#[test]
-	fn remove_works() {
-		todo!()
+	fn remove_node_happy_path_works() {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			// add some validators to genesis state
+			bond_validator(51, 50, 1_000);
+			bond_validator(61, 60, 1_000);
+			bond_validator(71, 70, 10);
+			bond_validator(81, 80, 10);
+			bond_validator(91, 90, 2_000);
+			bond_validator(161, 160, 2_000);
+			bond_validator(171, 170, 2_000);
+			bond_validator(181, 180, 2_000);
+			bond_validator(191, 190, 2_000);
+
+			// given
+			let mut bag_1000 = Bag::<Test>::get(1_000).unwrap();
+			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 101, 51, 61]);
+			let mut bag_10 = Bag::<Test>::get(10).unwrap();
+			assert_eq!(bag_as_ids(&bag_10), vec![31, 71, 81]);
+			let mut bag_2000 = Bag::<Test>::get(2_000).unwrap();
+			assert_eq!(bag_as_ids(&bag_2000), vec![91, 161,  171, 181, 191]);
+
+			// remove node from center that is not pointing at head or tail
+			let node_101 = Node::<Test>::get(bag_1000.bag_upper, &101).unwrap();
+			let node_101_pre_remove = node_101.clone();
+			bag_1000.remove_node(&node_101);
+			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 51, 61]);
+			// node isn't mutated when its removed
+			assert_eq!(node_101, node_101_pre_remove);
+			assert_ok!(bag_1000.sanity_check());
+
+			// remove head when its not pointing at tail
+			let node_11 = Node::<Test>::get(bag_1000.bag_upper, &11).unwrap();
+			bag_1000.remove_node(&node_11);
+			assert_eq!(bag_as_ids(&bag_1000), vec![21, 51, 61]);
+			assert_eq!(bag_1000.head, Some(21)); assert_eq!(bag_1000.tail, Some(61));
+			assert_ok!(bag_1000.sanity_check());
+
+			// remove tail when its not pointing at head
+			let node_61 = Node::<Test>::get(bag_1000.bag_upper, &61).unwrap();
+			bag_1000.remove_node(&node_61);
+			assert_eq!(bag_as_ids(&bag_1000), vec![21, 51]);
+			assert_eq!(bag_1000.head, Some(21)); assert_eq!(bag_1000.tail, Some(51));
+			assert_ok!(bag_1000.sanity_check());
+
+			// remove tail when its pointing at head
+			let node_51 = Node::<Test>::get(bag_1000.bag_upper, &51).unwrap();
+			bag_1000.remove_node(&node_51);
+			assert_eq!(bag_as_ids(&bag_1000), vec![21]);
+			assert_eq!(bag_1000.head, Some(21)); assert_eq!(bag_1000.tail, Some(21));
+			assert_ok!(bag_1000.sanity_check());
+
+			// remove node that is head & tail
+			let node_21 = Node::<Test>::get(bag_1000.bag_upper, &21).unwrap();
+			bag_1000.remove_node(&node_21);
+			assert_eq!(bag_as_ids(&bag_1000), Vec::<u64>::new());
+			assert_eq!(bag_1000.head, None); assert_eq!(bag_1000.tail, None);
+			assert_ok!(bag_1000.sanity_check());
+
+			// remove node that is pointing at head and tail
+			let node_71 = Node::<Test>::get(bag_10.bag_upper, &71).unwrap();
+			bag_10.remove_node(&node_71);
+			assert_eq!(bag_as_ids(&bag_10), vec![31, 81]);
+			assert_eq!(bag_10.head, Some(31)); assert_eq!(bag_10.tail, Some(81));
+			assert_ok!(bag_10.sanity_check());
+
+			// remove head when pointing at tail
+			let node_31 = Node::<Test>::get(bag_10.bag_upper, &31).unwrap();
+			bag_10.remove_node(&node_31);
+			assert_eq!(bag_as_ids(&bag_10), vec![81]);
+			assert_eq!(bag_10.head, Some(81)); assert_eq!(bag_10.tail, Some(81));
+			assert_ok!(bag_10.sanity_check());
+
+			// remove node that is pointing at head, but not tail
+			let node_161 = Node::<Test>::get(bag_2000.bag_upper, &161).unwrap();
+			bag_2000.remove_node(&node_161);
+			assert_eq!(bag_as_ids(&bag_2000), vec![91, 171, 181, 191]);
+			assert_eq!(bag_2000.head, Some(91)); assert_eq!(bag_2000.tail, Some(191));
+			assert_ok!(bag_2000.sanity_check());
+
+			// remove node that is pointing at tail, but not head
+			let node_181 = Node::<Test>::get(bag_2000.bag_upper, &181).unwrap();
+			bag_2000.remove_node(&node_181);
+			assert_eq!(bag_as_ids(&bag_2000), vec![91, 171, 191]);
+			assert_eq!(bag_2000.head, Some(91)); assert_eq!(bag_2000.tail, Some(191));
+			assert_ok!(bag_2000.sanity_check());
+
+		});
+	}
+
+	#[test]
+	fn remove_node_bad_paths_documented() {
+		// removing node with prev, next in other bags will mess up other bags
+		// removing node that is bag but has the wrong upper wont do anything
+		// removing a node whose id is not in the bag does not do anything
 	}
 }
 
