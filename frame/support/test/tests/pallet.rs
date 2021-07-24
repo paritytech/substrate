@@ -503,7 +503,7 @@ pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo2
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
 
-#[frame_support::setup_default_test_parameters]
+#[frame_support::setup_default_system_test_config]
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
