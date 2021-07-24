@@ -1512,25 +1512,96 @@ mod bags {
 
 			// but the bag that actually had the node is in an invalid state
 			let bag_1000 = Bag::<Test>::get(1_000).unwrap();
-			assert_ok!(bag_1000.sanity_check());
-			let bag_1000 = Bag::<Test>::get(1_000).unwrap();
 			// because it still has the removed node as its tail.
 			assert_eq!(bag_1000.tail, Some(101));
 			assert_eq!(bag_1000.head, Some(11));
+			assert_ok!(bag_1000.sanity_check());
 		});
 	}
 }
 
 #[cfg(test)]
 mod voter_node {
+	use super::*;
+	use crate::mock::*;
+	use frame_support::{assert_ok, assert_storage_noop, traits::Currency};
+
 	#[test]
-	fn get_voting_data_works() {
-		todo!()
+	fn voting_data_works() {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let weight_of = Staking::weight_of_fn();
+
+			// add nominator with 2/3 slashed targets
+			bond_nominator(42, 43, 1_000, vec![31, 21, 11]);
+
+			// given
+			assert_eq!(get_voter_list_as_voters(), vec![
+				Voter::<_>::validator(11),
+				Voter::<_>::validator(21),
+				Voter::<_>::nominator(101),
+				Voter::<_>::nominator(42),
+				Voter::<_>::validator(31),
+			]);
+
+			let slashing_spans = <Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
+			assert_eq!(slashing_spans.keys().len(), 0); // no pre-existing slashing spans
+
+			let node_31 = Node::<Test>::get(10, &31).unwrap();
+			assert_eq!(
+				node_31.voting_data(&weight_of, &slashing_spans).unwrap(),
+				(31, 1, vec![31])
+			);
+
+			// getting data for a nominator with 0 slashed targets
+			let node_42 = Node::<Test>::get(10, &42).unwrap();
+			assert_eq!(
+				node_42.voting_data(&weight_of, &slashing_spans).unwrap(),
+				(42, 1_000, vec![31, 21, 11])
+			);
+
+			// when validator 31 gets a slash,
+			add_slash(&31);
+			let mut slashing_spans = <Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
+			assert!(slashing_spans.contains_key(&31));
+			// then its node no longer exists
+			assert_eq!(get_voter_list_as_voters(), vec![
+				Voter::<_>::validator(11),
+				Voter::<_>::validator(21),
+				Voter::<_>::nominator(101),
+				Voter::<_>::nominator(42),
+			]);
+			// and its nominator no longer has it as a target
+			let node_42 = Node::<Test>::get(10, &42).unwrap();
+			assert_eq!(
+				node_42.voting_data(&weight_of, &slashing_spans).unwrap(),
+				(42, 1_000, vec![21, 11])
+			)
+		});
 	}
 
 	#[test]
 	fn is_misplaced_works() {
-		todo!()
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let weight_of = Staking::weight_of_fn();
+			let node_31 = Node::<Test>::get(10, &31).unwrap();
+
+			// a node is properly placed if its slashable balance is in range
+			// of the threshold of the bag its in.
+			assert_eq!(Staking::slashable_balance_of(&31), 1);
+			assert!(!node_31.is_misplaced(&weight_of));
+
+			// and will become misplaced if its slashable balance does not
+			// correspond to the bag it is in.
+			Balances::make_free_balance_be(&31, 11);
+			let controller = Staking::bonded(&31).unwrap();
+			let mut ledger = Staking::ledger(&controller).unwrap();
+			ledger.total = 11;
+			ledger.active = 11;
+			Staking::update_ledger(&controller, &ledger);
+
+			assert_eq!(Staking::slashable_balance_of(&31), 11);
+			assert!(node_31.is_misplaced(&weight_of));
+		});
 	}
 }
 
