@@ -24,9 +24,11 @@ use std::cell::RefCell;
 use frame_support::{parameter_types, weights::Weight};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
-use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
-use sp_runtime::traits::{BlakeTwo256, ConvertInto, IdentityLookup};
-use sp_runtime::{Perbill, Permill};
+use sp_runtime::{
+	testing::{Header, TestXt, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill, Permill,
+};
 use sp_staking::{
 	offence::{OffenceError, ReportOffence},
 	SessionIndex,
@@ -70,13 +72,11 @@ impl pallet_session::SessionManager<u64> for TestSessionManager {
 
 impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
-		VALIDATORS.with(|l| l
-			.borrow_mut()
-			.take()
-			.map(|validators| {
-				validators.iter().map(|v| (*v, *v)).collect()
-			})
-		)
+		VALIDATORS.with(|l| {
+			l.borrow_mut()
+				.take()
+				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
+		})
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
@@ -105,9 +105,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default()
-		.build_storage::<Runtime>()
-		.unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
 
@@ -154,8 +152,9 @@ parameter_types! {
 
 impl pallet_session::Config for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
-	type SessionHandler = (ImOnline, );
+	type SessionManager =
+		pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
+	type SessionHandler = (ImOnline,);
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
@@ -230,7 +229,8 @@ impl Config for Runtime {
 	type WeightInfo = ();
 }
 
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
+where
 	Call: From<LocalCall>,
 {
 	type OverarchingCall = Call;

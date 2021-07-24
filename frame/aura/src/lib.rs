@@ -37,22 +37,23 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
 use core::convert::TryFrom;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use frame_support::{
-	Parameter, BoundedVec,
-	traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+	traits::{FindAuthor, Get, OnTimestampSet, OneSessionHandler},
+	ConsensusEngineId, Parameter, BoundedVec,
 };
+use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
+	generic::DigestItem,
+	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
-	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
-use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
+use sp_std::prelude::*;
 
+pub mod migrations;
 mod mock;
 mod tests;
-pub mod migrations;
 
 pub use pallet::*;
 
@@ -65,7 +66,11 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: pallet_timestamp::Config + frame_system::Config {
 		/// The identifier type for an authority.
-		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+		type AuthorityId: Member
+			+ Parameter
+			+ RuntimeAppPublic
+			+ Default
+			+ MaybeSerializeDeserialize;
 
 		/// The maximum number of authorities that can be added.
 		type MaxAuthorities: Get<u32>;
@@ -134,10 +139,8 @@ impl<T: Config> Pallet<T> {
 	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&Self::to_bounded_vec(new.clone()));
 
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
-			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new).encode()
-		);
+		let log: DigestItem<T::Hash> =
+			DigestItem::Consensus(AURA_ENGINE_ID, ConsensusLog::AuthoritiesChange(new).encode());
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
@@ -155,7 +158,7 @@ impl<T: Config> Pallet<T> {
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		for (id, mut data) in pre_runtime_digests {
 			if id == AURA_ENGINE_ID {
-				return Slot::decode(&mut data).ok();
+				return Slot::decode(&mut data).ok()
 			}
 		}
 
@@ -178,14 +181,16 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
 	{
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
 	{
 		// instant changes
 		if changed {
@@ -208,8 +213,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 }
 
 impl<T: Config> FindAuthor<u32> for Pallet<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32> where
-		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	fn find_author<'a, I>(digests: I) -> Option<u32>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
@@ -232,7 +238,8 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
 	fn find_author<'a, I>(digests: I) -> Option<T::AuthorityId>
-		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		let i = Inner::find_author(digests)?;
 
@@ -246,9 +253,7 @@ pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Pallet<T>>;
 
 impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
-		Self::authorities()
-			.iter()
-			.any(|id| id == authority_id)
+		Self::authorities().iter().any(|id| id == authority_id)
 	}
 }
 
@@ -260,6 +265,9 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 		let timestamp_slot = moment / slot_duration;
 		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(CurrentSlot::<T>::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
+		assert!(
+			CurrentSlot::<T>::get() == timestamp_slot,
+			"Timestamp slot must match `CurrentSlot`"
+		);
 	}
 }

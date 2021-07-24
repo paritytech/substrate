@@ -17,10 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use sp_runtime::traits::Block as BlockT;
-use sp_runtime::generic::BlockId;
-use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
 use sc_client_api::{StorageProvider, UsageProvider};
+use sp_core::storage::{well_known_keys, ChildInfo, Storage, StorageChild, StorageKey, StorageMap};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -35,9 +34,7 @@ where
 	B: BlockT,
 	BA: sc_client_api::backend::Backend<B>,
 {
-	let block = block.unwrap_or_else(
-		|| BlockId::Hash(client.usage_info().chain.best_hash)
-	);
+	let block = block.unwrap_or_else(|| BlockId::Hash(client.usage_info().chain.best_hash));
 
 	let empty_key = StorageKey(Vec::new());
 	let mut top_storage = client.storage_pairs(&block, &empty_key)?;
@@ -47,12 +44,12 @@ where
 	// pairs.
 	while let Some(pos) = top_storage
 		.iter()
-		.position(|(k, _)| k.0.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)) {
+		.position(|(k, _)| k.0.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX))
+	{
 		let (key, _) = top_storage.swap_remove(pos);
 
-		let key = StorageKey(
-			key.0[well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..].to_vec(),
-		);
+		let key =
+			StorageKey(key.0[well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..].to_vec());
 		let child_info = ChildInfo::new_default(&key.0);
 
 		let keys = client.child_storage_keys(&block, &child_info, &empty_key)?;

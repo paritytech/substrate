@@ -17,13 +17,10 @@
 
 use super::*;
 use crate as multi_phase;
-use multi_phase::unsigned::{IndexAssignmentOf, Voter};
+use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{
-	parameter_types,
-	traits::{Hooks},
-	weights::Weight,
-};
+use frame_support::{parameter_types, traits::Hooks, weights::Weight};
+use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -32,7 +29,6 @@ use sp_core::{
 	},
 	H256,
 };
-use frame_election_provider_support::{ElectionDataProvider, data_provider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -265,7 +261,6 @@ parameter_types! {
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
-	pub static SignedRewardMax: Balance = 10;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
@@ -360,6 +355,7 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
+	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
@@ -405,7 +401,7 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
-			return Err("Targets too big");
+			return Err("Targets too big")
 		}
 
 		Ok((targets, 0))
@@ -416,7 +412,7 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
 		let voters = Voters::get();
 		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
-			return Err("Voters too big");
+			return Err("Voters too big")
 		}
 
 		Ok((voters, 0))
