@@ -70,7 +70,7 @@
 use crate::Error;
 use std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
-pub use sp_core::sandbox::MAX_POSSIBLE_ALLOCATION;
+pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 
 /// The minimal alignment guaranteed by this allocator.
 ///

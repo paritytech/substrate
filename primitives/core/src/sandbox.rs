@@ -40,11 +40,6 @@ pub enum ExternEntity {
 	Memory(u32),
 }
 
-/// The maximum number of bytes that can be allocated at one time.
-// The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
-// everybody.
-pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
-
 /// An entry in a environment definition table.
 ///
 /// Each entry has a two-level name and description of an entity
