@@ -87,8 +87,10 @@ impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
 			on_idle_functions.push(Tuple::on_idle);
 		)* );
 		let mut weight = 0;
-		for on_idle in on_idle_functions {
+		for pallet_index in 0..on_idle_functions.len() {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			// let index = (pallet_index + n) % on_idle_functions.len();
+			let on_idle = on_idle_functions[pallet_index];
 			weight = weight.saturating_add(on_idle(n.clone(), adjusted_remaining_weight));
 		}
 		weight
@@ -359,5 +361,71 @@ mod tests {
 		assert!(version < PalletVersion::new(2, 50, 51));
 		assert!(version > PalletVersion::new(2, 49, 51));
 		assert!(version < PalletVersion::new(3, 49, 51));
+	}
+
+	#[test]
+	fn on_idle_round_robin_works() {
+		static mut ON_IDLE_INVOCATION_ORDER :sp_std::vec::Vec<&str> = sp_std::vec::Vec::new();
+
+		struct Test1;
+		struct Test2;
+		struct Test3;
+		type TestTuple = (Test1, Test2, Test3);
+		impl OnIdle<u8> for Test1 {
+			fn on_idle(n : u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+				unsafe {
+					ON_IDLE_INVOCATION_ORDER.push("Test1");
+				}
+				0
+			}
+		}
+		impl OnIdle<u8> for Test2 {
+			fn on_idle(n : u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+				unsafe {
+					ON_IDLE_INVOCATION_ORDER.push("Test2");
+				}
+				0
+			}
+		}
+		impl OnIdle<u8> for Test3 {
+			fn on_idle(n : u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+				unsafe {
+					ON_IDLE_INVOCATION_ORDER.push("Test3");
+				}
+				0
+			}
+		}
+
+		unsafe {
+			TestTuple::on_idle(0, 0);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"]
+				.to_vec()
+			);
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(1, 0);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"]
+				.to_vec()
+			);
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(2, 0);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"]
+				.to_vec()
+			);
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(3, 0);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"]
+				.to_vec()
+			);
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(4, 0);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"]
+				.to_vec()
+			);
+			ON_IDLE_INVOCATION_ORDER.clear();
+		}
 	}
 }
