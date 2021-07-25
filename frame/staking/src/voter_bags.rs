@@ -1597,7 +1597,7 @@ mod voter_node {
 			let node_42 = Node::<Test>::get(10, &42).unwrap();
 			assert_eq!(
 				node_42.voting_data(&weight_of, &slashing_spans),
-				None, // no voting data since all targets have been slashed since nominating
+				None, // no voting data since its target(s) have been slashed since nominating
 			);
 		});
 	}
