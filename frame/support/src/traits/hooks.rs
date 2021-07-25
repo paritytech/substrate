@@ -19,7 +19,7 @@
 
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::traits::MaybeSerializeDeserialize;
+use sp_runtime::traits::{MaybeSerializeDeserialize, AtLeast32BitUnsigned};
 
 /// The block initialization trait.
 ///
@@ -80,7 +80,7 @@ pub trait OnIdle<BlockNumber> {
 }
 
 #[impl_for_tuples(30)]
-impl<BlockNumber: Clone + Into<u32>> OnIdle<BlockNumber> for Tuple {
+impl<BlockNumber: Clone + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
 		let mut on_idle_functions = sp_std::vec::Vec::<
 			fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight,
@@ -91,9 +91,11 @@ impl<BlockNumber: Clone + Into<u32>> OnIdle<BlockNumber> for Tuple {
 		let mut weight = 0;
 		for pallet_index in 0..on_idle_functions.len() {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			let n1 = n.clone() % BlockNumber::from(on_idle_functions.len() as u32);
+			let n1 : u32 = n1.try_into().unwrap_or_else(|_| panic!("cannot convert BlockNumber to u32"));
 			let index =
-				((pallet_index as u32) + n.clone().into()) % (on_idle_functions.len() as u32);
-			let on_idle = on_idle_functions[pallet_index as usize];
+				((pallet_index as u32) + n1) % (on_idle_functions.len() as u32);
+			let on_idle = on_idle_functions[index as usize];
 			weight = weight.saturating_add(on_idle(n.clone(), adjusted_remaining_weight));
 		}
 		weight
@@ -374,24 +376,24 @@ mod tests {
 		struct Test2;
 		struct Test3;
 		type TestTuple = (Test1, Test2, Test3);
-		impl OnIdle<u8> for Test1 {
-			fn on_idle(_n: u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+		impl OnIdle<u32> for Test1 {
+			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
 				}
 				0
 			}
 		}
-		impl OnIdle<u8> for Test2 {
-			fn on_idle(_n: u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+		impl OnIdle<u32> for Test2 {
+			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
 				}
 				0
 			}
 		}
-		impl OnIdle<u8> for Test3 {
-			fn on_idle(_n: u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+		impl OnIdle<u32> for Test3 {
+			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");
 				}
