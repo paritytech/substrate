@@ -82,11 +82,15 @@ pub trait OnIdle<BlockNumber> {
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
-		let mut weight = 0;
+		let mut on_idle_functions = sp_std::vec::Vec::<fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight>::new();
 		for_tuples!( #(
-			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
-			weight = weight.saturating_add(Tuple::on_idle(n.clone(),  adjusted_remaining_weight));
+			on_idle_functions.push(Tuple::on_idle);
 		)* );
+		let mut weight = 0;
+		for on_idle in on_idle_functions {
+			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			weight = weight.saturating_add(on_idle(n.clone(), adjusted_remaining_weight));
+		}
 		weight
 	}
 }
