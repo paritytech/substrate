@@ -1524,7 +1524,7 @@ mod bags {
 mod voter_node {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::{assert_ok, assert_storage_noop, traits::Currency};
+	use frame_support::traits::Currency;
 
 	#[test]
 	fn voting_data_works() {
@@ -1535,16 +1535,20 @@ mod voter_node {
 			bond_nominator(42, 43, 1_000, vec![11]);
 
 			// given
-			assert_eq!(get_voter_list_as_voters(), vec![
-				Voter::<_>::validator(11),
-				Voter::<_>::validator(21),
-				Voter::<_>::nominator(101),
-				Voter::<_>::nominator(42),
-				Voter::<_>::validator(31),
-			]);
+			assert_eq!(
+				get_voter_list_as_voters(),
+				vec![
+					Voter::<_>::validator(11),
+					Voter::<_>::validator(21),
+					Voter::<_>::nominator(101),
+					Voter::<_>::nominator(42),
+					Voter::<_>::validator(31),
+				]
+			);
 			assert_eq!(active_era(), 0);
 
-			let slashing_spans = <Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
+			let slashing_spans =
+				<Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
 			assert_eq!(slashing_spans.keys().len(), 0); // no pre-existing slashing spans
 
 			let node_11 = Node::<Test>::get(10, &11).unwrap();
@@ -1565,31 +1569,35 @@ mod voter_node {
 				(42, 1_000, vec![11])
 			);
 
-			run_to_block(2_500);
-			assert_eq!(active_era(), 166);
+			run_to_block(20);
+			assert_eq!(active_era(), 1);
 			// when a validator gets a slash,
 			add_slash(&11);
-			let slashing_spans = <Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
+			let slashing_spans =
+				<Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
 
 			assert_eq!(slashing_spans.keys().cloned().collect::<Vec<_>>(), vec![11, 42, 101]);
 			// then its node no longer exists
-			assert_eq!(get_voter_list_as_voters(), vec![
-				Voter::<_>::validator(21),
-				Voter::<_>::nominator(101),
-				Voter::<_>::nominator(42),
-				Voter::<_>::validator(31),
-			]);
+			assert_eq!(
+				get_voter_list_as_voters(),
+				vec![
+					Voter::<_>::validator(21),
+					Voter::<_>::nominator(101),
+					Voter::<_>::nominator(42),
+					Voter::<_>::validator(31),
+				]
+			);
 			// and its nominators no longer have it as a target
 			let node_101 = Node::<Test>::get(10, &101).unwrap();
 			assert_eq!(
-				node_101.voting_data(&weight_of, &slashing_spans).unwrap(),
-				(101, 475, vec![21])
+				node_101.voting_data(&weight_of, &slashing_spans),
+				Some((101, 475, vec![21])),
 			);
 
-			let node_42 = Node::<Test>::get(10, &42);
+			let node_42 = Node::<Test>::get(10, &42).unwrap();
 			assert_eq!(
 				node_42.voting_data(&weight_of, &slashing_spans),
-				None
+				None, // no voting data since all targets have been slashed since nominating
 			);
 		});
 	}
