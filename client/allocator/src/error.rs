@@ -26,5 +26,5 @@ pub enum Error {
 	AllocatorOutOfSpace,
 	/// Some other error occurred.
 	#[error("Other: {0}")]
-	Other(&'static str)
+	Other(&'static str),
 }

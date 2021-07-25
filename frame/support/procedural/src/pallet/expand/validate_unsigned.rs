@@ -15,15 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::{pallet::Def, COUNTER};
 use proc_macro2::TokenStream;
 use quote::quote;
-use crate::COUNTER;
-use syn::{Ident, spanned::Spanned};
+use syn::{spanned::Spanned, Ident};
 
 pub fn expand_validate_unsigned(def: &mut Def) -> TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
-	let macro_ident = Ident::new(&format!("__is_validate_unsigned_part_defined_{}", count), def.item.span());
+	let macro_ident =
+		Ident::new(&format!("__is_validate_unsigned_part_defined_{}", count), def.item.span());
 
 	let maybe_compile_error = if def.validate_unsigned.is_none() {
 		quote! {
@@ -48,7 +48,7 @@ pub fn expand_validate_unsigned(def: &mut Def) -> TokenStream {
 					#maybe_compile_error
 				}
 			}
-	
+
 			#[doc(hidden)]
 			pub use #macro_ident as is_validate_unsigned_part_defined;
 		}

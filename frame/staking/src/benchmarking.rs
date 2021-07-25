@@ -21,11 +21,11 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
-use sp_runtime::traits::One;
-use frame_system::RawOrigin;
 pub use frame_benchmarking::{
-	benchmarks, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite,
+	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
 };
+use frame_system::RawOrigin;
+use sp_runtime::traits::One;
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
@@ -36,13 +36,15 @@ const MAX_SLASHES: u32 = 1000;
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
 fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
-	if spans == 0 { return }
+	if spans == 0 {
+		return
+	}
 
 	// For the first slashing span, we initialize
 	let mut slashing_spans = crate::slashing::SlashingSpans::new(0);
 	SpanSlash::<T>::insert((who, 0), crate::slashing::SpanRecord::default());
 
-	for i in 1 .. spans {
+	for i in 1..spans {
 		assert!(slashing_spans.end_span(i));
 		SpanSlash::<T>::insert((who, i), crate::slashing::SpanRecord::default());
 	}
@@ -56,7 +58,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
 	dead: bool,
-	destination: RewardDestination<T::AccountId>
+	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
@@ -64,10 +66,8 @@ pub fn create_validator_with_nominators<T: Config>(
 	let mut points_individual = Vec::new();
 
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
-	let validator_prefs = ValidatorPrefs {
-		commission: Perbill::from_percent(50),
-		.. Default::default()
-	};
+	let validator_prefs =
+		ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
 
@@ -77,14 +77,17 @@ pub fn create_validator_with_nominators<T: Config>(
 	let mut nominators = Vec::new();
 
 	// Give the validator n nominators, but keep total users in the system the same.
-	for i in 0 .. upper_bound {
+	for i in 0..upper_bound {
 		let (n_stash, n_controller) = if !dead {
 			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		} else {
 			create_stash_and_dead_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		};
 		if i < n {
-			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
+			Staking::<T>::nominate(
+				RawOrigin::Signed(n_controller.clone()).into(),
+				vec![stash_lookup.clone()],
+			)?;
 			nominators.push((n_stash, n_controller));
 		}
 	}
@@ -639,7 +642,7 @@ benchmarks! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{ExtBuilder, Test, Balances, Staking, Origin};
+	use crate::mock::{Balances, ExtBuilder, Origin, Staking, Test};
 	use frame_support::assert_ok;
 
 	#[test]
@@ -654,7 +657,8 @@ mod tests {
 				<Test as Config>::MAX_NOMINATIONS as usize,
 				false,
 				None,
-			).unwrap();
+			)
+			.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
@@ -674,7 +678,8 @@ mod tests {
 				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
 				false,
 				RewardDestination::Staked,
-			).unwrap();
+			)
+			.unwrap();
 
 			assert_eq!(nominators.len() as u32, n);
 
@@ -698,7 +703,8 @@ mod tests {
 				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
 				false,
 				RewardDestination::Staked,
-			).unwrap();
+			)
+			.unwrap();
 
 			// Add 20 slashing spans
 			let num_of_slashing_spans = 20;
@@ -706,14 +712,14 @@ mod tests {
 
 			let slashing_spans = SlashingSpans::<Test>::get(&validator_stash).unwrap();
 			assert_eq!(slashing_spans.iter().count(), num_of_slashing_spans as usize);
-			for i in 0 .. num_of_slashing_spans {
+			for i in 0..num_of_slashing_spans {
 				assert!(SpanSlash::<Test>::contains_key((&validator_stash, i)));
 			}
 
 			// Test everything is cleaned up
 			assert_ok!(Staking::kill_stash(&validator_stash, num_of_slashing_spans));
 			assert!(SlashingSpans::<Test>::get(&validator_stash).is_none());
-			for i in 0 .. num_of_slashing_spans {
+			for i in 0..num_of_slashing_spans {
 				assert!(!SpanSlash::<Test>::contains_key((&validator_stash, i)));
 			}
 		});
@@ -726,13 +732,17 @@ mod tests {
 			let n = 100;
 
 			let selected_benchmark = SelectedBenchmark::payout_all;
-			let c = vec![(frame_benchmarking::BenchmarkParameter::v, v), (frame_benchmarking::BenchmarkParameter::n, n)];
+			let c = vec![
+				(frame_benchmarking::BenchmarkParameter::v, v),
+				(frame_benchmarking::BenchmarkParameter::n, n),
+			];
 			let closure_to_benchmark =
 				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Test>>::instance(
 					&selected_benchmark,
 					&c,
-					true
-				).unwrap();
+					true,
+				)
+				.unwrap();
 
 			assert_ok!(closure_to_benchmark());
 		});

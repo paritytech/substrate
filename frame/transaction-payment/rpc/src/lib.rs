@@ -17,33 +17,31 @@
 
 //! RPC interface for the transaction payment pallet.
 
-use std::sync::Arc;
-use std::convert::TryInto;
+pub use self::gen_client::Client as TransactionPaymentClient;
 use codec::{Codec, Decode};
-use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
+pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
+use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
-use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
-pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
-pub use self::gen_client::Client as TransactionPaymentClient;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, MaybeDisplay},
+};
+use std::{convert::TryInto, sync::Arc};
 
 #[rpc]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[rpc(name = "payment_queryInfo")]
-	fn query_info(
-		&self,
-		encoded_xt: Bytes,
-		at: Option<BlockHash>
-	) -> Result<ResponseType>;
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> Result<ResponseType>;
 	#[rpc(name = "payment_queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
-		at: Option<BlockHash>
+		at: Option<BlockHash>,
 	) -> Result<FeeDetails<NumberOrHex>>;
 }
 
@@ -77,10 +75,8 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<
-	<Block as BlockT>::Hash,
-	RuntimeDispatchInfo<Balance>,
-> for TransactionPayment<C, Block>
+impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+	for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
@@ -90,13 +86,12 @@ where
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
-		at: Option<<Block as BlockT>::Hash>
+		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash
-		));
+			self.client.info().best_hash));
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -120,8 +115,7 @@ where
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash
-		));
+			self.client.info().best_hash));
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -136,11 +130,13 @@ where
 			data: Some(format!("{:?}", e).into()),
 		})?;
 
-		let try_into_rpc_balance = |value: Balance| value.try_into().map_err(|_| RpcError {
-			code: ErrorCode::InvalidParams,
-			message: format!("{} doesn't fit in NumberOrHex representation", value),
-			data: None,
-		});
+		let try_into_rpc_balance = |value: Balance| {
+			value.try_into().map_err(|_| RpcError {
+				code: ErrorCode::InvalidParams,
+				message: format!("{} doesn't fit in NumberOrHex representation", value),
+				data: None,
+			})
+		};
 
 		Ok(FeeDetails {
 			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {

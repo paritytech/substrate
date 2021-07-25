@@ -49,9 +49,7 @@ impl NodesUtils {
 			return 0
 		}
 
-		64 - self.no_of_leaves
-				.next_power_of_two()
-				.leading_zeros()
+		64 - self.no_of_leaves.next_power_of_two().leading_zeros()
 	}
 }
 
@@ -123,9 +121,6 @@ mod tests {
 				actual_sizes.push(mmr.size());
 			})
 		}
-		assert_eq!(
-			sizes[1..],
-			actual_sizes[..],
-		);
+		assert_eq!(sizes[1..], actual_sizes[..]);
 	}
 }

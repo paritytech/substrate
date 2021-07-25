@@ -16,9 +16,9 @@
 // limitations under the License.
 
 use super::helper;
-use syn::spanned::Spanned;
-use quote::ToTokens;
 use frame_support_procedural_tools::clean_type_string;
+use quote::ToTokens;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -80,7 +80,7 @@ impl PalletEventAttr {
 
 /// Parse for syntax `$Type = "$SomeString"`.
 fn parse_event_metadata_element(
-	input: syn::parse::ParseStream
+	input: syn::parse::ParseStream,
 ) -> syn::Result<(syn::Type, String)> {
 	let typ = input.parse::<syn::Type>()?;
 	input.parse::<syn::Token![=]>()?;
@@ -118,7 +118,6 @@ impl syn::parse::Parse for PalletEventAttr {
 			generate_content.parse::<syn::Token![fn]>()?;
 			let fn_span = generate_content.parse::<keyword::deposit_event>()?.span();
 
-
 			Ok(PalletEventAttr::DepositEvent { fn_vis, span, fn_span })
 		} else {
 			Err(lookahead.error())
@@ -139,11 +138,10 @@ impl PalletEventAttrInfo {
 			match attr {
 				PalletEventAttr::Metadata { metadata: m, .. } if metadata.is_none() =>
 					metadata = Some(m),
-				PalletEventAttr::DepositEvent { fn_vis, fn_span, .. } if deposit_event.is_none() =>
+				PalletEventAttr::DepositEvent { fn_vis, fn_span, .. }
+					if deposit_event.is_none() =>
 					deposit_event = Some((fn_vis, fn_span)),
-				attr => {
-					return Err(syn::Error::new(attr.span(), "Duplicate attribute"));
-				}
+				attr => return Err(syn::Error::new(attr.span(), "Duplicate attribute")),
 			}
 		}
 
@@ -170,7 +168,7 @@ impl EventDef {
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::event, `Error` must be public";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		let where_clause = item.generics.where_clause.clone();
@@ -182,10 +180,7 @@ impl EventDef {
 			instances.push(u);
 		} else {
 			// construct_runtime only allow non generic event for non instantiable pallet.
-			instances.push(helper::InstanceUsage {
-				has_instance: false,
-				span: item.ident.span(),
-			})
+			instances.push(helper::InstanceUsage { has_instance: false, span: item.ident.span() })
 		}
 
 		let has_instance = item.generics.type_params().any(|t| t.ident == "I");
@@ -195,13 +190,19 @@ impl EventDef {
 
 		let event = syn::parse2::<keyword::Event>(item.ident.to_token_stream())?;
 
-		let metadata = item.variants.iter()
+		let metadata = item
+			.variants
+			.iter()
 			.map(|variant| {
 				let name = variant.ident.clone();
 				let docs = helper::get_doc_literals(&variant.attrs);
-				let args = variant.fields.iter()
+				let args = variant
+					.fields
+					.iter()
 					.map(|field| {
-						metadata.iter().find(|m| m.0 == field.ty)
+						metadata
+							.iter()
+							.find(|m| m.0 == field.ty)
 							.map(|m| m.1.clone())
 							.unwrap_or_else(|| {
 								clean_type_string(&field.ty.to_token_stream().to_string())

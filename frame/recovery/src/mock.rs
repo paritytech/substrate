@@ -19,12 +19,16 @@
 
 use super::*;
 
-use frame_support::{parameter_types, traits::{OnInitialize, OnFinalize}};
+use crate as recovery;
+use frame_support::{
+	parameter_types,
+	traits::{OnFinalize, OnInitialize},
+};
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
 };
-use crate as recovery;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -113,7 +117,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
 

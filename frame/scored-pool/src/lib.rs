@@ -91,18 +91,16 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use sp_std::{
-	fmt::Debug,
-	prelude::*,
-};
 use frame_support::{
 	ensure,
-	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
+	traits::{ChangeMembers, Currency, Get, InitializeMembers, ReservableCurrency},
 };
-use sp_runtime::traits::{AtLeast32Bit, Zero, StaticLookup};
 pub use pallet::*;
+use sp_runtime::traits::{AtLeast32Bit, StaticLookup, Zero};
+use sp_std::{fmt::Debug, prelude::*};
 
-type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T, I> =
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>)>;
 
 /// The enum is supplied when refreshing the members set.
@@ -117,10 +115,10 @@ enum ChangeReceiver {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Weight};
 	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::MaybeSerializeDeserialize;
-	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -132,8 +130,13 @@ pub mod pallet {
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 		/// The score attributed to a member or candidate.
-		type Score:
-			AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+		type Score: AtLeast32Bit
+			+ Clone
+			+ Copy
+			+ Default
+			+ FullCodec
+			+ MaybeSerializeDeserialize
+			+ Debug;
 
 		/// The overarching event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
@@ -209,22 +212,19 @@ pub mod pallet {
 	/// `T::AccountId`, but by `T::Score` instead).
 	#[pallet::storage]
 	#[pallet::getter(fn candidate_exists)]
-	pub(crate) type CandidateExists<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat, T::AccountId,
-		bool,
-		ValueQuery,
-	>;
+	pub(crate) type CandidateExists<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, bool, ValueQuery>;
 
 	/// The current membership, stored as an ordered Vec.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
-	pub(crate) type Members<T: Config<I>, I: 'static = ()> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub(crate) type Members<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Size of the `Members` set.
 	#[pallet::storage]
 	#[pallet::getter(fn member_count)]
-	pub(crate) type MemberCount<T, I=()> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type MemberCount<T, I = ()> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
@@ -235,10 +235,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self {
-				pool: Default::default(),
-				member_count: Default::default(),
-			}
+			Self { pool: Default::default(), member_count: Default::default() }
 		}
 	}
 
@@ -249,19 +246,15 @@ pub mod pallet {
 
 			// reserve balance for each candidate in the pool.
 			// panicking here is ok, since this just happens one time, pre-genesis.
-			pool
-				.iter()
-				.for_each(|(who, _)| {
-					T::Currency::reserve(&who, T::CandidateDeposit::get())
-						.expect("balance too low to create candidacy");
-					<CandidateExists<T, I>>::insert(who, true);
-				});
+			pool.iter().for_each(|(who, _)| {
+				T::Currency::reserve(&who, T::CandidateDeposit::get())
+					.expect("balance too low to create candidacy");
+				<CandidateExists<T, I>>::insert(who, true);
+			});
 
 			// Sorts the `Pool` by score in a descending order. Entities which
 			// have a score of `None` are sorted to the beginning of the vec.
-			pool.sort_by_key(|(_, maybe_score)|
-				Reverse(maybe_score.unwrap_or_default())
-			);
+			pool.sort_by_key(|(_, maybe_score)| Reverse(maybe_score.unwrap_or_default()));
 
 			<MemberCount<T, I>>::put(self.member_count);
 			<Pool<T, I>>::put(&pool);
@@ -324,10 +317,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
 		#[pallet::weight(0)]
-		pub fn withdraw_candidacy(
-			origin: OriginFor<T>,
-			index: u32
-		) -> DispatchResult {
+		pub fn withdraw_candidacy(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let pool = <Pool<T, I>>::get();
@@ -348,7 +338,7 @@ pub mod pallet {
 		pub fn kick(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
-			index: u32
+			index: u32,
 		) -> DispatchResult {
 			T::KickOrigin::ensure_origin(origin)?;
 
@@ -373,7 +363,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32,
-			score: T::Score
+			score: T::Score,
 		) -> DispatchResult {
 			T::ScoreOrigin::ensure_origin(origin)?;
 
@@ -390,10 +380,9 @@ pub mod pallet {
 			// where we can insert while maintaining order.
 			let item = (who, Some(score.clone()));
 			let location = pool
-				.binary_search_by_key(
-					&Reverse(score),
-					|(_, maybe_score)| Reverse(maybe_score.unwrap_or_default())
-				)
+				.binary_search_by_key(&Reverse(score), |(_, maybe_score)| {
+					Reverse(maybe_score.unwrap_or_default())
+				})
 				.unwrap_or_else(|l| l);
 			pool.insert(location, item);
 
@@ -418,16 +407,12 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-
 	/// Fetches the `MemberCount` highest scoring members from
 	/// `Pool` and puts them into `Members`.
 	///
 	/// The `notify` parameter is used to deduct which associated
 	/// type function to invoke at the end of the method.
-	fn refresh_members(
-		pool: PoolT<T, I>,
-		notify: ChangeReceiver
-	) {
+	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) {
 		let count = MemberCount::<T, I>::get();
 
 		let mut new_members: Vec<T::AccountId> = pool
@@ -445,10 +430,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChangeReceiver::MembershipInitialized =>
 				T::MembershipInitialized::initialize_members(&new_members),
 			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(
-					&new_members[..],
-					&old_members[..],
-				),
+				T::MembershipChanged::set_members_sorted(&new_members[..], &old_members[..]),
 		}
 	}
 
@@ -459,7 +441,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn remove_member(
 		mut pool: PoolT<T, I>,
 		remove: T::AccountId,
-		index: u32
+		index: u32,
 	) -> Result<(), Error<T, I>> {
 		// all callers of this function in this pallet also check
 		// the index for validity before calling this function.
@@ -486,11 +468,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Checks if `index` is a valid number and if the element found
 	/// at `index` in `Pool` is equal to `who`.
-	fn ensure_index(
-		pool: &PoolT<T, I>,
-		who: &T::AccountId,
-		index: u32
-	) -> Result<(), Error<T, I>> {
+	fn ensure_index(pool: &PoolT<T, I>, who: &T::AccountId, index: u32) -> Result<(), Error<T, I>> {
 		ensure!(index < pool.len() as u32, Error::<T, I>::InvalidIndex);
 
 		let (index_who, _index_score) = &pool[index as usize];

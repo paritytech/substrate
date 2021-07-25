@@ -29,24 +29,26 @@
 //! whose voting is serially unsuccessful.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-use sp_std::prelude::*;
-use sp_runtime::{
-	RuntimeDebug, print,
-	traits::{Zero, One, StaticLookup, Saturating},
-};
+use codec::{Decode, Encode};
 use frame_support::{
-	pallet_prelude::*, ensure,
-	weights::{Weight, DispatchClass},
+	ensure,
+	pallet_prelude::*,
 	traits::{
-		Currency, ExistenceRequirement, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReasons, ChangeMembers,
-	}
+		BalanceStatus, ChangeMembers, Currency, ExistenceRequirement, LockIdentifier,
+		LockableCurrency, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+	},
+	weights::{DispatchClass, Weight},
 };
-use codec::{Encode, Decode};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_runtime::{
+	print,
+	traits::{One, Saturating, StaticLookup, Zero},
+	RuntimeDebug,
+};
+use sp_std::prelude::*;
 
 mod mock;
 mod tests;
@@ -140,9 +142,11 @@ pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 /// Index used to access chunks.
 type SetIndex = u32;
@@ -170,8 +174,7 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency:
-			LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>
+		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// Handler for the unbalanced reduction when slashing a validator.
@@ -239,14 +242,14 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		/// The chunk size of the voter vector.
 		#[allow(non_snake_case)]
 		fn VOTER_SET_SIZE() -> u32 {
 			VOTER_SET_SIZE as u32
 		}
 
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		/// The chunk size of the approval vector.
 		#[allow(non_snake_case)]
 		fn APPROVAL_SET_SIZE() -> u32 {
@@ -292,17 +295,12 @@ pub mod pallet {
 	// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
 	// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 	// `APPROVAL_SET_SIZE`.
-	///
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash and `SetIndex` is not
 	/// attacker-controlled.
 	#[pallet::storage]
 	#[pallet::getter(fn approvals_of)]
-	pub type ApprovalsOf<T: Config> = StorageMap<
-		_,
-		Twox64Concat, (T::AccountId, SetIndex),
-		Vec<ApprovalFlag>,
-		ValueQuery,
-	>;
+	pub type ApprovalsOf<T: Config> =
+		StorageMap<_, Twox64Concat, (T::AccountId, SetIndex), Vec<ApprovalFlag>, ValueQuery>;
 
 	/// The vote index and list slot that the candidate `who` was registered or `None` if they
 	/// are not currently registered.
@@ -310,26 +308,24 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 	#[pallet::storage]
 	#[pallet::getter(fn candidate_reg_info)]
-	pub type RegisterInfoOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, (VoteIndex, u32)>;
+	pub type RegisterInfoOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, (VoteIndex, u32)>;
 
 	/// Basic information about a voter.
 	///
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 	#[pallet::storage]
 	#[pallet::getter(fn voter_info)]
-	pub type VoterInfoOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VoterInfo<BalanceOf<T>>>;
+	pub type VoterInfoOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, VoterInfo<BalanceOf<T>>>;
 
 	/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
 	///
 	/// TWOX-NOTE: OKAY ― `SetIndex` is not user-controlled data.
 	#[pallet::storage]
 	#[pallet::getter(fn voters)]
-	pub type Voters<T: Config> = StorageMap<
-		_,
-		Twox64Concat, SetIndex,
-		Vec<Option<T::AccountId>>,
-		ValueQuery,
-	>;
+	pub type Voters<T: Config> =
+		StorageMap<_, Twox64Concat, SetIndex, Vec<Option<T::AccountId>>, ValueQuery>;
 
 	/// the next free set to store a voter in. This will keep growing.
 	#[pallet::storage]
@@ -559,7 +555,8 @@ pub mod pallet {
 
 			let reporter_index = reporter_index as usize;
 			let who_index = who_index as usize;
-			let assumed_reporter = Self::voter_at(reporter_index).ok_or(Error::<T>::InvalidReporterIndex)?;
+			let assumed_reporter =
+				Self::voter_at(reporter_index).ok_or(Error::<T>::InvalidReporterIndex)?;
 			let assumed_who = Self::voter_at(who_index).ok_or(Error::<T>::InvalidTargetIndex)?;
 
 			ensure!(assumed_reporter == reporter, Error::<T>::InvalidReporterIndex);
@@ -567,29 +564,31 @@ pub mod pallet {
 
 			// will definitely kill one of reporter or who now.
 
-			let valid = !Self::all_approvals_of(&who).iter()
-				.zip(Self::candidates().iter())
-				.any(|(&appr, addr)|
-					 appr &&
+			let valid = !Self::all_approvals_of(&who).iter().zip(Self::candidates().iter()).any(
+				|(&appr, addr)| {
+					appr &&
 					 *addr != T::AccountId::default() &&
 					 // defensive only: all items in candidates list are registered
 					 Self::candidate_reg_info(addr).map_or(false, |x| x.0 <= last_active)
-				);
+				},
+			);
 
 			Self::remove_voter(
 				if valid { &who } else { &reporter },
-				if valid { who_index } else { reporter_index }
+				if valid { who_index } else { reporter_index },
 			);
 
-			T::Currency::remove_lock(
-				T::PalletId::get(),
-				if valid { &who } else { &reporter }
-			);
+			T::Currency::remove_lock(T::PalletId::get(), if valid { &who } else { &reporter });
 
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its
 				// the origin. Still, it's no more harmful to propagate any error at this point.
-				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
+				T::Currency::repatriate_reserved(
+					&who,
+					&reporter,
+					T::VotingBond::get(),
+					BalanceStatus::Free,
+				)?;
 				Self::deposit_event(Event::<T>::VoterReaped(who, reporter));
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
@@ -614,7 +613,10 @@ pub mod pallet {
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
 		#[pallet::weight(1_250_000_000)]
-		pub fn retract_voter(origin: OriginFor<T>, #[pallet::compact] index: u32) -> DispatchResult {
+		pub fn retract_voter(
+			origin: OriginFor<T>,
+			#[pallet::compact] index: u32,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::presentation_active(), Error::<T>::CannotRetractPresenting);
@@ -644,7 +646,10 @@ pub mod pallet {
 		/// - Three DB changes.
 		/// # </weight>
 		#[pallet::weight(2_500_000_000)]
-		pub fn submit_candidacy(origin: OriginFor<T>, #[pallet::compact] slot: u32) -> DispatchResult {
+		pub fn submit_candidacy(
+			origin: OriginFor<T>,
+			#[pallet::compact] slot: u32,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::is_a_candidate(&who), Error::<T>::DuplicatedCandidate);
@@ -689,38 +694,31 @@ pub mod pallet {
 			#[pallet::compact] index: VoteIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(
-				!total.is_zero(),
-				Error::<T>::ZeroDeposit,
-			);
+			ensure!(!total.is_zero(), Error::<T>::ZeroDeposit);
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
-			let (_, _, expiring) = Self::next_finalize()
-				.ok_or(Error::<T>::NotPresentationPeriod)?;
+			let (_, _, expiring) =
+				Self::next_finalize().ok_or(Error::<T>::NotPresentationPeriod)?;
 			let bad_presentation_punishment =
-				T::PresentSlashPerVoter::get()
-				* BalanceOf::<T>::from(Self::voter_count() as u32);
+				T::PresentSlashPerVoter::get() * BalanceOf::<T>::from(Self::voter_count() as u32);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
 				Error::<T>::InsufficientPresenterFunds,
 			);
 
-			let mut leaderboard = Self::leaderboard()
-				.ok_or(Error::<T>::LeaderboardMustExist)?;
+			let mut leaderboard = Self::leaderboard().ok_or(Error::<T>::LeaderboardMustExist)?;
 			ensure!(total > leaderboard[0].0, Error::<T>::UnworthyCandidate);
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
-				ensure!(
-					p < expiring.len(),
-					Error::<T>::DuplicatedCandidate,
-				);
+				ensure!(p < expiring.len(), Error::<T>::DuplicatedCandidate);
 			}
 
 			let voters = Self::all_voters();
 			let (registered_since, candidate_index): (VoteIndex, u32) =
 				Self::candidate_reg_info(&candidate).ok_or(Error::<T>::InvalidCandidate)?;
-			let actual_total = voters.iter()
+			let actual_total = voters
+				.iter()
 				.filter_map(|maybe_voter| maybe_voter.as_ref())
 				.filter_map(|voter| match Self::voter_info(voter) {
 					Some(b) if b.last_active >= registered_since => {
@@ -731,7 +729,9 @@ pub mod pallet {
 						let weight = stake + offset + b.pot;
 						if Self::approvals_of_at(voter, candidate_index as usize) {
 							Some(weight)
-						} else { None }
+						} else {
+							None
+						}
 					},
 					_ => None,
 				})
@@ -748,7 +748,11 @@ pub mod pallet {
 				// better safe than sorry.
 				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
 				T::BadPresentation::on_unbalanced(imbalance);
-				Err(if dupe { Error::<T>::DuplicatedPresentation } else { Error::<T>::IncorrectTotal })?
+				Err(if dupe {
+					Error::<T>::DuplicatedPresentation
+				} else {
+					Error::<T>::IncorrectTotal
+				})?
 			}
 		}
 
@@ -756,7 +760,10 @@ pub mod pallet {
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
 		#[pallet::weight((0, DispatchClass::Operational))]
-		pub fn set_desired_seats(origin: OriginFor<T>, #[pallet::compact] count: u32) -> DispatchResult {
+		pub fn set_desired_seats(
+			origin: OriginFor<T>,
+			#[pallet::compact] count: u32,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			DesiredSeats::<T>::put(count);
 			Ok(())
@@ -767,13 +774,14 @@ pub mod pallet {
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
 		#[pallet::weight((0, DispatchClass::Operational))]
-		pub fn remove_member(origin: OriginFor<T>, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		pub fn remove_member(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let new_set: Vec<(T::AccountId, T::BlockNumber)> = Self::members()
-				.into_iter()
-				.filter(|i| i.0 != who)
-				.collect();
+			let new_set: Vec<(T::AccountId, T::BlockNumber)> =
+				Self::members().into_iter().filter(|i| i.0 != who).collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
 			T::ChangeMembers::change_members(&[], &[who], new_set);
@@ -821,7 +829,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Iff the member `who` still has a seat at blocknumber `n` returns `true`.
 	pub fn will_still_be_member_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
-		Self::members().iter()
+		Self::members()
+			.iter()
 			.find(|&&(ref a, _)| a == who)
 			.map(|&(_, expires)| expires > n)
 			.unwrap_or(false)
@@ -859,7 +868,8 @@ impl<T: Config> Pallet<T> {
 				} else {
 					Some(c[c.len() - (desired_seats - coming) as usize].1)
 				}
-			}.map(Self::next_vote_from)
+			}
+			.map(Self::next_vote_from)
 		}
 	}
 
@@ -906,18 +916,12 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!Self::presentation_active(), Error::<T>::ApprovalPresentation);
 		ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
-		ensure!(
-			!candidates_len.is_zero(),
-			Error::<T>::ZeroCandidates,
-		);
+		ensure!(!candidates_len.is_zero(), Error::<T>::ZeroCandidates);
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
 		// length since otherwise an attacker may be able to submit a very long list of `votes` that
 		// far exceeds the amount of candidates and waste more computation than a reasonable voting
 		// bond would cover.
-		ensure!(
-			candidates_len >= votes.len(),
-			Error::<T>::TooManyVotes,
-		);
+		ensure!(candidates_len >= votes.len(), Error::<T>::TooManyVotes);
 		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
 		// Amount to be locked up.
@@ -969,19 +973,14 @@ impl<T: Config> Pallet<T> {
 						NextVoterSet::<T>::put(next + 1);
 					}
 					<Voters<T>>::append(next, Some(who.clone()));
-				}
+				},
 			}
 
 			T::Currency::reserve(&who, T::VotingBond::get())?;
 			VoterCount::<T>::mutate(|c| *c = *c + 1);
 		}
 
-		T::Currency::set_lock(
-			T::PalletId::get(),
-			&who,
-			locked_balance,
-			WithdrawReasons::all(),
-		);
+		T::Currency::set_lock(T::PalletId::get(), &who, locked_balance, WithdrawReasons::all());
 
 		<VoterInfoOf<T>>::insert(
 			&who,
@@ -990,7 +989,7 @@ impl<T: Config> Pallet<T> {
 				last_win: index,
 				stake: locked_balance,
 				pot: pot_to_set,
-			}
+			},
 		);
 		Self::set_approvals_chunked(&who, votes);
 
@@ -1002,18 +1001,26 @@ impl<T: Config> Pallet<T> {
 		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
 		let number = <frame_system::Pallet<T>>::block_number();
-		let expiring =
-			members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
+		let expiring = members
+			.iter()
+			.take_while(|i| i.1 <= number)
+			.map(|i| i.0.clone())
+			.collect::<Vec<_>>();
 		let retaining_seats = members.len() - expiring.len();
 		if retaining_seats < desired_seats {
 			let empty_seats = desired_seats - retaining_seats;
-			<NextFinalize<T>>::put(
-				(number + Self::presentation_duration(), empty_seats as u32, expiring)
-			);
+			<NextFinalize<T>>::put((
+				number + Self::presentation_duration(),
+				empty_seats as u32,
+				expiring,
+			));
 
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
-			<Leaderboard<T>>::put(vec![(BalanceOf::<T>::zero(), T::AccountId::default()); leaderboard_size]);
+			<Leaderboard<T>>::put(vec![
+				(BalanceOf::<T>::zero(), T::AccountId::default());
+				leaderboard_size
+			]);
 
 			Self::deposit_event(Event::<T>::TallyStarted(empty_seats as u32));
 		}
@@ -1027,19 +1034,22 @@ impl<T: Config> Pallet<T> {
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
 			<NextFinalize<T>>::take()
 				.ok_or("finalize can only be called after a tally is started.")?;
-		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
-			.unwrap_or_default();
+		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> =
+			<Leaderboard<T>>::take().unwrap_or_default();
 		let new_expiry = <frame_system::Pallet<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
 		let candidacy_bond = T::CandidacyBond::get();
-		let incoming: Vec<_> = leaderboard.iter()
+		let incoming: Vec<_> = leaderboard
+			.iter()
 			.rev()
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
 			.map(|(_, a)| a)
 			.cloned()
-			.inspect(|a| { T::Currency::unreserve(a, candidacy_bond); })
+			.inspect(|a| {
+				T::Currency::unreserve(a, candidacy_bond);
+			})
 			.collect();
 
 		// Update last win index for anyone voted for any of the incomings.
@@ -1049,14 +1059,16 @@ impl<T: Config> Pallet<T> {
 				.iter()
 				.filter_map(|mv| mv.as_ref())
 				.filter(|v| Self::approvals_of_at(*v, index))
-				.for_each(|v| <VoterInfoOf<T>>::mutate(v, |a| {
-					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
-				}));
+				.for_each(|v| {
+					<VoterInfoOf<T>>::mutate(v, |a| {
+						if let Some(activity) = a {
+							activity.last_win = Self::vote_index() + 1;
+						}
+					})
+				});
 		});
 		let members = Self::members();
-		let outgoing: Vec<_> = members.iter()
-			.take(expiring.len())
-			.map(|a| a.0.clone()).collect();
+		let outgoing: Vec<_> = members.iter().take(expiring.len()).map(|a| a.0.clone()).collect();
 
 		// set the new membership set.
 		let mut new_set: Vec<_> = members
@@ -1072,8 +1084,9 @@ impl<T: Config> Pallet<T> {
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
-		let mut new_candidates = vec![T::AccountId::default(); candidates.len()];	// shrink later.
-		let runners_up = leaderboard.into_iter()
+		let mut new_candidates = vec![T::AccountId::default(); candidates.len()]; // shrink later.
+		let runners_up = leaderboard
+			.into_iter()
 			.rev()
 			.take_while(|&(b, _)| !b.is_zero())
 			.skip(coming as usize)
@@ -1098,11 +1111,10 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		// discard any superfluous slots.
-		if let Some(last_index) = new_candidates
-			.iter()
-			.rposition(|c| *c != T::AccountId::default()) {
-				new_candidates.truncate(last_index + 1);
-			}
+		if let Some(last_index) = new_candidates.iter().rposition(|c| *c != T::AccountId::default())
+		{
+			new_candidates.truncate(last_index + 1);
+		}
 
 		Self::deposit_event(Event::<T>::TallyFinalized(incoming, outgoing));
 
@@ -1131,7 +1143,7 @@ impl<T: Config> Pallet<T> {
 		loop {
 			let next_set = <Voters<T>>::get(index);
 			if next_set.is_empty() {
-				break;
+				break
 			} else {
 				index += 1;
 				all.extend(next_set);
@@ -1177,9 +1189,7 @@ impl<T: Config> Pallet<T> {
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert(
-				(&who, index as SetIndex), slice)
-			);
+			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert((&who, index as SetIndex), slice));
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
@@ -1204,7 +1214,7 @@ impl<T: Config> Pallet<T> {
 	/// Return true of the bit `n` of scalar `x` is set to `1` and false otherwise.
 	fn bit_at(x: ApprovalFlag, n: usize) -> bool {
 		if n < APPROVAL_FLAG_LEN {
-			x & ( 1 << n ) != 0
+			x & (1 << n) != 0
 		} else {
 			false
 		}
@@ -1215,7 +1225,7 @@ impl<T: Config> Pallet<T> {
 	pub fn bool_to_flag(x: Vec<bool>) -> Vec<ApprovalFlag> {
 		let mut result: Vec<ApprovalFlag> = Vec::with_capacity(x.len() / APPROVAL_FLAG_LEN);
 		if x.is_empty() {
-			return result;
+			return result
 		}
 		result.push(0);
 		let mut index = 0;
@@ -1224,7 +1234,9 @@ impl<T: Config> Pallet<T> {
 			let shl_index = counter % APPROVAL_FLAG_LEN;
 			result[index] += (if x[counter] { 1 } else { 0 }) << shl_index;
 			counter += 1;
-			if counter > x.len() - 1 { break; }
+			if counter > x.len() - 1 {
+				break
+			}
 			if counter % APPROVAL_FLAG_LEN == 0 {
 				result.push(0);
 				index += 1;
@@ -1236,15 +1248,18 @@ impl<T: Config> Pallet<T> {
 	/// Convert a vec of flags (u32) to boolean.
 	pub fn flag_to_bool(chunk: Vec<ApprovalFlag>) -> Vec<bool> {
 		let mut result = Vec::with_capacity(chunk.len());
-		if chunk.is_empty() { return vec![] }
-		chunk.into_iter()
-			.map(|num|
+		if chunk.is_empty() {
+			return vec![]
+		}
+		chunk
+			.into_iter()
+			.map(|num| {
 				(0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>()
-			)
+			})
 			.for_each(|c| {
 				let last_approve = match c.iter().rposition(|n| *n) {
 					Some(index) => index + 1,
-					None => 0
+					None => 0,
 				};
 				result.extend(c.into_iter().take(last_approve));
 			});
@@ -1258,7 +1273,9 @@ impl<T: Config> Pallet<T> {
 		let mut index = 0_u32;
 		loop {
 			let chunk = Self::approvals_of((who.clone(), index));
-			if chunk.is_empty() { break; }
+			if chunk.is_empty() {
+				break
+			}
 			all.extend(Self::flag_to_bool(chunk));
 			index += 1;
 		}
@@ -1291,7 +1308,9 @@ impl<T: Config> Pallet<T> {
 	/// returned if `t` is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
 		let decay_ratio: BalanceOf<T> = T::DecayRatio::get().into();
-		if t > 150 { return stake * decay_ratio }
+		if t > 150 {
+			return stake * decay_ratio
+		}
 		let mut offset = stake;
 		let mut r = Zero::zero();
 		let decay = decay_ratio + One::one();

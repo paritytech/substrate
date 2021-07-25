@@ -18,7 +18,6 @@
 //! Shareable Substrate types.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Initialize a key-value collection from array.
@@ -32,17 +31,16 @@ macro_rules! map {
 	);
 }
 
-use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
-use sp_std::prelude::*;
-use sp_std::ops::Deref;
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+#[doc(hidden)]
+pub use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 pub use serde;
-#[doc(hidden)]
-pub use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
+use sp_std::{ops::Deref, prelude::*};
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 pub use sp_debug_derive::RuntimeDebug;
 
@@ -53,37 +51,39 @@ pub use impl_serde::serialize as bytes;
 pub mod hashing;
 
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-pub mod hexdisplay;
+pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
 pub mod crypto;
+pub mod hexdisplay;
 
 pub mod u32_trait;
 
-pub mod ed25519;
-pub mod sr25519;
+mod changes_trie;
 pub mod ecdsa;
+pub mod ed25519;
 pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
-pub mod uint;
-mod changes_trie;
+pub mod sr25519;
+pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
-pub mod testing;
+pub mod uint;
 
-pub use self::hash::{H160, H256, H512, convert_hash};
-pub use self::uint::{U256, U512};
+pub use self::{
+	hash::{convert_hash, H160, H256, H512},
+	uint::{U256, U512},
+};
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
-pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::keccak::KeccakHasher;
+pub use hash_db::Hasher;
 
 pub use sp_storage as storage;
 
@@ -117,14 +117,14 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction =>
-				offchain::Capabilities::none(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::none(),
 			// Enable keystore, transaction pool and Offchain DB reads by default for offchain calls.
 			OffchainCall(None) => [
 				offchain::Capability::Keystore,
 				offchain::Capability::OffchainDbRead,
 				offchain::Capability::TransactionPool,
-			][..].into(),
+			][..]
+				.into(),
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
@@ -133,19 +133,25 @@ impl ExecutionContext {
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
-	fn from(s: Vec<u8>) -> Self { Bytes(s) }
+	fn from(s: Vec<u8>) -> Self {
+		Bytes(s)
+	}
 }
 
 impl From<OpaqueMetadata> for Bytes {
-	fn from(s: OpaqueMetadata) -> Self { Bytes(s.0) }
+	fn from(s: OpaqueMetadata) -> Self {
+		Bytes(s.0)
+	}
 }
 
 impl Deref for Bytes {
 	type Target = [u8];
-	fn deref(&self) -> &[u8] { &self.0[..] }
+	fn deref(&self) -> &[u8] {
+		&self.0[..]
+	}
 }
 
 impl codec::WrapperTypeEncode for Bytes {}
@@ -183,7 +189,9 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner)]
+#[derive(
+	Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OpaquePeerId(pub Vec<u8>);
 
@@ -200,7 +208,7 @@ pub enum NativeOrEncoded<R> {
 	/// The native representation.
 	Native(R),
 	/// The encoded representation.
-	Encoded(Vec<u8>)
+	Encoded(Vec<u8>),
 }
 
 #[cfg(feature = "std")]

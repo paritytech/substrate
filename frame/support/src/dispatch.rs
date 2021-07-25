@@ -18,20 +18,26 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use frame_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
+pub use crate::{
+	codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output},
+	sp_std::{
+		fmt, marker,
+		prelude::{Clone, Eq, PartialEq, Vec},
+		result,
+	},
+	traits::{
+		CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, UnfilteredDispatchable,
+	},
+	weights::{
+		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
+		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
+	},
 };
-pub use crate::weights::{
-	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
-	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
+pub use frame_metadata::{
+	DecodeDifferent, DecodeDifferentArray, DefaultByte, DefaultByteGetter, ErrorMetadata,
+	FunctionArgumentMetadata, FunctionMetadata, ModuleConstantMetadata, ModuleErrorMetadata,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{
-	CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable, GetPalletVersion,
-};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -2331,7 +2337,6 @@ macro_rules! __call_to_functions {
 	};
 }
 
-
 /// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]
 #[doc(hidden)]
@@ -2465,13 +2470,19 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
-	use crate::traits::{
-		GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
-		IntegrityTest, Get, PalletInfo,
+	use crate::{
+		traits::{
+			Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize, OnRuntimeUpgrade,
+			PalletInfo,
+		},
+		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
 
-	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
+	pub trait Config: system::Config + Sized
+	where
+		Self::AccountId: From<u32>,
+	{
+	}
 
 	pub mod system {
 		use super::*;
@@ -2546,18 +2557,14 @@ mod tests {
 		FunctionMetadata {
 			name: DecodeDifferent::Encode("aux_0"),
 			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[
-				" Hi, this is a comment."
-			])
+			documentation: DecodeDifferent::Encode(&[" Hi, this is a comment."]),
 		},
 		FunctionMetadata {
 			name: DecodeDifferent::Encode("aux_1"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
-				}
-			]),
+			arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+				name: DecodeDifferent::Encode("_data"),
+				ty: DecodeDifferent::Encode("Compact<u32>"),
+			}]),
 			documentation: DecodeDifferent::Encode(&[]),
 		},
 		FunctionMetadata {
@@ -2570,7 +2577,7 @@ mod tests {
 				FunctionArgumentMetadata {
 					name: DecodeDifferent::Encode("_data2"),
 					ty: DecodeDifferent::Encode("String"),
-				}
+				},
 			]),
 			documentation: DecodeDifferent::Encode(&[]),
 		},
@@ -2581,12 +2588,10 @@ mod tests {
 		},
 		FunctionMetadata {
 			name: DecodeDifferent::Encode("aux_4"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				}
-			]),
+			arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+				name: DecodeDifferent::Encode("_data"),
+				ty: DecodeDifferent::Encode("i32"),
+			}]),
 			documentation: DecodeDifferent::Encode(&[]),
 		},
 		FunctionMetadata {
@@ -2598,8 +2603,8 @@ mod tests {
 				},
 				FunctionArgumentMetadata {
 					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
-				}
+					ty: DecodeDifferent::Encode("Compact<u32>"),
+				},
 			]),
 			documentation: DecodeDifferent::Encode(&[]),
 		},
@@ -2611,7 +2616,7 @@ mod tests {
 	];
 
 	pub struct TraitImpl {}
-	impl Config for TraitImpl { }
+	impl Config for TraitImpl {}
 
 	type Test = Module<TraitImpl>;
 
@@ -2678,7 +2683,6 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 	}
-
 
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
@@ -2760,9 +2764,9 @@ mod tests {
 
 	#[test]
 	fn on_runtime_upgrade_should_work() {
-		sp_io::TestExternalities::default().execute_with(||
+		sp_io::TestExternalities::default().execute_with(|| {
 			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
-		);
+		});
 	}
 
 	#[test]
@@ -2788,7 +2792,10 @@ mod tests {
 	#[test]
 	fn get_call_names() {
 		let call_names = Call::<TraitImpl>::get_call_names();
-		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
+		assert_eq!(
+			["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"],
+			call_names
+		);
 	}
 
 	#[test]

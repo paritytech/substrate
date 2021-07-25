@@ -46,25 +46,29 @@ pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 		),)
 	};
 
-	let from_impl_rest = (3..=count).map(|c| {
-		let inner = (0..c-1).map(|i|
-			quote!((index_of_target(&distribution[#i].0).or_invalid_index()?, distribution[#i].1),)
-		).collect::<TokenStream2>();
-
-		let field_name = field_name_for(c);
-		let last_index = c - 1;
-		let last = quote!(index_of_target(&distribution[#last_index].0).or_invalid_index()?);
-
-		quote!(
-			#c => compact.#field_name.push(
-				(
-					index_of_voter(&who).or_invalid_index()?,
-					[#inner],
-					#last,
+	let from_impl_rest = (3..=count)
+		.map(|c| {
+			let inner = (0..c - 1)
+				.map(
+					|i| quote!((index_of_target(&distribution[#i].0).or_invalid_index()?, distribution[#i].1),),
 				)
-			),
-		)
-	}).collect::<TokenStream2>();
+				.collect::<TokenStream2>();
+
+			let field_name = field_name_for(c);
+			let last_index = c - 1;
+			let last = quote!(index_of_target(&distribution[#last_index].0).or_invalid_index()?);
+
+			quote!(
+				#c => compact.#field_name.push(
+					(
+						index_of_voter(&who).or_invalid_index()?,
+						[#inner],
+						#last,
+					)
+				),
+			)
+		})
+		.collect::<TokenStream2>();
 
 	quote!(
 		#from_impl_single
@@ -113,39 +117,41 @@ pub(crate) fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 		)
 	};
 
-	let into_impl_rest = (3..=count).map(|c| {
-		let name = field_name_for(c);
-		quote!(
-			for (voter_index, inners, t_last_idx) in self.#name {
-				let mut sum = #per_thing::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<_npos::sp_std::prelude::Vec<(A, #per_thing)>, _npos::Error>>()?;
+	let into_impl_rest = (3..=count)
+		.map(|c| {
+			let name = field_name_for(c);
+			quote!(
+				for (voter_index, inners, t_last_idx) in self.#name {
+					let mut sum = #per_thing::zero();
+					let mut inners_parsed = inners
+						.iter()
+						.map(|(ref t_idx, p)| {
+							sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
+							let target = target_at(*t_idx).or_invalid_index()?;
+							Ok((target, *p))
+						})
+						.collect::<Result<_npos::sp_std::prelude::Vec<(A, #per_thing)>, _npos::Error>>()?;
 
-				if sum >= #per_thing::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
+					if sum >= #per_thing::one() {
+						return Err(_npos::Error::CompactStakeOverflow);
+					}
+
+					// defensive only. Since Percent doesn't have `Sub`.
+					let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
+						#per_thing::one(),
+						sum,
+					);
+
+					inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
+
+					assignments.push(_npos::Assignment {
+						who: voter_at(voter_index).or_invalid_index()?,
+						distribution: inners_parsed,
+					});
 				}
-
-				// defensive only. Since Percent doesn't have `Sub`.
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					#per_thing::one(),
-					sum,
-				);
-
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-		)
-	}).collect::<TokenStream2>();
+			)
+		})
+		.collect::<TokenStream2>();
 
 	quote!(
 		#into_impl_single
