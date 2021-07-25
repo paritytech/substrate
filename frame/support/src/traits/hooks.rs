@@ -82,14 +82,17 @@ pub trait OnIdle<BlockNumber> {
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone + Into<u32>> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
-		let mut on_idle_functions = sp_std::vec::Vec::<fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight>::new();
+		let mut on_idle_functions = sp_std::vec::Vec::<
+			fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight,
+		>::new();
 		for_tuples!( #(
 			on_idle_functions.push(Tuple::on_idle);
 		)* );
 		let mut weight = 0;
 		for pallet_index in 0..on_idle_functions.len() {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
-			let index = ((pallet_index as u32) + n.clone().into()) % (on_idle_functions.len() as u32);
+			let index =
+				((pallet_index as u32) + n.clone().into()) % (on_idle_functions.len() as u32);
 			let on_idle = on_idle_functions[pallet_index as usize];
 			weight = weight.saturating_add(on_idle(n.clone(), adjusted_remaining_weight));
 		}
@@ -365,14 +368,14 @@ mod tests {
 
 	#[test]
 	fn on_idle_round_robin_works() {
-		static mut ON_IDLE_INVOCATION_ORDER :sp_std::vec::Vec<&str> = sp_std::vec::Vec::new();
+		static mut ON_IDLE_INVOCATION_ORDER: sp_std::vec::Vec<&str> = sp_std::vec::Vec::new();
 
 		struct Test1;
 		struct Test2;
 		struct Test3;
 		type TestTuple = (Test1, Test2, Test3);
 		impl OnIdle<u8> for Test1 {
-			fn on_idle(n : u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
 				}
@@ -380,7 +383,7 @@ mod tests {
 			}
 		}
 		impl OnIdle<u8> for Test2 {
-			fn on_idle(n : u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
 				}
@@ -388,7 +391,7 @@ mod tests {
 			}
 		}
 		impl OnIdle<u8> for Test3 {
-			fn on_idle(n : u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u8, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");
 				}
@@ -398,33 +401,23 @@ mod tests {
 
 		unsafe {
 			TestTuple::on_idle(0, 0);
-			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"]
-				.to_vec()
-			);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
 			TestTuple::on_idle(1, 0);
-			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"]
-				.to_vec()
-			);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
 			TestTuple::on_idle(2, 0);
-			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"]
-				.to_vec()
-			);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
 			TestTuple::on_idle(3, 0);
-			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"]
-				.to_vec()
-			);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
 			TestTuple::on_idle(4, 0);
-			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"]
-				.to_vec()
-			);
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 		}
 	}
