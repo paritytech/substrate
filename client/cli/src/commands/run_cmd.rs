@@ -50,6 +50,10 @@ pub struct RunCmd {
 	#[structopt(long)]
 	pub no_grandpa: bool,
 
+	/// Set justification generation period (in blocks). Default is 512.
+	#[structopt(long = "justification-period")]
+	pub justification_period: Option<u32>,
+
 	/// Experimental: Run in light client mode.
 	#[structopt(long = "light")]
 	pub light: bool,
@@ -375,6 +379,10 @@ impl CliConfiguration for RunCmd {
 
 	fn disable_grandpa(&self) -> Result<bool> {
 		Ok(self.no_grandpa)
+	}
+
+	fn justification_period(&self) -> Result<u32> {
+		Ok(self.justification_period.unwrap_or(512).max(1))
 	}
 
 	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {

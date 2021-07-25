@@ -266,6 +266,7 @@ fn node_config<
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		justification_period: 512,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
 		disable_log_reloading: false,

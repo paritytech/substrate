@@ -461,6 +461,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(true)
 	}
 
+	/// Get justification generation period (in blocks).
+	///
+	/// By default this is `512`.
+	fn justification_period(&self) -> Result<u32> {
+		Ok(512)
+	}
+
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCli>(
 		&self,
@@ -535,6 +542,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
+			justification_period: self.justification_period()?,
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),

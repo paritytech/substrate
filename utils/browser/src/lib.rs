@@ -116,6 +116,7 @@ where
 		wasm_runtime_overrides: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		justification_period: 512,
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat { enable_color: false },
 		disable_log_reloading: false,

@@ -189,6 +189,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
+	let justification_period = config.justification_period;
 
 	let rpc_extensions_builder = {
 		let client = client.clone();
@@ -275,7 +276,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let grandpa_config = sc_finality_grandpa::Config {
 		// FIXME #1578 make this available through chainspec
 		gossip_duration: Duration::from_millis(333),
-		justification_period: 512,
+		justification_period,
 		name: Some(name),
 		observer_enabled: false,
 		keystore,

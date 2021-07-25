@@ -139,6 +139,8 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+	/// Justification generation period (in blocks).
+	pub justification_period: u32,
 	/// Base path of the configuration
 	pub base_path: Option<BasePath>,
 	/// Configuration of the output format that the informant uses.
