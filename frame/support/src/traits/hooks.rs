@@ -80,7 +80,7 @@ pub trait OnIdle<BlockNumber> {
 }
 
 #[impl_for_tuples(30)]
-impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
+impl<BlockNumber: Clone + Into<u32>> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
 		let mut on_idle_functions = sp_std::vec::Vec::<fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight>::new();
 		for_tuples!( #(
@@ -89,8 +89,8 @@ impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
 		let mut weight = 0;
 		for pallet_index in 0..on_idle_functions.len() {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
-			// let index = (pallet_index + n) % on_idle_functions.len();
-			let on_idle = on_idle_functions[pallet_index];
+			let index = ((pallet_index as u32) + n.clone().into()) % (on_idle_functions.len() as u32);
+			let on_idle = on_idle_functions[pallet_index as usize];
 			weight = weight.saturating_add(on_idle(n.clone(), adjusted_remaining_weight));
 		}
 		weight
