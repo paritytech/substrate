@@ -16,26 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::*;
-use super::state_full::split_range;
 use self::error::Error;
+use super::{state_full::split_range, *};
 
-use std::sync::Arc;
-use assert_matches::assert_matches;
-use futures01::stream::Stream;
-use sp_core::{storage::ChildInfo, ChangesTrieConfiguration};
-use sp_core::hash::H256;
-use sc_block_builder::BlockBuilderProvider;
-use sp_io::hashing::blake2_256;
-use substrate_test_runtime_client::{
-	prelude::*,
-	sp_consensus::BlockOrigin,
-	runtime,
-};
-use sc_rpc_api::DenyUnsafe;
-use sp_runtime::generic::BlockId;
 use crate::testing::TaskExecutor;
-use futures::{executor, compat::Future01CompatExt};
+use assert_matches::assert_matches;
+use futures::{compat::Future01CompatExt, executor};
+use futures01::stream::Stream;
+use sc_block_builder::BlockBuilderProvider;
+use sc_rpc_api::DenyUnsafe;
+use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
+use sp_io::hashing::blake2_256;
+use sp_runtime::generic::BlockId;
+use std::sync::Arc;
+use substrate_test_runtime_client::{prelude::*, runtime, sp_consensus::BlockOrigin};
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -68,12 +62,18 @@ fn should_return_storage() {
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
-		client.storage(key.clone(), Some(genesis_hash).into()).wait()
-			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		client
+			.storage(key.clone(), Some(genesis_hash).into())
+			.wait()
+			.map(|x| x.map(|x| x.0.len()))
+			.unwrap()
+			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		client.storage_hash(key.clone(), Some(genesis_hash).into()).wait()
+		client
+			.storage_hash(key.clone(), Some(genesis_hash).into())
+			.wait()
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
@@ -87,10 +87,13 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		executor::block_on(
-			child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
+			child
+				.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 				.compat(),
-		).unwrap().unwrap() as usize,
+		)
+		.unwrap()
+		.unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
 }
@@ -98,19 +101,16 @@ fn should_return_storage() {
 #[test]
 fn should_return_child_storage() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
-		.add_child_storage(&child_info, "key", vec![42_u8])
-		.build());
-	let genesis_hash = client.genesis_hash();
-	let (_client, child) = new_full(
-		client,
-		SubscriptionManager::new(Arc::new(TaskExecutor)),
-		DenyUnsafe::No,
-		None,
+	let client = Arc::new(
+		substrate_test_runtime_client::TestClientBuilder::new()
+			.add_child_storage(&child_info, "key", vec![42_u8])
+			.build(),
 	);
+	let genesis_hash = client.genesis_hash();
+	let (_client, child) =
+		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
-
 
 	assert_matches!(
 		child.storage(
@@ -121,36 +121,26 @@ fn should_return_child_storage() {
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		child.storage_hash(
-			child_key.clone(),
-			key.clone(),
-			Some(genesis_hash).into(),
-		).wait().map(|x| x.is_some()),
+		child
+			.storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into(),)
+			.wait()
+			.map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_matches!(
-		child.storage_size(
-			child_key.clone(),
-			key.clone(),
-			None,
-		).wait(),
-		Ok(Some(1))
-	);
+	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None,).wait(), Ok(Some(1)));
 }
 
 #[test]
 fn should_call_contract() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let genesis_hash = client.genesis_hash();
-	let (client, _child) = new_full(
-		client,
-		SubscriptionManager::new(Arc::new(TaskExecutor)),
-		DenyUnsafe::No,
-		None,
-	);
+	let (client, _child) =
+		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
 
 	assert_matches!(
-		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
+		client
+			.call("balanceOf".into(), Bytes(vec![1, 2, 3]), Some(genesis_hash).into())
+			.wait(),
 		Err(Error::Client(_))
 	)
 }
@@ -171,18 +161,17 @@ fn should_notify_about_storage_changes() {
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
-		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
+		builder
+			.push_transfer(runtime::Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
 		let block = builder.build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
@@ -207,25 +196,27 @@ fn should_send_initial_storage_changes_and_notifications() {
 			None,
 		);
 
-		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key =
+			blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
-		api.subscribe_storage(Default::default(), subscriber, Some(vec![
-			StorageKey(alice_balance_key.to_vec()),
-		]).into());
+		api.subscribe_storage(
+			Default::default(),
+			subscriber,
+			Some(vec![StorageKey(alice_balance_key.to_vec())]).into(),
+		);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
-		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
+		builder
+			.push_transfer(runtime::Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
 		let block = builder.build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
@@ -257,9 +248,13 @@ fn should_query_storage() {
 			// fake change: None -> Some(value) -> Some(value)
 			builder.push_storage_change(vec![2], Some(vec![2])).unwrap();
 			// actual change: None -> Some(value) -> None
-			builder.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None }).unwrap();
+			builder
+				.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
+				.unwrap();
 			// actual change: None -> Some(value)
-			builder.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) }).unwrap();
+			builder
+				.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
+				.unwrap();
 			// actual change: Some(value1) -> Some(value2)
 			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
 			let block = builder.build().unwrap().block;
@@ -301,20 +296,12 @@ fn should_query_storage() {
 
 		// Query changes only up to block1
 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			Some(block1_hash).into(),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
 		assert_eq!(result.wait().unwrap(), expected);
 
 		// Query all changes
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			None.into(),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
 
 		expected.push(StorageChangeSet {
 			block: block2_hash,
@@ -327,20 +314,12 @@ fn should_query_storage() {
 		assert_eq!(result.wait().unwrap(), expected);
 
 		// Query changes up to block2.
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			Some(block2_hash),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
 		assert_eq!(result.wait().unwrap(), expected);
 
 		// Inverted range.
-		let result = api.query_storage(
-			keys.clone(),
-			block1_hash,
-			Some(genesis_hash),
-		);
+		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -348,18 +327,15 @@ fn should_query_storage() {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
 				details: "from number > to number".to_owned(),
-			}).map_err(|e| e.to_string())
+			})
+			.map_err(|e| e.to_string())
 		);
 
 		let random_hash1 = H256::random();
 		let random_hash2 = H256::random();
 
 		// Invalid second hash.
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			Some(random_hash1),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -367,15 +343,12 @@ fn should_query_storage() {
 				from: format!("{:?}", genesis_hash),
 				to: format!("{:?}", Some(random_hash1)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string())
+			})
+			.map_err(|e| e.to_string())
 		);
 
 		// Invalid first hash with Some other hash.
-		let result = api.query_storage(
-			keys.clone(),
-			random_hash1,
-			Some(genesis_hash),
-		);
+		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -383,15 +356,12 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(genesis_hash)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string()),
+			})
+			.map_err(|e| e.to_string()),
 		);
 
 		// Invalid first hash with None.
-		let result = api.query_storage(
-			keys.clone(),
-			random_hash1,
-			None,
-		);
+		let result = api.query_storage(keys.clone(), random_hash1, None);
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -399,15 +369,12 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(block2_hash)), // Best block hash.
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string()),
+			})
+			.map_err(|e| e.to_string()),
 		);
 
 		// Both hashes invalid.
-		let result = api.query_storage(
-			keys.clone(),
-			random_hash1,
-			Some(random_hash2),
-		);
+		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -415,29 +382,25 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1), // First hash not found.
 				to: format!("{:?}", Some(random_hash2)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string()),
+			})
+			.map_err(|e| e.to_string()),
 		);
 
 		// single block range
-		let result = api.query_storage_at(
-			keys.clone(),
-			Some(block1_hash),
-		);
+		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
 
 		assert_eq!(
 			result.wait().unwrap(),
-			vec![
-				StorageChangeSet {
-					block: block1_hash,
-					changes: vec![
-						(StorageKey(vec![1_u8]), None),
-						(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
-						(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
-						(StorageKey(vec![4_u8]), None),
-						(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
-					]
-				}
-			]
+			vec![StorageChangeSet {
+				block: block1_hash,
+				changes: vec![
+					(StorageKey(vec![1_u8]), None),
+					(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
+					(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
+					(StorageKey(vec![4_u8]), None),
+					(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
+				]
+			}]
 		);
 	}
 
@@ -460,7 +423,6 @@ fn should_split_ranges() {
 	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
 	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
 }
-
 
 #[test]
 fn should_return_runtime_version() {
@@ -503,17 +465,13 @@ fn should_notify_on_runtime_version_initially() {
 		api.subscribe_runtime_version(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
-
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 	}
 
 	// assert initial version sent.
 	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
-		// no more notifications on this channel
+	// no more notifications on this channel
 	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }
 

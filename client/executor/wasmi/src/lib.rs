@@ -18,25 +18,28 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{cell::RefCell, rc::Rc, str, sync::Arc};
-use wasmi::{
-	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-	RuntimeValue::{I32, I64, self}, TableRef, memory_units::Pages,
-};
-use codec::{Encode, Decode};
-use sp_core::sandbox as sandbox_primitives;
-use log::{error, trace, debug};
-use sp_wasm_interface::{
-	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
-};
-use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::{util::MemoryTransfer, wasm_runtime::{WasmModule, WasmInstance, InvokeMethod}};
+
+use codec::{Decode, Encode};
+use log::{debug, error, trace};
 use sc_executor_common::{
 	error::{Error, WasmError},
+	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
 	sandbox,
+	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	util::MemoryTransfer,
 };
-
-use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
+use sp_core::sandbox as sandbox_primitives;
+use sp_runtime_interface::unpack_ptr_and_len;
+use sp_wasm_interface::{
+	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
+};
+use std::{cell::RefCell, rc::Rc, str, sync::Arc};
+use wasmi::{
+	memory_units::Pages,
+	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	RuntimeValue::{self, I32, I64},
+	TableRef,
+};
 
 #[derive(Clone)]
 struct FunctionExecutor {
@@ -247,7 +250,7 @@ impl Sandbox for FunctionExecutor {
 					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
-			}
+			},
 			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
 		}
 	}
@@ -271,7 +274,8 @@ impl Sandbox for FunctionExecutor {
 		let dispatch_thunk = {
 			let table = self.inner.table.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
-			table.get(dispatch_thunk_id)
+			table
+				.get(dispatch_thunk_id)
 				.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
 				.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
 		};
@@ -298,8 +302,7 @@ impl Sandbox for FunctionExecutor {
 				.map(|i| i.register(store))
 			{
 				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) =>
-					sandbox_primitives::ERR_EXECUTION,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
 				Err(_) => sandbox_primitives::ERR_MODULE,
 			};
 
@@ -380,7 +383,7 @@ struct Resolver<'a> {
 
 impl<'a> Resolver<'a> {
 	fn new(
-		host_functions: &'a[&'static dyn Function],
+		host_functions: &'a [&'static dyn Function],
 		allow_missing_func_imports: bool,
 		heap_pages: usize,
 	) -> Resolver<'a> {
@@ -395,25 +398,23 @@ impl<'a> Resolver<'a> {
 }
 
 impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
-	fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
-		-> std::result::Result<wasmi::FuncRef, wasmi::Error>
-	{
+	fn resolve_func(
+		&self,
+		name: &str,
+		signature: &wasmi::Signature,
+	) -> std::result::Result<wasmi::FuncRef, wasmi::Error> {
 		let signature = sp_wasm_interface::Signature::from(signature);
 		for (function_index, function) in self.host_functions.iter().enumerate() {
 			if name == function.name() {
 				if signature == function.signature() {
-					return Ok(
-						wasmi::FuncInstance::alloc_host(signature.into(), function_index),
-					)
+					return Ok(wasmi::FuncInstance::alloc_host(signature.into(), function_index))
 				} else {
-					return Err(wasmi::Error::Instantiation(
-						format!(
-							"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
-							function.name(),
-							signature,
-							function.signature(),
-						),
-					))
+					return Err(wasmi::Error::Instantiation(format!(
+						"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
+						function.name(),
+						signature,
+						function.signature(),
+					)))
 				}
 			}
 		}
@@ -425,9 +426,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 
 			Ok(wasmi::FuncInstance::alloc_host(signature.into(), id))
 		} else {
-			Err(wasmi::Error::Instantiation(
-				format!("Export {} not found", name),
-			))
+			Err(wasmi::Error::Instantiation(format!("Export {} not found", name)))
 		}
 	}
 
@@ -438,15 +437,14 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	) -> Result<MemoryRef, wasmi::Error> {
 		if field_name == "memory" {
 			match &mut *self.import_memory.borrow_mut() {
-				Some(_) => Err(wasmi::Error::Instantiation(
-					"Memory can not be imported twice!".into(),
-				)),
+				Some(_) =>
+					Err(wasmi::Error::Instantiation("Memory can not be imported twice!".into())),
 				memory_ref @ None => {
 					if memory_type
-							.maximum()
-							.map(|m| m.saturating_sub(memory_type.initial()))
-							.map(|m| self.heap_pages > m as usize)
-							.unwrap_or(false)
+						.maximum()
+						.map(|m| m.saturating_sub(memory_type.initial()))
+						.map(|m| self.heap_pages > m as usize)
+						.unwrap_or(false)
 					{
 						Err(wasmi::Error::Instantiation(format!(
 							"Heap pages ({}) is greater than imported memory maximum ({}).",
@@ -464,20 +462,23 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 						*memory_ref = Some(memory.clone());
 						Ok(memory)
 					}
-				}
+				},
 			}
 		} else {
-			Err(wasmi::Error::Instantiation(
-				format!("Unknown memory reference with name: {}", field_name),
-			))
+			Err(wasmi::Error::Instantiation(format!(
+				"Unknown memory reference with name: {}",
+				field_name
+			)))
 		}
 	}
 }
 
 impl wasmi::Externals for FunctionExecutor {
-	fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs)
-		-> Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
-	{
+	fn invoke_index(
+		&mut self,
+		index: usize,
+		args: wasmi::RuntimeArgs,
+	) -> Result<Option<wasmi::RuntimeValue>, wasmi::Trap> {
 		let mut args = args.as_ref().iter().copied().map(Into::into);
 
 		if let Some(function) = self.inner.host_functions.clone().get(index) {
@@ -554,25 +555,26 @@ fn call_in_wasm_module(
 	function_executor.write_memory(offset, data)?;
 
 	let result = match method {
-		InvokeMethod::Export(method) => {
-			module_instance.invoke_export(
-				method,
-				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut function_executor,
-			)
-		},
+		InvokeMethod::Export(method) => module_instance.invoke_export(
+			method,
+			&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+			&mut function_executor,
+		),
 		InvokeMethod::Table(func_ref) => {
-			let func = table.ok_or(Error::NoTable)?
+			let func = table
+				.ok_or(Error::NoTable)?
 				.get(func_ref)?
 				.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
 			FuncInstance::invoke(
 				&func,
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut function_executor,
-			).map_err(Into::into)
+			)
+			.map_err(Into::into)
 		},
 		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
-			let dispatcher = table.ok_or(Error::NoTable)?
+			let dispatcher = table
+				.ok_or(Error::NoTable)?
 				.get(dispatcher_ref)?
 				.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
 
@@ -580,7 +582,8 @@ fn call_in_wasm_module(
 				&dispatcher,
 				&[I32(func as _), I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut function_executor,
-			).map_err(Into::into)
+			)
+			.map_err(Into::into)
 		},
 	};
 
@@ -610,14 +613,11 @@ fn instantiate_module(
 ) -> Result<(ModuleRef, Vec<String>, MemoryRef), Error> {
 	let resolver = Resolver::new(host_functions, allow_missing_func_imports, heap_pages);
 	// start module instantiation. Don't run 'start' function yet.
-	let intermediate_instance = ModuleInstance::new(
-		module,
-		&ImportsBuilder::new().with_resolver("env", &resolver),
-	)?;
+	let intermediate_instance =
+		ModuleInstance::new(module, &ImportsBuilder::new().with_resolver("env", &resolver))?;
 
 	// Verify that the module has the heap base global variable.
 	let _ = get_heap_base(intermediate_instance.not_started_instance())?;
-
 
 	// Get the memory reference. Runtimes should import memory, but to be backwards
 	// compatible we also support exported memory.
@@ -633,7 +633,7 @@ fn instantiate_module(
 			memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
 
 			memory
-		}
+		},
 	};
 
 	if intermediate_instance.has_start() {
@@ -684,9 +684,7 @@ impl GlobalValsSnapshot {
 			// the instance should be the same as used for preserving and
 			// we iterate the same way it as we do it for preserving values that means that the
 			// types should be the same and all the values are mutable. So no error is expected/
-			global_ref
-				.set(*global_val)
-				.map_err(|_| WasmError::ApplySnapshotFailed)?;
+			global_ref.set(*global_val).map_err(|_| WasmError::ApplySnapshotFailed)?;
 		}
 		Ok(())
 	}
@@ -716,7 +714,8 @@ impl WasmModule for WasmiRuntime {
 			&self.module,
 			&self.host_functions,
 			self.allow_missing_func_imports,
-		).map_err(|e| WasmError::Instantiation(e.to_string()))?;
+		)
+		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 		Ok(Box::new(WasmiInstance {
 			instance,
@@ -738,11 +737,11 @@ pub fn create_runtime(
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 ) -> Result<WasmiRuntime, WasmError> {
-	let data_segments_snapshot = DataSegmentsSnapshot::take(&blob)
-		.map_err(|e| WasmError::Other(e.to_string()))?;
+	let data_segments_snapshot =
+		DataSegmentsSnapshot::take(&blob).map_err(|e| WasmError::Other(e.to_string()))?;
 
-	let module = Module::from_parity_wasm_module(blob.into_inner())
-		.map_err(|_| WasmError::InvalidModule)?;
+	let module =
+		Module::from_parity_wasm_module(blob.into_inner()).map_err(|_| WasmError::InvalidModule)?;
 
 	let global_vals_snapshot = {
 		let (instance, _, _) = instantiate_module(
@@ -826,7 +825,7 @@ impl WasmInstance for WasmiInstance {
 					.as_global()
 					.ok_or_else(|| format!("`{}` is not a global", name))?
 					.get()
-					.into()
+					.into(),
 			)),
 			None => Ok(None),
 		}

@@ -19,16 +19,18 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::instance_wrapper::InstanceWrapper;
-use std::{cell::RefCell, rc::Rc};
+use crate::{instance_wrapper::InstanceWrapper, util};
+use codec::{Decode, Encode};
 use log::trace;
-use codec::{Encode, Decode};
-use sc_executor_common::util::MemoryTransfer;
 use sc_allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::error::Result;
-use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
+use sc_executor_common::{
+	error::Result,
+	sandbox::{self, SandboxCapabilities, SupervisorFuncIndex},
+	util::MemoryTransfer,
+};
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
+use std::{cell::RefCell, rc::Rc};
 use wasmtime::{Func, Val};
 use sandbox::SandboxCapabilitiesHolder;
 
@@ -105,7 +107,7 @@ impl SandboxCapabilities for HostState {
 						"Supervisor function returned {} results, expected 1",
 						ret_vals.len()
 					)
-					.into());
+					.into())
 				} else {
 					&ret_vals[0]
 				};
@@ -113,9 +115,9 @@ impl SandboxCapabilities for HostState {
 				if let Some(ret_val) = ret_val.i64() {
 					Ok(ret_val)
 				} else {
-					return Err("Supervisor function returned unexpected result!".into());
+					return Err("Supervisor function returned unexpected result!".into())
 				}
-			}
+			},
 			Err(err) => Err(err.to_string().into()),
 		}
 	}
@@ -270,7 +272,7 @@ impl Sandbox for HostState {
 						.map_err(|_| "can't write return value")?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
-			}
+			},
 			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
 		}
 	}

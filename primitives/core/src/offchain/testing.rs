@@ -20,23 +20,17 @@
 //! Namely all ExecutionExtensions that allow mocking
 //! the extra APIs.
 
+use crate::{
+	offchain::{
+		self, storage::InMemOffchainStorage, HttpError, HttpRequestId as RequestId,
+		HttpRequestStatus as RequestStatus, OffchainOverlayedChange, OffchainStorage,
+		OpaqueNetworkState, StorageKind, Timestamp, TransactionPool,
+	},
+	OpaquePeerId,
+};
 use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
-};
-use crate::OpaquePeerId;
-use crate::offchain::{
-	self,
-	OffchainOverlayedChange,
-	storage::InMemOffchainStorage,
-	HttpError,
-	HttpRequestId as RequestId,
-	HttpRequestStatus as RequestStatus,
-	Timestamp,
-	StorageKind,
-	OpaqueNetworkState,
-	TransactionPool,
-	OffchainStorage,
 };
 
 use parking_lot::RwLock;
@@ -75,9 +69,7 @@ impl TestPersistentOffchainDB {
 
 	/// Create a new and empty offchain storage db for persistent items
 	pub fn new() -> Self {
-		Self {
-			persistent: Arc::new(RwLock::new(InMemOffchainStorage::default()))
-		}
+		Self { persistent: Arc::new(RwLock::new(InMemOffchainStorage::default())) }
 	}
 
 	/// Apply a set of off-chain changes directly to the test backend
@@ -88,7 +80,8 @@ impl TestPersistentOffchainDB {
 		let mut me = self.persistent.write();
 		for ((_prefix, key), value_operation) in changes {
 			match value_operation {
-				OffchainOverlayedChange::SetValue(val) => me.set(Self::PREFIX, key.as_slice(), val.as_slice()),
+				OffchainOverlayedChange::SetValue(val) =>
+					me.set(Self::PREFIX, key.as_slice(), val.as_slice()),
 				OffchainOverlayedChange::Remove => me.remove(Self::PREFIX, key.as_slice()),
 			}
 		}
@@ -124,7 +117,6 @@ impl OffchainStorage for TestPersistentOffchainDB {
 	}
 }
 
-
 /// Internal state of the externalities.
 ///
 /// This can be used in tests to respond or assert stuff about interactions.
@@ -151,20 +143,17 @@ impl OffchainState {
 		id: u16,
 		expected: PendingRequest,
 		response: impl Into<Vec<u8>>,
-		response_headers: impl IntoIterator<Item=(String, String)>,
+		response_headers: impl IntoIterator<Item = (String, String)>,
 	) {
 		match self.requests.get_mut(&RequestId(id)) {
 			None => {
 				panic!("Missing pending request: {:?}.\n\nAll: {:?}", id, self.requests);
-			}
+			},
 			Some(req) => {
-				assert_eq!(
-					*req,
-					expected,
-				);
+				assert_eq!(*req, expected,);
 				req.response = Some(response.into());
 				req.response_headers = response_headers.into_iter().collect();
-			}
+			},
 		}
 	}
 
@@ -213,7 +202,9 @@ impl TestOffchainExt {
 	}
 
 	/// Create new `TestOffchainExt` and a reference to the internal state.
-	pub fn with_offchain_db(offchain_db: TestPersistentOffchainDB) -> (Self, Arc<RwLock<OffchainState>>) {
+	pub fn with_offchain_db(
+		offchain_db: TestPersistentOffchainDB,
+	) -> (Self, Arc<RwLock<OffchainState>>) {
 		let (ext, state) = Self::new();
 		ext.0.write().persistent_storage = offchain_db;
 		(ext, state)
@@ -226,10 +217,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		Ok(OpaqueNetworkState {
-			peer_id: Default::default(),
-			external_addresses: vec![],
-		})
+		Ok(OpaqueNetworkState { peer_id: Default::default(), external_addresses: vec![] })
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -244,15 +232,23 @@ impl offchain::Externalities for TestOffchainExt {
 		self.0.read().seed
 	}
 
-	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<RequestId, ()> {
+	fn http_request_start(
+		&mut self,
+		method: &str,
+		uri: &str,
+		meta: &[u8],
+	) -> Result<RequestId, ()> {
 		let mut state = self.0.write();
 		let id = RequestId(state.requests.len() as u16);
-		state.requests.insert(id, PendingRequest {
-			method: method.into(),
-			uri: uri.into(),
-			meta: meta.into(),
-			..Default::default()
-		});
+		state.requests.insert(
+			id,
+			PendingRequest {
+				method: method.into(),
+				uri: uri.into(),
+				meta: meta.into(),
+				..Default::default()
+			},
+		);
 		Ok(id)
 	}
 
@@ -275,7 +271,7 @@ impl offchain::Externalities for TestOffchainExt {
 		&mut self,
 		request_id: RequestId,
 		chunk: &[u8],
-		_deadline: Option<Timestamp>
+		_deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		let mut state = self.0.write();
 
@@ -302,12 +298,14 @@ impl offchain::Externalities for TestOffchainExt {
 	) -> Vec<RequestStatus> {
 		let state = self.0.read();
 
-		ids.iter().map(|id| match state.requests.get(id) {
-			Some(req) if req.response.is_none() =>
-				panic!("No `response` provided for request with id: {:?}", id),
-			None => RequestStatus::Invalid,
-			_ => RequestStatus::Finished(200),
-		}).collect()
+		ids.iter()
+			.map(|id| match state.requests.get(id) {
+				Some(req) if req.response.is_none() =>
+					panic!("No `response` provided for request with id: {:?}", id),
+				None => RequestStatus::Invalid,
+				_ => RequestStatus::Finished(200),
+			})
+			.collect()
 	}
 
 	fn http_response_headers(&mut self, request_id: RequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -327,11 +325,12 @@ impl offchain::Externalities for TestOffchainExt {
 		&mut self,
 		request_id: RequestId,
 		buffer: &mut [u8],
-		_deadline: Option<Timestamp>
+		_deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
 		let mut state = self.0.write();
 		if let Some(req) = state.requests.get_mut(&request_id) {
-			let response = req.response
+			let response = req
+				.response
 				.as_mut()
 				.unwrap_or_else(|| panic!("No response provided for request: {:?}", request_id));
 
@@ -377,14 +376,14 @@ impl offchain::DbExternalities for TestOffchainExt {
 		kind: StorageKind,
 		key: &[u8],
 		old_value: Option<&[u8]>,
-		new_value: &[u8]
+		new_value: &[u8],
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => state.local_storage
-				.compare_and_set(b"", key, old_value, new_value),
-			StorageKind::PERSISTENT => state.persistent_storage
-				.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::LOCAL =>
+				state.local_storage.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::PERSISTENT =>
+				state.persistent_storage.compare_and_set(b"", key, old_value, new_value),
 		}
 	}
 

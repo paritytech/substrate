@@ -32,11 +32,15 @@ pub enum AllowAll {}
 pub enum DenyAll {}
 
 impl<T> Filter<T> for AllowAll {
-	fn filter(_: &T) -> bool { true }
+	fn filter(_: &T) -> bool {
+		true
+	}
 }
 
 impl<T> Filter<T> for DenyAll {
-	fn filter(_: &T) -> bool { false }
+	fn filter(_: &T) -> bool {
+		false
+	}
 }
 
 /// Trait to add a constraint onto the filter.
@@ -101,17 +105,28 @@ pub trait InstanceFilter<T>: Sized + Send + Sync {
 	fn filter(&self, _: &T) -> bool;
 
 	/// Determines whether `self` matches at least everything that `_o` does.
-	fn is_superset(&self, _o: &Self) -> bool { false }
+	fn is_superset(&self, _o: &Self) -> bool {
+		false
+	}
 }
 
 impl<T> InstanceFilter<T> for () {
-	fn filter(&self, _: &T) -> bool { true }
-	fn is_superset(&self, _o: &Self) -> bool { true }
+	fn filter(&self, _: &T) -> bool {
+		true
+	}
+	fn is_superset(&self, _o: &Self) -> bool {
+		true
+	}
 }
 
 /// Re-expected for the macro.
 #[doc(hidden)]
-pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
+pub use sp_std::{
+	boxed::Box,
+	cell::RefCell,
+	mem::{swap, take},
+	vec::Vec,
+};
 
 #[macro_export]
 macro_rules! impl_filter_stack {
@@ -206,7 +221,9 @@ pub mod test_impl_filter_stack {
 	pub struct IsCallable;
 	pub struct BaseFilter;
 	impl Filter<u32> for BaseFilter {
-		fn filter(x: &u32) -> bool { x % 2 == 0 }
+		fn filter(x: &u32) -> bool {
+			x % 2 == 0
+		}
 	}
 	impl_filter_stack!(
 		crate::traits::filter::test_impl_filter_stack::IsCallable,

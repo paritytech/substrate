@@ -16,10 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::marker::{PhantomData, Unpin};
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+	marker::{PhantomData, Unpin},
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+};
 
 use finality_grandpa::{voter, voter_set::VoterSet, BlockNumberOps, Error as GrandpaError};
 use futures::prelude::*;
@@ -95,14 +97,14 @@ where
 			},
 			voter::CommunicationIn::CatchUp(..) => {
 				// ignore catch up messages
-				return future::ok(last_finalized_number);
+				return future::ok(last_finalized_number)
 			},
 		};
 
 		// if the commit we've received targets a block lower or equal to the last
 		// finalized, ignore it and continue with the current state
 		if commit.target_number <= last_finalized_number {
-			return future::ok(last_finalized_number);
+			return future::ok(last_finalized_number)
 		}
 
 		let validation_result = match finality_grandpa::validate_commit(
@@ -201,11 +203,9 @@ where
 		telemetry.clone(),
 	);
 
-	let observer_work = observer_work
-		.map_ok(|_| ())
-		.map_err(|e| {
-			warn!("GRANDPA Observer failed: {:?}", e);
-		});
+	let observer_work = observer_work.map_ok(|_| ()).map_err(|e| {
+		warn!("GRANDPA Observer failed: {:?}", e);
+	});
 
 	Ok(observer_work.map(drop))
 }
@@ -213,7 +213,8 @@ where
 /// Future that powers the observer.
 #[must_use]
 struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
-	observer: Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
+	observer:
+		Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
@@ -285,11 +286,13 @@ where
 			let network = self.network.clone();
 			let voters = voters.clone();
 
-			move |round| network.note_round(
-				crate::communication::Round(round),
-				crate::communication::SetId(set_id),
-				&*voters,
-			)
+			move |round| {
+				network.note_round(
+					crate::communication::Round(round),
+					crate::communication::SetId(set_id),
+					&*voters,
+				)
+			}
 		};
 
 		// create observer for the current set
@@ -337,7 +340,8 @@ where
 
 				set_state
 			},
-		}.into();
+		}
+		.into();
 
 		self.rebuild_observer();
 		Ok(())
@@ -356,33 +360,33 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		match Future::poll(Pin::new(&mut self.observer), cx) {
-			Poll::Pending => {}
+			Poll::Pending => {},
 			Poll::Ready(Ok(())) => {
 				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
 				return Poll::Ready(Ok(()))
-			}
+			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
 				return Poll::Ready(Err(e))
-			}
+			},
 			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
 				self.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
-			}
+			},
 		}
 
 		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
-			Poll::Pending => {}
+			Poll::Pending => {},
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
 				return Poll::Ready(Ok(()))
-			}
+			},
 			Poll::Ready(Some(command)) => {
 				// some command issued externally
 				self.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
-			}
+			},
 		}
 
 		Future::poll(Pin::new(&mut self.network), cx)
@@ -393,12 +397,15 @@ where
 mod tests {
 	use super::*;
 
+	use crate::{
+		aux_schema,
+		communication::tests::{make_test_network, Event},
+	};
 	use assert_matches::assert_matches;
-	use sp_utils::mpsc::tracing_unbounded;
-	use crate::{aux_schema,	communication::tests::{Event, make_test_network}};
-	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;
 	use sp_blockchain::HeaderBackend as _;
+	use sp_utils::mpsc::tracing_unbounded;
+	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 
 	use futures::executor;
 
@@ -426,12 +433,9 @@ mod tests {
 
 		let voters = vec![(sp_keyring::Ed25519Keyring::Alice.public().into(), 1)];
 
-		let persistent_data = aux_schema::load_persistent(
-			&*backend,
-			client.info().genesis_hash,
-			0,
-			|| Ok(voters),
-		).unwrap();
+		let persistent_data =
+			aux_schema::load_persistent(&*backend, client.info().genesis_hash, 0, || Ok(voters))
+				.unwrap();
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");
 

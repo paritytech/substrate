@@ -22,7 +22,7 @@
 #![deny(unused_crate_dependencies)]
 
 pub mod error;
+pub mod runtime_blob;
 pub mod sandbox;
 pub mod wasm_runtime;
-pub mod runtime_blob;
 pub mod util;

@@ -21,16 +21,16 @@ use super::*;
 use crate as pallet_society;
 
 use frame_support::{
-	parameter_types, ord_parameter_types,
-	traits::{OnInitialize, OnFinalize},
+	ord_parameter_types, parameter_types,
+	traits::{OnFinalize, OnInitialize},
 };
 use frame_support_test::TestRandomness;
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_system::EnsureSignedBy;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -156,14 +156,16 @@ impl EnvBuilder {
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
-		pallet_balances::GenesisConfig::<Test> {
-			balances: self.balances,
-		}.assimilate_storage(&mut t).unwrap();
-		pallet_society::GenesisConfig::<Test>{
+		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		pallet_society::GenesisConfig::<Test> {
 			members: self.members,
 			pot: self.pot,
 			max_members: self.max_members,
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(f)
 	}
@@ -210,12 +212,7 @@ pub fn run_to_block(n: u64) {
 pub fn create_bid<AccountId, Balance>(
 	value: Balance,
 	who: AccountId,
-	kind: BidKind<AccountId, Balance>
-) -> Bid<AccountId, Balance>
-{
-	Bid {
-		who,
-		kind,
-		value
-	}
+	kind: BidKind<AccountId, Balance>,
+) -> Bid<AccountId, Balance> {
+	Bid { who, kind, value }
 }
