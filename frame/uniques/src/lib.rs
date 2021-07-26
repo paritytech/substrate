@@ -316,7 +316,14 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			Self::do_create_class(class, owner.clone(), admin.clone(), None, None, Event::Created(class, owner, admin))
+			Self::do_create_class(
+				class,
+				owner.clone(),
+				admin.clone(),
+				None,
+				None,
+				Event::Created(class, owner, admin),
+			)
 		}
 
 		/// Issue a new class of non-fungible assets from a privileged origin.
@@ -345,7 +352,14 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_create_class(class, owner.clone(), owner.clone(), Some(Zero::zero()), Some(free_holding), Event::ForceCreated(class, owner))
+			Self::do_create_class(
+				class,
+				owner.clone(),
+				owner.clone(),
+				Some(Zero::zero()),
+				Some(free_holding),
+				Event::ForceCreated(class, owner),
+			)
 		}
 
 		/// Destroy a class of fungible assets.
