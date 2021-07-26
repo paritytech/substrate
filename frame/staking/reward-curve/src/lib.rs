@@ -159,9 +159,10 @@ impl core::fmt::Display for Bounds {
 	}
 }
 
-fn parse_field<Token: Parse + Default + ToTokens>(input: ParseStream, bounds: Bounds)
-	-> syn::Result<u32>
-{
+fn parse_field<Token: Parse + Default + ToTokens>(
+	input: ParseStream,
+	bounds: Bounds,
+) -> syn::Result<u32> {
 	<Token>::parse(input)?;
 	<syn::Token![:]>::parse(input)?;
 	let value_lit = syn::LitInt::parse(input)?;
@@ -287,10 +288,7 @@ impl INPoS {
 fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 	let inpos = INPoS::from_input(input);
 
-	let mut points = vec![
-		(0, inpos.i_0),
-		(inpos.x_ideal, inpos.i_ideal_times_x_ideal)
-	];
+	let mut points = vec![(0, inpos.i_0), (inpos.x_ideal, inpos.i_ideal_times_x_ideal)];
 
 	// For each point p: (next_p.0 - p.0) < segment_length && (next_p.1 - p.1) < segment_length.
 	// This ensures that the total number of segment doesn't overflow max_piece_count.

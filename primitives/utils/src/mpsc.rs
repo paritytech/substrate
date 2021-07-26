@@ -100,7 +100,7 @@ mod inner {
 
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
-			self.1.unbounded_send(msg).map(|s|{
+			self.1.unbounded_send(msg).map(|s| {
 				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, "send"]).inc();
 				s
 			})
