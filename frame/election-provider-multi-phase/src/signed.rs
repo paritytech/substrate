@@ -18,8 +18,8 @@
 //! The signed phase implementation.
 
 use crate::{
-	CompactOf, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
-	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
+	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
 	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
@@ -29,7 +29,7 @@ use frame_support::{
 	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{is_score_better, CompactSolution, ElectionScore};
+use sp_npos_elections::{is_score_better, ElectionScore, Solution, SolutionBase};
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
@@ -44,24 +44,23 @@ use sp_std::{
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
+pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	/// Who submitted this solution.
 	pub who: AccountId,
 	/// The deposit reserved for storing this solution.
 	pub deposit: Balance,
 	/// The raw solution itself.
-	pub solution: RawSolution<CompactSolution>,
+	pub solution: RawSolution<Solution>,
 	/// The reward that should potentially be paid for this solution, if accepted.
 	pub reward: Balance,
 }
 
-impl<AccountId, Balance, CompactSolution> Ord
-	for SignedSubmission<AccountId, Balance, CompactSolution>
+impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
 where
 	AccountId: Ord,
 	Balance: Ord + HasCompact,
-	CompactSolution: Ord,
-	RawSolution<CompactSolution>: Ord,
+	Solution: Ord,
+	RawSolution<Solution>: Ord,
 {
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.solution
@@ -73,13 +72,12 @@ where
 	}
 }
 
-impl<AccountId, Balance, CompactSolution> PartialOrd
-	for SignedSubmission<AccountId, Balance, CompactSolution>
+impl<AccountId, Balance, Solution> PartialOrd for SignedSubmission<AccountId, Balance, Solution>
 where
 	AccountId: Ord,
 	Balance: Ord + HasCompact,
-	CompactSolution: Ord,
-	RawSolution<CompactSolution>: Ord,
+	Solution: Ord,
+	RawSolution<Solution>: Ord,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
@@ -95,7 +93,7 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 pub type SignedSubmissionOf<T> =
-	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, CompactOf<T>>;
+	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, SolutionOf<T>>;
 
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
@@ -355,7 +353,7 @@ impl<T: Config> Pallet<T> {
 
 		while let Some(best) = all_submissions.pop_last() {
 			let SignedSubmission { solution, who, deposit, reward } = best;
-			let active_voters = solution.compact.voter_count() as u32;
+			let active_voters = solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
 				let desired_targets = Self::desired_targets().unwrap_or_default();
@@ -447,14 +445,14 @@ impl<T: Config> Pallet<T> {
 
 	/// The feasibility weight of the given raw solution.
 	pub fn feasibility_weight_of(
-		solution: &RawSolution<CompactOf<T>>,
+		solution: &RawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
 		T::WeightInfo::feasibility_check(
 			size.voters,
 			size.targets,
-			solution.compact.voter_count() as u32,
-			solution.compact.unique_targets().len() as u32,
+			solution.solution.voter_count() as u32,
+			solution.solution.unique_targets().len() as u32,
 		)
 	}
 
@@ -466,7 +464,7 @@ impl<T: Config> Pallet<T> {
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(
-		solution: &RawSolution<CompactOf<T>>,
+		solution: &RawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = solution.encoded_size().saturated_into();
@@ -497,7 +495,7 @@ mod tests {
 
 	fn submit_with_witness(
 		origin: Origin,
-		solution: RawSolution<CompactOf<Runtime>>,
+		solution: RawSolution<SolutionOf<Runtime>>,
 	) -> DispatchResult {
 		MultiPhase::submit(origin, solution, MultiPhase::signed_submissions().len() as u32)
 	}
@@ -828,12 +826,12 @@ mod tests {
 				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
 					witness.voters,
 					witness.targets,
-					solution.compact.voter_count() as u32,
-					solution.compact.unique_targets().len() as u32,
+					solution.solution.voter_count() as u32,
+					solution.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, 35);
-				assert_eq!(solution.compact.voter_count(), 5);
+				assert_eq!(solution.solution.voter_count(), 5);
 				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
 
 				assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));

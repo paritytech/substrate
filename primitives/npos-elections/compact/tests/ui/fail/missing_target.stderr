@@ -1,5 +1,0 @@
-error: Expected binding: `TargetIndex = ...`
- --> $DIR/missing_target.rs:5:2
-  |
-5 |     u8,
-  |     ^^

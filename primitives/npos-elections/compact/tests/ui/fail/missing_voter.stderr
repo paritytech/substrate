@@ -1,5 +1,0 @@
-error: Expected binding: `VoterIndex = ...`
- --> $DIR/missing_voter.rs:4:2
-  |
-4 |     u16,
-  |     ^^^
