@@ -15,15 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::traits::{GetStorageVersion, PalletInfoAccess};
+use crate::{
+	traits::{GetStorageVersion, PalletInfoAccess},
+	weights::{RuntimeDbWeight, Weight},
+};
 
 /// Trait used by [`migrate_from_pallet_version_to_storage_version`] to do the actual migration.
 pub trait PalletVersionToStorageVersionHelper {
-	fn migrate();
+	fn migrate(db_weight: &RuntimeDbWeight) -> Weight;
 }
 
 impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelper for T {
-	fn migrate() {
+	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
 		const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 
 		fn pallet_version_key(name: &str) -> [u8; 32] {
@@ -41,13 +44,19 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 
 		let version = <T as GetStorageVersion>::current_storage_version();
 		version.put::<T>();
+
+		db_weight.writes(2)
 	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 impl PalletVersionToStorageVersionHelper for T {
-	fn migrate() {
-		for_tuples!( #( T::migrate(); )* )
+	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
+		let mut weight: Weight = 0;
+
+		for_tuples!( #( weight = weight.saturating_add(T::migrate(db_weight)); )* );
+
+		weight
 	}
 }
 
@@ -57,6 +66,6 @@ impl PalletVersionToStorageVersionHelper for T {
 /// This will remove all `PalletVersion's` from the state and insert the current storage version.
 pub fn migrate_from_pallet_version_to_storage_version<
 	AllPallets: PalletVersionToStorageVersionHelper,
->() {
-	AllPallets::migrate()
+>(db_weight: &RuntimeDbWeight) -> Weight {
+	AllPallets::migrate(db_weight)
 }

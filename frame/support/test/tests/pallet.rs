@@ -15,15 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{
-	dispatch::{Parameter, UnfilteredDispatchable},
-	storage::unhashed,
-	traits::{
+use frame_support::{dispatch::{Parameter, UnfilteredDispatchable}, storage::unhashed, traits::{
 		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
 		PalletInfoAccess, StorageVersion,
-	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
-};
+	}, weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight}};
+use frame_system::WeightInfo;
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
@@ -955,9 +951,13 @@ fn migrate_from_pallet_version_to_storage_version() {
 		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
 		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
 
-		frame_support::migrations::migrate_from_pallet_version_to_storage_version::<
+		let db_weight = RuntimeDbWeight { read: 0, write: 5 };
+		let weight = frame_support::migrations::migrate_from_pallet_version_to_storage_version::<
 			AllPalletsWithSystem,
-		>();
+		>(&db_weight);
+
+		// 3 pallets, 2 writes and every write costs 5 weight.
+		assert_eq!(3 * 2 * 5, weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
