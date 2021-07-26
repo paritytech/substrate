@@ -22,7 +22,7 @@ use frame_support::{
 	traits::{ConstU32, Get},
 	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use scale_info::{build::{Fields, Variants}, Path, Type, TypeInfo, TypeParameter};
+use scale_info::{build::{Fields, Variants}, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::{fmt::Debug, iter::once, ops::Add, prelude::*};
 
