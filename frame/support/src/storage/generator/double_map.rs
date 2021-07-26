@@ -407,14 +407,10 @@ where
 	}
 
 	fn iter() -> Self::Iterator {
-		Self::iter_from(G::prefix_hash())
-	}
-
-	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		Self::Iterator {
-			prefix,
-			previous_key: starting_raw_key,
+			prefix: prefix.clone(),
+			previous_key: prefix,
 			drain: false,
 			closure: |raw_key_without_prefix, mut raw_value| {
 				let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
@@ -426,15 +422,17 @@ where
 		}
 	}
 
-	fn iter_keys() -> Self::FullKeyIterator {
-		Self::iter_keys_from(G::prefix_hash())
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
+		let mut iter = Self::iter();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
 	}
 
-	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::FullKeyIterator {
+	fn iter_keys() -> Self::FullKeyIterator {
 		let prefix = G::prefix_hash();
 		Self::FullKeyIterator {
-			prefix,
-			previous_key: starting_raw_key,
+			prefix: prefix.clone(),
+			previous_key: prefix,
 			drain: false,
 			closure: |raw_key_without_prefix| {
 				let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
@@ -444,6 +442,12 @@ where
 				Ok((k1, k2))
 			},
 		}
+	}
+
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::FullKeyIterator {
+		let mut iter = Self::iter_keys();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
 	}
 
 	fn drain() -> Self::Iterator {
