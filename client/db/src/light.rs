@@ -518,7 +518,7 @@ where
 
 			self.db.commit(transaction)?;
 			cache.commit(cache_ops).expect(
-				"only fails if cache with given name isn't loaded yet;cache is already loaded \
+				"only fails if cache with given name isn't loaded yet; cache is already loaded \
 				 because there are cache_ops; qed",
 			);
 		}
