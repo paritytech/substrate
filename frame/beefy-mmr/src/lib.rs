@@ -32,12 +32,14 @@
 //!
 //! and thanks to versioning can be easily updated in the future.
 
-use beefy_primitives::mmr::{BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
-use codec::Encode;
-use frame_support::traits::Get;
-use pallet_mmr::primitives::LeafDataProvider;
 use sp_runtime::traits::{Convert, Hash};
 use sp_std::prelude::*;
+
+use beefy_primitives::mmr::{BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
+use pallet_mmr::primitives::LeafDataProvider;
+
+use codec::Encode;
+use frame_support::traits::Get;
 
 pub use pallet::*;
 
@@ -72,7 +74,7 @@ impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEth
 		use sp_core::crypto::Public;
 		let compressed_key = a.as_slice();
 
-		secp256k1::PublicKey::parse_slice(compressed_key, Some(secp256k1::PublicKeyFormat::Compressed))
+		libsecp256k1::PublicKey::parse_slice(compressed_key, Some(libsecp256k1::PublicKeyFormat::Compressed))
 			// uncompress the key
 			.map(|pub_key| pub_key.serialize().to_vec())
 			// now convert to ETH address
