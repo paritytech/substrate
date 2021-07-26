@@ -1041,6 +1041,20 @@ mod voter_list {
 					31,  // last bag.
 				]
 			);
+
+			// when adding a voter that has a higher weight than pre-existing voters in the bag
+			bond_validator(71, 70, 10);
+
+			// then
+			assert_eq!(
+				iteration,
+				vec![
+					51, 61, // best bag
+					11, 21, 101, // middle bag
+					31, 71, // last bag; the new voter is last, because it is order of insertion
+				]
+			);
+
 		})
 	}
 
