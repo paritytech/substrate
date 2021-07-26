@@ -60,7 +60,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// type, `u8` target type and `Perbill` accuracy with maximum of 4 edges per voter.
 ///
 /// ```
-/// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_npos_elections_solution_type::generate_solution_type;
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(pub struct TestSolution::<
 ///     VoterIndex = u16,
@@ -96,7 +96,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// for numbers will be used, similar to how `parity-scale-codec`'s `Compact` works.
 ///
 /// ```
-/// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_npos_elections_solution_type::generate_solution_type;
+/// # use sp_npos_elections::Solution; // TODO: why is this now needed?
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]
@@ -111,7 +112,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// pagination, the `#[pages(_)]` attribute can be used. For example:
 ///
 /// ```
-/// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_npos_elections_solution_type::generate_solution_type;
+/// # use sp_npos_elections::Solution; // TODO: why is this now needed?
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]
@@ -184,7 +186,6 @@ pub fn generate_solution_type(item: TokenStream) -> TokenStream {
 				voter_type.clone(),
 				target_type.clone(),
 				weight_type.clone(),
-				compact_encoding,
 			)
 			.unwrap_or_else(|e| e.to_compile_error());
 			quote!(#single #multi)

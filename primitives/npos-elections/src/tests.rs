@@ -931,6 +931,64 @@ mod paged_solution_type {
 	}
 
 	#[test]
+	fn solution_struct_works_with_and_without_compact() {
+		use codec::Encode;
+		// we use u32 size to make sure compact is smaller.
+		let without_compact = {
+			generate_solution_type!(
+				#[pages(2)]
+				pub struct InnerTestSolution::<
+					VoterIndex = u32,
+					TargetIndex = u32,
+					Accuracy = TestAccuracy,
+				>(16)
+			);
+			let solution = InnerTestSolution {
+				page0: InnerTestSolutionPage {
+					votes1: vec![(2, 20), (4, 40)],
+					votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+					..Default::default()
+				},
+				page1: InnerTestSolutionPage {
+					votes1: vec![(2, 20), (4, 40)],
+					votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+					..Default::default()
+				},
+			};
+
+			solution.encode().len()
+		};
+
+		let with_compact = {
+			generate_solution_type!(
+				#[compact]
+				#[pages(2)]
+				pub struct InnerTestSolutionCompact::<
+					VoterIndex = u32,
+					TargetIndex = u32,
+					Accuracy = TestAccuracy,
+				>(16)
+			);
+			let compact = InnerTestSolutionCompact {
+				page0: InnerTestSolutionCompactPage {
+					votes1: vec![(2, 20), (4, 40)],
+					votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+					..Default::default()
+				},
+				page1: InnerTestSolutionCompactPage {
+					votes1: vec![(2, 20), (4, 40)],
+					votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+					..Default::default()
+				},
+			};
+
+			compact.encode().len()
+		};
+
+		assert!(with_compact < without_compact);
+	}
+
+	#[test]
 	fn page_struct_generated() {
 		// this struct is the one that is used per-page.
 		let _ = TestSolutionPage::default();
@@ -1464,7 +1522,7 @@ mod solution_type {
 }
 
 #[test]
-fn index_assignments_generate_same_compact_as_plain_assignments() {
+fn index_assignments_generate_same_solution_as_plain_assignments() {
 	let rng = rand::rngs::SmallRng::seed_from_u64(0);
 
 	let (voters, assignments, candidates) = generate_random_votes(1000, 2500, rng);

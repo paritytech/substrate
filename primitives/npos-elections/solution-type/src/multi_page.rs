@@ -29,9 +29,8 @@ pub(crate) fn generate(
 	voter_type: syn::Type,
 	target_type: syn::Type,
 	weight_type: syn::Type,
-	compact_encoding: bool,
 ) -> Result<TokenStream2> {
-	let struct_name = syn::Ident::new("fooo", proc_macro2::Span::call_site());
+	let struct_name = syn::Ident::new("solution", proc_macro2::Span::call_site());
 
 	let paged_fields = (0..voter_pages)
 		.map(|i| {
@@ -142,6 +141,8 @@ pub(crate) fn generate(
 	};
 
 	Ok(quote! {
+		// NOTE: this will always simply derive Encode and Decode. The inner (per-page) type could
+		// be `#[compact]` or not
 		#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode)]
 		#vis struct #ident {
 			#paged_fields
