@@ -930,25 +930,62 @@ mod voter_list {
 
 	#[test]
 	fn basic_setup_works() {
+		use crate::{
+			CounterForNominators, CounterForValidators, CounterForVoters, VoterBags, VoterNodes,
+		};
+		let node = |voter, prev, next| Node::<Test> { voter, prev, next, bag_upper: 0 };
+
 		// make sure ALL relevant data structures are setup correctly.
-		// TODO: we are not checking all of them yet.
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(crate::CounterForVoters::<Test>::get(), 4);
+			assert_eq!(CounterForVoters::<Test>::get(), 4);
+			assert_eq!(VoterBagFor::<Test>::iter().count(), 4);
+			assert_eq!(VoterNodes::<Test>::iter().count(), 4);
+			assert_eq!(VoterBags::<Test>::iter().count(), 2);
+			assert_eq!(CounterForValidators::<Test>::get(), 3);
+			assert_eq!(CounterForNominators::<Test>::get(), 1);
+
+			assert_eq!(
+				VoterBags::<Test>::get(10).unwrap(),
+				Bag::<Test> { head: Some(31), tail: Some(31), bag_upper: 0 }
+			);
+			assert_eq!(
+				VoterBags::<Test>::get(1_000).unwrap(),
+				Bag::<Test> { head: Some(11), tail: Some(101), bag_upper: 0 }
+			);
 
 			let weight_of = Staking::weight_of_fn();
+
 			assert_eq!(weight_of(&11), 1000);
 			assert_eq!(VoterBagFor::<Test>::get(11).unwrap(), 1000);
+			assert_eq!(
+				VoterNodes::<Test>::get(11).unwrap(),
+				node(Voter::validator(11), None, Some(21))
+			);
 
 			assert_eq!(weight_of(&21), 1000);
 			assert_eq!(VoterBagFor::<Test>::get(21).unwrap(), 1000);
+			assert_eq!(
+				VoterNodes::<Test>::get(21).unwrap(),
+				node(Voter::validator(21), Some(11), Some(101))
+			);
 
 			assert_eq!(weight_of(&31), 1);
 			assert_eq!(VoterBagFor::<Test>::get(31).unwrap(), 10);
+			assert_eq!(
+				VoterNodes::<Test>::get(31).unwrap(),
+				node(Voter::validator(31), None, None)
+			);
 
+			assert_eq!(weight_of(&41), 1000);
 			assert_eq!(VoterBagFor::<Test>::get(41), None); // this staker is chilled!
+			assert_eq!(VoterNodes::<Test>::get(41), None);
 
 			assert_eq!(weight_of(&101), 500);
 			assert_eq!(VoterBagFor::<Test>::get(101).unwrap(), 1000);
+			assert_eq!(
+				VoterNodes::<Test>::get(101).unwrap(),
+				node(Voter::nominator(101), Some(21), None)
+			);
 
 			// iteration of the bags would yield:
 			assert_eq!(
