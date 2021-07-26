@@ -21,6 +21,8 @@
 use crate::{backend::Consolidate, debug, warn, StorageKey, StorageValue};
 use codec::Encode;
 use hash_db::{self, Hasher, Prefix};
+#[cfg(feature = "std")]
+use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
 use sp_std::{boxed::Box, ops::Deref, vec::Vec};
 use sp_trie::{
@@ -28,6 +30,8 @@ use sp_trie::{
 	trie_types::{Layout, TrieDB, TrieError},
 	DBValue, KeySpacedDB, MemoryDB, PrefixedMemoryDB, Trie, TrieDBIterator,
 };
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
@@ -46,11 +50,26 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
+/// Local cache for child root.
+#[cfg(feature = "std")]
+pub(crate) struct Cache {
+	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
+}
+
+#[cfg(feature = "std")]
+impl Cache {
+	fn new() -> Self {
+		Cache { child_root: HashMap::new() }
+	}
+}
+
 /// Patricia trie-based pairs storage essence.
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
 	empty: H::Out,
+	#[cfg(feature = "std")]
+	pub(crate) cache: Arc<RwLock<Cache>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
@@ -59,7 +78,13 @@ where
 {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackendEssence { storage, root, empty: H::hash(&[0u8]) }
+		TrieBackendEssence {
+			storage,
+			root,
+			empty: H::hash(&[0u8]),
+			#[cfg(feature = "std")]
+			cache: Arc::new(RwLock::new(Cache::new())),
+		}
 	}
 
 	/// Get backend storage reference.
@@ -79,8 +104,18 @@ where
 
 	/// Set trie root. This is useful for testing.
 	pub fn set_root(&mut self, root: H::Out) {
+		// If root did change so can have cached content.
+		self.reset_cache();
 		self.root = root;
 	}
+
+	#[cfg(feature = "std")]
+	fn reset_cache(&mut self) {
+		self.cache = Arc::new(RwLock::new(Cache::new()));
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn reset_cache(&mut self) {}
 
 	/// Consumes self and returns underlying storage.
 	pub fn into_storage(self) -> S {
@@ -95,7 +130,24 @@ where
 
 	/// Access the root of the child storage in its parent trie
 	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>> {
-		self.storage(child_info.prefixed_storage_key().as_slice())
+		#[cfg(feature = "std")]
+		{
+			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
+				return Ok(result.clone())
+			}
+		}
+
+		let result = self.storage(child_info.prefixed_storage_key().as_slice())?;
+
+		#[cfg(feature = "std")]
+		{
+			self.cache
+				.write()
+				.child_root
+				.insert(child_info.storage_key().to_vec(), result.clone());
+		}
+
+		Ok(result)
 	}
 
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
