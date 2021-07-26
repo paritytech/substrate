@@ -71,6 +71,7 @@ members = [
 	"frame/babe",
 	"frame/balances",
 	"frame/balances/rpc",
+	"frame/balances/rpc/runtime-api",
 	"frame/benchmarking",
 	"frame/bounties",
 	"frame/collective",

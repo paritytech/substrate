@@ -23,7 +23,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use pallet_balances::pallet::Config;
+
 sp_api::decl_runtime_apis! {
-	pub trait BalancesApi<T> {
-		pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance;
+	pub trait BalancesApi<T> where
+		T: Config,
+	{
+		fn free_balance(who: T::AccountId) -> T::Balance;
+	}
 }
