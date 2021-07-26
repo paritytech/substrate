@@ -1297,11 +1297,14 @@ mod bags {
 
 	#[test]
 	fn get_works() {
+		use crate::VoterBags;
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
 			let check_bag = |bag_upper, head, tail, ids| {
 				assert_storage_noop!(Bag::<Test>::get(bag_upper));
+
 				let bag = Bag::<Test>::get(bag_upper).unwrap();
 				let bag_ids = bag.iter().map(|n| n.voter().id).collect::<Vec<_>>();
+
 				assert_eq!(bag, Bag::<Test> { head, tail, bag_upper });
 				assert_eq!(bag_ids, ids);
 			};
@@ -1322,7 +1325,14 @@ mod bags {
 				.filter(|bag_upper| !existing_bag_uppers.contains(bag_upper))
 				.for_each(|bag_upper| {
 					assert_storage_noop!(assert_eq!(Bag::<Test>::get(*bag_upper), None));
+					assert!(!VoterBags::<Test>::contains_key(*bag_upper));
 				});
+
+			// when we make a pre-existing bag empty
+			VoterList::<Test>::remove(&31);
+
+			// then
+			check_bag(existing_bag_uppers[0], None, None, vec![]);
 		});
 	}
 
