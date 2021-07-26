@@ -1164,7 +1164,6 @@ mod solution_type {
 	use codec::{Decode, Encode};
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
 	use crate::{generate_solution_type, Assignment, Error as NposError, Solution, SolutionBase};
-	use sp_arithmetic::Percent;
 	use sp_std::{convert::TryInto, fmt::Debug};
 
 	#[allow(dead_code)]
@@ -1172,10 +1171,9 @@ mod solution_type {
 		// This is just to make sure that the solution can be generated in a scope without any
 		// imports.
 		use crate::generate_solution_type;
-		use sp_arithmetic::Percent;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy = Percent>(12)
+			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy = sp_runtime::Percent>(12)
 		);
 	}
 
@@ -1187,7 +1185,7 @@ mod solution_type {
 				pub struct InnerTestSolution::<
 					VoterIndex = u32,
 					TargetIndex = u32,
-					Accuracy = Percent,
+					Accuracy = TestAccuracy,
 				>(16)
 			);
 			let solution = InnerTestSolution {
@@ -1205,7 +1203,7 @@ mod solution_type {
 				pub struct InnerTestSolutionCompact::<
 					VoterIndex = u32,
 					TargetIndex = u32,
-					Accuracy = Percent,
+					Accuracy = TestAccuracy,
 				>(16)
 			);
 			let compact = InnerTestSolutionCompact {
@@ -1304,7 +1302,7 @@ mod solution_type {
 		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<u8> {
+		let target_index = |a: &AccountId| -> Option<u16> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
@@ -1333,8 +1331,8 @@ mod solution_type {
 		let voter_at = |a: u32| -> Option<AccountId> {
 			voters.get(<u32 as TryInto<usize>>::try_into(a).unwrap()).cloned()
 		};
-		let target_at = |a: u8| -> Option<AccountId> {
-			targets.get(<u8 as TryInto<usize>>::try_into(a).unwrap()).cloned()
+		let target_at = |a: u16| -> Option<AccountId> {
+			targets.get(<u16 as TryInto<usize>>::try_into(a).unwrap()).cloned()
 		};
 
 		assert_eq!(solution.into_assignment(voter_at, target_at).unwrap(), assignments);
@@ -1399,7 +1397,7 @@ mod solution_type {
 		};
 
 		let voter_at = |a: u32| -> Option<AccountId> { Some(a as AccountId) };
-		let target_at = |a: u8| -> Option<AccountId> { Some(a as AccountId) };
+		let target_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
 
 		assert_eq!(
 			solution.into_assignment(&voter_at, &target_at).unwrap_err(),
@@ -1423,13 +1421,11 @@ mod solution_type {
 	#[test]
 	fn target_count_overflow_is_detected() {
 		let voter_index = |a: &AccountId| -> Option<u32> { Some(*a as u32) };
-		let target_index = |a: &AccountId| -> Option<u8> { Some(*a as u8) };
+		let target_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
 
 		let assignments = vec![Assignment {
 			who: 1 as AccountId,
-			distribution: (10..27)
-				.map(|i| (i as AccountId, Percent::from_parts(i as u8)))
-				.collect::<Vec<_>>(),
+			distribution: (10..27).map(|i| (i as AccountId, p(i as u8))).collect::<Vec<_>>(),
 		}];
 
 		let solution = TestSolution::from_assignment(&assignments, voter_index, target_index);
@@ -1449,7 +1445,7 @@ mod solution_type {
 		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<u8> {
+		let target_index = |a: &AccountId| -> Option<u16> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 

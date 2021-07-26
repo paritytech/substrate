@@ -24,7 +24,6 @@ pub(crate) fn generate(
 	vis: syn::Visibility,
 	ident: syn::Ident,
 	count: usize,
-	_voter_pages: u8,
 	voter_type: syn::Type,
 	target_type: syn::Type,
 	weight_type: syn::Type,
@@ -150,6 +149,7 @@ pub(crate) fn generate(
 					for<'r> FT: Fn(&'r A) -> Option<Self::Target>,
 			{
 				let mut #struct_name: #ident = Default::default();
+				println!("HERE");
 				for _npos::Assignment { who, distribution } in assignments {
 					match distribution.len() {
 						0 => continue,
