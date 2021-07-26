@@ -39,7 +39,7 @@ pub use frame_metadata::{
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
 
-/// The return typ of a `Dispatchable` in frame. When returned explicitly from
+/// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
 /// returned from a dispatch.
 pub type DispatchResultWithPostInfo =
