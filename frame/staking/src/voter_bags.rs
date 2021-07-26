@@ -1051,10 +1051,10 @@ mod voter_list {
 				vec![
 					51, 61, // best bag
 					11, 21, 101, // middle bag
-					31, 71, // last bag; the new voter is last, because it is order of insertion
+					31,
+					71, // last bag; the new voter is last, because it is order of insertion
 				]
 			);
-
 		})
 	}
 
@@ -1095,17 +1095,15 @@ mod voter_list {
 	#[test]
 	fn insert_works() {
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// Insert into an existing bag:
-			// when
-			bond(42, 43, 999);
+			// when inserting into an existing bag
+			bond(42, 43, 1_000);
 			VoterList::<Test>::insert(Voter::<_>::nominator(42), Pallet::<Test>::weight_of_fn());
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 42, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42])]);
 
-			// Insert into a non-existent bag:
-			// when
+			// when inserting into a non-existent bag
 			bond(422, 433, 1_001);
 			VoterList::<Test>::insert(Voter::<_>::nominator(422), Pallet::<Test>::weight_of_fn());
 
@@ -1131,8 +1129,7 @@ mod voter_list {
 			];
 			assert_eq!(actual, expected);
 
-			// Insert a new voter with role:
-			// when
+			// when inserting a new voter
 			VoterList::<Test>::insert_as(&42, VoterType::Nominator);
 
 			// then
@@ -1140,8 +1137,7 @@ mod voter_list {
 			expected.push(Voter::<_>::nominator(42));
 			assert_eq!(actual, expected);
 
-			// Update the voter type of an already existing voter:
-			// when
+			// when updating the voter type of an already existing voter
 			VoterList::<Test>::insert_as(&42, VoterType::Validator);
 
 			// then
@@ -1153,31 +1149,40 @@ mod voter_list {
 
 	#[test]
 	fn remove_works() {
+		use crate::VoterNodes;
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			// Remove a non-existent voter:
-			// when
+			// when removing a non-existent voter
 			VoterList::<Test>::remove(&42);
+			assert!(!VoterBagFor::<Test>::contains_key(42));
+			assert!(!VoterNodes::<Test>::contains_key(42));
 
 			// then nothing changes
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
 
-			// Remove from a bag with multiple nodes:
-			// when
+			// when removing a node from a bag with multiple nodes
 			VoterList::<Test>::remove(&11);
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![21, 101, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![21, 101])]);
+			assert!(!VoterBagFor::<Test>::contains_key(11));
+			assert!(!VoterNodes::<Test>::contains_key(11));
 
-			// Remove from a bag with only one node:
+			// when removing a node from a bag with only one node:
 			VoterList::<Test>::remove(&31);
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![21, 101]);
-			assert_eq!(get_bags(), vec![(10, vec![]), (1_000, vec![21, 101])]);
-
-			// TODO check storage is cleaned up
+			assert_eq!(
+				get_bags(),
+				vec![
+					(10, vec![]), // the bag itself is not cleaned up from storage, which is ok
+					(1_000, vec![21, 101])
+				]
+			);
+			assert!(!VoterBagFor::<Test>::contains_key(31));
+			assert!(!VoterNodes::<Test>::contains_key(31));
 		});
 	}
 
