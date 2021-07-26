@@ -48,6 +48,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(super) fn do_create_class(
+		class: T::ClassId,
+		owner: T::AccountId,
+		admin: T::AccountId,
+		deposit: Option<DepositBalanceOf<T, I>>,
+		free_holding: Option<bool>,
+		event: Event<T, I>,
+	) -> DispatchResult {
+		ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
+
+		let dep_amt = deposit.unwrap_or(T::ClassDeposit::get());
+		T::Currency::reserve(&owner, dep_amt)?;
+
+		Class::<T, I>::insert(
+			class,
+			ClassDetails {
+				owner: owner.clone(),
+				issuer: admin.clone(),
+				admin: admin.clone(),
+				freezer: admin.clone(),
+				total_deposit: dep_amt,
+				free_holding: free_holding.unwrap_or(false),
+				instances: 0,
+				instance_metadatas: 0,
+				attributes: 0,
+				is_frozen: false,
+			},
+		);
+
+		Self::deposit_event(event);
+		Ok(())
+	}
+
 	pub(super) fn do_mint(
 		class: T::ClassId,
 		instance: T::InstanceId,

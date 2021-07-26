@@ -316,28 +316,7 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
-
-			let deposit = T::ClassDeposit::get();
-			T::Currency::reserve(&owner, deposit)?;
-
-			Class::<T, I>::insert(
-				class,
-				ClassDetails {
-					owner: owner.clone(),
-					issuer: admin.clone(),
-					admin: admin.clone(),
-					freezer: admin.clone(),
-					total_deposit: deposit,
-					free_holding: false,
-					instances: 0,
-					instance_metadatas: 0,
-					attributes: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::Created(class, owner, admin));
-			Ok(())
+			Self::do_create_class(class, owner.clone(), admin.clone(), None, None, Event::Created(class, owner, admin))
 		}
 
 		/// Issue a new class of non-fungible assets from a privileged origin.
@@ -366,25 +345,7 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
-
-			Class::<T, I>::insert(
-				class,
-				ClassDetails {
-					owner: owner.clone(),
-					issuer: owner.clone(),
-					admin: owner.clone(),
-					freezer: owner.clone(),
-					total_deposit: Zero::zero(),
-					free_holding,
-					instances: 0,
-					instance_metadatas: 0,
-					attributes: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::ForceCreated(class, owner));
-			Ok(())
+			Self::do_create_class(class, owner.clone(), owner.clone(), Some(Zero::zero()), Some(free_holding), Event::ForceCreated(class, owner))
 		}
 
 		/// Destroy a class of fungible assets.
