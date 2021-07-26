@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use jsonrpc_core::futures::prelude::*;
 use futures::{channel::oneshot, compat::Compat};
+use jsonrpc_core::futures::prelude::*;
 
 /// Wraps around `oneshot::Receiver` and adjusts the error type to produce an internal error if the
 /// sender gets dropped.

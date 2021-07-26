@@ -17,10 +17,13 @@
 
 //! Offchain workers types
 
-use codec::{Encode, Decode};
-use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::{OpaquePeerId, RuntimeDebug};
-use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
+use codec::{Decode, Encode};
+use sp_runtime_interface::pass_by::{PassByCodec, PassByEnum, PassByInner};
+use sp_std::{
+	convert::TryFrom,
+	prelude::{Box, Vec},
+};
 
 pub use crate::crypto::KeyTypeId;
 
@@ -30,7 +33,7 @@ pub mod storage;
 pub mod testing;
 
 /// Persistent storage prefix used by the Offchain Worker API when creating a DB key.
-pub const STORAGE_PREFIX : &[u8] = b"storage";
+pub const STORAGE_PREFIX: &[u8] = b"storage";
 
 /// Offchain DB persistent (non-fork-aware) storage.
 pub trait OffchainStorage: Clone + Send + Sync {
@@ -93,7 +96,9 @@ impl From<StorageKind> for u32 {
 }
 
 /// Opaque type for offchain http requests.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner,
+)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct HttpRequestId(pub u16);
 
@@ -123,7 +128,7 @@ impl TryFrom<u32> for HttpError {
 			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
 			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
 			e if e == HttpError::Invalid as u8 as u32 => Ok(HttpError::Invalid),
-			_ => Err(())
+			_ => Err(()),
 		}
 	}
 }
@@ -202,11 +207,15 @@ impl OpaqueMultiaddr {
 }
 
 /// Opaque timestamp type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
+)]
 pub struct Timestamp(u64);
 
 /// Duration type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
+)]
 pub struct Duration(u64);
 
 impl Duration {
@@ -290,11 +299,7 @@ impl Capabilities {
 	/// Those calls should be allowed to sign and submit transactions
 	/// and access offchain workers database (but read only!).
 	pub fn rich_offchain_call() -> Self {
-		[
-			Capability::TransactionPool,
-			Capability::Keystore,
-			Capability::OffchainDbRead,
-		][..].into()
+		[Capability::TransactionPool, Capability::Keystore, Capability::OffchainDbRead][..].into()
 	}
 
 	/// Check if particular capability is enabled.
@@ -345,12 +350,11 @@ pub trait Externalities: Send {
 	/// Returns an error if:
 	/// - No new request identifier could be allocated.
 	/// - The method or URI contain invalid characters.
-	///
 	fn http_request_start(
 		&mut self,
 		method: &str,
 		uri: &str,
-		meta: &[u8]
+		meta: &[u8],
 	) -> Result<HttpRequestId, ()>;
 
 	/// Append header to the request.
@@ -365,12 +369,11 @@ pub trait Externalities: Send {
 	///
 	/// An error doesn't poison the request, and you can continue as if the call had never been
 	/// made.
-	///
 	fn http_request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
 		name: &str,
-		value: &str
+		value: &str,
 	) -> Result<(), ()>;
 
 	/// Write a chunk of request body.
@@ -387,12 +390,11 @@ pub trait Externalities: Send {
 	/// - The deadline is reached.
 	/// - An I/O error has happened, for example the remote has closed our
 	///   request. The request is then considered invalid.
-	///
 	fn http_request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError>;
 
 	/// Block and wait for the responses for given requests.
@@ -408,7 +410,7 @@ pub trait Externalities: Send {
 	fn http_response_wait(
 		&mut self,
 		ids: &[HttpRequestId],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus>;
 
 	/// Read all response headers.
@@ -420,10 +422,7 @@ pub trait Externalities: Send {
 	///
 	/// Returns an empty list if the identifier is unknown/invalid, hasn't
 	/// received a response, or has finished.
-	fn http_response_headers(
-		&mut self,
-		request_id: HttpRequestId
-	) -> Vec<(Vec<u8>, Vec<u8>)>;
+	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Read a chunk of body response to given buffer.
 	///
@@ -443,12 +442,11 @@ pub trait Externalities: Send {
 	/// - The deadline is reached.
 	/// - An I/O error has happened, for example the remote has closed our
 	///   request. The request is then considered invalid.
-	///
 	fn http_response_read_body(
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError>;
 
 	/// Set the authorized nodes from runtime.
@@ -466,11 +464,11 @@ pub trait Externalities: Send {
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	fn is_validator(&self) -> bool {
-		(& **self).is_validator()
+		(&**self).is_validator()
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		(& **self).network_state()
+		(&**self).network_state()
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -485,11 +483,21 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).random_seed()
 	}
 
-	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
+	fn http_request_start(
+		&mut self,
+		method: &str,
+		uri: &str,
+		meta: &[u8],
+	) -> Result<HttpRequestId, ()> {
 		(&mut **self).http_request_start(method, uri, meta)
 	}
 
-	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+	fn http_request_add_header(
+		&mut self,
+		request_id: HttpRequestId,
+		name: &str,
+		value: &str,
+	) -> Result<(), ()> {
 		(&mut **self).http_request_add_header(request_id, name, value)
 	}
 
@@ -497,12 +505,16 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		(&mut **self).http_request_write_body(request_id, chunk, deadline)
 	}
 
-	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
+	fn http_response_wait(
+		&mut self,
+		ids: &[HttpRequestId],
+		deadline: Option<Timestamp>,
+	) -> Vec<HttpRequestStatus> {
 		(&mut **self).http_response_wait(ids, deadline)
 	}
 
@@ -514,7 +526,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
@@ -533,10 +545,7 @@ pub struct LimitedExternalities<T> {
 impl<T> LimitedExternalities<T> {
 	/// Create new externalities limited to given `capabilities`.
 	pub fn new(capabilities: Capabilities, externalities: T) -> Self {
-		Self {
-			capabilities,
-			externalities,
-		}
+		Self { capabilities, externalities }
 	}
 
 	/// Check if given capability is allowed.
@@ -575,12 +584,22 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.random_seed()
 	}
 
-	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
+	fn http_request_start(
+		&mut self,
+		method: &str,
+		uri: &str,
+		meta: &[u8],
+	) -> Result<HttpRequestId, ()> {
 		self.check(Capability::Http, "http_request_start");
 		self.externalities.http_request_start(method, uri, meta)
 	}
 
-	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+	fn http_request_add_header(
+		&mut self,
+		request_id: HttpRequestId,
+		name: &str,
+		value: &str,
+	) -> Result<(), ()> {
 		self.check(Capability::Http, "http_request_add_header");
 		self.externalities.http_request_add_header(request_id, name, value)
 	}
@@ -589,13 +608,17 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		self.check(Capability::Http, "http_request_write_body");
 		self.externalities.http_request_write_body(request_id, chunk, deadline)
 	}
 
-	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
+	fn http_response_wait(
+		&mut self,
+		ids: &[HttpRequestId],
+		deadline: Option<Timestamp>,
+	) -> Vec<HttpRequestStatus> {
 		self.check(Capability::Http, "http_response_wait");
 		self.externalities.http_response_wait(ids, deadline)
 	}
@@ -609,7 +632,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
@@ -717,7 +740,8 @@ impl<T: DbExternalities> DbExternalities for LimitedExternalities<T> {
 		new_value: &[u8],
 	) -> bool {
 		self.check(Capability::OffchainDbWrite, "local_storage_compare_and_set");
-		self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
+		self.externalities
+			.local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {

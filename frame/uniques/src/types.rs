@@ -27,12 +27,8 @@ pub(super) type ClassDetailsFor<T, I> =
 pub(super) type InstanceDetailsFor<T, I> =
 	InstanceDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 
-
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct ClassDetails<
-	AccountId,
-	DepositBalance,
-> {
+pub struct ClassDetails<AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
 	/// Can mint tokens.

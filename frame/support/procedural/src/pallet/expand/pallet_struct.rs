@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, expand::merge_where_clauses, parse::helper::get_doc_literals};
+use crate::pallet::{expand::merge_where_clauses, parse::helper::get_doc_literals, Def};
 
 /// * Add derive trait on Pallet
 /// * Implement GetPalletVersion on Pallet
@@ -104,29 +104,25 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 
 	// Depending on the flag `generate_storage_info` we use partial or full storage info from
 	// storage.
-	let (
-		storage_info_span,
-		storage_info_trait,
-		storage_info_method,
-	) = if let Some(span) = def.pallet_struct.generate_storage_info {
-		(
-			span,
-			quote::quote_spanned!(span => StorageInfoTrait),
-			quote::quote_spanned!(span => storage_info),
-		)
-	} else {
-		let span = def.pallet_struct.attr_span;
-		(
-			span,
-			quote::quote_spanned!(span => PartialStorageInfoTrait),
-			quote::quote_spanned!(span => partial_storage_info),
-		)
-	};
+	let (storage_info_span, storage_info_trait, storage_info_method) =
+		if let Some(span) = def.pallet_struct.generate_storage_info {
+			(
+				span,
+				quote::quote_spanned!(span => StorageInfoTrait),
+				quote::quote_spanned!(span => storage_info),
+			)
+		} else {
+			let span = def.pallet_struct.attr_span;
+			(
+				span,
+				quote::quote_spanned!(span => PartialStorageInfoTrait),
+				quote::quote_spanned!(span => partial_storage_info),
+			)
+		};
 
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
-	let storage_cfg_attrs = &def.storages.iter()
-		.map(|storage| &storage.cfg_attrs)
-		.collect::<Vec<_>>();
+	let storage_cfg_attrs =
+		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
 
 	let storage_info = quote::quote_spanned!(storage_info_span =>
 		impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
