@@ -1379,15 +1379,13 @@ fn metadata() {
 			name: "Example2",
 			storage: Some(PalletStorageMetadata {
 				prefix: "Example2",
-				entries: vec![
-					StorageEntryMetadata {
-						name: "SomeValue",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<Vec<u32>>()),
-						default: vec![0],
-						docs: vec![],
-					}
-				]
+				entries: vec![StorageEntryMetadata {
+					name: "SomeValue",
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(scale_info::meta_type::<Vec<u32>>()),
+					default: vec![0],
+					docs: vec![],
+				}],
 			}),
 			calls: Some(scale_info::meta_type::<pallet2::Call<Runtime>>().into()),
 			event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet2::Event>() }),
