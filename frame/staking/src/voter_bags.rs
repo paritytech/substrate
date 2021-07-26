@@ -1197,12 +1197,7 @@ mod voter_list {
 
 			// when account 31 bonds extra and needs to be moved to a non-existing higher bag
 			// (we can't call bond_extra, because that implicitly calls update_position_for)
-			Balances::make_free_balance_be(&31, 11);
-			let controller = Staking::bonded(&31).unwrap();
-			let mut ledger = Staking::ledger(&controller).unwrap();
-			ledger.total = 11;
-			ledger.active = 11;
-			Staking::update_ledger(&controller, &ledger);
+			set_ledger_and_free_balance(&31, 11);
 
 			assert!(node_31.is_misplaced(&weight_of));
 			assert_eq!(weight_of(&31), 11);
@@ -1219,12 +1214,8 @@ mod voter_list {
 				None,
 			));
 
-			// when account 31 bonds extra and needs to be moved to an existent higher bag
-			Balances::make_free_balance_be(&31, 1_000);
-			let mut ledger = Staking::ledger(&controller).unwrap();
-			ledger.total = 61;
-			ledger.active = 61;
-			Staking::update_ledger(&controller, &ledger);
+			// when account 31 bonds extra and needs to be moved to an existing higher bag
+			set_ledger_and_free_balance(&31, 61);
 
 			// then updating positions moves it to the correct bag
 			let node_31 = Node::<Test>::from_id(&31).unwrap();
@@ -1239,10 +1230,7 @@ mod voter_list {
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 
 			// when account 31 bonds extra but should not change bags
-			let mut ledger = Staking::ledger(&controller).unwrap();
-			ledger.total = 1_000;
-			ledger.active = 1_000;
-			Staking::update_ledger(&controller, &ledger);
+			set_ledger_and_free_balance(&31, 1_000);
 
 			// then nothing changes
 			let node_31 = Node::<Test>::from_id(&31).unwrap();

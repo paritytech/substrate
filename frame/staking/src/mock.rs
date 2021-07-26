@@ -857,3 +857,14 @@ pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
 pub(crate) fn get_voter_list_as_voters() -> Vec<voter_bags::Voter<AccountId>> {
 	VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>()
 }
+
+// Useful for when you want to change the effectively bonded value but you don't want to use
+// the bond extrinsics because they implicitly rebag.
+pub (crate) fn set_ledger_and_free_balance(account: &AccountId, value: Balance) {
+	Balances::make_free_balance_be(account, value);
+	let controller = Staking::bonded(account).unwrap();
+	let mut ledger = Staking::ledger(&controller).unwrap();
+	ledger.total = value;
+	ledger.active = value;
+	Staking::update_ledger(&controller, &ledger);
+}
