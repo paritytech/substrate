@@ -26,10 +26,7 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::parse::Error;
 
-mod docs;
 pub mod syn_ext;
-
-pub use docs::get_doc_literals;
 
 // FIXME #1569, remove the following functions, which are copied from sp-api-macros
 use proc_macro2::{Span, TokenStream};
@@ -102,4 +99,22 @@ pub fn clean_type_string(input: &str) -> String {
 		.replace(" <", "<")
 		.replace("< ", "<")
 		.replace(" >", ">")
+}
+
+/// Return all doc attributes literals found.
+pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+					Some(meta.lit)
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		})
+		.collect()
 }

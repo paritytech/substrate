@@ -252,8 +252,3 @@ try-runtime = [
 contracts-unstable-interface = [
 	"pallet-contracts/unstable-interface"
 ]
-# Enable docs to be included in metadata
-metadata-docs = [
-	"frame-support/metadata-docs",
-	"scale-info/docs"
-]

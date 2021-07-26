@@ -2334,10 +2334,7 @@ macro_rules! __impl_module_constants_metadata {
 							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(
 								Default::default()
 							).default_byte(),
-							#[cfg(feature = "metadata-docs")]
 							docs: $crate::sp_std::vec![ $( $doc_attr ),* ],
-							#[cfg(not(feature = "metadata-docs"))]
-							docs: $crate::sp_std::vec![],
 						}
 					),*
 				]

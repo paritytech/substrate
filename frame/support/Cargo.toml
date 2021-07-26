@@ -41,7 +41,7 @@ frame-system = { version = "4.0.0-dev", path = "../system" }
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 
 [features]
-default = ["std", "metadata-docs"]
+default = ["std"]
 std = [
 	"once_cell",
 	"serde",
@@ -59,10 +59,6 @@ std = [
 	"sp-state-machine",
 	"frame-support-procedural/std",
 	"log/std",
-]
-metadata-docs = [
-	"frame-support-procedural/metadata-docs",
-	"scale-info/docs"
 ]
 runtime-benchmarks = []
 try-runtime = []
