@@ -105,7 +105,7 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-max-payload")]
 	pub rpc_max_payload: Option<usize>,
 
-	/// Listen to all Prometheus data source interfaces.
+	/// Expose Prometheus exporter on all interfaces.
 	///
 	/// Default is local.
 	#[structopt(long = "prometheus-external")]
@@ -140,11 +140,11 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify Prometheus data source server TCP Port.
+	/// Specify Prometheus exporter TCP Port.
 	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
-	/// Do not expose a Prometheus metric endpoint.
+	/// Do not expose a Prometheus exporter endpoint.
 	///
 	/// Prometheus metric endpoint is enabled by default.
 	#[structopt(long = "no-prometheus")]
