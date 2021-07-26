@@ -1294,8 +1294,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(consumed_weight)` if operation is okay.
 	pub fn create_snapshot() -> Result<Weight, ElectionError> {
-		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
+		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
+		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
 		let (targets, w1) =
 			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;

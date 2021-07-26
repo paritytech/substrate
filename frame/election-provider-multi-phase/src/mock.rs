@@ -378,7 +378,7 @@ impl crate::Config for Runtime {
 	type OnChainAccuracy = Perbill;
 	type Fallback = Fallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type CompactSolution = TestNposSolution;
+	type Solution = TestNposSolution;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -396,7 +396,7 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as Solution>::LIMIT as u32;
+	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as SolutionBase>::LIMIT as u32;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		let targets = Targets::get();
 
