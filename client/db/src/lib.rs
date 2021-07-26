@@ -1199,7 +1199,16 @@ impl<Block: BlockT> Backend<Block> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
 
+		let (best_number, best_hash) = best_to;
+
 		let meta = self.blockchain.meta.read();
+
+		if meta.best_number > best_number &&
+			(meta.best_number - best_number).saturated_into::<u64>() >
+				self.canonicalization_delay
+		{
+			return Err(sp_blockchain::Error::SetHeadTooOld.into())
+		}
 
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
@@ -1233,13 +1242,13 @@ impl<Block: BlockT> Backend<Block> {
 			}
 		}
 
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_number, &best_hash)?;
 		transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, lookup_key);
 		utils::insert_number_to_key_mapping(
 			transaction,
 			columns::KEY_LOOKUP,
-			best_to.0,
-			best_to.1,
+			best_number,
+			best_hash,
 		)?;
 
 		Ok((enacted, retracted))
@@ -1534,6 +1543,27 @@ impl<Block: BlockT> Backend<Block> {
 				hash, number, is_best, operation.commit_state, existing_header,
 			);
 
+			self.state_usage.merge_sm(operation.old_state.usage_info());
+			// release state reference so that it can be finalized
+			let cache = operation.old_state.into_cache_changes();
+
+			if finalized {
+				// TODO: ensure best chain contains this block.
+				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
+				self.note_finalized(
+					&mut transaction,
+					true,
+					header,
+					hash,
+					&mut changes_trie_cache_ops,
+					&mut finalization_displaced_leaves,
+					operation.commit_state,
+				)?;
+			} else {
+				// canonicalize blocks which are old enough, regardless of finality.
+				self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
+			}
+
 			if !existing_header {
 				let changes_trie_config_update = operation.changes_trie_config_update;
 				changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
@@ -1550,37 +1580,14 @@ impl<Block: BlockT> Backend<Block> {
 					changes_trie_cache_ops,
 				)?);
 
-				self.state_usage.merge_sm(operation.old_state.usage_info());
-				// release state reference so that it can be finalized
-				let cache = operation.old_state.into_cache_changes();
-
-				if finalized {
-					// TODO: ensure best chain contains this block.
-					self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-					self.note_finalized(
-						&mut transaction,
-						true,
-						header,
-						hash,
-						&mut changes_trie_cache_ops,
-						&mut finalization_displaced_leaves,
-						operation.commit_state,
-					)?;
-				} else {
-					// canonicalize blocks which are old enough, regardless of finality.
-					self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
-				}
-
-				let displaced_leaf = {
+				{
 					let mut leaves = self.blockchain.leaves.write();
-					let displaced_leaf = leaves.import(hash, number, parent_hash);
+					leaves.import(hash, number, parent_hash);
 					leaves.prepare_transaction(
 						&mut transaction,
 						columns::META,
 						meta_keys::LEAF_PREFIX,
 					);
-
-					displaced_leaf
 				};
 
 				let mut children = children::read_children(
@@ -1599,28 +1606,17 @@ impl<Block: BlockT> Backend<Block> {
 					parent_hash,
 					children,
 				);
-
-				meta_updates.push(MetaUpdate {
-					hash,
-					number,
-					is_best: pending_block.leaf_state.is_best(),
-					is_finalized: finalized,
-					with_state: operation.commit_state,
-				});
-
-				Some((
-					pending_block.header,
-					number,
-					hash,
-					enacted,
-					retracted,
-					displaced_leaf,
-					is_best,
-					cache,
-				))
-			} else {
-				None
 			}
+
+			meta_updates.push(MetaUpdate {
+				hash,
+				number,
+				is_best: pending_block.leaf_state.is_best(),
+				is_finalized: finalized,
+				with_state: operation.commit_state,
+			});
+
+			Some((pending_block.header, number, hash, enacted, retracted, is_best, cache))
 		} else {
 			None
 		};
@@ -1660,17 +1656,7 @@ impl<Block: BlockT> Backend<Block> {
 		// Apply all in-memory state changes.
 		// Code beyond this point can't fail.
 
-		if let Some((
-			header,
-			number,
-			hash,
-			enacted,
-			retracted,
-			_displaced_leaf,
-			is_best,
-			mut cache,
-		)) = imported
-		{
+		if let Some((header, number, hash, enacted, retracted, is_best, mut cache)) = imported {
 			trace!(target: "db", "DB Commit done {:?}", hash);
 			let header_metadata = CachedHeaderMetadata::from(&header);
 			self.blockchain.insert_header_metadata(header_metadata.hash, header_metadata);
@@ -3389,5 +3375,67 @@ pub(crate) mod tests {
 		backend.remove_leaf_block(&prev_hash).unwrap();
 		assert_eq!(None, backend.blockchain().header(BlockId::hash(prev_hash.clone())).unwrap());
 		assert!(!backend.have_state_at(&prev_hash, 1));
+	}
+
+	#[test]
+	fn test_import_existing_block_as_new_head() {
+		let backend: Backend<Block> = Backend::new_test(10, 3);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let block3 = insert_header(&backend, 3, block2, None, Default::default());
+		let block4 = insert_header(&backend, 4, block3, None, Default::default());
+		let block5 = insert_header(&backend, 5, block4, None, Default::default());
+		assert_eq!(backend.blockchain().info().best_hash, block5);
+
+		// Insert 1 as best again. This should fail because canonicalization_delay == 3 and best == 5
+		let header = Header {
+			number: 1,
+			parent_hash: block0,
+			state_root: BlakeTwo256::trie_root(Vec::new()),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
+		assert!(matches!(backend.commit_operation(op), Err(sp_blockchain::Error::SetHeadTooOld)));
+
+		// Insert 2 as best again.
+		let header = Header {
+			number: 2,
+			parent_hash: block1,
+			state_root: BlakeTwo256::trie_root(Vec::new()),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
+		backend.commit_operation(op).unwrap();
+		assert_eq!(backend.blockchain().info().best_hash, block2);
+	}
+
+	#[test]
+	fn test_import_existing_block_as_final() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		let _block2 = insert_header(&backend, 2, block1, None, Default::default());
+		// Genesis is auto finalized, the rest are not.
+		assert_eq!(backend.blockchain().info().finalized_hash, block0);
+
+		// Insert 1 as final again.
+		let header = Header {
+			number: 1,
+			parent_hash: block0,
+			state_root: BlakeTwo256::trie_root(Vec::new()),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
+
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Final).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert_eq!(backend.blockchain().info().finalized_hash, block1);
 	}
 }

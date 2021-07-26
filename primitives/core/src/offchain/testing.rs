@@ -150,7 +150,7 @@ impl OffchainState {
 				panic!("Missing pending request: {:?}.\n\nAll: {:?}", id, self.requests);
 			},
 			Some(req) => {
-				assert_eq!(*req, expected,);
+				assert_eq!(*req, expected);
 				req.response = Some(response.into());
 				req.response_headers = response_headers.into_iter().collect();
 			},

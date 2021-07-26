@@ -512,7 +512,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 			tester
 				.filter_network_events(move |event| match event {
 					Event::WriteNotification(peer, message) => {
-						assert_eq!(peer, id,);
+						assert_eq!(peer, id);
 
 						assert_eq!(
 							message,

@@ -593,7 +593,7 @@ pub(crate) fn current_era() -> EraIndex {
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller,));
+	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
 	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
 }
 
@@ -605,7 +605,7 @@ pub(crate) fn bond_nominator(
 ) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller,));
+	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
 

@@ -193,7 +193,7 @@ fn check_runtime_api_versions() {
 fn mock_runtime_api_has_api() {
 	let mock = MockApi { block: None };
 
-	assert!(mock.has_api::<dyn ApiWithCustomVersion<Block>>(&BlockId::Number(0)).unwrap(),);
+	assert!(mock.has_api::<dyn ApiWithCustomVersion<Block>>(&BlockId::Number(0)).unwrap());
 	assert!(mock.has_api::<dyn Api<Block>>(&BlockId::Number(0)).unwrap());
 }
 
