@@ -22,10 +22,7 @@ use frame_support::{
 	traits::{ConstU32, Get},
 	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use scale_info::{
-	build::{Fields, Variants},
-	Path, Type, TypeInfo,
-};
+use scale_info::{build::{Fields, Variants}, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::{fmt::Debug, iter::once, ops::Add, prelude::*};
 
@@ -275,9 +272,12 @@ impl TypeInfo for IdentityFields {
 	type Identity = Self;
 
 	fn type_info() -> Type {
-		Type::builder().path(Path::new("IdentityFields", module_path!())).composite(
+		Type::builder()
+			.path(Path::new("BitFlags", module_path!()))
+			.type_params(vec![ TypeParameter::new("T", Some(meta_type::<IdentityField>())) ])
+			.composite(
 			Fields::unnamed()
-				.field(|f| f.ty::<IdentityField>().type_name("BitFlags<IdentityField>")),
+				.field(|f| f.ty::<u64>().type_name("IdentityField")),
 		)
 	}
 }
