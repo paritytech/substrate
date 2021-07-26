@@ -8349,7 +8349,7 @@ dependencies = [
 [[package]]
 name = "scale-info"
 version = "0.9.2"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#21b6d3515ef140912f8b6e86bbb6a6d8ba5b6fea"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#ce28c82827c127bc2a581a00934e9270f88893b7"
 dependencies = [
  "bitvec",
  "cfg-if 1.0.0",
@@ -8362,7 +8362,7 @@ dependencies = [
 [[package]]
 name = "scale-info-derive"
 version = "0.6.1"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#21b6d3515ef140912f8b6e86bbb6a6d8ba5b6fea"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#ce28c82827c127bc2a581a00934e9270f88893b7"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",

@@ -127,7 +127,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
-		#[scale_info(skip_type_params(#type_use_gen))]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = true)]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]
