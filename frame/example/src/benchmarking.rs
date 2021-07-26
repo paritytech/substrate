@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
 
 // To actually run this benchmark on pallet-example, we need to put this pallet into the
@@ -33,7 +33,7 @@ use frame_system::RawOrigin;
 
 // Details on using the benchmarks macro can be seen at:
 //   https://substrate.dev/rustdocs/v3.0.0/frame_benchmarking/macro.benchmarks.html
-benchmarks!{
+benchmarks! {
 	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
 	set_dummy_benchmark {
 		// This is the benchmark setup phase

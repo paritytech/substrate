@@ -16,8 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::config::TaskExecutor;
-use crate::task_manager::TaskManager;
+use crate::{config::TaskExecutor, task_manager::TaskManager};
 use futures::{future::FutureExt, pin_mut, select};
 use parking_lot::Mutex;
 use std::{any::Any, sync::Arc, time::Duration};
@@ -205,7 +204,9 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
 	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	spawn_essential_handle.spawn("task3", async { panic!("task failed") });
-	runtime.block_on(task_manager.future()).expect_err("future()'s Result must be Err");
+	runtime
+		.block_on(task_manager.future())
+		.expect_err("future()'s Result must be Err");
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
@@ -265,7 +266,9 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 4);
 	spawn_essential_handle_child_1.spawn("task5", async { panic!("task failed") });
-	runtime.block_on(task_manager.future()).expect_err("future()'s Result must be Err");
+	runtime
+		.block_on(task_manager.future())
+		.expect_err("future()'s Result must be Err");
 	assert_eq!(drop_tester, 4);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);

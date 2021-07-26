@@ -28,24 +28,24 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use codec::{Decode, Encode};
 use frame_support::{
-	traits::{ReservableCurrency, Currency, OnUnbalanced},
 	dispatch::{Dispatchable, GetDispatchInfo},
+	traits::{Currency, OnUnbalanced, ReservableCurrency},
 };
-use sp_std::prelude::*;
-use sp_std::{result};
-use codec::{Encode, Decode};
-use sp_runtime::traits::{Saturating, BlakeTwo256, Hash, Zero, One};
+use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
+use sp_std::{prelude::*, result};
 use sp_transaction_storage_proof::{
-	TransactionStorageProof, InherentError,
-	random_chunk, encode_index,
-	CHUNK_SIZE, INHERENT_IDENTIFIER, DEFAULT_STORAGE_PERIOD,
+	encode_index, random_chunk, InherentError, TransactionStorageProof, CHUNK_SIZE,
+	DEFAULT_STORAGE_PERIOD, INHERENT_IDENTIFIER,
 };
 
 /// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>
-	::NegativeImbalance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
@@ -76,16 +76,19 @@ fn num_chunks(bytes: u32) -> u32 {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// A dispatchable call.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
+		type Call: Parameter
+			+ Dispatchable<Origin = Self::Origin>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		/// Handler for the unbalanced decrease when fees are burned.
@@ -145,8 +148,7 @@ pub mod pallet {
 
 		fn on_finalize(n: T::BlockNumber) {
 			assert!(
-				<ProofChecked<T>>::take()
-				|| {
+				<ProofChecked<T>>::take() || {
 					// Proof is not required for early or empty blocks.
 					let number = <frame_system::Pallet<T>>::block_number();
 					let period = <StoragePeriod<T>>::get();
@@ -174,12 +176,12 @@ pub mod pallet {
 		/// Additionally contains a DB write.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::store(data.len() as u32))]
-		pub fn store(
-			origin: OriginFor<T>,
-			data: Vec<u8>,
-		) -> DispatchResult {
+		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
 			ensure!(data.len() > 0, Error::<T>::EmptyTransaction);
-			ensure!(data.len() <= MaxTransactionSize::<T>::get() as usize, Error::<T>::TransactionTooLarge);
+			ensure!(
+				data.len() <= MaxTransactionSize::<T>::get() as usize,
+				Error::<T>::TransactionTooLarge
+			);
 			let sender = ensure_signed(origin)?;
 			Self::apply_fee(sender, data.len() as u32)?;
 
@@ -189,8 +191,8 @@ pub mod pallet {
 			let root = sp_io::trie::blake2_256_ordered_root(chunks);
 
 			let content_hash = sp_io::hashing::blake2_256(&data);
-			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().ok_or_else(
-				|| Error::<T>::BadContext)?;
+			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index()
+				.ok_or_else(|| Error::<T>::BadContext)?;
 			sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 
 			let mut index = 0;
@@ -277,11 +279,14 @@ pub mod pallet {
 			let selected_chunk_index = random_chunk(parent_hash.as_ref(), total_chunks);
 			let (info, chunk_index) = match <Transactions<T>>::get(target_number) {
 				Some(infos) => {
-					let index = match infos.binary_search_by_key(&selected_chunk_index, |info| info.block_chunks) {
+					let index = match infos
+						.binary_search_by_key(&selected_chunk_index, |info| info.block_chunks)
+					{
 						Ok(index) => index,
 						Err(index) => index,
 					};
-					let info = infos.get(index).ok_or_else(|| Error::<T>::MissingStateData)?.clone();
+					let info =
+						infos.get(index).ok_or_else(|| Error::<T>::MissingStateData)?.clone();
 					let chunks = num_chunks(info.size);
 					let prev_chunks = info.block_chunks - chunks;
 					(info, selected_chunk_index - prev_chunks)
@@ -317,23 +322,13 @@ pub mod pallet {
 	/// Collection of transaction metadata by block number.
 	#[pallet::storage]
 	#[pallet::getter(fn transaction_roots)]
-	pub(super) type Transactions<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::BlockNumber,
-		Vec<TransactionInfo>,
-		OptionQuery,
-	>;
+	pub(super) type Transactions<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::BlockNumber, Vec<TransactionInfo>, OptionQuery>;
 
 	/// Count indexed chunks for each block.
 	#[pallet::storage]
-	pub(super) type ChunkCount<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::BlockNumber,
-		u32,
-		ValueQuery,
-	>;
+	pub(super) type ChunkCount<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::BlockNumber, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn byte_fee)]
@@ -362,12 +357,12 @@ pub mod pallet {
 
 	// Intermediates
 	#[pallet::storage]
-	pub(super) type BlockTransactions<T: Config> = StorageValue<_, Vec<TransactionInfo>, ValueQuery>;
+	pub(super) type BlockTransactions<T: Config> =
+		StorageValue<_, Vec<TransactionInfo>, ValueQuery>;
 
 	/// Was the proof checked in this block?
 	#[pallet::storage]
 	pub(super) type ProofChecked<T: Config> = StorageValue<_, bool, ValueQuery>;
-
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -409,11 +404,16 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let proof = data.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER).unwrap_or(None);
+			let proof = data
+				.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER)
+				.unwrap_or(None);
 			proof.map(Call::check_proof)
 		}
 
-		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
+		fn check_inherent(
+			_call: &Self::Call,
+			_data: &InherentData,
+		) -> result::Result<(), Self::Error> {
 			Ok(())
 		}
 

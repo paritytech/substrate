@@ -25,8 +25,8 @@ fn main() {
 mod cli {
 	include!("src/cli.rs");
 
-	use std::{fs, env, path::Path};
 	use sc_cli::structopt::clap::Shell;
+	use std::{env, fs, path::Path};
 	use substrate_build_script_utils::{generate_cargo_keys, rerun_if_git_head_changed};
 
 	pub fn main() {
@@ -51,9 +51,12 @@ mod cli {
 			Some(dir) => dir,
 		};
 		let path = Path::new(&outdir)
-			.parent().unwrap()
-			.parent().unwrap()
-			.parent().unwrap()
+			.parent()
+			.unwrap()
+			.parent()
+			.unwrap()
+			.parent()
+			.unwrap()
 			.join("completion-scripts");
 
 		fs::create_dir(&path).ok();
