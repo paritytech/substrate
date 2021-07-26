@@ -203,7 +203,7 @@ pub mod pallet {
 
 			Self::do_proxy(def, real, *call);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
@@ -268,7 +268,7 @@ pub mod pallet {
 			let (_, old_deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&who, old_deposit);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
@@ -317,7 +317,7 @@ pub mod pallet {
 			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
 			Self::deposit_event(Event::AnonymousCreated(anonymous, who, proxy_type, index));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Removes a previously spawned anonymous proxy.
@@ -358,7 +358,7 @@ pub mod pallet {
 			let (_, deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&spawner, deposit);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Publish the hash of a proxy-call that will be made in the future.
@@ -417,7 +417,7 @@ pub mod pallet {
 			})?;
 			Self::deposit_event(Event::Announced(real, who, call_hash));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove a given announcement.
@@ -447,7 +447,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove the given announcement of a delegate.
@@ -479,7 +479,7 @@ pub mod pallet {
 				ann.real != who || ann.call_hash != call_hash
 			})?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Dispatch the given `call` from an account that the sender is authorized for through
@@ -528,7 +528,7 @@ pub mod pallet {
 
 			Self::do_proxy(def, real, *call);
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -654,7 +654,7 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(delegator, *deposit - new_deposit);
 			}
 			*deposit = new_deposit;
-			Ok(().into())
+			Ok(())
 		})
 	}
 
@@ -686,7 +686,7 @@ impl<T: Config> Pallet<T> {
 			if !proxies.is_empty() {
 				*x = Some((proxies, new_deposit))
 			}
-			Ok(().into())
+			Ok(())
 		})
 	}
 
