@@ -64,7 +64,10 @@ pub trait OnFinalize<BlockNumber> {
 /// Implementing this lets you express what should happen for your pallet before
 /// block finalization (see `on_finalize` hook) in case any remaining weight is left.
 pub trait OnIdle<BlockNumber: 'static> {
-	const ON_IDLE_FUNCTIONS: &'static [fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight] = &[Self::on_idle];
+	const ON_IDLE_FUNCTIONS: &'static [fn(
+		BlockNumber,
+		crate::weights::Weight,
+	) -> crate::weights::Weight] = &[Self::on_idle];
 
 	/// The block is being finalized.
 	/// Implement to have something happen in case there is leftover weight.
@@ -82,15 +85,16 @@ pub trait OnIdle<BlockNumber: 'static> {
 }
 
 #[impl_for_tuples(30)]
-impl<BlockNumber:'static + Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
-
+impl<BlockNumber: 'static + Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 	for_tuples!( const ON_IDLE_FUNCTIONS : &'static [fn(BlockNumber, crate::weights::Weight) -> crate::weights::Weight] = &[ #(Tuple::on_idle),* ]; );
 
-	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {;
+	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
 		let mut weight = 0;
 		let len = <Self as OnIdle<BlockNumber>>::ON_IDLE_FUNCTIONS.len();
 		let start_index = n % (len as u32).into();
-		let start_index = start_index.try_into().unwrap_or_else(|_| panic!("Can not convert BlockNumber to usize"));
+		let start_index = start_index
+			.try_into()
+			.unwrap_or_else(|_| panic!("Can not convert BlockNumber to usize"));
 		for on_idle in Self::ON_IDLE_FUNCTIONS.iter().cycle().skip(start_index).take(len) {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
 			weight = weight.saturating_add(on_idle(n, adjusted_remaining_weight));
