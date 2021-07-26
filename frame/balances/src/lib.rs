@@ -1569,8 +1569,11 @@ where
 				},
 			) {
 				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(Event::Slashed(who.clone(), value.saturating_sub(not_slashed)));
-					return (imbalance, not_slashed);
+					Self::deposit_event(Event::Slashed(
+						who.clone(),
+						value.saturating_sub(not_slashed),
+					));
+					return (imbalance, not_slashed)
 				},
 				Err(_) => (),
 			}
@@ -1815,8 +1818,11 @@ where
 				(NegativeImbalance::new(actual), value - actual)
 			}) {
 				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(Event::Slashed(who.clone(), value.saturating_sub(not_slashed)));
-					return (imbalance, not_slashed);
+					Self::deposit_event(Event::Slashed(
+						who.clone(),
+						value.saturating_sub(not_slashed),
+					));
+					return (imbalance, not_slashed)
 				},
 				Err(_) => (),
 			}
