@@ -92,9 +92,9 @@ impl<BlockNumber: 'static + Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for
 		let mut weight = 0;
 		let len = <Self as OnIdle<BlockNumber>>::ON_IDLE_FUNCTIONS.len();
 		let start_index = n % (len as u32).into();
-		let start_index = start_index
-			.try_into()
-			.expect("`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed");
+		let start_index = start_index.try_into().unwrap_or_else(|_| {
+			panic!("`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed");
+		});
 		for on_idle in Self::ON_IDLE_FUNCTIONS.iter().cycle().skip(start_index).take(len) {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
 			weight = weight.saturating_add(on_idle(n, adjusted_remaining_weight));
