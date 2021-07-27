@@ -539,7 +539,6 @@ where
 {
 	let cache = generate_cache(candidates.iter().cloned());
 	move |who| {
-		println! {"CALLED who: {:?}, cache {:?}", who, cache.get(who)};
 		if cache.get(who).is_none() {
 			println!("WARNING: target {} will raise InvalidIndex", who);
 		}

@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Traits for the npos-election operations.
+
 use crate::{
 	Assignment, ElectionScore, Error, EvaluateSupport, ExtendedBalance, IndexAssignmentOf,
 	VoteWeight,
