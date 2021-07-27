@@ -8,8 +8,8 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect(
-		"Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.",
+		"Development wasm binary is not available. Testing is only supported with the flag \
+		 disabled.",
 	)
 }
 
