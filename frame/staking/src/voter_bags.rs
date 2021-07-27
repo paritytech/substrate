@@ -994,7 +994,7 @@ mod voter_list {
 				//   ^^ note the order of insertion in genesis!
 			);
 
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])],);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
 		})
 	}
 
@@ -1217,7 +1217,6 @@ mod voter_list {
 			// nominator and validator counters are not updated at this level of the api
 			assert_eq!(crate::CounterForValidators::<Test>::get(), 3);
 			assert_eq!(crate::CounterForNominators::<Test>::get(), 1);
-
 		});
 	}
 
