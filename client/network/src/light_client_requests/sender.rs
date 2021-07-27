@@ -902,7 +902,7 @@ mod tests {
 
 		let OutEvent::SendRequest { target, pending_response, .. } =
 			block_on(sender.next()).unwrap();
-		assert!(target == peer0 || target == peer1, "Expect request to originate from known peer.",);
+		assert!(target == peer0 || target == peer1, "Expect request to originate from known peer.");
 
 		// And we should have one busy peer.
 		assert!({

@@ -314,9 +314,9 @@ fn deposit_event_topics() {
 
 		// Check that the topic-events mapping reflects the deposited topics.
 		// Note that these are indexes of the events.
-		assert_eq!(System::event_topics(&topics[0]), vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],);
-		assert_eq!(System::event_topics(&topics[1]), vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],);
-		assert_eq!(System::event_topics(&topics[2]), vec![(BLOCK_NUMBER, 0)],);
+		assert_eq!(System::event_topics(&topics[0]), vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)]);
+		assert_eq!(System::event_topics(&topics[1]), vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)]);
+		assert_eq!(System::event_topics(&topics[2]), vec![(BLOCK_NUMBER, 0)]);
 	});
 }
 
@@ -343,12 +343,12 @@ fn prunes_block_hash_mappings() {
 
 		// first 5 block hashes are pruned
 		for n in 0..5 {
-			assert_eq!(System::block_hash(n), H256::zero(),);
+			assert_eq!(System::block_hash(n), H256::zero());
 		}
 
 		// the remaining 10 are kept
 		for n in 5..15 {
-			assert_eq!(System::block_hash(n), [n as u8; 32].into(),);
+			assert_eq!(System::block_hash(n), [n as u8; 32].into());
 		}
 	})
 }

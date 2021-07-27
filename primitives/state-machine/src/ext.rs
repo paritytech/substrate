@@ -1118,7 +1118,7 @@ mod tests {
 		);
 
 		assert_eq!(ext.child_storage(child_info, &[20]), None);
-		assert_eq!(ext.child_storage_hash(child_info, &[20]), None,);
+		assert_eq!(ext.child_storage_hash(child_info, &[20]), None);
 
 		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![31]));
 		assert_eq!(

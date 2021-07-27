@@ -536,7 +536,7 @@ mod test {
 				.unwrap();
 		}
 
-		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), None,);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), None);
 
 		// should perform the migration
 		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -547,7 +547,7 @@ mod test {
 		)
 		.unwrap();
 
-		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3),);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3));
 
 		let PersistentData { authority_set, set_state, .. } =
 			load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -629,7 +629,7 @@ mod test {
 				.unwrap();
 		}
 
-		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(1),);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(1));
 
 		// should perform the migration
 		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -640,7 +640,7 @@ mod test {
 		)
 		.unwrap();
 
-		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3),);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3));
 
 		let PersistentData { authority_set, set_state, .. } =
 			load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -719,7 +719,7 @@ mod test {
 				.unwrap();
 		}
 
-		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(2),);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(2));
 
 		// should perform the migration
 		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -730,7 +730,7 @@ mod test {
 		)
 		.unwrap();
 
-		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3),);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3));
 
 		let PersistentData { authority_set, .. } = load_persistent::<
 			substrate_test_runtime_client::runtime::Block,

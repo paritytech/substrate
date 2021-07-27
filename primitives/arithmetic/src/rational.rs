@@ -389,7 +389,7 @@ mod tests {
 			r(7, MAX128).checked_sub(r(MAX128, MAX128)),
 			Err("overflow while subtracting numerators"),
 		);
-		assert_eq!(r(1, 10).checked_sub(r(2, 10)), Err("overflow while subtracting numerators"),);
+		assert_eq!(r(1, 10).checked_sub(r(2, 10)), Err("overflow while subtracting numerators"));
 	}
 
 	#[test]
@@ -433,8 +433,8 @@ mod tests {
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 
-		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1,);
-		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3,);
+		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1);
+		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3);
 
 		assert_eq!(
 			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
@@ -449,7 +449,7 @@ mod tests {
 			multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
 			73786976294838206461,
 		);
-		assert_eq!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000,);
+		assert_eq!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000);
 
 		assert_eq!(
 			multiply_by_rational(
@@ -464,8 +464,8 @@ mod tests {
 
 	#[test]
 	fn multiply_by_rational_a_b_are_interchangeable() {
-		assert_eq!(multiply_by_rational(10, MAX128, MAX128 / 2), Ok(20),);
-		assert_eq!(multiply_by_rational(MAX128, 10, MAX128 / 2), Ok(20),);
+		assert_eq!(multiply_by_rational(10, MAX128, MAX128 / 2), Ok(20));
+		assert_eq!(multiply_by_rational(MAX128, 10, MAX128 / 2), Ok(20));
 	}
 
 	#[test]

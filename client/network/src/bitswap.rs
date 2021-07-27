@@ -230,7 +230,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		let wantlist = match request.wantlist {
 			Some(wantlist) => wantlist,
 			None => {
-				debug!(target: LOG_TARGET, "Unexpected bitswap message from {}", peer,);
+				debug!(target: LOG_TARGET, "Unexpected bitswap message from {}", peer);
 				return
 			},
 		};

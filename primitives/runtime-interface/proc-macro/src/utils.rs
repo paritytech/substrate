@@ -116,14 +116,14 @@ pub fn create_exchangeable_host_function_ident(name: &Ident) -> Ident {
 /// Create the host function identifier for the given function name.
 pub fn create_host_function_ident(name: &Ident, version: u32, trait_name: &Ident) -> Ident {
 	Ident::new(
-		&format!("ext_{}_{}_version_{}", trait_name.to_string().to_snake_case(), name, version,),
+		&format!("ext_{}_{}_version_{}", trait_name.to_string().to_snake_case(), name, version),
 		Span::call_site(),
 	)
 }
 
 /// Create the host function identifier for the given function name.
 pub fn create_function_ident_with_version(name: &Ident, version: u32) -> Ident {
-	Ident::new(&format!("{}_version_{}", name, version,), Span::call_site())
+	Ident::new(&format!("{}_version_{}", name, version), Span::call_site())
 }
 
 /// Returns the function arguments of the given `Signature`, minus any `self` arguments.
