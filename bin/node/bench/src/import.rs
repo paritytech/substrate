@@ -139,7 +139,8 @@ impl core::Benchmark for ImportBenchmark {
 						// we have 1 unsigned and the rest are signed in the block
 						// those 7 events per signed are:
 						//    - withdraw (Balances::Withdraw) for charging the transaction fee
-						//    - new account (System::NewAccount) as we always transfer fund to non-existant account
+						//    - new account (System::NewAccount) as we always transfer fund to
+						//      non-existent account
 						//    - endowed (Balances::Endowed) for this new account
 						//    - successful transfer (Event::Transfer) for this transfer operation
 						//    - 2x deposit (Balances::Deposit and Treasury::Deposit) for depositing
