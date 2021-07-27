@@ -23,20 +23,23 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
 
-mod from_assignment_helpers;
 mod codec;
+mod from_assignment_helpers;
 mod index_assignment;
 mod multi_page;
 mod single_page;
 
+/// Get the name of a filed based on voter count.
 pub(crate) fn vote_filed(n: usize) -> Ident {
 	quote::format_ident!("votes{}", n)
 }
 
+/// Get the name of a filed based on pae count.
 pub(crate) fn page_field(page: u8) -> Ident {
 	quote::format_ident!("page{}", page)
 }
 
+/// Generate a `syn::Error`.
 pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 	syn::Error::new(Span::call_site(), message)
 }
