@@ -3827,36 +3827,43 @@ fn on_finalize_weight_is_nonzero() {
 
 // end-to-end nodes of the voter bags operation.
 mod voter_bags {
+	use super::Origin;
 	use crate::{mock::*, ValidatorPrefs};
 	use frame_support::{assert_ok, traits::Currency};
-	use super::Origin;
 
 	#[test]
 	fn insert_and_remove_works() {
 		// we test insert/remove indirectly via `validate`, `nominate`, and chill
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
 
-		// given
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
+			// `bond`
+			bond(42, 43, 2_000);
+			// does not insert the voter
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
 
-		// `bond`
-		bond(42, 43, 2_000);
-		// does not insert the voter
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
+			// `validate`
+			assert_ok!(Staking::validate(Origin::signed(43).into(), ValidatorPrefs::default()));
+			// moves the voter into a bag
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
+			);
 
-		// `validate`
-		assert_ok!(Staking::validate(Origin::signed(43).into(), ValidatorPrefs::default()));
-		// moves the voter into a bag
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]);
+			// `nominate`-ing, but not changing active stake (which implicitly calls remove)
+			assert_ok!(Staking::nominate(Origin::signed(43), vec![11]));
+			// does not change the voters position
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
+			);
 
-		// `nominate`-ing, but not changing active stake (which implicitly calls remove)
-		assert_ok!(Staking::nominate(Origin::signed(43), vec![11]));
-		// does not change the voters position
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]);
-
-		// `chill`
-		assert_ok!(Staking::chill(Origin::signed(43)));
-		// removes the voter
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![])]);
+			// `chill`
+			assert_ok!(Staking::chill(Origin::signed(43)));
+			// removes the voter
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![])]);
+		});
 	}
 
 	#[test]
@@ -3871,13 +3878,19 @@ mod voter_bags {
 
 			// increase stake and implicitly rebag with `bond_extra` to the level of non-existent bag
 			assert_ok!(Staking::bond_extra(Origin::signed(42), 1_980)); // 20 + 1_980 = 2_000
-			assert_eq!(get_bags(), vec![(10, vec![31]), (20, vec![]), (1000, vec![11, 21, 101]), (2000, vec![42])]);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (20, vec![]), (1000, vec![11, 21, 101]), (2000, vec![42])]
+			);
 
 			// decrease stake within the range of the current bag
 			assert_ok!(Staking::unbond(Origin::signed(43), 999)); // 2000 - 999 = 1001
 			assert_ok!(Staking::rebag(Origin::signed(43), 42));
 			// does not change bags
-			assert_eq!(get_bags(), vec![(10, vec![31]), (20, vec![]), (1000, vec![11, 21, 101]), (2000, vec![42])]);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (20, vec![]), (1000, vec![11, 21, 101]), (2000, vec![42])]
+			);
 
 			// reduce stake to the level of a non-existent bag
 			assert_ok!(Staking::unbond(Origin::signed(43), 971)); // 1001 - 971 = 30
@@ -3885,7 +3898,13 @@ mod voter_bags {
 			// creates the bag and moves the voter into it
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![31]), (20, vec![]), (30, vec![42]), (1000, vec![11, 21, 101]), (2000, vec![])]
+				vec![
+					(10, vec![31]),
+					(20, vec![]),
+					(30, vec![42]),
+					(1000, vec![11, 21, 101]),
+					(2000, vec![])
+				]
 			);
 
 			// increase stake by `rebond`-ing to the level of a pre-existing bag
@@ -3894,87 +3913,17 @@ mod voter_bags {
 			// moves the voter to that bag
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![31]), (20, vec![]), (30, vec![]), (1000, vec![11, 21, 101, 42]), (2000, vec![])]
+				vec![
+					(10, vec![31]),
+					(20, vec![]),
+					(30, vec![]),
+					(1000, vec![11, 21, 101, 42]),
+					(2000, vec![])
+				]
 			);
 		});
 	}
 }
-/*
-// TODO: this needs some love, retire it in favour of the one above. Use the mock data, don't make
-// it complicated with data setup, use the simplest data possible, instead check multiple
-// edge-cases.
-#[test]
-fn test_rebag() {
-	use crate::{
-		testing_utils::create_stash_controller,
-		voter_bags::{Bag, Node},
-	};
-	use frame_system::RawOrigin;
-
-	/// Make a validator and return its stash
-	fn make_validator(n: u32, balance_factor: u32) -> Result<AccountIdOf<Test>, &'static str> {
-		let (stash, controller) = create_stash_controller::<Test>(n, balance_factor, Default::default()).unwrap();
-
-		// Bond the full value of the stash
-		//
-		// By default, `create_stash_controller` only bonds 10% of the stash. However, we're going
-		// to want to edit one account's bonded value to match another's, so it's simpler if 100% of
-		// the balance is bonded.
-		let balance = <Test as Config>::Currency::free_balance(&stash);
-		Staking::bond_extra(RawOrigin::Signed(stash.clone()).into(), balance).unwrap();
-		Staking::validate(
-			RawOrigin::Signed(controller.clone()).into(),
-			ValidatorPrefs::default(),
-		).unwrap();
-
-		Ok(stash)
-	}
-
-	ExtBuilder::default().build_and_execute(|| {
-		// We want to have two validators: one, `stash`, is the one we will rebag.
-		// The other, `other_stash`, exists only so that the destination bag is not empty.
-		let stash = make_validator(0, 2000).unwrap();
-		let other_stash = make_validator(1, 9000).unwrap();
-
-		// verify preconditions
-		let weight_of = Staking::weight_of_fn();
-		let node = Node::<Test>::from_id(&stash).unwrap();
-		assert_eq!(
-			{
-				let origin_bag = Bag::<Test>::get(node.bag_upper).unwrap();
-				origin_bag.iter().count()
-			},
-			1,
-			"stash should be the only node in origin bag",
-		);
-		let other_node = Node::<Test>::from_id(&other_stash).unwrap();
-		assert!(!other_node.is_misplaced(&weight_of), "other stash balance never changed");
-		assert_ne!(
-			{
-				let destination_bag = Bag::<Test>::get(other_node.bag_upper);
-				destination_bag.iter().count()
-			},
-			0,
-			"destination bag should not be empty",
-		);
-
-		// Update `stash`'s value to match `other_stash`, and bond extra to update its weight.
-		//
-		// This implicitly calls rebag, so the user stays in the best bag they qualify for.
-		let new_balance = <Test as Config>::Currency::free_balance(&other_stash);
-		<Test as Config>::Currency::make_free_balance_be(&stash, new_balance);
-		Staking::bond_extra(
-			RawOrigin::Signed(stash.clone()).into(),
-			new_balance,
-		).unwrap();
-
-		// node should no longer be misplaced
-		// note that we refresh the node, in case the storage value has changed
-		let node = Node::<Test>::from_id(&stash).unwrap();
-		assert!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
-	});
-}
-*/
 
 mod election_data_provider {
 	use super::*;
