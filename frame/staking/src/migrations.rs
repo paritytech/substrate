@@ -14,7 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 
-//! Migrations for the Staking FRAME Pallet.
+//! Storage migrations for the Staking pallet.
 
 use super::*;
 
