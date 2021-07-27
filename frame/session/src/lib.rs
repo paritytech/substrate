@@ -129,7 +129,7 @@ use frame_support::{
 use frame_system::ensure_signed;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	KeyTypeId, Perbill, Permill, RuntimeAppPublic,
+	KeyTypeId, Permill, RuntimeAppPublic,
 };
 use sp_staking::SessionIndex;
 use sp_std::{
@@ -390,12 +390,6 @@ pub trait Config: frame_system::Config {
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
 
-	/// The fraction of validators set that is safe to be disabled.
-	///
-	/// After the threshold is reached `disabled` method starts to return true,
-	/// which in combination with `pallet_staking` forces a new era.
-	type DisabledValidatorsThreshold: Get<Perbill>;
-
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -578,6 +572,11 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
+	/// Returns the number of validators in the current session.
+	pub fn validators_len() -> usize {
+		<Validators<T>>::decode_len().unwrap_or(0)
+	}
+
 	/// Move on to next session. Register new validator set and session keys. Changes to the
 	/// validator set have a session of delay to take effect. This allows for equivocation
 	/// punishment after a fork.
@@ -663,42 +662,31 @@ impl<T: Config> Module<T> {
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
 	}
 
-	/// Disable the validator of index `i`.
-	///
-	/// Returns `true` if this causes a `DisabledValidatorsThreshold` of validators
-	/// to be already disabled.
+	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
 	pub fn disable_index(i: usize) -> bool {
-		let (fire_event, threshold_reached) = DisabledValidators::mutate(|disabled| {
-			let i = i as u32;
-			if let Err(index) = disabled.binary_search(&i) {
-				let count = <Validators<T>>::decode_len().unwrap_or(0) as u32;
-				let threshold = T::DisabledValidatorsThreshold::get() * count;
-				disabled.insert(index, i);
-				(true, disabled.len() as u32 > threshold)
-			} else {
-				(false, false)
+		DisabledValidators::mutate(|disabled| {
+			let i_u32 = i as u32;
+			if let Err(index) = disabled.binary_search(&i_u32) {
+				disabled.insert(index, i_u32);
+				T::SessionHandler::on_disabled(i);
+				return true
 			}
-		});
 
-		if fire_event {
-			T::SessionHandler::on_disabled(i);
-		}
-
-		threshold_reached
+			false
+		})
 	}
 
 	/// Disable the validator identified by `c`. (If using with the staking module,
 	/// this would be their *stash* account.)
 	///
-	/// Returns `Ok(true)` if more than `DisabledValidatorsThreshold` validators in current
-	/// session is already disabled.
-	/// If used with the staking module it allows to force a new era in such case.
-	pub fn disable(c: &T::ValidatorId) -> sp_std::result::Result<bool, ()> {
+	/// Returns `false` either if the validator could not be found or it was already
+	/// disabled.
+	pub fn disable(c: &T::ValidatorId) -> bool {
 		Self::validators()
 			.iter()
 			.position(|i| i == c)
 			.map(Self::disable_index)
-			.ok_or(())
+			.unwrap_or(false)
 	}
 
 	/// Upgrade the key type from some old type to a new type. Supports adding
