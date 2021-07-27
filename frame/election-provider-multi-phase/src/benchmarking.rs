@@ -305,11 +305,11 @@ frame_benchmarking::benchmarks! {
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
 		for i in 0..c {
-			let solution = RawSolution {
+			let raw_solution = RawSolution {
 				score: [(10_000_000 + i).into(), 0, 0],
 				..Default::default()
 			};
-			let signed_submission = SignedSubmission { solution, ..Default::default() };
+			let signed_submission = SignedSubmission { raw_solution, ..Default::default() };
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();

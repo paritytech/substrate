@@ -624,24 +624,26 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
 	/// code, so that we do less and less storage reads here.
-	pub fn unsigned_pre_dispatch_checks(solution: &RawSolution<SolutionOf<T>>) -> DispatchResult {
+	pub fn unsigned_pre_dispatch_checks(
+		raw_solution: &RawSolution<SolutionOf<T>>,
+	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
 
 		// ensure round is current
-		ensure!(Self::round() == solution.round, Error::<T>::OcwCallWrongEra);
+		ensure!(Self::round() == raw_solution.round, Error::<T>::OcwCallWrongEra);
 
 		// ensure correct number of winners.
 		ensure!(
 			Self::desired_targets().unwrap_or_default() ==
-				solution.solution.unique_targets().len() as u32,
+				raw_solution.solution.unique_targets().len() as u32,
 			Error::<T>::PreDispatchWrongWinnerCount,
 		);
 
 		// ensure score is being improved. Panic henceforth.
 		ensure!(
 			Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
-				solution.score,
+				raw_solution.score,
 				q.score,
 				T::SolutionImprovementThreshold::get()
 			)),
@@ -881,10 +883,10 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let solution =
+			let raw =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
-			assert_eq!(solution.solution.unique_targets().len(), 0);
+			let call = Call::submit_unsigned(raw.clone(), witness());
+			assert_eq!(raw.solution.unique_targets().len(), 0);
 
 			// won't work anymore.
 			assert!(matches!(
@@ -992,30 +994,30 @@ mod tests {
 				roll_to(25);
 				assert!(MultiPhase::current_phase().is_unsigned());
 
-				let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
+				let (raw, witness) = MultiPhase::mine_solution(2).unwrap();
 				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
 					witness.voters,
 					witness.targets,
-					solution.solution.voter_count() as u32,
-					solution.solution.unique_targets().len() as u32,
+					raw.solution.voter_count() as u32,
+					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, 35);
-				assert_eq!(solution.solution.voter_count(), 5);
+				assert_eq!(raw.solution.voter_count(), 5);
 
 				// now reduce the max weight
 				<MinerMaxWeight>::set(25);
 
-				let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
+				let (raw, witness) = MultiPhase::mine_solution(2).unwrap();
 				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
 					witness.voters,
 					witness.targets,
-					solution.solution.voter_count() as u32,
-					solution.solution.unique_targets().len() as u32,
+					raw.solution.voter_count() as u32,
+					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, 25);
-				assert_eq!(solution.solution.voter_count(), 3);
+				assert_eq!(raw.solution.voter_count(), 3);
 			})
 	}
 

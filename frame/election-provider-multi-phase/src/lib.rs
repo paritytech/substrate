@@ -850,14 +850,14 @@ pub mod pallet {
 			T::WeightInfo::submit_unsigned(
 				witness.voters,
 				witness.targets,
-				solution.solution.voter_count() as u32,
-				solution.solution.unique_targets().len() as u32
+				raw_solution.solution.voter_count() as u32,
+				raw_solution.solution.unique_targets().len() as u32
 			),
 			DispatchClass::Operational,
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			solution: RawSolution<SolutionOf<T>>,
+			raw_solution: RawSolution<SolutionOf<T>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -865,7 +865,7 @@ pub mod pallet {
 				 deprive validator from their authoring reward.";
 
 			// Check score being an improvement, phase, and desired targets.
-			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
+			Self::unsigned_pre_dispatch_checks(&raw_solution).expect(error_message);
 
 			// Ensure witness was correct.
 			let SolutionOrSnapshotSize { voters, targets } =
@@ -875,8 +875,8 @@ pub mod pallet {
 			assert!(voters as u32 == witness.voters, "{}", error_message);
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
-			let ready =
-				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
+			let ready = Self::feasibility_check(raw_solution, ElectionCompute::Unsigned)
+				.expect(error_message);
 
 			// Store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
@@ -947,7 +947,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
-			solution: RawSolution<SolutionOf<T>>,
+			raw_solution: RawSolution<SolutionOf<T>>,
 			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -970,19 +970,19 @@ pub mod pallet {
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
-				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
+				Self::feasibility_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
 			// create the submission
-			let deposit = Self::deposit_for(&solution, size);
+			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call = Call::submit(solution.clone(), num_signed_submissions);
+				let call = Call::submit(raw_solution.clone(), num_signed_submissions);
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
 
-			let submission = SignedSubmission { who: who.clone(), deposit, solution, reward };
+			let submission = SignedSubmission { who: who.clone(), deposit, raw_solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1605,13 +1605,13 @@ mod feasibility_check {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let solution = raw_solution();
+			let raw = raw_solution();
 
-			assert_eq!(solution.solution.unique_targets().len(), 4);
+			assert_eq!(raw.solution.unique_targets().len(), 4);
 			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
 
 			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::WrongWinnerCount,
 			);
 		})
@@ -1623,20 +1623,20 @@ mod feasibility_check {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let mut solution = raw_solution();
+			let mut raw = raw_solution();
 			assert_eq!(MultiPhase::snapshot().unwrap().targets.len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
 			// Swap all votes from 3 to 4. This will ensure that the number of unique winners
 			// will still be 4, but one of the indices will be gibberish. Requirement is to make
 			// sure 3 a winner, which we don't do here.
-			solution
+			raw
 				.solution
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
 				.for_each(|(_, t)| *t += 1);
-			solution.solution.votes2.iter_mut().for_each(|(_, (t0, _), t1)| {
+			raw.solution.votes2.iter_mut().for_each(|(_, (t0, _), t1)| {
 				if *t0 == TargetIndex::from(3u16) {
 					*t0 += 1
 				};
@@ -1645,7 +1645,7 @@ mod feasibility_check {
 				};
 			});
 			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::InvalidWinner
 			);
 		})
