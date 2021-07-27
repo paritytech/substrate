@@ -121,8 +121,8 @@ pub fn run() -> sc_cli::Result<()> {
 
 				runner.sync_run(|config| cmd.run::<Block, service::Executor>(config))
 			} else {
-				Err("Benchmarking wasn't enabled when building the node. \
-				You can enable it with `--features runtime-benchmarks`."
+				Err("Benchmarking wasn't enabled when building the node. You can enable it with \
+				     `--features runtime-benchmarks`."
 					.into())
 			},
 		None => {
