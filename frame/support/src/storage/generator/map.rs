@@ -153,6 +153,13 @@ where
 		}
 	}
 
+	/// Enumerate all elements in the map after a given key.
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
+		let mut iter = Self::iter();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	/// Enumerate all keys in the map.
 	fn iter_keys() -> Self::KeyIterator {
 		let prefix = G::prefix_hash();
@@ -165,6 +172,13 @@ where
 				K::decode(&mut key_material)
 			},
 		}
+	}
+
+	/// Enumerate all keys in the map after a given key.
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
+		let mut iter = Self::iter_keys();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
 	}
 
 	/// Enumerate all elements in the map.
@@ -380,6 +394,28 @@ mod test_iterators {
 		assert!(*last != 255, "mock function not implemented for this prefix");
 		*last += 1;
 		prefix
+	}
+
+	#[test]
+	fn map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			crate::generate_storage_alias!(MyModule, MyMap => Map<(u64, Identity), u64>);
+
+			MyMap::insert(1, 10);
+			MyMap::insert(2, 20);
+			MyMap::insert(3, 30);
+			MyMap::insert(4, 40);
+			MyMap::insert(5, 50);
+
+			let starting_raw_key = MyMap::storage_map_final_key(3);
+			let iter = MyMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(4, 40), (5, 50)]);
+
+			let starting_raw_key = MyMap::storage_map_final_key(2);
+			let iter = MyMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![3, 4, 5]);
+		});
 	}
 
 	#[test]
