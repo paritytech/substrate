@@ -33,9 +33,11 @@ use sp_runtime::{
 	traits::{BadOrigin, Dispatchable},
 	Perbill, Percent,
 };
-use sp_staking::{offence::OffenceDetails, SessionIndex};
+use sp_staking::{
+	offence::{OffenceDetails, OnOffenceHandler},
+	SessionIndex,
+};
 use sp_std::prelude::*;
-use sp_staking::offence::OnOffenceHandler;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]

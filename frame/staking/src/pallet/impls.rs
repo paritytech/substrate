@@ -28,17 +28,19 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, SaturatedConversion, Saturating, Zero, Convert},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
 	Perbill,
 };
-use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
+use sp_staking::{
+	offence::{OffenceDetails, OnOffenceHandler},
+	SessionIndex,
+};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
-	ExposureOf,
 };
 
 use super::{pallet::*, STAKING_ID};
