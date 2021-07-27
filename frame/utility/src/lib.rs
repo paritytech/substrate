@@ -114,7 +114,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// The limit on the number of batched calls.
 		fn batched_calls_limit() -> u32 {
-			let allocator_limit = 33554432; // 32MiB
+			let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
 			let call_size = core::mem::size_of::<<T as Config>::Call>() as u32;
 			// The margin to take into account vec doubling capacity.
 			let margin_factor = 3;
