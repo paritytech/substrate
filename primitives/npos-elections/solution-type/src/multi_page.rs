@@ -31,13 +31,13 @@ pub(crate) fn generate(
 	weight_type: syn::Type,
 ) -> Result<TokenStream2> {
 	let struct_name = syn::Ident::new("solution", proc_macro2::Span::call_site());
-	let paged_fields = paged_fields(voter_count);
-	let voter_count_impl = voter_count_impl(voter_count);
-	let edge_count_impl = edge_count_impl(voter_count);
-	let unique_targets_impl = unique_targets_impl(voter_count);
-	let remove_voter_impl_per_page = remove_voter_impl_per_page(voter_count);
-	let from_impl_per_page = from_assignments_impl_per_page(voter_count);
-	let into_impl_per_page = into_assignments_impl_per_page(voter_count);
+	let paged_fields = paged_fields(voter_pages, &single_page_ident);
+	let voter_count_impl = voter_count_impl(voter_pages);
+	let edge_count_impl = edge_count_impl(voter_pages);
+	let unique_targets_impl = unique_targets_impl(voter_pages);
+	let remove_voter_impl_per_page = remove_voter_impl_per_page(voter_pages);
+	let from_impl_per_page = from_assignments_impl_per_page(voter_pages, count, &struct_name);
+	let into_impl_per_page = into_assignments_impl_per_page(voter_pages);
 
 	Ok(quote! {
 		// NOTE: this will always simply derive Encode and Decode. The inner (per-page) type could
@@ -73,7 +73,7 @@ pub(crate) fn generate(
 						let voter_index = |_: &A| Some(voter_index_value);
 
 						match page {
-							#( #from_impl_per_page )*
+							#from_impl_per_page
 							_ => return Err(_npos::Error::SolutionInvalidPageIndex)
 						}
 					}
@@ -90,13 +90,13 @@ pub(crate) fn generate(
 				let mut assignments: _npos::sp_std::prelude::Vec<
 					_npos::Assignment<A, #weight_type>
 				> = Default::default();
-				#( #into_impl_per_page )*
+				#into_impl_per_page
 				Ok(assignments)
 			}
 
 			fn remove_voter(&mut self, remove_page: _npos::PageIndex, to_remove: Self::Voter) -> bool {
 				match remove_page {
-					#( #remove_voter_impl_per_page )*
+					#remove_voter_impl_per_page
 					_ => false
 				}
 			}
@@ -123,7 +123,7 @@ pub(crate) fn generate(
 	})
 }
 
-fn page_fields(voter_pages: u8) -> TokenStream2 {
+fn paged_fields(voter_pages: u8, single_page_ident: &syn::Ident) -> TokenStream2 {
 	(0..voter_pages)
 		.map(|i| {
 			let name = page_field(i);
@@ -177,10 +177,10 @@ fn remove_voter_impl_per_page(voter_pages: u8) -> TokenStream2 {
 	(0..voter_pages).map(|i| {
 		let filed = page_field(i);
 		quote!(#i => self.#filed.remove_voter(to_remove),)
-	})
+	}).collect::<TokenStream2>()
 }
 
-fn from_assignments_impl_per_page(voter_pages: u8) -> TokenStream2 {
+fn from_assignments_impl_per_page(voter_pages: u8, count: usize, struct_name: &syn::Ident) -> TokenStream2 {
 	(0..voter_pages).map(|i| {
 		let page_field = page_field(i);
 
@@ -217,7 +217,7 @@ fn from_assignments_impl_per_page(voter_pages: u8) -> TokenStream2 {
 				}
 			},
 		)
-	})
+	}).collect::<TokenStream2>()
 }
 
 fn into_assignments_impl_per_page(voter_pages: u8) -> TokenStream2 {
@@ -229,5 +229,5 @@ fn into_assignments_impl_per_page(voter_pages: u8) -> TokenStream2 {
 			let this_page_assignment = self.#page_field.into_assignment(voter_at, &target_at)?;
 			assignments.extend(this_page_assignment);
 		}
-	})
+	}).collect::<TokenStream2>()
 }
