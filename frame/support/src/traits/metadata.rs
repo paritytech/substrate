@@ -154,7 +154,7 @@ impl PartialOrd<u16> for StorageVersion {
 
 /// Provides information about the storage version of a pallet.
 ///
-/// It differentiates between current and active storage version. Both should be only out of sync
+/// It differentiates between current and on-chain storage version. Both should be only out of sync
 /// when a new runtime upgrade was applied and the runtime migrations did not yet executed.
 /// Otherwise it means that the pallet works with an unsupported storage version and unforeseen
 /// stuff can happen.
@@ -162,7 +162,7 @@ impl PartialOrd<u16> for StorageVersion {
 /// The current storage version is the version of the pallet as supported at runtime. The active
 /// storage version is the version of the pallet in the storage.
 ///
-/// It is required to update the active storage version manually when a migration was applied.
+/// It is required to update the on-chain storage version manually when a migration was applied.
 pub trait GetStorageVersion {
 	/// Returns the current storage version as supported by the pallet.
 	fn current_storage_version() -> StorageVersion;
