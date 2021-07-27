@@ -415,9 +415,10 @@ where
 		k1: impl EncodeLike<Key1>,
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::PrefixIterator<(Key2, Value)> {
-		<
-			Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>
-		>::iter_prefix_from(k1, starting_raw_key)
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_prefix_from(
+			k1,
+			starting_raw_key,
+		)
 	}
 
 	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
@@ -438,9 +439,10 @@ where
 		k1: impl EncodeLike<Key1>,
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::KeyPrefixIterator<Key2> {
-		<
-			Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>
-		>::iter_key_prefix_from(k1, starting_raw_key)
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_key_prefix_from(
+			k1,
+			starting_raw_key,
+		)
 	}
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
@@ -468,9 +470,9 @@ where
 	pub fn iter_from(
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::PrefixIterator<(Key1, Key2, Value)> {
-		<
-			Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>
-		>::iter_from(starting_raw_key)
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_from(
+			starting_raw_key,
+		)
 	}
 
 	/// Enumerate all keys `k1` and `k2` in the map in no particular order.
@@ -484,10 +486,12 @@ where
 	/// particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
-	pub fn iter_keys_from(starting_raw_key: Vec<u8>) -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
-		<
-			Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>
-		>::iter_keys_from(starting_raw_key)
+	pub fn iter_keys_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_keys_from(
+			starting_raw_key,
+		)
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.

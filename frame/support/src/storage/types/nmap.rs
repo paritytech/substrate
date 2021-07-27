@@ -340,9 +340,10 @@ where
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<
-			Self as crate::storage::IterableStorageNMap<Key, Value>
-		>::iter_prefix_from(kp, starting_raw_key)
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix_from(
+			kp,
+			starting_raw_key,
+		)
 	}
 
 	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order.
@@ -370,9 +371,10 @@ where
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<
-			Self as crate::storage::IterableStorageNMap<Key, Value>
-		>::iter_key_prefix_from(kp, starting_raw_key)
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix_from(
+			kp,
+			starting_raw_key,
+		)
 	}
 
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no

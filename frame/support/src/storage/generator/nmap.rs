@@ -492,8 +492,7 @@ mod test_iterators {
 	#[test]
 	fn n_map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			use crate::hash::Identity;
-			use crate::storage::Key as NMapKey;
+			use crate::{hash::Identity, storage::Key as NMapKey};
 			crate::generate_storage_alias!(
 				MyModule,
 				MyNMap => NMap<Key<(u64, Identity), (u64, Identity), (u64, Identity)>, u64>

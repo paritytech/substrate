@@ -381,7 +381,8 @@ pub trait IterableStorageDoubleMap<K1: FullCodec, K2: FullCodec, V: FullCodec>:
 	/// Enumerate all elements in the map with first key `k1` after a specified `starting_raw_key`
 	/// in lexicographical order of the encoded key. If you add or remove values whose first key is
 	/// `k1` to the map while doing this, you'll get undefined results.
-	fn iter_prefix_from(k1: impl EncodeLike<K1>, starting_raw_key: Vec<u8>) -> Self::PrefixIterator;
+	fn iter_prefix_from(k1: impl EncodeLike<K1>, starting_raw_key: Vec<u8>)
+		-> Self::PrefixIterator;
 
 	/// Enumerate all second keys `k2` in the map with the same first key `k1` in lexicographical
 	/// order of the encoded key. If you add or remove values whose first key is `k1` to the map
@@ -811,12 +812,7 @@ impl<T> PrefixIterator<T> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator {
-			prefix,
-			previous_key,
-			drain: false,
-			closure: decode_fn,
-		}
+		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
 	}
 
 	/// Get the last key that has been iterated upon and return it.
@@ -911,12 +907,7 @@ impl<T> KeyPrefixIterator<T> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		KeyPrefixIterator {
-			prefix,
-			previous_key,
-			drain: false,
-			closure: decode_fn,
-		}
+		KeyPrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
 	}
 
 	/// Get the last key that has been iterated upon and return it.
@@ -1568,8 +1559,7 @@ mod test {
 	#[test]
 	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
-			use crate::hash::Identity;
-			use crate::storage::generator::map::StorageMap;
+			use crate::{hash::Identity, storage::generator::map::StorageMap};
 			crate::generate_storage_alias! {
 				MyModule,
 				MyStorageMap => Map<(u64, Identity), u64>
@@ -1589,7 +1579,7 @@ mod test {
 			let op = |(_, v)| v / 10;
 			let mut final_vec = vec![];
 			let mut iter = MyStorageMap::iter();
-		
+
 			let elem = iter.next().unwrap();
 			assert_eq!(elem, (1, 10));
 			final_vec.push(op(elem));
