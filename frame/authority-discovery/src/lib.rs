@@ -148,7 +148,7 @@ mod tests {
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId},
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		KeyTypeId, Perbill,
+		KeyTypeId,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -168,10 +168,6 @@ mod tests {
 
 	impl Config for Test {}
 
-	parameter_types! {
-		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
-	}
-
 	impl pallet_session::Config for Test {
 		type SessionManager = ();
 		type Keys = UintAuthorityId;
@@ -180,7 +176,6 @@ mod tests {
 		type Event = Event;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
-		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 		type WeightInfo = ();
 	}
