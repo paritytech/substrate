@@ -619,7 +619,7 @@ fn metadata() {
 			},
 			PalletConstantMetadata {
 				name: "SS58Prefix",
-				ty: scale_info::meta_type::<u8>(),
+				ty: scale_info::meta_type::<u16>(),
 				value: vec![],
 				docs: vec![],
 			},
