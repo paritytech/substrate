@@ -1781,6 +1781,7 @@ pub mod pallet {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
+				Self::do_rebag(&ledger.stash);
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -2273,6 +2274,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
+			Self::do_rebag(&ledger.stash);
 			Ok(Some(
 				35 * WEIGHT_PER_MICROS +
 					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
