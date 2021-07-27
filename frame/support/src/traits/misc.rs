@@ -18,7 +18,6 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
-use sp_arithmetic::traits::AtLeast32Bit;
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 
 /// Anything that can have a `::len()` method.
@@ -181,7 +180,7 @@ pub trait HandleLifetime<T> {
 impl<T> HandleLifetime<T> for () {}
 
 pub trait Time {
-	type Moment: AtLeast32Bit + Parameter + Default + Copy;
+	type Moment: sp_arithmetic::traits::AtLeast32Bit + Parameter + Default + Copy;
 
 	fn now() -> Self::Moment;
 }
@@ -307,7 +306,7 @@ pub trait OffchainWorker<BlockNumber> {
 	fn offchain_worker(_n: BlockNumber) {}
 }
 
-/// Some amount of backing from a group. The precise defintion of what it means to "back" something
+/// Some amount of backing from a group. The precise definition of what it means to "back" something
 /// is left flexible.
 pub struct Backing {
 	/// The number of members of the group that back some motion.
@@ -356,5 +355,24 @@ where
 {
 	fn call(&self) -> &Self::Call {
 		&self.function
+	}
+}
+
+/// Something that can estimate the fee of a (frame-based) call.
+///
+/// Typically, the same pallet that will charge transaction fees will implement this.
+pub trait EstimateCallFee<Call, Balance> {
+	/// Estimate the fee of this call.
+	///
+	/// The dispatch info and the length is deduced from the call. The post info can optionally be
+	/// provided.
+	fn estimate_call_fee(call: &Call, post_info: crate::weights::PostDispatchInfo) -> Balance;
+}
+
+// Useful for building mocks.
+#[cfg(feature = "std")]
+impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
+	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
+		T.into()
 	}
 }

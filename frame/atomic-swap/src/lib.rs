@@ -289,7 +289,7 @@ pub mod pallet {
 			proof: Vec<u8>,
 			action: T::SwapAction,
 		) -> DispatchResult {
-			ensure!(proof.len() <= T::ProofLimit::get() as usize, Error::<T>::ProofTooLarge,);
+			ensure!(proof.len() <= T::ProofLimit::get() as usize, Error::<T>::ProofTooLarge);
 
 			let target = ensure_signed(origin)?;
 			let hashed_proof = blake2_256(&proof);
@@ -322,7 +322,7 @@ pub mod pallet {
 			let source = ensure_signed(origin)?;
 
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof).ok_or(Error::<T>::NotExist)?;
-			ensure!(swap.source == source, Error::<T>::SourceMismatch,);
+			ensure!(swap.source == source, Error::<T>::SourceMismatch);
 			ensure!(
 				frame_system::Pallet::<T>::block_number() >= swap.end_block,
 				Error::<T>::DurationNotPassed,

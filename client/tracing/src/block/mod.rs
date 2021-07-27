@@ -246,7 +246,7 @@ where
 			);
 			let _guard = dispatcher_span.enter();
 			if let Err(e) = dispatcher::with_default(&dispatch, || {
-				let span = tracing::info_span!(target: TRACE_TARGET, "trace_block",);
+				let span = tracing::info_span!(target: TRACE_TARGET, "trace_block");
 				let _enter = span.enter();
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {

@@ -980,22 +980,22 @@ mod test {
 
 		tree.finalize_root(&"A");
 
-		assert_eq!(tree.best_finalized_number, Some(1),);
+		assert_eq!(tree.best_finalized_number, Some(1));
 
-		assert_eq!(tree.import("A", 1, (), &is_descendent_of), Err(Error::Revert),);
+		assert_eq!(tree.import("A", 1, (), &is_descendent_of), Err(Error::Revert));
 	}
 
 	#[test]
 	fn import_doesnt_add_duplicates() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		assert_eq!(tree.import("A", 1, (), &is_descendent_of), Err(Error::Duplicate),);
+		assert_eq!(tree.import("A", 1, (), &is_descendent_of), Err(Error::Duplicate));
 
-		assert_eq!(tree.import("I", 4, (), &is_descendent_of), Err(Error::Duplicate),);
+		assert_eq!(tree.import("I", 4, (), &is_descendent_of), Err(Error::Duplicate));
 
-		assert_eq!(tree.import("G", 3, (), &is_descendent_of), Err(Error::Duplicate),);
+		assert_eq!(tree.import("G", 3, (), &is_descendent_of), Err(Error::Duplicate));
 
-		assert_eq!(tree.import("K", 3, (), &is_descendent_of), Err(Error::Duplicate),);
+		assert_eq!(tree.import("K", 3, (), &is_descendent_of), Err(Error::Duplicate));
 	}
 
 	#[test]
@@ -1057,7 +1057,7 @@ mod test {
 		let original_roots = tree.roots.clone();
 
 		// finalizing a block prior to any in the node doesn't change the tree
-		assert_eq!(tree.finalize(&"0", 0, &is_descendent_of), Ok(FinalizationResult::Unchanged),);
+		assert_eq!(tree.finalize(&"0", 0, &is_descendent_of), Ok(FinalizationResult::Unchanged));
 
 		assert_eq!(tree.roots, original_roots);
 
@@ -1073,12 +1073,12 @@ mod test {
 		);
 
 		// finalizing anything lower than what we observed will fail
-		assert_eq!(tree.best_finalized_number, Some(1),);
+		assert_eq!(tree.best_finalized_number, Some(1));
 
-		assert_eq!(tree.finalize(&"Z", 1, &is_descendent_of), Err(Error::Revert),);
+		assert_eq!(tree.finalize(&"Z", 1, &is_descendent_of), Err(Error::Revert));
 
 		// trying to finalize a node without finalizing its ancestors first will fail
-		assert_eq!(tree.finalize(&"H", 3, &is_descendent_of), Err(Error::UnfinalizedAncestor),);
+		assert_eq!(tree.finalize(&"H", 3, &is_descendent_of), Err(Error::UnfinalizedAncestor));
 
 		// after finalizing "F" we can finalize "H"
 		assert_eq!(
@@ -1144,7 +1144,7 @@ mod test {
 			vec![("L", 4), ("I", 4)],
 		);
 
-		assert_eq!(tree.best_finalized_number, Some(3),);
+		assert_eq!(tree.best_finalized_number, Some(3));
 
 		// finalizing N (which is not a part of the tree):
 		// 1) removes roots that are not ancestors/descendants of N (I)
@@ -1161,7 +1161,7 @@ mod test {
 			vec![],
 		);
 
-		assert_eq!(tree.best_finalized_number, Some(6),);
+		assert_eq!(tree.best_finalized_number, Some(6));
 	}
 
 	#[test]
@@ -1327,7 +1327,7 @@ mod test {
 				Ok(Some(false)),
 			);
 
-			assert_eq!(n_is_descendent_of_calls.load(Ordering::SeqCst), 1,);
+			assert_eq!(n_is_descendent_of_calls.load(Ordering::SeqCst), 1);
 		}
 
 		n_is_descendent_of_calls.store(0, Ordering::SeqCst);
@@ -1350,7 +1350,7 @@ mod test {
 				Ok(FinalizationResult::Changed(Some(10))),
 			);
 
-			assert_eq!(n_is_descendent_of_calls.load(Ordering::SeqCst), 1,);
+			assert_eq!(n_is_descendent_of_calls.load(Ordering::SeqCst), 1);
 		}
 	}
 
@@ -1377,7 +1377,7 @@ mod test {
 
 		let removed = tree.prune(&"C", &3, &is_descendent_of, &|_| true).unwrap();
 
-		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["B"],);
+		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["B"]);
 
 		assert_eq!(
 			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
@@ -1391,9 +1391,9 @@ mod test {
 
 		let removed = tree.prune(&"E", &5, &is_descendent_of, &|_| true).unwrap();
 
-		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["D"],);
+		assert_eq!(tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(), vec!["D"]);
 
-		assert_eq!(tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(), vec!["D", "E"],);
+		assert_eq!(tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(), vec!["D", "E"]);
 
 		assert_eq!(removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(), vec!["B", "C"]);
 	}
