@@ -1374,11 +1374,11 @@ pub mod pallet {
 		BadTarget,
 		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
 		CannotChillOther,
-		/// There are too many nominators in the system. Governance needs to adjust the staking settings
-		/// to keep things safe for the runtime.
+		/// There are too many nominators in the system. Governance needs to adjust the staking
+		/// settings to keep things safe for the runtime.
 		TooManyNominators,
-		/// There are too many validators in the system. Governance needs to adjust the staking settings
-		/// to keep things safe for the runtime.
+		/// There are too many validators in the system. Governance needs to adjust the staking
+		/// settings to keep things safe for the runtime.
 		TooManyValidators,
 	}
 

@@ -1472,7 +1472,8 @@ impl<T: Config> Pallet<T> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
-		// - signed phase was open, in which case this is essential for correct functioning of the system
+		// - signed phase was open, in which case this is essential for correct functioning of the
+		//   system
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let (_, signed_finalize_weight) = Self::finalize_signed_phase();

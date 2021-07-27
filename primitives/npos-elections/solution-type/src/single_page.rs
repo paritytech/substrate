@@ -149,7 +149,6 @@ pub(crate) fn generate(
 					for<'r> FT: Fn(&'r A) -> Option<Self::Target>,
 			{
 				let mut #struct_name: #ident = Default::default();
-				println!("HERE");
 				for _npos::Assignment { who, distribution } in assignments {
 					match distribution.len() {
 						0 => continue,

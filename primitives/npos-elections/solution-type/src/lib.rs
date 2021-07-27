@@ -66,15 +66,15 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///     VoterIndex = u16,
 ///     TargetIndex = u8,
 ///     Accuracy = Perbill,
-/// >(3));
+/// >(4));
 /// ```
 ///
 /// The output of this macro will roughly look like:
 ///
 /// ```ignore
 /// struct TestSolution {
-///     voters1: <stripped>
-///     voters2: <stripped>
+///     voters1: vec![(V, T), ..]
+///     voters2: vec![V, P, [(T1, P1), (T2, P2)], T_last]
 ///     voters3: <stripped>
 ///     voters4: <stripped>
 /// }

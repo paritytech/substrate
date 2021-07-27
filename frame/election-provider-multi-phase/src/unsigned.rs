@@ -843,7 +843,8 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let solution = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution =
+				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
@@ -880,7 +881,8 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let solution = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution =
+				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call = Call::submit_unsigned(solution.clone(), witness());
 			assert_eq!(solution.solution.unique_targets().len(), 0);
 
@@ -932,7 +934,8 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// This is in itself an invalid BS solution.
-			let solution = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution =
+				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call = Call::submit_unsigned(solution.clone(), witness());
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
@@ -948,7 +951,8 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// This solution is unfeasible as well, but we won't even get there.
-			let solution = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution =
+				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;

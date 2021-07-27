@@ -459,7 +459,8 @@ pub fn generate_random_votes(
 
 		// it's not interesting if a voter chooses 0 or all candidates, so rule those cases out.
 		// also, let's not generate any cases which result in a compact overflow.
-		let n_candidates_chosen = rng.gen_range(1, candidates.len().min(<TestSolution as crate::SolutionBase>::LIMIT));
+		let n_candidates_chosen =
+			rng.gen_range(1, candidates.len().min(<TestSolution as crate::SolutionBase>::LIMIT));
 
 		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
 		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
