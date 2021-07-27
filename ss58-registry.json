@@ -443,6 +443,15 @@
 			"website": "https://neatcoin.org"
 		},
 		{
+			"prefix": 57,
+			"network": "beats",
+			"displayName": "Melodity Beats Mainnet",
+			"symbols": ["MELB"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://dolabs.studio"
+		},
+		{
 			"prefix": 63,
 			"network": "hydradx",
 			"displayName": "HydraDX",
