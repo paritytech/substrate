@@ -277,12 +277,12 @@ pub(crate) fn compute_slash<T: Config>(
 			// not continue in the next election. also end the slashing span.
 			spans.end_span(now);
 			<Pallet<T>>::chill_stash(stash);
-
-			// add the validator to the offenders list and make sure it is disabled for
-			// the duration of the era
-			add_offending_validator::<T>(params.stash, true);
 		}
 	}
+
+	// add the validator to the offenders list and make sure it is disabled for
+	// the duration of the era
+	add_offending_validator::<T>(params.stash, true);
 
 	let mut nominators_slashed = Vec::new();
 	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut nominators_slashed);
@@ -341,7 +341,7 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 				let offending_threshold = T::OffendingValidatorsThreshold::get() *
 					T::SessionInterface::validators_len() as u32;
 
-				if offending.len() > offending_threshold as usize {
+				if offending.len() >= offending_threshold as usize {
 					// force a new era, to select a new validator set
 					<Pallet<T>>::ensure_new_era()
 				}
