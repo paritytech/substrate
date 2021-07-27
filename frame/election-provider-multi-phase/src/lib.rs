@@ -982,12 +982,8 @@ pub mod pallet {
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
 
-			let submission = SignedSubmission {
-				who: who.clone(),
-				deposit,
-				solution: *solution,
-				reward,
-			};
+			let submission =
+				SignedSubmission { who: who.clone(), deposit, solution: *solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
