@@ -374,7 +374,7 @@ impl<T: Config> Pallet<T> {
 	/// In case election result has more than [`MinimumValidatorCount`] validator trigger a new era.
 	///
 	/// In case a new era is planned, the new validator set is returned.
-	fn try_trigger_new_era(
+	pub(crate) fn try_trigger_new_era(
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
@@ -516,7 +516,7 @@ impl<T: Config> Pallet<T> {
 	/// This is called:
 	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
-	pub(super) fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
+	pub(crate) fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
@@ -534,7 +534,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Clear all era information for given era.
-	pub(super) fn clear_era_information(era_index: EraIndex) {
+	pub(crate) fn clear_era_information(era_index: EraIndex) {
 		<ErasStakers<T>>::remove_prefix(era_index, None);
 		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
 		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
