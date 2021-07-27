@@ -47,30 +47,30 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
-mod benchmarking;
 pub mod weights;
 
-use sp_std::prelude::*;
-use sp_runtime::{
-	DispatchError, ArithmeticError,
-	traits::{AccountIdConversion, Saturating, Zero},
-};
+use codec::{Decode, Encode};
 use frame_support::{
-	ensure, PalletId, RuntimeDebug,
-	dispatch::{Dispatchable, DispatchResult, GetDispatchInfo},
-	traits::{
-		Currency, ReservableCurrency, Get, ExistenceRequirement::KeepAlive, Randomness,
-	},
+	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
+	ensure,
+	traits::{Currency, ExistenceRequirement::KeepAlive, Get, Randomness, ReservableCurrency},
+	PalletId, RuntimeDebug,
 };
-use codec::{Encode, Decode};
-pub use weights::WeightInfo;
 pub use pallet::*;
+use sp_runtime::{
+	traits::{AccountIdConversion, Saturating, Zero},
+	ArithmeticError, DispatchError,
+};
+use sp_std::prelude::*;
+pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 // Any runtime call can be encoded into two bytes which represent the pallet and call index.
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
@@ -96,7 +96,9 @@ pub trait ValidateCall<T: Config> {
 }
 
 impl<T: Config> ValidateCall<T> for () {
-	fn validate_call(_: &<T as Config>::Call) -> bool { false }
+	fn validate_call(_: &<T as Config>::Call) -> bool {
+		false
+	}
 }
 
 impl<T: Config> ValidateCall<T> for Pallet<T> {
@@ -112,9 +114,9 @@ impl<T: Config> ValidateCall<T> for Pallet<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{Parameter, pallet_prelude::*, traits::EnsureOrigin, weights::Weight};
-	use frame_system::{ensure_signed, pallet_prelude::*};
 	use super::*;
+	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Weight, Parameter};
+	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -128,7 +130,10 @@ pub mod pallet {
 		type PalletId: Get<PalletId>;
 
 		/// A dispatchable call.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
+		type Call: Parameter
+			+ Dispatchable<Origin = Self::Origin>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -200,16 +205,13 @@ pub mod pallet {
 
 	/// The configuration for the current lottery.
 	#[pallet::storage]
-	pub(crate) type Lottery<T: Config> = StorageValue<_, LotteryConfig<T::BlockNumber, BalanceOf<T>>>;
+	pub(crate) type Lottery<T: Config> =
+		StorageValue<_, LotteryConfig<T::BlockNumber, BalanceOf<T>>>;
 
 	/// Users who have purchased a ticket. (Lottery Index, Tickets Purchased)
 	#[pallet::storage]
-	pub(crate) type Participants<T: Config> = StorageMap<
-		_,
-		Twox64Concat, T::AccountId,
-		(u32, Vec<CallIndex>),
-		ValueQuery,
-	>;
+	pub(crate) type Participants<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, (u32, Vec<CallIndex>), ValueQuery>;
 
 	/// Total number of tickets sold.
 	#[pallet::storage]
@@ -232,9 +234,8 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			Lottery::<T>::mutate(|mut lottery| -> Weight {
 				if let Some(config) = &mut lottery {
-					let payout_block = config.start
-						.saturating_add(config.length)
-						.saturating_add(config.delay);
+					let payout_block =
+						config.start.saturating_add(config.length).saturating_add(config.delay);
 					if payout_block <= n {
 						let (lottery_account, lottery_balance) = Self::pot();
 						let ticket_count = TicketsCount::<T>::get();
@@ -242,7 +243,12 @@ pub mod pallet {
 						let winning_number = Self::choose_winner(ticket_count);
 						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
 						// Not much we can do if this fails...
-						let res = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						let res = T::Currency::transfer(
+							&Self::account_id(),
+							&winner,
+							lottery_balance,
+							KeepAlive,
+						);
 						debug_assert!(res.is_ok());
 
 						Self::deposit_event(Event::<T>::Winner(winner, lottery_balance));
@@ -340,13 +346,7 @@ pub mod pallet {
 				let new_index = index.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				let start = frame_system::Pallet::<T>::block_number();
 				// Use new_index to more easily track everything with the current state.
-				*lottery = Some(LotteryConfig {
-					price,
-					start,
-					length,
-					delay,
-					repeat,
-				});
+				*lottery = Some(LotteryConfig { price, start, length, delay, repeat });
 				LotteryIndex::<T>::put(new_index);
 				Ok(())
 			})?;
@@ -389,8 +389,8 @@ impl<T: Config> Pallet<T> {
 	// The existential deposit is not part of the pot so lottery account never gets deleted.
 	fn pot() -> (T::AccountId, BalanceOf<T>) {
 		let account_id = Self::account_id();
-		let balance = T::Currency::free_balance(&account_id)
-			.saturating_sub(T::Currency::minimum_balance());
+		let balance =
+			T::Currency::free_balance(&account_id).saturating_sub(T::Currency::minimum_balance());
 
 		(account_id, balance)
 	}
@@ -408,7 +408,9 @@ impl<T: Config> Pallet<T> {
 	// Convert a call to it's call index by encoding the call and taking the first two bytes.
 	fn call_to_index(call: &<T as Config>::Call) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
-		if encoded_call.len() < 2 { Err(Error::<T>::EncodingFailed)? }
+		if encoded_call.len() < 2 {
+			Err(Error::<T>::EncodingFailed)?
+		}
 		return Ok((encoded_call[0], encoded_call[1]))
 	}
 
@@ -417,30 +419,39 @@ impl<T: Config> Pallet<T> {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Pallet::<T>::block_number();
-		ensure!(block_number < config.start.saturating_add(config.length), Error::<T>::AlreadyEnded);
+		ensure!(
+			block_number < config.start.saturating_add(config.length),
+			Error::<T>::AlreadyEnded
+		);
 		ensure!(T::ValidateCall::validate_call(call), Error::<T>::InvalidCall);
 		let call_index = Self::call_to_index(call)?;
 		let ticket_count = TicketsCount::<T>::get();
 		let new_ticket_count = ticket_count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 		// Try to update the participant status
-		Participants::<T>::try_mutate(&caller, |(lottery_index, participating_calls)| -> DispatchResult {
-			let index = LotteryIndex::<T>::get();
-			// If lottery index doesn't match, then reset participating calls and index.
-			if *lottery_index != index {
-				*participating_calls = Vec::new();
-				*lottery_index = index;
-			} else {
-				// Check that user is not already participating under this call.
-				ensure!(!participating_calls.iter().any(|c| call_index == *c), Error::<T>::AlreadyParticipating);
-			}
-			// Check user has enough funds and send it to the Lottery account.
-			T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
-			// Create a new ticket.
-			TicketsCount::<T>::put(new_ticket_count);
-			Tickets::<T>::insert(ticket_count, caller.clone());
-			participating_calls.push(call_index);
-			Ok(())
-		})?;
+		Participants::<T>::try_mutate(
+			&caller,
+			|(lottery_index, participating_calls)| -> DispatchResult {
+				let index = LotteryIndex::<T>::get();
+				// If lottery index doesn't match, then reset participating calls and index.
+				if *lottery_index != index {
+					*participating_calls = Vec::new();
+					*lottery_index = index;
+				} else {
+					// Check that user is not already participating under this call.
+					ensure!(
+						!participating_calls.iter().any(|c| call_index == *c),
+						Error::<T>::AlreadyParticipating
+					);
+				}
+				// Check user has enough funds and send it to the Lottery account.
+				T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
+				// Create a new ticket.
+				TicketsCount::<T>::put(new_ticket_count);
+				Tickets::<T>::insert(ticket_count, caller.clone());
+				participating_calls.push(call_index);
+				Ok(())
+			},
+		)?;
 
 		Self::deposit_event(Event::<T>::TicketBought(caller.clone(), call_index));
 
@@ -452,9 +463,9 @@ impl<T: Config> Pallet<T> {
 		let mut random_number = Self::generate_random_number(0);
 
 		// Best effort attempt to remove bias from modulus operator.
-		for i in 1 .. T::MaxGenerateRandom::get() {
+		for i in 1..T::MaxGenerateRandom::get() {
 			if random_number < u32::MAX - u32::MAX % total {
-				break;
+				break
 			}
 
 			random_number = Self::generate_random_number(i);

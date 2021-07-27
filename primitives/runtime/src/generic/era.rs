@@ -18,9 +18,9 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::codec::{Decode, Encode, Input, Output, Error};
+use crate::codec::{Decode, Encode, Error, Input, Output};
 
 /// Era period
 pub type Period = u64;
@@ -47,15 +47,13 @@ pub enum Era {
 	Mortal(Period, Phase),
 }
 
-/*
- * E.g. with period == 4:
- * 0         10        20        30        40
- * 0123456789012345678901234567890123456789012
- *              |...|
- *    authored -/   \- expiry
- * phase = 1
- * n = Q(current - phase, period) + phase
- */
+// E.g. with period == 4:
+// 0         10        20        30        40
+// 0123456789012345678901234567890123456789012
+//              |...|
+//    authored -/   \- expiry
+// phase = 1
+// n = Q(current - phase, period) + phase
 impl Era {
 	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
 	/// and a block number on which it should start (or, for long periods, be shortly after the start).
@@ -64,10 +62,7 @@ impl Era {
 	/// does not exceed `BlockHashCount` parameter passed to `system` module, since that
 	/// prunes old blocks and renders transactions immediately invalid.
 	pub fn mortal(period: u64, current: u64) -> Self {
-		let period = period.checked_next_power_of_two()
-			.unwrap_or(1 << 16)
-			.max(4)
-			.min(1 << 16);
+		let period = period.checked_next_power_of_two().unwrap_or(1 << 16).max(4).min(1 << 16);
 		let phase = current % period;
 		let quantize_factor = (period >> 12).max(1);
 		let quantized_phase = phase / quantize_factor * quantize_factor;
@@ -109,9 +104,10 @@ impl Encode for Era {
 			Self::Immortal => output.push_byte(0),
 			Self::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
-				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) << 4) as u16;
+				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 |
+					((phase / quantize_factor) << 4) as u16;
 				encoded.encode_to(output);
-			}
+			},
 		}
 	}
 }
@@ -153,7 +149,7 @@ mod tests {
 		assert!(e.is_immortal());
 
 		assert_eq!(e.encode(), vec![0u8]);
-		assert_eq!(e, Era::decode(&mut&[0u8][..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &[0u8][..]).unwrap());
 	}
 
 	#[test]
@@ -163,7 +159,7 @@ mod tests {
 
 		let expected = vec![5 + 42 % 16 * 16, 42 / 16];
 		assert_eq!(e.encode(), expected);
-		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &expected[..]).unwrap());
 	}
 
 	#[test]
@@ -172,7 +168,7 @@ mod tests {
 
 		let expected = vec![(14 + 2500 % 16 * 16) as u8, (2500 / 16) as u8];
 		assert_eq!(e.encode(), expected);
-		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &expected[..]).unwrap());
 	}
 
 	#[test]

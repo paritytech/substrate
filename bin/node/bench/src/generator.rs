@@ -30,14 +30,15 @@ use crate::simple_trie::SimpleTrie;
 /// return root.
 pub fn generate_trie(
 	db: Arc<dyn KeyValueDB>,
-	key_values: impl IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
+	key_values: impl IntoIterator<Item = (Vec<u8>, Vec<u8>)>,
 ) -> Hash {
 	let mut root = Hash::default();
 
 	let (db, overlay) = {
 		let mut overlay = HashMap::new();
 		overlay.insert(
-			hex::decode("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").expect("null key is valid"),
+			hex::decode("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
+				.expect("null key is valid"),
 			Some(vec![0]),
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };
@@ -50,7 +51,7 @@ pub fn generate_trie(
 
 			trie_db.commit();
 		}
-		( trie.db, overlay )
+		(trie.db, overlay)
 	};
 
 	let mut transaction = db.transaction();

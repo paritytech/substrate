@@ -28,11 +28,11 @@
 //! flag and open a browser to the url that `wasm-pack test` outputs.
 //! For more infomation see <https://rustwasm.github.io/docs/wasm-pack/>.
 
-use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
-use wasm_bindgen_futures::JsFuture;
-use wasm_bindgen::JsValue;
-use jsonrpc_core::types::{MethodCall, Success, Version, Params, Id};
+use jsonrpc_core::types::{Id, MethodCall, Params, Success, Version};
 use serde::de::DeserializeOwned;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -41,8 +41,9 @@ fn rpc_call(method: &str) -> String {
 		jsonrpc: Some(Version::V2),
 		method: method.into(),
 		params: Params::None,
-		id: Id::Num(1)
-	}).unwrap()
+		id: Id::Num(1),
+	})
+	.unwrap()
 }
 
 fn deserialize_rpc_result<T: DeserializeOwned>(js_value: JsValue) -> T {
@@ -55,15 +56,12 @@ fn deserialize_rpc_result<T: DeserializeOwned>(js_value: JsValue) -> T {
 
 #[wasm_bindgen_test]
 async fn runs() {
-	let mut client = node_cli::start_client(None, "info".into())
-			.unwrap();
+	let mut client = node_cli::start_client(None, "info".into()).unwrap();
 
 	// Check that the node handles rpc calls.
 	// TODO: Re-add the code that checks if the node is syncing.
 	let chain_name: String = deserialize_rpc_result(
-		JsFuture::from(client.rpc_send(&rpc_call("system_chain")))
-			.await
-			.unwrap()
+		JsFuture::from(client.rpc_send(&rpc_call("system_chain"))).await.unwrap(),
 	);
 	assert_eq!(chain_name, "Development");
 }

@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//!
 //! An opt-in utility module for reporting equivocations.
 //!
 //! This module defines an offence type for BABE equivocations
@@ -33,22 +32,23 @@
 //! When using this module for enabling equivocation reporting it is required
 //! that the `ValidateUnsigned` for the BABE pallet is used in the runtime
 //! definition.
-//!
 
 use frame_support::traits::{Get, KeyOwnerProofSystem};
 use sp_consensus_babe::{EquivocationProof, Slot};
-use sp_runtime::transaction_validity::{
-	InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
-	TransactionValidityError, ValidTransaction,
+use sp_runtime::{
+	transaction_validity::{
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		TransactionValidityError, ValidTransaction,
+	},
+	DispatchResult, Perbill,
 };
-use sp_runtime::{DispatchResult, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
 
-use crate::{Call, Pallet, Config};
+use crate::{Call, Config, Pallet};
 
 /// A trait with utility methods for handling equivocation reports in BABE.
 /// The trait provides methods for reporting an offence triggered by a valid
@@ -115,9 +115,7 @@ pub struct EquivocationHandler<I, R, L> {
 
 impl<I, R, L> Default for EquivocationHandler<I, R, L> {
 	fn default() -> Self {
-		Self {
-			_phantom: Default::default(),
-		}
+		Self { _phantom: Default::default() }
 	}
 }
 
@@ -188,30 +186,28 @@ impl<T: Config> Pallet<T> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 				_ => {
 					log::warn!(
 						target: "runtime::babe",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block.",
 					);
 
-					return InvalidTransaction::Call.into();
-				}
+					return InvalidTransaction::Call.into()
+				},
 			}
 
 			// check report staleness
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
 
-			let longevity = <T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
+			let longevity =
+				<T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
 
 			ValidTransaction::with_tag_prefix("BabeEquivocation")
 				// We assign the maximum priority for any equivocation report.
 				.priority(TransactionPriority::max_value())
 				// Only one equivocation report for the same offender at the same slot.
-				.and_provides((
-					equivocation_proof.offender.clone(),
-					*equivocation_proof.slot,
-				))
+				.and_provides((equivocation_proof.offender.clone(), *equivocation_proof.slot))
 				.longevity(longevity)
 				// We don't propagate this. This can never be included on a remote node.
 				.propagate(false)
@@ -235,10 +231,7 @@ fn is_known_offence<T: Config>(
 	key_owner_proof: &T::KeyOwnerProof,
 ) -> Result<(), TransactionValidityError> {
 	// check the membership proof to extract the offender's id
-	let key = (
-		sp_consensus_babe::KEY_TYPE,
-		equivocation_proof.offender.clone(),
-	);
+	let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;
