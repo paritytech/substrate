@@ -485,11 +485,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			.map(|(p, k)| (p.clone(), NetworkBehaviour::new_handler(k)));
 
 		IntoMultiHandler::try_from_iter(iter).expect(
-			"There can be at most one handler per `ProtocolId` and \
-				protocol names contain the `ProtocolId` so no two protocol \
-				names in `self.kademlias` can be equal which is the only error \
-				`try_from_iter` can return, therefore this call is guaranteed \
-				to succeed; qed",
+			"There can be at most one handler per `ProtocolId` and protocol names contain the \
+			 `ProtocolId` so no two protocol names in `self.kademlias` can be equal which is the \
+			 only error `try_from_iter` can return, therefore this call is guaranteed to succeed; \
+			 qed",
 		)
 	}
 
