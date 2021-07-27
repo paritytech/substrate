@@ -548,6 +548,8 @@ parameter_types! {
 		*RuntimeBlockLength::get()
 		.max
 		.get(DispatchClass::Normal);
+
+	pub const VoterSnapshotPerBlock: u32 = u32::max_value();
 }
 
 sp_npos_elections::generate_solution_type!(
@@ -602,6 +604,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = BenchmarkConfig;
+	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
 
 parameter_types! {
