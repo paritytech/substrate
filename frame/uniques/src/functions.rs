@@ -68,7 +68,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				admin: admin.clone(),
 				freezer: admin.clone(),
 				total_deposit: deposit,
-				free_holding: free_holding,
+				free_holding,
 				instances: 0,
 				instance_metadatas: 0,
 				attributes: 0,
