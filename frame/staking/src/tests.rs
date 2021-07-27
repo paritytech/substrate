@@ -3862,7 +3862,7 @@ mod voter_bags {
 			// `chill`
 			assert_ok!(Staking::chill(Origin::signed(43)));
 			// removes the voter
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![])]);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
 		});
 	}
 
@@ -3880,7 +3880,7 @@ mod voter_bags {
 			assert_ok!(Staking::bond_extra(Origin::signed(42), 1_980)); // 20 + 1_980 = 2_000
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![31]), (20, vec![]), (1000, vec![11, 21, 101]), (2000, vec![42])]
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
 			);
 
 			// decrease stake within the range of the current bag
@@ -3889,7 +3889,7 @@ mod voter_bags {
 			// does not change bags
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![31]), (20, vec![]), (1000, vec![11, 21, 101]), (2000, vec![42])]
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
 			);
 
 			// reduce stake to the level of a non-existent bag
@@ -3898,29 +3898,14 @@ mod voter_bags {
 			// creates the bag and moves the voter into it
 			assert_eq!(
 				get_bags(),
-				vec![
-					(10, vec![31]),
-					(20, vec![]),
-					(30, vec![42]),
-					(1000, vec![11, 21, 101]),
-					(2000, vec![])
-				]
+				vec![(10, vec![31]), (30, vec![42]), (1000, vec![11, 21, 101]),]
 			);
 
 			// increase stake by `rebond`-ing to the level of a pre-existing bag
 			assert_ok!(Staking::rebond(Origin::signed(43), 31)); // 30 + 41 = 61
 			assert_ok!(Staking::rebag(Origin::signed(43), 42));
 			// moves the voter to that bag
-			assert_eq!(
-				get_bags(),
-				vec![
-					(10, vec![31]),
-					(20, vec![]),
-					(30, vec![]),
-					(1000, vec![11, 21, 101, 42]),
-					(2000, vec![])
-				]
-			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101, 42]),]);
 		});
 	}
 }

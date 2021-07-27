@@ -245,7 +245,6 @@ impl<T: Config> VoterList<T> {
 
 			// clear the old bag head/tail pointers as necessary
 			if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
-				dbg!(&bag);
 				bag.remove_node(&node);
 				bag.put();
 			} else {
@@ -1061,12 +1060,9 @@ mod voter_list {
 				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
 			);
 
-			// when
-			let iteration = VoterList::<Test>::iter().map(|node| node.voter.id).collect::<Vec<_>>();
-
 			// then
 			assert_eq!(
-				iteration,
+				get_voter_list_as_ids(),
 				vec![
 					51, 61, // best bag
 					11, 21, 101, // middle bag
@@ -1079,7 +1075,7 @@ mod voter_list {
 
 			// then
 			assert_eq!(
-				iteration,
+				get_voter_list_as_ids(),
 				vec![
 					51, 61, // best bag
 					11, 21, 101, // middle bag
@@ -1176,7 +1172,7 @@ mod voter_list {
 
 	#[test]
 	fn remove_works() {
-		use crate::{CounterForVoters, VoterNodes};
+		use crate::{CounterForVoters, VoterNodes, VoterBags};
 
 		let check_storage = |id, counter, voters, bags| {
 			assert!(!VoterBagFor::<Test>::contains_key(id));
@@ -1219,33 +1215,31 @@ mod voter_list {
 			check_storage(
 				31,
 				2,
-				vec![21, 101], // voter list
-				vec![
-					// bags
-					(10, vec![]), // the bag itself is not cleaned up from storage, which is ok
-					(1_000, vec![21, 101]),
-				],
+				vec![21, 101],                // voter list
+				vec![(1_000, vec![21, 101])], // bags
 			);
+			assert!(!VoterBags::<Test>::contains_key(10)); // bag 10 is removed
 
 			// remove remaining voters to make sure storage cleans up as expected
 			VoterList::<Test>::remove(&21);
 			check_storage(
 				21,
 				1,
-				vec![101],                              // voter list
-				vec![(10, vec![]), (1_000, vec![101])], // bags
+				vec![101],                // voter list
+				vec![(1_000, vec![101])], // bags
 			);
 
 			VoterList::<Test>::remove(&101);
 			check_storage(
 				101,
 				0,
-				Vec::<u64>::new(),                   // voter list
-				vec![(10, vec![]), (1_000, vec![])], // bags
+				Vec::<u64>::new(), // voter list
+				vec![],            // bags
 			);
+			assert!(!VoterBags::<Test>::contains_key(1_000)); // bag 1_000 is removed
 
-			// bags are not deleted via removals
-			assert_eq!(crate::VoterBags::<Test>::iter().count(), 2);
+			// bags are deleted via removals
+			assert_eq!(VoterBags::<Test>::iter().count(), 0);
 			// nominator and validator counters are not updated at this level of the api
 			assert_eq!(crate::CounterForValidators::<Test>::get(), 3);
 			assert_eq!(crate::CounterForNominators::<Test>::get(), 1);
@@ -1270,7 +1264,7 @@ mod voter_list {
 
 			// then updating position moves it to the correct bag
 			assert_eq!(VoterList::<Test>::update_position_for(node_31, &weight_of), Some((10, 20)));
-			assert_eq!(get_bags(), vec![(10, vec![]), (20, vec![31]), (1_000, vec![11, 21, 101])]);
+			assert_eq!(get_bags(), vec![(20, vec![31]), (1_000, vec![11, 21, 101])]);
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 
 			// and if you try and update the position with no change in active stake nothing changes
@@ -1291,7 +1285,7 @@ mod voter_list {
 			);
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![]), (20, vec![]), (1_000, vec![11, 21, 101, 31])]
+				vec![(1_000, vec![11, 21, 101, 31])]
 			);
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 
@@ -1304,53 +1298,6 @@ mod voter_list {
 				VoterList::<Test>::update_position_for(node_31, &weight_of),
 				None,
 			));
-		});
-	}
-
-	// TODO: should probs remove this; Just wanted to document an edge case
-	// I ran into where I read in a node, called bond_extra, and then called
-	// update_position_for(node). The underlying issue is we insert a node with
-	// the same ID twice.
-	// When we insert we set node.prev = tail.id
-	// and then old_tail.next = node.id. Which creates a cycle since old_tail
-	// was the same node
-	// tl;dr, don't insert the same id into a bag twice, especially if its tail
-	// cover this explicitly in insert_node_bad_paths_documented
-	#[test]
-	fn node_reference_invalid_after_implicit_update_position() {
-		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			let weight_of = Staking::weight_of_fn();
-
-			// starts out in the correct place.
-			let node_31 = Node::<Test>::from_id(&31).unwrap();
-			assert!(!node_31.is_misplaced(&weight_of));
-
-			Balances::make_free_balance_be(&31, 11);
-			// when we call bond_extra
-			assert_ok!(Staking::bond_extra(Origin::signed(31), 11));
-
-			// then now the reference is outdated
-			assert!(node_31.is_misplaced(&weight_of));
-			// but we can expect the list is correct
-			assert_eq!(get_bags(), vec![(10, vec![]), (20, vec![31]), (1_000, vec![11, 21, 101])]);
-			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
-
-			assert_eq!(VoterList::<Test>::update_position_for(node_31, &weight_of), Some((10, 20)));
-
-			let bag = Bag::<Test>::get(20).unwrap();
-			// there is a cycle,
-			// the bags head/tail are the same node, and that node has its own
-			// id for prev & next so when we iterate we will infinitely keep
-			// reading the same node from storage.
-			assert_eq!(
-				bag.head().unwrap().voter().id,
-				bag.head().unwrap().next().unwrap().voter().id
-			);
-			assert_eq!(
-				bag.head().unwrap().voter().id,
-				bag.head().unwrap().prev().unwrap().voter().id
-			);
-			assert_eq!(bag.head().unwrap().voter().id, bag.tail().unwrap().voter().id,)
 		});
 	}
 }
@@ -1398,7 +1345,7 @@ mod bags {
 			VoterList::<Test>::remove(&31);
 
 			// then
-			check_bag(existing_bag_uppers[0], None, None, vec![]);
+			assert_eq!(Bag::<Test>::get(existing_bag_uppers[0]), None)
 		});
 	}
 
@@ -1577,8 +1524,8 @@ mod bags {
 			// remove node that is head & tail
 			let node_21 = Node::<Test>::get(bag_1000.bag_upper, &21).unwrap();
 			bag_1000.remove_node(&node_21);
-			assert_eq!(bag_as_ids(&bag_1000), Vec::<u64>::new());
-			assert_ok!(bag_1000.sanity_check());
+			bag_1000.put(); // put into storage so get returns the updated bag
+			assert_eq!(Bag::<Test>::get(1_000), None);
 
 			// remove node that is pointing at head and tail
 			let node_71 = Node::<Test>::get(bag_10.bag_upper, &71).unwrap();
@@ -1591,6 +1538,7 @@ mod bags {
 			bag_10.remove_node(&node_31);
 			assert_eq!(bag_as_ids(&bag_10), vec![81]);
 			assert_ok!(bag_10.sanity_check());
+			bag_10.put(); // since we updated the bag's head/tail, we need to write this storage
 
 			// remove node that is pointing at head, but not tail
 			let node_161 = Node::<Test>::get(bag_2000.bag_upper, &161).unwrap();
@@ -1607,7 +1555,7 @@ mod bags {
 			// state of all bags is as expected
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![81]), (1_000, vec![]), (2_000, vec![91, 171, 191])]
+				vec![(10, vec![81]), (2_000, vec![91, 171, 191])]
 			);
 		});
 	}
