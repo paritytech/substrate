@@ -2172,7 +2172,10 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_genesis() {}
+			fn on_genesis() {
+				let storage_version = <Self as $crate::traits::GetStorageVersion>::current_storage_version();
+				storage_version.put::<Self>();
+			}
 		}
 
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
