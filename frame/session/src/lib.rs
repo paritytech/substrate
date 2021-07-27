@@ -572,7 +572,7 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	/// Returns the number of validators in the current session.
+	/// Get the number of validators in the current session.
 	pub fn validators_len() -> usize {
 		<Validators<T>>::decode_len().unwrap_or(0)
 	}

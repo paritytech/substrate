@@ -56,7 +56,7 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{Currency, Imbalance, OnUnbalanced},
+	traits::{Currency, Get, Imbalance, OnUnbalanced},
 };
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -278,11 +278,9 @@ pub(crate) fn compute_slash<T: Config>(
 			spans.end_span(now);
 			<Pallet<T>>::chill_stash(stash);
 
-			// make sure to disable validator till the end of this session
-			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
-				// force a new era, to select a new validator set
-				<Pallet<T>>::ensure_new_era()
-			}
+			// add the validator to the offenders list and make sure it is disabled for
+			// the duration of the session
+			add_offending_validator::<T>(params.stash, true);
 		}
 	}
 
@@ -316,12 +314,40 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 		spans.end_span(params.now);
 		<Pallet<T>>::chill_stash(params.stash);
 
-		// make sure to disable validator till the end of this session
-		if T::SessionInterface::disable_validator(params.stash).unwrap_or(false) {
-			// force a new era, to select a new validator set
-			<Pallet<T>>::ensure_new_era()
-		}
+		// add the validator to the offenders list but since there's no slash being
+		// applied there's no need to disable the validator
+		add_offending_validator::<T>(params.stash, false);
 	}
+}
+
+/// Add the given validator to the offenders list and optionally disable it.
+/// If after adding the validator `OffendingValidatorsThreshold` is reached
+/// a new era will be forced.
+fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
+	<Pallet<T> as Store>::OffendingValidators::mutate(|offending| {
+		let validator_index =
+			match T::SessionInterface::validators().iter().position(|i| i == stash) {
+				Some(index) => index,
+				None => return,
+			};
+
+		let validator_index_u32 = validator_index as u32;
+		if let Err(index) = offending.binary_search(&validator_index_u32) {
+			offending.insert(index, validator_index_u32);
+
+			let offending_threshold = T::OffendingValidatorsThreshold::get() *
+				T::SessionInterface::validators_len() as u32;
+
+			if offending.len() > offending_threshold as usize {
+				// force a new era, to select a new validator set
+				<Pallet<T>>::ensure_new_era()
+			}
+
+			if disable {
+				T::SessionInterface::disable_validator(validator_index);
+			}
+		}
+	});
 }
 
 /// Slash nominators. Accepts general parameters and the prior slash percentage of the validator.

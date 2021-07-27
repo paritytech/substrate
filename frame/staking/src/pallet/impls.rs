@@ -300,6 +300,8 @@ impl<T: Config> Pallet<T> {
 					Self::end_era(active_era, session_index);
 				}
 			}
+
+			<OffendingValidators<T>>::take();
 		}
 	}
 
