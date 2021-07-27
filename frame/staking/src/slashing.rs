@@ -279,7 +279,7 @@ pub(crate) fn compute_slash<T: Config>(
 			<Pallet<T>>::chill_stash(stash);
 
 			// add the validator to the offenders list and make sure it is disabled for
-			// the duration of the session
+			// the duration of the era
 			add_offending_validator::<T>(params.stash, true);
 		}
 	}
@@ -332,20 +332,33 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 			};
 
 		let validator_index_u32 = validator_index as u32;
-		if let Err(index) = offending.binary_search(&validator_index_u32) {
-			offending.insert(index, validator_index_u32);
 
-			let offending_threshold = T::OffendingValidatorsThreshold::get() *
-				T::SessionInterface::validators_len() as u32;
+		match offending.binary_search_by_key(&validator_index_u32, |(index, _)| *index) {
+			// this is a new offending validator
+			Err(index) => {
+				offending.insert(index, (validator_index_u32, disable));
 
-			if offending.len() > offending_threshold as usize {
-				// force a new era, to select a new validator set
-				<Pallet<T>>::ensure_new_era()
-			}
+				let offending_threshold = T::OffendingValidatorsThreshold::get() *
+					T::SessionInterface::validators_len() as u32;
 
-			if disable {
-				T::SessionInterface::disable_validator(validator_index);
-			}
+				if offending.len() > offending_threshold as usize {
+					// force a new era, to select a new validator set
+					<Pallet<T>>::ensure_new_era()
+				}
+
+				if disable {
+					T::SessionInterface::disable_validator(validator_index);
+				}
+			},
+			Ok(index) if disable => {
+				// the validator had previously offended without being disabled,
+				// let's make sure we disable it now
+				if !offending[index].1 {
+					offending[index].1 = true;
+					T::SessionInterface::disable_validator(validator_index);
+				}
+			},
+			_ => {},
 		}
 	});
 }

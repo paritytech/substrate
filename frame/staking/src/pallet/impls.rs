@@ -288,6 +288,13 @@ impl<T: Config> Pallet<T> {
 				Self::start_era(start_session);
 			}
 		}
+
+		// disable all offending validators that have been disabled for the whole era
+		for (index, disabled) in <OffendingValidators<T>>::get() {
+			if disabled {
+				T::SessionInterface::disable_validator(index as usize);
+			}
+		}
 	}
 
 	/// End a session potentially ending an era.
@@ -300,8 +307,6 @@ impl<T: Config> Pallet<T> {
 					Self::end_era(active_era, session_index);
 				}
 			}
-
-			<OffendingValidators<T>>::take();
 		}
 	}
 
@@ -361,6 +366,9 @@ impl<T: Config> Pallet<T> {
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
 			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
+
+			// Clear offending validators.
+			<OffendingValidators<T>>::take();
 		}
 	}
 

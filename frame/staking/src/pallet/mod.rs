@@ -437,8 +437,16 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
+	/// Indices of validators that have offended in the current era and whether they are currently
+	/// disabled.
+	///
+	/// This value should be a superset of disabled validators since not all offences lead to the
+	/// validator being disabled (if there was no slash). This is needed to track the percentage
+	/// of validators that have offended in the current era, ensuring a new era is forced if
+	/// `OffendingValidatorsThreshold` is reached. The set is cleared when the era ends.
 	#[pallet::storage]
-	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
+	#[pallet::getter(fn offending_validators)]
+	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
