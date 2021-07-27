@@ -320,8 +320,8 @@ pub mod pallet {
 				class,
 				owner.clone(),
 				admin.clone(),
-				None,
-				None,
+				T::ClassDeposit::get(),
+				false,
 				Event::Created(class, owner, admin),
 			)
 		}
@@ -356,8 +356,8 @@ pub mod pallet {
 				class,
 				owner.clone(),
 				owner.clone(),
-				Some(Zero::zero()),
-				Some(free_holding),
+				Zero::zero(),
+				free_holding,
 				Event::ForceCreated(class, owner),
 			)
 		}

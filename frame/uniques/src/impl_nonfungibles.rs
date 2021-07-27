@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_support::{
-	traits::tokens::nonfungibles::{Create, Inspect, InspectEnumerable, Mutate, Transfer},
+	traits::{Get, tokens::nonfungibles::{Create, Inspect, InspectEnumerable, Mutate, Transfer}},
 	BoundedSlice,
 };
 use sp_runtime::DispatchResult;
@@ -96,8 +96,8 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 			class.clone(),
 			who.clone(),
 			admin.clone(),
-			None,
-			None,
+			T::ClassDeposit::get(),
+			false,
 			Event::Created(class.clone(), who.clone(), admin.clone()),
 		)
 	}

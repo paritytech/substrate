@@ -52,14 +52,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		class: T::ClassId,
 		owner: T::AccountId,
 		admin: T::AccountId,
-		deposit: Option<DepositBalanceOf<T, I>>,
-		free_holding: Option<bool>,
+		deposit: DepositBalanceOf<T, I>,
+		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
 		ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
 
-		let dep_amt = deposit.unwrap_or(T::ClassDeposit::get());
-		T::Currency::reserve(&owner, dep_amt)?;
+		T::Currency::reserve(&owner, deposit)?;
 
 		Class::<T, I>::insert(
 			class,
@@ -68,8 +67,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				issuer: admin.clone(),
 				admin: admin.clone(),
 				freezer: admin.clone(),
-				total_deposit: dep_amt,
-				free_holding: free_holding.unwrap_or(false),
+				total_deposit: deposit,
+				free_holding: free_holding,
 				instances: 0,
 				instance_metadatas: 0,
 				attributes: 0,
