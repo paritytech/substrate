@@ -163,7 +163,7 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
-	($pallet:ident, $name:ident => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>) => {
+	($pallet:ident, $name:ident => NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageNMap<
