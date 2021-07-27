@@ -121,12 +121,10 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 pub trait Create<AccountId>: Inspect<AccountId> {
 	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
 	fn create_class(
-		_class: &Self::ClassId,
-		_who: &AccountId,
-		_admin: &AccountId,
-	) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
-	}
+		class: &Self::ClassId,
+		who: &AccountId,
+		admin: &AccountId,
+	) -> DispatchResult;
 }
 
 /// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,
