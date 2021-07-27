@@ -245,6 +245,7 @@ impl<T: Config> VoterList<T> {
 
 			// clear the old bag head/tail pointers as necessary
 			if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
+				dbg!(&bag);
 				bag.remove_node(&node);
 				bag.put();
 			} else {
@@ -431,9 +432,18 @@ impl<T: Config> Bag<T> {
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
 
+	/// `True` if self is empty.
+	pub fn is_empty(&self) -> bool {
+		self.head.is_none() && self.tail.is_none()
+	}
+
 	/// Put the bag back into storage.
 	pub fn put(self) {
-		crate::VoterBags::<T>::insert(self.bag_upper, self);
+		if self.is_empty() {
+			crate::VoterBags::<T>::remove(self.bag_upper);
+		} else {
+			crate::VoterBags::<T>::insert(self.bag_upper, self);
+		}
 	}
 
 	/// Get the head node in this bag.
@@ -1014,6 +1024,28 @@ mod voter_list {
 		assert!(VoteWeight::MAX > max_explicit_threshold);
 		// anything above it will belong to the VoteWeight::MAX bag.
 		assert_eq!(notional_bag_for::<Test>(max_explicit_threshold + 1), VoteWeight::MAX);
+	}
+
+	#[test]
+	fn remove_last_voter_in_bags_cleans_bag() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
+
+			// give 31 more stake to bump it to a new bag.
+			Balances::make_free_balance_be(&31, 10000);
+			assert_ok!(Staking::bond_extra(Origin::signed(31), 10000 - 10));
+
+			// then the bag with bound 10 is wiped from storage.
+			assert_eq!(get_bags(), vec![(1000, vec![11, 21, 101]), (10_000, vec![31])]);
+
+			// and can be recreated again as needed
+			bond_validator(77, 777, 10);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![77]), (1000, vec![11, 21, 101]), (10_000, vec![31])]
+			);
+		});
 	}
 
 	#[test]
