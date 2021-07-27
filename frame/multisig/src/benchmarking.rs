@@ -40,7 +40,8 @@ fn setup_multi<T: Config>(s: u32, z: u32) -> Result<(Vec<T::AccountId>, Vec<u8>)
 	}
 	signatories.sort();
 	// Must first convert to outer call type.
-	let call: <T as Config>::Call = frame_system::Call::<T>::remark { _remark: vec![0; z as usize] }.into();
+	let call: <T as Config>::Call =
+		frame_system::Call::<T>::remark { _remark: vec![0; z as usize] }.into();
 	let call_data = call.encode();
 	return Ok((signatories, call_data))
 }
