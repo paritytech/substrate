@@ -479,6 +479,15 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for the node. You still need to call
 	/// `self.put()` after use.
 	fn insert_node(&mut self, mut node: Node<T>) {
+		if let Some(tail) = &self.tail {
+			if *tail == node.voter.id {
+				// this should never happen, but this check prevents a worst case infinite loop
+				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
+				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
+				return
+			};
+		}
+
 		let id = node.voter.id.clone();
 
 		node.prev = self.tail.clone();
@@ -1172,7 +1181,7 @@ mod voter_list {
 
 	#[test]
 	fn remove_works() {
-		use crate::{CounterForVoters, VoterNodes, VoterBags};
+		use crate::{CounterForVoters, VoterBags, VoterNodes};
 
 		let check_storage = |id, counter, voters, bags| {
 			assert!(!VoterBagFor::<Test>::contains_key(id));
@@ -1283,10 +1292,7 @@ mod voter_list {
 				VoterList::<Test>::update_position_for(node_31, &weight_of),
 				Some((20, 1_000))
 			);
-			assert_eq!(
-				get_bags(),
-				vec![(1_000, vec![11, 21, 101, 31])]
-			);
+			assert_eq!(get_bags(), vec![(1_000, vec![11, 21, 101, 31])]);
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
 
 			// when account 31 bonds extra but should not change bags
@@ -1411,24 +1417,14 @@ mod bags {
 	// Document improper ways `insert_node` may be getting used.
 	#[test]
 	fn insert_node_bad_paths_documented() {
+		let node = |voter, prev, next, bag_upper| Node::<Test> { voter, prev, next, bag_upper };
 		ExtBuilder::default().build_and_execute_without_check_count(|| {
-			let node = |voter, prev, next, bag_upper| Node::<Test> { voter, prev, next, bag_upper };
-			// insert some validators into genesis state
-			bond_validator(51, 50, 2_000);
-			bond_validator(61, 60, 2_000);
-			bond_validator(71, 70, 2_000);
-
-			// given
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61, 71])],
-			);
-
 			// when inserting a node with both prev & next pointing at an account in the bag
 			// and an incorrect bag_upper
 			let mut bag_1000 = Bag::<Test>::get(1_000).unwrap();
 			let voter_42 = Voter::nominator(42);
 			bag_1000.insert_node(node(voter_42.clone(), Some(11), Some(11), 0));
+
 			// then the ids are in the correct order
 			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 101, 42]);
 			// and when the node is re-fetched all the info is correct
@@ -1440,10 +1436,12 @@ mod bags {
 			// given 21 is a validator in bag_1000 (and not a tail node)
 			let bag_1000_voter =
 				bag_1000.iter().map(|node| node.voter().clone()).collect::<Vec<_>>();
-			assert_eq!(bag_1000_voter[1], Voter::<_>::validator(21));
+			assert_eq!(bag_1000_voter[1], Voter::validator(21));
+
 			// when inserting a node with duplicate id 21 but as a nominator
-			let voter_21_nom = Voter::<_>::nominator(21);
+			let voter_21_nom = Voter::nominator(21);
 			bag_1000.insert_node(node(voter_21_nom.clone(), None, None, bag_1000.bag_upper));
+
 			// then all the nodes after the duplicate are lost (because it is set as the tail)
 			assert_eq!(bag_as_ids(&bag_1000), vec![11, 21]);
 			// and the re-fetched node is a nominator with an **incorrect** prev pointer.
@@ -1451,24 +1449,45 @@ mod bags {
 				Node::<Test>::get(1_000, &21).unwrap(),
 				node(voter_21_nom, Some(42), None, bag_1000.bag_upper)
 			);
+		});
 
-			// TODO: this exact issue could be avoided at this level of abstraction if we check if
-			// an id is already the bags tail before inserting
-
-			// given a bag we are confident is in valid state
-			let mut bag_2000 = Bag::<Test>::get(2_000).unwrap();
-			assert_eq!(bag_as_ids(&bag_2000), vec![51, 61, 71]);
-			// when inserting a duplicate id that is already the tail
-			assert_eq!(bag_2000.tail, Some(71));
-			let voter_71 = Voter::<_>::validator(71);
-			bag_2000.insert_node(node(voter_71.clone(), None, None, bag_2000.bag_upper));
-			// then a cycle is created
-			assert_eq!(bag_2000.tail, Some(71));
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			// when inserting a duplicate id of the head
+			let mut bag_1000 = Bag::<Test>::get(1_000).unwrap();
+			let voter_11 = Voter::validator(11);
+			bag_1000.insert_node(node(voter_11.clone(), None, None, 0));
+			// then all nodes after the head are lost
+			assert_eq!(bag_as_ids(&bag_1000), vec![11]);
+			// and the re-fetched node
 			assert_eq!(
-				Node::<Test>::get(2_000, &71).unwrap(),
-				node(voter_71, Some(71), Some(71), bag_2000.bag_upper)
+				Node::<Test>::get(1_000, &11).unwrap(),
+				node(voter_11, Some(101), None, bag_1000.bag_upper)
 			);
-		})
+
+			assert_eq!(
+				bag_1000,
+				Bag {
+					head: Some(11), tail: Some(11), bag_upper: 1_000
+				}
+			)
+		});
+	}
+
+	#[test]
+	#[should_panic = "system logic error: inserting a node who has the id of tail"]
+	fn insert_node_duplicate_tail_panics_with_debug_assert() {
+		ExtBuilder::default().build_and_execute_without_check_count(|| {
+			let node = |voter, prev, next, bag_upper| Node::<Test> { voter, prev, next, bag_upper };
+
+			// given
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])],);
+			let mut bag_1000 = Bag::<Test>::get(1_000).unwrap();
+
+			// when inserting a duplicate id that is already the tail
+			assert_eq!(bag_1000.tail, Some(101));
+			let voter_101 = Voter::validator(101);
+			bag_1000.insert_node(node(voter_101, None, None, bag_1000.bag_upper)); // panics
+		});
 	}
 
 	#[test]
@@ -1553,10 +1572,7 @@ mod bags {
 			assert_ok!(bag_2000.sanity_check());
 
 			// state of all bags is as expected
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![81]), (2_000, vec![91, 171, 191])]
-			);
+			assert_eq!(get_bags(), vec![(10, vec![81]), (2_000, vec![91, 171, 191])]);
 		});
 	}
 
