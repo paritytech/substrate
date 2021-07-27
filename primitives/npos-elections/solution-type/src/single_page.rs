@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{syn_err, vote_filed};
+use crate::{syn_err, vote_filed, from_assignment_helpers::*};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::Result;
@@ -88,9 +88,8 @@ pub(crate) fn generate(
 	let struct_name = syn::Ident::new("solution", proc_macro2::Span::call_site());
 	let assignment_name = syn::Ident::new("all_assignments", proc_macro2::Span::call_site());
 
-	let from_impl = crate::assignment::from_impl_single_page(&struct_name, count);
-	let into_impl =
-		crate::assignment::into_impl_single_page(&assignment_name, count, weight_type.clone());
+	let from_impl = from_impl(&struct_name, count);
+	let into_impl = into_impl(&assignment_name, count, weight_type.clone());
 	let from_index_impl = crate::index_assignment::from_impl(&struct_name, count);
 
 	Ok(quote! (
@@ -297,4 +296,119 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 		#unique_targets_impl_double
 		#unique_targets_impl_rest
 	}
+}
+
+pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 {
+	let from_impl_single = {
+		let field = vote_filed(1);
+		let push_code = from_impl_single_push_code();
+		quote!(1 => #struct_name.#field.#push_code,)
+	};
+
+	let from_impl_double = {
+		let field = vote_filed(2);
+		let push_code = from_impl_double_push_code();
+		quote!(2 => #struct_name.#field.#push_code,)
+	};
+
+	let from_impl_rest = (3..=count)
+		.map(|c| {
+			let field = vote_filed(c);
+			let push_code = from_impl_rest_push_code(c);
+			quote!(#c => #struct_name.#field.#push_code,)
+		})
+		.collect::<TokenStream2>();
+
+	quote!(
+		#from_impl_single
+		#from_impl_double
+		#from_impl_rest
+	)
+}
+
+pub(crate) fn into_impl(
+	assignments: &syn::Ident,
+	count: usize,
+	per_thing: syn::Type,
+) -> TokenStream2 {
+	let into_impl_single = {
+		let name = vote_filed(1);
+		quote!(
+			for (voter_index, target_index) in self.#name {
+				#assignments.push(_npos::Assignment {
+					who: voter_at(voter_index).or_invalid_index()?,
+					distribution: vec![
+						(target_at(target_index).or_invalid_index()?, #per_thing::one())
+					],
+				})
+			}
+		)
+	};
+
+	let into_impl_double = {
+		let name = vote_filed(2);
+		quote!(
+			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
+				if p1 >= #per_thing::one() {
+					return Err(_npos::Error::SolutionWeightOverflow);
+				}
+
+				// defensive only. Since Percent doesn't have `Sub`.
+				let p2 = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
+					#per_thing::one(),
+					p1,
+				);
+
+				#assignments.push( _npos::Assignment {
+					who: voter_at(voter_index).or_invalid_index()?,
+					distribution: vec![
+						(target_at(t1_idx).or_invalid_index()?, p1),
+						(target_at(t2_idx).or_invalid_index()?, p2),
+					]
+				});
+			}
+		)
+	};
+
+	let into_impl_rest = (3..=count)
+		.map(|c| {
+			let name = vote_filed(c);
+			quote!(
+				for (voter_index, inners, t_last_idx) in self.#name {
+					let mut sum = #per_thing::zero();
+					let mut inners_parsed = inners
+						.iter()
+						.map(|(ref t_idx, p)| {
+							sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
+							let target = target_at(*t_idx).or_invalid_index()?;
+							Ok((target, *p))
+						})
+						.collect::<Result<_npos::sp_std::prelude::Vec<(A, #per_thing)>, _npos::Error>>()?;
+
+					if sum >= #per_thing::one() {
+						return Err(_npos::Error::SolutionWeightOverflow);
+					}
+
+					// defensive only. Since Percent doesn't have `Sub`.
+					let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
+						#per_thing::one(),
+						sum,
+					);
+
+					inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
+
+					#assignments.push(_npos::Assignment {
+						who: voter_at(voter_index).or_invalid_index()?,
+						distribution: inners_parsed,
+					});
+				}
+			)
+		})
+		.collect::<TokenStream2>();
+
+	quote!(
+		#into_impl_single
+		#into_impl_double
+		#into_impl_rest
+	)
 }

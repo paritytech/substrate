@@ -23,7 +23,7 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
 
-mod assignment;
+mod from_assignment_helpers;
 mod codec;
 mod index_assignment;
 mod multi_page;

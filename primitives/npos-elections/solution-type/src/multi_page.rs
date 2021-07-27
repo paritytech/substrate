@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{page_field, vote_filed};
+use crate::{page_field, vote_filed, from_assignment_helpers::*};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::Result;
@@ -94,19 +94,19 @@ pub(crate) fn generate(
 
 			let single = {
 				let vote_filed = vote_filed(1);
-				let push_code = crate::assignment::from_impl_single_push_code();
+				let push_code = from_impl_single_push_code();
 				quote! {1 => #struct_name.#page_field.#vote_filed.#push_code,}
 			};
 			let double = {
 				let vote_filed = vote_filed(2);
-				let push_code = crate::assignment::from_impl_double_push_code();
+				let push_code = from_impl_double_push_code();
 				quote! {2 => #struct_name.#page_field.#vote_filed.#push_code,}
 			};
 			let rest = {
 				(3..=count)
 					.map(|c| {
 						let field = vote_filed(c);
-						let push_code = crate::assignment::from_impl_rest_push_code(c);
+						let push_code = from_impl_rest_push_code(c);
 						quote!(#c => #struct_name.#page_field.#field.#push_code,)
 					})
 					.collect::<TokenStream2>()
