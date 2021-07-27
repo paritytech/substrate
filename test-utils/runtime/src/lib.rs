@@ -77,8 +77,8 @@ pub mod wasm_binary_logging_disabled {
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect(
-		"Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.",
+		"Development wasm binary is not available. Testing is only supported with the flag \
+		 disabled.",
 	)
 }
 
@@ -87,7 +87,7 @@ pub fn wasm_binary_unwrap() -> &'static [u8] {
 pub fn wasm_binary_logging_disabled_unwrap() -> &'static [u8] {
 	wasm_binary_logging_disabled::WASM_BINARY.expect(
 		"Development wasm binary is not available. Testing is only supported with the flag \
-			disabled.",
+		 disabled.",
 	)
 }
 

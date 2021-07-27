@@ -25,7 +25,7 @@
 //! This is internal api and is subject to change.
 
 mod double_map;
-mod map;
+pub(crate) mod map;
 mod nmap;
 mod value;
 
