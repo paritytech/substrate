@@ -16,8 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A set of common definitions that are needed for defining execution engines.
-
+#![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 #![deny(unused_crate_dependencies)]
 

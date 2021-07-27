@@ -21,7 +21,7 @@ use crate::error::{self, Error};
 use pwasm_utils::parity_wasm::elements::Instruction;
 use std::mem;
 
-/// This is a snapshot of data segments specialzied for a particular instantiation.
+/// This is a snapshot of data segments specialized for a particular instantiation.
 ///
 /// Note that this assumes that no mutable globals are used.
 #[derive(Clone)]

@@ -31,12 +31,15 @@ pub trait InstanceGlobals {
 	/// A handle to a global which can be used to get or set a global variable. This is supposed to
 	/// be a lightweight handle, like an index or an Rc-like smart-pointer, which is cheap to clone.
 	type Global: Clone;
+
 	/// Get a handle to a global by it's export name.
 	///
 	/// The requested export is must exist in the exported list, and it should be a mutable global.
 	fn get_global(&self, export_name: &str) -> Self::Global;
+
 	/// Get the current value of the global.
 	fn get_global_value(&self, global: &Self::Global) -> sp_wasm_interface::Value;
+
 	/// Update the current value of the global.
 	///
 	/// The global behind the handle is guaranteed to be mutable and the value to be the same type
@@ -49,7 +52,7 @@ pub trait InstanceGlobals {
 /// This is set of globals required to create a [`GlobalsSnapshot`] and that are collected from
 /// a runtime blob that was instrumented by
 /// [`RuntimeBlob::expose_mutable_globals`](super::RuntimeBlob::expose_mutable_globals`).
-
+///
 /// If the code wasn't instrumented then it would be empty and snapshot would do nothing.
 pub struct ExposedMutableGlobalsSet(Vec<String>);
 

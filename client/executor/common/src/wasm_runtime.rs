@@ -65,7 +65,7 @@ impl<'a> From<&'a str> for InvokeMethod<'a> {
 ///
 /// This can be implemented by an execution engine.
 pub trait WasmModule: Sync + Send {
-	/// Create a new instance.
+	/// Create a new instance (or reuses an existing instance if possible).
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error>;
 }
 

@@ -279,7 +279,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// usage in bytes.
 ///
 /// The actual number of bytes consumed by a function is not trivial to compute  without going through
-/// full compilation. Therefore, it's expected that `native_stack_max` is grealy overestimated and
+/// full compilation. Therefore, it's expected that `native_stack_max` is greedily overestimated and
 /// thus never reached in practice. The stack overflow check introduced by the instrumentation and
 /// that relies on the logical item count should be reached first.
 ///
@@ -297,7 +297,7 @@ pub struct DeterministicStackLimit {
 	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm function
 	/// after translation into machine code. It is also not quite trivial.
 	///
-	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
+	/// Therefore, this number should be chosen conservatively. It must be so large so that it can
 	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the current
 	/// instrumentation algorithm.
 	///
@@ -307,7 +307,7 @@ pub struct DeterministicStackLimit {
 
 pub struct Semantics {
 	/// Enabling this will lead to some optimization shenanigans that make calling [`WasmInstance`]
-	/// extermely fast.
+	/// extremely fast.
 	///
 	/// Primarily this is achieved by not recreating the instance for each call and performing a
 	/// bare minimum clean up: reapplying the data segments and restoring the values for global
@@ -322,7 +322,7 @@ pub struct Semantics {
 	// I.e. if [`CodeSupplyMode::Verbatim`] is used.
 	pub fast_instance_reuse: bool,
 
-	/// Specifiying `Some` will enable deterministic stack height. That is, all executor invocations
+	/// Specifying `Some` will enable deterministic stack height. That is, all executor invocations
 	/// will reach stack overflow at the exactly same point across different wasmtime versions and
 	/// architectures.
 	///
@@ -354,8 +354,8 @@ pub struct Config {
 	pub heap_pages: u32,
 
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
-	/// othewise, the instantiation fails. If this option is set to `true`, then this behavior is
-	/// overriden and imports that are requested by the module and not provided by the host functions
+	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is
+	/// overridden and imports that are requested by the module and not provided by the host functions
 	/// will be resolved using stubs. These stubs will trap upon a call.
 	pub allow_missing_func_imports: bool,
 
@@ -462,7 +462,7 @@ unsafe fn do_create_runtime(
 			}
 		},
 		CodeSupplyMode::Artifact { compiled_artifact } => {
-			// SAFETY: The unsafity of `deserialize` is covered by this function. The
+			// SAFETY: The unsafety of `deserialize` is covered by this function. The
 			//         responsibilities to maintain the invariants are passed to the caller.
 			let module = wasmtime::Module::deserialize(&engine, compiled_artifact)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;

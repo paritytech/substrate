@@ -71,6 +71,7 @@ impl GuestToSupervisorFunctionMapping {
 	}
 }
 
+/// External functions and memories that a particular wasm module depends upon.
 struct Imports {
 	func_map: HashMap<(Vec<u8>, Vec<u8>), GuestFuncIndex>,
 	memories_map: HashMap<(Vec<u8>, Vec<u8>), MemoryRef>,
@@ -131,7 +132,7 @@ impl ImportResolver for Imports {
 
 /// This trait encapsulates sandboxing capabilities.
 ///
-/// Note that this functions are only called in the `supervisor` context.
+/// Note that these functions are only called in the `supervisor` context.
 pub trait SandboxCapabilities: FunctionContext {
 	/// Represents a function reference into the supervisor environment.
 	type SupervisorFuncRef;
@@ -159,7 +160,7 @@ pub trait SandboxCapabilities: FunctionContext {
 	) -> Result<i64>;
 }
 
-/// Implementation of [`Externals`] that allows execution of guest module with
+/// Implementation of [`Externals`] that allows execution of a guest (wasm) module with
 /// [externals][`Externals`] that might refer functions defined by supervisor.
 ///
 /// [`Externals`]: ../wasmi/trait.Externals.html
@@ -173,6 +174,7 @@ fn trap(msg: &'static str) -> Trap {
 	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
 }
 
+/// Transforms the result of an external function (from the host) into a format understood by the runtime.
 fn deserialize_result(
 	mut serialized_result: &[u8],
 ) -> std::result::Result<Option<RuntimeValue>, Trap> {
@@ -301,7 +303,8 @@ where
 
 /// Sandboxed instance of a wasm module.
 ///
-/// It's primary purpose is to [`invoke`] exported functions on it.
+/// The supervisor (host) can [`invoke`] wasm-exported functions
+/// and retrieve global variables from the wasm instance.
 ///
 /// All imports of this instance are specified at the creation time and
 /// imports are implemented by the supervisor.
@@ -323,7 +326,7 @@ impl<FR> SandboxInstance<FR> {
 	/// Invoke an exported function by a name.
 	///
 	/// `supervisor_externals` is required to execute the implementations
-	/// of the syscalls that published to a sandboxed module instance.
+	/// of the syscalls that are published to a sandboxed module instance.
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
@@ -358,6 +361,7 @@ pub enum InstantiationError {
 	ModuleDecoding,
 	/// Module is a well-formed webassembly binary but could not be instantiated. This could
 	/// happen because, e.g. the module imports entries not provided by the environment.
+	/// (A linking error)
 	Instantiation,
 	/// Module is well-formed, instantiated and linked, but while executing the start function
 	/// a trap was generated.
@@ -399,7 +403,7 @@ fn decode_environment_definition(
 	Ok((Imports { func_map, memories_map }, guest_to_supervisor_mapping))
 }
 
-/// An environment in which the guest module is instantiated.
+/// An environment in which the guest (wasm) module is instantiated.
 pub struct GuestEnvironment {
 	imports: Imports,
 	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,

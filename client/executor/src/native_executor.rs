@@ -194,7 +194,7 @@ impl WasmExecutor {
 
 	/// Perform a call into the given runtime.
 	///
-	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
+	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
 	/// In case of problems with during creation of the runtime or instantation, a `Err` is returned.
@@ -394,11 +394,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				};
 
 				let result = with_externalities_safe(&mut async_ext, move || {
-					// FIXME: Should be refactored to shared "instance factory".
-					// Instantiating wasm here every time is suboptimal at the moment, shared
-					// pool of instances should be used.
-					//
-					// https://github.com/paritytech/substrate/issues/7354
+					// The new_instance() call may return a reused instance.
 					let instance =
 						module.new_instance().expect("Failed to create new instance from module");
 
