@@ -145,7 +145,7 @@ impl core::Benchmark for ImportBenchmark {
 						//    - successful transfer (Event::Transfer) for this transfer operation
 						//    - 2x deposit (Balances::Deposit and Treasury::Deposit) for depositing
 						//      the transaction fee into the treasury
-						//    - extrinsic successcollect::<Vec<_>>());
+						//    - extrinsic success
 						assert_eq!(
 							node_runtime::System::events().len(),
 							(self.block.extrinsics.len() - 1) * 7 + 1,
