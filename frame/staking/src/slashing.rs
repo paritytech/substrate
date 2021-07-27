@@ -313,11 +313,11 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 	if spans.era_span(params.slash_era).map(|s| s.index) == Some(spans.span_index()) {
 		spans.end_span(params.now);
 		<Pallet<T>>::chill_stash(params.stash);
-
-		// add the validator to the offenders list but since there's no slash being
-		// applied there's no need to disable the validator
-		add_offending_validator::<T>(params.stash, false);
 	}
+
+	// add the validator to the offenders list but since there's no slash being
+	// applied there's no need to disable the validator
+	add_offending_validator::<T>(params.stash, false);
 }
 
 /// Add the given validator to the offenders list and optionally disable it.
