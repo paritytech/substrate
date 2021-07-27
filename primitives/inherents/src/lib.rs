@@ -462,7 +462,7 @@ mod tests {
 
 		let inherent_data = provider.create_inherent_data().unwrap();
 
-		assert_eq!(inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 42u32,);
+		assert_eq!(inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 42u32);
 	}
 
 	#[test]

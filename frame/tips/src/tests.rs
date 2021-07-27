@@ -314,7 +314,7 @@ fn slash_tip_works() {
 		assert_eq!(last_event(), RawEvent::NewTip(h));
 
 		// can't remove from any origin
-		assert_noop!(TipsModTestInst::slash_tip(Origin::signed(0), h.clone()), BadOrigin,);
+		assert_noop!(TipsModTestInst::slash_tip(Origin::signed(0), h.clone()), BadOrigin);
 
 		// can remove from root.
 		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));

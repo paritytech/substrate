@@ -20,8 +20,8 @@
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
-	checked_pow, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedShl, CheckedShr,
-	CheckedSub, One, Signed, Unsigned, Zero,
+	checked_pow, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,
+	CheckedShr, CheckedSub, One, Signed, Unsigned, Zero,
 };
 use sp_std::{
 	self,
@@ -55,6 +55,7 @@ pub trait BaseArithmetic:
 	+ CheckedSub
 	+ CheckedMul
 	+ CheckedDiv
+	+ CheckedRem
 	+ Saturating
 	+ PartialOrd<Self>
 	+ Ord
@@ -109,6 +110,7 @@ impl<
 			+ CheckedSub
 			+ CheckedMul
 			+ CheckedDiv
+			+ CheckedRem
 			+ Saturating
 			+ PartialOrd<Self>
 			+ Ord

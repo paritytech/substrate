@@ -35,7 +35,7 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
+	dispatch::DispatchError,
 	ensure,
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
 	weights::GetDispatchInfo,
@@ -102,7 +102,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type Call: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<Origin = Self::Origin>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>
 			+ IsSubType<Call<Self>>
@@ -196,14 +196,14 @@ pub mod pallet {
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let def = Self::find_proxy(&real, &who, force_proxy_type)?;
 			ensure!(def.delay.is_zero(), Error::<T>::Unannounced);
 
 			Self::do_proxy(def, real, *call);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
@@ -225,7 +225,7 @@ pub mod pallet {
 			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::add_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
@@ -247,7 +247,7 @@ pub mod pallet {
 			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
@@ -263,12 +263,12 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get().into()))]
-		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&who, old_deposit);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
@@ -300,7 +300,7 @@ pub mod pallet {
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 			index: u16,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
@@ -317,7 +317,7 @@ pub mod pallet {
 			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
 			Self::deposit_event(Event::AnonymousCreated(anonymous, who, proxy_type, index));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Removes a previously spawned anonymous proxy.
@@ -348,7 +348,7 @@ pub mod pallet {
 			index: u16,
 			#[pallet::compact] height: T::BlockNumber,
 			#[pallet::compact] ext_index: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let when = (height, ext_index);
@@ -358,7 +358,7 @@ pub mod pallet {
 			let (_, deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&spawner, deposit);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Publish the hash of a proxy-call that will be made in the future.
@@ -387,7 +387,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			real: T::AccountId,
 			call_hash: CallHashOf<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::get(&real)
 				.0
@@ -417,7 +417,7 @@ pub mod pallet {
 			})?;
 			Self::deposit_event(Event::Announced(real, who, call_hash));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove a given announcement.
@@ -443,11 +443,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			real: T::AccountId,
 			call_hash: CallHashOf<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove the given announcement of a delegate.
@@ -473,13 +473,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
 			call_hash: CallHashOf<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&delegate, |ann| {
 				ann.real != who || ann.call_hash != call_hash
 			})?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Dispatch the given `call` from an account that the sender is authorized for through
@@ -513,7 +513,7 @@ pub mod pallet {
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
 
@@ -528,7 +528,7 @@ pub mod pallet {
 
 			Self::do_proxy(def, real, *call);
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -641,7 +641,7 @@ impl<T: Config> Pallet<T> {
 		delegatee: T::AccountId,
 		proxy_type: T::ProxyType,
 		delay: T::BlockNumber,
-	) -> DispatchResultWithPostInfo {
+	) -> DispatchResult {
 		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
 		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
 			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
@@ -654,7 +654,7 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(delegator, *deposit - new_deposit);
 			}
 			*deposit = new_deposit;
-			Ok(().into())
+			Ok(())
 		})
 	}
 
@@ -671,7 +671,7 @@ impl<T: Config> Pallet<T> {
 		delegatee: T::AccountId,
 		proxy_type: T::ProxyType,
 		delay: T::BlockNumber,
-	) -> DispatchResultWithPostInfo {
+	) -> DispatchResult {
 		Proxies::<T>::try_mutate_exists(delegator, |x| {
 			let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
 			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
@@ -686,7 +686,7 @@ impl<T: Config> Pallet<T> {
 			if !proxies.is_empty() {
 				*x = Some((proxies, new_deposit))
 			}
-			Ok(().into())
+			Ok(())
 		})
 	}
 

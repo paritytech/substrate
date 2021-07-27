@@ -512,7 +512,7 @@ pub(crate) mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(0, 5);
 
-		assert!(matches!(prove_finality(&*backend, authority_set_changes, 6), Ok(None),));
+		assert!(matches!(prove_finality(&*backend, authority_set_changes, 6), Ok(None)));
 	}
 
 	#[test]

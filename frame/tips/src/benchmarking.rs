@@ -192,4 +192,4 @@ benchmarks! {
 	}: _(RawOrigin::Root, hash)
 }
 
-impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test,);
+impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test);
