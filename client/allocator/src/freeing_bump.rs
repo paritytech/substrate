@@ -68,8 +68,8 @@
 //!   sizes.
 
 use crate::Error;
-use sp_wasm_interface::{Pointer, WordSize};
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
+use sp_wasm_interface::{Pointer, WordSize};
 use std::{
 	convert::{TryFrom, TryInto},
 	mem,
