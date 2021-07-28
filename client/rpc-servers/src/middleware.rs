@@ -132,7 +132,7 @@ impl RpcMiddleware {
 		RpcMiddleware {
 			metrics,
 			known_rpc_method_names,
-			transport_label: String::from(transport_label),
+			transport_label: transport_label.into(),
 		}
 	}
 }
@@ -202,7 +202,7 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 					.with_label_values(&[
 						transport_label.as_str(),
 						name.as_str(),
-						format!("{}", is_success(&r)).as_str(),
+						if is_success(&r) { "true" } else { "false" },
 					])
 					.inc();
 			}

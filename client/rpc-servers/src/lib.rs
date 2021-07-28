@@ -104,7 +104,7 @@ impl ServerMetrics {
 					.into(),
 				})
 			})
-			.unwrap_or_else(|| Ok(Self { session_opened: None, session_closed: None }))
+			.unwrap_or_default()
 	}
 }
 
