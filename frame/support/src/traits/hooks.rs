@@ -89,7 +89,7 @@ impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 		let mut weight = 0;
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
-		let start_index = start_index.try_into().expect(
+		let start_index = start_index.try_into().ok().expect(
 			"`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed"
 		);
 		for on_idle in on_idle_functions.iter().cycle().skip(start_index).take(len) {
