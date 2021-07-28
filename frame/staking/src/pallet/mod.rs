@@ -127,7 +127,7 @@ pub mod pallet {
 		type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Interface for interacting with a session pallet.
-		type SessionInterface: self::SessionInterface<Self::AccountId>;
+		type SessionInterface: SessionInterface<Self::AccountId>;
 
 		/// The payout for validators and the system for the current era.
 		/// See [Era payout](./index.html#era-payout).
@@ -932,7 +932,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS, Error::<T>::NoMoreChunks);
+			ensure!(ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS, Error::<T>::NoMoreChunks,);
 
 			let mut value = value.min(ledger.active);
 

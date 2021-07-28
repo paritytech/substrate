@@ -560,7 +560,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Clear all era information for given era.
-	pub(super) fn clear_era_information(era_index: EraIndex) {
+	pub(crate) fn clear_era_information(era_index: EraIndex) {
 		<ErasStakers<T>>::remove_prefix(era_index, None);
 		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
 		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
