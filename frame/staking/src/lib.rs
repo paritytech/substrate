@@ -766,7 +766,7 @@ pub mod migrations {
 		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 			ensure!(StorageVersion::<T>::get() == Releases::V7_0_0, "must upgrade linearly");
 			ensure!(
-				VoterList::<T>::decode_len().unwrap_or_default() == 0,
+				VoterList::<T>::iter().count() == 0,
 				"voter list already exists"
 			);
 			Ok(())
