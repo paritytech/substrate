@@ -1269,7 +1269,7 @@ fn restoration(
 						phase: Phase::Initialization,
 						event: Event::Balances(pallet_balances::Event::Withdraw(
 							addr_dummy.clone(),
-							5348
+							5348,
 						)),
 						topics: vec![],
 					},
@@ -1389,18 +1389,17 @@ fn restoration(
 			match (test_different_storage, test_restore_to_with_dirty_storage, test_code_evicted) {
 				(true, false, false) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::InvalidTombstone);
-					assert_eq!(System::events(), vec![
-						EventRecord {
+					assert_eq!(
+						System::events(),
+						vec![EventRecord {
 							phase: Phase::Initialization,
-							event: Event::Balances(
-								pallet_balances::Event::Withdraw(
-									addr_django.clone(),
-									3138,
-								),
-							),
+							event: Event::Balances(pallet_balances::Event::Withdraw(
+								addr_django.clone(),
+								3138,
+							),),
 							topics: vec![],
-						},
-					]);
+						},]
+					);
 				},
 				(_, true, false) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::InvalidContractOrigin);
@@ -1423,16 +1422,14 @@ fn restoration(
 							EventRecord {
 								phase: Phase::Initialization,
 								event: Event::Balances(pallet_balances::Event::Deposit(
-									ALICE,
-									10_000
+									ALICE, 10_000
 								)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
 								event: Event::Balances(pallet_balances::Event::Deposit(
-									CHARLIE,
-									1_000_000
+									CHARLIE, 1_000_000
 								)),
 								topics: vec![],
 							},
@@ -1501,18 +1498,17 @@ fn restoration(
 				(false, false, true) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::CodeNotFound);
 					assert_refcount!(set_rent_code_hash, 0);
-					assert_eq!(System::events(), vec![
-						EventRecord {
+					assert_eq!(
+						System::events(),
+						vec![EventRecord {
 							phase: Phase::Initialization,
-							event: Event::Balances(
-								pallet_balances::Event::Withdraw(
-									addr_django.clone(),
-									3138,
-								),
-							),
+							event: Event::Balances(pallet_balances::Event::Withdraw(
+								addr_django.clone(),
+								3138,
+							),),
 							topics: vec![],
-						},
-					]);
+						},]
+					);
 				},
 				_ => unreachable!(),
 			}
@@ -1535,7 +1531,8 @@ fn restoration(
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::Balances(pallet_balances::Event::Withdraw(
-							addr_django.clone(), 3138
+							addr_django.clone(),
+							3138
 						)),
 						topics: vec![],
 					},
@@ -1547,7 +1544,9 @@ fn restoration(
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::Balances(pallet_balances::Event::BalanceSet(
-							addr_django.clone(), 0, 0
+							addr_django.clone(),
+							0,
+							0
 						)),
 						topics: vec![],
 					},
@@ -1559,7 +1558,8 @@ fn restoration(
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::Balances(pallet_balances::Event::Deposit(
-							addr_bob.clone(), 23726
+							addr_bob.clone(),
+							23726
 						)),
 						topics: vec![],
 					},
@@ -1754,10 +1754,7 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Withdraw(
-						addr.clone(),
-						3462
-					)),
+					event: Event::Balances(pallet_balances::Event::Withdraw(addr.clone(), 3462)),
 					topics: vec![],
 				},
 				EventRecord {
