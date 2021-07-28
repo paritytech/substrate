@@ -40,8 +40,8 @@ criterion_main!(benches);
 /// The wasm runtime code.
 pub fn compact_code_unwrap() -> &'static [u8] {
 	node_runtime::WASM_BINARY.expect(
-		"Development wasm binary is not available. \
-									  Testing is only supported with the flag disabled.",
+		"Development wasm binary is not available. Testing is only supported with the flag \
+		 disabled.",
 	)
 }
 

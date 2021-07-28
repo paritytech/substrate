@@ -108,8 +108,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 	);
 
 	let current_author = authorities.get(idx as usize).expect(
-		"authorities not empty; index constrained to list length;\
-				this is a valid index; qed",
+		"authorities not empty; index constrained to list length;this is a valid index; qed",
 	);
 
 	Some(current_author)
