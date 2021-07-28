@@ -472,6 +472,11 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Deposit(ALICE, 1_000_000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
@@ -513,6 +518,11 @@ fn instantiate_and_call_and_deposit_event() {
 						addr.clone(),
 						vec![1, 2, 3, 4]
 					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Withdraw(addr.clone(), 1980)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1169,6 +1179,11 @@ fn restoration(
 		let mut events = vec![
 			EventRecord {
 				phase: Phase::Initialization,
+				event: Event::Balances(pallet_balances::Event::Deposit(ALICE, 1_000_000)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::Initialization,
 				event: Event::System(frame_system::Event::NewAccount(ALICE)),
 				topics: vec![],
 			},
@@ -1199,6 +1214,11 @@ fn restoration(
 			EventRecord {
 				phase: Phase::Initialization,
 				event: Event::Contracts(crate::Event::CodeStored(set_rent_code_hash.into())),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Balances(pallet_balances::Event::Withdraw(addr_bob.clone(), 5344)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -1242,6 +1262,14 @@ fn restoration(
 							ALICE,
 							addr_dummy.clone(),
 							20_000,
+						)),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: Event::Balances(pallet_balances::Event::Withdraw(
+							addr_dummy.clone(),
+							5348
 						)),
 						topics: vec![],
 					},
@@ -1361,7 +1389,18 @@ fn restoration(
 			match (test_different_storage, test_restore_to_with_dirty_storage, test_code_evicted) {
 				(true, false, false) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::InvalidTombstone);
-					assert_eq!(System::events(), vec![]);
+					assert_eq!(System::events(), vec![
+						EventRecord {
+							phase: Phase::Initialization,
+							event: Event::Balances(
+								pallet_balances::Event::Withdraw(
+									addr_django.clone(),
+									3138,
+								),
+							),
+							topics: vec![],
+						},
+					]);
 				},
 				(_, true, false) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::InvalidContractOrigin);
@@ -1370,7 +1409,31 @@ fn restoration(
 						vec![
 							EventRecord {
 								phase: Phase::Initialization,
+								event: Event::Balances(pallet_balances::Event::Withdraw(
+									addr_bob.clone(),
+									4656
+								)),
+								topics: vec![],
+							},
+							EventRecord {
+								phase: Phase::Initialization,
 								event: Event::Contracts(crate::Event::Evicted(addr_bob)),
+								topics: vec![],
+							},
+							EventRecord {
+								phase: Phase::Initialization,
+								event: Event::Balances(pallet_balances::Event::Deposit(
+									ALICE,
+									10_000
+								)),
+								topics: vec![],
+							},
+							EventRecord {
+								phase: Phase::Initialization,
+								event: Event::Balances(pallet_balances::Event::Deposit(
+									CHARLIE,
+									1_000_000
+								)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1418,6 +1481,14 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
+								event: Event::Balances(pallet_balances::Event::Withdraw(
+									addr_django.clone(),
+									3136
+								)),
+								topics: vec![],
+							},
+							EventRecord {
+								phase: Phase::Initialization,
 								event: Event::Contracts(crate::Event::Instantiated(
 									CHARLIE,
 									addr_django.clone()
@@ -1430,7 +1501,18 @@ fn restoration(
 				(false, false, true) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::CodeNotFound);
 					assert_refcount!(set_rent_code_hash, 0);
-					assert_eq!(System::events(), vec![]);
+					assert_eq!(System::events(), vec![
+						EventRecord {
+							phase: Phase::Initialization,
+							event: Event::Balances(
+								pallet_balances::Event::Withdraw(
+									addr_django.clone(),
+									3138,
+								),
+							),
+							topics: vec![],
+						},
+					]);
 				},
 				_ => unreachable!(),
 			}
@@ -1452,12 +1534,33 @@ fn restoration(
 				vec![
 					EventRecord {
 						phase: Phase::Initialization,
+						event: Event::Balances(pallet_balances::Event::Withdraw(
+							addr_django.clone(), 3138
+						)),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
 						event: Event::Contracts(crate::Event::CodeRemoved(restoration_code_hash)),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
+						event: Event::Balances(pallet_balances::Event::BalanceSet(
+							addr_django.clone(), 0, 0
+						)),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
 						event: Event::System(system::Event::KilledAccount(addr_django.clone())),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: Event::Balances(pallet_balances::Event::Deposit(
+							addr_bob.clone(), 23726
+						)),
 						topics: vec![],
 					},
 					EventRecord {
@@ -1649,6 +1752,14 @@ fn self_destruct_works() {
 		pretty_assertions::assert_eq!(
 			System::events(),
 			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Withdraw(
+						addr.clone(),
+						3462
+					)),
+					topics: vec![],
+				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::KilledAccount(addr.clone())),

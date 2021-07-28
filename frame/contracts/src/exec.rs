@@ -2445,11 +2445,18 @@ mod tests {
 			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello World");
 			assert_eq!(
 				System::events(),
-				vec![EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
-					topics: vec![],
-				},]
+				vec![
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Balances(pallet_balances::Event::Withdraw(BOB, 32)),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+						topics: vec![],
+					},
+				]
 			);
 		});
 	}
@@ -2501,6 +2508,11 @@ mod tests {
 			assert_eq!(
 				System::events(),
 				vec![
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Balances(pallet_balances::Event::Withdraw(BOB, 32)),
+						topics: vec![],
+					},
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
