@@ -72,7 +72,7 @@ pub fn rpc_handler<M: PubSubMetadata>(
 }
 
 /// RPC server-specific prometheus metrics.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ServerMetrics {
 	/// Number of sessions opened.
 	session_opened: Option<Counter<U64>>,
