@@ -23,13 +23,13 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 derive_more = "0.99.2"
 futures = "0.3.9"
-futures-timer = "3.0.1"
+#futures-timer = "3.0.1"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 log = "0.4.8"
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
+#sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+#sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
