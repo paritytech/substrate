@@ -46,7 +46,7 @@ use sc_client_api::{
 	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
 };
 use sc_executor::RuntimeVersion;
-use sc_light::{call_executor::prove_execution, fetcher::ChangesProof};
+use sc_light::fetcher::ChangesProof;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
@@ -1312,8 +1312,8 @@ where
 			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
 		)?;
 
-		let state = self.state_at(id)?;
-		prove_execution(state, &self.executor, method, call_data)
+		self.executor
+			.prove_execution(id, method, call_data)
 			.map(|(r, p)| (r, StorageProof::merge(vec![p, code_proof])))
 	}
 
