@@ -1807,7 +1807,7 @@ macro_rules! decl_module {
 		///
 		/// Each variant of this enum maps to a dispatchable function from the associated module.
 		#[derive($crate::codec::Encode, $crate::codec::Decode, $crate::scale_info::TypeInfo)]
-		#[scale_info(skip_type_params($trait_instance, $($instance)?), capture_docs = true)]
+		#[scale_info(skip_type_params($trait_instance, $($instance)?), capture_docs = "always")]
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
 			where $( $other_where_bounds )*
 		{
