@@ -47,7 +47,7 @@ use sp_core::{testing::TaskExecutor, NativeOrEncoded, H256};
 use sp_externalities::Extensions;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as _, HashFor, Header as HeaderT, NumberFor},
+	traits::{BlakeTwo256, Block as _, Header as HeaderT, NumberFor},
 	Digest, Justifications,
 };
 use sp_state_machine::{ExecutionManager, OverlayedChanges};
