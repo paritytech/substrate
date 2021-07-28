@@ -20,7 +20,7 @@ prost-build = "0.7"
 async-trait = "0.1"
 codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
 derive_more = "0.99.2"
-either = "1.5.3"
+#either = "1.5.3"
 futures = "0.3.9"
 futures-timer = "3.0.1"
 ip_network = "0.3.4"
@@ -31,7 +31,7 @@ prost = "0.7"
 rand = "0.7.2"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
-serde_json = "1.0.41"
+#serde_json = "1.0.41"
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../primitives/authority-discovery" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
