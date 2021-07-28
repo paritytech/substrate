@@ -1340,8 +1340,7 @@ where
 		}
 
 		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
-			"valid babe headers must contain a predigest; \
-					 header has been already verified; qed",
+			"valid babe headers must contain a predigest; header has been already verified; qed",
 		);
 		let slot = pre_digest.slot();
 
@@ -1357,8 +1356,8 @@ where
 			})?;
 
 		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot()).expect(
-			"parent is non-genesis; valid BABE headers contain a pre-digest; \
-					header has already been verified; qed",
+			"parent is non-genesis; valid BABE headers contain a pre-digest; header has already \
+			 been verified; qed",
 		);
 
 		// make sure that slot number is strictly increasing
@@ -1581,15 +1580,11 @@ where
 			.header(BlockId::Hash(info.finalized_hash))
 			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
 			.expect(
-				"best finalized hash was given by client; \
-				 finalized headers must exist in db; qed",
+				"best finalized hash was given by client; finalized headers must exist in db; qed",
 			);
 
 		find_pre_digest::<Block>(&finalized_header)
-			.expect(
-				"finalized header must be valid; \
-					 valid blocks have a pre-digest; qed",
-			)
+			.expect("finalized header must be valid; valid blocks have a pre-digest; qed")
 			.slot()
 	};
 

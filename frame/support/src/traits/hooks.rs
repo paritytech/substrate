@@ -332,7 +332,6 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::traits::metadata::PalletVersion;
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {

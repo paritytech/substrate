@@ -518,8 +518,8 @@ where
 
 			self.db.commit(transaction)?;
 			cache.commit(cache_ops).expect(
-				"only fails if cache with given name isn't loaded yet;\
-						cache is already loaded because there are cache_ops; qed",
+				"only fails if cache with given name isn't loaded yet; cache is already loaded \
+				 because there are cache_ops; qed",
 			);
 		}
 
@@ -569,8 +569,8 @@ where
 
 				self.db.commit(transaction)?;
 				cache.commit(cache_ops).expect(
-					"only fails if cache with given name isn't loaded yet;\
-							cache is already loaded because there are cache_ops; qed",
+					"only fails if cache with given name isn't loaded yet; cache is already loaded \
+					 because there are cache_ops; qed",
 				);
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
