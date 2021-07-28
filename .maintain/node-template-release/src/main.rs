@@ -260,11 +260,11 @@ fn main() {
 	});
 
 	// ensures rustfmt is consistent across repositories.
-    let node_template_rustfmt_toml_path = node_template_path.join("rustfmt.toml");
-    let rustfmt_target = Path::new("../../rustfmt.toml");
-    if rustfmt_target.exists() {
-    	fs::copy(&rustfmt_target, &node_template_rustfmt_toml_path).expect("Copying rustfmt.toml.");
-    }
+    	let node_template_rustfmt_toml_path = node_template_path.join("rustfmt.toml");
+    	let rustfmt_target = Path::new("../../rustfmt.toml");
+    	if rustfmt_target.exists() {
+    		fs::copy(&rustfmt_target, &node_template_rustfmt_toml_path).expect("Copying rustfmt.toml.");
+    	}
 
 	build_and_test(&node_template_path, &cargo_tomls);
 
