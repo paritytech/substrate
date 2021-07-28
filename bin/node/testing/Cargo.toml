@@ -1,6 +1,6 @@
 [package]
 name = "node-testing"
-version = "3.0.0-dev"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Test utilities for Substrate node."
 edition = "2018"
@@ -22,9 +22,9 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 #pallet-grandpa = { version = "4.0.0-dev", path = "../../../frame/grandpa" }
 #pallet-indices = { version = "4.0.0-dev", path = "../../../frame/indices" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
-node-executor = { version = "3.0.0-dev", path = "../executor" }
+node-executor = { version = "4.0.0-dev", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
-node-runtime = { version = "3.0.0-dev", path = "../runtime" }
+node-runtime = { version = "4.0.0-dev", path = "../runtime" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 #frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
