@@ -27,6 +27,11 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
+use crate::voter_bags::VoterList;
+use frame_support::{pallet_prelude::*, traits::Currency};
+use sp_runtime::{traits::StaticLookup, Perbill};
+use sp_std::prelude::*;
+
 const SEED: u32 = 0;
 
 /// This function removes all validators and nominators from storage.

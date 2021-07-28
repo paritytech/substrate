@@ -18,11 +18,14 @@
 //! Test utilities
 
 use crate as staking;
-use crate::*;
+use crate::{voter_bags::VoterList, *};
 use frame_election_provider_support::onchain;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
+	traits::{
+		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnInitialize, OnUnbalanced,
+		OneSessionHandler,
+	},
 	weights::constants::RocksDbWeight,
 };
 use sp_core::H256;

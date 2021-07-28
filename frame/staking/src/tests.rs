@@ -18,10 +18,13 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use frame_election_provider_support::Support;
+use crate::voter_bags::VoterList;
+use frame_election_provider_support::{ElectionProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, OnInitialize, ReservableCurrency},
+	dispatch::WithPostDispatchInfo,
+	pallet_prelude::*,
+	traits::{Currency, Get, OnInitialize, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
@@ -30,8 +33,13 @@ use sp_npos_elections::supports_eq_unordered;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
+	Perbill, Percent,
 };
-use sp_staking::offence::OffenceDetails;
+use sp_staking::{
+	offence::{OffenceDetails, OnOffenceHandler},
+	SessionIndex,
+};
+use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -3885,7 +3893,7 @@ mod voter_bags {
 
 			// decrease stake within the range of the current bag
 			assert_ok!(Staking::unbond(Origin::signed(43), 999)); // 2000 - 999 = 1001
-			// does not change bags
+													  // does not change bags
 			assert_eq!(
 				get_bags(),
 				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
@@ -3893,7 +3901,7 @@ mod voter_bags {
 
 			// reduce stake to the level of a non-existent bag
 			assert_ok!(Staking::unbond(Origin::signed(43), 971)); // 1001 - 971 = 30
-			// creates the bag and moves the voter into it
+													  // creates the bag and moves the voter into it
 			assert_eq!(
 				get_bags(),
 				vec![(10, vec![31]), (30, vec![42]), (1000, vec![11, 21, 101]),]
@@ -3901,7 +3909,7 @@ mod voter_bags {
 
 			// increase stake by `rebond`-ing to the level of a pre-existing bag
 			assert_ok!(Staking::rebond(Origin::signed(43), 31)); // 30 + 41 = 61
-			// moves the voter to that bag
+													 // moves the voter to that bag
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101, 42]),]);
 
 			// TODO test rebag directly

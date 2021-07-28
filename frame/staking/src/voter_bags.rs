@@ -1464,12 +1464,7 @@ mod bags {
 				node(voter_11, Some(101), None, bag_1000.bag_upper)
 			);
 
-			assert_eq!(
-				bag_1000,
-				Bag {
-					head: Some(11), tail: Some(11), bag_upper: 1_000
-				}
-			)
+			assert_eq!(bag_1000, Bag { head: Some(11), tail: Some(11), bag_upper: 1_000 })
 		});
 	}
 
