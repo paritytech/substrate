@@ -39,6 +39,7 @@ pub use frame_benchmarking::{
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, One};
 
+
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 const MAX_VALIDATORS: u32 = 1000;
