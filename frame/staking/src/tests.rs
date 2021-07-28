@@ -3903,6 +3903,8 @@ mod voter_bags {
 			assert_ok!(Staking::rebond(Origin::signed(43), 31)); // 30 + 41 = 61
 			// moves the voter to that bag
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101, 42]),]);
+
+			// TODO test rebag directly
 		});
 	}
 }
