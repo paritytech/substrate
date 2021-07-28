@@ -129,11 +129,7 @@ impl RpcMiddleware {
 		known_rpc_method_names: HashSet<String>,
 		transport_label: &str,
 	) -> Self {
-		RpcMiddleware {
-			metrics,
-			known_rpc_method_names,
-			transport_label: transport_label.into(),
-		}
+		RpcMiddleware { metrics, known_rpc_method_names, transport_label: transport_label.into() }
 	}
 }
 
@@ -206,8 +202,13 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 					])
 					.inc();
 			}
-			log::debug!(target: "rpc_metrics", "[{}] {} call took {} μs", transport_label, name,
-				micros);
+			log::debug!(
+				target: "rpc_metrics",
+				"[{}] {} call took {} μs",
+				transport_label,
+				name,
+				micros,
+			);
 			r
 		})))
 	}
