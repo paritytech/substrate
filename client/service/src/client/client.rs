@@ -1072,8 +1072,8 @@ where
 		// telemetry once about the finalized block.
 		if let Some(last) = notify_finalized.last() {
 			let header = self.header(&BlockId::Hash(*last))?.expect(
-				"Header already known to exist in DB because it is \
-					indicated in the tree route; qed",
+				"Header already known to exist in DB because it is indicated in the tree route; \
+				 qed",
 			);
 
 			telemetry!(
@@ -1087,8 +1087,8 @@ where
 
 		for finalized_hash in notify_finalized {
 			let header = self.header(&BlockId::Hash(finalized_hash))?.expect(
-				"Header already known to exist in DB because it is \
-					indicated in the tree route; qed",
+				"Header already known to exist in DB because it is indicated in the tree route; \
+				 qed",
 			);
 
 			let notification = FinalityNotification { header, hash: finalized_hash };

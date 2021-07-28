@@ -128,10 +128,13 @@ pub struct NetworkParams {
 	pub ipfs_server: bool,
 
 	/// Blockchain syncing mode.
-	/// Full - Download and validate full blockchain history (Default).
-	/// Fast - Download blocks and the latest state only.
-	/// FastUnsafe - Same as Fast, but do skips downloading state proofs.
-	#[structopt(long, default_value = "Full")]
+	///
+	/// - `Full`: Download and validate full blockchain history.
+	///
+	/// - `Fast`: Download blocks and the latest state only.
+	///
+	/// - `FastUnsafe`: Same as `Fast`, but skip downloading state proofs.
+	#[structopt(long, value_name = "SYNC_MODE", default_value = "Full")]
 	pub sync: SyncMode,
 }
 

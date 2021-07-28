@@ -364,8 +364,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 			.map(|(p, (r, _))| (p.to_string(), NetworkBehaviour::new_handler(r)));
 
 		MultiHandler::try_from_iter(iter).expect(
-			"Protocols are in a HashMap and there can be at most one handler per \
-						  protocol name, which is the only possible error; qed",
+			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
+			 which is the only possible error; qed",
 		)
 	}
 
