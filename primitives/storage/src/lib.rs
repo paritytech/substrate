@@ -206,7 +206,7 @@ pub mod well_known_keys {
 	pub const HEAP_PAGES: &'static [u8] = b":heappages";
 
 	/// Number of wasm linear memory pages used required for the execution of the runtime in
-	/// offchain context. By offchain we mean anything other than `consensus` (see `HEAP_PAGES`).
+	/// offchain context. By offchain we mean anything other than `consensus` (see [`HEAP_PAGES`]).
 	///
 	/// The type of this value is encoded `u64`.
 	pub const OFFCHAIN_HEAP_PAGES: &'static [u8] = b":offchain_heappages";
