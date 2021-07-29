@@ -73,7 +73,7 @@ grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../
 #sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
-#sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 #sc-tracing = { version = "4.0.0-dev", path = "../../../client/tracing" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
@@ -99,7 +99,7 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 #node-executor = { version = "4.0.0-dev", path = "../executor" }
 
 # CLI-specific dependencies
-#sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli" }
+sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli" }
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }

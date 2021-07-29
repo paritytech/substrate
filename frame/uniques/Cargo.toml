@@ -32,7 +32,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"sp-std/std",
-	"sp-core/std",
+#	"sp-core/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
