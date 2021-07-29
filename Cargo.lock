@@ -1704,7 +1704,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.14.3"
-source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#e7cdb8781c51f2f02d1dc24de5b50f811be1309f"
+source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#2928dc840989ec3aeb1b639f68cee6c5e686e7c7"
 dependencies = [
  "either",
  "futures 0.3.15",
@@ -1852,7 +1852,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "14.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=main#7bb2935f9c2a51193708d5cd4b190deee726c663"
+source = "git+https://github.com/paritytech/frame-metadata?branch=main#e5c1540cf17577c40fc00b905a2d6afee9090cf6"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
@@ -8348,8 +8348,9 @@ dependencies = [
 
 [[package]]
 name = "scale-info"
-version = "0.9.2"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#08fc6d497b5ab64086b2810cbe55f82c15bc13cb"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2e62ff266e136db561a007c84569985805f84a1d5a08278e52c36aacb6e061b"
 dependencies = [
  "bitvec",
  "cfg-if 1.0.0",
@@ -8361,8 +8362,9 @@ dependencies = [
 
 [[package]]
 name = "scale-info-derive"
-version = "0.6.1"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#08fc6d497b5ab64086b2810cbe55f82c15bc13cb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b648fa291891a4c80187a25532f6a7d96b82c70353e30b868b14632b8fe043d6"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",
