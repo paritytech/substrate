@@ -50,14 +50,17 @@ pub enum VerificationResult<Block: BlockT> {
 /// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
 pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
 	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof size is reached.
-	fn generate(&self, start: B::Hash) -> Result<EncodedProof, String>;
+	fn generate(
+		&self,
+		start: B::Hash,
+	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>>;
 	/// Verify warp proof agains current set of authorities.
 	fn verify(
 		&self,
 		proof: &EncodedProof,
 		set_id: SetId,
 		authorities: AuthorityList,
-	) -> Result<VerificationResult<B>, String>;
+	) -> Result<VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>;
 	/// Get current list of authorities. This is supposed to be genesis authorities when starting sync.
 	fn current_authorities(&self) -> AuthorityList;
 }
@@ -151,7 +154,8 @@ enum HandleRequestError {
 	DecodeScale(codec::Error),
 	Client(sp_blockchain::Error),
 	#[from(ignore)]
-	InvalidRequest(String),
+	#[display(fmt = "Invalid request {}.", _0)]
+	InvalidRequest(Box<dyn std::error::Error + Send + Sync>),
 	#[display(fmt = "Failed to send response.")]
 	SendResponse,
 }

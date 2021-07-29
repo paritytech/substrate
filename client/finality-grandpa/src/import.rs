@@ -24,7 +24,7 @@ use parity_scale_codec::{Decode, Encode};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sc_consensus::shared_data::{SharedDataLocked, SharedDataLockedUpgradable};
 use sc_telemetry::TelemetryHandle;
-use sp_api::TransactionFor;
+use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -426,24 +426,34 @@ where
 
 	/// Read current set id form a given state.
 	fn current_set_id(&self, id: &BlockId<Block>) -> Result<SetId, ConsensusError> {
-		match self.inner.runtime_api().current_set_id(&id) {
-			Ok(set_id) => Ok(set_id),
-			Err(sp_api::ApiError::Application(_)) => {
-				// The new API is not supported in this runtime. Try reading directly from storage.
-				// This code may be removed once warp sync to an old runtime is no longer needed.
-				for prefix in ["GrandpaFinality", "Grandpa"] {
-					let k = [twox_128(prefix.as_bytes()), twox_128(b"CurrentSetId")].concat();
-					if let Ok(Some(id)) =
-						self.inner.storage(&id, &sc_client_api::StorageKey(k.to_vec()))
-					{
-						if let Ok(id) = SetId::decode(&mut id.0.as_ref()) {
-							return Ok(id)
-						}
+		let runtime_version = self.inner.runtime_api().version(id).map_err(|e| {
+			ConsensusError::ClientImport(format!(
+				"Unable to retrieve current runtime version. {}",
+				e
+			))
+		})?;
+		if runtime_version
+			.api_version(&<dyn GrandpaApi<Block>>::ID)
+			.map_or(false, |v| v < 3)
+		{
+			// The new API is not supported in this runtime. Try reading directly from storage.
+			// This code may be removed once warp sync to an old runtime is no longer needed.
+			for prefix in ["GrandpaFinality", "Grandpa"] {
+				let k = [twox_128(prefix.as_bytes()), twox_128(b"CurrentSetId")].concat();
+				if let Ok(Some(id)) =
+					self.inner.storage(&id, &sc_client_api::StorageKey(k.to_vec()))
+				{
+					if let Ok(id) = SetId::decode(&mut id.0.as_ref()) {
+						return Ok(id)
 					}
 				}
-				Err(ConsensusError::ClientImport("Unable to read retrieve current set id.".into()))
-			},
-			Err(e) => Err(ConsensusError::ClientImport(e.to_string())),
+			}
+			Err(ConsensusError::ClientImport("Unable to retrieve current set id.".into()))
+		} else {
+			self.inner
+				.runtime_api()
+				.current_set_id(&id)
+				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 		}
 	}
 

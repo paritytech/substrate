@@ -52,6 +52,8 @@ pub enum Error {
 	MissingData,
 }
 
+impl std::error::Error for Error {}
+
 /// The maximum size in bytes of the `WarpSyncProof`.
 pub(super) const MAX_WARP_SYNC_PROOF_SIZE: usize = 8 * 1024 * 1024;
 
@@ -253,13 +255,16 @@ impl<Block: BlockT, Backend: ClientBackend<Block>> WarpSyncProvider<Block>
 where
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn generate(&self, start: Block::Hash) -> Result<EncodedProof, String> {
+	fn generate(
+		&self,
+		start: Block::Hash,
+	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
 		let proof = WarpSyncProof::<Block>::generate(
 			&*self.backend,
 			start,
 			&self.authority_set.authority_set_changes(),
 		)
-		.map_err(|e| e.to_string())?;
+		.map_err(Box::new)?;
 		Ok(EncodedProof(proof.encode()))
 	}
 
@@ -268,7 +273,7 @@ where
 		proof: &EncodedProof,
 		set_id: SetId,
 		authorities: AuthorityList,
-	) -> Result<VerificationResult<Block>, String> {
+	) -> Result<VerificationResult<Block>, Box<dyn std::error::Error + Send + Sync>> {
 		let EncodedProof(proof) = proof;
 		let proof = WarpSyncProof::<Block>::decode(&mut proof.as_slice())
 			.map_err(|e| format!("Proof decoding error: {:?}", e))?;
@@ -277,9 +282,8 @@ where
 			.last()
 			.map(|p| p.header.clone())
 			.ok_or_else(|| "Empty proof".to_string())?;
-		let (next_set_id, next_authorities) = proof
-			.verify(set_id, authorities)
-			.map_err(|e| format!("Proof verification error: {:?}", e))?;
+		let (next_set_id, next_authorities) =
+			proof.verify(set_id, authorities).map_err(Box::new)?;
 		if proof.is_finished {
 			Ok(VerificationResult::<Block>::Complete(next_set_id, next_authorities, last_header))
 		} else {
