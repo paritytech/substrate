@@ -19,7 +19,10 @@
 
 use super::*;
 use frame_support::{
-	traits::tokens::nonfungibles::{Inspect, InspectEnumerable, Mutate, Transfer},
+	traits::{
+		tokens::nonfungibles::{Create, Inspect, InspectEnumerable, Mutate, Transfer},
+		Get,
+	},
 	BoundedSlice,
 };
 use sp_runtime::DispatchResult;
@@ -82,6 +85,24 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			(Some(cd), Some(id)) if !cd.is_frozen && !id.is_frozen => true,
 			_ => false,
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
+	fn create_class(
+		class: &Self::ClassId,
+		who: &T::AccountId,
+		admin: &T::AccountId,
+	) -> DispatchResult {
+		Self::do_create_class(
+			class.clone(),
+			who.clone(),
+			admin.clone(),
+			T::ClassDeposit::get(),
+			false,
+			Event::Created(class.clone(), who.clone(), admin.clone()),
+		)
 	}
 }
 
