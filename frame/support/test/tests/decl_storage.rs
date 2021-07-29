@@ -242,28 +242,6 @@ mod tests {
 					default: vec![0],
 					docs: vec![],
 				},
-				// StorageEntryMetadata {
-				// 	name: "MAPU32MYDEF",
-				// 	modifier: StorageEntryModifier::Optional,
-				// 	ty: StorageEntryType::Map {
-				// 		hasher: StorageHasher::Blake2_128Concat,
-				// 		key: scale_info::meta_type::<u32>(),
-				// 		value: scale_info::meta_type::<String>(),
-				// 	},
-				// 	default: vec![0],
-				// 	docs:vec![],
-				// },
-				// StorageEntryMetadata {
-				// 	name: "PUBMAPU32MYDEF",
-				// 	modifier: StorageEntryModifier::Optional,
-				// 	ty: StorageEntryType::Map {
-				// 		hasher: StorageHasher::Blake2_128Concat,
-				// 		key: scale_info::meta_type::<u32>(),
-				// 		value: scale_info::meta_type::<String>(),
-				// 	},
-				// 	default: vec![0],
-				// 	docs:vec![],
-				// },
 				StorageEntryMetadata {
 					name: "GETMAPU32",
 					modifier: StorageEntryModifier::Default,
