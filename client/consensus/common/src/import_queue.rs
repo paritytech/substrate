@@ -41,7 +41,7 @@ use crate::{
 	metrics::Metrics,
 };
 pub use basic_queue::BasicQueue;
-use sp_consensus::{error::Error as ConsensusError, CacheKeyId, BlockOrigin};
+use sp_consensus::{error::Error as ConsensusError, BlockOrigin, CacheKeyId};
 
 /// A commonly-used Import Queue type.
 ///

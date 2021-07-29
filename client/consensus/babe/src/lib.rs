@@ -107,8 +107,8 @@ use sp_blockchain::{
 	Error as ClientError, HeaderBackend, HeaderMetadata, ProvideCache, Result as ClientResult,
 };
 use sp_consensus::{
-	CacheKeyId, BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError,
-	Proposer, SelectChain, SlotData,
+	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
+	SelectChain, SlotData,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;

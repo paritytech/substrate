@@ -24,7 +24,7 @@ use sp_runtime::{
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
-use sp_consensus::{CacheKeyId, BlockOrigin, Error};
+use sp_consensus::{BlockOrigin, CacheKeyId, Error};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]

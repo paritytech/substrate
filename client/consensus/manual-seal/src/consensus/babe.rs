@@ -39,7 +39,7 @@ use std::{
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{CacheKeyId, BlockOrigin};
+use sp_consensus::{BlockOrigin, CacheKeyId};
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
