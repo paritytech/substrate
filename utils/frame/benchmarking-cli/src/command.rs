@@ -79,7 +79,6 @@ impl BenchmarkCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -139,8 +138,9 @@ impl BenchmarkCmd {
 				.execute(strategy.into())
 				.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
 
-				let lists = <Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
-					.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+				let lists =
+					<Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
+						.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
 
 				for list in lists {
 					println!("{}", String::from_utf8(list.pallet).unwrap());
