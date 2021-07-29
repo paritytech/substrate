@@ -139,14 +139,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         let mut deposit = Zero::zero();
         if !class_details.free_holding && maybe_check_owner.is_some() {
             deposit = T::DepositPerByte::get()
-                .saturating_mul(((key.len() + value.len()) as u32).into())
+				.saturating_mul((key.len().saturating_add(value.len()) as u32).into())
                 .saturating_add(T::AttributeDepositBase::get());
         }
         class_details.total_deposit.saturating_accrue(deposit);
         if deposit > old_deposit {
-            T::Currency::reserve(&class_details.owner, deposit - old_deposit)?;
+            T::Currency::reserve(&class_details.owner, deposit.saturating_sub(old_deposit))?;
         } else if deposit < old_deposit {
-            T::Currency::unreserve(&class_details.owner, old_deposit - deposit);
+            T::Currency::unreserve(&class_details.owner, old_deposit.saturating_sub(deposit));
         }
 
         Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
