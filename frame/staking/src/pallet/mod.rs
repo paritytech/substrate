@@ -526,7 +526,7 @@ pub mod pallet {
 		/// the remainder from the maximum amount of reward.
 		/// \[era_index, validator_payout, remainder\]
 		EraPaid(EraIndex, BalanceOf<T>, BalanceOf<T>),
-		/// The nominator has been rewarded by this amount. \[era_index, stash, amount\]
+		/// The nominator has been rewarded by this amount. \[stash, amount\]
 		Rewarded(T::AccountId, BalanceOf<T>),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		/// \[validator, amount\]
