@@ -116,9 +116,10 @@ impl VersionedRuntime {
 					if new_inst {
 						log::debug!(
 							target: "wasm-runtime",
-							"Allocated WASM instance {}/{}",
+							"Allocated WASM instance {}/{} [pages = {}]",
 							index + 1,
 							self.instances.len(),
+							self.heap_pages,
 						);
 					}
 				}
