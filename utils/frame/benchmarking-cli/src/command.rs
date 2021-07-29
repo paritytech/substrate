@@ -17,8 +17,9 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector, BenchmarkResults};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkResults, BenchmarkSelector};
 use frame_support::traits::StorageInfo;
+use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -32,32 +33,41 @@ use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
 use std::{fmt::Debug, sync::Arc};
-use linked_hash_map::LinkedHashMap;
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
 fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
-	if batches.is_empty() { return batches }
+	if batches.is_empty() {
+		return batches
+	}
 
 	let mut all_benchmarks = LinkedHashMap::<_, Vec<BenchmarkResults>>::new();
 
-	batches.into_iter().for_each(|BenchmarkBatch { pallet, instance, benchmark, results }| {
-		// We use this key to uniquely identify a benchmark among batches.
-		let key = (pallet, instance, benchmark);
+	batches
+		.into_iter()
+		.for_each(|BenchmarkBatch { pallet, instance, benchmark, results }| {
+			// We use this key to uniquely identify a benchmark among batches.
+			let key = (pallet, instance, benchmark);
 
-		match all_benchmarks.get_mut(&key) {
-			// We already have this benchmark, so we extend the results.
-			Some(x) => x.extend(results),
-			// New benchmark, so we add a new entry with the initial results.
-			None => {
-				all_benchmarks.insert(key, results);
-			},
-		}
-	});
+			match all_benchmarks.get_mut(&key) {
+				// We already have this benchmark, so we extend the results.
+				Some(x) => x.extend(results),
+				// New benchmark, so we add a new entry with the initial results.
+				None => {
+					all_benchmarks.insert(key, results);
+				},
+			}
+		});
 
-	all_benchmarks.into_iter().map(|((pallet, instance, benchmark), results)| {
-		BenchmarkBatch { pallet, instance, benchmark, results }
-	}).collect::<Vec<_>>()
+	all_benchmarks
+		.into_iter()
+		.map(|((pallet, instance, benchmark), results)| BenchmarkBatch {
+			pallet,
+			instance,
+			benchmark,
+			results,
+		})
+		.collect::<Vec<_>>()
 }
 
 impl BenchmarkCmd {
@@ -69,7 +79,6 @@ impl BenchmarkCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -105,7 +114,7 @@ impl BenchmarkCmd {
 		let mut batches = Vec::new();
 		let mut storage_info = Vec::new();
 
-		for r in 0 .. self.repeat {
+		for r in 0..self.repeat {
 			let mut extensions = Extensions::default();
 			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
@@ -129,8 +138,9 @@ impl BenchmarkCmd {
 				.execute(strategy.into())
 				.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
 
-				let lists = <Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
-					.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+				let lists =
+					<Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
+						.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
 
 				for list in lists {
 					println!("{}", String::from_utf8(list.pallet).unwrap());
@@ -157,7 +167,8 @@ impl BenchmarkCmd {
 					(r, self.repeat),
 					!self.no_verify,
 					self.extra,
-				).encode(),
+				)
+					.encode(),
 				extensions,
 				&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
 				sp_core::testing::TaskExecutor::new(),
@@ -166,10 +177,10 @@ impl BenchmarkCmd {
 			.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
 			let (batch, last_storage_info) = <std::result::Result<
-					(Vec<BenchmarkBatch>, Vec<StorageInfo>),
-					String,
-				> as Decode>::decode(&mut &result[..])
-				.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
+				(Vec<BenchmarkBatch>, Vec<StorageInfo>),
+				String,
+			> as Decode>::decode(&mut &result[..])
+			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
 
 			batches.extend(batch);
 			storage_info = last_storage_info;
@@ -178,7 +189,8 @@ impl BenchmarkCmd {
 		let batches = combine_batches(batches);
 
 		for b in batches.clone() {
-			println!("{:?}: {:?}",
+			println!(
+				"{:?}: {:?}",
 				String::from_utf8(b.pallet).unwrap(),
 				String::from_utf8(b.benchmark).unwrap(),
 			);
@@ -201,7 +213,9 @@ impl BenchmarkCmd {
 			);
 
 			// Skip raw data + analysis if there are no results
-			if batch.results.is_empty() { continue }
+			if batch.results.is_empty() {
+				continue
+			}
 
 			if self.raw_data {
 				// Print the table header
@@ -210,11 +224,11 @@ impl BenchmarkCmd {
 				print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
 				// Print the values
 				batch.results.iter().for_each(|result| {
-
 					let parameters = &result.components;
 					parameters.iter().for_each(|param| print!("{:?},", param.1));
 					// Print extrinsic time and storage root time
-					print!("{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
+					print!(
+						"{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
 						result.extrinsic_time,
 						result.storage_root_time,
 						result.reads,
@@ -231,25 +245,37 @@ impl BenchmarkCmd {
 			// Conduct analysis.
 			if !self.no_median_slopes {
 				println!("Median Slopes Analysis\n========");
-				if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime)
+				{
 					println!("-- Extrinsic Time --\n{}", analysis);
 				}
-				if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads)
+				{
 					println!("Reads = {:?}", analysis);
 				}
-				if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes)
+				{
 					println!("Writes = {:?}", analysis);
 				}
 			}
 			if !self.no_min_squares {
 				println!("Min Squares Analysis\n========");
-				if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime)
+				{
 					println!("-- Extrinsic Time --\n{}", analysis);
 				}
-				if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads)
+				{
 					println!("Reads = {:?}", analysis);
 				}
-				if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes)
+				{
 					println!("Writes = {:?}", analysis);
 				}
 			}
