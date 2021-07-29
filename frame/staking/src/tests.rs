@@ -18,10 +18,12 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use frame_election_provider_support::Support;
+use frame_election_provider_support::{ElectionProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, OnInitialize, ReservableCurrency},
+	dispatch::WithPostDispatchInfo,
+	pallet_prelude::*,
+	traits::{Currency, Get, OnInitialize, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
@@ -29,8 +31,13 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
+	Perbill, Percent,
 };
-use sp_staking::offence::OffenceDetails;
+use sp_staking::{
+	offence::{OffenceDetails, OnOffenceHandler},
+	SessionIndex,
+};
+use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]

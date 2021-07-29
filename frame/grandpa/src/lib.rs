@@ -42,7 +42,7 @@ use fg_primitives::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	storage,
-	traits::{KeyOwnerProofSystem, OneSessionHandler},
+	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion},
 	weights::{Pays, Weight},
 };
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
@@ -67,6 +67,9 @@ pub use equivocation::{
 
 pub use pallet::*;
 
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -75,6 +78,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
