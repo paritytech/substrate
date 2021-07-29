@@ -501,7 +501,7 @@ where
 				&BlockId::Number(Zero::zero()),
 				"GrandpaApi_grandpa_authorities",
 				&[],
-				sc_client_api::ExecutionConfig::new_consensus(ExecutionStrategy::NativeElseWasm),
+				ExecutionStrategy::NativeElseWasm.in_consensus(),
 				None,
 			)
 			.and_then(|call_result| {
