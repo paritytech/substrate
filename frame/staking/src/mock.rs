@@ -251,7 +251,8 @@ impl onchain::Config for Test {
 }
 
 /// Thresholds used for bags.
-const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+const THRESHOLDS: [VoteWeight; 9] =
+	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000, u32::MAX - 10, u32::MAX];
 
 parameter_types! {
 	pub const VoterBagThresholds: &'static [VoteWeight] = &THRESHOLDS;
