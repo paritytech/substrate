@@ -19,7 +19,7 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector, BenchmarkResults};
 use frame_support::traits::StorageInfo;
-use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
+use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -77,11 +77,15 @@ impl BenchmarkCmd {
 		}
 
 		if let Some(header_file) = &self.header {
-			if !header_file.is_file() { return Err("Header file is invalid!".into()) };
+			if !header_file.is_file() {
+				return Err("Header file is invalid!".into())
+			};
 		}
 
 		if let Some(handlebars_template_file) = &self.template {
-			if !handlebars_template_file.is_file() { return Err("Handlebars template file is invalid!".into()) };
+			if !handlebars_template_file.is_file() {
+				return Err("Handlebars template file is invalid!".into())
+			};
 		}
 
 		let spec = config.chain_spec;
@@ -179,7 +183,6 @@ impl BenchmarkCmd {
 				String::from_utf8(b.benchmark).unwrap(),
 			);
 		}
-
 
 		if let Some(output_path) = &self.output {
 			crate::writer::write_results(&batches, &storage_info, output_path, self)?;

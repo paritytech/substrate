@@ -18,15 +18,12 @@
 
 use std::{
 	collections::{HashMap, HashSet},
-	fmt,
-	hash,
+	fmt, hash,
 	sync::Arc,
 };
 
 use sp_core::hexdisplay::HexDisplay;
-use sp_runtime::transaction_validity::{
-	TransactionTag as Tag,
-};
+use sp_runtime::transaction_validity::TransactionTag as Tag;
 use wasm_timer::Instant;
 
 use super::base_pool::Transaction;
@@ -48,10 +45,13 @@ impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, E
 		write!(fmt, "imported_at: {:?}, ", self.imported_at)?;
 		write!(fmt, "transaction: {:?}, ", self.transaction)?;
 		write!(
-			fmt, 
-			"missing_tags: {{{}}}", 
-			self.missing_tags.iter()
-				.map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(", "),
+			fmt,
+			"missing_tags: {{{}}}",
+			self.missing_tags
+				.iter()
+				.map(|tag| HexDisplay::from(tag).to_string())
+				.collect::<Vec<_>>()
+				.join(", "),
 		)?;
 		write!(fmt, "}}")
 	}
@@ -77,22 +77,20 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		provided: &HashMap<Tag, Hash>,
 		recently_pruned: &[HashSet<Tag>],
 	) -> Self {
-		let missing_tags = transaction.requires
+		let missing_tags = transaction
+			.requires
 			.iter()
 			.filter(|tag| {
 				// is true if the tag is already satisfied either via transaction in the pool
 				// or one that was recently included.
-				let is_provided = provided.contains_key(&**tag) || recently_pruned.iter().any(|x| x.contains(&**tag));
+				let is_provided = provided.contains_key(&**tag) ||
+					recently_pruned.iter().any(|x| x.contains(&**tag));
 				!is_provided
 			})
 			.cloned()
 			.collect();
 
-		Self {
-			transaction: Arc::new(transaction),
-			missing_tags,
-			imported_at: Instant::now(),
-		}
+		Self { transaction: Arc::new(transaction), missing_tags, imported_at: Instant::now() }
 	}
 
 	/// Marks the tag as satisfied.
@@ -121,10 +119,7 @@ pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 
 impl<Hash: hash::Hash + Eq, Ex> Default for FutureTransactions<Hash, Ex> {
 	fn default() -> Self {
-		Self {
-			wanted_tags: Default::default(),
-			waiting: Default::default(),
-		}
+		Self { wanted_tags: Default::default(), waiting: Default::default() }
 	}
 }
 
@@ -144,7 +139,10 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// we should remove the transactions from here and move them to the Ready queue.
 	pub fn import(&mut self, tx: WaitingTransaction<Hash, Ex>) {
 		assert!(!tx.is_ready(), "Transaction is ready.");
-		assert!(!self.waiting.contains_key(&tx.transaction.hash), "Transaction is already imported.");
+		assert!(
+			!self.waiting.contains_key(&tx.transaction.hash),
+			"Transaction is already imported."
+		);
 
 		// Add all tags that are missing
 		for tag in &tx.missing_tags {
@@ -163,14 +161,20 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 
 	/// Returns a list of known transactions
 	pub fn by_hashes(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
-		hashes.iter().map(|h| self.waiting.get(h).map(|x| x.transaction.clone())).collect()
+		hashes
+			.iter()
+			.map(|h| self.waiting.get(h).map(|x| x.transaction.clone()))
+			.collect()
 	}
 
 	/// Satisfies provided tags in transactions that are waiting for them.
 	///
 	/// Returns (and removes) transactions that became ready after their last tag got
 	/// satisfied and now we can remove them from Future and move to Ready queue.
-	pub fn satisfy_tags<T: AsRef<Tag>>(&mut self, tags: impl IntoIterator<Item=T>) -> Vec<WaitingTransaction<Hash, Ex>> {
+	pub fn satisfy_tags<T: AsRef<Tag>>(
+		&mut self,
+		tags: impl IntoIterator<Item = T>,
+	) -> Vec<WaitingTransaction<Hash, Ex>> {
 		let mut became_ready = vec![];
 
 		for tag in tags {
@@ -205,7 +209,9 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 					let remove = if let Some(wanted) = self.wanted_tags.get_mut(&tag) {
 						wanted.remove(hash);
 						wanted.is_empty()
-					} else { false };
+					} else {
+						false
+					};
 					if remove {
 						self.wanted_tags.remove(&tag);
 					}
@@ -218,14 +224,15 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	}
 
 	/// Fold a list of future transactions to compute a single value.
-	pub fn fold<R, F: FnMut(Option<R>, &WaitingTransaction<Hash, Ex>) -> Option<R>>(&mut self, f: F) -> Option<R> {
-		self.waiting
-			.values()
-			.fold(None, f)
+	pub fn fold<R, F: FnMut(Option<R>, &WaitingTransaction<Hash, Ex>) -> Option<R>>(
+		&mut self,
+		f: F,
+	) -> Option<R> {
+		self.waiting.values().fold(None, f)
 	}
 
 	/// Returns iterator over all future transactions
-	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
+	pub fn all(&self) -> impl Iterator<Item = &Transaction<Hash, Ex>> {
 		self.waiting.values().map(|waiting| &*waiting.transaction)
 	}
 
@@ -265,7 +272,8 @@ mod tests {
 				provides: vec![vec![3], vec![4]],
 				propagate: true,
 				source: TransactionSource::External,
-			}.into(),
+			}
+			.into(),
 			missing_tags: vec![vec![1u8], vec![2u8]].into_iter().collect(),
 			imported_at: std::time::Instant::now(),
 		});

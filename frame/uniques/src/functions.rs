@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_support::{ensure, traits::Get};
-use sp_runtime::{DispatchResult, DispatchError};
+use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_transfer(
@@ -48,13 +48,43 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(super) fn do_create_class(
+		class: T::ClassId,
+		owner: T::AccountId,
+		admin: T::AccountId,
+		deposit: DepositBalanceOf<T, I>,
+		free_holding: bool,
+		event: Event<T, I>,
+	) -> DispatchResult {
+		ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
+
+		T::Currency::reserve(&owner, deposit)?;
+
+		Class::<T, I>::insert(
+			class,
+			ClassDetails {
+				owner: owner.clone(),
+				issuer: admin.clone(),
+				admin: admin.clone(),
+				freezer: admin.clone(),
+				total_deposit: deposit,
+				free_holding,
+				instances: 0,
+				instance_metadatas: 0,
+				attributes: 0,
+				is_frozen: false,
+			},
+		);
+
+		Self::deposit_event(event);
+		Ok(())
+	}
+
 	pub(super) fn do_mint(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		owner: T::AccountId,
-		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>,
-		) -> DispatchResult,
+		with_details: impl FnOnce(&ClassDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
 
@@ -63,8 +93,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			with_details(&class_details)?;
 
-			let instances = class_details.instances.checked_add(1)
-				.ok_or(ArithmeticError::Overflow)?;
+			let instances =
+				class_details.instances.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 			class_details.instances = instances;
 
 			let deposit = match class_details.free_holding {
@@ -76,7 +106,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			let owner = owner.clone();
 			Account::<T, I>::insert((&owner, &class, &instance), ());
-			let details = InstanceDetails { owner, approved: None, is_frozen: false, deposit};
+			let details = InstanceDetails { owner, approved: None, is_frozen: false, deposit };
 			Asset::<T, I>::insert(&class, &instance, details);
 			Ok(())
 		})?;
@@ -88,23 +118,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn do_burn(
 		class: T::ClassId,
 		instance: T::InstanceId,
-		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>,
-			&InstanceDetailsFor<T, I>,
-		) -> DispatchResult,
+		with_details: impl FnOnce(&ClassDetailsFor<T, I>, &InstanceDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
-		let owner = Class::<T, I>::try_mutate(&class, |maybe_class_details| -> Result<T::AccountId, DispatchError> {
-			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-			let details = Asset::<T, I>::get(&class, &instance)
-				.ok_or(Error::<T, I>::Unknown)?;
-			with_details(&class_details, &details)?;
+		let owner = Class::<T, I>::try_mutate(
+			&class,
+			|maybe_class_details| -> Result<T::AccountId, DispatchError> {
+				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details =
+					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+				with_details(&class_details, &details)?;
 
-			// Return the deposit.
-			T::Currency::unreserve(&class_details.owner, details.deposit);
-			class_details.total_deposit.saturating_reduce(details.deposit);
-			class_details.instances.saturating_dec();
-			Ok(details.owner)
-		})?;
+				// Return the deposit.
+				T::Currency::unreserve(&class_details.owner, details.deposit);
+				class_details.total_deposit.saturating_reduce(details.deposit);
+				class_details.instances.saturating_dec();
+				Ok(details.owner)
+			},
+		)?;
 
 		Asset::<T, I>::remove(&class, &instance);
 		Account::<T, I>::remove((&owner, &class, &instance));

@@ -18,25 +18,27 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
-use sp_std::prelude::*;
-use sp_io::{
-	storage::root as storage_root, storage::changes_root as storage_changes_root,
-	hashing::blake2_256, trie,
-};
-use frame_support::storage;
-use frame_support::{decl_storage, decl_module};
-use sp_runtime::{
-	traits::Header as _, generic, ApplyExtrinsicResult,
-	transaction_validity::{
-		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
-	},
-};
-use codec::{KeyedVec, Encode, Decode};
-use frame_system::Config;
 use crate::{
-	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
+	AccountId, AuthorityId, Block, BlockNumber, Digest, Extrinsic, Header, Transfer, H256 as Hash,
 };
+use codec::{Decode, Encode, KeyedVec};
+use frame_support::{decl_module, decl_storage, storage};
+use frame_system::Config;
 use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
+use sp_io::{
+	hashing::blake2_256,
+	storage::{changes_root as storage_changes_root, root as storage_root},
+	trie,
+};
+use sp_runtime::{
+	generic,
+	traits::Header as _,
+	transaction_validity::{
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
+	},
+	ApplyExtrinsicResult,
+};
+use sp_std::prelude::*;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -159,17 +161,17 @@ impl frame_support::traits::ExecuteBlock<Block> for BlockExecutor {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	if check_signature(&utx).is_err() {
-		return InvalidTransaction::BadProof.into();
+		return InvalidTransaction::BadProof.into()
 	}
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
-		return InvalidTransaction::Stale.into();
+		return InvalidTransaction::Stale.into()
 	}
 	if tx.nonce > expected_nonce + 64 {
-		return InvalidTransaction::Future.into();
+		return InvalidTransaction::Future.into()
 	}
 
 	let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
@@ -181,20 +183,14 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 	let provides = vec![encode(&tx.from, tx.nonce)];
 
-	Ok(ValidTransaction {
-		priority: tx.amount,
-		requires,
-		provides,
-		longevity: 64,
-		propagate: true,
-	})
+	Ok(ValidTransaction { priority: tx.amount, requires, provides, longevity: 64, propagate: true })
 }
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
-	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
-		.unwrap_or_default();
+	let extrinsic_index: u32 =
+		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
 	let result = execute_transaction_backend(&utx, extrinsic_index);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
@@ -215,8 +211,8 @@ pub fn finalize_block() -> Header {
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root = Hash::decode(&mut &storage_root()[..])
-		.expect("`storage_root` is a valid hash");
+	let storage_root =
+		Hash::decode(&mut &storage_root()[..]).expect("`storage_root` is a valid hash");
 	let storage_changes_root = storage_changes_root(&parent_hash.encode())
 		.map(|r| Hash::decode(&mut &r[..]).expect("`storage_changes_root` is a valid hash"));
 
@@ -231,17 +227,11 @@ pub fn finalize_block() -> Header {
 
 	if let Some(new_config) = new_changes_trie_config {
 		digest.push(generic::DigestItem::ChangesTrieSignal(
-			generic::ChangesTrieSignal::NewConfiguration(new_config)
+			generic::ChangesTrieSignal::NewConfiguration(new_config),
 		));
 	}
 
-	Header {
-		number,
-		extrinsics_root,
-		state_root: storage_root,
-		parent_hash,
-		digest,
-	}
+	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest }
 }
 
 #[inline(always)]
@@ -253,12 +243,11 @@ fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyExtrinsicResult {
 	check_signature(utx)?;
 	match utx {
-		Extrinsic::Transfer { exhaust_resources_when_not_first: true, .. } if extrinsic_index != 0 =>
+		Extrinsic::Transfer { exhaust_resources_when_not_first: true, .. }
+			if extrinsic_index != 0 =>
 			Err(InvalidTransaction::ExhaustsResources.into()),
-		Extrinsic::Transfer { ref transfer, .. } =>
-			execute_transfer_backend(transfer),
-		Extrinsic::AuthoritiesChange(ref new_auth) =>
-			execute_new_authorities_backend(new_auth),
+		Extrinsic::Transfer { ref transfer, .. } => execute_transfer_backend(transfer),
+		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(Ok(())),
 		Extrinsic::StorageChange(key, value) =>
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
@@ -271,9 +260,8 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 		Extrinsic::OffchainIndexClear(key) => {
 			sp_io::offchain_index::clear(&key);
 			Ok(Ok(()))
-		}
-		Extrinsic::Store(data) =>
-			execute_store(data.clone()),
+		},
+		Extrinsic::Store(data) => execute_store(data.clone()),
 	}
 }
 
@@ -282,7 +270,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
-		return Err(InvalidTransaction::Stale.into());
+		return Err(InvalidTransaction::Stale.into())
 	}
 
 	// increment nonce in storage
@@ -294,7 +282,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
-		return Err(InvalidTransaction::Payment.into());
+		return Err(InvalidTransaction::Payment.into())
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
@@ -323,12 +311,12 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 	Ok(Ok(()))
 }
 
-fn execute_changes_trie_config_update(new_config: Option<ChangesTrieConfiguration>) -> ApplyExtrinsicResult {
+fn execute_changes_trie_config_update(
+	new_config: Option<ChangesTrieConfiguration>,
+) -> ApplyExtrinsicResult {
 	match new_config.clone() {
-		Some(new_config) => storage::unhashed::put_raw(
-			well_known_keys::CHANGES_TRIE_CONFIG,
-			&new_config.encode(),
-		),
+		Some(new_config) =>
+			storage::unhashed::put_raw(well_known_keys::CHANGES_TRIE_CONFIG, &new_config.encode()),
 		None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
 	}
 	<NewChangesTrieConfig>::put(new_config);
@@ -360,19 +348,18 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use sp_io::TestExternalities;
+	use crate::{wasm_binary_unwrap, Header, Transfer};
+	use sc_executor::{native_executor_instance, NativeExecutor, WasmExecutionMethod};
+	use sp_core::{
+		map,
+		traits::{CodeExecutor, RuntimeCode},
+		NeverNativeValue,
+	};
+	use sp_io::{hashing::twox_128, TestExternalities};
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
-	use crate::{Header, Transfer, wasm_binary_unwrap};
-	use sp_core::{NeverNativeValue, map, traits::{CodeExecutor, RuntimeCode}};
-	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
-	use sp_io::hashing::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.
-	native_executor_instance!(
-		NativeDispatch,
-		crate::api::dispatch,
-		crate::native_version
-	);
+	native_executor_instance!(NativeDispatch, crate::api::dispatch, crate::native_version);
 
 	fn executor() -> NativeExecutor<NativeDispatch> {
 		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
@@ -382,7 +369,7 @@ mod tests {
 		let authorities = vec![
 			Sr25519Keyring::Alice.to_raw_public(),
 			Sr25519Keyring::Bob.to_raw_public(),
-			Sr25519Keyring::Charlie.to_raw_public()
+			Sr25519Keyring::Charlie.to_raw_public(),
 		];
 		TestExternalities::new_with_code(
 			wasm_binary_unwrap(),
@@ -399,7 +386,10 @@ mod tests {
 		)
 	}
 
-	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities) {
+	fn block_import_works<F>(block_executor: F)
+	where
+		F: Fn(Block, &mut TestExternalities),
+	{
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
@@ -407,10 +397,7 @@ mod tests {
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		};
-		let mut b = Block {
-			header: h,
-			extrinsics: vec![],
-		};
+		let mut b = Block { header: h, extrinsics: vec![] };
 
 		new_test_ext().execute_with(|| polish_block(&mut b));
 
@@ -419,7 +406,11 @@ mod tests {
 
 	#[test]
 	fn block_import_works_native() {
-		block_import_works(|b, ext| ext.execute_with(|| { execute_block(b); }));
+		block_import_works(|b, ext| {
+			ext.execute_with(|| {
+				execute_block(b);
+			})
+		});
 	}
 
 	#[test]
@@ -432,19 +423,23 @@ mod tests {
 				heap_pages: None,
 			};
 
-			executor().call::<NeverNativeValue, fn() -> _>(
-				&mut ext,
-				&runtime_code,
-				"Core_execute_block",
-				&b.encode(),
-				false,
-				None,
-			).0.unwrap();
+			executor()
+				.call::<NeverNativeValue, fn() -> _>(
+					&mut ext,
+					&runtime_code,
+					"Core_execute_block",
+					&b.encode(),
+					false,
+					None,
+				)
+				.0
+				.unwrap();
 		})
 	}
 
 	fn block_import_with_transaction_works<F>(block_executor: F)
-		where F: Fn(Block, &mut TestExternalities)
+	where
+		F: Fn(Block, &mut TestExternalities),
 	{
 		let mut b1 = Block {
 			header: Header {
@@ -454,14 +449,13 @@ mod tests {
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			},
-			extrinsics: vec![
-				Transfer {
-					from: AccountKeyring::Alice.into(),
-					to: AccountKeyring::Bob.into(),
-					amount: 69,
-					nonce: 0,
-				}.into_signed_tx()
-			],
+			extrinsics: vec![Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Bob.into(),
+				amount: 69,
+				nonce: 0,
+			}
+			.into_signed_tx()],
 		};
 
 		let mut dummy_ext = new_test_ext();
@@ -481,13 +475,15 @@ mod tests {
 					to: AccountKeyring::Alice.into(),
 					amount: 27,
 					nonce: 0,
-				}.into_signed_tx(),
+				}
+				.into_signed_tx(),
 				Transfer {
 					from: AccountKeyring::Alice.into(),
 					to: AccountKeyring::Charlie.into(),
 					amount: 69,
 					nonce: 1,
-				}.into_signed_tx(),
+				}
+				.into_signed_tx(),
 			],
 		};
 
@@ -519,7 +515,11 @@ mod tests {
 
 	#[test]
 	fn block_import_with_transaction_works_native() {
-		block_import_with_transaction_works(|b, ext| ext.execute_with(|| { execute_block(b); }));
+		block_import_with_transaction_works(|b, ext| {
+			ext.execute_with(|| {
+				execute_block(b);
+			})
+		});
 	}
 
 	#[test]
@@ -532,14 +532,17 @@ mod tests {
 				heap_pages: None,
 			};
 
-			executor().call::<NeverNativeValue, fn() -> _>(
-				&mut ext,
-				&runtime_code,
-				"Core_execute_block",
-				&b.encode(),
-				false,
-				None,
-			).0.unwrap();
+			executor()
+				.call::<NeverNativeValue, fn() -> _>(
+					&mut ext,
+					&runtime_code,
+					"Core_execute_block",
+					&b.encode(),
+					false,
+					None,
+				)
+				.0
+				.unwrap();
 		})
 	}
 }

@@ -21,8 +21,10 @@ use codec::Encode;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
 
-use crate::mmr::{NodeOf, Node};
-use crate::{NumberOfLeaves, Nodes, Pallet, Config, primitives};
+use crate::{
+	mmr::{Node, NodeOf},
+	primitives, Config, Nodes, NumberOfLeaves, Pallet,
+};
 
 /// A marker type for runtime-specific storage implementation.
 ///
@@ -44,9 +46,7 @@ pub struct OffchainStorage;
 ///
 /// There are two different implementations depending on the use case.
 /// See docs for [RuntimeStorage] and [OffchainStorage].
-pub struct Storage<StorageType, T, I, L>(
-	sp_std::marker::PhantomData<(StorageType, T, I, L)>
-);
+pub struct Storage<StorageType, T, I, L>(sp_std::marker::PhantomData<(StorageType, T, I, L)>);
 
 impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 	fn default() -> Self {
@@ -54,7 +54,8 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 	}
 }
 
-impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L> where
+impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>
+where
 	T: Config<I>,
 	I: 'static,
 	L: primitives::FullLeaf + codec::Decode,
@@ -62,32 +63,30 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T,
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
 		let key = Pallet::<T, I>::offchain_key(pos);
 		// Retrieve the element from Off-chain DB.
-		Ok(sp_io::offchain
-			::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
 	}
 
 	fn append(&mut self, _: u64, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
 		panic!("MMR must not be altered in the off-chain context.")
- 	}
+	}
 }
 
-impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, I, L> where
+impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, I, L>
+where
 	T: Config<I>,
 	I: 'static,
 	L: primitives::FullLeaf,
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
-		Ok(<Nodes<T, I>>::get(pos)
-			.map(Node::Hash)
-		)
+		Ok(<Nodes<T, I>>::get(pos).map(Node::Hash))
 	}
 
 	fn append(&mut self, pos: u64, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
 		let mut leaves = crate::NumberOfLeaves::<T, I>::get();
 		let mut size = crate::mmr::utils::NodesUtils::new(leaves).size();
 		if pos != size {
-			return Err(mmr_lib::Error::InconsistentStore);
+			return Err(mmr_lib::Error::InconsistentStore)
 		}
 
 		for elem in elems {

@@ -19,26 +19,30 @@
 //! Extensions for manual seal to produce blocks valid for any runtime.
 use super::Error;
 
-use sp_runtime::traits::{Block as BlockT, DigestFor};
-use sp_inherents::InherentData;
 use sp_consensus::BlockImportParams;
+use sp_inherents::InherentData;
+use sp_runtime::traits::{Block as BlockT, DigestFor};
 
 pub mod babe;
 
-/// Consensus data provider, manual seal uses this trait object for authoring blocks valid 
+/// Consensus data provider, manual seal uses this trait object for authoring blocks valid
 /// for any runtime.
 pub trait ConsensusDataProvider<B: BlockT>: Send + Sync {
 	/// Block import transaction type
 	type Transaction;
 
 	/// Attempt to create a consensus digest.
-	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<DigestFor<B>, Error>;
+	fn create_digest(
+		&self,
+		parent: &B::Header,
+		inherents: &InherentData,
+	) -> Result<DigestFor<B>, Error>;
 
 	/// set up the neccessary import params.
 	fn append_block_import(
 		&self,
 		parent: &B::Header,
 		params: &mut BlockImportParams<B, Self::Transaction>,
-		inherents: &InherentData
+		inherents: &InherentData,
 	) -> Result<(), Error>;
 }
