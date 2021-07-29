@@ -432,7 +432,7 @@ mod execution {
 
 			trace!(
 				target: "state",
-				%ext_id,
+				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
 				method = %self.method,
 				parent_hash = %self.parent_hash.map(|h| format!("{:?}", h)).unwrap_or_else(|| String::from("None")),
 				input = ?HexDisplay::from(&self.call_data),
@@ -454,7 +454,7 @@ mod execution {
 
 			trace!(
 				target: "state",
-				%ext_id,
+				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
 				?was_native,
 				?result,
 				"Return",

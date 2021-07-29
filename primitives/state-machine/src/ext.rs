@@ -206,7 +206,7 @@ where
 		trace!(
 			target: "state",
 			method = "Get",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			result = ?result.as_ref().map(HexDisplay::from),
 			result_encoded = %HexDisplay::from(
@@ -231,7 +231,7 @@ where
 		trace!(
 			target: "state",
 			method = "Hash",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			?result,
 		);
@@ -251,7 +251,7 @@ where
 		trace!(
 			target: "state",
 			method = "ChildGet",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			result = ?result.as_ref().map(HexDisplay::from)
@@ -273,7 +273,7 @@ where
 		trace!(
 			target: "state",
 			method = "ChildHash",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			?result,
@@ -292,7 +292,7 @@ where
 		trace!(
 			target: "state",
 			method = "Exists",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			%result,
 		);
@@ -314,7 +314,7 @@ where
 		trace!(
 			target: "state",
 			method = "ChildExists",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			%result,
@@ -412,7 +412,7 @@ where
 		trace!(
 			target: "state",
 			method = "Put",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			value = ?value.as_ref().map(HexDisplay::from),
 			value_encoded = %HexDisplay::from(
@@ -436,7 +436,7 @@ where
 		trace!(
 			target: "state",
 			method = "ChildPut",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			value = ?value.as_ref().map(HexDisplay::from),
@@ -451,7 +451,7 @@ where
 		trace!(
 			target: "state",
 			method = "ChildKill",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 		);
 		let _guard = guard();
@@ -464,7 +464,7 @@ where
 		trace!(
 			target: "state",
 			method = "ClearPrefix",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			prefix = %HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
@@ -491,7 +491,7 @@ where
 		trace!(
 			target: "state",
 			method = "ChildClearPrefix",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			prefix = %HexDisplay::from(&prefix),
 		);
@@ -506,7 +506,7 @@ where
 		trace!(
 			target: "state",
 			method = "Append",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			value = %HexDisplay::from(&value),
 		);
@@ -527,7 +527,7 @@ where
 			trace!(
 				target: "state",
 				method = "StorageRoot",
-				ext_id = self.id,
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 				storage_root = %HexDisplay::from(&root.as_ref()),
 				cached = true,
 			);
@@ -538,7 +538,7 @@ where
 		trace!(
 			target: "state",
 			method = "StorageRoot",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			storage_root = %HexDisplay::from(&root.as_ref()),
 			cached = false,
 		);
@@ -557,7 +557,7 @@ where
 			trace!(
 				target: "state",
 				method = "ChildStorageRoot",
-				ext_id = self.id,
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 				child_info = %HexDisplay::from(&storage_key),
 				storage_root = %HexDisplay::from(&root.as_ref()),
 				cached = true,
@@ -587,7 +587,7 @@ where
 				trace!(
 					target: "state",
 					method = "ChildStorageRoot",
-					ext_id = self.id,
+					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 					child_info = %HexDisplay::from(&storage_key.as_ref()),
 					storage_root = %HexDisplay::from(&root.as_ref()),
 					cached = false,
@@ -604,7 +604,7 @@ where
 				trace!(
 					target: "state",
 					method = "ChildStorageRoot",
-					ext_id = self.id,
+					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 					child_info = %HexDisplay::from(&storage_key.as_ref()),
 					storage_root = %HexDisplay::from(&root.as_ref()),
 					cached = false,
@@ -619,7 +619,7 @@ where
 		trace!(
 			target: "state",
 			method = "IndexTransaction",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			%index,
 			tx_hash = %HexDisplay::from(&hash),
 			%size,
@@ -637,7 +637,7 @@ where
 		trace!(
 			target: "state",
 			method = "RenewTransactionIndex",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			%index,
 			tx_hash = %HexDisplay::from(&hash),
 		);
@@ -659,7 +659,7 @@ where
 			trace!(
 				target: "state",
 				method = "ChangesRoot",
-				ext_id = self.id,
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 				parent_hash = %HexDisplay::from(&parent_hash),
 				?root,
 				cached = true,
@@ -684,7 +684,7 @@ where
 			trace!(
 				target: "state",
 				method = "ChangesRoot",
-				ext_id = self.id,
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 				parent_hash = %HexDisplay::from(&parent_hash),
 				?root,
 				cached = false,
