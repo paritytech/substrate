@@ -22,8 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, MallocSizeOfWasm, RpcHandlers, SpawnTaskHandle, TaskManager,
-	TransactionPoolAdapter,
+	start_rpc_servers, MallocSizeOfWasm, RpcHandlers, RpcMiddleware, SpawnTaskHandle,
+	TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpc_pubsub::manager::SubscriptionManager;
@@ -45,6 +45,7 @@ use sc_network::{
 	state_request_handler::{self, StateRequestHandler},
 	NetworkService,
 };
+use sc_rpc_server::{CustomMiddleware, NoopCustomMiddleware};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -537,7 +538,7 @@ where
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<RpcHandlers, Error>
+) -> Result<RpcHandlers<NoopCustomMiddleware>, Error>
 where
 	TCl: ProvideRuntimeApi<TBl>
 		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
@@ -564,6 +565,43 @@ where
 		+ MallocSizeOfWasm
 		+ 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
+{
+	spawn_tasks_with_rpc_middleware(params, NoopCustomMiddleware::default())
+}
+
+/// Spawn the tasks that are required to run a node with a customn rpc middleware
+pub fn spawn_tasks_with_rpc_middleware<TBl, TBackend, TExPool, TRpc, TCl, TCm>(
+	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
+	rpc_middleware: TCm,
+) -> Result<RpcHandlers<TCm>, Error>
+where
+	TCl: ProvideRuntimeApi<TBl>
+		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
+		+ Chain<TBl>
+		+ BlockBackend<TBl>
+		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
+		+ ProofProvider<TBl>
+		+ HeaderBackend<TBl>
+		+ BlockchainEvents<TBl>
+		+ ExecutorProvider<TBl>
+		+ UsageProvider<TBl>
+		+ StorageProvider<TBl, TBackend>
+		+ CallApiAt<TBl>
+		+ Send
+		+ 'static,
+	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
+		+ sc_offchain::OffchainWorkerApi<TBl>
+		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
+		+ sp_session::SessionKeys<TBl>
+		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+	TBl: BlockT,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
+		+ MallocSizeOfWasm
+		+ 'static,
+	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
+	TCm: CustomMiddleware<sc_rpc::Metadata>,
+	RpcHandlers<TCm>: Clone,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -631,7 +669,7 @@ where
 
 	// RPC
 	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe,
-	                   rpc_middleware: sc_rpc_server::RpcMiddleware| {
+	                   rpc_middleware: RpcMiddleware<TCm>| {
 		gen_handler(
 			deny_unsafe,
 			rpc_middleware,
@@ -653,7 +691,7 @@ where
 	let rpc_handlers = RpcHandlers(Arc::new(
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
-			sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser"),
+			RpcMiddleware::<TCm>::new_with_custom_middleware(rpc_metrics, "inbrowser", rpc_middleware),
 		)
 		.into(),
 	));
@@ -728,9 +766,9 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	Ok(telemetry.handle())
 }
 
-fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
+fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl, TCm>(
 	deny_unsafe: sc_rpc::DenyUnsafe,
-	rpc_middleware: sc_rpc_server::RpcMiddleware,
+	rpc_middleware: RpcMiddleware<TCm>,
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
@@ -741,7 +779,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata, TCm>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -760,6 +798,7 @@ where
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	TCm: CustomMiddleware<sc_rpc::Metadata>,
 {
 	use sc_rpc::{author, chain, offchain, state, system};
 

@@ -27,7 +27,7 @@ use node_runtime::RuntimeApi;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_network::{Event, NetworkService};
-use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
+use sc_service::{CustomMiddleware, NoopCustomMiddleware, RpcHandlers, RpcMetadata, TaskManager, config::Configuration, error::Error as ServiceError};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
@@ -419,11 +419,29 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 }
 
 pub fn new_light_base(
-	mut config: Configuration,
+	config: Configuration,
 ) -> Result<
 	(
 		TaskManager,
-		RpcHandlers,
+		RpcHandlers<NoopCustomMiddleware>,
+		Arc<LightClient>,
+		Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+		Arc<
+			sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>,
+		>,
+	),
+	ServiceError,
+> {
+	new_light_base_with_rpc_middleware(config, NoopCustomMiddleware::default())
+}
+
+pub fn new_light_base_with_rpc_middleware<CM: CustomMiddleware<RpcMetadata>>(
+	mut config: Configuration,
+	rpc_middleware: CM,
+) -> Result<
+	(
+		TaskManager,
+		RpcHandlers<CM>,
 		Arc<LightClient>,
 		Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 		Arc<
@@ -561,7 +579,7 @@ pub fn new_light_base(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+	let rpc_handlers = sc_service::spawn_tasks_with_rpc_middleware(sc_service::SpawnTasksParams {
 		on_demand: Some(on_demand),
 		remote_blockchain: Some(backend.remote_blockchain()),
 		rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
@@ -574,7 +592,7 @@ pub fn new_light_base(
 		network: network.clone(),
 		task_manager: &mut task_manager,
 		telemetry: telemetry.as_mut(),
-	})?;
+	}, rpc_middleware)?;
 
 	network_starter.start_network();
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))

@@ -28,7 +28,7 @@ pub use sc_client_api::{
 };
 pub use sc_client_db::{self, Backend};
 pub use sc_executor::{self, NativeExecutor, WasmExecutionMethod};
-pub use sc_service::{client, RpcHandlers, RpcSession};
+pub use sc_service::{client, CustomMiddleware, RpcHandlers, RpcMetadata, RpcSession};
 pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
@@ -342,7 +342,7 @@ pub trait RpcHandlersExt {
 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>>;
 }
 
-impl RpcHandlersExt for RpcHandlers {
+impl<CM: CustomMiddleware<RpcMetadata>> RpcHandlersExt for RpcHandlers<CM> {
 	fn send_transaction(
 		&self,
 		extrinsic: OpaqueExtrinsic,

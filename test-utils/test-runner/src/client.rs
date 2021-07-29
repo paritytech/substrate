@@ -43,7 +43,7 @@ use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use std::{str::FromStr, sync::Arc};
 
 type ClientParts<T> = (
-	Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
+	Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware<sc_rpc::Metadata>>>,
 	TaskManager,
 	Arc<
 		TFullClient<

@@ -28,8 +28,8 @@ use sc_chain_spec::Extension;
 use sc_network::config::TransportConfig;
 use sc_service::{
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	Configuration, GenericChainSpec, KeepBlocks, Role, RpcHandlers, RpcSession, RuntimeGenesis,
-	TaskManager, TransactionStorageMode,
+	Configuration, CustomMiddleware, GenericChainSpec, KeepBlocks, Role, RpcHandlers,
+	RpcMetadata, RpcSession, RuntimeGenesis, TaskManager, TransactionStorageMode,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::pin::Pin;
@@ -137,7 +137,9 @@ struct RpcMessage {
 }
 
 /// Create a Client object that connects to a service.
-pub fn start_client(mut task_manager: TaskManager, rpc_handlers: RpcHandlers) -> Client {
+pub fn start_client<CM>(mut task_manager: TaskManager, rpc_handlers:  RpcHandlers<CM>) -> Client
+	where CM: CustomMiddleware<RpcMetadata>
+{
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with

@@ -50,9 +50,9 @@ use sp_utils::mpsc::TracingUnboundedReceiver;
 pub use self::{
 	builder::{
 		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_light_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer,
-		NetworkStarter, NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams,
-		TFullBackend, TFullCallExecutor, TFullClient, TLightBackend, TLightBackendWithHash,
+		new_full_parts, new_light_parts, spawn_tasks, spawn_tasks_with_rpc_middleware,
+		BuildNetworkParams, KeystoreContainer, NetworkStarter, NoopRpcExtensionBuilder, RpcExtensionBuilder,
+		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient, TLightBackend, TLightBackendWithHash,
 		TLightCallExecutor, TLightClient, TLightClientWithBackend,
 	},
 	client::{ClientConfig, LocalCallExecutor},
@@ -71,6 +71,7 @@ pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
 pub use sc_rpc::Metadata as RpcMetadata;
+pub use sc_rpc_server::{CustomMiddleware, NoopCustomMiddleware};
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
@@ -78,6 +79,8 @@ pub use sp_consensus::import_queue::ImportQueue;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 pub use task_manager::{SpawnTaskHandle, TaskManager};
+
+type RpcMiddleware<CM> = sc_rpc_server::RpcMiddleware<sc_rpc::Metadata, CM>;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -93,11 +96,11 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(
-	Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
+pub struct RpcHandlers<CM: CustomMiddleware<RpcMetadata>>(
+	Arc<jsonrpc_core::MetaIoHandler<RpcMetadata, RpcMiddleware<CM>>>,
 );
 
-impl RpcHandlers {
+impl<CM: CustomMiddleware<RpcMetadata>> RpcHandlers<CM> {
 	/// Starts an RPC query.
 	///
 	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
@@ -122,7 +125,7 @@ impl RpcHandlers {
 	/// Provides access to the underlying `MetaIoHandler`
 	pub fn io_handler(
 		&self,
-	) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	) -> Arc<jsonrpc_core::MetaIoHandler<RpcMetadata, RpcMiddleware<CM>>> {
 		self.0.clone()
 	}
 }
@@ -345,10 +348,11 @@ mod waiting {
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
+	CM: CustomMiddleware<RpcMetadata>,
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
-		sc_rpc_server::RpcMiddleware,
-	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
+		RpcMiddleware<CM>,
+	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata, CM>,
 >(
 	config: &Configuration,
 	mut gen_handler: H,
@@ -389,7 +393,7 @@ fn start_rpc_servers<
 				&*path,
 				gen_handler(
 					sc_rpc::DenyUnsafe::No,
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
+					RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
 				),
 			)
 		}),
@@ -400,7 +404,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http"),
+					RpcMiddleware::new(rpc_metrics.clone(), "http"),
 				),
 				config.rpc_max_payload,
 			)
@@ -413,7 +417,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws"),
+					RpcMiddleware::new(rpc_metrics.clone(), "ws"),
 				),
 				config.rpc_max_payload,
 			)
@@ -425,10 +429,11 @@ fn start_rpc_servers<
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<
+	CM: CustomMiddleware<RpcMetadata>,
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
-		sc_rpc_server::RpcMiddleware,
-	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
+		RpcMiddleware<CM>,
+	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata, CM>,
 >(
 	_: &Configuration,
 	_: H,
