@@ -41,7 +41,6 @@ hex-literal = "0.3.1"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
-#parking_lot = "0.11.1"
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev",  path = "../../../primitives/authority-discovery" }
@@ -54,9 +53,7 @@ sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
-#sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-#sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
@@ -69,28 +66,17 @@ sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 sc-consensus-uncles = { version = "0.10.0-dev", path = "../../../client/consensus/uncles" }
 grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-#sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
-#sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
-#sc-tracing = { version = "4.0.0-dev", path = "../../../client/tracing" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
 sc-finality-grandpa-warp-sync = { version = "0.10.0-dev", path = "../../../client/finality-grandpa-warp-sync", optional = true }
 
 # frame dependencies
-#pallet-indices = { version = "4.0.0-dev", path = "../../../frame/indices" }
-#pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../frame/timestamp" }
-#pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
-#pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-#frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
-#pallet-authority-discovery = { version = "4.0.0-dev", path = "../../../frame/authority-discovery" }
-#pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
-#pallet-grandpa = { version = "4.0.0-dev", path = "../../../frame/grandpa" }
 
 # node-specific dependencies
 node-runtime = { version = "4.0.0-dev", path = "../runtime" }

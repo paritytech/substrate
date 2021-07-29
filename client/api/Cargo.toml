@@ -27,8 +27,6 @@ parking_lot = "0.11.1"
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
-#sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-#sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }

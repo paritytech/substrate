@@ -37,7 +37,6 @@ sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 serde_json = "1.0.41"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
-#sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
@@ -45,8 +44,6 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 finality-grandpa = { version = "0.14.1", features = ["derive-codec"] }
-#pin-project = "1.0.4"
-#linked-hash-map = "0.5.2"
 async-trait = "0.1.50"
 wasm-timer = "0.2"
 
