@@ -111,7 +111,7 @@ use crate::{
 };
 use frame_support::{
 	dispatch::Dispatchable,
-	traits::{Currency, Filter, Get, OnUnbalanced, Randomness, Time},
+	traits::{Currency, Filter, Get, OnUnbalanced, Randomness, StorageVersion, Time},
 	weights::{GetDispatchInfo, PostDispatchInfo, Weight, WithPostDispatchInfo},
 };
 use frame_system::Pallet as System;
@@ -133,6 +133,9 @@ type BalanceOf<T> =
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -273,6 +276,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]

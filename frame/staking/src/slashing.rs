@@ -49,7 +49,7 @@
 //!
 //! Based on research at <https://w3f-research.readthedocs.io/en/latest/polkadot/slashing/npos.html>
 
-use super::{
+use crate::{
 	BalanceOf, Config, EraIndex, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill,
 	SessionInterface, Store, UnappliedSlash,
 };

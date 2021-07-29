@@ -61,6 +61,7 @@ pub mod inherent;
 #[macro_use]
 pub mod error;
 pub mod instances;
+pub mod migrations;
 pub mod traits;
 pub mod weights;
 
@@ -670,21 +671,6 @@ pub use frame_support_procedural::DefaultNoBound;
 /// ```
 pub use frame_support_procedural::require_transactional;
 
-/// Convert the current crate version into a [`PalletVersion`](crate::traits::PalletVersion).
-///
-/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
-/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
-/// This means that the [`PalletVersion`](crate::traits::PalletVersion)
-/// object will correspond to the version of the crate the macro is called in!
-///
-/// # Example
-///
-/// ```
-/// # use frame_support::{traits::PalletVersion, crate_to_pallet_version};
-/// const Version: PalletVersion = crate_to_pallet_version!();
-/// ```
-pub use frame_support_procedural::crate_to_pallet_version;
-
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.
@@ -1286,7 +1272,7 @@ pub mod pallet_prelude {
 			},
 		},
 		traits::{
-			ConstU32, EnsureOrigin, Get, GetDefault, GetPalletVersion, Hooks, IsType,
+			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait,
 		},
 		weights::{DispatchClass, Pays, Weight},
@@ -1407,6 +1393,19 @@ pub mod pallet_prelude {
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
 /// and value types must bound [`pallet_prelude::MaxEncodedLen`].
 ///
+/// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to be
+/// communicated to the macro. This can be done by using the `storage_version` attribute:
+///
+/// ```ignore
+/// const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
+///
+/// #[pallet::pallet]
+/// #[pallet::storage_version(STORAGE_VERSION)]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// If not present, the current storage version is set to the default value.
+///
 /// ### Macro expansion:
 ///
 /// The macro add this attribute to the struct definition:
@@ -1421,7 +1420,7 @@ pub mod pallet_prelude {
 /// and replace the type `_` by `PhantomData<T>`.
 ///
 /// It implements on pallet:
-/// * [`traits::GetPalletVersion`]
+/// * [`traits::GetStorageVersion`]
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
 /// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
