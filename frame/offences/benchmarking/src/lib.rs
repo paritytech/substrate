@@ -289,7 +289,7 @@ benchmarks! {
 		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount * (1 + n) / 2;
 		let slash = |id| core::iter::once(
-			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slash(id, BalanceOf::<T>::from(slash_amount)))
+			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
