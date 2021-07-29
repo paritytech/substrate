@@ -166,7 +166,10 @@ fn test_blocks(
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: Call::Balances(pallet_balances::Call::transfer { dest: bob().into(), value: 1 * DOLLARS }),
+		function: Call::Balances(pallet_balances::Call::transfer {
+			dest: bob().into(),
+			value: 1 * DOLLARS,
+		}),
 	}));
 	let block1 =
 		construct_block(executor, &mut test_ext.ext(), 1, GENESIS_HASH.into(), block1_extrinsics);
