@@ -31,8 +31,9 @@
 //!
 //! <h2>Note</h2>
 //! The running node has no signature verification, which allows us author extrinsics for any
-//! account on chain.     <br/>
-//!     <br/>
+//! account on chain.
+//!
+//!
 //!
 //! <h2>How do I Use this?</h2>
 //!

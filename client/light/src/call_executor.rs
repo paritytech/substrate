@@ -132,7 +132,7 @@ where
 				call_data,
 				changes,
 				None,
-				ExecutionConfig::new_consensus(ExecutionStrategy::NativeWhenPossible).get_manager(),
+				ExecutionStrategy::NativeWhenPossible.in_consensus().get_manager(),
 				native_call,
 				recorder,
 				extensions,
