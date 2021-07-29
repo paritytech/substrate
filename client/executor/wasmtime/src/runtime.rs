@@ -279,7 +279,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// usage in bytes.
 ///
 /// The actual number of bytes consumed by a function is not trivial to compute  without going through
-/// full compilation. Therefore, it's expected that `native_stack_max` is greedily overestimated and
+/// full compilation. Therefore, it's expected that `native_stack_max` is greatly overestimated and
 /// thus never reached in practice. The stack overflow check introduced by the instrumentation and
 /// that relies on the logical item count should be reached first.
 ///
