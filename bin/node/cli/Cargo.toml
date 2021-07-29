@@ -96,7 +96,7 @@ pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "..
 node-runtime = { version = "4.0.0-dev", path = "../runtime" }
 node-rpc = { version = "4.0.0-dev", path = "../rpc" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
-#node-executor = { version = "4.0.0-dev", path = "../executor" }
+node-executor = { version = "4.0.0-dev", path = "../executor" }
 
 # CLI-specific dependencies
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli" }
