@@ -152,7 +152,7 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
 #[repr(u64)]
-#[derive(Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
 pub enum IdentityField {
 	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -164,13 +164,19 @@ pub enum IdentityField {
 	Twitter = 0b0000000000000000000000000000000000000000000000000000000010000000,
 }
 
+impl MaxEncodedLen for IdentityField {
+	fn max_encoded_len() -> usize {
+		u64::max_encoded_len()
+	}
+}
+
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
 pub struct IdentityFields(pub(crate) BitFlags<IdentityField>);
 
 impl MaxEncodedLen for IdentityFields {
 	fn max_encoded_len() -> usize {
-		u64::max_encoded_len()
+		IdentityField::max_encoded_len()
 	}
 }
 

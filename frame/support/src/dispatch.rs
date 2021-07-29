@@ -26,7 +26,7 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, UnfilteredDispatchable,
 	},
 	weights::{
 		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
@@ -352,7 +352,6 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
-			{}
 			[]
 			$($t)*
 		);
@@ -389,7 +388,6 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
-			{}
 			[]
 			$($t)*
 		);
@@ -410,7 +408,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event() = default;
@@ -429,8 +426,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -449,7 +445,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event
@@ -476,7 +471,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event() = default;
@@ -499,7 +493,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -520,8 +513,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -541,7 +533,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -570,7 +561,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -595,7 +585,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_idle($param_name1:ident : $param1:ty, $param_name2:ident: $param2:ty $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -616,8 +605,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -638,7 +626,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -665,7 +652,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -692,7 +678,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -721,7 +706,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -742,8 +726,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -765,7 +748,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -790,7 +772,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{}
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn integrity_test() { $( $impl:tt )* }
@@ -813,7 +794,6 @@ macro_rules! decl_module {
 				$(#[doc = $doc_attr])*
 				fn integrity_test() { $( $impl)* }
 			}
-			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -835,7 +815,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )+ }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn integrity_test() { $( $impl:tt )* }
@@ -860,7 +839,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -887,7 +865,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -916,7 +893,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -937,8 +913,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -960,7 +935,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -985,7 +959,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -1006,8 +979,7 @@ macro_rules! decl_module {
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -1029,7 +1001,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -1055,7 +1026,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$( #[doc = $doc_attr:tt] )*
 		const $name:ident: $ty:ty = $value:expr;
@@ -1081,8 +1051,7 @@ macro_rules! decl_module {
 				$name: $ty = $value;
 			}
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -1106,7 +1075,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		type Error = $error_type:ty;
@@ -1127,8 +1095,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $error_type }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -1151,7 +1118,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $($t:tt)* ]
 		$($rest:tt)*
 	) => {
@@ -1170,55 +1136,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ &'static str }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
-			[ $($t)* ]
-			$($rest)*
-		);
-	};
-
-	// Parse storage version
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<
-			$trait_instance:ident:
-				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
-			>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
-		{ $( $on_idle:tt )* }
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		{ $( $error_type:tt )* }
-		{ $( $integrity_test:tt )* }
-		{ }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		type StorageVersion = $storage_version:path;
-		$($rest:tt)*
-	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<
-				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
-			>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $other_where_bounds )* }
-			{ $( $deposit_event )* }
-			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
-			{ $( $on_idle )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			{ $( $constants )* }
-			{ $( $error_type )* }
 			{ $( $integrity_test)* }
-			{ $storage_version }
-			[ $( $dispatchables )* ]
+			[ $($t)* ]
 			$($rest)*
 		);
 	};
@@ -1241,7 +1160,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $error_type:ty }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -1266,8 +1184,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $error_type }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 			[
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
@@ -1299,7 +1216,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[$fn_attr:meta])*
@@ -1329,7 +1245,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -1359,7 +1274,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -1389,7 +1303,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -1420,7 +1333,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 	) => {
 		$crate::decl_module!(@imp
@@ -1438,8 +1350,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
+			{ $( $integrity_test)* }
 		);
 	};
 
@@ -1540,17 +1451,25 @@ macro_rules! decl_module {
 					as
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				let new_storage_version = $crate::crate_to_pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"⚠️ {} declares internal migrations (which *might* execute). \
-					 On-chain `{:?}` vs current storage version `{:?}`",
+					"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
 					pallet_name,
-					<Self as $crate::traits::GetStorageVersion>::on_chain_storage_version(),
-					<Self as $crate::traits::GetStorageVersion>::current_storage_version(),
+					new_storage_version,
 				);
 
-				(|| { $( $impl )* })()
+				let result: $return = (|| { $( $impl )* })();
+
+				new_storage_version
+					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
+
+				let additional_write = <
+					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
+				>::get().writes(1);
+
+				result.saturating_add(additional_write)
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -1581,14 +1500,19 @@ macro_rules! decl_module {
 					as
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				let new_storage_version = $crate::crate_to_pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"✅ no migration for {}",
+					"✅ no migration for {}, setting storage version to {:?}",
 					pallet_name,
+					new_storage_version,
 				);
 
-				0
+				new_storage_version
+					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
+
+				<<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>>::get().writes(1)
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -1899,45 +1823,6 @@ macro_rules! decl_module {
 		}
 	};
 
-	// Implementation for `GetStorageVersion`.
-	(@impl_get_storage_version
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		{ $( $other_where_bounds:tt )* }
-		$( $storage_version:tt )+
-	) => {
-		// Implement `GetStorageVersion` for `Pallet`
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetStorageVersion
-			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn current_storage_version() -> $crate::traits::StorageVersion {
-				$( $storage_version )*
-			}
-
-			fn on_chain_storage_version() -> $crate::traits::StorageVersion {
-				$crate::traits::StorageVersion::get::<Self>()
-			}
-		}
-	};
-
-	// Implementation for `GetStorageVersion` when no storage version is passed.
-	(@impl_get_storage_version
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		{ $( $other_where_bounds:tt )* }
-	) => {
-		// Implement `GetStorageVersion` for `Pallet`
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetStorageVersion
-			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn current_storage_version() -> $crate::traits::StorageVersion {
-				Default::default()
-			}
-
-			fn on_chain_storage_version() -> $crate::traits::StorageVersion {
-				$crate::traits::StorageVersion::get::<Self>()
-			}
-		}
-	};
-
 	// The main macro expansion that actually renders the module code.
 
 	(@imp
@@ -1967,7 +1852,6 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $error_type:ty }
 		{ $( $integrity_test:tt )* }
-		{ $( $storage_version:tt )* }
 	) => {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
@@ -2024,7 +1908,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			$( $offchain )*
 		}
-
 		$crate::decl_module! {
 			@impl_deposit_event
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
@@ -2081,13 +1964,6 @@ macro_rules! decl_module {
 			)*
 		}
 
-		$crate::decl_module! {
-			@impl_get_storage_version
-			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
-			{ $( $other_where_bounds )* }
-			$( $storage_version )*
-		}
-
 		// Implement weight calculation function for Call
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetDispatchInfo
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
@@ -2121,27 +1997,6 @@ macro_rules! decl_module {
 			}
 		}
 
-		// Implement PalletInfoAccess for the module.
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletInfoAccess
-			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn index() -> usize {
-				<
-					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
-				>::index::<Self>()
-					.expect("Pallet is part of the runtime because pallet `Config` trait is \
-						implemented by the runtime")
-			}
-
-			fn name() -> &'static str {
-				<
-					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
-				>::name::<Self>()
-					.expect("Pallet is part of the runtime because pallet `Config` trait is \
-						implemented by the runtime")
-			}
-		}
-
 		// Implement GetCallName for the Call.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallName
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
@@ -2168,13 +2023,32 @@ macro_rules! decl_module {
 			}
 		}
 
+		// Bring `GetPalletVersion` into scope to make it easily usable.
+		pub use $crate::traits::GetPalletVersion as _;
+		// Implement `GetPalletVersion` for `Module`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetPalletVersion
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn current_version() -> $crate::traits::PalletVersion {
+				$crate::crate_to_pallet_version!()
+			}
+
+			fn storage_version() -> Option<$crate::traits::PalletVersion> {
+				let key = $crate::traits::PalletVersion::storage_key::<
+						<$trait_instance as $system::Config>::PalletInfo, Self
+					>().expect("Every active pallet has a name in the runtime; qed");
+
+				$crate::storage::unhashed::get(&key)
+			}
+		}
+
 		// Implement `OnGenesis` for `Module`
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_genesis() {
-				let storage_version = <Self as $crate::traits::GetStorageVersion>::current_storage_version();
-				storage_version.put::<Self>();
+				$crate::crate_to_pallet_version!()
+					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
 			}
 		}
 

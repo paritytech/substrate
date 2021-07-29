@@ -22,10 +22,7 @@ use crate::*;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{
-		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnInitialize, OnUnbalanced,
-		OneSessionHandler,
-	},
+	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
 	weights::constants::RocksDbWeight,
 };
 use sp_core::H256;

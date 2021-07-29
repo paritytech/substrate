@@ -19,10 +19,9 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion,
+		GetCallName, GetPalletVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
@@ -97,14 +96,12 @@ impl SomeAssociation2 for u64 {
 pub mod pallet {
 	use super::{
 		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
-		SomeType6, SomeType7, StorageVersion,
+		SomeType6, SomeType7,
 	};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	type BalanceOf<T> = <T as Config>::Balance;
-
-	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(10);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
@@ -149,7 +146,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::generate_storage_info]
-	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -900,7 +896,12 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPallets::on_initialize(1), 10);
 		AllPallets::on_finalize(1);
 
+		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
 		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
+		assert_eq!(
+			pallet::Pallet::<Runtime>::storage_version(),
+			Some(pallet::Pallet::<Runtime>::current_version()),
+		);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -920,58 +921,13 @@ fn pallet_hooks_expand() {
 #[test]
 fn pallet_on_genesis() {
 	TestExternalities::default().execute_with(|| {
-		assert_eq!(pallet::Pallet::<Runtime>::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
 		pallet::Pallet::<Runtime>::on_genesis();
 		assert_eq!(
-			pallet::Pallet::<Runtime>::current_storage_version(),
-			pallet::Pallet::<Runtime>::on_chain_storage_version(),
+			pallet::Pallet::<Runtime>::storage_version(),
+			Some(pallet::Pallet::<Runtime>::current_version()),
 		);
 	})
-}
-
-#[test]
-fn migrate_from_pallet_version_to_storage_version() {
-	const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
-
-	fn pallet_version_key(name: &str) -> [u8; 32] {
-		let pallet_name = sp_io::hashing::twox_128(name.as_bytes());
-		let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&pallet_name);
-		final_key[16..].copy_from_slice(&postfix);
-
-		final_key
-	}
-
-	TestExternalities::default().execute_with(|| {
-		// Insert some fake pallet versions
-		sp_io::storage::set(&pallet_version_key(Example::name()), &[1, 2, 3]);
-		sp_io::storage::set(&pallet_version_key(Example2::name()), &[1, 2, 3]);
-		sp_io::storage::set(&pallet_version_key(System::name()), &[1, 2, 3]);
-
-		// Check that everyone currently is at version 0
-		assert_eq!(Example::on_chain_storage_version(), StorageVersion::new(0));
-		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
-		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
-
-		let db_weight = RuntimeDbWeight { read: 0, write: 5 };
-		let weight = frame_support::migrations::migrate_from_pallet_version_to_storage_version::<
-			AllPalletsWithSystem,
-		>(&db_weight);
-
-		// 3 pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(3 * 2 * 5, weight);
-
-		// All pallet versions should be removed
-		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
-		assert!(sp_io::storage::get(&pallet_version_key(Example2::name())).is_none());
-		assert!(sp_io::storage::get(&pallet_version_key(System::name())).is_none());
-
-		assert_eq!(Example::on_chain_storage_version(), pallet::STORAGE_VERSION);
-		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
-		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
-	});
 }
 
 #[test]
