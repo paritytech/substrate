@@ -154,11 +154,13 @@ impl<T: Config> Pallet<T> {
 		let validator_exposure_part = Perbill::from_rational(exposure.own, exposure.total);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
+		Self::deposit_event(Event::<T>::PayoutStarted(era, ledger.stash.clone()));
+
 		// We can now make total validator payout:
 		if let Some(imbalance) =
 			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
 		{
-			Self::deposit_event(Event::<T>::Reward(ledger.stash, imbalance.peek()));
+			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
 		}
 
 		// Track the number of payout ops to nominators. Note: `WeightInfo::payout_stakers_alive_staked`
@@ -176,7 +178,8 @@ impl<T: Config> Pallet<T> {
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
 				// Note: this logic does not count payouts for `RewardDestination::None`.
 				nominator_payout_count += 1;
-				Self::deposit_event(Event::<T>::Reward(nominator.who.clone(), imbalance.peek()));
+				let e = Event::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
+				Self::deposit_event(e);
 			}
 		}
 
@@ -354,7 +357,7 @@ impl<T: Config> Pallet<T> {
 			let issuance = T::Currency::total_issuance();
 			let (validator_payout, rest) = T::EraPayout::era_payout(staked, issuance, era_duration);
 
-			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout, rest));
+			Self::deposit_event(Event::<T>::EraPaid(active_era.index, validator_payout, rest));
 
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
@@ -446,7 +449,7 @@ impl<T: Config> Pallet<T> {
 			return None
 		}
 
-		Self::deposit_event(Event::StakingElection);
+		Self::deposit_event(Event::StakersElected);
 		Some(Self::trigger_new_era(start_session_index, exposures))
 	}
 
