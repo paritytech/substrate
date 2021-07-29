@@ -115,7 +115,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
         )
     }
 
- fn set_class_attribute(
+ 	fn set_class_attribute(
         class: &Self::ClassId,
         key: &[u8],
         value: &[u8],
