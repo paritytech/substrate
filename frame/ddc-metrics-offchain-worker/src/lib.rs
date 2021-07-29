@@ -250,6 +250,21 @@ impl<T: Trait> Module<T> {
         }
     }
 
+	fn get_block_interval() -> Option<u32> {
+		let value = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::block_interval").get::<u32>();
+
+		match value {
+			None => {
+				None
+			}
+			Some(None) => {
+				error!("[OCW] Block Interval could not be decoded");
+				None
+			}
+			Some(Some(block_interval)) => Some(block_interval),
+		}
+	}
+
     fn check_if_should_proceed(block_number: T::BlockNumber) -> bool {
         let s_next_at = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::next-at");
 
@@ -264,8 +279,14 @@ impl<T: Trait> Module<T> {
                     );
                     Err("Skipping")
                 } else {
+					let block_interval_configured = Self::get_block_interval();
+					let mut block_interval = T::BlockInterval::get();
+					if block_interval_configured.is_some() {
+						block_interval = <T as frame_system::Trait>::BlockNumber::from(block_interval_configured.unwrap());
+					}
+
                     // set new value
-                    Ok(T::BlockInterval::get() + block_number)
+                    Ok(block_interval + block_number)
                 }
             } else {
                 error!("[OCW] Something went wrong in `check_if_should_proceed`");
