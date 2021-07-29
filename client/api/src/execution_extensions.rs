@@ -22,21 +22,19 @@
 //! strategy for the runtime calls and provide the right `Externalities`
 //! extensions to support APIs for particular execution context & capabilities.
 
-use std::sync::{Weak, Arc};
 use codec::Decode;
-use sp_core::{
-	ExecutionContext,
-	offchain::{self, OffchainWorkerExt, TransactionPoolExt, OffchainDbExt},
-};
-use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
-use sp_runtime::{
-	generic::BlockId,
-	traits,
-};
-use sp_state_machine::{ExecutionManager, ExecutionStrategy, ExecutionConfig, DefaultHandler};
-use sp_externalities::Extensions;
 use parking_lot::RwLock;
 use sc_transaction_pool_api::OffchainSubmitTransaction;
+use sp_core::{
+	offchain::{self, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
+	ExecutionContext,
+};
+use sp_externalities::Extensions;
+use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
+use sp_runtime::{generic::BlockId, traits};
+pub use sp_state_machine::{ExecutionStrategy, ExecutionConfig};
+use sp_state_machine::{DefaultHandler, ExecutionManager};
+use std::sync::{Arc, Weak};
 
 /// Execution configurations, per operation type.
 #[derive(Debug, Clone)]
@@ -150,7 +148,8 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 	/// Register transaction pool extension.
 	pub fn register_transaction_pool<T>(&self, pool: &Arc<T>)
-		where T: OffchainSubmitTransaction<Block> + 'static
+	where
+		T: OffchainSubmitTransaction<Block> + 'static,
 	{
 		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
 	}
@@ -170,14 +169,10 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		if capabilities.has(offchain::Capability::TransactionPool) {
 			if let Some(pool) = self.transaction_pool.read().as_ref().and_then(|x| x.upgrade()) {
-				extensions.register(
-					TransactionPoolExt(
-						Box::new(TransactionPoolAdapter {
-							at: *at,
-							pool,
-						}) as _
-					),
-				);
+				extensions
+					.register(TransactionPoolExt(
+						Box::new(TransactionPoolAdapter { at: *at, pool }) as _,
+					));
 			}
 		}
 
@@ -185,19 +180,18 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			capabilities.has(offchain::Capability::OffchainDbWrite)
 		{
 			if let Some(offchain_db) = self.offchain_db.as_ref() {
-				extensions.register(
-					OffchainDbExt::new(offchain::LimitedExternalities::new(
-						capabilities,
-						offchain_db.create(),
-					))
-				);
+				extensions.register(OffchainDbExt::new(offchain::LimitedExternalities::new(
+					capabilities,
+					offchain_db.create(),
+				)));
 			}
 		}
 
 		if let ExecutionContext::OffchainCall(Some(ext)) = context {
-			extensions.register(
-				OffchainWorkerExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)),
-			);
+			extensions.register(OffchainWorkerExt::new(offchain::LimitedExternalities::new(
+				capabilities,
+				ext.0,
+			)));
 		}
 
 		extensions
@@ -216,9 +210,8 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			ExecutionContext::BlockConstruction => self.configs.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.configs.syncing.get_manager(),
 			ExecutionContext::Importing => self.configs.importing.get_manager(),
-			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() => {
-				self.configs.offchain_worker.get_manager()
-			}
+			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
+				self.configs.offchain_worker.get_manager(),
 			ExecutionContext::OffchainCall(_) => self.configs.other.get_manager(),
 		};
 
@@ -238,7 +231,7 @@ impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<
 			Ok(xt) => xt,
 			Err(e) => {
 				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
-				return Err(());
+				return Err(())
 			},
 		};
 

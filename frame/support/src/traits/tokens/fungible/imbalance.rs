@@ -18,13 +18,10 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::*;
+use super::{super::Imbalance as ImbalanceT, balanced::Balanced, misc::Balance, *};
+use crate::traits::misc::{SameOrOther, TryDrop};
+use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
-use sp_runtime::{RuntimeDebug, traits::Zero};
-use super::misc::Balance;
-use super::balanced::Balanced;
-use crate::traits::misc::{TryDrop, SameOrOther};
-use super::super::Imbalance as ImbalanceT;
 
 /// Handler for when an imbalance gets dropped. This could handle either a credit (negative) or
 /// debt (positive) imbalance.
@@ -49,11 +46,9 @@ pub struct Imbalance<
 	_phantom: PhantomData<(OnDrop, OppositeOnDrop)>,
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>
-> Drop for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>> Drop
+	for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	fn drop(&mut self) {
 		if !self.amount.is_zero() {
 			OnDrop::handle(self.amount)
@@ -61,42 +56,34 @@ impl<
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> TryDrop for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>> TryDrop
+	for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self> {
 		self.drop_zero()
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> Default for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>> Default
+	for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	fn default() -> Self {
 		Self::zero()
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>>
+	Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	pub(crate) fn new(amount: B) -> Self {
 		Self { amount, _phantom: PhantomData }
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> ImbalanceT<B> for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>>
+	ImbalanceT<B> for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	type Opposite = Imbalance<B, OppositeOnDrop, OnDrop>;
 
 	fn zero() -> Self {
@@ -127,9 +114,10 @@ impl<
 		self.amount = self.amount.saturating_add(other.amount);
 		sp_std::mem::forget(other);
 	}
-	fn offset(self, other: Imbalance<B, OppositeOnDrop, OnDrop>)
-		-> SameOrOther<Self, Imbalance<B, OppositeOnDrop, OnDrop>>
-	{
+	fn offset(
+		self,
+		other: Imbalance<B, OppositeOnDrop, OnDrop>,
+	) -> SameOrOther<Self, Imbalance<B, OppositeOnDrop, OnDrop>> {
 		let (a, b) = (self.amount, other.amount);
 		sp_std::mem::forget((self, other));
 

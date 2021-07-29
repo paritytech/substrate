@@ -20,13 +20,16 @@
 
 use sp_runtime_interface::*;
 
-use sp_runtime_interface_test_wasm::{wasm_binary_unwrap, test_api::HostFunctions};
+use sp_runtime_interface_test_wasm::{test_api::HostFunctions, wasm_binary_unwrap};
 use sp_runtime_interface_test_wasm_deprecated::wasm_binary_unwrap as wasm_binary_deprecated_unwrap;
 
-use sp_wasm_interface::HostFunctions as HostFunctionsT;
 use sc_executor_common::runtime_blob::RuntimeBlob;
+use sp_wasm_interface::HostFunctions as HostFunctionsT;
 
-use std::{collections::HashSet, sync::{Arc, Mutex}};
+use std::{
+	collections::HashSet,
+	sync::{Arc, Mutex},
+};
 
 type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
@@ -82,7 +85,10 @@ fn test_set_storage() {
 
 #[test]
 fn test_return_value_into_mutable_reference() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_value_into_mutable_reference");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_return_value_into_mutable_reference",
+	);
 }
 
 #[test]
@@ -102,7 +108,8 @@ fn test_return_input_public_key() {
 
 #[test]
 fn host_function_not_found() {
-	let err = call_wasm_method_with_result::<()>(&wasm_binary_unwrap()[..], "test_return_data").unwrap_err();
+	let err = call_wasm_method_with_result::<()>(&wasm_binary_unwrap()[..], "test_return_data")
+		.unwrap_err();
 
 	assert!(err.contains("Instantiation: Export "));
 	assert!(err.contains(" not found"));
@@ -111,41 +118,56 @@ fn host_function_not_found() {
 #[test]
 #[should_panic(expected = "Invalid utf8 data provided")]
 fn test_invalid_utf8_data_should_return_an_error() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_invalid_utf8_data_should_return_an_error");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_invalid_utf8_data_should_return_an_error",
+	);
 }
 
 #[test]
 fn test_overwrite_native_function_implementation() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_overwrite_native_function_implementation");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_overwrite_native_function_implementation",
+	);
 }
 
 #[test]
 fn test_u128_i128_as_parameter_and_return_value() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_u128_i128_as_parameter_and_return_value");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_u128_i128_as_parameter_and_return_value",
+	);
 }
 
 #[test]
 fn test_vec_return_value_memory_is_freed() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_vec_return_value_memory_is_freed");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_vec_return_value_memory_is_freed",
+	);
 }
 
 #[test]
 fn test_encoded_return_value_memory_is_freed() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_encoded_return_value_memory_is_freed");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_encoded_return_value_memory_is_freed",
+	);
 }
 
 #[test]
 fn test_array_return_value_memory_is_freed() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_array_return_value_memory_is_freed");
+	call_wasm_method::<HostFunctions>(
+		&wasm_binary_unwrap()[..],
+		"test_array_return_value_memory_is_freed",
+	);
 }
 
 #[test]
 fn test_versionining_with_new_host_works() {
 	// We call to the new wasm binary with new host function.
-	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
-		"test_versionning_works",
-	);
+	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_versionning_works");
 
 	// we call to the old wasm binary with a new host functions
 	// old versions of host functions should be called and test should be ok!
@@ -158,7 +180,7 @@ fn test_versionining_with_new_host_works() {
 #[test]
 fn test_tracing() {
 	use std::fmt;
-	use tracing::{span::Id as SpanId};
+	use tracing::span::Id as SpanId;
 	use tracing_core::field::{Field, Visit};
 
 	#[derive(Clone)]
@@ -166,9 +188,8 @@ fn test_tracing() {
 
 	struct FieldConsumer(&'static str, Option<String>);
 	impl Visit for FieldConsumer {
-
 		fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-			if  field.name() == self.0 {
+			if field.name() == self.0 {
 				self.1 = Some(format!("{:?}", value))
 			}
 		}
@@ -180,14 +201,16 @@ fn test_tracing() {
 	}
 
 	impl tracing::subscriber::Subscriber for TracingSubscriber {
-		fn enabled(&self, _: &tracing::Metadata) -> bool { true }
+		fn enabled(&self, _: &tracing::Metadata) -> bool {
+			true
+		}
 
 		fn new_span(&self, span: &tracing::span::Attributes) -> tracing::Id {
 			let mut inner = self.0.lock().unwrap();
 			let id = SpanId::from_u64((inner.spans.len() + 1) as _);
 			let mut f = FieldConsumer("name", None);
 			span.record(&mut f);
-			inner.spans.insert(f.1.unwrap_or_else(||span.metadata().name().to_owned()));
+			inner.spans.insert(f.1.unwrap_or_else(|| span.metadata().name().to_owned()));
 			id
 		}
 

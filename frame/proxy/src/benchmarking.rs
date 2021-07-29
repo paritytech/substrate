@@ -20,10 +20,10 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use sp_runtime::traits::Bounded;
 use crate::Pallet as Proxy;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
@@ -48,7 +48,7 @@ fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(),
 fn add_announcements<T: Config>(
 	n: u32,
 	maybe_who: Option<T::AccountId>,
-	maybe_real: Option<T::AccountId>
+	maybe_real: Option<T::AccountId>,
 ) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -247,8 +247,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Proxy,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);

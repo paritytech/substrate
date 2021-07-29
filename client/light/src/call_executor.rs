@@ -18,34 +18,34 @@
 
 //! Methods that light client could use to execute runtime calls.
 
-use std::{
-	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
-};
+use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use hash_db::Hasher;
 use sp_core::{
-	convert_hash, NativeOrEncoded, traits::{CodeExecutor, SpawnNamed},
-};
-use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, Header as HeaderT, HashFor},
+	convert_hash,
+	traits::{CodeExecutor, SpawnNamed},
+	NativeOrEncoded,
 };
 use sp_externalities::Extensions;
-use sp_state_machine::{
-	self, Backend as StateBackend, OverlayedChanges, ExecutionConfig, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, ExecutionStrategy, StorageProof,
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
-use hash_db::Hasher;
+use sp_state_machine::{
+	self, create_proof_check_backend, execution_proof_check_on_trie_backend,
+	Backend as StateBackend, ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof,
+	ExecutionConfig
+};
 
 use sp_api::{ProofRecorder, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 use sc_client_api::{
-	backend::RemoteBackend,
-	light::RemoteCallRequest,
-	call_executor::CallExecutor,
+	backend::RemoteBackend, call_executor::CallExecutor, light::RemoteCallRequest,
 };
-use sc_executor::{RuntimeVersion, NativeVersion};
+use sc_executor::{NativeVersion, RuntimeVersion};
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -64,10 +64,7 @@ impl<B, L> GenesisCallExecutor<B, L> {
 
 impl<B, L: Clone> Clone for GenesisCallExecutor<B, L> {
 	fn clone(&self) -> Self {
-		GenesisCallExecutor {
-			backend: self.backend.clone(),
-			local: self.local.clone(),
-		}
+		GenesisCallExecutor { backend: self.backend.clone(), local: self.local.clone() }
 	}
 }
 
@@ -113,7 +110,10 @@ where
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+	) -> ClientResult<NativeOrEncoded<R>>
+	where
+		ExecutionManager<EM>: Clone,
+	{
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
@@ -124,7 +124,7 @@ where
 					Result<NativeOrEncoded<R>, Local::Error>,
 				) -> Result<NativeOrEncoded<R>, Local::Error>,
 				_,
-				NC
+				NC,
 			>(
 				&self.local,
 				at,
@@ -136,7 +136,8 @@ where
 				native_call,
 				recorder,
 				extensions,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
+			)
+			.map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -173,24 +174,19 @@ pub fn prove_execution<Block, S, E>(
 	method: &str,
 	call_data: &[u8],
 ) -> ClientResult<(Vec<u8>, StorageProof)>
-	where
-		Block: BlockT,
-		S: StateBackend<HashFor<Block>>,
-		E: CallExecutor<Block>,
+where
+	Block: BlockT,
+	S: StateBackend<HashFor<Block>>,
+	E: CallExecutor<Block>,
 {
-	let trie_state = state.as_trie_backend()
-		.ok_or_else(||
-			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as
-				Box<dyn sp_state_machine::Error>
-		)?;
+	let trie_state = state.as_trie_backend().ok_or_else(|| {
+		Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+			as Box<dyn sp_state_machine::Error>
+	})?;
 
 	// execute method + record execution proof
-	let (result, exec_proof) = executor.prove_at_trie_state(
-		&trie_state,
-		&mut Default::default(),
-		method,
-		call_data,
-	)?;
+	let (result, exec_proof) =
+		executor.prove_at_trie_state(&trie_state, &mut Default::default(), method, call_data)?;
 
 	Ok((result, exec_proof))
 }
@@ -204,11 +200,11 @@ pub fn check_execution_proof<Header, E, H>(
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
-	where
-		Header: HeaderT,
-		E: CodeExecutor + Clone + 'static,
-		H: Hasher,
-		H::Out: Ord + codec::Codec + 'static,
+where
+	Header: HeaderT,
+	E: CodeExecutor + Clone + 'static,
+	H: Hasher,
+	H::Out: Ord + codec::Codec + 'static,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);

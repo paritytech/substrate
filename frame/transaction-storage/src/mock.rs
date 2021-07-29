@@ -19,13 +19,16 @@
 
 use crate as pallet_transaction_storage;
 use crate::TransactionStorageProof;
-use sp_core::H256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, BuildStorage};
 use frame_support::{
 	parameter_types,
-	traits::{OnInitialize, OnFinalize},
+	traits::{OnFinalize, OnInitialize},
 };
-
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 pub type Block = frame_system::mocking::MockBlock<Test>;
@@ -104,7 +107,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = GenesisConfig {
 		system: Default::default(),
 		balances: pallet_balances::GenesisConfig::<Test> {
-			balances: vec![(1, 1000000000), (2, 100), (3, 100), (4, 100)]
+			balances: vec![(1, 1000000000), (2, 100), (3, 100), (4, 100)],
 		},
 		transaction_storage: pallet_transaction_storage::GenesisConfig::<Test> {
 			storage_period: 10,
@@ -113,7 +116,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			max_block_transactions: crate::DEFAULT_MAX_BLOCK_TRANSACTIONS,
 			max_transaction_size: crate::DEFAULT_MAX_TRANSACTION_SIZE,
 		},
-	}.build_storage().unwrap();
+	}
+	.build_storage()
+	.unwrap();
 	t.into()
 }
 

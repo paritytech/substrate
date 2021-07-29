@@ -19,22 +19,22 @@
 //! Generic implementations of Extrinsic/Header/Block.
 // end::description[]
 
-mod unchecked_extrinsic;
-mod era;
-mod checked_extrinsic;
-mod header;
 mod block;
+mod checked_extrinsic;
 mod digest;
+mod era;
+mod header;
 #[cfg(test)]
 mod tests;
+mod unchecked_extrinsic;
 
-pub use self::unchecked_extrinsic::{UncheckedExtrinsic, SignedPayload};
-pub use self::era::{Era, Phase};
-pub use self::checked_extrinsic::CheckedExtrinsic;
-pub use self::header::Header;
-pub use self::block::{Block, SignedBlock, BlockId};
-pub use self::digest::{
-	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId, ChangesTrieSignal,
+pub use self::{
+	block::{Block, BlockId, SignedBlock},
+	checked_extrinsic::CheckedExtrinsic,
+	digest::{ChangesTrieSignal, Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
+	era::{Era, Phase},
+	header::Header,
+	unchecked_extrinsic::{SignedPayload, UncheckedExtrinsic},
 };
 
 use crate::codec::Encode;

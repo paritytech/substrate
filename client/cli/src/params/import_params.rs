@@ -16,19 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::{
-	ExecutionStrategy, WasmExecutionMethod, DEFAULT_STRATEGY_BLOCK_CONSTRUCTION,
-	DEFAULT_STRATEGY_IMPORT_BLOCK, DEFAULT_STRATEGY_IMPORT_BLOCK_VALIDATOR,
-	DEFAULT_STRATEGY_OFFCHAIN_WORKER, DEFAULT_STRATEGY_OTHER, DEFAULT_STRATEGY_SYNCING,
-	DEFAULT_CODE_CONTEXT_SYNCING, DEFAULT_CODE_CONTEXT_IMPORT_BLOCK,
-	DEFAULT_CODE_CONTEXT_IMPORT_BLOCK_VALIDATOR,DEFAULT_CODE_CONTEXT_BLOCK_CONSTRUCTION,
-	DEFAULT_CODE_CONTEXT_OFFCHAIN_WORKER, DEFAULT_CODE_CONTEXT_OTHER,
+use crate::{
+	arg_enums::{
+		ExecutionStrategy, WasmExecutionMethod, DEFAULT_STRATEGY_BLOCK_CONSTRUCTION,
+		DEFAULT_STRATEGY_IMPORT_BLOCK, DEFAULT_STRATEGY_IMPORT_BLOCK_VALIDATOR,
+		DEFAULT_STRATEGY_OFFCHAIN_WORKER, DEFAULT_STRATEGY_OTHER, DEFAULT_STRATEGY_SYNCING,
+		DEFAULT_CODE_CONTEXT_SYNCING, DEFAULT_CODE_CONTEXT_IMPORT_BLOCK,
+		DEFAULT_CODE_CONTEXT_IMPORT_BLOCK_VALIDATOR,DEFAULT_CODE_CONTEXT_BLOCK_CONSTRUCTION,
+		DEFAULT_CODE_CONTEXT_OFFCHAIN_WORKER, DEFAULT_CODE_CONTEXT_OTHER,
+	},
+	params::{DatabaseParams, PruningParams},
 };
-use crate::params::DatabaseParams;
-use crate::params::PruningParams;
-use sc_client_api::execution_extensions::ExecutionConfigs;
-use structopt::StructOpt;
+use sc_client_api::execution_extensions::{ExecutionConfigs, ExecutionConfig};
 use std::path::PathBuf;
+use structopt::StructOpt;
 
 #[cfg(feature = "wasmtime")]
 const WASM_METHOD_DEFAULT: &str = "Compiled";
@@ -76,11 +77,7 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Specify the state cache size.
-	#[structopt(
-		long = "state-cache-size",
-		value_name = "Bytes",
-		default_value = "67108864"
-	)]
+	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 }
 
@@ -103,7 +100,6 @@ impl ImportParams {
 
 	/// Get execution strategies for the parameters
 	pub fn execution_configs(&self, is_dev: bool, is_validator: bool) -> ExecutionConfigs {
-		use sc_client_api::ExecutionConfig;
 		let exec = &self.execution_strategies;
 		let exec_all_or = |start: Option<ExecutionStrategy>, default: ExecutionStrategy| {
 			let default = if is_dev { ExecutionStrategy::Native } else { default };

@@ -19,20 +19,16 @@
 
 #![cfg(test)]
 
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::Header,
-};
-use sp_core::H256;
-use sp_io;
-use frame_support::parameter_types;
-use frame_support::traits::StorageMapShim;
-use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use crate::{
-	self as pallet_balances,
-	Pallet, Config, decl_tests,
+use crate::{self as pallet_balances, decl_tests, Config, Pallet};
+use frame_support::{
+	parameter_types,
+	traits::StorageMapShim,
+	weights::{DispatchInfo, IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;
+use sp_core::H256;
+use sp_io;
+use sp_runtime::{testing::Header, traits::IdentityLookup};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -98,12 +94,8 @@ impl Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = StorageMapShim<
-		super::Account<Test>,
-		system::Provider<Test>,
-		u64,
-		super::AccountData<u64>,
-	>;
+	type AccountStore =
+		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
 	type MaxLocks = MaxLocks;
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = [u8; 8];
@@ -116,10 +108,7 @@ pub struct ExtBuilder {
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {
-			existential_deposit: 1,
-			monied: false,
-		}
+		Self { existential_deposit: 1, monied: false }
 	}
 }
 impl ExtBuilder {
@@ -147,12 +136,14 @@ impl ExtBuilder {
 					(2, 20 * self.existential_deposit),
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
-					(12, 10 * self.existential_deposit)
+					(12, 10 * self.existential_deposit),
 				]
 			} else {
 				vec![]
 			},
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| System::set_block_number(1));
@@ -160,40 +151,37 @@ impl ExtBuilder {
 	}
 }
 
-decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
+decl_tests! { Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
 
 #[test]
 fn emit_events_with_no_existential_deposit_suicide_with_dust() {
-	<ExtBuilder>::default()
-		.existential_deposit(2)
-		.build()
-		.execute_with(|| {
-			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+	<ExtBuilder>::default().existential_deposit(2).build().execute_with(|| {
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
 
-			assert_eq!(
-				events(),
-				[
-					Event::System(system::Event::NewAccount(1)),
-					Event::Balances(crate::Event::Endowed(1, 100)),
-					Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
-				]
-			);
+		assert_eq!(
+			events(),
+			[
+				Event::System(system::Event::NewAccount(1)),
+				Event::Balances(crate::Event::Endowed(1, 100)),
+				Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
+			]
+		);
 
-			let res = Balances::slash(&1, 98);
-			assert_eq!(res, (NegativeImbalance::new(98), 0));
+		let res = Balances::slash(&1, 98);
+		assert_eq!(res, (NegativeImbalance::new(98), 0));
 
-			// no events
-			assert_eq!(events(), []);
+		// no events
+		assert_eq!(events(), []);
 
-			let res = Balances::slash(&1, 1);
-			assert_eq!(res, (NegativeImbalance::new(1), 0));
+		let res = Balances::slash(&1, 1);
+		assert_eq!(res, (NegativeImbalance::new(1), 0));
 
-			assert_eq!(
-				events(),
-				[
-					Event::System(system::Event::KilledAccount(1)),
-					Event::Balances(crate::Event::DustLost(1, 1)),
-				]
-			);
-		});
+		assert_eq!(
+			events(),
+			[
+				Event::System(system::Event::KilledAccount(1)),
+				Event::Balances(crate::Event::DustLost(1, 1)),
+			]
+		);
+	});
 }

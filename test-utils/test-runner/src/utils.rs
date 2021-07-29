@@ -16,18 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use futures::FutureExt;
+use sc_executor::WasmExecutionMethod;
+use sc_informant::OutputFormat;
+use sc_network::{
+	config::{NetworkConfiguration, Role, TransportConfig},
+	multiaddr,
+};
 use sc_service::{
-	BasePath, ChainSpec, Configuration, TaskExecutor,
-	DatabaseConfig, KeepBlocks, TransactionStorageMode, TaskType,
+	config::KeystoreConfig, BasePath, ChainSpec, Configuration, DatabaseConfig, KeepBlocks,
+	TaskExecutor, TaskType, TransactionStorageMode,
 };
 use sp_keyring::sr25519::Keyring::Alice;
-use sc_network::{multiaddr, config::{NetworkConfiguration, TransportConfig, Role}};
-use sc_informant::OutputFormat;
-use sc_service::config::KeystoreConfig;
-use sc_executor::WasmExecutionMethod;
 use sc_client_api::execution_extensions::ExecutionConfigs;
 use tokio::runtime::Handle;
-use futures::FutureExt;
 
 pub use sc_cli::build_runtime;
 
@@ -65,9 +67,7 @@ pub fn default_config(
 	let informant_output_format = OutputFormat { enable_color: false };
 	network_config.allow_non_globals_in_dht = true;
 
-	network_config
-		.listen_addresses
-		.push(multiaddr::Protocol::Memory(0).into());
+	network_config.listen_addresses.push(multiaddr::Protocol::Memory(0).into());
 
 	network_config.transport = TransportConfig::MemoryOnly;
 
@@ -78,14 +78,8 @@ pub fn default_config(
 		task_executor: task_executor.into(),
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore: KeystoreConfig::Path {
-			path: root_path.join("key"),
-			password: None,
-		},
-		database: DatabaseConfig::RocksDb {
-			path: root_path.join("db"),
-			cache_size: 128,
-		},
+		keystore: KeystoreConfig::Path { path: root_path.join("key"), password: None },
+		database: DatabaseConfig::RocksDb { path: root_path.join("db"), cache_size: 128 },
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		chain_spec,
@@ -132,7 +126,8 @@ pub fn default_config(
 pub fn task_executor(handle: Handle) -> TaskExecutor {
 	let task_executor = move |fut, task_type| match task_type {
 		TaskType::Async => handle.spawn(fut).map(drop),
-		TaskType::Blocking => handle.spawn_blocking(move || futures::executor::block_on(fut)).map(drop),
+		TaskType::Blocking =>
+			handle.spawn_blocking(move || futures::executor::block_on(fut)).map(drop),
 	};
 
 	task_executor.into()

@@ -16,13 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use codec::{Encode, Decode};
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use sc_client_api::StorageProof;
-use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
-use crate::chain::{Client, ImportedState};
 use super::StateDownloadProgress;
+use crate::{
+	chain::{Client, ImportedState},
+	schema::v1::{StateEntry, StateRequest, StateResponse},
+};
+use codec::{Decode, Encode};
+use sc_client_api::StorageProof;
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use std::sync::Arc;
 
 /// State sync support.
 
@@ -73,14 +75,14 @@ impl<B: BlockT> StateSync<B> {
 				target: "sync",
 				"Bad state response",
 			);
-			return ImportResult::BadResponse;
+			return ImportResult::BadResponse
 		}
 		if !self.skip_proof && response.proof.is_empty() {
 			log::debug!(
 				target: "sync",
 				"Missing proof",
 			);
-			return ImportResult::BadResponse;
+			return ImportResult::BadResponse
 		}
 		let complete = if !self.skip_proof {
 			log::debug!(
@@ -93,24 +95,21 @@ impl<B: BlockT> StateSync<B> {
 				Ok(proof) => proof,
 				Err(e) => {
 					log::debug!(target: "sync", "Error decoding proof: {:?}", e);
-					return ImportResult::BadResponse;
-				}
-			};
-			let (values, complete) = match self.client.verify_range_proof(
-				self.target_root,
-				proof,
-				&self.last_key
-			) {
-				Err(e) => {
-					log::debug!(
-						target: "sync",
-						"StateResponse failed proof verification: {:?}",
-						e,
-					);
-					return ImportResult::BadResponse;
+					return ImportResult::BadResponse
 				},
-				Ok(values) => values,
 			};
+			let (values, complete) =
+				match self.client.verify_range_proof(self.target_root, proof, &self.last_key) {
+					Err(e) => {
+						log::debug!(
+							target: "sync",
+							"StateResponse failed proof verification: {:?}",
+							e,
+						);
+						return ImportResult::BadResponse
+					},
+					Ok(values) => values,
+				};
 			log::debug!(target: "sync", "Imported with {} keys", values.len());
 
 			if let Some(last) = values.last().map(|(k, _)| k) {
@@ -120,7 +119,7 @@ impl<B: BlockT> StateSync<B> {
 			for (key, value) in values {
 				self.imported_bytes += key.len() as u64;
 				self.state.push((key, value))
-			};
+			}
 			self.imported_bytes += proof_size;
 			complete
 		} else {
@@ -142,10 +141,14 @@ impl<B: BlockT> StateSync<B> {
 		};
 		if complete {
 			self.complete = true;
-			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
-				block: self.target_block.clone(),
-				state: std::mem::take(&mut self.state)
-			})
+			ImportResult::Import(
+				self.target_block.clone(),
+				self.target_header.clone(),
+				ImportedState {
+					block: self.target_block.clone(),
+					state: std::mem::take(&mut self.state),
+				},
+			)
 		} else {
 			ImportResult::Continue(self.next_request())
 		}
@@ -178,10 +181,6 @@ impl<B: BlockT> StateSync<B> {
 	/// Returns state sync estimated progress.
 	pub fn progress(&self) -> StateDownloadProgress {
 		let percent_done = (*self.last_key.get(0).unwrap_or(&0u8) as u32) * 100 / 256;
-		StateDownloadProgress {
-			percentage: percent_done,
-			size: self.imported_bytes,
-		}
+		StateDownloadProgress { percentage: percent_done, size: self.imported_bytes }
 	}
 }
-

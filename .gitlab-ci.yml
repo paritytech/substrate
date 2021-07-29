@@ -233,6 +233,14 @@ cargo-deny:
   # FIXME: Temorarily allow to fail.
   allow_failure:                   true
 
+cargo-fmt:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - cargo +nightly fmt --all -- --check
+  allow_failure:                   true
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env

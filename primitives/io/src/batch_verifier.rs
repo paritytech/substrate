@@ -17,9 +17,12 @@
 
 //! Batch/parallel verification.
 
-use sp_core::{ed25519, sr25519, ecdsa, crypto::Pair, traits::SpawnNamed};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
-use futures::{future::FutureExt, channel::oneshot};
+use futures::{channel::oneshot, future::FutureExt};
+use sp_core::{crypto::Pair, ecdsa, ed25519, sr25519, traits::SpawnNamed};
+use std::sync::{
+	atomic::{AtomicBool, Ordering as AtomicOrdering},
+	Arc,
+};
 
 #[derive(Debug, Clone)]
 struct Sr25519BatchItem {
@@ -61,7 +64,9 @@ impl BatchVerifier {
 		name: &'static str,
 	) -> bool {
 		// there is already invalid transaction encountered
-		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
+		if self.invalid.load(AtomicOrdering::Relaxed) {
+			return false
+		}
 
 		let invalid_clone = self.invalid.clone();
 		let (sender, receiver) = oneshot::channel();
@@ -78,7 +83,8 @@ impl BatchVerifier {
 					log::warn!("Verification halted while result was pending");
 					invalid_clone.store(true, AtomicOrdering::Relaxed);
 				}
-			}.boxed(),
+			}
+			.boxed(),
 		);
 
 		true
@@ -110,7 +116,9 @@ impl BatchVerifier {
 		pub_key: sr25519::Public,
 		message: Vec<u8>,
 	) -> bool {
-		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
+		if self.invalid.load(AtomicOrdering::Relaxed) {
+			return false
+		}
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
 
 		if self.sr25519_items.len() >= 128 {
@@ -163,7 +171,7 @@ impl BatchVerifier {
 		);
 
 		if !Self::verify_sr25519_batch(std::mem::take(&mut self.sr25519_items)) {
-			return false;
+			return false
 		}
 
 		if pending.len() > 0 {
@@ -172,10 +180,12 @@ impl BatchVerifier {
 				"substrate_batch_verify_join",
 				async move {
 					futures::future::join_all(pending).await;
-					sender.send(())
-						  .expect("Channel never panics if receiver is live. \
-								Receiver is always live until received this data; qed. ");
-				}.boxed(),
+					sender.send(()).expect(
+						"Channel never panics if receiver is live. \
+								Receiver is always live until received this data; qed. ",
+					);
+				}
+				.boxed(),
 			);
 
 			if receiver.recv().is_err() {
@@ -184,7 +194,7 @@ impl BatchVerifier {
 					"Haven't received async result from verification task. Returning false.",
 				);
 
-				return false;
+				return false
 			}
 		}
 

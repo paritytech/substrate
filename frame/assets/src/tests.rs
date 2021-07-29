@@ -18,10 +18,10 @@
 //! Tests for Assets pallet.
 
 use super::*;
-use crate::{Error, mock::*};
-use sp_runtime::{TokenError, traits::ConvertInto};
-use frame_support::{assert_ok, assert_noop, traits::Currency};
+use crate::{mock::*, Error};
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 use pallet_balances::Error as BalancesError;
+use sp_runtime::{traits::ConvertInto, TokenError};
 
 #[test]
 fn basic_minting_should_work() {
@@ -151,13 +151,25 @@ fn force_cancel_approval_works() {
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		let e = Error::<Test>::NoPermission;
 		assert_noop!(Assets::force_cancel_approval(Origin::signed(2), 0, 1, 2), e);
-		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 1, 1, 2), Error::<Test>::Unknown);
-		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 2, 2), Error::<Test>::Unknown);
-		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 3), Error::<Test>::Unknown);
+		assert_noop!(
+			Assets::force_cancel_approval(Origin::signed(1), 1, 1, 2),
+			Error::<Test>::Unknown
+		);
+		assert_noop!(
+			Assets::force_cancel_approval(Origin::signed(1), 0, 2, 2),
+			Error::<Test>::Unknown
+		);
+		assert_noop!(
+			Assets::force_cancel_approval(Origin::signed(1), 0, 1, 3),
+			Error::<Test>::Unknown
+		);
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_ok!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 0);
-		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2), Error::<Test>::Unknown);
+		assert_noop!(
+			Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2),
+			Error::<Test>::Unknown
+		);
 	});
 }
 
@@ -222,7 +234,6 @@ fn destroy_with_bad_witness_should_not_work() {
 		w.accounts += 2;
 		w.sufficients += 2;
 		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
-
 	});
 }
 
@@ -259,7 +270,10 @@ fn non_providing_should_work() {
 		// ...or transfer...
 		assert_noop!(Assets::transfer(Origin::signed(0), 0, 1, 50), TokenError::CannotCreate);
 		// ...or force-transfer
-		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 0, 1, 50), TokenError::CannotCreate);
+		assert_noop!(
+			Assets::force_transfer(Origin::signed(1), 0, 0, 1, 50),
+			TokenError::CannotCreate
+		);
 
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
@@ -278,7 +292,10 @@ fn min_balance_should_work() {
 		// Cannot create a new account with a balance that is below minimum...
 		assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
-		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9), TokenError::BelowMinimum);
+		assert_noop!(
+			Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9),
+			TokenError::BelowMinimum
+		);
 
 		// When deducting from an account to below minimum, it should be reaped.
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
@@ -333,7 +350,10 @@ fn transferring_enough_to_kill_source_when_keep_alive_should_fail() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 10));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
-		assert_noop!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 91), Error::<Test>::BalanceLow);
+		assert_noop!(
+			Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 91),
+			Error::<Test>::BalanceLow
+		);
 		assert_ok!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 90));
 		assert_eq!(Assets::balance(0, 1), 10);
 		assert_eq!(Assets::balance(0, 2), 90);
@@ -385,13 +405,19 @@ fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-		assert_noop!(Assets::transfer_ownership(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
+		assert_noop!(
+			Assets::transfer_ownership(Origin::signed(2), 0, 2),
+			Error::<Test>::NoPermission
+		);
 		assert_noop!(Assets::set_team(Origin::signed(2), 0, 2, 2, 2), Error::<Test>::NoPermission);
 		assert_noop!(Assets::freeze(Origin::signed(2), 0, 1), Error::<Test>::NoPermission);
 		assert_noop!(Assets::thaw(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
 		assert_noop!(Assets::mint(Origin::signed(2), 0, 2, 100), Error::<Test>::NoPermission);
 		assert_noop!(Assets::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
-		assert_noop!(Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
+		assert_noop!(
+			Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100),
+			Error::<Test>::NoPermission
+		);
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_noop!(Assets::destroy(Origin::signed(2), 0, w), Error::<Test>::NoPermission);
 	});
@@ -410,7 +436,10 @@ fn transfer_owner_should_work() {
 		assert_eq!(Balances::reserved_balance(&2), 1);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
-		assert_noop!(Assets::transfer_ownership(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
+		assert_noop!(
+			Assets::transfer_ownership(Origin::signed(1), 0, 1),
+			Error::<Test>::NoPermission
+		);
 
 		// Set metadata now and make sure that deposit gets transferred back.
 		assert_ok!(Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12));
@@ -513,25 +542,25 @@ fn set_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		// Cannot add metadata to unknown asset
 		assert_noop!(
-				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12),
-				Error::<Test>::Unknown,
-			);
+			Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12),
+			Error::<Test>::Unknown,
+		);
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
-				Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12),
-				Error::<Test>::NoPermission,
-			);
+			Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12),
+			Error::<Test>::NoPermission,
+		);
 
 		// Cannot add oversized metadata
 		assert_noop!(
-				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 100], vec![0u8; 10], 12),
-				Error::<Test>::BadMetadata,
-			);
+			Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 100], vec![0u8; 10], 12),
+			Error::<Test>::BadMetadata,
+		);
 		assert_noop!(
-				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 100], 12),
-				Error::<Test>::BadMetadata,
-			);
+			Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 100], 12),
+			Error::<Test>::BadMetadata,
+		);
 
 		// Successfully add metadata and take deposit
 		Balances::make_free_balance_be(&1, 30);
@@ -546,9 +575,9 @@ fn set_metadata_should_work() {
 
 		// Cannot over-reserve
 		assert_noop!(
-				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], 12),
-				BalancesError::<Test, _>::InsufficientBalance,
-			);
+			Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], 12),
+			BalancesError::<Test, _>::InsufficientBalance,
+		);
 
 		// Clear Metadata
 		assert!(Metadata::<Test>::contains_key(0));
@@ -565,7 +594,6 @@ fn freezer_should_work() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 10));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
-
 
 		// freeze 50 of it.
 		set_frozen_balance(0, 1, 50);
@@ -624,45 +652,73 @@ fn imbalances_should_work() {
 #[test]
 fn force_metadata_should_work() {
 	new_test_ext().execute_with(|| {
-		//force set metadata works
+		// force set metadata works
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Assets::force_set_metadata(Origin::root(), 0, vec![0u8; 10], vec![0u8; 10], 8, false));
+		assert_ok!(Assets::force_set_metadata(
+			Origin::root(),
+			0,
+			vec![0u8; 10],
+			vec![0u8; 10],
+			8,
+			false
+		));
 		assert!(Metadata::<Test>::contains_key(0));
 
-		//overwrites existing metadata
+		// overwrites existing metadata
 		let asset_original_metadata = Metadata::<Test>::get(0);
-		assert_ok!(Assets::force_set_metadata(Origin::root(), 0, vec![1u8; 10], vec![1u8; 10], 8, false));
+		assert_ok!(Assets::force_set_metadata(
+			Origin::root(),
+			0,
+			vec![1u8; 10],
+			vec![1u8; 10],
+			8,
+			false
+		));
 		assert_ne!(Metadata::<Test>::get(0), asset_original_metadata);
 
-		//attempt to set metadata for non-existent asset class
+		// attempt to set metadata for non-existent asset class
 		assert_noop!(
 			Assets::force_set_metadata(Origin::root(), 1, vec![0u8; 10], vec![0u8; 10], 8, false),
 			Error::<Test>::Unknown
 		);
 
-		//string length limit check
+		// string length limit check
 		let limit = StringLimit::get() as usize;
 		assert_noop!(
-			Assets::force_set_metadata(Origin::root(), 0, vec![0u8; limit + 1], vec![0u8; 10], 8, false),
+			Assets::force_set_metadata(
+				Origin::root(),
+				0,
+				vec![0u8; limit + 1],
+				vec![0u8; 10],
+				8,
+				false
+			),
 			Error::<Test>::BadMetadata
 		);
 		assert_noop!(
-			Assets::force_set_metadata(Origin::root(), 0, vec![0u8; 10], vec![0u8; limit + 1], 8, false),
+			Assets::force_set_metadata(
+				Origin::root(),
+				0,
+				vec![0u8; 10],
+				vec![0u8; limit + 1],
+				8,
+				false
+			),
 			Error::<Test>::BadMetadata
 		);
 
-		//force clear metadata works
+		// force clear metadata works
 		assert!(Metadata::<Test>::contains_key(0));
 		assert_ok!(Assets::force_clear_metadata(Origin::root(), 0));
 		assert!(!Metadata::<Test>::contains_key(0));
 
-		//Error handles clearing non-existent asset class
+		// Error handles clearing non-existent asset class
 		assert_noop!(Assets::force_clear_metadata(Origin::root(), 1), Error::<Test>::Unknown);
 	});
 }
 
 #[test]
-fn force_asset_status_should_work(){
+fn force_asset_status_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 10);
 		Balances::make_free_balance_be(&2, 10);
@@ -670,28 +726,28 @@ fn force_asset_status_should_work(){
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 50));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 150));
 
-		//force asset status to change min_balance > balance
+		// force asset status to change min_balance > balance
 		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 100, true, false));
 		assert_eq!(Assets::balance(0, 1), 50);
 
-		//account can recieve assets for balance < min_balance
+		// account can recieve assets for balance < min_balance
 		assert_ok!(Assets::transfer(Origin::signed(2), 0, 1, 1));
 		assert_eq!(Assets::balance(0, 1), 51);
 
-		//account on outbound transfer will cleanup for balance < min_balance
+		// account on outbound transfer will cleanup for balance < min_balance
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 1));
-		assert_eq!(Assets::balance(0,1), 0);
+		assert_eq!(Assets::balance(0, 1), 0);
 
-		//won't create new account with balance below min_balance
+		// won't create new account with balance below min_balance
 		assert_noop!(Assets::transfer(Origin::signed(2), 0, 3, 50), TokenError::BelowMinimum);
 
-		//force asset status will not execute for non-existent class
+		// force asset status will not execute for non-existent class
 		assert_noop!(
 			Assets::force_asset_status(Origin::root(), 1, 1, 1, 1, 1, 90, true, false),
 			Error::<Test>::Unknown
 		);
 
-		//account drains to completion when funds dip below min_balance
+		// account drains to completion when funds dip below min_balance
 		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 110, true, false));
 		assert_ok!(Assets::transfer(Origin::signed(2), 0, 1, 110));
 		assert_eq!(Assets::balance(0, 1), 200);
@@ -715,7 +771,10 @@ fn balance_conversion_should_work() {
 			Err(ConversionError::AssetMissing)
 		);
 		assert_eq!(
-			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, not_sufficient),
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(
+				100,
+				not_sufficient
+			),
 			Err(ConversionError::AssetNotSufficient)
 		);
 		// 10 / 1 == 10 -> the conversion should 10x the value
