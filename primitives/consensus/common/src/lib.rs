@@ -33,13 +33,15 @@ use sp_state_machine::StorageProof;
 pub mod block_validation;
 pub mod error;
 pub mod evaluation;
-pub mod import_queue;
 mod select_chain;
 
 pub use self::error::Error;
 pub use select_chain::SelectChain;
 pub use sp_inherents::InherentData;
 pub use sp_state_machine::Backend as StateBackend;
+
+/// Type of keys in the blockchain cache that consensus module could use for its needs.
+pub type CacheKeyId = [u8; 4];
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]

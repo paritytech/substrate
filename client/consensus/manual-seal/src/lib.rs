@@ -27,7 +27,7 @@ use sc_consensus::{
 	import_queue::{BasicQueue, BoxBlockImport, Verifier},
 };
 use sp_blockchain::HeaderBackend;
-use sp_consensus::{import_queue::CacheKeyId, BlockOrigin, Environment, Proposer, SelectChain};
+use sp_consensus::{CacheKeyId, BlockOrigin, Environment, Proposer, SelectChain};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId, Justifications};
 use std::{marker::PhantomData, sync::Arc};
