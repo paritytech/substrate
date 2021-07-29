@@ -99,6 +99,41 @@ fn should_return_storage() {
 }
 
 #[test]
+fn should_return_storages() {
+	const KEY1: &[u8] = b":mock";
+	const KEY2: &[u8] = b":turtle";
+	const VALUE: &[u8] = b"hello world";
+	const CHILD_VALUE1: &[u8] = b"hello world !";
+	const CHILD_VALUE2: &[u8] = b"hello world    !";
+
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let client = TestClientBuilder::new()
+		.add_extra_storage(KEY1.to_vec(), VALUE.to_vec())
+		.add_extra_child_storage(&child_info, KEY1.to_vec(), CHILD_VALUE1.to_vec())
+		.add_extra_child_storage(&child_info, KEY2.to_vec(), CHILD_VALUE2.to_vec())
+		.build();
+	let genesis_hash = client.genesis_hash();
+	let (_client, child) = new_full(
+		Arc::new(client),
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+		None,
+	);
+	let keys = &[StorageKey(KEY1.to_vec()), StorageKey(KEY2.to_vec())];
+
+	assert_eq!(
+		executor::block_on(
+			child
+				.storages(prefixed_storage_key(), keys.to_vec(), Some(genesis_hash).into())
+				.map(|x| x.into_iter().map(|x| x.map(|y| y.0.len()).unwrap()).sum::<usize>())
+				.compat(),
+		)
+		.unwrap(),
+		CHILD_VALUE1.len() + CHILD_VALUE2.len(),
+	);
+}
+
+#[test]
 fn should_return_child_storage() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	let client = Arc::new(
@@ -128,6 +163,49 @@ fn should_return_child_storage() {
 		Ok(true)
 	);
 	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None).wait(), Ok(Some(1)));
+}
+
+#[test]
+fn should_return_child_storages() {
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let client = Arc::new(
+		substrate_test_runtime_client::TestClientBuilder::new()
+			.add_child_storage(&child_info, "key1", vec![42_u8])
+			.add_child_storage(&child_info, "key2", vec![43_u8, 44])
+			.build(),
+	);
+	let genesis_hash = client.genesis_hash();
+	let (_client, child) =
+		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
+	let child_key = prefixed_storage_key();
+	let keys = vec![StorageKey(b"key1".to_vec()), StorageKey(b"key2".to_vec())];
+
+	let res = child
+		.storages(child_key.clone(), keys.clone(), Some(genesis_hash).into())
+		.wait()
+		.unwrap();
+
+	assert_matches!(
+		res[0],
+		Some(StorageData(ref d))
+			if d[0] == 42 && d.len() == 1
+	);
+	assert_matches!(
+		res[1],
+		Some(StorageData(ref d))
+			if d[0] == 43 && d[1] == 44 && d.len() == 2
+	);
+	assert_matches!(
+		child
+			.storage_hash(child_key.clone(), keys[0].clone(), Some(genesis_hash).into(),)
+			.wait()
+			.map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_matches!(
+		child.storage_size(child_key.clone(), keys[0].clone(), None).wait(),
+		Ok(Some(1))
+	);
 }
 
 #[test]

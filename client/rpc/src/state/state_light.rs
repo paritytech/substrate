@@ -30,7 +30,7 @@ use log::warn;
 use parking_lot::Mutex;
 use rpc::{
 	futures::{
-		future::{result, Future},
+		future::{join_all, result, Future},
 		stream::Stream,
 		Sink,
 	},
@@ -243,6 +243,26 @@ where
 					.expect("successful request has entries for all requested keys; qed")
 			}),
 		)
+	}
+
+	fn storages(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let remote_blockchain = self.remote_blockchain.clone();
+		let fetcher = self.fetcher.clone();
+		let block = self.block_or_best(block);
+		Box::new(join_all(keys.into_iter().map(move |key| {
+			storage(&*remote_blockchain, fetcher.clone(), block, vec![key.0.clone()])
+				.boxed()
+				.compat()
+				.map(move |mut values| {
+					values
+						.remove(&key)
+						.expect("successful request has entries for all requested keys; qed")
+				})
+		})))
 	}
 
 	fn storage_hash(
@@ -561,6 +581,52 @@ where
 			});
 
 		Box::new(child_storage.boxed().compat())
+	}
+
+	fn storages(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let block = self.block_or_best(block);
+		let fetcher = self.fetcher.clone();
+		let remote_blockchain = self.remote_blockchain.clone();
+		Box::new(join_all(keys.into_iter().map(move |key| {
+			let storage_key = storage_key.clone();
+			let fetcher2 = fetcher.clone();
+			let child_storage =
+				resolve_header(&*remote_blockchain, &*fetcher, block).then(move |result| {
+					match result {
+						Ok(header) => Either::Left(
+							fetcher2
+								.remote_read_child(RemoteReadChildRequest {
+									block,
+									header,
+									storage_key,
+									keys: vec![key.0.clone()],
+									retry_count: Default::default(),
+								})
+								.then(move |result| {
+									ready(
+										result
+											.map(|mut data| {
+												data.remove(&key.0)
+												.expect(
+													"successful result has entry for all keys; qed",
+												)
+												.map(StorageData)
+											})
+											.map_err(client_err),
+									)
+								}),
+						),
+						Err(error) => Either::Right(ready(Err(error))),
+					}
+				});
+
+			Box::new(child_storage.boxed().compat())
+		})))
 	}
 
 	fn storage_hash(

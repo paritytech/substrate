@@ -22,7 +22,10 @@ use futures::{future, StreamExt as _, TryStreamExt as _};
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
 use rpc::{
-	futures::{future::result, stream, Future, Sink, Stream},
+	futures::{
+		future::{join_all, result},
+		stream, Future, Sink, Stream,
+	},
 	Result as RpcResult,
 };
 use std::{
@@ -355,6 +358,22 @@ where
 			self.block_or_best(block)
 				.and_then(|block| self.client.storage(&BlockId::Hash(block), &key))
 				.map_err(client_err),
+		))
+	}
+
+	fn storages(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let block = match self.block_or_best(block) {
+			Ok(b) => b,
+			Err(e) => return Box::new(result(Err(client_err(e)))),
+		};
+		let client = self.client.clone();
+		Box::new(join_all(
+			keys.into_iter()
+				.map(move |key| client.storage(&BlockId::Hash(block), &key).map_err(client_err)),
 		))
 	}
 
@@ -720,6 +739,30 @@ where
 				})
 				.map_err(client_err),
 		))
+	}
+
+	fn storages(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let block = match self.block_or_best(block) {
+			Ok(b) => b,
+			Err(e) => return Box::new(result(Err(client_err(e)))),
+		};
+		let client = self.client.clone();
+		Box::new(
+			join_all(keys.into_iter().map(move |key| {
+				let child_info = match ChildType::from_prefixed_key(&storage_key) {
+					Some((ChildType::ParentKeyId, storage_key)) =>
+						ChildInfo::new_default(storage_key),
+					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+				};
+				client.child_storage(&BlockId::Hash(block), &child_info, &key)
+			}))
+			.map_err(client_err),
+		)
 	}
 
 	fn storage_hash(
