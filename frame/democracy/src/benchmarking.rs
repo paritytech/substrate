@@ -68,7 +68,7 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::<T>::get() - 1;
 	T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index).encode(),
+		(T::PalletId::get(), referendum_index).encode(),
 		DispatchTime::At(1u32.into()),
 		None,
 		63,

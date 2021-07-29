@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::GenesisBuild};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -85,10 +85,12 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
+	pub const VestingPalletId: LockIdentifier = *b"vesting ";
 	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl Config for Test {
+	type PalletId = VestingPalletId;
 	type BlockNumberToBalance = Identity;
 	type Currency = Balances;
 	type Event = Event;

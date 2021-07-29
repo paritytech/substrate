@@ -54,28 +54,25 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	ensure,
-	pallet_prelude::*,
+	dispatch::DispatchResult,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
 		WithdrawReasons,
 	},
 };
-use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-pub use pallet::*;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, MaybeSerializeDeserialize, StaticLookup, Zero},
 	RuntimeDebug,
 };
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::prelude::*;
+
+pub use pallet::*;
 pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type MaxLocksOf<T> =
 	<<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
-
-const VESTING_ID: LockIdentifier = *b"vesting ";
 
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -113,9 +110,15 @@ impl<Balance: AtLeast32BitUnsigned + Copy, BlockNumber: AtLeast32BitUnsigned + C
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// Identifier for the vesting pallet's lock
+		#[pallet::constant]
+		type PalletId: Get<LockIdentifier>;
+
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -175,7 +178,7 @@ pub mod pallet {
 
 				Vesting::<T>::insert(who, VestingInfo { locked, per_block, starting_block: begin });
 				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
+				T::Currency::set_lock(T::PalletId::get(), who, locked, reasons);
 			}
 		}
 	}
@@ -358,12 +361,12 @@ impl<T: Config> Pallet<T> {
 		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
 
 		if locked_now.is_zero() {
-			T::Currency::remove_lock(VESTING_ID, &who);
+			T::Currency::remove_lock(T::PalletId::get(), &who);
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(Event::<T>::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+			T::Currency::set_lock(T::PalletId::get(), &who, locked_now, reasons);
 			Self::deposit_event(Event::<T>::VestingUpdated(who, locked_now));
 		}
 		Ok(())
@@ -372,7 +375,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
 where
-	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
+	BalanceOf<T>: MaybeSerializeDeserialize,
 {
 	type Moment = T::BlockNumber;
 	type Currency = T::Currency;

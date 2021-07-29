@@ -23,8 +23,8 @@ use frame_election_provider_support::onchain;
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
-		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnInitialize, OnUnbalanced,
-		OneSessionHandler,
+		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, LockIdentifier, OnInitialize,
+		OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -250,8 +250,13 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 
+parameter_types! {
+	pub const StakingPalletId: LockIdentifier = *b"staking ";
+}
+
 impl Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
+	type PalletId = StakingPalletId;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;

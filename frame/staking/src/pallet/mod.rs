@@ -18,7 +18,6 @@
 //! Staking FRAME Pallet.
 
 use frame_support::{
-	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
 		LockableCurrency, OnUnbalanced, UnixTime,
@@ -28,7 +27,7 @@ use frame_support::{
 		Weight,
 	},
 };
-use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
+use frame_system::offchain::SendTransactionTypes;
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	DispatchError, Perbill, Percent,
@@ -48,11 +47,12 @@ use crate::{
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
-const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -60,6 +60,10 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+		/// Identifier for the staking pallet's lock
+		#[pallet::constant]
+		type PalletId: Get<LockIdentifier>;
+
 		/// The staking balance.
 		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
@@ -862,7 +866,7 @@ pub mod pallet {
 					// left. We can now safely remove all staking-related information.
 					Self::kill_stash(&stash, num_slashing_spans)?;
 					// Remove the lock.
-					T::Currency::remove_lock(STAKING_ID, &stash);
+					T::Currency::remove_lock(T::PalletId::get(), &stash);
 					// This is worst case scenario, so we use the full weight and return None
 					None
 				} else {
@@ -1196,7 +1200,7 @@ pub mod pallet {
 			Self::kill_stash(&stash, num_slashing_spans)?;
 
 			// Remove the lock.
-			T::Currency::remove_lock(STAKING_ID, &stash);
+			T::Currency::remove_lock(T::PalletId::get(), &stash);
 			Ok(())
 		}
 
@@ -1388,7 +1392,7 @@ pub mod pallet {
 			let at_minimum = T::Currency::total_balance(&stash) == T::Currency::minimum_balance();
 			ensure!(at_minimum, Error::<T>::FundedTarget);
 			Self::kill_stash(&stash, num_slashing_spans)?;
-			T::Currency::remove_lock(STAKING_ID, &stash);
+			T::Currency::remove_lock(T::PalletId::get(), &stash);
 			Ok(())
 		}
 

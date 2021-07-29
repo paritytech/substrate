@@ -155,6 +155,7 @@
 use codec::{Decode, Encode, Input};
 use frame_support::{
 	ensure,
+	dispatch::{DispatchError, DispatchResult},
 	traits::{
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
@@ -164,7 +165,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Bounded, Dispatchable, Hash, Saturating, Zero},
-	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
+	ArithmeticError, RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -185,8 +186,6 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-
-const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 /// The maximum number of vetoers on a single proposal used to compute Weight.
 ///
@@ -240,15 +239,8 @@ enum Releases {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::DispatchResultWithPostInfo,
-		pallet_prelude::*,
-		traits::EnsureOrigin,
-		weights::{DispatchClass, Pays},
-		Parameter,
-	};
-	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-	use sp_runtime::DispatchResult;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -256,7 +248,12 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
+		/// Identifier for the democracy pallet's lock
+		#[pallet::constant]
+		type PalletId: Get<LockIdentifier>;
+
 		type Proposal: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
+
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Currency type for this pallet.
@@ -926,7 +923,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::cancel_queued(10), DispatchClass::Operational))]
 		pub fn cancel_queued(origin: OriginFor<T>, which: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
-			T::Scheduler::cancel_named((DEMOCRACY_ID, which).encode())
+			T::Scheduler::cancel_named((T::PalletId::get(), which).encode())
 				.map_err(|_| Error::<T>::ProposalMissing)?;
 			Ok(())
 		}
@@ -1402,7 +1399,12 @@ impl<T: Config> Pallet<T> {
 		})?;
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
 		// votes are in place.
-		T::Currency::extend_lock(DEMOCRACY_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
+		T::Currency::extend_lock(
+			T::PalletId::get(),
+			who,
+			vote.balance(),
+			WithdrawReasons::TRANSFER,
+		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
 	}
@@ -1538,7 +1540,7 @@ impl<T: Config> Pallet<T> {
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
-			T::Currency::extend_lock(DEMOCRACY_ID, &who, balance, WithdrawReasons::TRANSFER);
+			T::Currency::extend_lock(T::PalletId::get(), &who, balance, WithdrawReasons::TRANSFER);
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
@@ -1579,9 +1581,9 @@ impl<T: Config> Pallet<T> {
 			voting.locked_balance()
 		});
 		if lock_needed.is_zero() {
-			T::Currency::remove_lock(DEMOCRACY_ID, who);
+			T::Currency::remove_lock(T::PalletId::get(), who);
 		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
+			T::Currency::set_lock(T::PalletId::get(), who, lock_needed, WithdrawReasons::TRANSFER);
 		}
 	}
 
@@ -1710,7 +1712,7 @@ impl<T: Config> Pallet<T> {
 				);
 
 				if T::Scheduler::schedule_named(
-					(DEMOCRACY_ID, index).encode(),
+					(T::PalletId::get(), index).encode(),
 					DispatchTime::At(when),
 					None,
 					63,

@@ -43,7 +43,7 @@ use crate::{
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
-use super::{pallet::*, STAKING_ID};
+use super::pallet::*;
 
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
@@ -191,7 +191,12 @@ impl<T: Config> Pallet<T> {
 		controller: &T::AccountId,
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
 	) {
-		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
+		T::Currency::set_lock(
+			T::PalletId::get(),
+			&ledger.stash,
+			ledger.total,
+			WithdrawReasons::all(),
+		);
 		<Ledger<T>>::insert(controller, ledger);
 	}
 

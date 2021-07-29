@@ -477,6 +477,7 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
+	pub const StakingPalletId: LockIdentifier = *b"staking ";
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
@@ -488,6 +489,7 @@ parameter_types! {
 use frame_election_provider_support::onchain;
 impl pallet_staking::Config for Runtime {
 	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
+	type PalletId = StakingPalletId;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
@@ -600,6 +602,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 }
 
 parameter_types! {
+	pub const DemocracyPalletId: LockIdentifier = *b"democrac";
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const FastTrackVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
@@ -614,6 +617,7 @@ parameter_types! {
 }
 
 impl pallet_democracy::Config for Runtime {
+	type PalletId = DemocracyPalletId;
 	type Proposal = Call;
 	type Event = Event;
 	type Currency = Balances;
@@ -1054,9 +1058,11 @@ impl pallet_society::Config for Runtime {
 
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
+	pub const VestingPalletId: LockIdentifier = *b"vesting ";
 }
 
 impl pallet_vesting::Config for Runtime {
+	type PalletId = VestingPalletId;
 	type Event = Event;
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;

@@ -35,6 +35,7 @@ fn nay(x: u8, balance: u64) -> AccountVote<u64> {
 }
 
 fn the_lock(amount: u64) -> BalanceLock<u64> {
+	const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 	BalanceLock { id: DEMOCRACY_ID, amount, reasons: pallet_balances::Reasons::Misc }
 }
 

@@ -135,6 +135,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
+	pub const DemocracyPalletId: LockIdentifier = *b"democrac";
 	pub const LaunchPeriod: u64 = 2;
 	pub const VotingPeriod: u64 = 2;
 	pub const FastTrackVotingPeriod: u64 = 2;
@@ -164,6 +165,7 @@ impl SortedMembers<u64> for OneToFive {
 }
 
 impl Config for Test {
+	type PalletId = DemocracyPalletId;
 	type Proposal = Call;
 	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
