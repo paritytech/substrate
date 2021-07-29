@@ -503,7 +503,7 @@ pub mod pallet {
 
 		/// Set the number of pages in the offchain WebAssembly environment's heap.
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
-		pub fn set_heap_pages_offchain(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
+		pub fn set_heap_pages_offchain(origin: OriginFor<T>, pages: u64) -> DispatchResult {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::OFFCHAIN_HEAP_PAGES, &pages.encode());
 			Ok(().into())
