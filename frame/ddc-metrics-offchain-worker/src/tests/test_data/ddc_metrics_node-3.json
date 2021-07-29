@@ -1,0 +1,9 @@
+[
+  {
+    "appPubKey" : "0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830",
+    "partitionId" : "f6cbe4e6-ef3a-4970-b3da-f8ae29cd22bd",
+    "storageBytes" : 20,
+    "wcuUsed": 0,
+    "rcuUsed": 0
+  }
+]

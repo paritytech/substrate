@@ -1,0 +1,25 @@
+# ===== FIRST STAGE ======
+ARG DDC_SMART_CONTRACT_VERSION=v1.1.0
+ARG ECR_REGISTRY
+FROM phusion/baseimage:0.11 as builder
+LABEL maintainer="team@cere.network"
+LABEL description="This is the build stage to create the binary."
+WORKDIR /cerenetwork
+COPY . /cerenetwork
+
+# ===== SECOND STAGE ======
+FROM $ECR_REGISTRY/ddc-smart-contract:$DDC_SMART_CONTRACT_VERSION as ddc-smart-contract
+
+FROM builder
+# Copy smart-contract artifacts (ddc.wasm and metadata.json)
+COPY --from=ddc-smart-contract /ddc-smart-contract/artifacts/ddc.wasm /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
+COPY --from=ddc-smart-contract /ddc-smart-contract/artifacts/metadata.json /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
+
+RUN apt-get update && \
+	apt-get upgrade -y && \
+	apt-get install -y cmake pkg-config libssl-dev git clang
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
+	export PATH=$PATH:$HOME/.cargo/bin && \
+	scripts/init.sh && \
+	TRYBUILD=overwrite cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml && \
+	WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout

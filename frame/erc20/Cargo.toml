@@ -1,0 +1,48 @@
+[package]
+name = "pallet-erc20"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Unlicense"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME example pallet"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
+sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "2.0.0", path = "../../primitives/core", default-features = false }
+sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic", default-features = false }
+pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../chainbridge" }
+pallet-erc721 = { version = "2.0.0", default-features = false, path = "../erc721" }
+
+frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+	"sp-runtime/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-balances/std",
+	"sp-io/std",
+	"sp-std/std",
+	"sp-core/std",
+	"sp-arithmetic/std",
+	"pallet-chainbridge/std",
+	"pallet-erc721/std"
+]
+runtime-benchmarks = ["frame-benchmarking"]

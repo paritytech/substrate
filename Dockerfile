@@ -9,9 +9,9 @@ RUN apt-get update && \
 	apt-get upgrade -y && \
 	apt-get install -y cmake pkg-config libssl-dev git clang
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-         export PATH=$PATH:$HOME/.cargo/bin && \
-         scripts/init.sh && \
-         cargo +nightly-2020-10-06 build --$PROFILE
+    export PATH=$PATH:$HOME/.cargo/bin && \
+    scripts/init.sh && \
+    cargo +nightly-2021-05-07 build --$PROFILE
 
 # ===== SECOND STAGE ======
 FROM phusion/baseimage:0.11
