@@ -22,7 +22,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
-trybuild = "1.0.42"
+trybuild = "1.0.43"
 rustversion = "1.0.0"
 
 [dev-dependencies]
