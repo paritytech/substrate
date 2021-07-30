@@ -846,17 +846,20 @@ macro_rules! impl_benchmark {
 					Ok(())
 				};
 
+				let (current_step, total_steps) = steps;
+
 				if components.is_empty() {
-					if verify {
-						// If `--verify` is used, run the benchmark once to verify it would complete.
-						do_benchmark(Default::default(), &mut $crate::Vec::new(), true, 1, 1)?;
+					// The CLI could ask to do more steps than is sensible, so we skip those.
+					if current_step == 0 {
+						if verify {
+							// If `--verify` is used, run the benchmark once to verify it would complete.
+							do_benchmark(Default::default(), &mut $crate::Vec::new(), true, 1, 1)?;
+						}
+						do_benchmark(Default::default(), &mut results, false, 1, 1)?;
 					}
-					do_benchmark(Default::default(), &mut results, false, 1, 1)?;
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
-						// Get the number of steps for this component.
-						let (_current_step, total_steps) = steps;
 
 						let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
 						let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
@@ -867,28 +870,31 @@ macro_rules! impl_benchmark {
 						let step_size = (diff / total_steps).max(1);
 						let num_of_steps = diff / step_size + 1;
 
-						for s in 0..num_of_steps {
-							// This is the value we will be testing for component `name`
-							let component_value = lowest + step_size * s;
-
-							// Select the max value for all the other components.
-							let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components.iter()
-								.enumerate()
-								.map(|(idx, (n, _, h))|
-									if n == name {
-										(*n, component_value)
-									} else {
-										(*n, *highest_range_values.get(idx).unwrap_or(h))
-									}
-								)
-								.collect();
-
-							if verify {
-								// If `--verify` is used, run the benchmark once to verify it would complete.
-								do_benchmark(&c, &mut $crate::Vec::new(), true, s, num_of_steps)?;
-							}
-							do_benchmark(&c, &mut results, false, s, num_of_steps)?;
+						// The CLI could ask to do more steps than is sensible, so we just skip those.
+						if current_step >= num_of_steps {
+							continue;
 						}
+
+						// This is the value we will be testing for component `name`
+						let component_value = lowest + step_size * current_step;
+
+						// Select the max value for all the other components.
+						let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+							.enumerate()
+							.map(|(idx, (n, _, h))|
+								if n == name {
+									(*n, component_value)
+								} else {
+									(*n, *highest_range_values.get(idx).unwrap_or(h))
+								}
+							)
+							.collect();
+
+						if verify {
+							// If `--verify` is used, run the benchmark once to verify it would complete.
+							do_benchmark(&c, &mut $crate::Vec::new(), true, current_step, num_of_steps)?;
+						}
+						do_benchmark(&c, &mut results, false, current_step, num_of_steps)?;
 					}
 				}
 				return Ok(results);
