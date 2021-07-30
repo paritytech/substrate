@@ -78,7 +78,7 @@ pub fn create_stash_controller<T: Config>(
 	create_stash_controller_b::<T>(n, balance_factor.into(), destination)
 }
 
-/// Create a stash and controller pair. TODO do we keep this version that uses balance?
+/// Create a stash and controller pair.
 pub fn create_stash_controller_b<T: Config>(
 	n: u32,
 	balance_factor: crate::BalanceOf<T>,
