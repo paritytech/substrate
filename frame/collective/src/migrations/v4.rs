@@ -35,7 +35,7 @@ pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
 			target: "runtime::collective",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return 0;
+		return 0
 	}
 
 	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
@@ -52,7 +52,7 @@ pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
 				new_pallet_name.as_ref().as_bytes(),
 			);
 			<T as frame_system::Config>::BlockWeights::get().max_block
-		}
+		},
 		_ => {
 			log::warn!(
 				target: "runtime::collective",
@@ -60,7 +60,7 @@ pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
 				maybe_storage_version,
 			);
 			0
-		}
+		},
 	}
 }
 
