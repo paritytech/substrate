@@ -23,6 +23,10 @@ use codec::{Codec, Decode, Encode};
 use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
+use sc_consensus::{
+	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
+	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
+};
 use sc_consensus_slots::{check_equivocation, CheckedHeader, InherentDataProviderExt};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -31,11 +35,7 @@ use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
 	HeaderBackend, ProvideCache,
 };
-use sp_consensus::{
-	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
-	BlockImport, BlockImportParams, BlockOrigin, CanAuthorWith, Error as ConsensusError,
-	ForkChoiceStrategy,
-};
+use sp_consensus::{BlockOrigin, CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
 	AURA_ENGINE_ID,

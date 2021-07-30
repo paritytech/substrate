@@ -21,14 +21,6 @@
 //! change. Implementors of traits should not rely on the interfaces to remain
 //! the same.
 
-// This provides "unused" building blocks to other crates
-#![allow(dead_code)]
-// our error-chain could potentially blow up otherwise
-#![recursion_limit = "128"]
-
-#[macro_use]
-extern crate log;
-
 use std::{sync::Arc, time::Duration};
 
 use futures::prelude::*;
@@ -38,24 +30,18 @@ use sp_runtime::{
 };
 use sp_state_machine::StorageProof;
 
-pub mod block_import;
 pub mod block_validation;
 pub mod error;
 pub mod evaluation;
-pub mod import_queue;
-mod metrics;
 mod select_chain;
 
 pub use self::error::Error;
-pub use block_import::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, ForkChoiceStrategy,
-	ImportResult, ImportedAux, ImportedState, JustificationImport, JustificationSyncLink,
-	StateAction, StorageChanges,
-};
-pub use import_queue::DefaultImportQueue;
 pub use select_chain::SelectChain;
 pub use sp_inherents::InherentData;
 pub use sp_state_machine::Backend as StateBackend;
+
+/// Type of keys in the blockchain cache that consensus module could use for its needs.
+pub type CacheKeyId = [u8; 4];
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -70,6 +56,23 @@ pub enum BlockStatus {
 	KnownBad,
 	/// Not in the queue or the blockchain.
 	Unknown,
+}
+
+/// Block data origin.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum BlockOrigin {
+	/// Genesis block built into the client.
+	Genesis,
+	/// Block is part of the initial sync with the network.
+	NetworkInitialSync,
+	/// Block was broadcasted on the network.
+	NetworkBroadcast,
+	/// Block that was received from the network and validated in the consensus process.
+	ConsensusBroadcast,
+	/// Block that was collated by this node.
+	Own,
+	/// Block was imported from a file.
+	File,
 }
 
 /// Environment for a Consensus instance.

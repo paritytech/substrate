@@ -45,6 +45,9 @@ use sc_client_api::{
 	notifications::{StorageEventStream, StorageNotifications},
 	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
 };
+use sc_consensus::{
+	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
+};
 use sc_executor::RuntimeVersion;
 use sc_light::fetcher::ChangesProof;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
@@ -56,10 +59,8 @@ use sp_blockchain::{
 	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend, Cache,
 	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata, ProvideCache,
 };
-use sp_consensus::{
-	BlockCheckParams, BlockImportParams, BlockOrigin, BlockStatus, Error as ConsensusError,
-	ForkChoiceStrategy, ImportResult, StateAction,
-};
+use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
+
 use sp_core::{
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
@@ -120,17 +121,18 @@ where
 	_phantom: PhantomData<RA>,
 }
 
-// used in importing a block, where additional changes are made after the runtime
-// executed.
+/// Used in importing a block, where additional changes are made after the runtime
+/// executed.
 enum PrePostHeader<H> {
-	// they are the same: no post-runtime digest items.
+	/// they are the same: no post-runtime digest items.
 	Same(H),
-	// different headers (pre, post).
+	/// different headers (pre, post).
 	Different(H, H),
 }
 
 impl<H> PrePostHeader<H> {
-	// get a reference to the "post-header" -- the header as it should be after all changes are applied.
+	/// get a reference to the "post-header" -- the header as it should be
+	/// after all changes are applied.
 	fn post(&self) -> &H {
 		match *self {
 			PrePostHeader::Same(ref h) => h,
@@ -138,7 +140,8 @@ impl<H> PrePostHeader<H> {
 		}
 	}
 
-	// convert to the "post-header" -- the header as it should be after all changes are applied.
+	/// convert to the "post-header" -- the header as it should be after
+	/// all changes are applied.
 	fn into_post(self) -> H {
 		match self {
 			PrePostHeader::Same(h) => h,
@@ -149,7 +152,7 @@ impl<H> PrePostHeader<H> {
 
 enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
 	Discard(ImportResult),
-	Import(Option<sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>),
+	Import(Option<sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>),
 }
 
 /// Create an instance of in-memory client.
@@ -577,7 +580,8 @@ where
 		Ok(StorageProof::merge(proofs))
 	}
 
-	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
+	/// Generates CHT-based proof for roots of changes tries at given blocks
+	/// (that are part of single CHT).
 	fn changes_trie_roots_proof_at_cht(
 		&self,
 		cht_size: NumberFor<Block>,
@@ -603,11 +607,12 @@ where
 		Ok(proof)
 	}
 
-	/// Returns changes trie storage and all configurations that have been active in the range [first; last].
+	/// Returns changes trie storage and all configurations that have been active
+	/// in the range [first; last].
 	///
 	/// Configurations are returned in descending order (and obviously never overlap).
-	/// If fail_if_disabled is false, returns maximal consequent configurations ranges, starting from last and
-	/// stopping on either first, or when CT have been disabled.
+	/// If fail_if_disabled is false, returns maximal consequent configurations ranges,
+	/// starting from last and stopping on either first, or when CT have been disabled.
 	/// If fail_if_disabled is true, fails when there's a subrange where CT have been disabled
 	/// inside first..last blocks range.
 	fn require_changes_trie(
@@ -656,7 +661,7 @@ where
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		storage_changes: Option<
-			sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
+			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
 	) -> sp_blockchain::Result<ImportResult>
 	where
@@ -749,7 +754,7 @@ where
 		body: Option<Vec<Block::Extrinsic>>,
 		indexed_body: Option<Vec<Vec<u8>>>,
 		storage_changes: Option<
-			sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
+			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
@@ -793,7 +798,7 @@ where
 		let storage_changes = match storage_changes {
 			Some(storage_changes) => {
 				let storage_changes = match storage_changes {
-					sp_consensus::StorageChanges::Changes(storage_changes) => {
+					sc_consensus::StorageChanges::Changes(storage_changes) => {
 						self.backend
 							.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 						let (main_sc, child_sc, offchain_sc, tx, _, changes_trie_tx, tx_index) =
@@ -813,7 +818,7 @@ where
 
 						Some((main_sc, child_sc))
 					},
-					sp_consensus::StorageChanges::Import(changes) => {
+					sc_consensus::StorageChanges::Import(changes) => {
 						let storage = sp_storage::Storage {
 							top: changes.state.into_iter().collect(),
 							children_default: Default::default(),
@@ -889,7 +894,8 @@ where
 
 		operation.op.insert_aux(aux)?;
 
-		// we only notify when we are already synced to the tip of the chain or if this import triggers a re-org
+		// we only notify when we are already synced to the tip of the chain
+		// or if this import triggers a re-org
 		if make_notifications || tree_route.is_some() {
 			if finalized {
 				operation.notify_finalized.push(hash);
@@ -933,7 +939,7 @@ where
 			(_, StateAction::Skip) => (false, None),
 			(
 				BlockStatus::InChainPruned,
-				StateAction::ApplyChanges(sp_consensus::StorageChanges::Changes(_)),
+				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(_)),
 			) => return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
 			(BlockStatus::InChainPruned, StateAction::Execute) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
@@ -975,7 +981,7 @@ where
 				{
 					return Err(Error::InvalidStateRoot)
 				}
-				Some(sp_consensus::StorageChanges::Changes(gen_storage_changes))
+				Some(sc_consensus::StorageChanges::Changes(gen_storage_changes))
 			},
 			// No block body, no storage changes
 			(true, None, None) => None,
@@ -1852,7 +1858,7 @@ where
 /// objects. Otherwise, importing blocks directly into the client would be bypassing
 /// important verification work.
 #[async_trait::async_trait]
-impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, RA>
+impl<B, E, Block, RA> sc_consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
@@ -1960,7 +1966,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> sc_consensus::BlockImport<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
