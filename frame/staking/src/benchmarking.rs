@@ -18,9 +18,11 @@
 //! Staking pallet benchmarking.
 
 use super::*;
-use crate::Pallet as Staking;
+use crate::{
+	voter_bags::{Bag, Node},
+	Pallet as Staking,
+};
 use testing_utils::*;
-use crate::voter_bags::{Bag, Node};
 
 use frame_support::{
 	pallet_prelude::*,
@@ -143,10 +145,7 @@ pub fn create_validator_with_nominators<T: Config>(
 fn prepare_rebag_scenario<T: Config>(
 	src_bag_thresh: BalanceOf<T>,
 	dest_bag_thresh: BalanceOf<T>,
-) -> Result<
-	(T::AccountId, T::AccountId, T::AccountId, T::AccountId),
-	&'static str,
-> {
+) -> Result<(T::AccountId, T::AccountId, T::AccountId, T::AccountId), &'static str> {
 	// The most expensive case for this rebag-ing:
 	//
 	// - It doesn't matter where in the source bag the stash lies; the number of reads and
@@ -203,16 +202,15 @@ fn verify_post_rebag_scenario<T: Config>(
 	src_thresh: u64,
 	dest_thresh: u64,
 ) -> Result<(), &'static str> {
-	let src_node = Node::<T>::from_id(&src_stash).ok_or("node not found for stash")?;
+	let src_node = Node::<T>::from_id(&src_stash).ok_or("node not found for src stash")?;
 	let weight_of = Staking::<T>::weight_of_fn();
-	ensure!(!src_node.is_misplaced(&weight_of), "node must be in proper place after rebag");
+	ensure!(!src_node.is_misplaced(&weight_of), "src node must be in proper place after rebag");
 
 	let dest_bag = Bag::<T>::get(dest_thresh).ok_or("destination bag not found")?;
 
 	let mut dest_bag_as_ids = dest_bag.iter().map(|n| n.voter().id.clone()).collect::<Vec<_>>();
 	dest_bag_as_ids.sort();
 	crate::log!(info, "dest_bag_as_ids {:?}", dest_bag_as_ids);
-
 
 	let mut expected_dest_ids = vec![src_stash, dest1_stash, dest2_stash];
 	expected_dest_ids.sort();
@@ -269,33 +267,57 @@ benchmarks! {
 
 		let max_additional = dest_bag_thresh - src_bag_thresh;
 
+		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
+		let old_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(src_stash);
 	}: _(RawOrigin::Signed(src_stash.clone()), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
-		assert!(src_bag_thresh < new_bonded);
+		assert!(old_bonded < new_bonded);
 
 		verify_post_rebag_scenario::<T>(
 			src_stash,
 			dest1_stash,
 			dest2_stash,
-			thresholds[0],
-			thresholds[1],
+			thresholds[0], // src
+			thresholds[1], // dest
 		)?;
 	}
 
 	unbond {
-		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let amount = T::Currency::minimum_balance() * 10u32.into();
-		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
+		clear_validators_and_nominators::<T>();
+
+		let thresholds = T::VoterBagThresholds::get();
+		let total_issuance = T::Currency::total_issuance();
+		// the bag the voter will start at
+		let src_bag_thresh =
+			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
+		// the bag we will move the voter to
+		let dest_bag_thresh =
+			T::CurrencyToVote::to_currency(thresholds[0] as u128, total_issuance);
+
+		let (src_stash, src_controller, dest1_stash, dest2_stash)
+			= prepare_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
+
+		let amount = src_bag_thresh - dest_bag_thresh;
+
+		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
-		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller.clone()), amount)
+		whitelist_account!(src_controller);
+	}: _(RawOrigin::Signed(src_controller.clone()), amount)
 	verify {
-		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
+		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded > new_bonded);
+
+		verify_post_rebag_scenario::<T>(
+			src_stash,
+			dest1_stash,
+			dest2_stash,
+			thresholds[1], // src
+			thresholds[0], // dest
+		)?;
 	}
 
 	// Withdraw only updates the ledger
@@ -578,13 +600,12 @@ benchmarks! {
 		let (src_stash, src_controller, dest1_stash, dest2_stash)
 			= prepare_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
-
 		// rebond an amount that will put the user into the destination bag
 		let rebond_amount = dest_bag_thresh - src_bag_thresh;
 
-		// spread that amount across unlocking chunks
+		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
-		// sum of unlocking chunks puts voter in the dest bag
+		// so the sum of unlocking chunks puts voter into the dest bag
 		assert!(value * l.into() + src_bag_thresh > src_bag_thresh);
 		assert!(value * l.into() + src_bag_thresh <= dest_bag_thresh);
 
@@ -612,8 +633,8 @@ benchmarks! {
 			src_stash,
 			dest1_stash,
 			dest2_stash,
-			thresholds[0],
-			thresholds[1],
+			thresholds[0], // src
+			thresholds[1], // dest
 		)?;
 	}
 
