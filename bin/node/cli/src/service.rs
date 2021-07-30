@@ -27,7 +27,10 @@ use node_runtime::RuntimeApi;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_network::{Event, NetworkService};
-use sc_service::{CustomMiddleware, NoopCustomMiddleware, RpcHandlers, RpcMetadata, TaskManager, config::Configuration, error::Error as ServiceError};
+use sc_service::{
+	CustomMiddleware, NoopCustomMiddleware, RpcHandlers, RpcMetadata, TaskManager,
+	config::Configuration, error::Error as ServiceError
+};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;

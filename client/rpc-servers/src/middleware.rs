@@ -18,16 +18,21 @@
 
 //! Middleware for RPC requests.
 
-use jsonrpc_core::{Call, FutureOutput, FutureResponse, Metadata, Middleware as RequestMiddleware, Output, Request, Response};
+use jsonrpc_core::{
+	Call, FutureOutput, FutureResponse, Metadata, Middleware as RequestMiddleware, Output, Request, Response
+};
 use prometheus_endpoint::{Registry, CounterVec, PrometheusError,Opts, register, U64};
 
 use futures::{future::Either, Future};
 
 
 /// Custom rpc middleware
-pub trait CustomMiddleware<M: Metadata>: Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput> {}
+pub trait CustomMiddleware<M: Metadata>:
+	Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput> {}
 
-impl<M, T> CustomMiddleware<M> for T where M: Metadata, T: Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput> {}
+impl<M, T> CustomMiddleware<M> for T
+	where M: Metadata, T: Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput>
+{}
 
 /// Metrics for RPC middleware
 #[derive(Debug, Clone)]
