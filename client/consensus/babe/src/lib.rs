@@ -1420,10 +1420,7 @@ where
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
-		if matches!(
-			block.state_action,
-			StateAction::ApplyChanges(sp_consensus::StorageChanges::Import(_))
-		) {
+		if block.with_state() {
 			return self.import_state(block, new_cache).await
 		}
 

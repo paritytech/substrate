@@ -1267,15 +1267,13 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<()> {
 		let last_finalized =
 			last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
-		if last_finalized != self.blockchain.meta.read().genesis_hash {
-			if *header.parent_hash() != last_finalized {
-				return Err(::sp_blockchain::Error::NonSequentialFinalization(format!(
-					"Last finalized {:?} not parent of {:?}",
-					last_finalized,
-					header.hash()
-				))
-				.into())
-			}
+		if last_finalized != self.blockchain.meta.read().genesis_hash && *header.parent_hash() != last_finalized {
+			return Err(sp_blockchain::Error::NonSequentialFinalization(format!(
+				"Last finalized {:?} not parent of {:?}",
+				last_finalized,
+				header.hash()
+			))
+			.into())
 		}
 		Ok(())
 	}

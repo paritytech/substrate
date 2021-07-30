@@ -229,7 +229,7 @@ All data that's announced.
 
 In this mode the initial downloads and verifies full header history. This allows to validate
 authority set transitions and arrive at a recent header. After header chain is verified and imported
-the node starts downloading  a state snapshot using the state request protocol. Each `StateRequest`
+the node starts downloading a state snapshot using the state request protocol. Each `StateRequest`
 contains a starting storage key, which is empty for the first request.
 `StateResponse` contains a storage proof for a sequence of keys and values in the storage
 starting (but not including) from the key that is in the request. After iterating the proof trie against
