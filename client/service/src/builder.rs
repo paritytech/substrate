@@ -355,10 +355,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. }
-				) || matches!(
-					config.network.sync_mode,
-					sc_network::config::SyncMode::Warp
+					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
 				),
 				wasm_runtime_substitutes,
 			},

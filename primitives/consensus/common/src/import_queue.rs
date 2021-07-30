@@ -294,10 +294,7 @@ pub(crate) async fn import_single_block_metered<
 		metrics.report_verification(true, started.elapsed());
 	}
 
-	let mut cache = HashMap::new();
-	if let Some(keys) = maybe_keys {
-		cache.extend(keys.into_iter());
-	}
+	let cache = HashMap::from_iter(keys.unwrap_or_default());
 	let import_block = import_block.clear_storage_changes_and_mutate();
 	let imported = import_handle.import_block(import_block, cache).await;
 	if let Some(metrics) = metrics.as_ref() {

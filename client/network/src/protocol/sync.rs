@@ -1269,7 +1269,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Handle a response from the remote to a warp proof request that we made.
 	///
-	/// Returns next request if any.
+	/// Returns next request.
 	pub fn on_warp_sync_data(
 		&mut self,
 		who: &PeerId,
