@@ -31,6 +31,7 @@ serde = "1.0.126"
 handlebars = "3.5.0"
 Inflector = "0.11.4"
 linked-hash-map = "0.5.4"
+log = "0.4.8"
 
 [features]
 default = ["db"]

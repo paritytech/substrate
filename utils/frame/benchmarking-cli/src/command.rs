@@ -32,7 +32,7 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc, time};
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
@@ -172,6 +172,7 @@ impl BenchmarkCmd {
 		}
 
 		// Run the benchmarks
+		let mut timer = time::SystemTime::now();
 		for (pallet, extrinsic) in benchmarks_to_run {
 			for s in 0..self.steps {
 				for r in 0..self.repeat {
@@ -184,8 +185,8 @@ impl BenchmarkCmd {
 						&executor,
 						"Benchmark_dispatch_benchmark",
 						&(
-							&pallet,
-							&extrinsic,
+							&pallet.clone(),
+							&extrinsic.clone(),
 							self.lowest_range_values.clone(),
 							self.highest_range_values.clone(),
 							(s, self.steps),
@@ -209,6 +210,22 @@ impl BenchmarkCmd {
 
 					batches.extend(batch);
 					storage_info = last_storage_info;
+
+					// Show progress information
+					if let Some(elapsed) = timer.elapsed().ok() {
+						if elapsed >= time::Duration::from_secs(5) {
+							timer = time::SystemTime::now();
+							log::info!(
+								"Running Benchmark:\t{}\t{}\t{}/{}\t{}/{}",
+								String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
+								String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
+								s,
+								self.steps,
+								r,
+								self.repeat,
+							);
+						}
+					}
 				}
 			}
 		}
