@@ -247,7 +247,6 @@ pub trait ValidatorRegistration<ValidatorId> {
 
 /// Trait used to check whether a given validator is currently disabled and should not be
 /// participating in consensus (e.g. because they equivocated).
-/// The [Session module](../../pallet_session/index.html) is an implementor.
 pub trait DisabledValidators {
 	/// Returns true if the given validator is disabled.
 	fn is_disabled(index: u32) -> bool;
