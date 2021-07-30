@@ -293,7 +293,7 @@ pub enum BlockStatus {
 /// A list of all well known keys in the blockchain cache.
 pub mod well_known_cache_keys {
 	/// The type representing cache keys.
-	pub type Id = sp_consensus::import_queue::CacheKeyId;
+	pub type Id = sp_consensus::CacheKeyId;
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";

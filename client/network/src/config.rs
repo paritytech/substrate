@@ -44,7 +44,8 @@ use libp2p::{
 	multiaddr, wasm_ext, Multiaddr, PeerId,
 };
 use prometheus_endpoint::Registry;
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sc_consensus::ImportQueue;
+use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
