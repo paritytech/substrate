@@ -43,19 +43,23 @@ mod worker;
 
 pub use crate::worker::{MiningBuild, MiningMetadata, MiningWorker};
 
+use crate::worker::UntilImportedOrTimeout;
 use codec::{Decode, Encode};
 use futures::{Future, StreamExt};
 use log::*;
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use sc_client_api::{self, backend::AuxStore, BlockOf, BlockchainEvents};
+use sc_consensus::{
+	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxBlockImport,
+	BoxJustificationImport, ForkChoiceStrategy, ImportResult, Verifier,
+};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
 use sp_consensus::{
-	import_queue::{BasicQueue, BoxBlockImport, BoxJustificationImport, Verifier},
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, CanAuthorWith, Environment,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, Proposer, SelectChain, SyncOracle,
+	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
+	SyncOracle,
 };
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
@@ -68,8 +72,6 @@ use std::{
 	borrow::Cow, cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc,
 	time::Duration,
 };
-
-use crate::worker::UntilImportedOrTimeout;
 
 #[derive(derive_more::Display, Debug)]
 pub enum Error<B: BlockT> {
@@ -540,7 +542,7 @@ where
 	E::Error: std::fmt::Debug,
 	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
 	SO: SyncOracle + Clone + Send + Sync + 'static,
-	L: sp_consensus::JustificationSyncLink<Block>,
+	L: sc_consensus::JustificationSyncLink<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {

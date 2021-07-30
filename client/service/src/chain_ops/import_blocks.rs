@@ -19,21 +19,21 @@
 use crate::{error, error::Error};
 use codec::{Decode, IoReader as CodecIoReader};
 use futures::{future, prelude::*};
+use futures_timer::Delay;
 use log::{info, warn};
 use sc_chain_spec::ChainSpec;
-use sp_consensus::{
-	import_queue::{BlockImportError, BlockImportResult, ImportQueue, IncomingBlock, Link},
-	BlockOrigin,
+use sc_client_api::UsageProvider;
+use sc_consensus::import_queue::{
+	BlockImportError, BlockImportStatus, ImportQueue, IncomingBlock, Link,
 };
+use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
+use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::SignedBlock,
-	traits::{Block as BlockT, Header, MaybeSerializeDeserialize, NumberFor, Zero},
+	traits::{
+		Block as BlockT, CheckedDiv, Header, MaybeSerializeDeserialize, NumberFor, Saturating, Zero,
+	},
 };
-
-use futures_timer::Delay;
-use sc_client_api::UsageProvider;
-use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
-use sp_runtime::traits::{CheckedDiv, Saturating};
 use std::{
 	convert::{TryFrom, TryInto},
 	io::{Read, Seek},
@@ -316,7 +316,7 @@ where
 			&mut self,
 			imported: usize,
 			_num_expected_blocks: usize,
-			results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+			results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 		) {
 			self.imported_blocks += imported as u64;
 

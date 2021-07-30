@@ -20,7 +20,7 @@ use crate::error::Error;
 use codec::Encode;
 use futures::{future, prelude::*};
 use sc_client_api::{BlockBackend, UsageProvider};
-use sp_consensus::import_queue::ImportQueue;
+use sc_consensus::import_queue::ImportQueue;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 use crate::chain_ops::import_blocks;
