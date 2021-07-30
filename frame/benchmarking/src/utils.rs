@@ -128,11 +128,10 @@ sp_api::decl_runtime_apis! {
 		/// Parameters
 		/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
 		///            needed for weight calculation.
-		fn benchmarks(extra: bool) -> Vec<BenchmarkList>;
+		fn benchmark_metadata(extra: bool) -> (Vec<BenchmarkList>, Vec<StorageInfo>);
 
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(config: BenchmarkConfig)
-			-> Result<(Vec<BenchmarkBatch>, Vec<StorageInfo>), sp_runtime::RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
 	}
 }
 

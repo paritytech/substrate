@@ -17,7 +17,7 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkResults, BenchmarkSelector};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkResults, BenchmarkSelector, BenchmarkList};
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
@@ -113,9 +113,6 @@ impl BenchmarkCmd {
 			2, // The runtime instances cache size.
 		);
 
-		let mut batches = Vec::new();
-		let mut storage_info = Vec::new();
-
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
 			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
@@ -133,7 +130,7 @@ impl BenchmarkCmd {
 			None,
 			&mut changes,
 			&executor,
-			"Benchmark_benchmarks",
+			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
@@ -142,8 +139,8 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
 
-		let list = <Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
-			.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+		let (list, storage_info) = <(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
+			.map_err(|e| format!("Failed to decode benchmark metadata: {:?}", e))?;
 
 		if self.list {
 			// Show the list and exit early
@@ -171,6 +168,7 @@ impl BenchmarkCmd {
 		}
 
 		// Run the benchmarks
+		let mut batches = Vec::new();
 		let mut timer = time::SystemTime::now();
 		for (pallet, extrinsic) in benchmarks_to_run {
 			for s in 0..self.steps {
@@ -202,14 +200,13 @@ impl BenchmarkCmd {
 					.execute(strategy.into())
 					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-					let (batch, last_storage_info) = <std::result::Result<
-						(Vec<BenchmarkBatch>, Vec<StorageInfo>),
+					let batch = <std::result::Result<
+						Vec<BenchmarkBatch>,
 						String,
 					> as Decode>::decode(&mut &result[..])
 					.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
 
 					batches.extend(batch);
-					storage_info = last_storage_info;
 
 					// Show progress information
 					if let Some(elapsed) = timer.elapsed().ok() {
