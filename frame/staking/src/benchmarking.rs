@@ -29,7 +29,7 @@ use frame_support::{
 	traits::{Currency, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{CheckedSub, StaticLookup, Zero},
+	traits::{StaticLookup, Zero},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -141,16 +141,76 @@ pub fn create_validator_with_nominators<T: Config>(
 	Ok((v_stash, nominators))
 }
 
-// Returns (src_stash, src_controller, dest1_stash, dest2_stash source_threshold, dest_threshold).
-fn prepare_rebag_scenario<T: Config>(
+/// Data for a rebag scenario.
+struct RebagScenario<T: Config> {
+	dest1_stash: T::AccountId,
+	src1_stash: T::AccountId,
+	/// Stash that is expected to be rebagged.
+	src2_stash: T::AccountId,
+	/// Controller of the Stash that is expected to be rebagged.
+	src2_controller: T::AccountId,
+	src3_stash: T::AccountId,
 	src_bag_thresh: BalanceOf<T>,
 	dest_bag_thresh: BalanceOf<T>,
-) -> Result<(T::AccountId, T::AccountId, T::AccountId, T::AccountId), &'static str> {
+}
+
+impl<T: Config> RebagScenario<T> {
+	/// Verify that the rebag worked.
+	fn verify_post_rebag(&self) -> Result<(), &'static str> {
+		let RebagScenario {
+			dest1_stash,
+			src1_stash,
+			src2_stash,
+			src3_stash,
+			src_bag_thresh,
+			dest_bag_thresh,
+			..
+		} = self;
+
+		let src2_node = Node::<T>::from_id(&src2_stash).ok_or("node not found for src stash")?;
+		let weight_of = Staking::<T>::weight_of_fn();
+		ensure!(
+			!src2_node.is_misplaced(&weight_of),
+			"src node must be in proper place after rebag"
+		);
+
+		let total_issuance = T::Currency::total_issuance();
+
+		let dest_bag_thresh = T::CurrencyToVote::to_vote(*dest_bag_thresh, total_issuance);
+		let dest_bag_ids = Bag::<T>::get(dest_bag_thresh)
+			.ok_or("destination bag not found")?
+			.iter()
+			.map(|n| n.voter().id.clone())
+			.collect::<Vec<_>>();
+		let expected_dest_ids = vec![dest1_stash.clone(), src2_stash.clone()];
+		ensure!(
+			dest_bag_ids == expected_dest_ids,
+			"destination bag is not in expected state after rebag"
+		);
+
+		let src_bag_thresh = T::CurrencyToVote::to_vote(*src_bag_thresh, total_issuance);
+		let src_bag_ids = Bag::<T>::get(src_bag_thresh)
+			.ok_or("source bag not found")?
+			.iter()
+			.map(|n| n.voter().id.clone())
+			.collect::<Vec<_>>();
+		let expected_src_ids = vec![src1_stash.clone(), src3_stash.clone()];
+		ensure!(src_bag_ids == expected_src_ids, "source bag not in expected state after rebag");
+
+		Ok(())
+	}
+}
+
+// Build `RebagScenario`.
+fn build_rebag_scenario<T: Config>(
+	src_bag_thresh: BalanceOf<T>,
+	dest_bag_thresh: BalanceOf<T>,
+) -> Result<RebagScenario<T>, &'static str> {
 	// The most expensive case for this rebag-ing:
 	//
-	// - It doesn't matter where in the source bag the stash lies; the number of reads and
-	//   writes is constant. We can use the case that the stash is the only one in the source
-	//   bag, for simplicity.
+	// - The node to be rebagged should exist as a non-terminal node in a bag with at least
+	//   2 other nodes so both its prev and next are nodes that will need be updated
+	//   when it is removed.
 	// - The destination bag is not empty, because then we need to update the `next` pointer
 	//   of the previous node in addition to the work we do otherwise.
 
@@ -164,70 +224,46 @@ fn prepare_rebag_scenario<T: Config>(
 		create_stash_controller_b::<T>(USER_SEED, dest_factor, Default::default())?;
 	Staking::<T>::validate(RawOrigin::Signed(dest1_controller).into(), Default::default())?;
 
-	let (dest2_stash, dest2_controller) =
-		create_stash_controller_b::<T>(USER_SEED + 1, dest_factor, Default::default())?;
-	Staking::<T>::validate(RawOrigin::Signed(dest2_controller.clone()).into(), Default::default())?;
-
-	let (src_stash, src_controller) =
+	let (src1_stash, src1_controller) =
 		create_stash_controller_b::<T>(USER_SEED + 2, src_factor, Default::default())?;
-	Staking::<T>::validate(RawOrigin::Signed(src_controller.clone()).into(), Default::default())?;
+	Staking::<T>::validate(RawOrigin::Signed(src1_controller.clone()).into(), Default::default())?;
 
-	let src_node = Node::<T>::from_id(&src_stash).ok_or("node not found for stash")?;
+	let (src2_stash, src2_controller) =
+		create_stash_controller_b::<T>(USER_SEED + 3, src_factor, Default::default())?;
+	Staking::<T>::validate(RawOrigin::Signed(src2_controller.clone()).into(), Default::default())?;
+
+	let (src3_stash, src3_controller) =
+		create_stash_controller_b::<T>(USER_SEED + 4, src_factor, Default::default())?;
+	Staking::<T>::validate(RawOrigin::Signed(src3_controller.clone()).into(), Default::default())?;
+
+	let src2_node = Node::<T>::from_id(&src2_stash).ok_or("node not found for stash")?;
+	let src_bag_ids = Bag::<T>::get(src2_node.bag_upper)
+		.ok_or("source bag not found")?
+		.iter()
+		.map(|n| n.voter().id.clone())
+		.collect::<Vec<_>>();
 	ensure!(
-		{
-			let src_bag = Bag::<T>::get(src_node.bag_upper).ok_or("src bag not found")?;
-			src_bag.iter().count() == 1 // TODO could actually use equality here
-		},
-		"stash should be the only node in src bag",
+		src_bag_ids == vec![src1_stash.clone(), src2_stash.clone(), src3_stash.clone()],
+		"src2_stash should be the middle node of 3",
 	);
-	drop(src_node);
+
 	let dest1_node = Node::<T>::from_id(&dest1_stash).ok_or("node not found for dest_stash")?;
-	ensure!(
-		{
-			let destination_bag =
-				Bag::<T>::get(dest1_node.proper_bag_for()).ok_or("destination bag not found")?;
-			destination_bag.iter().count() == 2
-		},
-		"destination bag should have two nodes",
-	);
-	drop(dest1_node);
+	let dest_bag_ids = Bag::<T>::get(dest1_node.proper_bag_for())
+		.ok_or("destination bag not found")?
+		.iter()
+		.map(|n| n.voter().id.clone())
+		.collect::<Vec<_>>();
+	ensure!(dest_bag_ids == vec![dest1_stash.clone()], "destination bag should have 1 node",);
 
-	Ok((src_stash, src_controller, dest1_stash, dest2_stash))
-}
-
-fn verify_post_rebag_scenario<T: Config>(
-	src_stash: T::AccountId,
-	dest1_stash: T::AccountId,
-	dest2_stash: T::AccountId,
-	src_thresh: u64,
-	dest_thresh: u64,
-) -> Result<(), &'static str> {
-	let src_node = Node::<T>::from_id(&src_stash).ok_or("node not found for src stash")?;
-	let weight_of = Staking::<T>::weight_of_fn();
-	ensure!(!src_node.is_misplaced(&weight_of), "src node must be in proper place after rebag");
-
-	let dest_bag = Bag::<T>::get(dest_thresh).ok_or("destination bag not found")?;
-
-	let mut dest_bag_as_ids = dest_bag.iter().map(|n| n.voter().id.clone()).collect::<Vec<_>>();
-	dest_bag_as_ids.sort();
-	crate::log!(info, "dest_bag_as_ids {:?}", dest_bag_as_ids);
-
-	let mut expected_dest_ids = vec![src_stash, dest1_stash, dest2_stash];
-	expected_dest_ids.sort();
-	crate::log!(info, "expected_dest_ids {:?}", expected_dest_ids);
-
-	ensure!(
-		// TODO probs faster to use btree set set for this?
-		dest_bag_as_ids == expected_dest_ids,
-		"destination bag is not in expected state after rebag"
-	);
-
-	ensure!(
-		Bag::<T>::get(src_thresh).is_none(),
-		"source bag was expected to not exist after rebag"
-	);
-
-	Ok(())
+	Ok(RebagScenario {
+		dest1_stash,
+		src1_stash,
+		src2_stash,
+		src2_controller,
+		src3_stash,
+		src_bag_thresh,
+		dest_bag_thresh,
+	})
 }
 
 const USER_SEED: u32 = 999666;
@@ -262,27 +298,22 @@ benchmarks! {
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
 
-		let (src_stash, src_controller, dest1_stash, dest2_stash)
-			= prepare_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
+		let rebag_scenario
+			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
 		let max_additional = dest_bag_thresh - src_bag_thresh;
 
-		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
+		let stash = rebag_scenario.src2_stash.clone();
+		let ledger = Ledger::<T>::get(&rebag_scenario.src2_controller).ok_or("ledger not created after")?;
 		let old_bonded: BalanceOf<T> = ledger.active;
-		whitelist_account!(src_stash);
-	}: _(RawOrigin::Signed(src_stash.clone()), max_additional)
+		whitelist_account!(stash);
+	}: _(RawOrigin::Signed(stash), max_additional)
 	verify {
-		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
+		let ledger = Ledger::<T>::get(&rebag_scenario.src2_controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(old_bonded < new_bonded);
 
-		verify_post_rebag_scenario::<T>(
-			src_stash,
-			dest1_stash,
-			dest2_stash,
-			thresholds[0], // src
-			thresholds[1], // dest
-		)?;
+		rebag_scenario.verify_post_rebag()?;
 	}
 
 	unbond {
@@ -297,27 +328,22 @@ benchmarks! {
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[0] as u128, total_issuance);
 
-		let (src_stash, src_controller, dest1_stash, dest2_stash)
-			= prepare_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
+		let rebag_scenario
+			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
 		let amount = src_bag_thresh - dest_bag_thresh;
 
-		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created before")?;
+		let controller = rebag_scenario.src2_controller.clone();
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
-		whitelist_account!(src_controller);
-	}: _(RawOrigin::Signed(src_controller.clone()), amount)
+		whitelist_account!(controller);
+	}: _(RawOrigin::Signed(controller.clone()), amount)
 	verify {
-		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded > new_bonded);
 
-		verify_post_rebag_scenario::<T>(
-			src_stash,
-			dest1_stash,
-			dest2_stash,
-			thresholds[1], // src
-			thresholds[0], // dest
-		)?;
+		rebag_scenario.verify_post_rebag()?;
 	}
 
 	// Withdraw only updates the ledger
@@ -597,8 +623,8 @@ benchmarks! {
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
 
-		let (src_stash, src_controller, dest1_stash, dest2_stash)
-			= prepare_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
+		let rebag_scenario
+			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
 		// rebond an amount that will put the user into the destination bag
 		let rebond_amount = dest_bag_thresh - src_bag_thresh;
@@ -614,28 +640,23 @@ benchmarks! {
 			era: EraIndex::zero(),
 		};
 
-		let mut staking_ledger = Ledger::<T>::get(src_controller.clone()).unwrap();
+		let controller = rebag_scenario.src2_controller.clone();
+		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		for _ in 0 .. l {
 			staking_ledger.unlocking.push(unlock_chunk.clone())
 		}
 
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
-		Ledger::<T>::insert(src_controller.clone(), staking_ledger);
-		whitelist_account!(src_controller);
-	}: _(RawOrigin::Signed(src_controller.clone()), rebond_amount)
+		Ledger::<T>::insert(controller.clone(), staking_ledger);
+		whitelist_account!(controller);
+	}: _(RawOrigin::Signed(controller.clone()), rebond_amount)
 	verify {
-		let ledger = Ledger::<T>::get(&src_controller).ok_or("ledger not created after")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
 		assert!(src_bag_thresh < new_bonded);
 
-		verify_post_rebag_scenario::<T>(
-			src_stash,
-			dest1_stash,
-			dest2_stash,
-			thresholds[0], // src
-			thresholds[1], // dest
-		)?;
+		rebag_scenario.verify_post_rebag()?;
 	}
 
 	set_history_depth {
@@ -851,33 +872,26 @@ benchmarks! {
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
 
-		let (src_stash, src_controller, dest1_stash, dest2_stash)
-			= prepare_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
+		let rebag_scenario
+			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
-		T::Currency::make_free_balance_be(&src_stash, dest_bag_thresh);
-		let controller = Staking::<T>::bonded(&src_stash).ok_or("stash had no controller")?;
-		let mut ledger = Staking::<T>::ledger(&src_controller).ok_or("controller had no ledger")?;
+		T::Currency::make_free_balance_be(&rebag_scenario.src2_stash, dest_bag_thresh);
+		let mut ledger = Staking::<T>::ledger(&rebag_scenario.src2_controller).ok_or("controller had no ledger")?;
 		ledger.total = dest_bag_thresh;
 		ledger.active = dest_bag_thresh;
-		Staking::<T>::update_ledger(&controller, &ledger);
+		Staking::<T>::update_ledger(&rebag_scenario.src2_controller, &ledger);
 
 		let weight_of = Staking::<T>::weight_of_fn();
-		let src_node = Node::<T>::from_id(&src_stash).ok_or("node not found for stash")?;
+		let src2_node = Node::<T>::from_id(&rebag_scenario.src2_stash).ok_or("node not found for stash")?;
 		ensure!(
-			src_node.is_misplaced(&weight_of),
+			src2_node.is_misplaced(&weight_of),
 			"rebagging only makes sense when a node is misplaced",
 		);
 
 		let caller = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), src_stash.clone())
+	}: _(RawOrigin::Signed(caller), rebag_scenario.src2_stash.clone())
 	verify {
-		verify_post_rebag_scenario::<T>(
-			src_stash,
-			dest1_stash,
-			dest2_stash,
-			thresholds[0],
-			thresholds[1],
-		)?;
+		rebag_scenario.verify_post_rebag()?;
 	}
 
 	regenerate {

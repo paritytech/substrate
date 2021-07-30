@@ -52,7 +52,7 @@ pub fn create_funded_user<T: Config>(
 	create_funded_user_b::<T>(string, n, balance_factor.into())
 }
 
-/// Grab a funded user. TODO do we keep this version?
+/// Grab a funded user.
 pub fn create_funded_user_b<T: Config>(
 	string: &'static str,
 	n: u32,
@@ -95,7 +95,7 @@ pub fn create_stash_controller_b<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	Ok((stash, controller))
 }
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
