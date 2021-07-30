@@ -232,8 +232,10 @@ pub trait Benchmarking<T> {
 	///   bytes.
 	/// - `lowest_range_values`: The lowest number for each range of parameters.
 	/// - `highest_range_values`: The highest number for each range of parameters.
-	/// - `steps`: The number of sample points you want to take across the range of parameters. (current_step, total_steps)
-	/// - `repeat`: The total number times to repeat each benchmark to increase accuracy of results. (current_repeat, total_repeats)
+	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	///   (current_step, total_steps)
+	/// - `repeat`: The total number times to repeat each benchmark to increase accuracy of results.
+	///   (current_repeat, total_repeats)
 	fn run_benchmark(
 		name: &[u8],
 		lowest_range_values: &[u32],
