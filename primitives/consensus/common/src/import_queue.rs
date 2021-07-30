@@ -26,7 +26,7 @@
 //! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
 //! queues to be instantiated simply.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::FromIterator};
 
 use sp_runtime::{
 	traits::{Block as BlockT, Header as _, NumberFor},
@@ -294,7 +294,7 @@ pub(crate) async fn import_single_block_metered<
 		metrics.report_verification(true, started.elapsed());
 	}
 
-	let cache = HashMap::from_iter(keys.unwrap_or_default());
+	let cache = HashMap::from_iter(maybe_keys.unwrap_or_default());
 	let import_block = import_block.clear_storage_changes_and_mutate();
 	let imported = import_handle.import_block(import_block, cache).await;
 	if let Some(metrics) = metrics.as_ref() {

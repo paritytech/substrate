@@ -28,7 +28,7 @@ use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	ImportResult, JustificationImport, SelectChain, StateAction,
+	ImportResult, JustificationImport, SelectChain,
 };
 use sp_core::hashing::twox_128;
 use sp_finality_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
