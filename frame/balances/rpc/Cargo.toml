@@ -16,7 +16,6 @@ codec = { package = "parity-scale-codec", version = "2" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
-serde = { version = "1", features = ["derive"] }
 
 # Substrate Dependencies
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }

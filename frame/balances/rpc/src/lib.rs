@@ -20,35 +20,31 @@
 pub use self::gen_client::Client as BalancesClient;
 pub use pallet_balances_rpc_runtime_api::BalancesApi as BalancesRuntimeApi;
 
+use core::{fmt, str::FromStr};
 use codec::Codec;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT},
+	traits::{Block as BlockT, MaybeDisplay, MaybeFromStr},
 };
 use std::sync::Arc;
-
-/// Helper struct for serde
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct BalanceDetails<Balance> {
-	pub balance: Balance,
-}
+use pallet_balances_rpc_runtime_api::SerdeWrapper;
 
 /// Balances RPC methods.
 #[rpc]
-pub trait BalancesApi<BlockHash, AccountId, Balance> {
+pub trait BalancesApi<BlockHash, AccountId, Balance>
+where
+	Balance: FromStr + fmt::Display
+{
     #[rpc(name="balances_freeBalance")]
     fn free_balance(
 		&self,
 		who: AccountId,
 		at: Option<BlockHash>
-	) -> Result<BalanceDetails<Balance>>;
+	) -> Result<SerdeWrapper<Balance>>;
 }
 
 /// A struct that implements the ['BalancesApi'].
@@ -66,8 +62,6 @@ impl<C, P> Balances<C, P> {
 
 /// Error type of this RPC api.
 pub enum Error {
-	/// The transaction was not decodable.
-	DecodeError,
 	/// The call to runtime failed.
 	RuntimeError,
 }
@@ -76,7 +70,6 @@ impl From<Error> for i64 {
 	fn from(e: Error) -> i64 {
 		match e {
 			Error::RuntimeError => 1,
-			Error::DecodeError => 2,
 		}
 	}
 }
@@ -92,27 +85,22 @@ where
     C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
     C::Api: BalancesRuntimeApi<Block, AccountId, Balance>,
     AccountId: Codec,
-	Balance: Codec,
+	Balance: Codec + MaybeDisplay + MaybeFromStr,
 {
     fn free_balance(
         &self,
         who: AccountId,
 		at: Option<<Block as BlockT>::Hash>,
-    ) -> Result<BalanceDetails<Balance>> {
+    ) -> Result<SerdeWrapper<Balance>> {
         let api = self.client.runtime_api();
-
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let result = api
-			.free_balance(&at, who)
-			.map_err(|e| RpcError {
-				code: ErrorCode::ServerError(Error::RuntimeError.into()),
-				message: "Unable to query balances info.".into(),
-				data: Some(format!("{:?}", e).into()),
-			})?;
-
-		Ok(BalanceDetails { balance: result })
+		api.free_balance(&at, who).map_err(|e| RpcError {
+			code: ErrorCode::ServerError(Error::RuntimeError.into()),
+			message: "Unable to query balances info.".into(),
+			data: Some(format!("{:?}", e).into()),
+		})
     }
 }

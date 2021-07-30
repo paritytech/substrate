@@ -4857,7 +4857,6 @@ dependencies = [
  "jsonrpc-derive",
  "pallet-balances-rpc-runtime-api",
  "parity-scale-codec",
- "serde",
  "serde_json",
  "sp-api",
  "sp-blockchain",
@@ -4869,6 +4868,7 @@ name = "pallet-balances-rpc-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
  "parity-scale-codec",
+ "serde",
  "sp-api",
  "sp-runtime",
 ]
