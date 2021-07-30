@@ -76,8 +76,8 @@ pub mod wasm_binary_logging_disabled {
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect(
-		"Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.",
+		"Development wasm binary is not available. Testing is only supported with the flag \
+		 disabled.",
 	)
 }
 
@@ -86,7 +86,7 @@ pub fn wasm_binary_unwrap() -> &'static [u8] {
 pub fn wasm_binary_logging_disabled_unwrap() -> &'static [u8] {
 	wasm_binary_logging_disabled::WASM_BINARY.expect(
 		"Development wasm binary is not available. Testing is only supported with the flag \
-			disabled.",
+		 disabled.",
 	)
 }
 
@@ -1244,12 +1244,12 @@ mod tests {
 	use codec::Encode;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
+	use sp_consensus::BlockOrigin;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
-		prelude::*, runtime::TestAPI, sp_consensus::BlockOrigin, DefaultTestClientBuilderExt,
-		TestClientBuilder,
+		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
 	};
 
 	#[test]

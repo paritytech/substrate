@@ -4544,6 +4544,7 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-service",
  "sp-api",
@@ -6394,9 +6395,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.26"
+version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a152013215dca273577e18d2bf00fa862b89b24169fb78c4c95aeb07992c9cec"
+checksum = "5c7ed8b8c7b886ea3ed7dde405212185f423ab44682667c8c6dd14aa1d9f6612"
 dependencies = [
  "unicode-xid",
 ]
@@ -7269,7 +7270,6 @@ dependencies = [
  "sc-state-db",
  "sp-arithmetic",
  "sp-blockchain",
- "sp-consensus",
  "sp-core",
  "sp-database",
  "sp-keyring",
@@ -7287,11 +7287,24 @@ name = "sc-consensus"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
+ "futures 0.3.15",
+ "futures-timer 3.0.2",
+ "libp2p",
+ "log",
  "parking_lot 0.11.1",
  "sc-client-api",
+ "serde",
+ "sp-api",
  "sp-blockchain",
  "sp-consensus",
+ "sp-core",
  "sp-runtime",
+ "sp-state-machine",
+ "sp-test-primitives",
+ "sp-utils",
+ "substrate-prometheus-endpoint",
+ "thiserror",
+ "wasm-timer",
 ]
 
 [[package]]
@@ -7308,6 +7321,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-slots",
  "sc-executor",
  "sc-keystore",
@@ -7358,6 +7372,7 @@ dependencies = [
  "retain_mut",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
@@ -7449,6 +7464,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "sc-basic-authorship",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-transaction-pool",
@@ -7484,6 +7500,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-client-api",
+ "sc-consensus",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -7506,6 +7523,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-client-api",
+ "sc-consensus",
  "sc-telemetry",
  "sp-api",
  "sp-application-crypto",
@@ -7722,6 +7740,7 @@ dependencies = [
  "rand 0.8.3",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-finality-grandpa",
  "sc-network",
  "sc-service",
@@ -7824,6 +7843,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-peerset",
  "serde",
  "serde_json",
@@ -7981,6 +8001,7 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-io",
  "sp-keystore",
@@ -8075,6 +8096,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-informant",
@@ -8137,6 +8159,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-light",
  "sc-network",
@@ -8874,7 +8897,6 @@ dependencies = [
  "async-trait",
  "futures 0.3.15",
  "futures-timer 3.0.2",
- "libp2p",
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -9795,6 +9817,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
+ "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",
@@ -10051,7 +10074,6 @@ dependencies = [
  "sc-network",
  "sc-service",
  "sp-api",
- "sp-consensus",
  "sp-consensus-babe",
  "sp-inherents",
  "sp-keyring",
@@ -10699,9 +10721,9 @@ dependencies = [
 
 [[package]]
 name = "trybuild"
-version = "1.0.42"
+version = "1.0.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1768998d9a3b179411618e377dbb134c58a88cda284b0aa71c42c40660127d46"
+checksum = "c02c413315329fc96167f922b46fd0caa3a43f4697b7a7896b183c7142635832"
 dependencies = [
  "dissimilar",
  "glob",
@@ -10917,9 +10939,9 @@ checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
 
 [[package]]
 name = "walkdir"
-version = "2.3.1"
+version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "777182bc735b6424e1a57516d35ed72cb8019d85c8c9bf536dccb3445c1a2f7d"
+checksum = "808cf2735cd4b6866113f648b791c6adc5714537bc222d9347bb203386ffda56"
 dependencies = [
  "same-file",
  "winapi 0.3.9",

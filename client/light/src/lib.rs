@@ -37,7 +37,7 @@ pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
-) -> LightDataChecker<E, HashFor<B>, B, S>
+) -> LightDataChecker<E, B, S>
 where
 	E: CodeExecutor,
 {

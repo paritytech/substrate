@@ -85,6 +85,13 @@ use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
+use sc_consensus::{
+	block_import::{
+		BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
+		StateAction,
+	},
+	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
+};
 use sc_consensus_epochs::{
 	descendent_query, Epoch as EpochT, EpochChangesFor, SharedEpochChanges, ViableEpochDescriptor,
 };
@@ -100,10 +107,8 @@ use sp_blockchain::{
 	Error as ClientError, HeaderBackend, HeaderMetadata, ProvideCache, Result as ClientResult,
 };
 use sp_consensus::{
-	import_queue::{BasicQueue, BoxJustificationImport, CacheKeyId, DefaultImportQueue, Verifier},
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, CanAuthorWith, Environment,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, Proposer, SelectChain, SlotData,
-	StateAction,
+	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
+	SelectChain, SlotData,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
@@ -465,7 +470,7 @@ where
 		+ Sync
 		+ 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	L: sp_consensus::JustificationSyncLink<B> + 'static,
+	L: sc_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
@@ -668,7 +673,7 @@ where
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
+	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
@@ -774,7 +779,7 @@ where
 				StorageChanges<I::Transaction, B>,
 				Self::Claim,
 				Self::EpochData,
-			) -> Result<sp_consensus::BlockImportParams<B, I::Transaction>, sp_consensus::Error>
+			) -> Result<sc_consensus::BlockImportParams<B, I::Transaction>, sp_consensus::Error>
 			+ Send
 			+ 'static,
 	> {
@@ -809,7 +814,7 @@ where
 				import_block.post_digests.push(digest_item);
 				import_block.body = Some(body);
 				import_block.state_action = StateAction::ApplyChanges(
-					sp_consensus::StorageChanges::Changes(storage_changes),
+					sc_consensus::StorageChanges::Changes(storage_changes),
 				);
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
@@ -1340,8 +1345,7 @@ where
 		}
 
 		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
-			"valid babe headers must contain a predigest; \
-					 header has been already verified; qed",
+			"valid babe headers must contain a predigest; header has been already verified; qed",
 		);
 		let slot = pre_digest.slot();
 
@@ -1357,8 +1361,8 @@ where
 			})?;
 
 		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot()).expect(
-			"parent is non-genesis; valid BABE headers contain a pre-digest; \
-					header has already been verified; qed",
+			"parent is non-genesis; valid BABE headers contain a pre-digest; header has already \
+			 been verified; qed",
 		);
 
 		// make sure that slot number is strictly increasing
@@ -1581,15 +1585,11 @@ where
 			.header(BlockId::Hash(info.finalized_hash))
 			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
 			.expect(
-				"best finalized hash was given by client; \
-				 finalized headers must exist in db; qed",
+				"best finalized hash was given by client; finalized headers must exist in db; qed",
 			);
 
 		find_pre_digest::<Block>(&finalized_header)
-			.expect(
-				"finalized header must be valid; \
-					 valid blocks have a pre-digest; qed",
-			)
+			.expect("finalized header must be valid; valid blocks have a pre-digest; qed")
 			.slot()
 	};
 

@@ -329,6 +329,18 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		}
 	}
 
+	fn iter_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where
+		K: HasReversibleKeyPrefix<KP>,
+	{
+		let mut iter = Self::iter_prefix(kp);
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
 	where
 		K: HasReversibleKeyPrefix<KP>,
@@ -342,6 +354,18 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		}
 	}
 
+	fn iter_key_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where
+		K: HasReversibleKeyPrefix<KP>,
+	{
+		let mut iter = Self::iter_key_prefix(kp);
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where
 		K: HasReversibleKeyPrefix<KP>,
@@ -352,10 +376,14 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	}
 
 	fn iter() -> Self::Iterator {
+		Self::iter_from(G::prefix_hash())
+	}
+
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		Self::Iterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
+			prefix,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix, mut raw_value| {
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
@@ -365,10 +393,14 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	}
 
 	fn iter_keys() -> Self::KeyIterator {
+		Self::iter_keys_from(G::prefix_hash())
+	}
+
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
 		let prefix = G::prefix_hash();
 		Self::KeyIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
+			prefix,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix| {
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
@@ -455,6 +487,46 @@ mod test_iterators {
 		assert!(*last != 255, "mock function not implemented for this prefix");
 		*last += 1;
 		prefix
+	}
+
+	#[test]
+	fn n_map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::{hash::Identity, storage::Key as NMapKey};
+			crate::generate_storage_alias!(
+				MyModule,
+				MyNMap => NMap<Key<(u64, Identity), (u64, Identity), (u64, Identity)>, u64>
+			);
+
+			MyNMap::insert((1, 1, 1), 11);
+			MyNMap::insert((1, 1, 2), 21);
+			MyNMap::insert((1, 1, 3), 31);
+			MyNMap::insert((1, 2, 1), 12);
+			MyNMap::insert((1, 2, 2), 22);
+			MyNMap::insert((1, 2, 3), 32);
+			MyNMap::insert((1, 3, 1), 13);
+			MyNMap::insert((1, 3, 2), 23);
+			MyNMap::insert((1, 3, 3), 33);
+			MyNMap::insert((2, 0, 0), 200);
+
+			type Key = (NMapKey<Identity, u64>, NMapKey<Identity, u64>, NMapKey<Identity, u64>);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 2, 2));
+			let iter = MyNMap::iter_key_prefix_from((1,), starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(2, 3), (3, 1), (3, 2), (3, 3)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 1));
+			let iter = MyNMap::iter_prefix_from((1, 3), starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(2, 23), (3, 33)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 2));
+			let iter = MyNMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(1, 3, 3), (2, 0, 0)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 3));
+			let iter = MyNMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![((2, 0, 0), 200)]);
+		});
 	}
 
 	#[test]
