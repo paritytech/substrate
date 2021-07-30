@@ -28,6 +28,7 @@
 
 use std::collections::HashMap;
 
+use log::{debug, trace};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as _, NumberFor},
 	Justifications,

@@ -18,9 +18,6 @@
 
 //! Collection of common consensus specific implementations
 
-#[macro_use]
-extern crate log;
-
 pub mod block_import;
 pub mod import_queue;
 pub mod metrics;

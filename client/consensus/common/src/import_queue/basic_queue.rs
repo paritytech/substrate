@@ -14,12 +14,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use futures::{
 	prelude::*,
 	task::{Context, Poll},
 };
 use futures_timer::Delay;
+use log::{debug, trace};
 use prometheus_endpoint::Registry;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
@@ -41,7 +41,7 @@ use crate::{
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
-	/// Channel to send justifcation import messages to the background task.
+	/// Channel to send justification import messages to the background task.
 	justification_sender: TracingUnboundedSender<worker_messages::ImportJustification<B>>,
 	/// Channel to send block import messages to the background task.
 	block_import_sender: TracingUnboundedSender<worker_messages::ImportBlocks<B>>,
