@@ -39,8 +39,8 @@ pub struct BenchmarkCmd {
 	pub extrinsic: String,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, use_delimiter = true)]
-	pub steps: Vec<u32>,
+	#[structopt(short, long, default_value = "1")]
+	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
 	#[structopt(long = "low", use_delimiter = true)]
@@ -129,4 +129,8 @@ pub struct BenchmarkCmd {
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
+
+	/// List the benchmarks available
+	#[structopt(long)]
+	pub list: bool,
 }

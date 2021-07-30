@@ -36,10 +36,8 @@ use libp2p::{
 };
 use log::debug;
 use prost::Message;
-use sp_consensus::{
-	import_queue::{IncomingBlock, Origin},
-	BlockOrigin,
-};
+use sc_consensus::import_queue::{IncomingBlock, Origin};
+use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,

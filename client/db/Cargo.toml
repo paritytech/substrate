@@ -32,7 +32,6 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-mach
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
 parity-db = { version = "0.2.4", optional = true }
