@@ -49,12 +49,7 @@ pub fn create_funded_user<T: Config>(
 	n: u32,
 	balance_factor: u32,
 ) -> T::AccountId {
-	let user = account(string, n, SEED);
-	let balance = T::Currency::minimum_balance() * balance_factor.into();
-	T::Currency::make_free_balance_be(&user, balance);
-	// ensure T::CurrencyToVote will work correctly.
-	T::Currency::issue(balance);
-	user
+	create_funded_user_b::<T>(string, n, balance_factor.into())
 }
 
 /// Grab a funded user. TODO do we keep this version?
@@ -63,11 +58,14 @@ pub fn create_funded_user_b<T: Config>(
 	n: u32,
 	balance_factor: crate::BalanceOf<T>,
 ) -> T::AccountId {
+	let initial_issuance = T::Currency::total_issuance();
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor;
-	T::Currency::make_free_balance_be(&user, balance);
-	// ensure T::CurrencyToVote will work correctly.
-	T::Currency::issue(balance);
+	let positive_imbalance = T::Currency::make_free_balance_be(&user, balance);
+	drop(positive_imbalance);
+	// make sure the issuance increases to account for the positive imbalance
+	assert_eq!(initial_issuance + balance, T::Currency::total_issuance());
+
 	user
 }
 
@@ -77,29 +75,16 @@ pub fn create_stash_controller<T: Config>(
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user::<T>("stash", n, balance_factor);
-	let controller = create_funded_user::<T>("controller", n, balance_factor);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source =
-		T::Lookup::unlookup(controller.clone());
-	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(
-		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup,
-		amount,
-		destination,
-	)?;
-	return Ok((stash, controller))
+	create_stash_controller_b::<T>(n, balance_factor.into(), destination)
 }
 
-/// Create a stash and controller pair. TODO do we keep this version?
+/// Create a stash and controller pair. TODO do we keep this version that uses balance?
 pub fn create_stash_controller_b<T: Config>(
 	n: u32,
 	balance_factor: crate::BalanceOf<T>,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user_b::<T>("stash", n, balance_factor);
-	// TODO why do I need to do this to bond? Shouldn't it be auto incremented on account creatin?
-	frame_system::Pallet::<T>::inc_providers(&stash);
 	let controller = create_funded_user_b::<T>("controller", n, balance_factor);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source =
 		T::Lookup::unlookup(controller.clone());
