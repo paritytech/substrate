@@ -36,12 +36,10 @@ use std::{
 	time::SystemTime,
 };
 
+use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{
-	import_queue::{CacheKeyId, Verifier},
-	BlockImportParams, ForkChoiceStrategy,
-};
+use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,

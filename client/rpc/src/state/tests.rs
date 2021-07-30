@@ -25,11 +25,12 @@ use futures::{compat::Future01CompatExt, executor};
 use futures01::stream::Stream;
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
+use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
 use sp_io::hashing::blake2_256;
 use sp_runtime::generic::BlockId;
 use std::sync::Arc;
-use substrate_test_runtime_client::{prelude::*, runtime, sp_consensus::BlockOrigin};
+use substrate_test_runtime_client::{prelude::*, runtime};
 
 const STORAGE_KEY: &[u8] = b"child";
 

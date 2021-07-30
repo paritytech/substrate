@@ -50,13 +50,13 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	struct PassThroughVerifier(bool);
 
 	#[async_trait::async_trait]
-	impl<B: BlockT> sp_consensus::import_queue::Verifier<B> for PassThroughVerifier {
+	impl<B: BlockT> sc_consensus::Verifier<B> for PassThroughVerifier {
 		async fn verify(
 			&mut self,
 			mut block: sp_consensus::BlockImportParams<B, ()>,
 		) -> Result<
 			(
-				sp_consensus::BlockImportParams<B, ()>,
+				sc_consensus::BlockImportParams<B, ()>,
 				Option<Vec<(sp_blockchain::well_known_cache_keys::Id, Vec<u8>)>>,
 			),
 			String,
@@ -77,12 +77,12 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 				});
 
 			block.finalized = self.0;
-			block.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
+			block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
 			Ok((block, maybe_keys))
 		}
 	}
 
-	let import_queue = Box::new(sp_consensus::import_queue::BasicQueue::new(
+	let import_queue = Box::new(sc_consensus::BasicQueue::new(
 		PassThroughVerifier(false),
 		Box::new(client.clone()),
 		None,

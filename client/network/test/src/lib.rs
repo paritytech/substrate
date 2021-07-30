@@ -40,7 +40,10 @@ use sc_client_api::{
 	BlockBackend, BlockImportNotification, BlockchainEvents, FinalityNotification,
 	FinalityNotifications, ImportNotifications,
 };
-use sc_consensus::LongestChain;
+use sc_consensus::{
+	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
+	ForkChoiceStrategy, ImportResult, JustificationImport, LongestChain, Verifier,
+};
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
@@ -58,11 +61,8 @@ use sp_blockchain::{
 	HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
-	block_import::{BlockImport, ImportResult},
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
-	import_queue::{BasicQueue, BoxJustificationImport, Verifier},
-	BlockCheckParams, BlockImportParams, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy,
-	JustificationImport,
+	BlockOrigin, Error as ConsensusError,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -146,7 +146,7 @@ pub enum PeersClient {
 impl PeersClient {
 	pub fn as_full(&self) -> Option<Arc<PeersFullClient>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => Some(client.clone()),
+			PeersClient::Full(ref client, _) => Some(client.clone()),
 			_ => None,
 		}
 	}
@@ -157,15 +157,15 @@ impl PeersClient {
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.get_aux(key),
-			PeersClient::Light(ref client, ref _backend) => client.get_aux(key),
+			PeersClient::Full(ref client, _) => client.get_aux(key),
+			PeersClient::Light(ref client, _) => client.get_aux(key),
 		}
 	}
 
 	pub fn info(&self) -> BlockchainInfo<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.chain_info(),
-			PeersClient::Light(ref client, ref _backend) => client.chain_info(),
+			PeersClient::Full(ref client, _) => client.chain_info(),
+			PeersClient::Light(ref client, _) => client.chain_info(),
 		}
 	}
 
@@ -174,8 +174,8 @@ impl PeersClient {
 		block: &BlockId<Block>,
 	) -> ClientResult<Option<<Block as BlockT>::Header>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.header(block),
-			PeersClient::Light(ref client, ref _backend) => client.header(block),
+			PeersClient::Full(ref client, _) => client.header(block),
+			PeersClient::Light(ref client, _) => client.header(block),
 		}
 	}
 
@@ -194,22 +194,22 @@ impl PeersClient {
 
 	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.justifications(block),
-			PeersClient::Light(ref client, ref _backend) => client.justifications(block),
+			PeersClient::Full(ref client, _) => client.justifications(block),
+			PeersClient::Light(ref client, _) => client.justifications(block),
 		}
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.finality_notification_stream(),
-			PeersClient::Light(ref client, ref _backend) => client.finality_notification_stream(),
+			PeersClient::Full(ref client, _) => client.finality_notification_stream(),
+			PeersClient::Light(ref client, _) => client.finality_notification_stream(),
 		}
 	}
 
 	pub fn import_notification_stream(&self) -> ImportNotifications<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.import_notification_stream(),
-			PeersClient::Light(ref client, ref _backend) => client.import_notification_stream(),
+			PeersClient::Full(ref client, _) => client.import_notification_stream(),
+			PeersClient::Light(ref client, _) => client.import_notification_stream(),
 		}
 	}
 
