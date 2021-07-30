@@ -1344,62 +1344,50 @@ macro_rules! add_benchmark {
 			verify,
 			extra,
 		} = config;
-		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
-			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
-				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
-					$batches.push($crate::BenchmarkBatch {
-						pallet: name_string.to_vec(),
-						instance: instance_string.to_vec(),
-						benchmark: benchmark.to_vec(),
-						results: $( $location )*::run_benchmark(
-							benchmark,
-							&lowest_range_values[..],
-							&highest_range_values[..],
-							*steps,
-							*repeat,
-							whitelist,
-							*verify,
-						).map_err(|e| {
-							$crate::show_benchmark_debug_info(
-								instance_string,
-								benchmark,
-								lowest_range_values,
-								highest_range_values,
-								steps,
-								repeat,
-								verify,
-								e,
-							)
-						})?,
-					});
-				}
-			} else {
-				$batches.push($crate::BenchmarkBatch {
-					pallet: name_string.to_vec(),
-					instance: instance_string.to_vec(),
-					benchmark: benchmark.clone(),
-					results: $( $location )*::run_benchmark(
-						&benchmark[..],
-						&lowest_range_values[..],
-						&highest_range_values[..],
-						*steps,
-						*repeat,
-						whitelist,
-						*verify,
-					).map_err(|e| {
-						$crate::show_benchmark_debug_info(
-							instance_string,
-							benchmark,
-							lowest_range_values,
-							highest_range_values,
-							steps,
-							repeat,
-							verify,
-							e,
-						)
-					})?,
-				});
-			}
+		if &pallet[..] == &name_string[..] {
+			$batches.push($crate::BenchmarkBatch {
+				pallet: name_string.to_vec(),
+				instance: instance_string.to_vec(),
+				benchmark: benchmark.clone(),
+				results: $( $location )*::run_benchmark(
+					&benchmark[..],
+					&lowest_range_values[..],
+					&highest_range_values[..],
+					*steps,
+					*repeat,
+					whitelist,
+					*verify,
+				).map_err(|e| {
+					$crate::show_benchmark_debug_info(
+						instance_string,
+						benchmark,
+						lowest_range_values,
+						highest_range_values,
+						steps,
+						repeat,
+						verify,
+						e,
+					)
+				})?
+			});
 		}
+	)
+}
+
+#[macro_export]
+macro_rules! list_benchmark {
+	( $list:ident, $extra:ident, $name:path, $( $location:tt )* ) => (
+		let pallet_string = stringify!($name).as_bytes();
+		let instance_string = stringify!( $( $location )* ).as_bytes();
+		let benchmarks = $( $location )*::benchmarks($extra)
+			.iter()
+			.map(|b| b.to_vec())
+			.collect::<Vec<_>>();
+		let pallet_benchmarks = BenchmarkList {
+			pallet: pallet_string.to_vec(),
+			instance: instance_string.to_vec(),
+			benchmarks: benchmarks.to_vec(),
+		};
+		$list.push(pallet_benchmarks)
 	)
 }

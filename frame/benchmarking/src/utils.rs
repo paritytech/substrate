@@ -116,6 +116,7 @@ pub struct BenchmarkConfig {
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkList {
 	pub pallet: Vec<u8>,
+	pub instance: Vec<u8>,
 	pub benchmarks: Vec<Vec<u8>>,
 }
 
