@@ -17,7 +17,6 @@
 
 use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
-	scale_info,
 	storage::unhashed,
 	traits::{
 		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
@@ -100,7 +99,7 @@ pub mod pallet {
 		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
 		SomeType6, SomeType7, StorageVersion,
 	};
-	use frame_support::{pallet_prelude::*, scale_info};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	type BalanceOf<T> = <T as Config>::Balance;
