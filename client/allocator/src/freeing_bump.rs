@@ -68,6 +68,7 @@
 //!   sizes.
 
 use crate::Error;
+pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
 	convert::{TryFrom, TryInto},
@@ -95,15 +96,13 @@ const LOG_TARGET: &'static str = "wasm-heap";
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.
 //
-// The maximum possible allocation size was chosen rather arbitrary. 32 MiB should be enough for
-// everybody.
+// The maximum possible allocation size is set in the primitives to 32MiB.
 //
 // N_ORDERS - represents the number of orders supported.
 //
 // This number corresponds to the number of powers between the minimum possible allocation and
 // maximum possible allocation, or: 2^3...2^25 (both ends inclusive, hence 23).
 const N_ORDERS: usize = 23;
-const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
@@ -921,5 +920,14 @@ mod tests {
 		// then
 		assert!(heap.poisoned);
 		assert!(heap.deallocate(mem.as_mut(), alloc_ptr).is_err());
+	}
+
+	#[test]
+	fn test_n_orders() {
+		// Test that N_ORDERS is consistent with min and max possible allocation.
+		assert_eq!(
+			MIN_POSSIBLE_ALLOCATION * 2u32.pow(N_ORDERS as u32 - 1),
+			MAX_POSSIBLE_ALLOCATION
+		);
 	}
 }

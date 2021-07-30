@@ -21,11 +21,22 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
+use frame_support::{
+	pallet_prelude::*,
+	traits::{Currency, Get, Imbalance},
+};
+use sp_runtime::{
+	traits::{StaticLookup, Zero},
+	Perbill, Percent,
+};
+use sp_staking::SessionIndex;
+use sp_std::prelude::*;
+
 pub use frame_benchmarking::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::One;
+use sp_runtime::traits::{Bounded, One};
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
