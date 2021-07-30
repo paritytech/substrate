@@ -142,9 +142,8 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
 
-		let list =
-			<Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
-				.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+		let list = <Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
+			.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
 
 		if self.list {
 			// Show the list and exit early
@@ -196,7 +195,8 @@ impl BenchmarkCmd {
 						)
 							.encode(),
 						extensions(),
-						&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+						&sp_state_machine::backend::BackendRuntimeCode::new(&state)
+							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
 					)
 					.execute(strategy.into())
@@ -217,8 +217,10 @@ impl BenchmarkCmd {
 							timer = time::SystemTime::now();
 							log::info!(
 								"Running Benchmark:\t{}\t{}\t{}/{}\t{}/{}",
-								String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
-								String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
+								String::from_utf8(pallet.clone())
+									.expect("Encoded from String; qed"),
+								String::from_utf8(extrinsic.clone())
+									.expect("Encoded from String; qed"),
 								s,
 								self.steps,
 								r,
