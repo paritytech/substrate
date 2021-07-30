@@ -173,39 +173,43 @@ impl BenchmarkCmd {
 
 		// Run the benchmarks
 		for (pallet, extrinsic) in benchmarks_to_run {
-			for r in 0..self.repeat {
-				let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-					&state,
-					None,
-					&mut changes,
-					&executor,
-					"Benchmark_dispatch_benchmark",
-					&(
-						&pallet,
-						&extrinsic,
-						self.lowest_range_values.clone(),
-						self.highest_range_values.clone(),
-						(self.steps, self.steps),
-						(r, self.repeat),
-						!self.no_verify,
-						self.extra,
+			for s in 0..self.steps {
+				for r in 0..self.repeat {
+					// This should run only a single instance of a benchmark for `pallet` and
+					// `extrinsic`. All loops happen above.
+					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+						&state,
+						None,
+						&mut changes,
+						&executor,
+						"Benchmark_dispatch_benchmark",
+						&(
+							&pallet,
+							&extrinsic,
+							self.lowest_range_values.clone(),
+							self.highest_range_values.clone(),
+							(s, self.steps),
+							(r, self.repeat),
+							!self.no_verify,
+							self.extra,
+						)
+							.encode(),
+						extensions(),
+						&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+						sp_core::testing::TaskExecutor::new(),
 					)
-						.encode(),
-					extensions(),
-					&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-					sp_core::testing::TaskExecutor::new(),
-				)
-				.execute(strategy.into())
-				.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+					.execute(strategy.into())
+					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-				let (batch, last_storage_info) = <std::result::Result<
-					(Vec<BenchmarkBatch>, Vec<StorageInfo>),
-					String,
-				> as Decode>::decode(&mut &result[..])
-				.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
+					let (batch, last_storage_info) = <std::result::Result<
+						(Vec<BenchmarkBatch>, Vec<StorageInfo>),
+						String,
+					> as Decode>::decode(&mut &result[..])
+					.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
 
-				batches.extend(batch);
-				storage_info = last_storage_info;
+					batches.extend(batch);
+					storage_info = last_storage_info;
+				}
 			}
 		}
 
