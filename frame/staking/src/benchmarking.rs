@@ -171,7 +171,7 @@ impl<T: Config> RebagScenario<T> {
 		let weight_of = Staking::<T>::weight_of_fn();
 		ensure!(
 			!src2_node.is_misplaced(&weight_of),
-			"src node must be in proper place after rebag"
+			"src2_node must be in proper place after rebag"
 		);
 
 		let total_issuance = T::Currency::total_issuance();
@@ -225,18 +225,18 @@ fn build_rebag_scenario<T: Config>(
 	Staking::<T>::validate(RawOrigin::Signed(dest1_controller).into(), Default::default())?;
 
 	let (src1_stash, src1_controller) =
-		create_stash_controller_b::<T>(USER_SEED + 2, src_factor, Default::default())?;
+		create_stash_controller_b::<T>(USER_SEED + 1, src_factor, Default::default())?;
 	Staking::<T>::validate(RawOrigin::Signed(src1_controller.clone()).into(), Default::default())?;
 
 	let (src2_stash, src2_controller) =
-		create_stash_controller_b::<T>(USER_SEED + 3, src_factor, Default::default())?;
+		create_stash_controller_b::<T>(USER_SEED + 2, src_factor, Default::default())?;
 	Staking::<T>::validate(RawOrigin::Signed(src2_controller.clone()).into(), Default::default())?;
 
 	let (src3_stash, src3_controller) =
-		create_stash_controller_b::<T>(USER_SEED + 4, src_factor, Default::default())?;
+		create_stash_controller_b::<T>(USER_SEED + 3, src_factor, Default::default())?;
 	Staking::<T>::validate(RawOrigin::Signed(src3_controller.clone()).into(), Default::default())?;
 
-	let src2_node = Node::<T>::from_id(&src2_stash).ok_or("node not found for stash")?;
+	let src2_node = Node::<T>::from_id(&src2_stash).ok_or("node not found for src2_stash")?;
 	let src_bag_ids = Bag::<T>::get(src2_node.bag_upper)
 		.ok_or("source bag not found")?
 		.iter()
@@ -247,7 +247,7 @@ fn build_rebag_scenario<T: Config>(
 		"src2_stash should be the middle node of 3",
 	);
 
-	let dest1_node = Node::<T>::from_id(&dest1_stash).ok_or("node not found for dest_stash")?;
+	let dest1_node = Node::<T>::from_id(&dest1_stash).ok_or("node not found for dest1_stash")?;
 	let dest_bag_ids = Bag::<T>::get(dest1_node.proper_bag_for())
 		.ok_or("destination bag not found")?
 		.iter()
@@ -283,12 +283,10 @@ benchmarks! {
 	}
 
 	bond_extra {
-		// In order to ensure a worst case scenario, we need to ensure that this will
-		// rebag to a bag with at least 2 other nodes.
-
 		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		// The worst case scenario includes the voter changing bags.
 		let thresholds = T::VoterBagThresholds::get();
 		let total_issuance = T::Currency::total_issuance();
 		// the bag the voter will start at
@@ -297,7 +295,6 @@ benchmarks! {
 		// the bag we will move the voter to
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
-
 		let rebag_scenario
 			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
@@ -317,8 +314,10 @@ benchmarks! {
 	}
 
 	unbond {
+		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		// The worst case scenario includes the voter changing bags.
 		let thresholds = T::VoterBagThresholds::get();
 		let total_issuance = T::Currency::total_issuance();
 		// the bag the voter will start at
@@ -327,7 +326,6 @@ benchmarks! {
 		// the bag we will move the voter to
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[0] as u128, total_issuance);
-
 		let rebag_scenario
 			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
@@ -614,6 +612,10 @@ benchmarks! {
 	rebond {
 		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
 
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// The worst case scenario includes the voter changing bags.
 		let thresholds = T::VoterBagThresholds::get();
 		let total_issuance = T::Currency::total_issuance();
 		// the bag the voter will start at
@@ -622,7 +624,6 @@ benchmarks! {
 		// the bag we will move the voter to
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
-
 		let rebag_scenario
 			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
@@ -854,13 +855,7 @@ benchmarks! {
 	}
 
 	rebag {
-		// update the stash account's value/weight
-		//
-		// note that we have to manually update the ledger; if we were to just call
-		// `Staking::<T>::bond_extra`, then it would implicitly rebag. We want to separate that step
-		// so we can measure it in isolation.
 		// Clean up any existing state.
-
 		clear_validators_and_nominators::<T>();
 
 		let thresholds = T::VoterBagThresholds::get();
@@ -871,10 +866,14 @@ benchmarks! {
 		// the bag we will move the voter to
 		let dest_bag_thresh =
 			T::CurrencyToVote::to_currency(thresholds[1] as u128, total_issuance);
-
 		let rebag_scenario
 			= build_rebag_scenario::<T>(src_bag_thresh, dest_bag_thresh)?;
 
+		// update the stash account's value/weight
+		//
+		// note that we have to manually update the ledger; if we were to just call
+		// `Staking::<T>::bond_extra`, then it would implicitly rebag. We want to separate that step
+		// so we can measure it in isolation.
 		T::Currency::make_free_balance_be(&rebag_scenario.src2_stash, dest_bag_thresh);
 		let mut ledger = Staking::<T>::ledger(&rebag_scenario.src2_controller).ok_or("controller had no ledger")?;
 		ledger.total = dest_bag_thresh;
