@@ -1535,18 +1535,54 @@ impl_runtime_apis! {
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn benchmarks(extra: bool) -> Vec<frame_benchmarking::BenchmarkList> {
-			use frame_benchmarking::{Benchmarking, BenchmarkList};
+			use frame_benchmarking::{list_benchmark, Benchmarking, BenchmarkList};
 
-			let benchmarks = Assets::benchmarks(extra)
-				.iter()
-				.map(|b| b.to_vec())
-				.collect::<Vec<_>>();
-			let list = BenchmarkList {
-				pallet: b"Balances".to_vec(),
-				benchmarks: benchmarks.to_vec(),
-			};
+			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
+			// issues. To get around that, we separated the Session benchmarks into its own crate,
+			// which is why we need these two lines below.
+			use pallet_session_benchmarking::Pallet as SessionBench;
+			use pallet_offences_benchmarking::Pallet as OffencesBench;
+			use frame_system_benchmarking::Pallet as SystemBench;
 
-			return vec![list]
+			impl pallet_session_benchmarking::Config for Runtime {}
+			impl pallet_offences_benchmarking::Config for Runtime {}
+			impl frame_system_benchmarking::Config for Runtime {}
+
+			let mut list = Vec::<BenchmarkList>::new();
+
+			list_benchmark!(list, extra, pallet_assets, Assets);
+			list_benchmark!(list, extra, pallet_babe, Babe);
+			list_benchmark!(list, extra, pallet_balances, Balances);
+			list_benchmark!(list, extra, pallet_bounties, Bounties);
+			list_benchmark!(list, extra, pallet_collective, Council);
+			list_benchmark!(list, extra, pallet_contracts, Contracts);
+			list_benchmark!(list, extra, pallet_democracy, Democracy);
+			list_benchmark!(list, extra, pallet_election_provider_multi_phase, ElectionProviderMultiPhase);
+			list_benchmark!(list, extra, pallet_elections_phragmen, Elections);
+			list_benchmark!(list, extra, pallet_gilt, Gilt);
+			list_benchmark!(list, extra, pallet_grandpa, Grandpa);
+			list_benchmark!(list, extra, pallet_identity, Identity);
+			list_benchmark!(list, extra, pallet_im_online, ImOnline);
+			list_benchmark!(list, extra, pallet_indices, Indices);
+			list_benchmark!(list, extra, pallet_lottery, Lottery);
+			list_benchmark!(list, extra, pallet_membership, TechnicalMembership);
+			list_benchmark!(list, extra, pallet_mmr, Mmr);
+			list_benchmark!(list, extra, pallet_multisig, Multisig);
+			list_benchmark!(list, extra, pallet_offences, OffencesBench::<Runtime>);
+			list_benchmark!(list, extra, pallet_proxy, Proxy);
+			list_benchmark!(list, extra, pallet_scheduler, Scheduler);
+			list_benchmark!(list, extra, pallet_session, SessionBench::<Runtime>);
+			list_benchmark!(list, extra, pallet_staking, Staking);
+			list_benchmark!(list, extra, frame_system, SystemBench::<Runtime>);
+			list_benchmark!(list, extra, pallet_timestamp, Timestamp);
+			list_benchmark!(list, extra, pallet_tips, Tips);
+			list_benchmark!(list, extra, pallet_transaction_storage, TransactionStorage);
+			list_benchmark!(list, extra, pallet_treasury, Treasury);
+			list_benchmark!(list, extra, pallet_uniques, Uniques);
+			list_benchmark!(list, extra, pallet_utility, Utility);
+			list_benchmark!(list, extra, pallet_vesting, Vesting);
+
+			return list
 		}
 
 		fn dispatch_benchmark(
@@ -1564,10 +1600,6 @@ impl_runtime_apis! {
 			use pallet_session_benchmarking::Pallet as SessionBench;
 			use pallet_offences_benchmarking::Pallet as OffencesBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
-
-			impl pallet_session_benchmarking::Config for Runtime {}
-			impl pallet_offences_benchmarking::Config for Runtime {}
-			impl frame_system_benchmarking::Config for Runtime {}
 
 			let whitelist: Vec<TrackedStorageKey> = vec![
 				// Block Number

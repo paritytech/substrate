@@ -100,6 +100,8 @@ impl BenchmarkCmd {
 		let spec = config.chain_spec;
 		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
+		let pallet = self.pallet.as_bytes();
+		let extrinsic = self.extrinsic.as_bytes();
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
@@ -114,7 +116,7 @@ impl BenchmarkCmd {
 		let mut batches = Vec::new();
 		let mut storage_info = Vec::new();
 
-		for r in 0..self.repeat {
+		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
 			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
@@ -122,79 +124,94 @@ impl BenchmarkCmd {
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
+			return extensions
+		};
 
-			if self.list {
+		// Get Benchmark List
+		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+			&state,
+			None,
+			&mut changes,
+			&executor,
+			"Benchmark_benchmarks",
+			&(self.extra).encode(),
+			extensions(),
+			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			sp_core::testing::TaskExecutor::new(),
+		)
+		.execute(strategy.into())
+		.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
+
+		let list =
+			<Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
+				.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+
+		if self.list {
+			// Show the list and exit early
+			for item in list {
+				println!("{}", String::from_utf8(item.pallet).unwrap());
+				for benchmark in item.benchmarks {
+					println!("- {}", String::from_utf8(benchmark).unwrap());
+				}
+			}
+			return Ok(())
+		}
+
+		// Use the benchmark list and the user input to determine the set of benchmarks to run.
+		let mut benchmarks_to_run = Vec::new();
+		for item in list {
+			if pallet == &item.pallet[..] || pallet == &b"*"[..] {
+				if &pallet[..] == &b"*"[..] || &extrinsic[..] == &b"*"[..] {
+					for benchmark in item.benchmarks {
+						benchmarks_to_run.push((item.pallet.clone(), benchmark));
+					}
+				} else {
+					benchmarks_to_run.push((pallet.to_vec(), extrinsic.to_vec()));
+				}
+			}
+		}
+
+		// Run the benchmarks
+		for (pallet, extrinsic) in benchmarks_to_run {
+			for r in 0..self.repeat {
 				let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 					&state,
 					None,
 					&mut changes,
 					&executor,
-					"Benchmark_benchmarks",
-					&(self.extra).encode(),
-					extensions,
+					"Benchmark_dispatch_benchmark",
+					&(
+						&pallet,
+						&extrinsic,
+						self.lowest_range_values.clone(),
+						self.highest_range_values.clone(),
+						(self.steps, self.steps),
+						(r, self.repeat),
+						!self.no_verify,
+						self.extra,
+					)
+						.encode(),
+					extensions(),
 					&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
 					sp_core::testing::TaskExecutor::new(),
 				)
 				.execute(strategy.into())
-				.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
+				.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-				let lists =
-					<Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
-						.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+				let (batch, last_storage_info) = <std::result::Result<
+					(Vec<BenchmarkBatch>, Vec<StorageInfo>),
+					String,
+				> as Decode>::decode(&mut &result[..])
+				.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
 
-				for list in lists {
-					println!("{}", String::from_utf8(list.pallet).unwrap());
-					for benchmark in list.benchmarks {
-						println!("- {}", String::from_utf8(benchmark).unwrap());
-					}
-				}
-
-				return Ok(())
+				batches.extend(batch);
+				storage_info = last_storage_info;
 			}
-
-			let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-				&state,
-				None,
-				&mut changes,
-				&executor,
-				"Benchmark_dispatch_benchmark",
-				&(
-					&self.pallet,
-					&self.extrinsic,
-					self.lowest_range_values.clone(),
-					self.highest_range_values.clone(),
-					(self.steps, self.steps),
-					(r, self.repeat),
-					!self.no_verify,
-					self.extra,
-				)
-					.encode(),
-				extensions,
-				&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-				sp_core::testing::TaskExecutor::new(),
-			)
-			.execute(strategy.into())
-			.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-
-			let (batch, last_storage_info) = <std::result::Result<
-				(Vec<BenchmarkBatch>, Vec<StorageInfo>),
-				String,
-			> as Decode>::decode(&mut &result[..])
-			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
-
-			batches.extend(batch);
-			storage_info = last_storage_info;
 		}
 
+		// Combine all of the benchmark results, so that benchmarks of the same pallet/function
+		// are together.
 		let batches = combine_batches(batches);
-
-		for b in batches.clone() {
-			println!(
-				"{:?}: {:?}",
-				String::from_utf8(b.pallet).unwrap(),
-				String::from_utf8(b.benchmark).unwrap(),
-			);
-		}
 
 		if let Some(output_path) = &self.output {
 			crate::writer::write_results(&batches, &storage_info, output_path, self)?;
@@ -297,33 +314,3 @@ impl CliConfiguration for BenchmarkCmd {
 		})
 	}
 }
-
-// fn list<BB>(extra: bool) -> Result<()>
-// where
-// 	BB: BlockT + Debug,
-// 	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-// 	<BB as BlockT>::Hash: std::str::FromStr,
-// {
-// 	let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-// 		&state,
-// 		None,
-// 		&mut changes,
-// 		&executor,
-// 		"Benchmark_benchmarks",
-// 		&(extra).encode(),
-// 		extensions,
-// 		&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-// 		sp_core::testing::TaskExecutor::new(),
-// 	)
-// 	.execute(strategy.into())
-// 	.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
-
-// 	let list = <std::result::Result<
-// 			Vec<frame_benchmarking::BenchmarkList>,
-// 			String,
-// 		> as Decode>::decode(&mut &result[..])
-// 		.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))??;
-
-// 	println!("{:?}", list);
-// 	Ok(())
-// }
