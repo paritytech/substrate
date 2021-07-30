@@ -58,8 +58,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
 use sp_consensus::{
-	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
-	SyncOracle,
+	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
