@@ -1801,6 +1801,7 @@ dependencies = [
  "frame-support",
  "handlebars",
  "linked-hash-map",
+ "log",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-db",

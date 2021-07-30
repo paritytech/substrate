@@ -748,8 +748,6 @@ macro_rules! impl_benchmark {
 					c: &[($crate::BenchmarkParameter, u32)],
 					results: &mut $crate::Vec<$crate::BenchmarkResults>,
 					verify: bool,
-					step: u32,
-					num_steps: u32,
 				| -> Result<(), &'static str> {
 					// Set up the externalities environment for the setup we want to
 					// benchmark.
@@ -805,18 +803,6 @@ macro_rules! impl_benchmark {
 							"Read/Write Count {:?}", read_write_count
 						);
 
-						let time = $crate::benchmarking::current_time();
-						if time.saturating_sub(progress) > 5000000000 {
-							progress = $crate::benchmarking::current_time();
-							$crate::log::info!(
-								target: "benchmark",
-								"Benchmarking {} {}/{}",
-								extrinsic,
-								step,
-								num_steps,
-							);
-						}
-
 						// Time the storage root recalculation.
 						let start_storage_root = $crate::benchmarking::current_time();
 						$crate::storage_root();
@@ -853,9 +839,9 @@ macro_rules! impl_benchmark {
 					if current_step == 0 {
 						if verify {
 							// If `--verify` is used, run the benchmark once to verify it would complete.
-							do_benchmark(Default::default(), &mut $crate::Vec::new(), true, 1, 1)?;
+							do_benchmark(Default::default(), &mut $crate::Vec::new(), true)?;
 						}
-						do_benchmark(Default::default(), &mut results, false, 1, 1)?;
+						do_benchmark(Default::default(), &mut results, false)?;
 					}
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
@@ -892,9 +878,9 @@ macro_rules! impl_benchmark {
 
 						if verify {
 							// If `--verify` is used, run the benchmark once to verify it would complete.
-							do_benchmark(&c, &mut $crate::Vec::new(), true, current_step, num_of_steps)?;
+							do_benchmark(&c, &mut $crate::Vec::new(), true)?;
 						}
-						do_benchmark(&c, &mut results, false, current_step, num_of_steps)?;
+						do_benchmark(&c, &mut results, false)?;
 					}
 				}
 				return Ok(results);
