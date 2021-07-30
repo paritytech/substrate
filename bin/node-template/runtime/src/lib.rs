@@ -22,7 +22,6 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use pallet_balances_rpc_runtime_api::SerdeWrapper;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -442,12 +441,6 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
-		}
-	}
-
-	impl pallet_balances_rpc_runtime_api::BalancesApi<Block, AccountId, Balance> for Runtime {
-		fn free_balance(who: AccountId) -> SerdeWrapper<Balance> {
-			SerdeWrapper(Balances::free_balance(who))
 		}
 	}
 

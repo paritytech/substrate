@@ -39,7 +39,6 @@ sp-version = { version = "4.0.0-dev", default-features = false, path = "../../..
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
-pallet-balances-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances/rpc/runtime-api/" }
 
 # Used for runtime benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
@@ -61,7 +60,6 @@ std = [
 	"frame-system/std",
 	"pallet-aura/std",
 	"pallet-balances/std",
-	"pallet-balances-rpc-runtime-api/std",
 	"pallet-grandpa/std",
 	"pallet-randomness-collective-flip/std",
 	"pallet-sudo/std",
