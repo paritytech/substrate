@@ -9785,6 +9785,7 @@ dependencies = [
  "jsonrpc-core",
  "parity-scale-codec",
  "sc-rpc-api",
+ "scale-info",
  "serde",
  "sp-storage",
  "tokio 0.2.25",
