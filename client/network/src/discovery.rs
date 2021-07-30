@@ -722,7 +722,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						KademliaEvent::PendingRoutablePeer { .. } => {
 							// We are not interested in this event at the moment.
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::GetClosestPeers(res),
 							..
 						} => match res {
@@ -741,7 +741,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								}
 							},
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::GetRecord(res),
 							stats,
 							..
@@ -778,7 +778,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::PutRecord(res),
 							stats,
 							..
@@ -799,7 +799,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::RepublishRecord(res),
 							..
 						} => match res {
@@ -829,6 +829,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 							address,
 							score,
+						}),
+					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+							peer_id,
+							connection,
 						}),
 				}
 			}
@@ -861,6 +866,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 						address,
 						score,
+					}),
+				NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
 					}),
 			}
 		}
