@@ -284,8 +284,8 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	pub fn post_commit(&self, tx: Option<DbChangesTrieStorageTransaction<Block>>) {
 		if let Some(tx) = tx {
 			self.cache.0.write().commit(tx.cache_ops).expect(
-				"only fails if cache with given name isn't loaded yet;\
-						cache is already loaded because there is tx; qed",
+				"only fails if cache with given name isn't loaded yet; cache is already loaded \
+				 because there is tx; qed",
 			);
 		}
 	}

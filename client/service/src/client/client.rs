@@ -46,7 +46,7 @@ use sc_client_api::{
 	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
 };
 use sc_executor::RuntimeVersion;
-use sc_light::{call_executor::prove_execution, fetcher::ChangesProof};
+use sc_light::fetcher::ChangesProof;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
@@ -1072,8 +1072,8 @@ where
 		// telemetry once about the finalized block.
 		if let Some(last) = notify_finalized.last() {
 			let header = self.header(&BlockId::Hash(*last))?.expect(
-				"Header already known to exist in DB because it is \
-					indicated in the tree route; qed",
+				"Header already known to exist in DB because it is indicated in the tree route; \
+				 qed",
 			);
 
 			telemetry!(
@@ -1087,8 +1087,8 @@ where
 
 		for finalized_hash in notify_finalized {
 			let header = self.header(&BlockId::Hash(finalized_hash))?.expect(
-				"Header already known to exist in DB because it is \
-					indicated in the tree route; qed",
+				"Header already known to exist in DB because it is indicated in the tree route; \
+				 qed",
 			);
 
 			let notification = FinalityNotification { header, hash: finalized_hash };
@@ -1312,8 +1312,8 @@ where
 			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
 		)?;
 
-		let state = self.state_at(id)?;
-		prove_execution(state, &self.executor, method, call_data)
+		self.executor
+			.prove_execution(id, method, call_data)
 			.map(|(r, p)| (r, StorageProof::merge(vec![p, code_proof])))
 	}
 
