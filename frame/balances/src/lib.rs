@@ -900,7 +900,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 	) -> Result<(R, DustCleaner<T, I>), E> {
 		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
-			let is_new = maybe_account.is_none();
+			let is_new = maybe_account.is_none() && !system::Pallet::<T>::account_exists(who);
 			let mut account = maybe_account.take().unwrap_or_default();
 			f(&mut account, is_new).map(move |result| {
 				let maybe_endowed = if is_new { Some(account.free) } else { None };
