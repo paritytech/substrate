@@ -78,6 +78,7 @@ use sp_arithmetic::{
 	traits::{Bounded, UniqueSaturatedInto, Zero},
 	Normalizable, PerThing, Rational128, ThresholdOrd,
 };
+use sp_core::RuntimeDebug;
 use sp_std::{
 	cell::RefCell,
 	cmp::Ordering,
@@ -88,7 +89,6 @@ use sp_std::{
 	prelude::*,
 	rc::Rc,
 };
-use sp_core::RuntimeDebug;
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
@@ -100,21 +100,21 @@ mod mock;
 mod tests;
 
 mod assignments;
-pub mod phragmen;
 pub mod balancing;
-pub mod phragmms;
-pub mod node;
-pub mod reduce;
 pub mod helpers;
+pub mod node;
+pub mod phragmen;
+pub mod phragmms;
 pub mod pjr;
+pub mod reduce;
 
-pub use assignments::{Assignment, IndexAssignment, StakedAssignment, IndexAssignmentOf};
-pub use reduce::reduce;
+pub use assignments::{Assignment, IndexAssignment, IndexAssignmentOf, StakedAssignment};
+pub use balancing::*;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
-pub use balancing::*;
 pub use pjr::*;
+pub use reduce::reduce;
 
 // re-export the compact macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -206,9 +206,7 @@ where
 
 	/// Get the average edge count.
 	fn average_edge_count(&self) -> usize {
-		self.edge_count()
-			.checked_div(self.voter_count())
-			.unwrap_or(0)
+		self.edge_count().checked_div(self.voter_count()).unwrap_or(0)
 	}
 
 	/// Remove a certain voter.
@@ -379,9 +377,14 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 			.into_iter()
 			.filter_map(|e| {
 				let per_thing = P::from_rational(e.weight, budget);
-			// trim zero edges.
-			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
-		}).collect::<Vec<_>>();
+				// trim zero edges.
+				if per_thing.is_zero() {
+					None
+				} else {
+					Some((e.who, per_thing))
+				}
+			})
+			.collect::<Vec<_>>();
 
 		if distribution.len() > 0 {
 			Some(Assignment { who, distribution })
@@ -611,10 +614,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 	match this
 		.iter()
 		.zip(that.iter())
-		.map(|(thi, tha)| (
-			thi.ge(&tha),
-			thi.tcmp(&tha, epsilon.mul_ceil(*tha)),
-		))
+		.map(|(thi, tha)| (thi.ge(&tha), thi.tcmp(&tha, epsilon.mul_ceil(*tha))))
 		.collect::<Vec<(bool, Ordering)>>()
 		.as_slice()
 	{
@@ -653,40 +653,34 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 		})
 		.collect::<Vec<CandidatePtr<AccountId>>>();
 
-	let voters = initial_voters.into_iter().filter_map(|(who, voter_stake, votes)| {
-		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
-		for v in votes {
-			if edges.iter().any(|e| e.who == v) {
-				// duplicate edge.
-				continue;
-			}
-			if let Some(idx) = c_idx_cache.get(&v) {
-				// This candidate is valid + already cached.
-				let mut candidate = candidates[*idx].borrow_mut();
-				candidate.approval_stake =
-					candidate.approval_stake.saturating_add(voter_stake.into());
-				edges.push(
-					Edge {
+	let voters = initial_voters
+		.into_iter()
+		.filter_map(|(who, voter_stake, votes)| {
+			let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
+			for v in votes {
+				if edges.iter().any(|e| e.who == v) {
+					// duplicate edge.
+					continue
+				}
+				if let Some(idx) = c_idx_cache.get(&v) {
+					// This candidate is valid + already cached.
+					let mut candidate = candidates[*idx].borrow_mut();
+					candidate.approval_stake =
+						candidate.approval_stake.saturating_add(voter_stake.into());
+					edges.push(Edge {
 						who: v.clone(),
 						candidate: Rc::clone(&candidates[*idx]),
 						..Default::default()
-					}
-				);
-			} // else {} would be wrong votes. We don't really care about it.
-		}
-		if edges.is_empty() {
-			None
-		}
-		else {
-			Some(Voter {
-				who,
-				edges: edges,
-				budget: voter_stake.into(),
-				load: Rational128::zero(),
-			})
-		}
+					});
+				} // else {} would be wrong votes. We don't really care about it.
+			}
+			if edges.is_empty() {
+				None
+			} else {
+				Some(Voter { who, edges, budget: voter_stake.into(), load: Rational128::zero() })
+			}
+		})
+		.collect::<Vec<_>>();
 
-	}).collect::<Vec<_>>();
-
-	(candidates, voters,)
+	(candidates, voters)
 }

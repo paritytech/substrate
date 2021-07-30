@@ -17,22 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use futures::{future, prelude::*};
-use sp_runtime::traits::Block as BlockT;
-use sp_runtime::generic::BlockId;
 use codec::Encode;
-use sp_consensus::import_queue::ImportQueue;
+use futures::{future, prelude::*};
 use sc_client_api::{BlockBackend, UsageProvider};
+use sp_consensus::import_queue::ImportQueue;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-use std::pin::Pin;
-use std::sync::Arc;
 use crate::chain_ops::import_blocks;
+use std::{pin::Pin, sync::Arc};
 
 /// Re-validate known block.
 pub fn check_block<B, IQ, C>(
 	client: Arc<C>,
 	import_queue: IQ,
-	block_id: BlockId<B>
+	block_id: BlockId<B>,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
 where
 	C: BlockBackend<B> + UsageProvider<B> + Send + Sync + 'static,
@@ -46,7 +44,7 @@ where
 			block.encode_to(&mut buf);
 			let reader = std::io::Cursor::new(buf);
 			import_blocks(client, import_queue, reader, true, true)
-		}
+		},
 		Ok(None) => Box::pin(future::err("Unknown block".into())),
 		Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 	}

@@ -60,7 +60,7 @@ fn main() {
 fn mul_div(a: u128, b: u128, c: u128) -> u128 {
 	use primitive_types::U256;
 	if a.is_zero() {
-		return Zero::zero();
+		return Zero::zero()
 	}
 	let c = c.max(1);
 
@@ -70,7 +70,7 @@ fn mul_div(a: u128, b: u128, c: u128) -> u128 {
 	let ce: U256 = c.into();
 
 	let r = ae * be / ce;
-	if r > u128::max_value().into() {
+	if r > u128::MAX.into() {
 		a
 	} else {
 		r.as_u128()
