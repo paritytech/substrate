@@ -243,28 +243,3 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		System::assert_last_event(Event::Balances(crate::Event::DustLost(2, 50)));
 	});
 }
-
-#[test]
-fn repatriate_reserved_works_for_zero_account() {
-	// These functions all use `mutate_account` which may introduce a storage change when
-	// the account never existed to begin with, and shouldn't exist in the end.
-	<ExtBuilder>::default().existential_deposit(0).build().execute_with(|| {
-		let alice = 666;
-		let bob = 777;
-		assert_ok!(Balances::set_balance(Origin::root(), alice, 2000, 0));
-
-		assert_ok!(Balances::force_transfer(Origin::root(), alice, bob, 2000));
-
-		dbg!(alice, frame_system::Account::<Test>::get(alice));
-		dbg!(bob, frame_system::Account::<Test>::get(bob));
-
-		assert_ok!(frame_system::Pallet::<Test>::inc_consumers(&alice));
-		assert_ok!(Balances::reserve(&bob, 500));
-
-		dbg!(alice, frame_system::Account::<Test>::get(alice));
-		dbg!(bob, frame_system::Account::<Test>::get(bob));
-
-		// Repatriate Reserve
-		assert_ok!(Balances::repatriate_reserved(&bob, &alice, 500, Status::Free));
-	});
-}
