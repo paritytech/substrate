@@ -1457,7 +1457,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
 			Self::do_rebag(&ledger.stash);
-			Ok(Some(
+			Ok(Some( // TOOD should this be removed?
 				35 * WEIGHT_PER_MICROS +
 					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
 					T::DbWeight::get().reads_writes(3, 2),
