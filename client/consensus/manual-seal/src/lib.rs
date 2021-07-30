@@ -22,12 +22,12 @@
 use futures::prelude::*;
 use prometheus_endpoint::Registry;
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
-use sp_blockchain::HeaderBackend;
-use sp_consensus::{
-	import_queue::{BasicQueue, BoxBlockImport, CacheKeyId, Verifier},
-	BlockImport, BlockImportParams, BlockOrigin, Environment, ForkChoiceStrategy, Proposer,
-	SelectChain,
+use sc_consensus::{
+	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
+	import_queue::{BasicQueue, BoxBlockImport, Verifier},
 };
+use sp_blockchain::HeaderBackend;
+use sp_consensus::{BlockOrigin, CacheKeyId, Environment, Proposer, SelectChain};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId, Justifications};
 use std::{marker::PhantomData, sync::Arc};
@@ -257,9 +257,9 @@ mod tests {
 	use super::*;
 	use sc_basic_authorship::ProposerFactory;
 	use sc_client_api::BlockBackend;
+	use sc_consensus::ImportedAux;
 	use sc_transaction_pool::{BasicPool, Options, RevalidationType};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
-	use sp_consensus::ImportedAux;
 	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime_client::{
 		AccountKeyring::*, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,

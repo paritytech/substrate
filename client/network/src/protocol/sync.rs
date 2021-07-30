@@ -39,11 +39,11 @@ use extra_requests::ExtraRequests;
 use futures::{stream::FuturesUnordered, task::Poll, Future, FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
+use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderMetadata};
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, Validation},
-	import_queue::{BlockImportError, BlockImportResult, IncomingBlock},
 	BlockOrigin, BlockStatus,
 };
 use sp_runtime::{
@@ -1240,7 +1240,7 @@ impl<B: BlockT> ChainSync<B> {
 		&'a mut self,
 		imported: usize,
 		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		trace!(target: "sync", "Imported {} of {}", imported, count);
 
@@ -1260,12 +1260,12 @@ impl<B: BlockT> ChainSync<B> {
 			}
 
 			match result {
-				Ok(BlockImportResult::ImportedKnown(number, who)) => {
+				Ok(BlockImportStatus::ImportedKnown(number, who)) => {
 					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
 						peer.update_common_number(number);
 					}
 				},
-				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
+				Ok(BlockImportStatus::ImportedUnknown(number, aux, who)) => {
 					if aux.clear_justification_requests {
 						trace!(
 							target: "sync",
@@ -2454,7 +2454,7 @@ mod test {
 	///
 	/// The node is connected to multiple peers. Both of these peers are having a best block (1) that
 	/// is below our best block (3). Now peer 2 announces a fork of block 3 that we will
-	/// request from peer 2. After imporitng the fork, peer 2 and then peer 1 will announce block 4.
+	/// request from peer 2. After importing the fork, peer 2 and then peer 1 will announce block 4.
 	/// But as peer 1 in our view is still at block 1, we will request block 2 (which we already have)
 	/// from it. In the meanwhile peer 2 sends us block 4 and 3 and we send another request for block
 	/// 2 to peer 2. Peer 1 answers with block 2 and then peer 2. This will need to succeed, as we
@@ -2777,7 +2777,7 @@ mod test {
 					.rev()
 					.map(|b| {
 						(
-							Ok(BlockImportResult::ImportedUnknown(
+							Ok(BlockImportStatus::ImportedUnknown(
 								b.header().number().clone(),
 								Default::default(),
 								Some(peer_id1.clone()),

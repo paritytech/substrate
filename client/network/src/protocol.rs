@@ -48,12 +48,9 @@ use message::{
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use prost::Message as _;
+use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_consensus::{
-	block_validation::BlockAnnounceValidator,
-	import_queue::{BlockImportError, BlockImportResult, IncomingBlock, Origin},
-	BlockOrigin,
-};
+use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
@@ -1048,7 +1045,7 @@ impl<B: BlockT> Protocol<B> {
 		&mut self,
 		imported: usize,
 		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) {
 		let results = self.sync.on_blocks_processed(imported, count, results);
 		for result in results {
