@@ -1,5 +1,5 @@
 [package]
-name = "pallet-balances-runtime-api"
+name = "pallet-balances-rpc-runtime-api"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -12,17 +12,16 @@ description = "Runtime API definition required by Balances RPC extensions."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "2", default-features = false, features = ["derive"] }
 
 # Substrate Dependencies
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/std" }
-pallet-balances = { version = "4.0.0-dev", path = "../../" }
 
 [features]
 default = ["std"]
 std = [
 	"sp-api/std",
-	"sp-std/std",
+	"codec/std",
 	"sp-runtime/std",
 ]

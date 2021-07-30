@@ -23,12 +23,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use pallet_balances::pallet::Config;
+use codec::Codec;
 
 sp_api::decl_runtime_apis! {
-	pub trait BalancesApi<T> where
-		T: Config,
+	pub trait BalancesApi<AccountId, Balance> where
+		AccountId: Codec,
+		Balance: Codec,
 	{
-		fn free_balance(who: T::AccountId) -> T::Balance;
+		fn free_balance(who: AccountId) -> Balance;
 	}
 }

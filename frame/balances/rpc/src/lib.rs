@@ -18,23 +18,37 @@
 //! Node-specific RPC methods for interaction with Balances pallet.
 
 pub use self::gen_client::Client as BalancesClient;
+pub use pallet_balances_rpc_runtime_api::BalancesApi as BalancesRuntimeApi;
+
+use codec::Codec;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use pallet_balances::pallet::Config;
-pub use pallet_balances_runtime_api::BalancesApi as BalancesRuntimeApi;
+use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, MaybeDisplay}
+	traits::{Block as BlockT},
 };
 use std::sync::Arc;
 
+/// Helper struct for serde
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct BalanceDetails<Balance> {
+	pub balance: Balance,
+}
+
 /// Balances RPC methods.
 #[rpc]
-pub trait BalancesApi<BlockHash, T> where T: Config {
+pub trait BalancesApi<BlockHash, AccountId, Balance> {
     #[rpc(name="balances_freeBalance")]
-    fn free_balance(&self, who: T::AccountId, at: Option<BlockHash>) -> Result<T::Balance>;
+    fn free_balance(
+		&self,
+		who: AccountId,
+		at: Option<BlockHash>
+	) -> Result<BalanceDetails<Balance>>;
 }
 
 /// A struct that implements the ['BalancesApi'].
@@ -67,29 +81,38 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, T> BalancesApi<<Block as BlockT>::Hash, T>
-    for Balances<C, Block>
+impl<C, Block, AccountId, Balance>
+	BalancesApi<
+		<Block as BlockT>::Hash,
+		AccountId,
+		Balance,
+    > for Balances<C, Block>
 where
     Block: BlockT,
     C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-    C::Api: BalancesRuntimeApi<Block, T>,
-    T: Config,
+    C::Api: BalancesRuntimeApi<Block, AccountId, Balance>,
+    AccountId: Codec,
+	Balance: Codec,
 {
     fn free_balance(
         &self,
-        who: T::AccountId,
+        who: AccountId,
 		at: Option<<Block as BlockT>::Hash>,
-    ) -> Result<T::Balance> {
+    ) -> Result<BalanceDetails<Balance>> {
         let api = self.client.runtime_api();
 
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		api.free_balance(&at, who).map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::RuntimeError.into()),
-			message: "Unable to query dispatch info.".into(),
-			data: Some(format!("{:?}", e).into()),
-		})
+		let result = api
+			.free_balance(&at, who)
+			.map_err(|e| RpcError {
+				code: ErrorCode::ServerError(Error::RuntimeError.into()),
+				message: "Unable to query balances info.".into(),
+				data: Some(format!("{:?}", e).into()),
+			})?;
+
+		Ok(BalanceDetails { balance: result })
     }
 }

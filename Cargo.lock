@@ -4449,6 +4449,7 @@ dependencies = [
  "frame-benchmarking-cli",
  "jsonrpc-core",
  "node-template-runtime",
+ "pallet-balances-rpc",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
  "sc-cli",
@@ -4492,6 +4493,7 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-balances",
+ "pallet-balances-rpc-runtime-api",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-sudo",
@@ -4852,27 +4854,22 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "pallet-balances",
- "pallet-balances-runtime-api",
+ "pallet-balances-rpc-runtime-api",
  "parity-scale-codec",
  "serde",
  "serde_json",
  "sp-api",
  "sp-blockchain",
- "sp-core",
- "sp-rpc",
  "sp-runtime",
 ]
 
 [[package]]
-name = "pallet-balances-runtime-api"
+name = "pallet-balances-rpc-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
- "pallet-balances",
  "parity-scale-codec",
  "sp-api",
  "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
