@@ -712,7 +712,7 @@ macro_rules! impl_benchmark {
 				lowest_range_values: &[u32],
 				highest_range_values: &[u32],
 				steps: (u32, u32),
-				repeat: (u32, u32),
+				_repeat: (u32, u32),
 				whitelist: &[$crate::TrackedStorageKey],
 				verify: bool,
 			) -> Result<$crate::Vec<$crate::BenchmarkResults>, &'static str> {
@@ -738,9 +738,7 @@ macro_rules! impl_benchmark {
 					SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
 				>::components(&selected_benchmark);
 
-				let mut progress = $crate::benchmarking::current_time();
-
-				let mut do_benchmark = |
+				let do_benchmark = |
 					c: &[($crate::BenchmarkParameter, u32)],
 					results: &mut $crate::Vec<$crate::BenchmarkResults>,
 					verify: bool,
