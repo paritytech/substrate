@@ -79,6 +79,7 @@ pub type ValidatorSetId = u64;
 
 /// A set of BEEFY authorities, a.k.a. validators.
 #[derive(Decode, Encode, Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "scale-info", derive(scale_info::TypeInfo))]
 pub struct ValidatorSet<AuthorityId> {
 	/// Public keys of the validator set elements
 	pub validators: Vec<AuthorityId>,
@@ -104,6 +105,7 @@ pub type MmrRootHash = H256;
 
 /// A consensus log item for BEEFY.
 #[derive(Decode, Encode)]
+#[cfg_attr(feature = "scale-info", derive(scale_info::TypeInfo))]
 pub enum ConsensusLog<AuthorityId: Codec> {
 	/// The authorities have changed.
 	#[codec(index = 1)]
@@ -121,6 +123,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 /// A vote message is a direct vote created by a BEEFY node on every voting round
 /// and is gossiped to its peers.
 #[derive(Debug, Decode, Encode)]
+#[cfg_attr(feature = "scale-info", derive(scale_info::TypeInfo))]
 pub struct VoteMessage<Hash, Number, Id, Signature> {
 	/// Commit to information extracted from a finalized block
 	pub commitment: Commitment<Number, Hash>,
