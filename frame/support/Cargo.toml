@@ -45,7 +45,6 @@ default = ["std"]
 std = [
 	"once_cell",
 	"serde",
-	"scale-info/std",
 	"sp-io/std",
 	"codec/std",
 	"scale-info/std",
