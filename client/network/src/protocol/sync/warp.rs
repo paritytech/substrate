@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+///! Warp sync support.
 pub use super::state::ImportResult;
 use super::state::StateSync;
 pub use crate::warp_request_handler::{
@@ -27,10 +28,8 @@ use crate::{
 	WarpSyncPhase, WarpSyncProgress,
 };
 use sp_finality_grandpa::{AuthorityList, SetId};
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::sync::Arc;
-
-/// Warp sync support.
 
 enum Phase<B: BlockT> {
 	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
@@ -49,8 +48,6 @@ pub enum WarpProofImportResult<B: BlockT> {
 
 /// Warp sync state machine. Accumulates warp proofs and state.
 pub struct WarpSync<B: BlockT> {
-	target_hash: B::Hash,
-	target_num: NumberFor<B>,
 	phase: Phase<B>,
 	client: Arc<dyn Client<B>>,
 	warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
@@ -69,14 +66,7 @@ impl<B: BlockT> WarpSync<B> {
 			authorities: warp_sync_provider.current_authorities(),
 			last_hash,
 		};
-		WarpSync {
-			client,
-			warp_sync_provider,
-			target_hash: Default::default(),
-			target_num: Zero::zero(),
-			phase,
-			total_proof_bytes: 0,
-		}
+		WarpSync { client, warp_sync_provider, phase, total_proof_bytes: 0 }
 	}
 
 	///  Validate and import a state reponse.
@@ -119,8 +109,6 @@ impl<B: BlockT> WarpSync<B> {
 					},
 					Ok(VerificationResult::Complete(new_set_id, _, header)) => {
 						log::debug!(target: "sync", "Verified complete proof, set_id={:?}", new_set_id);
-						self.target_hash = header.hash();
-						self.target_num = *header.number();
 						self.total_proof_bytes += response.0.len() as u64;
 						let state_sync = StateSync::new(self.client.clone(), header, false);
 						let request = state_sync.next_request();
@@ -149,14 +137,20 @@ impl<B: BlockT> WarpSync<B> {
 		}
 	}
 
-	/// Return target block hash.
-	pub fn target_block_hash(&self) -> B::Hash {
-		self.target_hash.clone()
+	/// Return target block hash if it is known.
+	pub fn target_block_hash(&self) -> Option<B::Hash> {
+		match &self.phase {
+			Phase::State(s) => Some(s.target()),
+			Phase::WarpProof { .. } => None,
+		}
 	}
 
-	/// Return target block number.
-	pub fn target_block_number(&self) -> NumberFor<B> {
-		self.target_num
+	/// Return target block number if it is known.
+	pub fn target_block_number(&self) -> Option<NumberFor<B>> {
+		match &self.phase {
+			Phase::State(s) => Some(s.target_block_num()),
+			Phase::WarpProof { .. } => None,
+		}
 	}
 
 	/// Check if the state is complete.

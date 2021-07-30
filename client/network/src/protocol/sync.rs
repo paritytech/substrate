@@ -104,6 +104,9 @@ const STATE_SYNC_FINALITY_THRESHOLD: u32 = 8;
 /// so far behind.
 const MAJOR_SYNC_BLOCKS: u8 = 5;
 
+/// Number of peers that need to be connected before warp sync is started.
+const MIN_PEERS_TO_START_WARP_SYNC: usize = 3;
+
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer sent us a message that led to a
@@ -688,8 +691,8 @@ impl<B: BlockT> ChainSync<B> {
 				}
 
 				if let SyncMode::Warp = &self.mode {
-					// TODO: wait for 3 peers
-					if self.warp_sync.is_none() {
+					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
+					{
 						log::debug!(target: "sync", "Starting warp state sync.");
 						if let Some(provider) = &self.warp_sync_provider {
 							self.warp_sync =
@@ -978,9 +981,11 @@ impl<B: BlockT> ChainSync<B> {
 			if sync.is_complete() {
 				return None
 			}
-			if let Some(request) = sync.next_state_request() {
+			if let (Some(request), Some(target)) =
+				(sync.next_state_request(), sync.target_block_number())
+			{
 				for (id, peer) in self.peers.iter_mut() {
-					if peer.state.is_available() && peer.best_number >= sync.target_block_number() {
+					if peer.state.is_available() && peer.best_number >= target {
 						trace!(target: "sync", "New StateRequest for {}", id);
 						peer.state = PeerSyncState::DownloadingState;
 						return Some((id.clone(), request))
@@ -1006,11 +1011,17 @@ impl<B: BlockT> ChainSync<B> {
 				return None
 			}
 			if let Some(request) = sync.next_warp_poof_request() {
-				for (id, peer) in self.peers.iter_mut() {
-					if peer.state.is_available() && peer.best_number >= sync.target_block_number() {
-						trace!(target: "sync", "New WarpProofRequest for {}", id);
-						peer.state = PeerSyncState::DownloadingWarpProof;
-						return Some((id.clone(), request))
+				let mut targets: Vec<_> = self.peers.values().map(|p| p.best_number).collect();
+				if !targets.is_empty() {
+					targets.sort();
+					let median = targets[targets.len() / 2];
+					// Find a random peer that is synced as much as peer majority.
+					for (id, peer) in self.peers.iter_mut() {
+						if peer.state.is_available() && peer.best_number >= median {
+							trace!(target: "sync", "New WarpProofRequest for {}", id);
+							peer.state = PeerSyncState::DownloadingWarpProof;
+							return Some((id.clone(), request))
+						}
 					}
 				}
 			}
@@ -1466,8 +1477,10 @@ impl<B: BlockT> ChainSync<B> {
 						self.mode = SyncMode::Full;
 						output.extend(self.restart());
 					}
-					let warp_sync_complete =
-						self.warp_sync.as_ref().map_or(false, |s| s.target_block_hash() == hash);
+					let warp_sync_complete = self
+						.warp_sync
+						.as_ref()
+						.map_or(false, |s| s.target_block_hash() == Some(hash));
 					if warp_sync_complete {
 						info!(
 							target: "sync",
