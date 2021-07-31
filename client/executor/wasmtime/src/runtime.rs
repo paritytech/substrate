@@ -85,9 +85,7 @@ impl WasmtimeRuntime {
 		match self.config.max_memory_pages {
 			Some(max_memory_pages) => Store::new_with_limits(
 				&self.engine,
-				wasmtime::StoreLimitsBuilder::new()
-					.memory_pages(max_memory_pages)
-					.build(),
+				wasmtime::StoreLimitsBuilder::new().memory_pages(max_memory_pages).build(),
 			),
 			None => Store::new(&self.engine),
 		}
