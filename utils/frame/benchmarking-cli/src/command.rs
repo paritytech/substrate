@@ -17,7 +17,9 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkResults, BenchmarkSelector, BenchmarkList};
+use frame_benchmarking::{
+	Analysis, BenchmarkBatch, BenchmarkList, BenchmarkResults, BenchmarkSelector,
+};
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
@@ -139,8 +141,9 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
 
-		let (list, storage_info) = <(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
-			.map_err(|e| format!("Failed to decode benchmark metadata: {:?}", e))?;
+		let (list, storage_info) =
+			<(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
+				.map_err(|e| format!("Failed to decode benchmark metadata: {:?}", e))?;
 
 		if self.list {
 			// Show the list and exit early
@@ -200,11 +203,11 @@ impl BenchmarkCmd {
 					.execute(strategy.into())
 					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-					let batch = <std::result::Result<
-						Vec<BenchmarkBatch>,
-						String,
-					> as Decode>::decode(&mut &result[..])
-					.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
+					let batch =
+						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
+							&mut &result[..],
+						)
+						.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
 
 					batches.extend(batch);
 
