@@ -142,8 +142,7 @@ impl VersionedRuntime {
 	}
 }
 
-const MAX_CONSENSUS_RUNTIMES: usize = 2;
-const MAX_OFFCHAIN_RUNTIMES: usize = 2; // TODO: this is kinda pointless, as it cannot be different than the consensus one.
+const MAX_RUNTIMES: usize = 2;
 const MAX_OFFCHAIN_RUNTIME_INSTANCES: usize = 1;
 
 /// Cache for the runtimes.
@@ -162,12 +161,12 @@ pub struct RuntimeCache {
 	///
 	/// These runtime instances are only used in consensus code context and their count is limited
 	/// by `max_consensus_runtime_instances`.
-	consensus_runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_CONSENSUS_RUNTIMES]>,
+	consensus_runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
 	/// The size of the instances cache for each runtime.
 	max_consensus_runtime_instances: usize,
 	/// Same as `consensus_runtimes`, but used in offchain code context. Their size is always bound
 	/// by 1 (can easily be configurable, but we don't need this right now).
-	offchain_runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_OFFCHAIN_RUNTIMES]>,
+	offchain_runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
 	/// Optional path used for caching artifacts.
 	cache_path: Option<PathBuf>,
 }
@@ -284,8 +283,9 @@ impl RuntimeCache {
 						#[cfg(not(target_os = "unknown"))]
 						log::debug!(
 							target: "wasm-runtime",
-							"Prepared new runtime version {:?} in {} ms.",
+							"Prepared new runtime version {:?} for {:?} in {} ms.",
 							result.version,
+							runtime_code.context,
 							time.elapsed().as_millis(),
 						);
 					},
@@ -306,8 +306,8 @@ impl RuntimeCache {
 					runtimes.swap(i, i - 1);
 				},
 			None => {
-				runtimes[MAX_CONSENSUS_RUNTIMES - 1] = Some(runtime.clone());
-				for i in (1..MAX_CONSENSUS_RUNTIMES).rev() {
+				runtimes[MAX_RUNTIMES - 1] = Some(runtime.clone());
+				for i in (1..MAX_RUNTIMES).rev() {
 					runtimes.swap(i, i - 1);
 				}
 			},

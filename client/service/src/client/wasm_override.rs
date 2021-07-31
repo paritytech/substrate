@@ -37,7 +37,7 @@
 //! needed must be provided in the given directory.
 use sc_executor::RuntimeInfo;
 use sp_blockchain::Result;
-use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
+use sp_core::traits::{CodeContext, FetchRuntimeCode, RuntimeCode};
 use sp_state_machine::BasicExternalities;
 use sp_version::RuntimeVersion;
 use std::{
@@ -60,13 +60,8 @@ impl WasmBlob {
 		Self { code, hash }
 	}
 
-	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
-		RuntimeCode {
-			code_fetcher: self,
-			hash: self.hash.clone(),
-			context: sp_core::traits::CodeContext::Consensus,
-			heap_pages,
-		}
+	fn runtime_code(&self, heap_pages: Option<u64>, context: CodeContext) -> RuntimeCode {
+		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), context, heap_pages }
 	}
 }
 
@@ -130,8 +125,13 @@ where
 	/// Gets an override by it's runtime spec version.
 	///
 	/// Returns `None` if an override for a spec version does not exist.
-	pub fn get<'a, 'b: 'a>(&'b self, spec: &u32, pages: Option<u64>) -> Option<RuntimeCode<'a>> {
-		self.overrides.get(spec).map(|w| w.runtime_code(pages))
+	pub fn get<'a, 'b: 'a>(
+		&'b self,
+		spec: &u32,
+		pages: Option<u64>,
+		context: CodeContext,
+	) -> Option<RuntimeCode<'a>> {
+		self.overrides.get(spec).map(|w| w.runtime_code(pages, context))
 	}
 
 	/// Scrapes a folder for WASM runtimes.
@@ -153,7 +153,7 @@ where
 			match path.extension().map(|e| e.to_str()).flatten() {
 				Some("wasm") => {
 					let wasm = WasmBlob::new(fs::read(&path).map_err(handle_err)?);
-					let version = Self::runtime_version(executor, &wasm, Some(128))?;
+					let version = Self::runtime_version(executor, &wasm, Some(128), CodeContext::Consensus)?;
 					log::info!(
 						target: "wasm_overrides",
 						"Found wasm override in file: `{:?}`, version: {}",
@@ -185,10 +185,11 @@ where
 		executor: &E,
 		code: &WasmBlob,
 		heap_pages: Option<u64>,
+		context: CodeContext,
 	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor
-			.runtime_version(&mut ext, &code.runtime_code(heap_pages))
+			.runtime_version(&mut ext, &code.runtime_code(heap_pages, context))
 			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())
 	}
 }
@@ -234,8 +235,9 @@ mod tests {
 		let executor =
 			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
 
-		let version = WasmOverride::runtime_version(&executor, &wasm, Some(128))
-			.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");
+		let version =
+			WasmOverride::runtime_version(&executor, &wasm, Some(128), CodeContext::Consensus)
+				.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");
 		assert_eq!(version.spec_version, 2);
 	}
 

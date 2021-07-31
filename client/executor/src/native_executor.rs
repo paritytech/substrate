@@ -48,9 +48,14 @@ use sp_tasks::new_async_externalities;
 use sp_version::{NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{Function, HostFunctions};
 
-/// Default num of pages for the heap
+/// Default num of pages for the heap of the runtime, when used for consensus operations.
+///
+/// 128mb per instance.
 const DEFAULT_HEAP_PAGES_CONSENSUS: u64 = 2048;
-const DEFAULT_HEAP_PAGES_OFFCHAIN: u64 = DEFAULT_HEAP_PAGES_CONSENSUS * 4;
+/// Default num of pages for the heap of the runtime, when used for offchain operations.
+///
+/// 256mb per instance.
+const DEFAULT_HEAP_PAGES_OFFCHAIN: u64 = DEFAULT_HEAP_PAGES_CONSENSUS * 2;
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///

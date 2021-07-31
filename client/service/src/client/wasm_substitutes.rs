@@ -57,13 +57,12 @@ impl<Block: BlockT> WasmSubstitute<Block> {
 		Ok(Self { code, hash, block_hash, block_number })
 	}
 
-	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
-		RuntimeCode {
-			code_fetcher: self,
-			hash: self.hash.clone(),
-			heap_pages,
-			context: sp_core::traits::CodeContext::Consensus,
-		}
+	fn runtime_code(
+		&self,
+		heap_pages: Option<u64>,
+		context: sp_core::traits::CodeContext,
+	) -> RuntimeCode {
+		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages, context }
 	}
 
 	/// Returns `true` when the substitute matches for the given `block_id`.
@@ -173,10 +172,11 @@ where
 		&self,
 		spec: u32,
 		pages: Option<u64>,
+		context: sp_core::traits::CodeContext,
 		block_id: &BlockId<Block>,
 	) -> Option<RuntimeCode<'_>> {
 		let s = self.substitutes.get(&spec)?;
-		s.matches(block_id, &*self.backend).then(|| s.runtime_code(pages))
+		s.matches(block_id, &*self.backend).then(|| s.runtime_code(pages, context))
 	}
 
 	fn runtime_version(
@@ -185,7 +185,10 @@ where
 	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor
-			.runtime_version(&mut ext, &code.runtime_code(None))
+			.runtime_version(
+				&mut ext,
+				&code.runtime_code(None, sp_core::traits::CodeContext::Consensus),
+			)
 			.map_err(|e| WasmSubstituteError::VersionInvalid(format!("{:?}", e)).into())
 	}
 }

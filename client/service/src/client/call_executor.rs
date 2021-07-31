@@ -97,12 +97,12 @@ where
 		let code = if let Some(d) = self
 			.wasm_override
 			.as_ref()
-			.map(|o| o.get(&spec, onchain_code.heap_pages))
+			.map(|o| o.get(&spec, onchain_code.heap_pages, onchain_code.context))
 			.flatten()
 		{
 			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
-		} else if let Some(s) = self.wasm_substitutes.get(spec, onchain_code.heap_pages, id) {
+		} else if let Some(s) = self.wasm_substitutes.get(spec, onchain_code.heap_pages, onchain_code.context, id) {
 			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
 			s
 		} else {
