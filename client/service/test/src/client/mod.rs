@@ -70,7 +70,7 @@ native_executor_instance!(
 );
 
 fn executor() -> sc_executor::NativeExecutor<Executor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, 8)
 }
 
 pub fn prepare_client_with_key_changes() -> (

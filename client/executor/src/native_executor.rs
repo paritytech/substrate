@@ -303,9 +303,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
-		// deprecated: this is the CLI configurable heap pages, which no longer exists and is
-		// ALWAYS NONE. This parameter should be removed.
-		_default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
 		let extended = D::ExtendHostFunctions::host_functions();
@@ -671,7 +668,7 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
+		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, 8);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);
 		});

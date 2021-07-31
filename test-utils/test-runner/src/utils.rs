@@ -102,7 +102,6 @@ pub fn default_config(
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
-		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
 		disable_grandpa: false,

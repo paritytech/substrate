@@ -288,7 +288,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 	{
 		let executor = executor
 			.into()
-			.unwrap_or_else(|| NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8));
+			.unwrap_or_else(|| NativeExecutor::new(WasmExecutionMethod::Interpreted, 8));
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,

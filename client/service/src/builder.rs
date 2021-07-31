@@ -292,7 +292,6 @@ where
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
-		config.default_heap_pages,
 		config.max_runtime_instances,
 	);
 
@@ -383,7 +382,6 @@ where
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
-		config.default_heap_pages,
 		config.max_runtime_instances,
 	);
 

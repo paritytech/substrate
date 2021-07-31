@@ -362,7 +362,7 @@ mod tests {
 	native_executor_instance!(NativeDispatch, crate::api::dispatch, crate::native_version);
 
 	fn executor() -> NativeExecutor<NativeDispatch> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, 8)
 	}
 
 	fn new_test_ext() -> TestExternalities {

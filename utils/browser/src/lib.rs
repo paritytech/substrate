@@ -87,7 +87,6 @@ where
 		},
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
-		default_heap_pages: Default::default(),
 		dev_key_seed: Default::default(),
 		disable_grandpa: Default::default(),
 		execution_configs: Default::default(),

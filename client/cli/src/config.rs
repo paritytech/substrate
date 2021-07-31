@@ -520,7 +520,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,
 			telemetry_external_transport: self.telemetry_external_transport()?,
-			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
 			force_authoring: self.force_authoring()?,
 			disable_grandpa: self.disable_grandpa()?,

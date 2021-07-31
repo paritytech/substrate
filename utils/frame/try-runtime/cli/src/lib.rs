@@ -187,12 +187,12 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution: sp_state_machine::ExecutionStrategy = shared.execution.into();
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
+	// TODO: set the heap pages.
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
 	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
 
 	let ext = {
 		let builder = match command.state {
@@ -261,12 +261,12 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution: sp_state_machine::ExecutionStrategy = shared.execution.into();
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
+	// TODO: set heap pages.
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
 	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
 
 	let mode = match command.state {
 		State::Live { snapshot_path, modules } => {
@@ -343,12 +343,12 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution: sp_state_machine::ExecutionStrategy = shared.execution.into();
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
+	// TODO: set heap pages.
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
 	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
 
 	let block_hash = shared.block_at::<Block>()?;
 	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
