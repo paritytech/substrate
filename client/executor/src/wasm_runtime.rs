@@ -127,7 +127,11 @@ impl VersionedRuntime {
 				result
 			},
 			None => {
-				log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
+				log::warn!(
+					target: "wasm-runtime",
+					"Ran out of free WASM instances with {} pages",
+					self.heap_pages,
+				);
 
 				// Allocate a new instance
 				let instance = self.module.new_instance()?;
@@ -138,7 +142,9 @@ impl VersionedRuntime {
 	}
 }
 
-const MAX_RUNTIMES: usize = 2;
+const MAX_CONSENSUS_RUNTIMES: usize = 2;
+const MAX_OFFCHAIN_RUNTIMES: usize = 2; // TODO: this is kinda pointless, as it cannot be different than the consensus one.
+const MAX_OFFCHAIN_RUNTIME_INSTANCES: usize = 1;
 
 /// Cache for the runtimes.
 ///
@@ -149,15 +155,20 @@ const MAX_RUNTIMES: usize = 2;
 /// values of mutable globals. Follow-up requests to fetch a runtime return this one instance with
 /// the memory reset to the initial memory. So, one runtime instance is reused for every fetch
 /// request.
-///
-/// The size of cache is equal to `MAX_RUNTIMES`.
 pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
+	///
+	/// These runtime instances are only used in consensus code context and their count is limited
+	/// by `max_consensus_runtime_instances`.
+	consensus_runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_CONSENSUS_RUNTIMES]>,
 	/// The size of the instances cache for each runtime.
-	max_runtime_instances: usize,
+	max_consensus_runtime_instances: usize,
+	/// Same as `consensus_runtimes`, but used in offchain code context. Their size is always bound
+	/// by 1 (can easily be configurable, but we don't need this right now).
+	offchain_runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_OFFCHAIN_RUNTIMES]>,
+	/// Optional path used for caching artifacts.
 	cache_path: Option<PathBuf>,
 }
 
@@ -169,8 +180,13 @@ impl RuntimeCache {
 	///
 	/// `cache_path` allows to specify an optional directory where the executor can store files
 	/// for caching.
-	pub fn new(max_runtime_instances: usize, cache_path: Option<PathBuf>) -> RuntimeCache {
-		RuntimeCache { runtimes: Default::default(), max_runtime_instances, cache_path }
+	pub fn new(max_consensus_runtime_instances: usize, cache_path: Option<PathBuf>) -> RuntimeCache {
+		RuntimeCache {
+			consensus_runtimes: Default::default(),
+			offchain_runtimes: Default::default(),
+			max_consensus_runtime_instances,
+			cache_path,
+		}
 	}
 
 	/// Prepares a WASM module instance and executes given function for it.
@@ -222,7 +238,17 @@ impl RuntimeCache {
 		let code_hash = &runtime_code.hash;
 		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
-		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
+		// this must be released prior to calling f.
+		let mut runtimes = match runtime_code.context {
+			sp_core::traits::CodeContext::Consensus => self.consensus_runtimes.lock(),
+			sp_core::traits::CodeContext::Offchain => self.offchain_runtimes.lock(),
+		};
+
+		let max_runtime_instances = match runtime_code.context {
+			sp_core::traits::CodeContext::Consensus => self.max_consensus_runtime_instances,
+			sp_core::traits::CodeContext::Offchain => MAX_OFFCHAIN_RUNTIME_INSTANCES,
+		};
+
 		let pos = runtimes.iter().position(|r| {
 			r.as_ref().map_or(false, |r| {
 				r.wasm_method == wasm_method &&
@@ -249,7 +275,7 @@ impl RuntimeCache {
 					heap_pages,
 					host_functions.into(),
 					allow_missing_func_imports,
-					self.max_runtime_instances,
+					max_runtime_instances,
 					self.cache_path.as_deref(),
 				);
 
@@ -280,8 +306,8 @@ impl RuntimeCache {
 					runtimes.swap(i, i - 1);
 				},
 			None => {
-				runtimes[MAX_RUNTIMES - 1] = Some(runtime.clone());
-				for i in (1..MAX_RUNTIMES).rev() {
+				runtimes[MAX_CONSENSUS_RUNTIMES - 1] = Some(runtime.clone());
+				for i in (1..MAX_CONSENSUS_RUNTIMES).rev() {
 					runtimes.swap(i, i - 1);
 				}
 			},
