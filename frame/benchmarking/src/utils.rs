@@ -116,6 +116,9 @@ pub struct BenchmarkConfig {
 	pub extra: bool,
 }
 
+/// A list of benchmarks available for a particular pallet and instance.
+///
+/// All `Vec<u8>` must be valid utf8 strings.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkList {
 	pub pallet: Vec<u8>,
@@ -126,10 +129,10 @@ pub struct BenchmarkList {
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
-		/// Get the benchmarks available for this runtime.
+		/// Get the benchmark metadata available for this runtime.
 		///
 		/// Parameters
-		/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
+		/// - `extra`: Also list benchmarks marked "extra" which would otherwise not be
 		///            needed for weight calculation.
 		fn benchmark_metadata(extra: bool) -> (Vec<BenchmarkList>, Vec<StorageInfo>);
 

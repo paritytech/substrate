@@ -1358,6 +1358,26 @@ macro_rules! add_benchmark {
 	)
 }
 
+/// This macro allows users to easily generate a list of benchmarks for the pallets configured
+/// in the runtime.
+///
+/// To use this macro, first create a an object to store the list:
+///
+/// ```
+/// let mut list = Vec::<BenchmarkList>::new();
+/// ```
+///
+/// Then pass this `list` to the macro, along with the `extra` boolean, the pallet crate, and
+/// pallet struct:
+///
+/// ```
+/// list_benchmark!(list, extra, pallet_balances, Balances);
+/// list_benchmark!(list, extra, pallet_session, SessionBench::<Runtime>);
+/// list_benchmark!(list, extra, frame_system, SystemBench::<Runtime>);
+/// ```
+///
+/// This should match what exists with the `add_benchmark!` macro.
+
 #[macro_export]
 macro_rules! list_benchmark {
 	( $list:ident, $extra:ident, $name:path, $( $location:tt )* ) => (
