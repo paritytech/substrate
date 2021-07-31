@@ -40,7 +40,7 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 // and benchmark are the same.
 fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 	if batches.is_empty() {
-		return batches;
+		return batches
 	}
 
 	let mut all_benchmarks = LinkedHashMap::<_, Vec<BenchmarkResults>>::new();
@@ -57,7 +57,7 @@ fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 				// New benchmark, so we add a new entry with the initial results.
 				None => {
 					all_benchmarks.insert(key, results);
-				}
+				},
 			}
 		});
 
@@ -83,19 +83,19 @@ impl BenchmarkCmd {
 	{
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
-				return Err("Output file or path is invalid!".into());
+				return Err("Output file or path is invalid!".into())
 			}
 		}
 
 		if let Some(header_file) = &self.header {
 			if !header_file.is_file() {
-				return Err("Header file is invalid!".into());
+				return Err("Header file is invalid!".into())
 			};
 		}
 
 		if let Some(handlebars_template_file) = &self.template {
 			if !handlebars_template_file.is_file() {
-				return Err("Handlebars template file is invalid!".into());
+				return Err("Handlebars template file is invalid!".into())
 			};
 		}
 
@@ -125,7 +125,7 @@ impl BenchmarkCmd {
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
-			return extensions;
+			return extensions
 		};
 
 		// Get Benchmark List
@@ -149,7 +149,7 @@ impl BenchmarkCmd {
 
 		if self.list {
 			list_benchmark(pallet, extrinsic, list);
-			return Ok(());
+			return Ok(())
 		}
 
 		// Use the benchmark list and the user input to determine the set of benchmarks to run.
@@ -250,7 +250,7 @@ impl BenchmarkCmd {
 
 			// Skip raw data + analysis if there are no results
 			if batch.results.is_empty() {
-				continue;
+				continue
 			}
 
 			if self.raw_data {
@@ -350,7 +350,7 @@ fn list_benchmark(pallet_input: &[u8], extrinsic_input: &[u8], list: Vec<Benchma
 
 	if filtered_list.is_empty() {
 		println!("Pallet not found.");
-		return;
+		return
 	}
 
 	println!("pallet, benchmark");
