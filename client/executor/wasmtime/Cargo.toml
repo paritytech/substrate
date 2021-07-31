@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor-wasmtime"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -19,16 +19,16 @@ log = "0.4.8"
 scoped-tls = "1.0"
 parity-wasm = "0.42.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-executor-common = { version = "0.9.0", path = "../common" }
-sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sc-allocator = { version = "3.0.0", path = "../../allocator" }
+sc-executor-common = { version = "0.10.0-dev", path = "../common" }
+sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
 wasmtime = { version = "0.27.0", default-features = false, features = ["cache", "parallel-compilation"] }
 pwasm-utils = { version = "0.18" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 wat = "1.0"

@@ -38,9 +38,9 @@
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
 //! limited. Currently, the maximum size of an allocation is 32 MiB.
 //!
-//! When the allocator serves an allocation request it first checks the linked list for the respective
-//! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
-//! In any case the order is stored in the header of the allocation.
+//! When the allocator serves an allocation request it first checks the linked list for the
+//! respective order. If it doesn't have any free chunks, the allocator requests memory from the
+//! bump allocator. In any case the order is stored in the header of the allocation.
 //!
 //! Upon deallocation we get the order of the allocation from its header and then add that
 //! allocation to the linked list for the respective order.
@@ -59,16 +59,22 @@
 //!   allocator was consumed by the 32 MiB allocation, allocations of all sizes except 32 MiB will
 //!   fail.
 //!
-//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
-//!   will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will take
-//!   up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount in use
-//!   of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilisation is going to be around
-//!   75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be wasted.
-//!   This is more pronounced (in terms of absolute heap amounts) with larger allocation sizes.
+//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001
+//!   MiB will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will
+//!   take up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount
+//!   in use of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilization is going to
+//!   be around 75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be
+//!   wasted. This is more pronounced (in terms of absolute heap amounts) with larger allocation
+//!   sizes.
 
 use crate::Error;
-use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
+pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
+use std::{
+	convert::{TryFrom, TryInto},
+	mem,
+	ops::{Index, IndexMut, Range},
+};
 
 /// The minimal alignment guaranteed by this allocator.
 ///
@@ -90,15 +96,13 @@ const LOG_TARGET: &'static str = "wasm-heap";
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.
 //
-// The maximum possible allocation size was chosen rather arbitrary. 32 MiB should be enough for
-// everybody.
+// The maximum possible allocation size is set in the primitives to 32MiB.
 //
 // N_ORDERS - represents the number of orders supported.
 //
 // This number corresponds to the number of powers between the minimum possible allocation and
 // maximum possible allocation, or: 2^3...2^25 (both ends inclusive, hence 23).
 const N_ORDERS: usize = 23;
-const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
@@ -138,7 +142,7 @@ impl Order {
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
 			log::warn!(target: LOG_TARGET, "going to fail due to allocating {:?}", size);
-			return Err(Error::RequestedAllocationTooLarge);
+			return Err(Error::RequestedAllocationTooLarge)
 		} else if size < MIN_POSSIBLE_ALLOCATION {
 			MIN_POSSIBLE_ALLOCATION
 		} else {
@@ -215,7 +219,6 @@ impl Link {
 /// ```
 ///
 /// ## Occupied header
-///
 /// ```ignore
 /// 64             32                  0
 //  +--------------+-------------------+
@@ -289,9 +292,7 @@ struct FreeLists {
 impl FreeLists {
 	/// Creates the free empty lists.
 	fn new() -> Self {
-		Self {
-			heads: [Link::Nil; N_ORDERS]
-		}
+		Self { heads: [Link::Nil; N_ORDERS] }
 	}
 
 	/// Replaces a given link for the specified order and returns the old one.
@@ -396,15 +397,11 @@ impl FreeingBumpHeapAllocator {
 				self.free_lists[order] = next_free;
 
 				header_ptr
-			}
+			},
 			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
-				Self::bump(
-					&mut self.bumper,
-					order.size() + HEADER_SIZE,
-					mem.size(),
-				)?
-			}
+				Self::bump(&mut self.bumper, order.size() + HEADER_SIZE, mem.size())?
+			},
 		};
 
 		// Write the order in the occupied header.
@@ -439,7 +436,11 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
+	pub fn deallocate<M: Memory + ?Sized>(
+		&mut self,
+		mem: &mut M,
+		ptr: Pointer<u8>,
+	) -> Result<(), Error> {
 		if self.poisoned {
 			return Err(error("the allocator has been poisoned"))
 		}
@@ -479,8 +480,13 @@ impl FreeingBumpHeapAllocator {
 	/// the operation would exhaust the heap.
 	fn bump(bumper: &mut u32, size: u32, heap_end: u32) -> Result<u32, Error> {
 		if *bumper + size > heap_end {
-			log::error!(target: LOG_TARGET, "running out of space with current bumper {}, mem size {}", bumper, heap_end);
-			return Err(Error::AllocatorOutOfSpace);
+			log::error!(
+				target: LOG_TARGET,
+				"running out of space with current bumper {}, mem size {}",
+				bumper,
+				heap_end
+			);
+			return Err(Error::AllocatorOutOfSpace)
 		}
 
 		let res = *bumper;
@@ -914,5 +920,14 @@ mod tests {
 		// then
 		assert!(heap.poisoned);
 		assert!(heap.deallocate(mem.as_mut(), alloc_ptr).is_err());
+	}
+
+	#[test]
+	fn test_n_orders() {
+		// Test that N_ORDERS is consistent with min and max possible allocation.
+		assert_eq!(
+			MIN_POSSIBLE_ALLOCATION * 2u32.pow(N_ORDERS as u32 - 1),
+			MAX_POSSIBLE_ALLOCATION
+		);
 	}
 }

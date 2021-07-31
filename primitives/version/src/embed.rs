@@ -19,7 +19,7 @@
 //! into a WASM file.
 
 use codec::Encode;
-use parity_wasm::elements::{Module, deserialize_buffer, serialize};
+use parity_wasm::elements::{deserialize_buffer, serialize, Module};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, thiserror::Error)]
 pub enum Error {
@@ -40,7 +40,8 @@ pub fn embed_runtime_version(
 ) -> Result<Vec<u8>, Error> {
 	let mut module: Module = deserialize_buffer(wasm).map_err(|_| Error::Deserialize)?;
 
-	let apis = version.apis
+	let apis = version
+		.apis
 		.iter()
 		.map(Encode::encode)
 		.map(|v| v.into_iter())

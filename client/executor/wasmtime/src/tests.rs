@@ -16,12 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_executor_common::{
-	runtime_blob::RuntimeBlob,
-	wasm_runtime::WasmModule,
-};
+use codec::{Decode as _, Encode as _};
+use sc_executor_common::{runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
 use sc_runtime_test::wasm_binary_unwrap;
-use codec::{Encode as _, Decode as _};
 use std::sync::Arc;
 
 type HostFunctions = sp_io::SubstrateHostFunctions;
@@ -74,7 +71,7 @@ impl RuntimeBuilder {
 				Some(wat) => {
 					wasm = wat::parse_str(wat).expect("wat parsing failed");
 					&wasm
-				}
+				},
 			};
 
 			RuntimeBlob::uncompress_if_needed(&wasm)
@@ -90,21 +87,20 @@ impl RuntimeBuilder {
 				cache_path: None,
 				semantics: crate::Semantics {
 					fast_instance_reuse: self.fast_instance_reuse,
-					deterministic_stack_limit:
-						match self.deterministic_stack {
-							true => Some(crate::DeterministicStackLimit {
-								logical_max: 65536,
-								native_stack_max: 256 * 1024 * 1024,
-							}),
-							false => None,
-						},
+					deterministic_stack_limit: match self.deterministic_stack {
+						true => Some(crate::DeterministicStackLimit {
+							logical_max: 65536,
+							native_stack_max: 256 * 1024 * 1024,
+						}),
+						false => None,
+					},
 					canonicalize_nans: self.canonicalize_nans,
 				},
 			},
 			{
 				use sp_wasm_interface::HostFunctions as _;
 				HostFunctions::host_functions()
-			}
+			},
 		)
 		.expect("cannot create runtime");
 
@@ -120,9 +116,7 @@ fn test_nan_canonicalization() {
 		builder.build()
 	};
 
-	let instance = runtime
-		.new_instance()
-		.expect("failed to instantiate a runtime");
+	let instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	/// A NaN with canonical payload bits.
 	const CANONICAL_NAN_BITS: u32 = 0x7fc00000;
@@ -149,10 +143,7 @@ fn test_nan_canonicalization() {
 
 	let params = (u32::to_le_bytes(ARBITRARY_NAN_BITS), u32::to_le_bytes(1)).encode();
 	let res = {
-		let raw_result = instance.call_export(
-			"test_fp_f32add",
-			&params,
-		).unwrap();
+		let raw_result = instance.call_export("test_fp_f32add", &params).unwrap();
 		u32::from_le_bytes(<[u8; 4]>::decode(&mut &raw_result[..]).unwrap())
 	};
 	assert_eq!(res, CANONICAL_NAN_BITS);
@@ -168,9 +159,7 @@ fn test_stack_depth_reaching() {
 		builder.deterministic_stack(true);
 		builder.build()
 	};
-	let instance = runtime
-		.new_instance()
-		.expect("failed to instantiate a runtime");
+	let instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
 

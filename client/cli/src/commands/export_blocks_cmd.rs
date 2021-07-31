@@ -16,21 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::{GenericNumber, DatabaseParams, PruningParams, SharedParams};
-use crate::CliConfiguration;
-use log::info;
-use sc_service::{
-	config::DatabaseConfig, chain_ops::export_blocks,
+use crate::{
+	error,
+	params::{DatabaseParams, GenericNumber, PruningParams, SharedParams},
+	CliConfiguration,
 };
+use log::info;
 use sc_client_api::{BlockBackend, UsageProvider};
+use sc_service::{chain_ops::export_blocks, config::DatabaseConfig};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::fmt::Debug;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
 use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
@@ -95,9 +90,7 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		export_blocks(client, file, from.into(), to, binary)
-			.await
-			.map_err(Into::into)
+		export_blocks(client, file, from.into(), to, binary).await.map_err(Into::into)
 	}
 }
 

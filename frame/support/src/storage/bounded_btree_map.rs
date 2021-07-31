@@ -17,15 +17,12 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
+use crate::{storage::StorageDecodeLength, traits::Get};
+use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
 	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, fmt, marker::PhantomData,
 	ops::Deref,
 };
-use crate::{
-	storage::StorageDecodeLength,
-	traits::Get,
-};
-use codec::{Encode, Decode, MaxEncodedLen};
 
 /// A bounded map based on a B-Tree.
 ///
@@ -46,7 +43,7 @@ where
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = BTreeMap::<K, V>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedBTreeMap exceeds its limit".into());
+			return Err("BoundedBTreeMap exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -280,7 +277,9 @@ where
 	type Error = ();
 
 	fn try_from(value: BTreeMap<K, V>) -> Result<Self, Self::Error> {
-		(value.len() <= Self::bound()).then(move || BoundedBTreeMap(value, PhantomData)).ok_or(())
+		(value.len() <= Self::bound())
+			.then(move || BoundedBTreeMap(value, PhantomData))
+			.ok_or(())
 	}
 }
 
@@ -303,9 +302,9 @@ impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> whe
 #[cfg(test)]
 pub mod test {
 	use super::*;
+	use crate::Twox128;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

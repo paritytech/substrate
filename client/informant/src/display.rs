@@ -40,7 +40,6 @@ use wasm_timer::Instant;
 ///
 /// Call `InformantDisplay::new` to initialize the state, then regularly call `display` with the
 /// information to display.
-///
 pub struct InformantDisplay<B: BlockT> {
 	/// Head of chain block number from the last time `display` has been called.
 	/// `None` if `display` has never been called.
@@ -84,33 +83,31 @@ impl<B: BlockT> InformantDisplay<B> {
 
 		let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
 		let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
-		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
-			if elapsed > 0 {
-				self.last_total_bytes_inbound = total_bytes_inbound;
-				self.last_total_bytes_outbound = total_bytes_outbound;
-				(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
-			} else {
-				(diff_bytes_inbound, diff_bytes_outbound)
-			};
-
-		let (level, status, target) = match (
-			net_status.sync_state,
-			net_status.best_seen_block,
-			net_status.state_sync
-		) {
-			(_, _, Some(state)) => (
-				"⚙️ ",
-				"Downloading state".into(),
-				format!(", {}%, ({:.2}) Mib", state.percentage, (state.size as f32) / (1024f32 * 1024f32)),
-			),
-			(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
-			(SyncState::Downloading, None, _) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n), None) => (
-				"⚙️ ",
-				format!("Syncing{}", speed),
-				format!(", target=#{}", n),
-			),
+		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) = if elapsed > 0 {
+			self.last_total_bytes_inbound = total_bytes_inbound;
+			self.last_total_bytes_outbound = total_bytes_outbound;
+			(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+		} else {
+			(diff_bytes_inbound, diff_bytes_outbound)
 		};
+
+		let (level, status, target) =
+			match (net_status.sync_state, net_status.best_seen_block, net_status.state_sync) {
+				(_, _, Some(state)) => (
+					"⚙️ ",
+					"Downloading state".into(),
+					format!(
+						", {}%, ({:.2}) Mib",
+						state.percentage,
+						(state.size as f32) / (1024f32 * 1024f32)
+					),
+				),
+				(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
+				(SyncState::Downloading, None, _) =>
+					("⚙️ ", format!("Preparing{}", speed), "".into()),
+				(SyncState::Downloading, Some(n), None) =>
+					("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
+			};
 
 		if self.format.enable_color {
 			info!(
@@ -151,7 +148,7 @@ impl<B: BlockT> InformantDisplay<B> {
 fn speed<B: BlockT>(
 	best_number: NumberFor<B>,
 	last_number: Option<NumberFor<B>>,
-	last_update: Instant
+	last_update: Instant,
 ) -> String {
 	// Number of milliseconds elapsed since last time.
 	let elapsed_ms = {
@@ -164,25 +161,28 @@ fn speed<B: BlockT>(
 	// Number of blocks that have been imported since last time.
 	let diff = match last_number {
 		None => return String::new(),
-		Some(n) => best_number.saturating_sub(n)
+		Some(n) => best_number.saturating_sub(n),
 	};
 
 	if let Ok(diff) = TryInto::<u128>::try_into(diff) {
 		// If the number of blocks can be converted to a regular integer, then it's easy: just
 		// do the math and turn it into a `f64`.
-		let speed = diff.saturating_mul(10_000).checked_div(u128::from(elapsed_ms))
-			.map_or(0.0, |s| s as f64) / 10.0;
+		let speed = diff
+			.saturating_mul(10_000)
+			.checked_div(u128::from(elapsed_ms))
+			.map_or(0.0, |s| s as f64) /
+			10.0;
 		format!(" {:4.1} bps", speed)
-
 	} else {
 		// If the number of blocks can't be converted to a regular integer, then we need a more
 		// algebraic approach and we stay within the realm of integers.
 		let one_thousand = NumberFor::<B>::from(1_000u32);
-		let elapsed = NumberFor::<B>::from(
-			<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::MAX)
-		);
+		let elapsed =
+			NumberFor::<B>::from(<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::MAX));
 
-		let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)
+		let speed = diff
+			.saturating_mul(one_thousand)
+			.checked_div(&elapsed)
 			.unwrap_or_else(Zero::zero);
 		format!(" {} bps", speed)
 	}
