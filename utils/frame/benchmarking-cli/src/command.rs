@@ -40,7 +40,7 @@ use std::{fmt::Debug, sync::Arc, time};
 // and benchmark are the same.
 fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 	if batches.is_empty() {
-		return batches
+		return batches;
 	}
 
 	let mut all_benchmarks = LinkedHashMap::<_, Vec<BenchmarkResults>>::new();
@@ -57,7 +57,7 @@ fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 				// New benchmark, so we add a new entry with the initial results.
 				None => {
 					all_benchmarks.insert(key, results);
-				},
+				}
 			}
 		});
 
@@ -83,27 +83,29 @@ impl BenchmarkCmd {
 	{
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
-				return Err("Output file or path is invalid!".into())
+				return Err("Output file or path is invalid!".into());
 			}
 		}
 
 		if let Some(header_file) = &self.header {
 			if !header_file.is_file() {
-				return Err("Header file is invalid!".into())
+				return Err("Header file is invalid!".into());
 			};
 		}
 
 		if let Some(handlebars_template_file) = &self.template {
 			if !handlebars_template_file.is_file() {
-				return Err("Handlebars template file is invalid!".into())
+				return Err("Handlebars template file is invalid!".into());
 			};
 		}
 
 		let spec = config.chain_spec;
 		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
-		let pallet = self.pallet.as_bytes();
-		let extrinsic = self.extrinsic.as_bytes();
+		let pallet = self.pallet.clone().unwrap_or_else(|| String::new());
+		let pallet = pallet.as_bytes();
+		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
+		let extrinsic = extrinsic.as_bytes();
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
@@ -123,7 +125,7 @@ impl BenchmarkCmd {
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
-			return extensions
+			return extensions;
 		};
 
 		// Get Benchmark List
@@ -146,14 +148,8 @@ impl BenchmarkCmd {
 				.map_err(|e| format!("Failed to decode benchmark metadata: {:?}", e))?;
 
 		if self.list {
-			// Show the list and exit early
-			for item in list {
-				println!("{}", String::from_utf8(item.pallet).unwrap());
-				for benchmark in item.benchmarks {
-					println!("- {}", String::from_utf8(benchmark).unwrap());
-				}
-			}
-			return Ok(())
+			list_benchmark(pallet, extrinsic, list);
+			return Ok(());
 		}
 
 		// Use the benchmark list and the user input to determine the set of benchmarks to run.
@@ -254,7 +250,7 @@ impl BenchmarkCmd {
 
 			// Skip raw data + analysis if there are no results
 			if batch.results.is_empty() {
-				continue
+				continue;
 			}
 
 			if self.raw_data {
@@ -335,5 +331,43 @@ impl CliConfiguration for BenchmarkCmd {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
 		})
+	}
+}
+
+/// List the benchmarks available in the runtime, in a CSV friendly format.
+///
+/// If `pallet_input` and `extrinsic_input` is empty, we list everything.
+///
+/// If `pallet_input` is present, we only list the benchmarks for that pallet.
+///
+/// If `extrinsic_input` is `*`, we will hide the individual benchmarks for each pallet, and just
+/// show a single line for each available pallet.
+fn list_benchmark(pallet_input: &[u8], extrinsic_input: &[u8], list: Vec<BenchmarkList>) {
+	let filtered_list = list
+		.into_iter()
+		.filter(|item| pallet_input.is_empty() || pallet_input == &item.pallet)
+		.collect::<Vec<_>>();
+
+	if filtered_list.is_empty() {
+		println!("Pallet not found.");
+		return;
+	}
+
+	println!("pallet, benchmark");
+	for item in filtered_list {
+		let pallet_string =
+			String::from_utf8(item.pallet.clone()).expect("Encoded from String; qed");
+
+		if extrinsic_input == &b"*"[..] {
+			println!("{}, *", pallet_string)
+		} else {
+			for benchmark in item.benchmarks {
+				println!(
+					"{}, {}",
+					pallet_string,
+					String::from_utf8(benchmark).expect("Encoded from String; qed"),
+				);
+			}
+		}
 	}
 }
