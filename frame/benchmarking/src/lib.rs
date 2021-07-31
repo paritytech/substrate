@@ -1363,14 +1363,14 @@ macro_rules! add_benchmark {
 ///
 /// To use this macro, first create a an object to store the list:
 ///
-/// ```
+/// ```ignore
 /// let mut list = Vec::<BenchmarkList>::new();
 /// ```
 ///
 /// Then pass this `list` to the macro, along with the `extra` boolean, the pallet crate, and
 /// pallet struct:
 ///
-/// ```
+/// ```ignore
 /// list_benchmark!(list, extra, pallet_balances, Balances);
 /// list_benchmark!(list, extra, pallet_session, SessionBench::<Runtime>);
 /// list_benchmark!(list, extra, frame_system, SystemBench::<Runtime>);

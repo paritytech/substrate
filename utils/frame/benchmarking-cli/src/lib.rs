@@ -31,12 +31,12 @@ fn parse_pallet_name(pallet: &str) -> String {
 #[derive(Debug, structopt::StructOpt)]
 pub struct BenchmarkCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[structopt(short, long, parse(from_str = parse_pallet_name))]
-	pub pallet: String,
+	#[structopt(short, long, parse(from_str = parse_pallet_name), required_unless = "list")]
+	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[structopt(short, long)]
-	pub extrinsic: String,
+	#[structopt(short, long, required_unless = "list")]
+	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
 	#[structopt(short, long, default_value = "1")]
@@ -130,7 +130,11 @@ pub struct BenchmarkCmd {
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
 
-	/// List the benchmarks available
+	/// List the benchmarks available.
+	///
+	/// * If nothing else is specified, all pallets and benchmarks will be listed.
+	/// * If the `pallet` argument is passed, then we will only list benchmarks for that pallet.
+	/// * If the `extrinsic` argument is set to `*`, we will hide the individual benchmarks.
 	#[structopt(long)]
 	pub list: bool,
 }
