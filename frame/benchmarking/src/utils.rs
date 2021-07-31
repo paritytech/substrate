@@ -103,13 +103,16 @@ pub struct BenchmarkConfig {
 	pub lowest_range_values: Vec<u32>,
 	/// An optional manual override to the highest values used in the `steps` range.
 	pub highest_range_values: Vec<u32>,
-	/// The number of samples to take across the range of values for components. (current_step, total_steps)
+	/// The number of samples to take across the range of values for components. (current_step,
+	/// total_steps)
 	pub steps: (u32, u32),
-	/// The number times to repeat each benchmark to increase accuracy of results. (current_repeat, total_repeat)
+	/// The number times to repeat each benchmark to increase accuracy of results. (current_repeat,
+	/// total_repeat)
 	pub repeat: (u32, u32),
 	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
 	pub verify: bool,
-	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
+	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a
+	/// pallet.
 	pub extra: bool,
 }
 
