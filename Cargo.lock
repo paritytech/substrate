@@ -1851,7 +1851,7 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "14.0.0-dev"
+version = "4.0.0-dev"
 dependencies = [
  "parity-scale-codec",
  "serde",
