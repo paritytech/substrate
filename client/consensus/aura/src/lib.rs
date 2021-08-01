@@ -45,6 +45,7 @@ use log::{debug, trace};
 use codec::{Codec, Decode, Encode};
 
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
+use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SlotInfo, StorageChanges,
 };
@@ -53,8 +54,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, ProvideCache, Result as CResult};
 use sp_consensus::{
-	BlockImport, BlockImportParams, BlockOrigin, CanAuthorWith, Environment,
-	Error as ConsensusError, ForkChoiceStrategy, Proposer, SelectChain, StateAction,
+	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
 };
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{Pair, Public};
@@ -185,7 +185,7 @@ where
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
+	L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
@@ -277,7 +277,7 @@ where
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
+	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	AuraWorker {
@@ -324,7 +324,7 @@ where
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
+	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
@@ -395,7 +395,7 @@ where
 				Self::Claim,
 				Self::EpochData,
 			) -> Result<
-				sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
+				sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
 				sp_consensus::Error,
 			> + Send
 			+ 'static,
@@ -431,7 +431,7 @@ where
 			import_block.post_digests.push(signature_digest_item);
 			import_block.body = Some(body);
 			import_block.state_action =
-				StateAction::ApplyChanges(sp_consensus::StorageChanges::Changes(storage_changes));
+				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
 			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 			Ok(import_block)
@@ -560,14 +560,14 @@ mod tests {
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
+	use sc_consensus::BoxJustificationImport;
 	use sc_consensus_slots::{BackoffAuthoringOnFinalizedHeadLagging, SimpleSlotWorker};
 	use sc_keystore::LocalKeystore;
 	use sc_network::config::ProtocolConfig;
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
 	use sp_consensus::{
-		import_queue::BoxJustificationImport, AlwaysCanAuthor, DisableProofRecording,
-		NoNetwork as DummyOracle, Proposal, SlotData,
+		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal, SlotData,
 	};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
