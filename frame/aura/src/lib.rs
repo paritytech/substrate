@@ -148,7 +148,7 @@ impl<T: Config> Pallet<T> {
 
 			let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>
 				::try_from((*authorities).clone()).expect("authorities vec too big");
-				
+
 			<Authorities<T>>::put(bounded_authorities);
 		}
 	}
@@ -196,8 +196,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// instant changes
 		if changed {
 			let mut next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			// Truncate to MaxAuthorities, NOTE: is this the right thing to do?
+			// Truncate to MaxAuthorities, to not fail the conversion
 			next_authorities.truncate(T::MaxAuthorities::get() as usize);
+
 			let last_authorities = Self::authorities();
 			if next_authorities != last_authorities.into_inner() {
 				let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>

@@ -23,7 +23,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{traits::OneSessionHandler, BoundedVec};
+use frame_support::{
+	traits::{Get, OneSessionHandler},
+	BoundedVec,
+};
 use sp_authority_discovery::AuthorityId;
 use sp_std::prelude::*;
 
@@ -106,16 +109,14 @@ impl<T: Config> Pallet<T> {
 	fn initialize_keys(keys: &Vec<AuthorityId>) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			let bounded_keys = Self::to_bounded_vec((*keys).clone());
+
+			let bounded_keys =
+				BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from((*keys).clone())
+					.expect("Keys vec too big");
+
 			Keys::<T>::put(bounded_keys.clone());
 			NextKeys::<T>::put(bounded_keys);
 		}
-	}
-
-	fn to_bounded_vec(keys: Vec<AuthorityId>) -> BoundedVec<AuthorityId, T::MaxAuthorities> {
-		let bounded_keys = BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(keys);
-		assert!(bounded_keys.is_ok(), "More than the maximum number of authorities provided");
-		bounded_keys.unwrap()
 	}
 }
 
@@ -139,11 +140,23 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let keys = validators.map(|x| x.1).collect::<Vec<_>>();
-			let bounded_keys = Self::to_bounded_vec(keys);
+			let mut keys = validators.map(|x| x.1).collect::<Vec<_>>();
+			// Truncate to MaxAuthorities, to not fail the conversion
+			keys.truncate(T::MaxAuthorities::get() as usize);
+
+			let bounded_keys = BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(keys)
+				.expect("We truncated so this should never fail");
+
 			Keys::<T>::put(bounded_keys);
-			let next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
-			let next_bounded_keys = Self::to_bounded_vec(next_keys);
+
+			let mut next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
+			// Truncate to MaxAuthorities, to not fail the conversion
+			next_keys.truncate(T::MaxAuthorities::get() as usize);
+
+			let next_bounded_keys =
+				BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(next_keys)
+					.expect("We truncated so this should never fail");
+
 			NextKeys::<T>::put(next_bounded_keys);
 		}
 	}
