@@ -23,7 +23,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{BoundedVec, traits::OneSessionHandler};
+use frame_support::{traits::OneSessionHandler, BoundedVec};
 use sp_authority_discovery::AuthorityId;
 use sp_std::prelude::*;
 
@@ -38,7 +38,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info] 
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -51,20 +51,14 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
 	/// Keys of the current authority set.
-	pub(super) type Keys<T: Config> = StorageValue<
-		_,
-		BoundedVec<AuthorityId, T::MaxAuthorities>,
-		ValueQuery,
-	>;
+	pub(super) type Keys<T: Config> =
+		StorageValue<_, BoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.
-	pub(super) type NextKeys<T: Config> = StorageValue<
-		_,
-		BoundedVec<AuthorityId, T::MaxAuthorities>,
-		ValueQuery,
-	>;
+	pub(super) type NextKeys<T: Config> =
+		StorageValue<_, BoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {

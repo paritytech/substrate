@@ -37,11 +37,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use core::convert::TryFrom;
 use codec::{Decode, Encode};
+use core::convert::TryFrom;
 use frame_support::{
 	traits::{FindAuthor, Get, OnTimestampSet, OneSessionHandler},
-	ConsensusEngineId, Parameter, BoundedVec,
+	BoundedVec, ConsensusEngineId, Parameter,
 };
 use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
@@ -102,7 +102,8 @@ pub mod pallet {
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -132,9 +133,15 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn to_bounded_vec(authorities: Vec<T::AuthorityId>) -> BoundedVec<T::AuthorityId, T::MaxAuthorities> {
-		let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from(authorities);
-		assert!(bounded_authorities.is_ok(), "More than the maximum number of authorities provided");
+	fn to_bounded_vec(
+		authorities: Vec<T::AuthorityId>,
+	) -> BoundedVec<T::AuthorityId, T::MaxAuthorities> {
+		let bounded_authorities =
+			BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from(authorities);
+		assert!(
+			bounded_authorities.is_ok(),
+			"More than the maximum number of authorities provided"
+		);
 		bounded_authorities.unwrap()
 	}
 
