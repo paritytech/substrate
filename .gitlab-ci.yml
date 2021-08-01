@@ -343,6 +343,7 @@ unleash-check:
     - mkdir -p target/unleash
     - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
