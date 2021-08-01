@@ -193,8 +193,10 @@ impl<T: Config> RebagScenario<T> {
 			.iter()
 			.map(|n| n.voter().id.clone())
 			.collect::<Vec<_>>();
-		let expected_src_ids = vec![src1_stash.clone(), src3_stash.clone()];
-		ensure!(src_bag_ids == expected_src_ids, "source bag not in expected state after rebag");
+		ensure!(
+			src_bag_ids == vec![src1_stash.clone(), src3_stash.clone()], 
+			"source bag not in expected state after rebag"
+		);
 
 		Ok(())
 	}
