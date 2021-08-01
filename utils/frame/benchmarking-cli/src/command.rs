@@ -34,7 +34,7 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc, time};
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
