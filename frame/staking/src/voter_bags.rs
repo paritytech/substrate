@@ -243,6 +243,10 @@ impl<T: Config> VoterList<T> {
 		node.is_misplaced(&weight_of).then(move || {
 			let old_idx = node.bag_upper;
 
+			// TODO: there should be a way to move a non-head-tail node to another bag
+			// with just 1 bag read of the destination bag and zero writes
+			// https://github.com/paritytech/substrate/pull/9468/files/83289aa4a15d61e6cb334f9d7e7f6804cb7e3537..44875c511ebdc79270100720320c8e3d2d56eb4a#r680559166
+
 			// clear the old bag head/tail pointers as necessary
 			if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
 				bag.remove_node(&node);
