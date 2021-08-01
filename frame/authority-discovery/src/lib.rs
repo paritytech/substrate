@@ -143,7 +143,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if changed {
 			let mut keys = validators.map(|x| x.1).collect::<Vec<_>>();
 
-			if keys.len() <= T::MaxAuthorities::get() as usize {
+			if keys.len() >= T::MaxAuthorities::get() as usize {
 				// Truncate to MaxAuthorities, to not fail the conversion
 				keys.truncate(T::MaxAuthorities::get() as usize);
 
@@ -161,7 +161,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 
 			let mut next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
 
-			if next_keys.len() <= T::MaxAuthorities::get() as usize {
+			if next_keys.len() >= T::MaxAuthorities::get() as usize {
 				// Truncate to MaxAuthorities, to not fail the conversion
 				next_keys.truncate(T::MaxAuthorities::get() as usize);
 

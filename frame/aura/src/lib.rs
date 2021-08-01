@@ -200,7 +200,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if changed {
 			let mut next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 
-			if next_authorities.len() <= T::MaxAuthorities::get() as usize {
+			if next_authorities.len() >= T::MaxAuthorities::get() as usize {
 				// Truncate to MaxAuthorities, to not fail the conversion
 				next_authorities.truncate(T::MaxAuthorities::get() as usize);
 
