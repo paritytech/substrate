@@ -40,6 +40,7 @@
 use codec::{Decode, Encode};
 use core::convert::TryFrom;
 use frame_support::{
+	log,
 	traits::{FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	BoundedVec, ConsensusEngineId, Parameter,
 };
@@ -133,12 +134,13 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>){
+	fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new.to_vec()).encode());
+			ConsensusLog::AuthoritiesChange(new.to_vec()).encode(),
+		);
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
@@ -146,8 +148,9 @@ impl<T: Config> Pallet<T> {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
 
-			let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>
-				::try_from((*authorities).clone()).expect("authorities vec too big");
+			let bounded_authorities =
+				BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from((*authorities).clone())
+					.expect("authorities vec too big");
 
 			<Authorities<T>>::put(bounded_authorities);
 		}
@@ -196,13 +199,23 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// instant changes
 		if changed {
 			let mut next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			// Truncate to MaxAuthorities, to not fail the conversion
-			next_authorities.truncate(T::MaxAuthorities::get() as usize);
+
+			if next_authorities.len() <= T::MaxAuthorities::get() as usize {
+				// Truncate to MaxAuthorities, to not fail the conversion
+				next_authorities.truncate(T::MaxAuthorities::get() as usize);
+
+				log::warn!(
+					"Provided validators vec size {} is too large (max size {})",
+					next_authorities.len(),
+					T::MaxAuthorities::get()
+				);
+			}
 
 			let last_authorities = Self::authorities();
 			if next_authorities != last_authorities.into_inner() {
-				let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>
-					::try_from(next_authorities).expect("We truncate, so this should never fail");
+				let bounded_authorities =
+					BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from(next_authorities)
+						.expect("We truncate, so this should never fail");
 				Self::change_authorities(bounded_authorities);
 			}
 		}

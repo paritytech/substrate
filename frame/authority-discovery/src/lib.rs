@@ -24,6 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
+	log,
 	traits::{Get, OneSessionHandler},
 	BoundedVec,
 };
@@ -141,8 +142,17 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// Remember who the authorities are for the new and next session.
 		if changed {
 			let mut keys = validators.map(|x| x.1).collect::<Vec<_>>();
-			// Truncate to MaxAuthorities, to not fail the conversion
-			keys.truncate(T::MaxAuthorities::get() as usize);
+
+			if keys.len() <= T::MaxAuthorities::get() as usize {
+				// Truncate to MaxAuthorities, to not fail the conversion
+				keys.truncate(T::MaxAuthorities::get() as usize);
+
+				log::warn!(
+					"Provided validators vec size {} is too large (max size {})",
+					keys.len(),
+					T::MaxAuthorities::get()
+				);
+			}
 
 			let bounded_keys = BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(keys)
 				.expect("We truncated so this should never fail");
@@ -150,8 +160,17 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			Keys::<T>::put(bounded_keys);
 
 			let mut next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
-			// Truncate to MaxAuthorities, to not fail the conversion
-			next_keys.truncate(T::MaxAuthorities::get() as usize);
+
+			if next_keys.len() <= T::MaxAuthorities::get() as usize {
+				// Truncate to MaxAuthorities, to not fail the conversion
+				next_keys.truncate(T::MaxAuthorities::get() as usize);
+
+				log::warn!(
+					"Provided queued_validators vec size {} is too large (max size {})",
+					next_keys.len(),
+					T::MaxAuthorities::get()
+				);
+			}
 
 			let next_bounded_keys =
 				BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(next_keys)
