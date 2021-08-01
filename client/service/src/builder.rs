@@ -36,6 +36,7 @@ use sc_client_api::{
 	ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
+use sc_consensus::import_queue::ImportQueue;
 use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
 use sc_keystore::LocalKeystore;
 use sc_network::{
@@ -49,9 +50,8 @@ use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUB
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{
-	block_validation::{BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator},
-	import_queue::ImportQueue,
+use sp_consensus::block_validation::{
+	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
