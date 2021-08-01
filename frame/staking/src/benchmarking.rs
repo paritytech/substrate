@@ -182,9 +182,8 @@ impl<T: Config> RebagScenario<T> {
 			.iter()
 			.map(|n| n.voter().id.clone())
 			.collect::<Vec<_>>();
-		let expected_dest_ids = vec![dest1_stash.clone(), src2_stash.clone()];
 		ensure!(
-			dest_bag_ids == expected_dest_ids,
+			dest_bag_ids == vec![dest1_stash.clone(), src2_stash.clone()],
 			"destination bag is not in expected state after rebag"
 		);
 
