@@ -2430,7 +2430,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn pallet_constants_metadata() -> ::sp_std::vec::Vec<$crate::metadata::PalletConstantMetadata> {
+			pub fn pallet_constants_metadata() -> $crate::sp_std::vec::Vec<$crate::metadata::PalletConstantMetadata> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
