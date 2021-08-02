@@ -43,33 +43,34 @@ mod worker;
 
 pub use crate::worker::{MiningBuild, MiningMetadata, MiningWorker};
 
+use crate::worker::UntilImportedOrTimeout;
 use codec::{Decode, Encode};
 use futures::{Future, StreamExt};
 use log::*;
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use sc_client_api::{self, backend::AuxStore, BlockOf, BlockchainEvents};
+use sc_consensus::{
+	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxBlockImport,
+	BoxJustificationImport, ForkChoiceStrategy, ImportResult, Verifier,
+};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
 use sp_consensus::{
-	import_queue::{BasicQueue, BoxBlockImport, BoxJustificationImport, Verifier},
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, CanAuthorWith, Environment,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, Proposer, SelectChain, SyncOracle,
+	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, Digest, DigestItem},
 	traits::{Block as BlockT, Header as HeaderT},
-	Justifications, RuntimeString,
+	RuntimeString,
 };
 use std::{
 	borrow::Cow, cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc,
 	time::Duration,
 };
-
-use crate::worker::UntilImportedOrTimeout;
 
 #[derive(derive_more::Display, Debug)]
 pub enum Error<B: BlockT> {
@@ -459,26 +460,20 @@ where
 {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let hash = header.hash();
-		let (checked_header, seal) = self.check_header(header)?;
+		let hash = block.header.hash();
+		let (checked_header, seal) = self.check_header(block.header)?;
 
 		let intermediate = PowIntermediate::<Algorithm::Difficulty> { difficulty: None };
-
-		let mut import_block = BlockImportParams::new(origin, checked_header);
-		import_block.post_digests.push(seal);
-		import_block.body = body;
-		import_block.justifications = justifications;
-		import_block
+		block.header = checked_header;
+		block.post_digests.push(seal);
+		block
 			.intermediates
 			.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
-		import_block.post_hash = Some(hash);
+		block.post_hash = Some(hash);
 
-		Ok((import_block, None))
+		Ok((block, None))
 	}
 }
 
@@ -540,7 +535,7 @@ where
 	E::Error: std::fmt::Debug,
 	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
 	SO: SyncOracle + Clone + Send + Sync + 'static,
-	L: sp_consensus::JustificationSyncLink<Block>,
+	L: sc_consensus::JustificationSyncLink<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {

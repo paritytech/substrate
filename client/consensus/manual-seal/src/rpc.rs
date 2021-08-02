@@ -25,8 +25,8 @@ use futures::{
 };
 use jsonrpc_core::Error;
 use jsonrpc_derive::rpc;
+use sc_consensus::ImportedAux;
 use serde::{Deserialize, Serialize};
-use sp_consensus::ImportedAux;
 use sp_runtime::EncodedJustification;
 
 /// Future's type for jsonrpc

@@ -273,7 +273,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -343,6 +343,7 @@ unleash-check:
     - mkdir -p target/unleash
     - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -578,7 +579,7 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job 
+    # pass artifacts to the trigger-simnet job
     - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
@@ -713,7 +714,7 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}

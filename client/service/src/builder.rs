@@ -36,6 +36,7 @@ use sc_client_api::{
 	ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
+use sc_consensus::import_queue::ImportQueue;
 use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
 use sc_keystore::LocalKeystore;
 use sc_network::{
@@ -43,15 +44,15 @@ use sc_network::{
 	config::{OnDemand, Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
+	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{
-	block_validation::{BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator},
-	import_queue::ImportQueue,
+use sp_consensus::block_validation::{
+	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
@@ -354,7 +355,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. }
+					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
 				),
 				wasm_runtime_substitutes,
 			},
@@ -843,6 +844,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// A block announce validator builder.
 	pub block_announce_validator_builder:
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	/// An optional warp sync provider.
+	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -878,6 +881,7 @@ where
 		import_queue,
 		on_demand,
 		block_announce_validator_builder,
+		warp_sync,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -928,6 +932,20 @@ where
 		}
 	};
 
+	let warp_sync_params = warp_sync.map(|provider| {
+		let protocol_config = if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			warp_request_handler::generate_request_response_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) =
+				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			spawn_handle.spawn("warp_sync_request_handler", handler.run());
+			protocol_config
+		};
+		(provider, protocol_config)
+	});
+
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
@@ -965,6 +983,7 @@ where
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
+		warp_sync: warp_sync_params,
 		light_client_request_protocol_config,
 	};
 
