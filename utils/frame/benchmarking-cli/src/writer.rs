@@ -360,10 +360,21 @@ fn add_storage_comments(
 	results: &[BenchmarkResults],
 	storage_info: &[StorageInfo],
 ) {
-	let storage_info_map = storage_info
+	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
 		.collect::<HashMap<_, _>>();
+
+	// Special hack to show `Skipped Metadata`
+	let skip_storage_info = StorageInfo {
+		pallet_name: b"Skipped".to_vec(),
+		storage_name: b"Metadata".to_vec(),
+		prefix: b"Skipped Metadata".to_vec(),
+		max_values: None,
+		max_size: None,
+	};
+	storage_info_map.insert(skip_storage_info.prefix.clone(), &skip_storage_info);
+
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
 

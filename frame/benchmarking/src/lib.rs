@@ -187,6 +187,7 @@ macro_rules! benchmarks {
 			{ }
 			( )
 			( )
+			( )
 			$( $rest )*
 		);
 	}
@@ -203,6 +204,7 @@ macro_rules! benchmarks_instance {
 		$crate::benchmarks_iter!(
 			{ I: Instance }
 			{ }
+			( )
 			( )
 			( )
 			$( $rest )*
@@ -223,6 +225,7 @@ macro_rules! benchmarks_instance_pallet {
 			{ }
 			( )
 			( )
+			( )
 			$( $rest )*
 		);
 	}
@@ -237,6 +240,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		where_clause { where $( $where_bound:tt )* }
 		$( $rest:tt )*
 	) => {
@@ -245,15 +249,38 @@ macro_rules! benchmarks_iter {
 			{ $( $where_bound )* }
 			( $( $names )* )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$( $rest )*
 		}
 	};
-	// detect and extract extra tag:
+	// detect and extract `#[skip_meta]` tag:
 	(
 		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
+		#[skip_meta]
+		$name:ident
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $instance: $instance_bound )? }
+			{ $( $where_clause )* }
+			( $( $names )* )
+			( $( $names_extra )* )
+			( $( $names_skip_meta )* $name )
+			$name
+			$( $rest )*
+		}
+	};
+	// detect and extract `#[extra] tag:
+	(
+		{ $( $instance:ident: $instance_bound:tt )? }
+		{ $( $where_clause:tt )* }
+		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		#[extra]
 		$name:ident
 		$( $rest:tt )*
@@ -263,6 +290,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* $name )
+			( $( $names_skip_meta )* )
 			$name
 			$( $rest )*
 		}
@@ -273,6 +301,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
@@ -282,6 +311,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$name { $( $code )* }: $name ( $origin $( , $arg )* )
 			verify $postcode
 			$( $rest )*
@@ -293,6 +323,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
@@ -302,6 +333,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$name {
 				$( $code )*
 				let __benchmarked_call_encoded = $crate::frame_support::codec::Encode::encode(
@@ -328,6 +360,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
 		verify $postcode:block
 		$( $rest:tt )*
@@ -354,6 +387,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* { $( $instance )? } $name )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$( $rest )*
 		);
 	};
@@ -363,6 +397,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 	) => {
 		$crate::selected_benchmark!(
 			{ $( $where_clause)* }
@@ -374,6 +409,7 @@ macro_rules! benchmarks_iter {
 			{ $( $instance: $instance_bound )? }
 			( $( $names )* )
 			( $( $names_extra ),* )
+			( $( $names_skip_meta ),* )
 		);
 	};
 	// add verify block to _() format
@@ -382,6 +418,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
@@ -390,6 +427,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$name { $( $code )* }: _ ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
@@ -401,6 +439,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
@@ -409,6 +448,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
@@ -420,6 +460,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
+		( $( $names_skip_meta:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
 		$( $rest:tt )*
 	) => {
@@ -428,6 +469,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
+			( $( $names_skip_meta )* )
 			$name { $( $code )* }: $eval
 			verify { }
 			$( $rest )*
@@ -693,6 +735,7 @@ macro_rules! impl_benchmark {
 		{ $( $instance:ident: $instance_bound:tt )? }
 		( $( { $( $name_inst:ident )? } $name:ident )* )
 		( $( $name_extra:ident ),* )
+		( $( $name_skip_meta:ident ),* )
 	) => {
 		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
 			$crate::Benchmarking<$crate::BenchmarkResults> for Pallet<T $(, $instance)? >
@@ -803,7 +846,12 @@ macro_rules! impl_benchmark {
 						let finish_storage_root = $crate::benchmarking::current_time();
 						let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-						let read_and_written_keys = $crate::benchmarking::get_read_and_written_keys();
+						let skip_meta = [ $( stringify!($name_skip_meta).as_ref() ),* ];
+						let read_and_written_keys = if (&skip_meta).contains(&extrinsic) {
+							$crate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
+						} else {
+							$crate::benchmarking::get_read_and_written_keys()
+						};
 
 						results.push($crate::BenchmarkResults {
 							components: c.to_vec(),
