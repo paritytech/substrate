@@ -27,7 +27,7 @@ use crate::{
 	OpaqueExtrinsic,
 };
 use codec::{Decode, Encode, EncodeLike, Error, Input};
-use scale_info::{build::Fields, Path, Type, TypeInfo};
+use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
@@ -56,14 +56,29 @@ where
 impl<Address, Call, Signature, Extra> TypeInfo
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: SignedExtension + TypeInfo,
+	Address: StaticTypeInfo,
+	Call: StaticTypeInfo,
+	Signature: StaticTypeInfo,
+	Extra: SignedExtension + StaticTypeInfo,
 {
-	type Identity = UncheckedExtrinsic<(), (), (), Extra>;
+	type Identity = UncheckedExtrinsic<Address, Call, Signature, Extra>;
 
 	fn type_info() -> Type {
 		Type::builder()
 			.path(Path::new("UncheckedExtrinsic", module_path!()))
+			// Include the type parameter types, even though they are not used directly in any of
+			// the described fields. These type definitions can be used by downstream consumers
+			// to help construct the custom decoding from the opaque bytes (see below).
+			.type_params(vec![
+				TypeParameter::new("Address", Some(meta_type::<Address>())),
+				TypeParameter::new("Call", Some(meta_type::<Call>())),
+				TypeParameter::new("Signature", Some(meta_type::<Signature>())),
+				TypeParameter::new("Extra", Some(meta_type::<Extra>())),
+			])
 			.docs(&["UncheckedExtrinsic raw bytes, requires custom decoding routine"])
+			// Because of the custom encoding, we can only accurately describe the encoding as an
+			// opaque `Vec<u8>`. Downstream consumers will need to manually implement the codec to
+			// encode/decode the `signature` and `function` fields.
 			.composite(Fields::unnamed().field(|f| f.ty::<Vec<u8>>()))
 	}
 }
