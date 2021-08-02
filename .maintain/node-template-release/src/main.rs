@@ -262,7 +262,7 @@ fn main() {
 	// adding root rustfmt to node template build path
 	let node_template_rustfmt_toml_path = node_template_path.join("rustfmt.toml");
 	let root_rustfmt_toml =
-		&options.node_template.parent().unwrap().parent().unwrap().join("rustfmt.toml");
+		&options.node_template.join("../../rustfmt.toml");
 	if root_rustfmt_toml.exists() {
 		fs::copy(&root_rustfmt_toml, &node_template_rustfmt_toml_path)
 			.expect("Copying rustfmt.toml.");
