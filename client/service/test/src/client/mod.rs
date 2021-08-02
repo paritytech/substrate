@@ -1209,6 +1209,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -1555,6 +1556,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
@@ -1570,6 +1572,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1592,6 +1595,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1610,6 +1614,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 
@@ -1676,6 +1681,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1712,6 +1718,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 1,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1745,6 +1752,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 2,
 		parent_hash: a2.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1779,6 +1787,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: b1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 	assert_eq!(

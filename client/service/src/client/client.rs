@@ -769,6 +769,8 @@ where
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
+		let parent_exists = self.backend.blockchain().status(BlockId::Hash(parent_hash))? ==
+			blockchain::BlockStatus::InChain;
 		match (import_existing, status) {
 			(false, blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			(false, blockchain::BlockStatus::Unknown) => {},
@@ -815,7 +817,6 @@ where
 						if let Some(changes_trie_transaction) = changes_trie_tx {
 							operation.op.update_changes_trie(changes_trie_transaction)?;
 						}
-
 						Some((main_sc, child_sc))
 					},
 					sc_consensus::StorageChanges::Import(changes) => {
@@ -834,10 +835,10 @@ where
 						None
 					},
 				};
-
-				// ensure parent block is finalized to maintain invariant that
-				// finality is called sequentially.
-				if finalized {
+				// Ensure parent chain is finalized to maintain invariant that
+				// finality is called sequentially. This will also send finality
+				// notifications for top 250 newly finalized blocks.
+				if finalized && parent_exists {
 					self.apply_finality_with_block_hash(
 						operation,
 						parent_hash,
@@ -868,7 +869,7 @@ where
 			NewBlockState::Normal
 		};
 
-		let tree_route = if is_new_best && info.best_hash != parent_hash {
+		let tree_route = if is_new_best && info.best_hash != parent_hash && parent_exists {
 			let route_from_best =
 				sp_blockchain::tree_route(self.backend.blockchain(), info.best_hash, parent_hash)?;
 			Some(route_from_best)
@@ -932,21 +933,21 @@ where
 		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
 		let (enact_state, storage_changes) = match (self.block_status(&at)?, state_action) {
-			(BlockStatus::Unknown, _) =>
-				return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
 			(BlockStatus::KnownBad, _) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
-			(_, StateAction::Skip) => (false, None),
 			(
 				BlockStatus::InChainPruned,
 				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(_)),
 			) => return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
+			(_, StateAction::ApplyChanges(changes)) => (true, Some(changes)),
+			(BlockStatus::Unknown, _) =>
+				return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
+			(_, StateAction::Skip) => (false, None),
 			(BlockStatus::InChainPruned, StateAction::Execute) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
 			(BlockStatus::InChainPruned, StateAction::ExecuteIfPossible) => (false, None),
 			(_, StateAction::Execute) => (true, None),
 			(_, StateAction::ExecuteIfPossible) => (true, None),
-			(_, StateAction::ApplyChanges(changes)) => (true, Some(changes)),
 		};
 
 		let storage_changes = match (enact_state, storage_changes, &import_block.body) {
@@ -1912,8 +1913,14 @@ where
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } =
-			block;
+		let BlockCheckParams {
+			hash,
+			number,
+			parent_hash,
+			allow_missing_state,
+			import_existing,
+			allow_missing_parent,
+		} = block;
 
 		// Check the block against white and black lists if any are defined
 		// (i.e. fork blocks and bad blocks respectively)
@@ -1955,6 +1962,7 @@ where
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
+			BlockStatus::Unknown if allow_missing_parent => {},
 			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 			BlockStatus::InChainPruned if allow_missing_state => {},
 			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
