@@ -51,7 +51,9 @@ use frame_support::{
 	codec::{Decode, Encode},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
-	traits::{Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers},
+	traits::{
+		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
+	},
 	weights::{GetDispatchInfo, Weight},
 };
 
@@ -153,6 +155,9 @@ pub struct Votes<AccountId, BlockNumber> {
 	end: BlockNumber,
 }
 
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -161,6 +166,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]

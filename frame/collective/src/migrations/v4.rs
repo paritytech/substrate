@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::{
-	traits::{Get, GetPalletVersion, PalletVersion},
+	traits::{Get, GetStorageVersion},
 	weights::Weight,
 };
 use sp_io::hashing::twox_128;
@@ -26,7 +26,11 @@ use sp_io::hashing::twox_128;
 /// This new prefix must be the same as the one set in construct_runtime. For safety, use
 /// `PalletInfo` to get it, as:
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<CollectivePallet>`.
-pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
+///
+/// The migration will look into the storage version in order not to trigger a migration on an up
+/// to date storage. Thus the on chain storage version must be less than 4 in order to trigger the
+/// migration.
+pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
 	old_pallet_name: N,
 	new_pallet_name: N,
 ) -> Weight {
@@ -38,29 +42,27 @@ pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
 		return 0
 	}
 
-	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
+	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
 	log::info!(
 		target: "runtime::collective",
 		"Running migration to v4 for collective with storage version {:?}",
-		maybe_storage_version,
+		on_chain_storage_version,
 	);
-	match maybe_storage_version {
-		Some(storage_version) if storage_version <= PalletVersion::new(3, 0, 0) => {
-			log::info!(target: "runtime::collective", "new prefix: {}", new_pallet_name.as_ref());
-			frame_support::storage::migration::move_pallet(
-				old_pallet_name.as_ref().as_bytes(),
-				new_pallet_name.as_ref().as_bytes(),
-			);
-			<T as frame_system::Config>::BlockWeights::get().max_block
-		},
-		_ => {
-			log::warn!(
-				target: "runtime::collective",
-				"Attempted to apply migration to v4 but failed because storage version is {:?}",
-				maybe_storage_version,
-			);
-			0
-		},
+
+	if on_chain_storage_version < 4 {
+		log::info!(target: "runtime::collective", "new prefix: {}", new_pallet_name.as_ref());
+		frame_support::storage::migration::move_pallet(
+			old_pallet_name.as_ref().as_bytes(),
+			new_pallet_name.as_ref().as_bytes(),
+		);
+		<T as frame_system::Config>::BlockWeights::get().max_block
+	} else {
+		log::warn!(
+			target: "runtime::collective",
+			"Attempted to apply migration to v4 but failed because storage version is {:?}",
+			on_chain_storage_version,
+		);
+		0
 	}
 }
 
@@ -68,7 +70,7 @@ pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: AsRef<str>>(
+pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N: AsRef<str>>(
 	old: N,
 	new: N,
 ) {
@@ -79,9 +81,6 @@ pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: 
 	let next_key = sp_io::storage::next_key(&twox_128(old.as_ref().as_bytes())).unwrap();
 	assert!(next_key.starts_with(&twox_128(old.as_ref().as_bytes())));
 
-	// The pallet version is already stored using the pallet name
-	let storage_key = PalletVersion::storage_key::<T::PalletInfo, P>().unwrap();
-
 	// ensure nothing is stored in the new prefix.
 	assert!(
 		sp_io::storage::next_key(&twox_128(new.as_bytes())).map_or(
@@ -90,7 +89,8 @@ pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: 
 			// or we ensure that it has no common prefix with twox_128(new),
 			// or isn't the pallet version that is already stored using the pallet name
 			|next_key| {
-				!next_key.starts_with(&twox_128(new.as_bytes())) || next_key == storage_key
+				!next_key.starts_with(&twox_128(new.as_bytes()))
+					|| next_key == frame_support::traits::STORAGE_VERSION_STORAGE_KEY_POSTFIX
 			},
 		),
 		"unexpected next_key({}) = {:?}",
@@ -99,19 +99,19 @@ pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: 
 			&sp_io::storage::next_key(&twox_128(new.as_bytes())).unwrap()
 		),
 	);
-	assert_eq!(<P as GetPalletVersion>::storage_version().map(|version| version.major), Some(3));
+	assert!(<P as GetStorageVersion>::on_chain_storage_version() < 4);
 }
 
 /// Some checks for after migration. This can be linked to
 /// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn post_migration<P: GetPalletVersion, N: AsRef<str>>(old_pallet_name: N) {
+pub fn post_migration<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N) {
 	log::info!("post-migration collective");
 
 	let old_pallet_name = old_pallet_name.as_ref().as_bytes();
 	// Assert that nothing remains at the old prefix
 	assert!(sp_io::storage::next_key(&twox_128(old_pallet_name))
 		.map_or(true, |next_key| !next_key.starts_with(&twox_128(old_pallet_name))));
-	assert_eq!(<P as GetPalletVersion>::storage_version().map(|version| version.major), Some(4));
+	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }
