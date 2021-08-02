@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 	"max-encoded-len",
 ] }
 log = { version = "0.4", default-features = false }
-pwasm-utils = { version = "0.18.2", default-features = false }
+pwasm-utils = { git = "https://github.com/paritytech/wasm-utils", branch = "at-code-coverage", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",

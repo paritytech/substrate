@@ -5031,7 +5031,7 @@ dependencies = [
  "pallet-utility",
  "parity-scale-codec",
  "pretty_assertions 0.7.2",
- "pwasm-utils",
+ "pwasm-utils 0.18.1",
  "rand 0.8.4",
  "rand_pcg 0.3.0",
  "serde",
@@ -6531,6 +6531,16 @@ dependencies = [
 
 [[package]]
 name = "pwasm-utils"
+version = "0.18.1"
+source = "git+https://github.com/paritytech/wasm-utils?branch=at-code-coverage#80d15ced14d7a49160e298df529fc542b3dfcbe1"
+dependencies = [
+ "byteorder",
+ "log 0.4.14",
+ "parity-wasm 0.42.2",
+]
+
+[[package]]
+name = "pwasm-utils"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "880b3384fb00b8f6ecccd5d358b93bd2201900ae3daad213791d1864f6441f5c"
@@ -7662,7 +7672,7 @@ dependencies = [
  "derive_more",
  "environmental",
  "parity-scale-codec",
- "pwasm-utils",
+ "pwasm-utils 0.18.2",
  "sc-allocator",
  "sp-core",
  "sp-maybe-compressed-blob",

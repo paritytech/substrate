@@ -181,16 +181,24 @@ where
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
 	) -> ExecResult {
-		let memory =
-			sp_sandbox::Memory::new(self.initial, Some(self.maximum)).unwrap_or_else(|_| {
-				// unlike `.expect`, explicit panic preserves the source location.
-				// Needed as we can't use `RUST_BACKTRACE` in here.
-				panic!(
-					"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
+		let (cov_info, limits, code) = if coverage_instrumentation_enabled() {
+			let input = input_data.clone();
+			let code_hash = self.code_hash.clone();
+			let (cov_info, limits, code) = prepare::inject_coverage_instrumentation(&self)?;
+			(Some((cov_info, code_hash, input)), limits, code)
+		} else {
+			(None, (self.initial, self.maximum), self.code.clone())
+		};
+
+		let memory = sp_sandbox::Memory::new(limits.0, Some(limits.1)).unwrap_or_else(|_| {
+			// unlike `.expect`, explicit panic preserves the source location.
+			// Needed as we can't use `RUST_BACKTRACE` in here.
+			panic!(
+				"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
 						thus Memory::new must not fail;
 						qed"
-				)
-			});
+			)
+		});
 
 		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
@@ -201,7 +209,6 @@ where
 		let mut runtime = Runtime::new(ext, input_data, memory);
 
 		// We store before executing so that the code hash is available in the constructor.
-		let code = self.code.clone();
 		if let &ExportedFunction::Constructor = function {
 			code_cache::store(self)
 		}
@@ -210,6 +217,21 @@ where
 		// entrypoint.
 		let result = sp_sandbox::Instance::new(&code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(function.identifier(), &[], &mut runtime));
+
+		// Analyze the data that was written to contract memory by the instrumentation.
+		if let Some((cov_info, code_hash, input)) = cov_info {
+			let cov_range = cov_info.bitmap_location();
+			let bitmap = runtime.read_sandbox_memory(cov_range.start, cov_range.len() as u32)?;
+			let coverage = pwasm_utils::coverage::Coverage::new(cov_info, bitmap)?;
+			let stats = coverage.create_statistic();
+			log::info!(
+				target: "runtime::contracts",
+				"{:?}/{:?}: {}",
+				code_hash,
+				input,
+				stats,
+			);
+		}
 
 		runtime.to_execution_result(result)
 	}
@@ -229,6 +251,12 @@ where
 	fn refcount(&self) -> u32 {
 		self.refcount as u32
 	}
+}
+
+fn coverage_instrumentation_enabled() -> bool {
+	// We don't want it to interfere with benchmarks or any client used in production.
+	// Any production runtime will be build with disabled logging.
+	cfg!(not(feature = "runtime-benchmarks")) && log::max_level() >= log::Level::Info
 }
 
 #[cfg(test)]
@@ -1768,7 +1796,7 @@ mod tests {
 
 	(func (export "call")
 		(call $seal_terminate
-			(i32.const 65536)  ;; Pointer to "account" address (out of bound).
+			(i32.const 131072)  ;; Pointer to "account" address (out of bound).
 			(i32.const 8)  ;; Length of "account" address.
 		)
 	)

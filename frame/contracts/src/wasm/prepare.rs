@@ -24,7 +24,7 @@ use crate::{
 	wasm::{env_def::ImportSatisfyCheck, PrefabWasmModule},
 	Config, Schedule,
 };
-use pwasm_utils::parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType};
+use pwasm_utils::parity_wasm::elements::{self, External, Internal, Type, ValueType};
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
 
@@ -285,30 +285,28 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	fn scan_imports<C: ImportSatisfyCheck>(
 		&self,
 		import_fn_banlist: &[&[u8]],
-	) -> Result<Option<&MemoryType>, &'static str> {
+	) -> Result<(), &'static str> {
 		let module = &self.module;
-
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 		let import_entries = module.import_section().map(|is| is.entries()).unwrap_or(&[]);
-
-		let mut imported_mem_type = None;
+		let mut memory_found = false;
 
 		for import in import_entries {
 			let type_idx = match import.external() {
 				&External::Table(_) => return Err("Cannot import tables"),
 				&External::Global(_) => return Err("Cannot import globals"),
 				&External::Function(ref type_idx) => type_idx,
-				&External::Memory(ref memory_type) => {
+				&External::Memory(_) => {
 					if import.module() != IMPORT_MODULE_MEMORY {
 						return Err("Invalid module for imported memory")
 					}
 					if import.field() != "memory" {
 						return Err("Memory import must have the field name 'memory'")
 					}
-					if imported_mem_type.is_some() {
+					if memory_found {
 						return Err("Multiple memory imports defined")
 					}
-					imported_mem_type = Some(memory_type);
+					memory_found = true;
 					continue
 				},
 			};
@@ -329,7 +327,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 				return Err("module imports a non-existent function")
 			}
 		}
-		Ok(imported_mem_type)
+		Ok(())
 	}
 
 	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
@@ -338,10 +336,16 @@ impl<'a, T: Config> ContractModule<'a, T> {
 }
 
 fn get_memory_limits<T: Config>(
-	module: Option<&MemoryType>,
-	schedule: &Schedule<T>,
+	module: &elements::Module,
+	schedule: Option<&Schedule<T>>,
 ) -> Result<(u32, u32), &'static str> {
-	if let Some(memory_type) = module {
+	let mem = module
+		.import_section()
+		.map(|is| is.entries())
+		.unwrap_or(&[])
+		.iter()
+		.find_map(|e| if let External::Memory(mem) = e.external() { Some(mem) } else { None });
+	if let Some(memory_type) = mem {
 		// Inspect the module to extract the initial and maximum page count.
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
@@ -349,7 +353,8 @@ fn get_memory_limits<T: Config>(
 				return Err(
 					"Requested initial number of pages should not exceed the requested maximum",
 				),
-			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
+			(_, Some(maximum))
+				if schedule.map(|s| maximum > s.limits.memory_pages).unwrap_or(false) =>
 				return Err("Maximum number of pages should not exceed the configured maximum."),
 			(initial, Some(maximum)) => Ok((initial, maximum)),
 			(_, None) => {
@@ -381,8 +386,8 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 
 	// We disallow importing `gas` function here since it is treated as implementation detail.
 	let disallowed_imports = [b"gas".as_ref()];
-	let memory_limits =
-		get_memory_limits(contract_module.scan_imports::<C>(&disallowed_imports)?, schedule)?;
+	contract_module.scan_imports::<C>(&disallowed_imports)?;
+	let memory_limits = get_memory_limits(&contract_module.module, Some(schedule))?;
 
 	let code = contract_module
 		.inject_gas_metering()?
@@ -441,6 +446,18 @@ pub fn reinstrument_contract<T: Config>(
 	Ok(check_and_instrument::<super::runtime::Env, T>(&original_code, schedule)?.0)
 }
 
+pub fn inject_coverage_instrumentation<T: Config>(
+	prefab: &PrefabWasmModule<T>,
+) -> Result<(pwasm_utils::coverage::Info, (u32, u32), Vec<u8>), &'static str> {
+	let mut module = elements::deserialize_buffer(&prefab.code)
+		.map_err(|_| "Can't decode wasm code for coverage instrumentation.")?;
+	let info = pwasm_utils::coverage::instrument(&mut module, ("seal0", "gas"))?;
+	let limits = get_memory_limits::<T>(&module, None)?;
+	let code = elements::serialize(module)
+		.map_err(|_| "error serializing the coverage instrumented module")?;
+	Ok((info, limits, code))
+}
+
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
@@ -463,7 +480,8 @@ pub mod benchmarking {
 		schedule: &Schedule<T>,
 	) -> Result<PrefabWasmModule<T>, &'static str> {
 		let contract_module = ContractModule::new(&original_code, schedule)?;
-		let memory_limits = get_memory_limits(contract_module.scan_imports::<()>(&[])?, schedule)?;
+		contract_module.scan_imports::<()>(&[])?;
+		let memory_limits = get_memory_limits(&contract_module.module, Some(schedule))?;
 		Ok(PrefabWasmModule {
 			instruction_weights_version: schedule.instruction_weights.version,
 			initial: memory_limits.0,
