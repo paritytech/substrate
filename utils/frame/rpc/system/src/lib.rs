@@ -82,8 +82,8 @@ where
 			async move { system.backend.dry_run(extrinsic, at).await }.boxed()
 		})?;
 
-		module.register_alias("system_accountNextIndex", "account_nextIndex")?;
-		module.register_alias("system_dryRun", "system_dryRunAt")?;
+		module.register_alias("account_nextIndex", "system_accountNextIndex")?;
+		module.register_alias("system_dryRunAt", "system_dryRun")?;
 
 		Ok(module)
 	}

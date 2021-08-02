@@ -583,7 +583,7 @@ impl<Block, Client> ChildState<Block, Client>
 			}.boxed()
 		})?;
 
-		module.register_alias("childstate_getChildReadProof", "state_getChildReadProof")?;
+		module.register_alias("state_getChildReadProof", "childstate_getChildReadProof")?;
 
 		Ok(module)
 	}
