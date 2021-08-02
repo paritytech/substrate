@@ -26,7 +26,7 @@
 //! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
 //! queues to be instantiated simply.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::FromIterator};
 
 use log::{debug, trace};
 use sp_runtime::{
@@ -97,10 +97,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 	/// presented to the User in the logs.
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
 
@@ -222,7 +219,7 @@ pub(crate) async fn import_single_block_metered<
 	trace!(target: "sync", "Header {} has {:?} logs", block.hash, header.digest().logs().len());
 
 	let number = header.number().clone();
-	let hash = header.hash();
+	let hash = block.hash;
 	let parent_hash = header.parent_hash().clone();
 
 	let import_handler = |import| match import {
@@ -260,6 +257,7 @@ pub(crate) async fn import_single_block_metered<
 				parent_hash,
 				allow_missing_state: block.allow_missing_state,
 				import_existing: block.import_existing,
+				allow_missing_parent: block.state.is_some(),
 			})
 			.await,
 	)? {
@@ -268,32 +266,14 @@ pub(crate) async fn import_single_block_metered<
 	}
 
 	let started = wasm_timer::Instant::now();
-	let (mut import_block, maybe_keys) = verifier
-		.verify(block_origin, header, justifications, block.body)
-		.await
-		.map_err(|msg| {
-			if let Some(ref peer) = peer {
-				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
-			} else {
-				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
-			}
-			if let Some(metrics) = metrics.as_ref() {
-				metrics.report_verification(false, started.elapsed());
-			}
-			BlockImportError::VerificationFailed(peer.clone(), msg)
-		})?;
 
-	if let Some(metrics) = metrics.as_ref() {
-		metrics.report_verification(true, started.elapsed());
-	}
-
-	let mut cache = HashMap::new();
-	if let Some(keys) = maybe_keys {
-		cache.extend(keys.into_iter());
-	}
+	let mut import_block = BlockImportParams::new(block_origin, header);
+	import_block.body = block.body;
+	import_block.justifications = justifications;
+	import_block.post_hash = Some(hash);
 	import_block.import_existing = block.import_existing;
 	import_block.indexed_body = block.indexed_body;
-	let mut import_block = import_block.clear_storage_changes_and_mutate();
+
 	if let Some(state) = block.state {
 		let changes = crate::block_import::StorageChanges::Import(state);
 		import_block.state_action = StateAction::ApplyChanges(changes);
@@ -303,6 +283,24 @@ pub(crate) async fn import_single_block_metered<
 		import_block.state_action = StateAction::ExecuteIfPossible;
 	}
 
+	let (import_block, maybe_keys) = verifier.verify(import_block).await.map_err(|msg| {
+		if let Some(ref peer) = peer {
+			trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
+		} else {
+			trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
+		}
+		if let Some(metrics) = metrics.as_ref() {
+			metrics.report_verification(false, started.elapsed());
+		}
+		BlockImportError::VerificationFailed(peer.clone(), msg)
+	})?;
+
+	if let Some(metrics) = metrics.as_ref() {
+		metrics.report_verification(true, started.elapsed());
+	}
+
+	let cache = HashMap::from_iter(maybe_keys.unwrap_or_default());
+	let import_block = import_block.clear_storage_changes_and_mutate();
 	let imported = import_handle.import_block(import_block, cache).await;
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification_and_import(started.elapsed());

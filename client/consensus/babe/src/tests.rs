@@ -228,7 +228,6 @@ pub struct BabeTestNet {
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
-type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 type TestSelectChain =
 	substrate_test_runtime_client::LongestChain<substrate_test_runtime_client::Backend, TestBlock>;
@@ -257,14 +256,11 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// presented to the User in the logs.
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		mut header: TestHeader,
-		justifications: Option<Justifications>,
-		body: Option<Vec<TestExtrinsic>>,
+		mut block: BlockImportParams<TestBlock, ()>,
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
-		(self.mutator)(&mut header, Stage::PostSeal);
-		self.inner.verify(origin, header, justifications, body).await
+		(self.mutator)(&mut block.header, Stage::PostSeal);
+		self.inner.verify(block).await
 	}
 }
 

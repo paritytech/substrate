@@ -692,7 +692,10 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 						header_metadata
 					})
 					.ok_or_else(|| {
-						ClientError::UnknownBlock(format!("header not found in db: {}", hash))
+						ClientError::UnknownBlock(format!(
+							"Header was not found in the database: {:?}",
+							hash
+						))
 					})
 			},
 			Ok,
@@ -1210,8 +1213,11 @@ impl<Block: BlockT> Backend<Block> {
 			return Err(sp_blockchain::Error::SetHeadTooOld.into())
 		}
 
-		// cannot find tree route with empty DB.
-		if meta.best_hash != Default::default() {
+		let parent_exists =
+			self.blockchain.status(BlockId::Hash(route_to))? == sp_blockchain::BlockStatus::InChain;
+
+		// Cannot find tree route with empty DB or when imported a detached block.
+		if meta.best_hash != Default::default() && parent_exists {
 			let tree_route = sp_blockchain::tree_route(&self.blockchain, meta.best_hash, route_to)?;
 
 			// uncanonicalize: check safety violations and ensure the numbers no longer
@@ -1261,8 +1267,10 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<()> {
 		let last_finalized =
 			last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
-		if *header.parent_hash() != last_finalized {
-			return Err(::sp_blockchain::Error::NonSequentialFinalization(format!(
+		if last_finalized != self.blockchain.meta.read().genesis_hash &&
+			*header.parent_hash() != last_finalized
+		{
+			return Err(sp_blockchain::Error::NonSequentialFinalization(format!(
 				"Last finalized {:?} not parent of {:?}",
 				last_finalized,
 				header.hash()
@@ -1588,7 +1596,7 @@ impl<Block: BlockT> Backend<Block> {
 						columns::META,
 						meta_keys::LEAF_PREFIX,
 					);
-				};
+				}
 
 				let mut children = children::read_children(
 					&*self.storage.db,
@@ -1598,14 +1606,14 @@ impl<Block: BlockT> Backend<Block> {
 				)?;
 				if !children.contains(&hash) {
 					children.push(hash);
+					children::write_children(
+						&mut transaction,
+						columns::META,
+						meta_keys::CHILDREN_PREFIX,
+						parent_hash,
+						children,
+					);
 				}
-				children::write_children(
-					&mut transaction,
-					columns::META,
-					meta_keys::CHILDREN_PREFIX,
-					parent_hash,
-					children,
-				);
 			}
 
 			meta_updates.push(MetaUpdate {
@@ -1615,7 +1623,6 @@ impl<Block: BlockT> Backend<Block> {
 				is_finalized: finalized,
 				with_state: operation.commit_state,
 			});
-
 			Some((pending_block.header, number, hash, enacted, retracted, is_best, cache))
 		} else {
 			None
