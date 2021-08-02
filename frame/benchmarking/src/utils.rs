@@ -103,22 +103,41 @@ pub struct BenchmarkConfig {
 	pub lowest_range_values: Vec<u32>,
 	/// An optional manual override to the highest values used in the `steps` range.
 	pub highest_range_values: Vec<u32>,
-	/// The number of samples to take across the range of values for components.
-	pub steps: Vec<u32>,
-	/// The number of times to repeat a benchmark.
-	pub repeat: u32,
+	/// The number of samples to take across the range of values for components. (current_step,
+	/// total_steps)
+	pub steps: (u32, u32),
+	/// The number times to repeat each benchmark to increase accuracy of results. (current_repeat,
+	/// total_repeat)
+	pub repeat: (u32, u32),
 	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
 	pub verify: bool,
-	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
+	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a
+	/// pallet.
 	pub extra: bool,
+}
+
+/// A list of benchmarks available for a particular pallet and instance.
+///
+/// All `Vec<u8>` must be valid utf8 strings.
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkList {
+	pub pallet: Vec<u8>,
+	pub instance: Vec<u8>,
+	pub benchmarks: Vec<Vec<u8>>,
 }
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
+		/// Get the benchmark metadata available for this runtime.
+		///
+		/// Parameters
+		/// - `extra`: Also list benchmarks marked "extra" which would otherwise not be
+		///            needed for weight calculation.
+		fn benchmark_metadata(extra: bool) -> (Vec<BenchmarkList>, Vec<StorageInfo>);
+
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(config: BenchmarkConfig)
-			-> Result<(Vec<BenchmarkBatch>, Vec<StorageInfo>), sp_runtime::RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
 	}
 }
 
@@ -216,16 +235,18 @@ pub trait Benchmarking<T> {
 	/// Parameters
 	/// - `name`: The name of extrinsic function or benchmark you want to benchmark encoded as
 	///   bytes.
-	/// - `steps`: The number of sample points you want to take across the range of parameters.
 	/// - `lowest_range_values`: The lowest number for each range of parameters.
 	/// - `highest_range_values`: The highest number for each range of parameters.
-	/// - `repeat`: The number of times you want to repeat a benchmark.
+	/// - `steps`: The number of sample points you want to take across the range of parameters.
+	///   (current_step, total_steps)
+	/// - `repeat`: The total number times to repeat each benchmark to increase accuracy of results.
+	///   (current_repeat, total_repeats)
 	fn run_benchmark(
 		name: &[u8],
 		lowest_range_values: &[u32],
 		highest_range_values: &[u32],
-		steps: &[u32],
-		repeat: u32,
+		steps: (u32, u32),
+		repeat: (u32, u32),
 		whitelist: &[TrackedStorageKey],
 		verify: bool,
 	) -> Result<Vec<T>, &'static str>;

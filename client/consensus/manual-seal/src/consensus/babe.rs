@@ -39,7 +39,7 @@ use std::{
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{BlockOrigin, CacheKeyId};
+use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
@@ -50,7 +50,6 @@ use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	generic::{BlockId, Digest},
 	traits::{Block as BlockT, DigestFor, DigestItemFor, Header, Zero},
-	Justifications,
 };
 use sp_timestamp::{InherentType, TimestampInherentData, INHERENT_IDENTIFIER};
 
@@ -98,20 +97,14 @@ where
 {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		mut import_params: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let mut import_params = BlockImportParams::new(origin, header.clone());
-		import_params.justifications = justifications;
-		import_params.body = body;
 		import_params.finalized = false;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		let pre_digest = find_pre_digest::<B>(&header)?;
+		let pre_digest = find_pre_digest::<B>(&import_params.header)?;
 
-		let parent_hash = header.parent_hash();
+		let parent_hash = import_params.header.parent_hash();
 		let parent = self
 			.client
 			.header(BlockId::Hash(*parent_hash))
