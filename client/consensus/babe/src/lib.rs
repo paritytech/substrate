@@ -82,7 +82,7 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sp_core::{crypto::Public, traits::BareCryptoStore};
+use sp_core::{vrf::make_transcript, sr25519, crypto::Public, traits::BareCryptoStore, vrf};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
@@ -122,9 +122,13 @@ use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
-use schnorrkel::SignatureError;
+use schnorrkel::{vrf::VRFOutput, vrf::VRFProof, SignatureError};
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
+use extrinsic_shuffler::{apply_inherents_and_fetch_seed, fetch_seed};
+use pallet_random_seed::{RandomSeedInherentDataProvider, SeedType};
+use random_seed_runtime_api::RandomSeedApi;
+use sp_inherents::ProvideInherentData;
 
 mod verification;
 mod migration;
@@ -252,6 +256,10 @@ enum Error<B: BlockT> {
 	Client(sp_blockchain::Error),
 	Runtime(sp_inherents::Error),
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
+	#[display(fmt = "Bad shuffling seed: {:X?}", _0)]
+	BadSeed([u8; 32]),
+	#[display(fmt = "Seed verification problem: {}", _0)]
+	SeedVerificationErrorStr(String),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -379,7 +387,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
-	C::Api: BabeApi<B>,
+	C::Api: BabeApi<B> + random_seed_runtime_api::RandomSeedApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -411,7 +419,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		&inherent_data_providers,
 	)?;
 
-	info!(target: "babe", "👶 Starting BABE Authorship worker");
+	info!(target: "babe", "� Starting BABE Authorship worker");
 	let inner = sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
@@ -480,7 +488,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		ProvideCache<B> +
 		HeaderBackend<B> +
 		HeaderMetadata<B, Error = ClientError>,
-	C::Api: BabeApi<B>,
+	C::Api: BabeApi<B> + random_seed_runtime_api::RandomSeedApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -667,13 +675,41 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	}
 }
 
-impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
+fn inject_inherents<'a>(
+	keystore: KeyStorePtr,
+	public: &'a sr25519::Public,
+	seed: SeedType,
+	epoch: Epoch,
+	slot_info: &'a mut SlotInfo,
+) -> Result<(), sp_consensus::Error> {
+	let transcript_data = create_shuffling_seed_input_data(&seed);
+	let signature = keystore
+		.read()
+		.sr25519_vrf_sign(<AuthorityId as AppKey>::ID, public, transcript_data)
+		.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
+
+	sp_ignore_tx::IgnoreTXInherentDataProvider({
+		let flag = slot_info.number == (epoch.start_slot + epoch.duration - 1);
+		flag
+	})
+	.provide_inherent_data(&mut slot_info.inherent_data)
+	.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("cannot inject RandomSeed inherent data")))?;
+
+	RandomSeedInherentDataProvider(SeedType {
+		seed: signature.output.to_bytes(),
+		proof: signature.proof.to_bytes(),
+	})
+	.provide_inherent_data(&mut slot_info.inherent_data)
+	.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("cannot inject RandomSeed inherent data")))?;
+
+	Ok(())
+}
+
+impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO>
+where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> +
-		ProvideCache<B> +
-		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError> + Send + Sync,
-	C::Api: BabeApi<B>,
+	C: ProvideRuntimeApi<B> + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync,
+	C::Api: BabeApi<B> + random_seed_runtime_api::RandomSeedApi<B>,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -682,7 +718,39 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 {
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
+	fn on_slot(&mut self, chain_head: B::Header, mut slot_info: SlotInfo) -> Self::OnSlot {
+		let block_id = BlockId::<B>::Hash(chain_head.hash());
+		let seed = self.client.runtime_api().get_seed(&block_id).unwrap();
+		let epoch_data =
+			<Self as sc_consensus_slots::SimpleSlotWorker<B>>::epoch_data(self, &chain_head, slot_info.number).unwrap();
+
+		if let Some((_, public)) = <Self as sc_consensus_slots::SimpleSlotWorker<B>>::claim_slot(
+			self,
+			&chain_head,
+			slot_info.number,
+			&epoch_data,
+		) {
+			let changes = self.epoch_changes.lock();
+			let epoch = changes
+				.viable_epoch(&epoch_data, |slot| Epoch::genesis(&self.config, slot))
+				.ok_or(sp_consensus::Error::StateUnavailable(String::from(
+					"cannot fetch epoch for seed generation purposes",
+				)));
+
+			let inherent_injection_status = epoch.and_then(|epoch| {
+				inject_inherents(
+					self.keystore.clone(),
+					&public.into(),
+					seed,
+					epoch.into_cloned_inner(),
+					&mut slot_info,
+				)
+			});
+
+			if let Err(e) = inherent_injection_status {
+				return Box::pin(future::ready(Err(e)));
+			}
+		}
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }
@@ -787,6 +855,14 @@ impl<Block: BlockT> BabeLink<Block> {
 	}
 }
 
+/// calculates input that after signing will become next shuffling seed
+fn create_shuffling_seed_input_data<'a>(prev_seed: &'a SeedType) -> vrf::VRFTranscriptData<'a> {
+	vrf::VRFTranscriptData {
+		label: b"shuffling_seed",
+		items: vec![("prev_seed", vrf::VRFTranscriptValue::Bytes(&prev_seed.seed))],
+	}
+}
+
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	client: Arc<Client>,
@@ -803,7 +879,8 @@ where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
-		+ BabeApi<Block, Error = sp_blockchain::Error>,
+		+ BabeApi<Block, Error = sp_blockchain::Error>
+		+ RandomSeedApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block>,
 {
@@ -919,6 +996,32 @@ where
 
 		Ok(())
 	}
+
+	fn validate_seed_signature(
+		&self,
+		block_id: &BlockId<Block>,
+		inherents: Vec<Block::Extrinsic>,
+		public_key: &[u8],
+	) -> Result<(), Error<Block>> {
+		let runtime_api = self.client.runtime_api();
+
+		let prev = fetch_seed::<Block, Client>(&runtime_api, block_id)
+			.map_err(|e| Error::<Block>::SeedVerificationErrorStr(format!("{}", e)))?;
+		let new = apply_inherents_and_fetch_seed::<Block, Client>(&runtime_api, block_id, inherents)
+			.map_err(|e| Error::<Block>::SeedVerificationErrorStr(format!("{}", e)))?;
+
+		let output = VRFOutput::from_bytes(&new.seed)
+			.map_err(|_| Error::SeedVerificationErrorStr(String::from("cannot deserialize seed")))?;
+		let proof = VRFProof::from_bytes(&new.proof)
+			.map_err(|_| Error::SeedVerificationErrorStr(String::from("cannot deserialize seed proof")))?;
+		let input = make_transcript(create_shuffling_seed_input_data(&prev));
+
+		schnorrkel::PublicKey::from_bytes(public_key)
+			.and_then(|p| p.vrf_verify(input, &output, &proof))
+			.map_err(|_| Error::<Block>::BadSeed(new.seed))?;
+
+		Ok(())
+	}
 }
 
 impl<Block, Client, SelectChain, CAW> Verifier<Block>
@@ -927,7 +1030,8 @@ where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + AuxStore + ProvideCache<Block>,
-	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>
+		+ RandomSeedApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
 {
@@ -981,7 +1085,7 @@ where
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let v_params = verification::VerificationParams {
 			header: header.clone(),
-			pre_digest: Some(pre_digest),
+			pre_digest: Some(pre_digest.clone()),
 			slot_now: slot_now + 1,
 			epoch: viable_epoch.as_ref(),
 		};
@@ -1021,6 +1125,10 @@ where
 					let (_, inner_body) = block.deconstruct();
 					body = Some(inner_body);
 				}
+
+				let extrinsics = body.clone().unwrap();
+				let key = &viable_epoch.as_ref().authorities[babe_pre_digest.authority_index() as usize];
+				self.validate_seed_signature(&BlockId::Hash(parent_hash), extrinsics, key.0.as_ref())?;
 
 				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
 				telemetry!(
@@ -1136,6 +1244,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
+		info!("Processing block import using Babe");
 		let pre_digest = find_pre_digest::<Block>(&block.header)
 			.expect("valid babe headers must contain a predigest; \
 					 header has been already verified; qed");
@@ -1252,7 +1361,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			log!(target: "babe",
 				log_level,
-				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+				"� New epoch {} launching at block {} (block slot {} >= start slot {}).",
 				viable_epoch.as_ref().epoch_index,
 				hash,
 				slot_number,
@@ -1263,7 +1372,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			log!(target: "babe",
 				log_level,
-				"👶 Next epoch starts at slot {}",
+				"� Next epoch starts at slot {}",
 				next_epoch.as_ref().start_slot,
 			);
 
@@ -1317,6 +1426,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// more primary blocks), if there's a tie we go with the longest
 		// chain.
 		block.fork_choice = {
+			info!("Fork choice");
 			let (last_best, last_best_number) = (info.best_hash, info.best_number);
 
 			let last_best_weight = if &last_best == block.header.parent_hash() {
@@ -1455,7 +1565,8 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
+	Client::Api:
+		BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error> + RandomSeedApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {

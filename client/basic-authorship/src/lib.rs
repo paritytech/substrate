@@ -20,7 +20,7 @@
 //!
 //! # Example
 //!
-//! ```
+//! ```no_run
 //! # use sc_basic_authorship::ProposerFactory;
 //! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
@@ -62,7 +62,6 @@
 //! let block = futures::executor::block_on(future).unwrap();
 //! println!("Generated block: {:?}", block.block);
 //! ```
-//!
 
 mod basic_authorship;
 

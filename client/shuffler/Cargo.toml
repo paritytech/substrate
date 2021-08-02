@@ -1,0 +1,40 @@
+[package]
+name = "extrinsic-shuffler"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Substrate block builder"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+
+[dependencies]
+log = "0.4.8"
+sp-runtime = {default-features = false, version = "2.0.0" }
+sp-api = { default-features = false, version = "2.0.0" }
+sp-core = { default-features = false, version = "2.0.0" }
+sp-std = { default-features = false, version = '2.0.0' }
+sp-block-builder = { default-features=false, version = "2.0.0" }
+extrinsic-info-runtime-api = { default-features=false, path='../../primitives/extrinsic-info-runtime-api', version='2.0.0' }
+pallet-random-seed = { default-features=false, path='../../frame/random-seed', version='2.0.0' }
+random-seed-runtime-api = {default-features=false, path="../../frame/random-seed/runtime-api", version="2.0.0"}
+derive_more = "0.99.2"
+
+
+[features]
+default = ['std']
+std = [
+    'sp-api/std',
+    'sp-std/std',
+    'sp-core/std',
+    'sp-runtime/std',
+    'sp-block-builder/std',
+    'pallet-random-seed/std',
+    'random-seed-runtime-api/std',
+    'extrinsic-info-runtime-api/std',
+]

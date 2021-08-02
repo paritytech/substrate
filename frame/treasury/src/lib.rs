@@ -150,6 +150,7 @@ use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
+use orml_tokens::{MultiTokenNegativeImbalance, MultiTokenCurrency, MultiTokenCurrencyAdapter};
 
 mod tests;
 mod benchmarking;
@@ -1472,13 +1473,40 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
-	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
-		let numeric_amount = amount.peek();
 
-		// Must resolve into existing but better to be safe.
-		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
+pub struct NoTippers {}
 
-		Self::deposit_event(RawEvent::Deposit(numeric_amount));
+impl Contains<sp_runtime::AccountId32> for NoTippers {
+	fn sorted_members() -> Vec<sp_runtime::AccountId32> {
+		Vec::new()
 	}
 }
+
+impl ContainsLengthBound for NoTippers {
+	fn max_len() -> usize {
+		0
+	}
+	fn min_len() -> usize {
+		0
+	}
+}
+
+impl<T, I, Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>> for Module<T, I>
+where
+	T: Trait<I>,
+	I: Instance, 
+	Tokens: orml_tokens::Trait,
+	Tokens::AccountId: From<T::AccountId>,
+	<T::Currency as Currency<T::AccountId>>::Balance : From<u128>,
+{
+
+	fn on_nonzero_unbalanced(amount: MultiTokenNegativeImbalance<Tokens>) {
+		let numeric_amount = amount.peek().into();
+		let currency_id = amount.0;
+
+		// Must resolve into existing but better to be safe.
+		let _ = MultiTokenCurrencyAdapter::<Tokens>::resolve_creating(currency_id, &Self::account_id().into(), amount);
+
+		Module::<T,I>::deposit_event(RawEvent::Deposit(numeric_amount.into()));
+	}
+} 

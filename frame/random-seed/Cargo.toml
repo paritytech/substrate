@@ -1,5 +1,5 @@
 [package]
-name = "pallet-timestamp"
+name = "pallet-random-seed"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -20,12 +20,11 @@ serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false }
 sp-io = { version = "2.0.0", default-features = false, optional = true }
+sp-core = { version = "2.0.0", default-features = false}
 sp-runtime = { version = "2.0.0", default-features = false }
 sp-inherents = { version = "2.0.0", default-features = false }
-frame-benchmarking = { version = "2.0.0", default-features = false, optional = true }
 frame-support = { version = "2.0.0", default-features = false }
 frame-system = { version = "2.0.0", default-features = false }
-sp-timestamp = { version = "2.0.0", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
@@ -39,10 +38,6 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
-	"frame-benchmarking/std",
-	"frame-support/std",
 	"serde",
 	"frame-system/std",
-	"sp-timestamp/std"
 ]
-runtime-benchmarks = ["frame-benchmarking", "sp-io"]

@@ -23,7 +23,7 @@ use sp_consensus_babe::digests::{
 	CompatibleDigestItem
 };
 use sc_consensus_slots::CheckedHeader;
-use log::{debug, trace};
+use log::{debug, info, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
 use super::authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
@@ -57,6 +57,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem,
 {
+	info!("checking header");
 	let VerificationParams {
 		mut header,
 		pre_digest,
@@ -151,6 +152,7 @@ fn check_primary_header<B: BlockT + Sized>(
 	epoch: &Epoch,
 	c: (u64, u64),
 ) -> Result<(), Error<B>> {
+	info!("checking primary header");
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
 	if AuthorityPair::verify(&signature, pre_hash, &author) {
@@ -194,6 +196,7 @@ fn check_secondary_plain_header<B: BlockT>(
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 ) -> Result<(), Error<B>> {
+	info!("checking secondary plain header");
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author = secondary_slot_author(
@@ -222,6 +225,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 ) -> Result<(), Error<B>> {
+	info!("checking secondary vrf header");
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author = secondary_slot_author(

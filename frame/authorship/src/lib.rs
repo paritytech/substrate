@@ -208,7 +208,9 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
-		#[weight = (0, DispatchClass::Mandatory)]
+		/// Fixme Mandatory class removed
+		// #[weight = (0, DispatchClass::Mandatory)]
+		#[weight = 0]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
