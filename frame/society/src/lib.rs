@@ -251,11 +251,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
 		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
-		Get, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+		Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
 	},
 	PalletId,
 };
@@ -424,6 +423,7 @@ pub mod pallet {
 		type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The number of blocks between membership challenges.
+		#[pallet::constant]
 		type ChallengePeriod: Get<Self::BlockNumber>;
 
 		/// The maximum number of candidates that we accept per round.
