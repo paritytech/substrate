@@ -25,11 +25,12 @@ use futures::{compat::Future01CompatExt, executor};
 use futures01::stream::Stream;
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
+use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
 use sp_io::hashing::blake2_256;
 use sp_runtime::generic::BlockId;
 use std::sync::Arc;
-use substrate_test_runtime_client::{prelude::*, runtime, sp_consensus::BlockOrigin};
+use substrate_test_runtime_client::{prelude::*, runtime};
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -342,7 +343,10 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", genesis_hash),
 				to: format!("{:?}", Some(random_hash1)),
-				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
 			})
 			.map_err(|e| e.to_string())
 		);
@@ -355,7 +359,10 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(genesis_hash)),
-				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
 			})
 			.map_err(|e| e.to_string()),
 		);
@@ -368,7 +375,10 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(block2_hash)), // Best block hash.
-				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
 			})
 			.map_err(|e| e.to_string()),
 		);
@@ -381,7 +391,10 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1), // First hash not found.
 				to: format!("{:?}", Some(random_hash2)),
-				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
 			})
 			.map_err(|e| e.to_string()),
 		);

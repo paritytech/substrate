@@ -23,6 +23,10 @@ use codec::{Codec, Decode, Encode};
 use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
+use sc_consensus::{
+	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
+	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
+};
 use sc_consensus_slots::{check_equivocation, CheckedHeader, InherentDataProviderExt};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -31,11 +35,7 @@ use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
 	HeaderBackend, ProvideCache,
 };
-use sp_consensus::{
-	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
-	BlockImport, BlockImportParams, BlockOrigin, CanAuthorWith, Error as ConsensusError,
-	ForkChoiceStrategy,
-};
+use sp_consensus::{CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
 	AURA_ENGINE_ID,
@@ -46,7 +46,6 @@ use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, DigestItemFor, Header},
-	Justifications,
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 
@@ -206,13 +205,10 @@ where
 {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		mut body: Option<Vec<B::Extrinsic>>,
+		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let hash = header.hash();
-		let parent_hash = *header.parent_hash();
+		let hash = block.header.hash();
+		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
@@ -234,7 +230,7 @@ where
 		let checked_header = check_header::<C, B, P>(
 			&self.client,
 			slot_now + 1,
-			header,
+			block.header,
 			hash,
 			&authorities[..],
 			self.check_for_equivocation,
@@ -245,8 +241,8 @@ where
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
-				if let Some(inner_body) = body.take() {
-					let block = B::new(pre_header.clone(), inner_body);
+				if let Some(inner_body) = block.body.take() {
+					let new_block = B::new(pre_header.clone(), inner_body);
 
 					inherent_data.aura_replace_inherent_data(slot);
 
@@ -261,7 +257,7 @@ where
 						.map_err(|e| format!("{:?}", e))?
 					{
 						self.check_inherents(
-							block.clone(),
+							new_block.clone(),
 							BlockId::Hash(parent_hash),
 							inherent_data,
 							create_inherent_data_providers,
@@ -270,8 +266,8 @@ where
 						.map_err(|e| e.to_string())?;
 					}
 
-					let (_, inner_body) = block.deconstruct();
-					body = Some(inner_body);
+					let (_, inner_body) = new_block.deconstruct();
+					block.body = Some(inner_body);
 				}
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
@@ -298,14 +294,12 @@ where
 						_ => None,
 					});
 
-				let mut import_block = BlockImportParams::new(origin, pre_header);
-				import_block.post_digests.push(seal);
-				import_block.body = body;
-				import_block.justifications = justifications;
-				import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-				import_block.post_hash = Some(hash);
+				block.header = pre_header;
+				block.post_digests.push(seal);
+				block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+				block.post_hash = Some(hash);
 
-				Ok((import_block, maybe_keys))
+				Ok((block, maybe_keys))
 			},
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);

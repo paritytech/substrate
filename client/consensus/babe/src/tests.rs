@@ -29,15 +29,13 @@ use rand::RngCore;
 use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents};
+use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
 use sc_network::config::ProtocolConfig;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
-use sp_consensus::{
-	import_queue::{BoxBlockImport, BoxJustificationImport},
-	AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
-};
+use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
@@ -230,7 +228,6 @@ pub struct BabeTestNet {
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
-type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 type TestSelectChain =
 	substrate_test_runtime_client::LongestChain<substrate_test_runtime_client::Backend, TestBlock>;
@@ -259,14 +256,11 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// presented to the User in the logs.
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		mut header: TestHeader,
-		justifications: Option<Justifications>,
-		body: Option<Vec<TestExtrinsic>>,
+		mut block: BlockImportParams<TestBlock, ()>,
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
-		(self.mutator)(&mut header, Stage::PostSeal);
-		self.inner.verify(origin, header, justifications, body).await
+		(self.mutator)(&mut block.header, Stage::PostSeal);
+		self.inner.verify(block).await
 	}
 }
 
