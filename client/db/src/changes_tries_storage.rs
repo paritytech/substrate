@@ -358,18 +358,23 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			let next_config = match cache_tx {
 				Some(cache_tx) if config_for_new_block && cache_tx.new_config.is_some() => {
 					let config = cache_tx.new_config.clone().expect("guarded by is_some(); qed");
-					ChangesTrieConfigurationRange {
+					Ok(ChangesTrieConfigurationRange {
 						zero: (block_num, block_hash),
 						end: None,
 						config,
-					}
+					})
 				},
 				_ if config_for_new_block => self.configuration_at(&BlockId::Hash(
 					*new_header
 						.expect("config_for_new_block is only true when new_header is passed; qed")
 						.parent_hash(),
-				))?,
-				_ => self.configuration_at(&BlockId::Hash(next_digest_range_start_hash))?,
+				)),
+				_ => self.configuration_at(&BlockId::Hash(next_digest_range_start_hash)),
+			};
+			let next_config = match next_config {
+				Ok(next_config) => next_config,
+				Err(ClientError::UnknownBlock(_)) => break, // No block means nothing to prune.
+				Err(e) => return Err(e),
 			};
 			if let Some(config) = next_config.config {
 				let mut oldest_digest_range = config

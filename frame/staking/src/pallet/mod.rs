@@ -525,17 +525,17 @@ pub mod pallet {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
 		/// \[era_index, validator_payout, remainder\]
-		EraPayout(EraIndex, BalanceOf<T>, BalanceOf<T>),
-		/// The staker has been rewarded by this amount. \[stash, amount\]
-		Reward(T::AccountId, BalanceOf<T>),
+		EraPaid(EraIndex, BalanceOf<T>, BalanceOf<T>),
+		/// The nominator has been rewarded by this amount. \[stash, amount\]
+		Rewarded(T::AccountId, BalanceOf<T>),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		/// \[validator, amount\]
-		Slash(T::AccountId, BalanceOf<T>),
+		Slashed(T::AccountId, BalanceOf<T>),
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed. \[session_index\]
 		OldSlashingReportDiscarded(SessionIndex),
 		/// A new set of stakers was elected.
-		StakingElection,
+		StakersElected,
 		/// An account has bonded this amount. \[stash, amount\]
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
@@ -553,6 +553,8 @@ pub mod pallet {
 		/// An account has stopped participating as either a validator or nominator.
 		/// \[stash\]
 		Chilled(T::AccountId),
+		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
+		PayoutStarted(EraIndex, T::AccountId),
 	}
 
 	#[pallet::error]

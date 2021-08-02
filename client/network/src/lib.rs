@@ -243,6 +243,7 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
+//!
 
 mod behaviour;
 mod chain;
@@ -264,12 +265,13 @@ pub mod light_client_requests;
 pub mod network_state;
 pub mod state_request_handler;
 pub mod transactions;
+pub mod warp_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
-	sync::{StateDownloadProgress, SyncState},
+	sync::{StateDownloadProgress, SyncState, WarpSyncPhase, WarpSyncProgress},
 	PeerInfo,
 };
 pub use service::{
@@ -326,4 +328,6 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_outbound: u64,
 	/// State sync in progress.
 	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
+	/// Warp sync in progress.
+	pub warp_sync: Option<protocol::sync::WarpSyncProgress>,
 }
