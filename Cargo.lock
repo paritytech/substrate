@@ -1714,7 +1714,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "rand 0.8.3",
+ "rand 0.8.4",
  "scale-info",
 ]
 
@@ -1725,7 +1725,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
 dependencies = [
  "byteorder",
- "rand 0.8.3",
+ "rand 0.8.4",
  "rustc-hex",
  "static_assertions",
 ]
@@ -1802,6 +1802,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "handlebars",
+ "linked-hash-map",
+ "log",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-db",
@@ -3394,7 +3396,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "rand 0.8.3",
+ "rand 0.8.4",
  "smallvec 1.6.1",
  "socket2 0.4.0",
  "void",
@@ -4066,7 +4068,7 @@ dependencies = [
  "num-complex",
  "num-rational 0.4.0",
  "num-traits",
- "rand 0.8.3",
+ "rand 0.8.4",
  "rand_distr",
  "simba",
  "typenum",
@@ -4226,7 +4228,6 @@ dependencies = [
  "sc-consensus-slots",
  "sc-consensus-uncles",
  "sc-finality-grandpa",
- "sc-finality-grandpa-warp-sync",
  "sc-keystore",
  "sc-network",
  "sc-offchain",
@@ -4558,6 +4559,7 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-service",
  "sp-api",
@@ -4925,7 +4927,7 @@ dependencies = [
  "paste 1.0.4",
  "pretty_assertions 0.7.2",
  "pwasm-utils",
- "rand 0.8.3",
+ "rand 0.8.4",
  "rand_pcg 0.3.0",
  "scale-info",
  "serde",
@@ -5817,7 +5819,7 @@ dependencies = [
  "log",
  "memmap2",
  "parking_lot 0.11.1",
- "rand 0.8.3",
+ "rand 0.8.4",
 ]
 
 [[package]]
@@ -6547,7 +6549,7 @@ checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
 dependencies = [
  "env_logger 0.8.3",
  "log",
- "rand 0.8.3",
+ "rand 0.8.4",
 ]
 
 [[package]]
@@ -6615,9 +6617,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ef9e7e66b4468674bfcb0c81af8b7fa0bb154fa9f28eb840da5c447baeb8d7e"
+checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
@@ -6685,7 +6687,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "051b398806e42b9cd04ad9ec8f81e355d0a382c543ac6672c62f5a5b452ef142"
 dependencies = [
  "num-traits",
- "rand 0.8.3",
+ "rand 0.8.4",
 ]
 
 [[package]]
@@ -7310,7 +7312,6 @@ dependencies = [
  "sc-state-db",
  "sp-arithmetic",
  "sp-blockchain",
- "sp-consensus",
  "sp-core",
  "sp-database",
  "sp-keyring",
@@ -7328,11 +7329,24 @@ name = "sc-consensus"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
+ "futures 0.3.15",
+ "futures-timer 3.0.2",
+ "libp2p",
+ "log",
  "parking_lot 0.11.1",
  "sc-client-api",
+ "serde",
+ "sp-api",
  "sp-blockchain",
  "sp-consensus",
+ "sp-core",
  "sp-runtime",
+ "sp-state-machine",
+ "sp-test-primitives",
+ "sp-utils",
+ "substrate-prometheus-endpoint",
+ "thiserror",
+ "wasm-timer",
 ]
 
 [[package]]
@@ -7349,6 +7363,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-slots",
  "sc-executor",
  "sc-keystore",
@@ -7399,6 +7414,7 @@ dependencies = [
  "retain_mut",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
@@ -7490,6 +7506,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "sc-basic-authorship",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-transaction-pool",
@@ -7525,6 +7542,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-client-api",
+ "sc-consensus",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -7547,6 +7565,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-client-api",
+ "sc-consensus",
  "sc-telemetry",
  "sp-api",
  "sp-application-crypto",
@@ -7686,7 +7705,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "pin-project 1.0.5",
- "rand 0.7.3",
+ "rand 0.8.4",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
@@ -7742,32 +7761,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-finality-grandpa",
- "sp-keyring",
- "sp-runtime",
- "substrate-test-runtime-client",
-]
-
-[[package]]
-name = "sc-finality-grandpa-warp-sync"
-version = "0.10.0-dev"
-dependencies = [
- "derive_more",
- "finality-grandpa",
- "futures 0.3.15",
- "log",
- "num-traits",
- "parity-scale-codec",
- "parking_lot 0.11.1",
- "prost",
- "rand 0.8.3",
- "sc-block-builder",
- "sc-client-api",
- "sc-finality-grandpa",
- "sc-network",
- "sc-service",
- "sp-blockchain",
- "sp-consensus",
  "sp-finality-grandpa",
  "sp-keyring",
  "sp-runtime",
@@ -7865,6 +7858,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-peerset",
  "serde",
  "serde_json",
@@ -7873,6 +7867,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-finality-grandpa",
  "sp-keyring",
  "sp-runtime",
  "sp-test-primitives",
@@ -8022,6 +8017,7 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-io",
  "sp-keystore",
@@ -8116,6 +8112,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-informant",
@@ -8178,6 +8175,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-light",
  "sc-network",
@@ -8779,7 +8777,7 @@ dependencies = [
  "futures 0.3.15",
  "httparse",
  "log",
- "rand 0.8.3",
+ "rand 0.8.4",
  "sha-1 0.9.4",
 ]
 
@@ -8944,7 +8942,6 @@ dependencies = [
  "async-trait",
  "futures 0.3.15",
  "futures-timer 3.0.2",
- "libp2p",
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -9636,7 +9633,7 @@ dependencies = [
  "lazy_static",
  "nalgebra",
  "num-traits",
- "rand 0.8.3",
+ "rand 0.8.4",
 ]
 
 [[package]]
@@ -9880,6 +9877,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
+ "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",
@@ -10053,7 +10051,7 @@ checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "rand 0.8.3",
+ "rand 0.8.4",
  "redox_syscall 0.2.5",
  "remove_dir_all",
  "winapi 0.3.9",
@@ -10099,6 +10097,7 @@ dependencies = [
  "sp-consensus-babe",
  "sp-core",
  "sp-externalities",
+ "sp-finality-grandpa",
  "sp-inherents",
  "sp-keyring",
  "sp-keystore",
@@ -10136,7 +10135,6 @@ dependencies = [
  "sc-network",
  "sc-service",
  "sp-api",
- "sp-consensus",
  "sp-consensus-babe",
  "sp-inherents",
  "sp-keyring",
@@ -10726,7 +10724,7 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
- "rand 0.8.3",
+ "rand 0.8.4",
  "smallvec 1.6.1",
  "thiserror",
  "tinyvec",
@@ -11375,7 +11373,7 @@ dependencies = [
  "mach",
  "memoffset 0.6.1",
  "more-asserts",
- "rand 0.8.3",
+ "rand 0.8.4",
  "region",
  "thiserror",
  "wasmtime-environ",
@@ -11543,7 +11541,7 @@ dependencies = [
  "log",
  "nohash-hasher",
  "parking_lot 0.11.1",
- "rand 0.8.3",
+ "rand 0.8.4",
  "static_assertions",
 ]
 

@@ -53,21 +53,21 @@ pub use sc_client_api::{
 };
 
 /// Remote data checker.
-pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
+pub struct LightDataChecker<E, B: BlockT, S: BlockchainStorage<B>> {
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
-	_hasher: PhantomData<(B, H)>,
+	_marker: PhantomData<B>,
 }
 
-impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
+impl<E, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, B, S> {
 	/// Create new light data checker.
 	pub fn new(
 		blockchain: Arc<Blockchain<S>>,
 		executor: E,
 		spawn_handle: Box<dyn SpawnNamed>,
 	) -> Self {
-		Self { blockchain, executor, spawn_handle, _hasher: PhantomData }
+		Self { blockchain, executor, spawn_handle, _marker: PhantomData }
 	}
 
 	/// Check remote changes query proof assuming that CHT-s are of given size.
@@ -76,11 +76,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		request: &RemoteChangesRequest<B::Header>,
 		remote_proof: ChangesProof<B::Header>,
 		cht_size: NumberFor<B>,
-	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
-	where
-		H: Hasher,
-		H::Out: Ord + codec::Codec,
-	{
+	) -> ClientResult<Vec<(NumberFor<B>, u32)>> {
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
 		if remote_proof.max_block > request.max_block.0 ||
@@ -135,7 +131,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		let mut result = Vec::new();
 		let proof_storage = InMemoryChangesTrieStorage::with_proof(remote_proof);
 		for config_range in &request.changes_trie_configs {
-			let result_range = key_changes_proof_check_with_db::<H, _>(
+			let result_range = key_changes_proof_check_with_db::<HashFor<B>, _>(
 				ChangesTrieConfigurationRange {
 					config: config_range
 						.config
@@ -171,11 +167,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		cht_size: NumberFor<B>,
 		remote_roots: &BTreeMap<NumberFor<B>, B::Hash>,
 		remote_roots_proof: StorageProof,
-	) -> ClientResult<()>
-	where
-		H: Hasher,
-		H::Out: Ord + codec::Codec,
-	{
+	) -> ClientResult<()> {
 		// all the checks are sharing the same storage
 		let storage = remote_roots_proof.into_memory_db();
 
@@ -204,16 +196,14 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 					// check if the proofs storage contains the root
 					// normally this happens in when the proving backend is created, but since
 					// we share the storage for multiple checks, do it here
-					let mut cht_root = H::Out::default();
-					cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-					if !storage.contains(&cht_root, EMPTY_PREFIX) {
+					if !storage.contains(&local_cht_root, EMPTY_PREFIX) {
 						return Err(ClientError::InvalidCHTProof.into())
 					}
 
 					// check proof for single changes trie root
-					let proving_backend = TrieBackend::new(storage, cht_root);
+					let proving_backend = TrieBackend::new(storage, local_cht_root);
 					let remote_changes_trie_root = remote_roots[&block];
-					cht::check_proof_on_proving_backend::<B::Header, H>(
+					cht::check_proof_on_proving_backend::<B::Header, HashFor<B>>(
 						local_cht_root,
 						block,
 						remote_changes_trie_root,
@@ -231,12 +221,10 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	}
 }
 
-impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
+impl<E, Block, S> FetchChecker<Block> for LightDataChecker<E, Block, S>
 where
 	Block: BlockT,
 	E: CodeExecutor + Clone + 'static,
-	H: Hasher,
-	H::Out: Ord + codec::Codec + 'static,
 	S: BlockchainStorage<Block>,
 {
 	fn check_header_proof(
@@ -248,7 +236,7 @@ where
 		let remote_header =
 			remote_header.ok_or_else(|| ClientError::from(ClientError::InvalidCHTProof))?;
 		let remote_header_hash = remote_header.hash();
-		cht::check_proof::<Block::Header, H>(
+		cht::check_proof::<Block::Header, HashFor<Block>>(
 			request.cht_root,
 			request.block,
 			remote_header_hash,
@@ -262,7 +250,7 @@ where
 		request: &RemoteReadRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		read_proof_check::<H, _>(
+		read_proof_check::<HashFor<Block>, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			request.keys.iter(),
@@ -279,7 +267,7 @@ where
 			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 			None => return Err(ClientError::InvalidChildType),
 		};
-		read_child_proof_check::<H, _>(
+		read_child_proof_check::<HashFor<Block>, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			&child_info,
@@ -293,7 +281,7 @@ where
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<Vec<u8>> {
-		check_execution_proof::<_, _, H>(
+		check_execution_proof::<_, _, HashFor<Block>>(
 			&self.executor,
 			self.spawn_handle.clone(),
 			request,

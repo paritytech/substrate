@@ -71,7 +71,7 @@ struct BenchmarkData {
 // This forwards some specific metadata from the `BenchmarkCmd`
 #[derive(Serialize, Default, Debug, Clone)]
 struct CmdData {
-	steps: Vec<u32>,
+	steps: u32,
 	repeat: u32,
 	lowest_range_values: Vec<u32>,
 	highest_range_values: Vec<u32>,
