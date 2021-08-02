@@ -31,7 +31,6 @@ sc-informant = { path = "../../../client/informant" }
 sc-consensus = { path = "../../../client/consensus/common" }
 
 sp-runtime = { path = "../../../primitives/runtime" }
-sp-consensus = { path = "../../../primitives/consensus/common" }
 sp-keyring = { path = "../../../primitives/keyring" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
 sp-api = {  path = "../../../primitives/api" }

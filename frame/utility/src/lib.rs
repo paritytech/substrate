@@ -108,6 +108,8 @@ pub mod pallet {
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
+		/// A single item within a Batch of dispatches has completed with no error.
+		ItemCompleted,
 	}
 
 	#[pallet::call]
@@ -173,6 +175,7 @@ pub mod pallet {
 					// Return the actual used weight + base_weight of this call.
 					return Ok(Some(base_weight + weight).into())
 				}
+				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
@@ -289,6 +292,7 @@ pub mod pallet {
 					err.post_info = Some(base_weight + weight).into();
 					err
 				})?;
+				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch_all(calls_len as u32);

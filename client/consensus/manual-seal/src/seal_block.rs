@@ -20,13 +20,11 @@
 
 use crate::{rpc, ConsensusDataProvider, CreatedBlock, Error};
 use futures::prelude::*;
+use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::HeaderBackend;
-use sp_consensus::{
-	self, BlockImport, BlockImportParams, BlockOrigin, Environment, ForkChoiceStrategy,
-	ImportResult, Proposer, SelectChain, StateAction,
-};
+use sp_consensus::{self, BlockOrigin, Environment, Proposer, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::BlockId,
@@ -147,7 +145,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		params.state_action = StateAction::ApplyChanges(sp_consensus::StorageChanges::Changes(
+		params.state_action = StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(
 			proposal.storage_changes,
 		));
 
