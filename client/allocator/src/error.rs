@@ -24,6 +24,9 @@ pub enum Error {
 	/// Allocator run out of space.
 	#[error("Allocator ran out of space")]
 	AllocatorOutOfSpace,
+	/// The client passed a memory instance which is smaller than previously observed.
+	#[error("Shrinking of the underlying memory is observed")]
+	MemoryShrinked,
 	/// Some other error occurred.
 	#[error("Other: {0}")]
 	Other(&'static str),
