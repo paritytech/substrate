@@ -23,5 +23,5 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
-scale-info = { version = "0.10.0", default-features = false, features = ["derive"] }
+scale-info = "0.10.0"
 tokio = "0.2"
