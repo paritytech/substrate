@@ -434,7 +434,7 @@ fn start_rpc_servers<
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
 		sc_rpc_server::RpcMiddleware,
-	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
+	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>,
 >(
 	_: &Configuration,
 	_: H,
