@@ -361,7 +361,7 @@ where
 		))
 	}
 
-	fn storages(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
@@ -741,7 +741,7 @@ where
 		))
 	}
 
-	fn storages(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,

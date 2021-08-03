@@ -30,7 +30,7 @@ use log::warn;
 use parking_lot::Mutex;
 use rpc::{
 	futures::{
-		future::{join_all, result, Future},
+		future::{result, Future},
 		stream::Stream,
 		Sink,
 	},
@@ -245,24 +245,23 @@ where
 		)
 	}
 
-	fn storages(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<Option<StorageData>>> {
-		let remote_blockchain = self.remote_blockchain.clone();
-		let fetcher = self.fetcher.clone();
-		let block = self.block_or_best(block);
-		Box::new(join_all(keys.into_iter().map(move |key| {
-			storage(&*remote_blockchain, fetcher.clone(), block, vec![key.0.clone()])
-				.boxed()
-				.compat()
-				.map(move |mut values| {
-					values
-						.remove(&key)
-						.expect("successful request has entries for all requested keys; qed")
-				})
-		})))
+		let keys = keys.iter().map(|k| k.0.clone()).collect::<Vec<_>>();
+		Box::new(
+			storage(
+				&*self.remote_blockchain,
+				self.fetcher.clone(),
+				self.block_or_best(block),
+				keys,
+			)
+			.boxed()
+			.compat()
+			.map(|v| v.into_values().collect::<Vec<_>>()),
+		)
 	}
 
 	fn storage_hash(
@@ -583,7 +582,7 @@ where
 		Box::new(child_storage.boxed().compat())
 	}
 
-	fn storages(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -591,42 +590,46 @@ where
 	) -> FutureResult<Vec<Option<StorageData>>> {
 		let block = self.block_or_best(block);
 		let fetcher = self.fetcher.clone();
-		let remote_blockchain = self.remote_blockchain.clone();
-		Box::new(join_all(keys.into_iter().map(move |key| {
-			let storage_key = storage_key.clone();
-			let fetcher2 = fetcher.clone();
-			let child_storage =
-				resolve_header(&*remote_blockchain, &*fetcher, block).then(move |result| {
-					match result {
-						Ok(header) => Either::Left(
-							fetcher2
-								.remote_read_child(RemoteReadChildRequest {
-									block,
-									header,
-									storage_key,
-									keys: vec![key.0.clone()],
-									retry_count: Default::default(),
-								})
-								.then(move |result| {
-									ready(
-										result
-											.map(|mut data| {
-												data.remove(&key.0)
-												.expect(
-													"successful result has entry for all keys; qed",
-												)
-												.map(StorageData)
-											})
-											.map_err(client_err),
-									)
-								}),
-						),
-						Err(error) => Either::Right(ready(Err(error))),
-					}
-				});
+		let keys = keys.iter().map(|k| k.0.clone()).collect::<Vec<_>>();
+		let child_storage =
+			resolve_header(&*self.remote_blockchain, &*self.fetcher, block).then(move |result| {
+				match result {
+					Ok(header) => Either::Left(
+						fetcher
+							.remote_read_child(RemoteReadChildRequest {
+								block,
+								header,
+								storage_key,
+								keys: keys.clone(),
+								retry_count: Default::default(),
+							})
+							.then(move |result| {
+								ready(
+									result
+										.map(|data| {
+											data.iter()
+												.filter_map(|(k, d)| {
+													if keys.contains(k) {
+														if let Some(d) = d {
+															return Some(Some(StorageData(
+																d.to_vec(),
+															)))
+														}
+													};
 
-			Box::new(child_storage.boxed().compat())
-		})))
+													None
+												})
+												.collect::<Vec<_>>()
+										})
+										.map_err(client_err),
+								)
+							}),
+					),
+					Err(error) => Either::Right(ready(Err(error))),
+				}
+			});
+
+		Box::new(child_storage.boxed().compat())
 	}
 
 	fn storage_hash(

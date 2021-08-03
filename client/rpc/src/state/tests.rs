@@ -100,7 +100,7 @@ fn should_return_storage() {
 }
 
 #[test]
-fn should_return_storages() {
+fn should_return_storage_entries() {
 	const KEY1: &[u8] = b":mock";
 	const KEY2: &[u8] = b":turtle";
 	const VALUE: &[u8] = b"hello world";
@@ -120,17 +120,26 @@ fn should_return_storages() {
 		DenyUnsafe::No,
 		None,
 	);
-	let keys = &[StorageKey(KEY1.to_vec()), StorageKey(KEY2.to_vec())];
 
+	let keys = &[StorageKey(KEY1.to_vec()), StorageKey(KEY2.to_vec())];
 	assert_eq!(
-		executor::block_on(
-			child
-				.storages(prefixed_storage_key(), keys.to_vec(), Some(genesis_hash).into())
-				.map(|x| x.into_iter().map(|x| x.map(|y| y.0.len()).unwrap()).sum::<usize>())
-				.compat(),
-		)
-		.unwrap(),
-		CHILD_VALUE1.len() + CHILD_VALUE2.len(),
+		child
+			.storage_entries(prefixed_storage_key(), keys.to_vec(), Some(genesis_hash).into())
+			.wait()
+			.map(|x| x.into_iter().map(|x| x.map(|x| x.0.len()).unwrap()).sum::<usize>())
+			.unwrap(),
+		CHILD_VALUE1.len() + CHILD_VALUE2.len()
+	);
+
+	// should fail if not all keys exist.
+	let mut failing_keys = vec![StorageKey(b":soup".to_vec())];
+	failing_keys.extend_from_slice(keys);
+	assert_matches!(
+		child
+			.storage_entries(prefixed_storage_key(), failing_keys, Some(genesis_hash).into())
+			.wait()
+			.map(|x| x.iter().all(|x| x.is_some())),
+		Ok(false)
 	);
 }
 
@@ -156,6 +165,17 @@ fn should_return_child_storage() {
 		).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
+
+	// should fail if key does not exist.
+	let failing_key = StorageKey(b":soup".to_vec());
+	assert_matches!(
+		child
+			.storage(prefixed_storage_key(), failing_key, Some(genesis_hash).into())
+			.wait()
+			.map(|x| x.is_some()),
+		Ok(false)
+	);
+
 	assert_matches!(
 		child
 			.storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into(),)
@@ -167,7 +187,7 @@ fn should_return_child_storage() {
 }
 
 #[test]
-fn should_return_child_storages() {
+fn should_return_child_storage_entries() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	let client = Arc::new(
 		substrate_test_runtime_client::TestClientBuilder::new()
@@ -182,7 +202,7 @@ fn should_return_child_storages() {
 	let keys = vec![StorageKey(b"key1".to_vec()), StorageKey(b"key2".to_vec())];
 
 	let res = child
-		.storages(child_key.clone(), keys.clone(), Some(genesis_hash).into())
+		.storage_entries(child_key.clone(), keys.clone(), Some(genesis_hash).into())
 		.wait()
 		.unwrap();
 
