@@ -664,6 +664,7 @@ impl<T: Config> Pallet<T> {
 
 	/// This is a very expensive function and result should be cached versus being called multiple times.
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
+		// all current validators to be included
 		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
 	}
 

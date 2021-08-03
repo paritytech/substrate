@@ -575,6 +575,8 @@ pub struct Node<T: Config> {
 	/// The bag index is not stored in storage, but injected during all fetch operations.
 	#[codec(skip)]
 	pub(crate) bag_upper: VoteWeight,
+	// TODO maybe
+	// - store voter data here i.e targets
 }
 
 impl<T: Config> Node<T> {

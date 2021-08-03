@@ -106,7 +106,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		VoterBags: pallet_voter_bags::{Pallet, Call, Storage, Event<T>},
+		// VoterBags: pallet_voter_bags::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -258,12 +258,12 @@ parameter_types! {
 	pub const VoterBagThresholds: &'static [VoteWeight] = &THRESHOLDS;
 }
 
-impl pallet_voter_bags::Config for Test {
-	type Event = Event;
-	type BVoterBagThresholds = VoterBagThresholds;
-}
+// impl pallet_voter_bags::Config for Test {
+// 	type Event = Event;
+// 	type BVoterBagThresholds = VoterBagThresholds;
+// }
 
-impl Config for Test {
+impl crate::pallet::pallet::Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
@@ -284,7 +284,8 @@ impl Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 	type VoterBagThresholds = VoterBagThresholds;
-	type VoterListProvider = pallet_voter_bags::VoterBagsVoterListProvider;
+	// type VoterListProvider = pallet_voter_bags::VoterBagsVoterListProvider;
+	type VoterListProvider = staking::VoterList<Self>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
