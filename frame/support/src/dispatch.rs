@@ -2325,7 +2325,7 @@ macro_rules! __dispatch_impl_metadata {
 	}
 }
 
-/// Implement metadata for dispatch.
+/// Implement metadata for pallet error.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __impl_error_metadata {
