@@ -81,16 +81,24 @@ pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N:
 	let next_key = sp_io::storage::next_key(&twox_128(old.as_ref().as_bytes())).unwrap();
 	assert!(next_key.starts_with(&twox_128(old.as_ref().as_bytes())));
 
+	let new_prefix = twox_128(new.as_bytes());
+	let pallet_version_key = [&new_prefix, &b":__PALLET_VERSION__:"[..]].concat();
+	let storage_version_key = [
+		&new_prefix,
+		frame_support::traits::STORAGE_VERSION_STORAGE_KEY_POSTFIX,
+	].concat();
+
 	// ensure nothing is stored in the new prefix.
 	assert!(
-		sp_io::storage::next_key(&twox_128(new.as_bytes())).map_or(
+		sp_io::storage::next_key(&new_prefix).map_or(
 			// either nothing is there
 			true,
 			// or we ensure that it has no common prefix with twox_128(new),
 			// or isn't the pallet version that is already stored using the pallet name
 			|next_key| {
-				!next_key.starts_with(&twox_128(new.as_bytes()))
-					|| next_key == frame_support::traits::STORAGE_VERSION_STORAGE_KEY_POSTFIX
+				!next_key.starts_with(&new_prefix)
+					|| next_key == pallet_version_key
+					|| next_key == storage_version_key
 			},
 		),
 		"unexpected next_key({}) = {:?}",
