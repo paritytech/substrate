@@ -374,9 +374,9 @@ impl<T: Config> VoterList<T> {
 		let stored_count = crate::CounterForVoters::<T>::get();
 		ensure!(iter_count == stored_count, "iter_count != voter_count");
 
-		let validators = staking::CounterForValidators::<T>::get();
-		let nominators = staking::CounterForNominators::<T>::get();
-		ensure!(validators + nominators == stored_count, "validators + nominators != voters");
+		// let validators = staking::CounterForValidators::<T>::get();
+		// let nominators = staking::CounterForNominators::<T>::get();
+		// ensure!(validators + nominators == stored_count, "validators + nominators != voters");
 
 		let _ = T::VoterBagThresholds::get()
 			.into_iter()

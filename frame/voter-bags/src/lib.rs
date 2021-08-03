@@ -21,14 +21,10 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
-// use codec::{Decode, Encode};
 use frame_election_provider_support::VoteWeight;
-use frame_support::{
-	pallet_prelude::*,
-	traits::{Currency, CurrencyToVote, LockableCurrency},
-};
-use frame_system::{ensure_signed, pallet_prelude::*};
-use pallet_staking::{AccountIdOf, BalanceOf, VotingDataOf, GenesisConfig};
+use frame_support::traits::{Currency, CurrencyToVote, LockableCurrency};
+use frame_system::ensure_signed;
+use pallet_staking::{AccountIdOf, BalanceOf, GenesisConfig, VotingDataOf};
 use sp_std::collections::btree_map::BTreeMap;
 
 mod voter_list;
@@ -55,6 +51,8 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -191,7 +189,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> pallet_staking::VoterListProvider<T> for Pallet<T> {
+pub struct VoterBagsVoterListProvider;
+impl<T: Config> pallet_staking::VoterListProvider<T> for VoterBagsVoterListProvider {
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn get_voters(
 		slashing_spans: BTreeMap<AccountIdOf<T>, pallet_staking::slashing::SlashingSpans>,

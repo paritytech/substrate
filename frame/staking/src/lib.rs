@@ -822,7 +822,7 @@ pub trait VoterListProvider<T: Config> {
 
 // TODO this should have some tests?
 /// A simple voter list implementation that does not require any additional pallets.
-struct StakingVoterListStub;
+pub struct StakingVoterListStub;
 impl<T: Config> VoterListProvider<T> for StakingVoterListStub {
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn get_voters(
