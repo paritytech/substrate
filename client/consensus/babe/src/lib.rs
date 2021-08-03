@@ -125,7 +125,7 @@ pub use sp_consensus_babe::{
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight,
 	BabeEpochConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
-	VRF_OUTPUT_LENGTH,
+	VRF_OUTPUT_LENGTH, BabeBlockWeight,
 };
 
 pub use aux_schema::load_block_weight as block_weight;
