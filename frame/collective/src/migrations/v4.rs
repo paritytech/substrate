@@ -82,9 +82,10 @@ pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N:
 	assert!(next_key.starts_with(&twox_128(old.as_ref().as_bytes())));
 
 	let new_prefix = twox_128(new.as_bytes());
-	let pallet_version_key = [&new_prefix, &b":__PALLET_VERSION__:"[..]].concat();
+	let pallet_version_key = [&new_prefix, &twox_128(b":__PALLET_VERSION__:")[..]].concat();
 	let storage_version_key =
-		[&new_prefix, frame_support::traits::STORAGE_VERSION_STORAGE_KEY_POSTFIX].concat();
+		[&new_prefix, &twox_128(frame_support::traits::STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]]
+			.concat();
 
 	// ensure nothing is stored in the new prefix.
 	assert!(
