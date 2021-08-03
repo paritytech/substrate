@@ -98,7 +98,7 @@ macro_rules! data_raw_variants {
     ($variants:ident, $(($index:literal, $size:literal)),* ) => {
 		$variants
 		$(
-			.variant(concat!(stringify!(Raw), stringify!($size)), |v| v
+			.variant(concat!("Raw", stringify!($size)), |v| v
 				.index($index)
 				.fields(Fields::unnamed().field(|f| f.ty::<[u8; $size]>()))
 			)
