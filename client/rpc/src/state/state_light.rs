@@ -260,7 +260,7 @@ where
 			)
 			.boxed()
 			.compat()
-			.map(|v| v.into_values().collect::<Vec<_>>()),
+			.map(|v| v.into_iter().map(|x| x.1).collect::<Vec<_>>()),
 		)
 	}
 
