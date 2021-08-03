@@ -37,11 +37,9 @@ enum Phase<B: BlockT> {
 }
 
 /// Import warp proof result.
-pub enum WarpProofImportResult<B: BlockT> {
-	/// Start downloading state data.
-	StateRequest(StateRequest),
-	/// Continue dowloading warp sync proofs.
-	WarpProofRequest(WarpProofRequest<B>),
+pub enum WarpProofImportResult {
+	/// Import was successful.
+	Success,
 	/// Bad proof.
 	BadResponse,
 }
@@ -69,7 +67,7 @@ impl<B: BlockT> WarpSync<B> {
 		WarpSync { client, warp_sync_provider, phase, total_proof_bytes: 0 }
 	}
 
-	///  Validate and import a state reponse.
+	///  Validate and import a state response.
 	pub fn import_state(&mut self, response: StateResponse) -> ImportResult<B> {
 		match &mut self.phase {
 			Phase::WarpProof { .. } => {
@@ -80,8 +78,8 @@ impl<B: BlockT> WarpSync<B> {
 		}
 	}
 
-	///  Validate and import a warp proof reponse.
-	pub fn import_warp_proof(&mut self, response: EncodedProof) -> WarpProofImportResult<B> {
+	///  Validate and import a warp proof response.
+	pub fn import_warp_proof(&mut self, response: EncodedProof) -> WarpProofImportResult {
 		match &mut self.phase {
 			Phase::State(_) => {
 				log::debug!(target: "sync", "Unexpected warp proof response");
@@ -99,17 +97,14 @@ impl<B: BlockT> WarpSync<B> {
 						*authorities = new_authorities;
 						*last_hash = new_last_hash.clone();
 						self.total_proof_bytes += response.0.len() as u64;
-						WarpProofImportResult::WarpProofRequest(WarpProofRequest {
-							begin: new_last_hash,
-						})
+						WarpProofImportResult::Success
 					},
 					Ok(VerificationResult::Complete(new_set_id, _, header)) => {
 						log::debug!(target: "sync", "Verified complete proof, set_id={:?}", new_set_id);
 						self.total_proof_bytes += response.0.len() as u64;
 						let state_sync = StateSync::new(self.client.clone(), header, false);
-						let request = state_sync.next_request();
 						self.phase = Phase::State(state_sync);
-						WarpProofImportResult::StateRequest(request)
+						WarpProofImportResult::Success
 					},
 				}
 			},

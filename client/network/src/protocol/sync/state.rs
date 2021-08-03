@@ -46,8 +46,8 @@ pub struct StateSync<B: BlockT> {
 pub enum ImportResult<B: BlockT> {
 	/// State is complete and ready for import.
 	Import(B::Hash, B::Header, ImportedState<B>),
-	/// Continue dowloading.
-	Continue(StateRequest),
+	/// Continue downloading.
+	Continue,
 	/// Bad state chunk.
 	BadResponse,
 }
@@ -150,7 +150,7 @@ impl<B: BlockT> StateSync<B> {
 				},
 			)
 		} else {
-			ImportResult::Continue(self.next_request())
+			ImportResult::Continue
 		}
 	}
 

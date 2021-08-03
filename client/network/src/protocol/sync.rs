@@ -430,16 +430,7 @@ pub enum OnStateData<B: BlockT> {
 	/// The block and state that should be imported.
 	Import(BlockOrigin, IncomingBlock<B>),
 	/// A new state request needs to be made to the given peer.
-	Request(PeerId, StateRequest),
-}
-
-/// Result of [`ChainSync::on_warp_sync_data`].
-#[derive(Debug)]
-pub enum OnWarpSyncData<B: BlockT> {
-	/// Warp proof request is issued.
-	WarpProofRequest(PeerId, warp::WarpProofRequest<B>),
-	/// A new state request needs to be made to the given peer.
-	StateRequest(PeerId, StateRequest),
+	Continue,
 }
 
 /// Result of [`ChainSync::poll_block_announce_validation`].
@@ -1012,9 +1003,9 @@ impl<B: BlockT> ChainSync<B> {
 			}
 			for (id, peer) in self.peers.iter_mut() {
 				if peer.state.is_available() && peer.common_number >= sync.target_block_num() {
-					trace!(target: "sync", "New StateRequest for {}", id);
 					peer.state = PeerSyncState::DownloadingState;
 					let request = sync.next_request();
+					trace!(target: "sync", "New StateRequest for {}: {:?}", id, request);
 					return Some((id.clone(), request))
 				}
 			}
@@ -1028,7 +1019,7 @@ impl<B: BlockT> ChainSync<B> {
 			{
 				for (id, peer) in self.peers.iter_mut() {
 					if peer.state.is_available() && peer.best_number >= target {
-						trace!(target: "sync", "New StateRequest for {}", id);
+						trace!(target: "sync", "New StateRequest for {}: {:?}", id, request);
 						peer.state = PeerSyncState::DownloadingState;
 						return Some((id.clone(), request))
 					}
@@ -1308,6 +1299,11 @@ impl<B: BlockT> ChainSync<B> {
 		who: &PeerId,
 		response: StateResponse,
 	) -> Result<OnStateData<B>, BadPeer> {
+		if let Some(peer) = self.peers.get_mut(&who) {
+			if let PeerSyncState::DownloadingState = peer.state {
+				peer.state = PeerSyncState::Available;
+			}
+		}
 		let import_result = if let Some(sync) = &mut self.state_sync {
 			debug!(
 				target: "sync",
@@ -1349,8 +1345,7 @@ impl<B: BlockT> ChainSync<B> {
 				debug!(target: "sync", "State download is complete. Import is queued");
 				Ok(OnStateData::Import(origin, block))
 			},
-			state::ImportResult::Continue(request) =>
-				Ok(OnStateData::Request(who.clone(), request)),
+			state::ImportResult::Continue => Ok(OnStateData::Continue),
 			state::ImportResult::BadResponse => {
 				debug!(target: "sync", "Bad state data received from {}", who);
 				Err(BadPeer(who.clone(), rep::BAD_BLOCK))
@@ -1365,7 +1360,12 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		who: &PeerId,
 		response: warp::EncodedProof,
-	) -> Result<OnWarpSyncData<B>, BadPeer> {
+	) -> Result<(), BadPeer> {
+		if let Some(peer) = self.peers.get_mut(&who) {
+			if let PeerSyncState::DownloadingWarpProof = peer.state {
+				peer.state = PeerSyncState::Available;
+			}
+		}
 		let import_result = if let Some(sync) = &mut self.warp_sync {
 			debug!(
 				target: "sync",
@@ -1380,10 +1380,7 @@ impl<B: BlockT> ChainSync<B> {
 		};
 
 		match import_result {
-			warp::WarpProofImportResult::StateRequest(request) =>
-				Ok(OnWarpSyncData::StateRequest(who.clone(), request)),
-			warp::WarpProofImportResult::WarpProofRequest(request) =>
-				Ok(OnWarpSyncData::WarpProofRequest(who.clone(), request)),
+			warp::WarpProofImportResult::Success => Ok(()),
 			warp::WarpProofImportResult::BadResponse => {
 				debug!(target: "sync", "Bad proof data received from {}", who);
 				Err(BadPeer(who.clone(), rep::BAD_BLOCK))
