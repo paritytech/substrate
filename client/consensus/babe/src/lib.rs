@@ -112,7 +112,7 @@ use sp_consensus::{
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::crypto::Public;
+use sp_core::{crypto::Public, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
@@ -1006,6 +1006,7 @@ where
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
+		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
@@ -1020,7 +1021,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents(&block_id, block, inherent_data)
+			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
 			.map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
@@ -1244,6 +1245,7 @@ where
 						BlockId::Hash(parent_hash),
 						inherent_data,
 						create_inherent_data_providers,
+						block.origin.into(),
 					)
 					.await?;
 

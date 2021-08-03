@@ -374,6 +374,31 @@ fn tracks_block_numbers_when_current_and_previous_epoch_started() {
 }
 
 #[test]
+#[should_panic(
+	expected = "Validator with index 0 is disabled and should not be attempting to author blocks."
+)]
+fn disabled_validators_cannot_author_blocks() {
+	new_test_ext(4).execute_with(|| {
+		start_era(1);
+
+		// let's disable the validator at index 1
+		Session::disable_index(1);
+
+		// the mocking infrastructure always authors all blocks using authority index 0,
+		// so we should still be able to author blocks
+		start_era(2);
+
+		assert_eq!(Staking::current_era().unwrap(), 2);
+
+		// let's disable the validator at index 0
+		Session::disable_index(0);
+
+		// this should now panic as the validator authoring blocks is disabled
+		start_era(3);
+	});
+}
+
+#[test]
 fn report_equivocation_current_session_works() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(3);
 
@@ -394,8 +419,8 @@ fn report_equivocation_current_session_works() {
 			);
 		}
 
-		// we will use the validator at index 0 as the offending authority
-		let offending_validator_index = 0;
+		// we will use the validator at index 1 as the offending authority
+		let offending_validator_index = 1;
 		let offending_validator_id = Session::validators()[offending_validator_index];
 		let offending_authority_pair = pairs
 			.into_iter()
@@ -456,7 +481,7 @@ fn report_equivocation_old_session_works() {
 		let authorities = Babe::authorities();
 
 		// we will use the validator at index 0 as the offending authority
-		let offending_validator_index = 0;
+		let offending_validator_index = 1;
 		let offending_validator_id = Session::validators()[offending_validator_index];
 		let offending_authority_pair = pairs
 			.into_iter()

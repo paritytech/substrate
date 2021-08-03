@@ -41,7 +41,7 @@ use sp_consensus_aura::{
 	AURA_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
-use sp_core::crypto::Pair;
+use sp_core::{crypto::Pair, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
@@ -149,6 +149,7 @@ where
 		block_id: BlockId<B>,
 		inherent_data: sp_inherents::InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
+		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>>
 	where
 		C: ProvideRuntimeApi<B>,
@@ -169,7 +170,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents(&block_id, block, inherent_data)
+			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -261,6 +262,7 @@ where
 							BlockId::Hash(parent_hash),
 							inherent_data,
 							create_inherent_data_providers,
+							block.origin.into(),
 						)
 						.await
 						.map_err(|e| e.to_string())?;
