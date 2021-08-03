@@ -365,9 +365,7 @@ mod tests {
 	const TEST_ACCOUNT: TestAccountId = 0;
 
 	// NOTE: this is demonstration. One can simply use `()` for testing.
-	#[derive(
-		Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, TypeInfo,
-	)]
+	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, TypeInfo)]
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		const IDENTIFIER: &'static str = "TestExtra";
