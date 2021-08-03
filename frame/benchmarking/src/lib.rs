@@ -879,6 +879,11 @@ macro_rules! impl_benchmark {
 			}
 		}
 
+		#[cfg(test)]
+		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
+			Pallet<T $(, $instance)? >
+		where T: frame_system::Config, $( $where_clause )*
+		{
 		/// Test a particular benchmark by name.
 		///
 		/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
@@ -888,20 +893,17 @@ macro_rules! impl_benchmark {
 		/// This is generally intended to be used by child test modules such as those created
 		/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
 		/// author chooses not to implement benchmarks.
-		#[cfg(test)]
 		#[allow(unused)]
-		fn test_bench_by_name<T>(name: &[u8]) -> Result<(), &'static str>
-		where
-			T: Config + frame_system::Config, $( $where_clause )*
-		{
+		fn test_bench_by_name(name: &[u8]) -> Result<(), &'static str> {
 			let name = $crate::sp_std::str::from_utf8(name)
 				.map_err(|_| "`name` is not a valid utf8 string!")?;
 			match name {
 				$( stringify!($name) => {
-					$crate::paste::paste! { [< test_benchmark_ $name >]::<T>() }
+					$crate::paste::paste! { Self::[< test_benchmark_ $name >]() }
 				} )*
 				_ => Err("Could not find test for requested benchmark."),
 			}
+		}
 		}
 	};
 }
@@ -918,9 +920,13 @@ macro_rules! impl_benchmark_test {
 		$name:ident
 	) => {
 		$crate::paste::item! {
-			fn [<test_benchmark_ $name>] <T: Config > () -> Result<(), &'static str>
-				where T: frame_system::Config, $( $where_clause )*
+			#[cfg(test)]
+			impl<T: Config $(<$instance>, $instance: $instance_bound )? >
+				Pallet<T $(, $instance)? >
+			where T: frame_system::Config, $( $where_clause )*
 			{
+			#[allow(unused)]
+			fn [<test_benchmark_ $name>] () -> Result<(), &'static str> {
 				let selected_benchmark = SelectedBenchmark::$name;
 				let components = <
 					SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
@@ -971,6 +977,7 @@ macro_rules! impl_benchmark_test {
 					}
 				}
 				Ok(())
+			}
 			}
 		}
 	};
@@ -1185,7 +1192,6 @@ macro_rules! impl_benchmark_test_suite {
 	) => {
 		#[cfg(test)]
 		mod benchmark_tests {
-			use $path_to_benchmarks_invocation::test_bench_by_name;
 			use super::$bench_module;
 
 			#[test]
@@ -1196,7 +1202,7 @@ macro_rules! impl_benchmark_test_suite {
 					let mut anything_failed = false;
 					println!("failing benchmark tests:");
 					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
-						match std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
+						match std::panic::catch_unwind(|| $bench_module::<$test>::test_bench_by_name(benchmark_name)) {
 							Err(err) => {
 								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
 								anything_failed = true;
