@@ -278,6 +278,7 @@ impl Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 	type VoterBagThresholds = VoterBagThresholds;
+	type VoterListProvider = crate::VoterList<Self>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

@@ -195,6 +195,8 @@ pub mod pallet {
 		/// migration.
 		#[pallet::constant]
 		type VoterBagThresholds: Get<&'static [VoteWeight]>;
+
+		type VoterListProvider: crate::VoterListProvider<Self>;
 	}
 
 	#[pallet::extra_constants]

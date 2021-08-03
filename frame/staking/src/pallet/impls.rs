@@ -36,7 +36,8 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{prelude::*, collections::btree_map::BTreeMap};
+use crate::VoterListProvider;
 
 use crate::{
 	log, slashing,
@@ -654,13 +655,10 @@ impl<T: Config> Pallet<T> {
 		voter_count: usize,
 	) -> Vec<VotingDataOf<T>> {
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
-
-		let weight_of = Self::weight_of_fn();
-		// collect all slashing spans into a BTreeMap for further queries.
+		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		VoterList::<T>::iter()
-			.filter_map(|node| node.voting_data(&weight_of, &slashing_spans))
+		T::VoterListProvider::get_voters(slashing_spans)
 			.take(wanted_voters)
 			.collect()
 	}
@@ -683,8 +681,8 @@ impl<T: Config> Pallet<T> {
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc())
 		}
 		Nominators::<T>::insert(who, nominations);
-		VoterList::<T>::insert_as(who, voter_bags::VoterType::Nominator);
-		debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
+		T::VoterListProvider::on_nominator_insert(who);
+		debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -699,8 +697,8 @@ impl<T: Config> Pallet<T> {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
-			VoterList::<T>::remove(who);
-			debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
+			T::VoterListProvider::on_voter_remove(who);
+			debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 			true
 		} else {
 			false
@@ -720,8 +718,9 @@ impl<T: Config> Pallet<T> {
 			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
 		}
 		Validators::<T>::insert(who, prefs);
-		VoterList::<T>::insert_as(who, voter_bags::VoterType::Validator);
-		debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
+		T::VoterListProvider::on_validator_insert(who);
+		// VoterList::<T>::insert_as(who, voter_bags::VoterType::Validator);
+		debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a validator from the `Validators` storage map,
@@ -736,8 +735,8 @@ impl<T: Config> Pallet<T> {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
-			VoterList::<T>::remove(who);
-			debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
+			T::VoterListProvider::on_voter_remove(who);
+			debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 			true
 		} else {
 			false
@@ -780,11 +779,11 @@ impl<T: Config>
 		// check a few counters one last time...
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
-		debug_assert_eq!(
-			voter_count,
-			VoterList::<T>::decode_len().unwrap_or_default(),
-			"voter_count must be accurate",
-		);
+		// debug_assert_eq!(
+		// 	voter_count,
+		// 	T::VoterListProvider::get_voters().count(),
+		// 	"voter_count must be accurate",
+		// );
 
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(

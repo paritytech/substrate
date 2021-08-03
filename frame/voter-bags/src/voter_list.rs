@@ -682,7 +682,7 @@ impl<T: Config> Node<T> {
 	/// This is a helper intended only for benchmarking and should not be used in production.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn proper_bag_for(&self) -> VoteWeight {
-		let weight_of = crate::Pallet::<T>::weight_of_fn();
+		let weight_of = staking::Pallet::<T>::weight_of_fn();
 		let current_weight = weight_of(&self.voter.id);
 		notional_bag_for::<T>(current_weight)
 	}

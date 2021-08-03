@@ -29,6 +29,9 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 use pallet_staking;
+use sp_std::{
+	collections::{btree_map::BTreeMap}
+};
 
 mod voter_list;
 pub mod weights;
@@ -191,4 +194,36 @@ impl<T: Config> Pallet<T> {
 		};
 		maybe_movement
 	}
+}
+
+impl<T: Config> pallet_staking::VoterListProvider<T> for Pallet<T> {
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn get_voters(slashing_spans: BTreeMap<AccountIdOf<T>, pallet_staking::slashing::SlashingSpans>) -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
+		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
+
+		Box::new(VoterList::<T>::iter()
+			.filter_map(move |node| node.voting_data(&weight_of, &slashing_spans)))
+	}
+
+	fn on_validator_insert(voter: &T::AccountId) {
+		VoterList::<T>::insert_as(voter, voter_list::VoterType::Validator);
+	}
+
+	fn on_nominator_insert(voter: &T::AccountId) {
+		VoterList::<T>::insert_as(voter, voter_list::VoterType::Nominator);
+	}
+
+	/// Hook for updating a voter in the list (unused).
+	fn on_voter_update(voter: &T::AccountId) {
+		Pallet::<T>::do_rebag(voter);
+	}
+
+	/// Hook for removing a voter from the list.
+	fn on_voter_remove(voter: &T::AccountId) {
+		VoterList::<T>::remove(voter)
+	}
+
+	fn sanity_check() ->  Result<(), &'static str> {
+		VoterList::<T>::sanity_check()
+	 }
 }
