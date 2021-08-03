@@ -49,7 +49,7 @@
 //!
 //! Based on research at <https://w3f-research.readthedocs.io/en/latest/polkadot/slashing/npos.html>
 
-use super::{
+use crate::{
 	BalanceOf, Config, EraIndex, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill,
 	SessionInterface, Store, UnappliedSlash,
 };
@@ -584,7 +584,7 @@ pub fn do_slash<T: Config>(
 		<Pallet<T>>::update_ledger(&controller, &ledger);
 
 		// trigger the event
-		<Pallet<T>>::deposit_event(super::Event::<T>::Slash(stash.clone(), value));
+		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed(stash.clone(), value));
 	}
 }
 

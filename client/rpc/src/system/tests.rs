@@ -145,27 +145,27 @@ fn wait_receiver<T>(rx: Receiver<T>) -> T {
 
 #[test]
 fn system_name_works() {
-	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned(),);
+	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned());
 }
 
 #[test]
 fn system_version_works() {
-	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned(),);
+	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned());
 }
 
 #[test]
 fn system_chain_works() {
-	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned(),);
+	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned());
 }
 
 #[test]
 fn system_properties_works() {
-	assert_eq!(api(None).system_properties().unwrap(), serde_json::map::Map::new(),);
+	assert_eq!(api(None).system_properties().unwrap(), serde_json::map::Map::new());
 }
 
 #[test]
 fn system_type_works() {
-	assert_eq!(api(None).system_type().unwrap(), Default::default(),);
+	assert_eq!(api(None).system_type().unwrap(), Default::default());
 }
 
 #[test]

@@ -24,6 +24,10 @@ use environment::HasVoted;
 use futures::executor::block_on;
 use futures_timer::Delay;
 use parking_lot::{Mutex, RwLock};
+use sc_consensus::{
+	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
+	ImportedAux,
+};
 use sc_network::config::{ProtocolConfig, Role};
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
@@ -31,10 +35,7 @@ use sc_network_test::{
 };
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_blockchain::Result;
-use sp_consensus::{
-	import_queue::BoxJustificationImport, BlockImport, BlockImportParams, BlockOrigin,
-	ForkChoiceStrategy, ImportResult, ImportedAux,
-};
+use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_finality_grandpa::{
 	AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof, GRANDPA_ENGINE_ID,
@@ -200,6 +201,10 @@ sp_api::mock_impl_runtime_apis! {
 	impl GrandpaApi<Block> for RuntimeApi {
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
+		}
+
+		fn current_set_id(&self) -> SetId {
+			0
 		}
 
 		fn submit_report_equivocation_unsigned_extrinsic(
@@ -1631,7 +1636,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	);
 
 	// the justification should be imported and available from the client
-	assert!(client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some(),);
+	assert!(client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some());
 }
 
 #[test]

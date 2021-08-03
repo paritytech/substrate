@@ -18,9 +18,7 @@
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
-	traits::{
-		GetCallName, GetPalletVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-	},
+	traits::{GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
@@ -314,7 +312,7 @@ fn call_expand() {
 		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
-	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_transactional"],);
+	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_transactional"]);
 
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo(3);
 	assert_eq!(
@@ -505,17 +503,7 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPallets::on_initialize(1), 21);
 		AllPallets::on_finalize(1);
 
-		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
-		assert_eq!(pallet::Pallet::<Runtime, pallet::Instance1>::storage_version(), None);
 		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
-		assert_eq!(
-			pallet::Pallet::<Runtime>::storage_version(),
-			Some(pallet::Pallet::<Runtime>::current_version()),
-		);
-		assert_eq!(
-			pallet::Pallet::<Runtime, pallet::Instance1>::storage_version(),
-			Some(pallet::Pallet::<Runtime, pallet::Instance1>::current_version()),
-		);
 
 		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
@@ -548,19 +536,9 @@ fn pallet_hooks_expand() {
 #[test]
 fn pallet_on_genesis() {
 	TestExternalities::default().execute_with(|| {
-		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
 		pallet::Pallet::<Runtime>::on_genesis();
-		assert_eq!(
-			pallet::Pallet::<Runtime>::storage_version(),
-			Some(pallet::Pallet::<Runtime>::current_version()),
-		);
 
-		assert_eq!(pallet::Pallet::<Runtime, pallet::Instance1>::storage_version(), None);
 		pallet::Pallet::<Runtime, pallet::Instance1>::on_genesis();
-		assert_eq!(
-			pallet::Pallet::<Runtime, pallet::Instance1>::storage_version(),
-			Some(pallet::Pallet::<Runtime, pallet::Instance1>::current_version()),
-		);
 	})
 }
 

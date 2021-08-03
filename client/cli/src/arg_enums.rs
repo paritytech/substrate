@@ -242,6 +242,8 @@ arg_enum! {
 		Fast,
 		// Download blocks without executing them. Download latest state without proofs.
 		FastUnsafe,
+		// Prove finality and download the latest state.
+		Warp,
 	}
 }
 
@@ -253,6 +255,7 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
 			SyncMode::FastUnsafe =>
 				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
+			SyncMode::Warp => sc_network::config::SyncMode::Warp,
 		}
 	}
 }

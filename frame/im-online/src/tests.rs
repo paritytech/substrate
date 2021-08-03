@@ -37,7 +37,7 @@ use sp_runtime::{
 #[test]
 fn test_unresponsiveness_slash_fraction() {
 	// A single case of unresponsiveness is not slashed.
-	assert_eq!(UnresponsivenessOffence::<()>::slash_fraction(1, 50), Perbill::zero(),);
+	assert_eq!(UnresponsivenessOffence::<()>::slash_fraction(1, 50), Perbill::zero());
 
 	assert_eq!(
 		UnresponsivenessOffence::<()>::slash_fraction(5, 50),
@@ -435,7 +435,7 @@ fn should_handle_non_linear_session_progress() {
 		// if we don't have valid results for the current session progres then
 		// we'll fallback to `HeartbeatAfter` and only heartbeat on block 5.
 		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
-		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly),);
+		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
 
 		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
 		assert!(ImOnline::send_heartbeats(5).ok().is_some());
@@ -463,7 +463,7 @@ fn test_does_not_heartbeat_early_in_the_session() {
 		// heartbeating after 10% of the session has elapsed.
 		MOCK_CURRENT_SESSION_PROGRESS
 			.with(|p| *p.borrow_mut() = Some(Some(Permill::from_float(0.05))));
-		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly),);
+		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
 	});
 }
 
@@ -492,7 +492,7 @@ fn test_probability_of_heartbeating_increases_with_session_progress() {
 
 		let assert_too_early = |progress, random| {
 			set_test(progress, random);
-			assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly),);
+			assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
 		};
 
 		let assert_heartbeat_ok = |progress, random| {

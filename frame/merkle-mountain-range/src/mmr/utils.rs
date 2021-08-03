@@ -121,6 +121,6 @@ mod tests {
 				actual_sizes.push(mmr.size());
 			})
 		}
-		assert_eq!(sizes[1..], actual_sizes[..],);
+		assert_eq!(sizes[1..], actual_sizes[..]);
 	}
 }

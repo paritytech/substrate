@@ -2468,7 +2468,7 @@ mod tests {
 			let forbidden_call = Call::Balances(BalanceCall::transfer(CHARLIE, 22));
 
 			// simple cases: direct call
-			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin,);
+			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
 			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch(vec![
@@ -2504,6 +2504,11 @@ mod tests {
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted),
 						topics: vec![],
 					},
 					EventRecord {

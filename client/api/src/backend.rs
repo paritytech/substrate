@@ -42,7 +42,6 @@ use std::{
 	sync::Arc,
 };
 
-pub use sp_consensus::ImportedState;
 pub use sp_state_machine::Backend as StateBackend;
 use std::marker::PhantomData;
 

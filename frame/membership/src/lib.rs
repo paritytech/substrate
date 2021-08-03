@@ -459,7 +459,7 @@ mod benchmark {
 		}
 	}
 
-	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test,);
+	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test);
 }
 
 #[cfg(test)]

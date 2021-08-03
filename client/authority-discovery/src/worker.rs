@@ -421,7 +421,7 @@ where
 
 				if log_enabled!(log::Level::Debug) {
 					let hashes: Vec<_> = v.iter().map(|(hash, _value)| hash.clone()).collect();
-					debug!(target: LOG_TARGET, "Value for hash '{:?}' found on Dht.", hashes,);
+					debug!(target: LOG_TARGET, "Value for hash '{:?}' found on Dht.", hashes);
 				}
 
 				if let Err(e) = self.handle_dht_value_found_event(v) {
@@ -429,7 +429,7 @@ where
 						metrics.handle_value_found_event_failure.inc();
 					}
 
-					debug!(target: LOG_TARGET, "Failed to handle Dht value found event: {:?}", e,);
+					debug!(target: LOG_TARGET, "Failed to handle Dht value found event: {:?}", e);
 				}
 			},
 			DhtEvent::ValueNotFound(hash) => {
@@ -456,7 +456,7 @@ where
 					metrics.dht_event_received.with_label_values(&["value_put"]).inc();
 				}
 
-				debug!(target: LOG_TARGET, "Successfully put hash '{:?}' on Dht.", hash,)
+				debug!(target: LOG_TARGET, "Successfully put hash '{:?}' on Dht.", hash)
 			},
 			DhtEvent::ValuePutFailed(hash) => {
 				if let Some(metrics) = &self.metrics {
