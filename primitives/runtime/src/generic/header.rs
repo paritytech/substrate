@@ -18,7 +18,7 @@
 //! Generic implementation of a block header.
 
 use crate::{
-	codec::{Codec, Decode, Encode, EncodeAsRef, Error, HasCompact, Input, Output},
+	codec::{Codec, Decode, Encode},
 	generic::Digest,
 	traits::{
 		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeMallocSizeOf, MaybeSerialize,
@@ -31,7 +31,7 @@ use sp_core::U256;
 use sp_std::{convert::TryFrom, fmt::Debug};
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -43,6 +43,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 		feature = "std",
 		serde(serialize_with = "serialize_number", deserialize_with = "deserialize_number")
 	)]
+	#[codec(compact)]
 	pub number: Number,
 	/// The state trie merkle root
 	pub state_root: Hash::Output,
@@ -87,47 +88,6 @@ where
 {
 	let u256: U256 = serde::Deserialize::deserialize(d)?;
 	TryFrom::try_from(u256).map_err(|_| serde::de::Error::custom("Try from failed"))
-}
-
-impl<Number, Hash> Decode for Header<Number, Hash>
-where
-	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
-	Hash: HashT,
-	Hash::Output: Decode,
-{
-	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-		Ok(Self {
-			parent_hash: Decode::decode(input)?,
-			number: <<Number as HasCompact>::Type>::decode(input)?.into(),
-			state_root: Decode::decode(input)?,
-			extrinsics_root: Decode::decode(input)?,
-			digest: Decode::decode(input)?,
-		})
-	}
-}
-
-impl<Number, Hash> Encode for Header<Number, Hash>
-where
-	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
-	Hash: HashT,
-	Hash::Output: Encode,
-{
-	fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
-		self.parent_hash.encode_to(dest);
-		<<<Number as HasCompact>::Type as EncodeAsRef<_>>::RefType>::from(&self.number)
-			.encode_to(dest);
-		self.state_root.encode_to(dest);
-		self.extrinsics_root.encode_to(dest);
-		self.digest.encode_to(dest);
-	}
-}
-
-impl<Number, Hash> codec::EncodeLike for Header<Number, Hash>
-where
-	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
-	Hash: HashT,
-	Hash::Output: Encode,
-{
 }
 
 impl<Number, Hash> traits::Header for Header<Number, Hash>
