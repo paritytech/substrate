@@ -657,12 +657,14 @@ impl<T: Config> Pallet<T> {
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
-
+		// - go through 200 validators
+		// - chain 10,000 nominators
 		T::VoterListProvider::get_voters(slashing_spans).take(wanted_voters).collect()
 	}
 
 	/// This is a very expensive function and result should be cached versus being called multiple times.
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
+		// all current validators to be included
 		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
 	}
 
