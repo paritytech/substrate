@@ -17,6 +17,7 @@
 
 //! Implementations for the Staking FRAME Pallet.
 
+use crate::VoterListProvider;
 use frame_election_provider_support::{data_provider, ElectionProvider, Supports, VoteWeight};
 use frame_support::{
 	pallet_prelude::*,
@@ -36,8 +37,7 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use sp_std::{prelude::*, collections::btree_map::BTreeMap};
-use crate::VoterListProvider;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing,
@@ -658,9 +658,7 @@ impl<T: Config> Pallet<T> {
 		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		T::VoterListProvider::get_voters(slashing_spans)
-			.take(wanted_voters)
-			.collect()
+		T::VoterListProvider::get_voters(slashing_spans).take(wanted_voters).collect()
 	}
 
 	/// This is a very expensive function and result should be cached versus being called multiple times.

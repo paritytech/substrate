@@ -28,19 +28,14 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, LockableCurrency},
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
-use pallet_staking;
-use sp_std::{
-	collections::{btree_map::BTreeMap}
-};
+use pallet_staking::{AccountIdOf, BalanceOf, VotingDataOf, GenesisConfig};
+use sp_std::collections::btree_map::BTreeMap;
 
 mod voter_list;
 pub mod weights;
 
+pub use pallet::*;
 pub use weights::WeightInfo;
-
-use pallet::*;
-
-use pallet_staking::{AccountIdOf, BalanceOf, VotingDataOf};
 
 use voter_list::VoterList;
 
@@ -198,11 +193,15 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> pallet_staking::VoterListProvider<T> for Pallet<T> {
 	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters(slashing_spans: BTreeMap<AccountIdOf<T>, pallet_staking::slashing::SlashingSpans>) -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
+	fn get_voters(
+		slashing_spans: BTreeMap<AccountIdOf<T>, pallet_staking::slashing::SlashingSpans>,
+	) -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
 
-		Box::new(VoterList::<T>::iter()
-			.filter_map(move |node| node.voting_data(&weight_of, &slashing_spans)))
+		Box::new(
+			VoterList::<T>::iter()
+				.filter_map(move |node| node.voting_data(&weight_of, &slashing_spans)),
+		)
 	}
 
 	fn on_validator_insert(voter: &T::AccountId) {
@@ -223,7 +222,7 @@ impl<T: Config> pallet_staking::VoterListProvider<T> for Pallet<T> {
 		VoterList::<T>::remove(voter)
 	}
 
-	fn sanity_check() ->  Result<(), &'static str> {
+	fn sanity_check() -> Result<(), &'static str> {
 		VoterList::<T>::sanity_check()
-	 }
+	}
 }
