@@ -27,6 +27,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, CurrencyToVote, LockableCurrency},
 };
+use frame_system::{ensure_signed, pallet_prelude::*};
 use pallet_staking;
 
 mod voter_list;
@@ -37,6 +38,8 @@ pub use weights::WeightInfo;
 use pallet::*;
 
 use pallet_staking::{AccountIdOf, BalanceOf, VotingDataOf};
+
+use voter_list::VoterList;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::voter_bags";
 
@@ -61,6 +64,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_staking::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
 		/// The list of thresholds separating the various voter bags.
 		///
 		/// Voters are separated into unsorted bags according to their vote weight. This specifies
@@ -141,18 +147,48 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type VoterBags<T: Config> =
 		StorageMap<_, Twox64Concat, VoteWeight, voter_list::Bag<T>>;
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId")]
+	pub enum Event<T: Config> {
+		/// Moved an account from one bag to another. \[who, from, to\].
+		Rebagged(T::AccountId, VoteWeight, VoteWeight),
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Declare that some `stash` has, through rewards or penalties, sufficiently changed its
+		/// stake that it should properly fall into a different bag than its current position.
+		///
+		/// This will adjust its position into the appropriate bag. This will affect its position
+		/// among the nominator/validator set once the snapshot is prepared for the election.
+		///
+		/// Anyone can call this function about any stash.
+		// #[pallet::weight(T::WeightInfo::rebag())]
+		#[pallet::weight(123456789)] // TODO
+		pub fn rebag(origin: OriginFor<T>, stash: AccountIdOf<T>) -> DispatchResult {
+			ensure_signed(origin)?;
+			Pallet::<T>::do_rebag(&stash);
+			Ok(())
+		}
+	}
 }
 
-/// Compute the existential weight for the specified configuration.
-///
-/// Note that this value depends on the current issuance, a quantity known to change over time.
-/// This makes the project of computing a static value suitable for inclusion in a static,
-/// generated file _excitingly unstable_.
-#[cfg(any(feature = "std", feature = "make-bags"))]
-pub fn existential_weight<T: Config>() -> VoteWeight {
-	// use frame_support::traits::{Currency, CurrencyToVote};
-
-	let existential_deposit = <T::Currency as Currency<T::AccountId>>::minimum_balance();
-	let issuance = <T::Currency as Currency<T::AccountId>>::total_issuance();
-	T::CurrencyToVote::to_vote(existential_deposit, issuance)
+impl<T: Config> Pallet<T> {
+	/// Move a stash account from one bag to another, depositing an event on success.
+	///
+	/// If the stash changed bags, returns `Some((from, to))`.
+	pub fn do_rebag(stash: &T::AccountId) -> Option<(VoteWeight, VoteWeight)> {
+		// if no voter at that node, don't do anything.
+		// the caller just wasted the fee to call this.
+		let maybe_movement = voter_list::Node::<T>::from_id(&stash).and_then(|node| {
+			let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
+			VoterList::update_position_for(node, weight_of)
+		});
+		if let Some((from, to)) = maybe_movement {
+			Self::deposit_event(Event::<T>::Rebagged(stash.clone(), from, to));
+		};
+		maybe_movement
+	}
 }

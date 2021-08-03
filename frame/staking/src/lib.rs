@@ -341,8 +341,8 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-type VotingDataOf<T> = (AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>);
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+pub type VotingDataOf<T> = (AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>);
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
@@ -799,4 +799,56 @@ where
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
+}
+
+/// Trait to be implemented by a voter list provider.
+pub trait VoterListProvider<T: Config> {
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn get_voters() -> Box<dyn Iterator<Item = VotingDataOf<T>>>;
+	/// Hook for updating the list when a voter is added, their voter type is changed,
+	/// or their weight changes.
+	fn on_voter_update(voter: T::AccountId);
+	/// Hook for removing a voter from the list.
+	fn on_voter_removed(voter: T::AccountId);
+}
+
+/// A simple voter list implementation that does not require any additional pallets.
+struct StakingVoterListStub;
+impl<T: Config> VoterListProvider<T> for StakingVoterListStub {
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn get_voters() -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
+		let weight_of = Pallet::<T>::weight_of_fn();
+		let vals = <Validators<T>>::iter().map(move |(validator, _)|
+			(validator.clone(), weight_of(&validator), vec![validator.clone()])
+		);
+
+		// Collect all slashing spans into a BTreeMap for further queries.
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+
+		let weight_of = Pallet::<T>::weight_of_fn();
+		let noms = Nominators::<T>::iter().filter_map(move |(nominator, nominations)|{
+			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+
+			// Filter out nomination targets which were nominated before the most recent
+			// slashing span.
+			targets.retain(|stash| {
+				slashing_spans
+					.get(stash)
+					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
+			});
+
+			if !targets.is_empty() {
+				let vote_weight = weight_of(&nominator);
+				Some((nominator, vote_weight, targets))
+			} else {
+				None
+			}
+		});
+
+		Box::new(vals.chain(noms))
+	}
+	/// Hook for updating a voter in the list (unused).
+	fn on_voter_update(_voter: T::AccountId) {}
+	/// Hook for removing a voter from the list.
+	fn on_voter_removed(_voter: T::AccountId) {}
 }
