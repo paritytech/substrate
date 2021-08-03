@@ -672,6 +672,11 @@ publish-draft-release:
   allow_failure:                   true
 
 publish-to-crates-io:
+  # `cargo unleash em-dragons` first syncs the latest crates.io versions, then checks the local
+  # tree against them. Only the crates that locally have a version not found on crates.io (and
+  # don't have a `publish = false` flag in their `Cargo.toml`) will be attempted to be released.
+  # If the PR didn't change any version (for the majority of PRs) – no matter what others changes
+  # have occurred – this does exactly nothing, states that all is fine and quits.
   stage:                           publish
   needs:
     - job:                         unleash-check
