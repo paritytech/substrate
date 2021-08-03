@@ -32,7 +32,6 @@ struct ConstDef {
 pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
-	let type_decl_gen = &def.type_decl_generics(proc_macro2::Span::call_site());
 	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
 	let pallet_ident = &def.pallet_struct.pallet;
 
@@ -75,28 +74,12 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		let ident_str = format!("{}", ident);
 		let doc = const_.doc.clone().into_iter();
 		let default_byte_impl = &const_.default_byte_impl;
-		let default_byte_getter =
-			syn::Ident::new(&format!("{}DefaultByteGetter", ident), ident.span());
 
 		quote::quote!({
-			#[allow(non_upper_case_types)]
-			#[allow(non_camel_case_types)]
-			struct #default_byte_getter<#type_decl_gen>(
-				#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>
-			);
-
-			impl<#type_impl_gen> #default_byte_getter<#type_use_gen>
-				#completed_where_clause
-			{
-				fn default_byte(&self) -> #frame_support::sp_std::vec::Vec<u8> {
-					#default_byte_impl
-				}
-			}
-
 			#frame_support::metadata::PalletConstantMetadata {
 				name: #ident_str,
 				ty: #frame_support::scale_info::meta_type::<#const_type>(),
-				value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
+				value: { #default_byte_impl },
 				docs: #frame_support::sp_std::vec![ #( #doc ),* ],
 			}
 		})
