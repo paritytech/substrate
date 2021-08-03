@@ -32,7 +32,7 @@ use sp_core::U256;
 use sp_std::{convert::TryFrom, fmt::Debug};
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_core::RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -44,7 +44,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 		feature = "std",
 		serde(serialize_with = "serialize_number", deserialize_with = "deserialize_number")
 	)]
-	pub number: Number,
+	#[codec(compact)] pub number: Number,
 	/// The state trie merkle root
 	pub state_root: Hash::Output,
 	/// The merkle root of the extrinsics.
@@ -120,35 +120,6 @@ where
 		self.state_root.encode_to(dest);
 		self.extrinsics_root.encode_to(dest);
 		self.digest.encode_to(dest);
-	}
-}
-
-impl<Number, Hash> TypeInfo for Header<Number, Hash>
-where
-	Number: HasCompact + Copy + Into<U256> + TryFrom<U256> + TypeInfo + 'static,
-	Hash: HashT,
-	Hash::Output: TypeInfo,
-{
-	type Identity = Self;
-
-	fn type_info() -> scale_info::Type {
-		scale_info::Type::builder()
-			.path(scale_info::Path::new("Header", module_path!()))
-			.docs(&["Abstraction over a block header for a substrate chain."])
-			.composite(
-				scale_info::build::Fields::named()
-					.field(|f| f.name("parent_hash").ty::<Hash::Output>().type_name("Hash::Output"))
-					.field(|f| f.name("number").compact::<Number>().type_name("Number"))
-					.field(|f| f.name("state_root").ty::<Hash::Output>().type_name("Hash::Output"))
-					.field(|f| {
-						f.name("extrinsics_root").ty::<Hash::Output>().type_name("Hash::Output")
-					})
-					.field(|f| {
-						f.name("digest")
-							.ty::<Digest<Hash::Output>>()
-							.type_name("Digest<Hash::Output>")
-					}),
-			)
 	}
 }
 
