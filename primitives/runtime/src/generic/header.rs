@@ -44,7 +44,8 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 		feature = "std",
 		serde(serialize_with = "serialize_number", deserialize_with = "deserialize_number")
 	)]
-	#[codec(compact)] pub number: Number,
+	#[codec(compact)]
+	pub number: Number,
 	/// The state trie merkle root
 	pub state_root: Hash::Output,
 	/// The merkle root of the extrinsics.
