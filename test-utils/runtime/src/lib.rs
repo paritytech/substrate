@@ -582,6 +582,7 @@ impl pallet_babe::Config for Runtime {
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+	type DisabledValidators = ();
 
 	type KeyOwnerProofSystem = ();
 
@@ -881,6 +882,10 @@ cfg_if! {
 			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
 				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
 					Vec::new()
+				}
+
+				fn current_set_id() -> sp_finality_grandpa::SetId {
+					0
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(

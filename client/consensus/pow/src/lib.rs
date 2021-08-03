@@ -58,15 +58,15 @@ use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
 use sp_consensus::{
-	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
-	SyncOracle,
+	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
+use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, Digest, DigestItem},
 	traits::{Block as BlockT, Header as HeaderT},
-	Justifications, RuntimeString,
+	RuntimeString,
 };
 use std::{
 	borrow::Cow, cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc,
@@ -273,6 +273,7 @@ where
 		block: B,
 		block_id: BlockId<B>,
 		inherent_data_providers: CIDP::InherentDataProviders,
+		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>> {
 		if *block.header().number() < self.check_inherents_after {
 			return Ok(())
@@ -295,7 +296,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents(&block_id, block, inherent_data)
+			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -361,6 +362,7 @@ where
 				self.create_inherent_data_providers
 					.create_inherent_data_providers(parent_hash, ())
 					.await?,
+				block.origin.into(),
 			)
 			.await?;
 
@@ -461,26 +463,20 @@ where
 {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let hash = header.hash();
-		let (checked_header, seal) = self.check_header(header)?;
+		let hash = block.header.hash();
+		let (checked_header, seal) = self.check_header(block.header)?;
 
 		let intermediate = PowIntermediate::<Algorithm::Difficulty> { difficulty: None };
-
-		let mut import_block = BlockImportParams::new(origin, checked_header);
-		import_block.post_digests.push(seal);
-		import_block.body = body;
-		import_block.justifications = justifications;
-		import_block
+		block.header = checked_header;
+		block.post_digests.push(seal);
+		block
 			.intermediates
 			.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
-		import_block.post_hash = Some(hash);
+		block.post_hash = Some(hash);
 
-		Ok((import_block, None))
+		Ok((block, None))
 	}
 }
 
