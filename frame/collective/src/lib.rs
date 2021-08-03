@@ -238,37 +238,36 @@ pub mod pallet {
 	/// The hashes of the active proposals.
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub(super) type Proposals<T: Config<I>, I: 'static = ()> =
+	pub type Proposals<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<T::Hash, T::MaxProposals>, ValueQuery>;
 
 	/// Actual proposal for a given hash, if it's current.
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_of)]
-	pub(super) type ProposalOf<T: Config<I>, I: 'static = ()> =
+	pub type ProposalOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::Hash, <T as Config<I>>::Proposal, OptionQuery>;
 
 	/// Votes on a given proposal, if it is ongoing.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub(super) type Voting<T: Config<I>, I: 'static = ()> =
+	pub type Voting<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
 
 	/// Proposals so far.
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_count)]
-	pub(super) type ProposalCount<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
+	pub type ProposalCount<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
 
 	/// The current members of the collective. This is stored sorted (just by value).
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
-	pub(super) type Members<T: Config<I>, I: 'static = ()> =
+	pub type Members<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// The prime member that helps determine the default vote behavior in case of absentations.
 	#[pallet::storage]
 	#[pallet::getter(fn prime)]
-	pub(super) type Prime<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, T::AccountId, OptionQuery>;
+	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
