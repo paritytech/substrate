@@ -1,0 +1,43 @@
+[package]
+name = "pallet-voter-bags"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet voter bags"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
+
+log = { version = "0.4.14", default-features = false }
+
+# Optional imports for benchmarking
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+  "frame-election-provider-support/std",
+  "sp-runtime/std",
+  "sp-std/std",
+  "pallet-staking/std",
+  "log/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+]
