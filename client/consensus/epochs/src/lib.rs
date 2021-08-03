@@ -373,7 +373,7 @@ where
 		}
 	}
 
-	/// Returns epoch data if it matches gve identifier.
+	/// Returns epoch data if it matches given identifier.
 	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
 		let persistent = match (&self.current, &self.next) {
 			((h, n, e), _) if h == &id.hash && n == &id.number => Some(e),
@@ -476,7 +476,7 @@ where
 		self.inner.rebalance()
 	}
 
-	/// Cear gap epochs if any.
+	/// Clear gap epochs if any.
 	pub fn clear_gap(&mut self) {
 		self.gap = None;
 	}
@@ -1067,5 +1067,113 @@ mod tests {
 			// this chain.
 			assert!(epoch_for_x_child_before_genesis.is_none());
 		}
+	}
+
+	#[test]
+	fn gap_epochs_advance() {
+		// 0 - 1 - 2 - 3 - .... 42 - 43
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, *block) {
+				(b"0", _) => Ok(true),
+				(b"1", b) => Ok(b == *b"0"),
+				(b"2", b) => Ok(b == *b"1"),
+				(b"3", b) => Ok(b == *b"2"),
+				_ => Ok(false),
+			}
+		};
+
+		let duration = 100;
+
+		let make_genesis = |slot| Epoch { start_slot: slot, duration };
+
+		let mut epoch_changes = EpochChanges::new();
+		let next_descriptor = ();
+
+		let epoch42 = Epoch { start_slot: 42, duration: 100 };
+		let epoch43 = Epoch { start_slot: 43, duration: 100 };
+		epoch_changes.reset(*b"0", *b"1", 4200, epoch42, epoch43);
+		assert!(epoch_changes.gap.is_none());
+
+		// Import a new genesis epoch, this should crate the gap.
+		let genesis_epoch_a_descriptor = epoch_changes
+			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+			.unwrap()
+			.unwrap();
+
+		let incremented_epoch = epoch_changes
+			.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
+			.unwrap()
+			.increment(next_descriptor.clone());
+
+		epoch_changes
+			.import(&is_descendent_of, *b"1", 1, *b"0", incremented_epoch)
+			.unwrap();
+		assert!(epoch_changes.gap.is_some());
+
+		let genesis_epoch = epoch_changes
+			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+			.unwrap()
+			.unwrap();
+
+		assert_eq!(genesis_epoch, ViableEpochDescriptor::UnimportedGenesis(100));
+
+		// Import more epochs and check that gap advances.
+		let import_epoch_1 =
+			epoch_changes.viable_epoch(&genesis_epoch, &make_genesis).unwrap().increment(());
+
+		let epoch_1 = import_epoch_1.as_ref().clone();
+		epoch_changes
+			.import(&is_descendent_of, *b"1", 1, *b"0", import_epoch_1)
+			.unwrap();
+		let genesis_epoch_data = epoch_changes.epoch_data(&genesis_epoch, &make_genesis).unwrap();
+		let end_slot = genesis_epoch_data.end_slot();
+		let x = epoch_changes
+			.epoch_data_for_child_of(&is_descendent_of, b"1", 1, end_slot, &make_genesis)
+			.unwrap()
+			.unwrap();
+
+		assert_eq!(x, epoch_1);
+		assert_eq!(epoch_changes.gap.as_ref().unwrap().current.0, *b"1");
+		assert!(epoch_changes.gap.as_ref().unwrap().next.is_none());
+
+		let epoch_1_desriptor = epoch_changes
+			.epoch_descriptor_for_child_of(&is_descendent_of, b"1", 1, end_slot)
+			.unwrap()
+			.unwrap();
+		let epoch_1 = epoch_changes.epoch_data(&epoch_1_desriptor, &make_genesis).unwrap();
+		let import_epoch_2 = epoch_changes
+			.viable_epoch(&epoch_1_desriptor, &make_genesis)
+			.unwrap()
+			.increment(());
+		let epoch_2 = import_epoch_2.as_ref().clone();
+		epoch_changes
+			.import(&is_descendent_of, *b"2", 2, *b"1", import_epoch_2)
+			.unwrap();
+
+		let end_slot = epoch_1.end_slot();
+		let x = epoch_changes
+			.epoch_data_for_child_of(&is_descendent_of, b"2", 2, end_slot, &make_genesis)
+			.unwrap()
+			.unwrap();
+		assert_eq!(epoch_changes.gap.as_ref().unwrap().current.0, *b"1");
+		assert_eq!(epoch_changes.gap.as_ref().unwrap().next.as_ref().unwrap().0, *b"2");
+		assert_eq!(x, epoch_2);
+
+		let epoch_2_desriptor = epoch_changes
+			.epoch_descriptor_for_child_of(&is_descendent_of, b"2", 2, end_slot)
+			.unwrap()
+			.unwrap();
+		let import_epoch_3 = epoch_changes
+			.viable_epoch(&epoch_2_desriptor, &make_genesis)
+			.unwrap()
+			.increment(());
+		epoch_changes
+			.import(&is_descendent_of, *b"3", 3, *b"2", import_epoch_3)
+			.unwrap();
+
+		assert_eq!(epoch_changes.gap.as_ref().unwrap().current.0, *b"2");
+
+		epoch_changes.clear_gap();
+		assert!(epoch_changes.gap.is_none());
 	}
 }

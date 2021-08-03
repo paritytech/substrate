@@ -105,7 +105,7 @@ const STATE_SYNC_FINALITY_THRESHOLD: u32 = 8;
 const MAJOR_SYNC_BLOCKS: u8 = 5;
 
 /// Number of peers that need to be connected before warp sync is started.
-const MIN_PEERS_TO_START_WARP_SYNC: usize = 1;
+const MIN_PEERS_TO_START_WARP_SYNC: usize = 3;
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -891,7 +891,9 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Get an iterator over all block requests of all peers.
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
-		if self.pending_requests.is_empty() || self.state_sync.is_some() || self.mode == SyncMode::Warp
+		if self.pending_requests.is_empty() ||
+			self.state_sync.is_some() ||
+			self.mode == SyncMode::Warp
 		{
 			return Either::Left(std::iter::empty())
 		}
