@@ -21,7 +21,10 @@
 
 #[cfg(feature = "std")]
 mod analysis;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_instance;
 mod utils;
 
 #[cfg(feature = "std")]
@@ -1093,7 +1096,7 @@ macro_rules! impl_benchmark_test_suite {
 		$test:path
 		$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1118,7 +1121,7 @@ macro_rules! impl_benchmark_test_suite {
 			benchmarks_path = $benchmarks_path:ident
 			$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1143,7 +1146,7 @@ macro_rules! impl_benchmark_test_suite {
 			extra = $extra:expr
 			$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1168,7 +1171,7 @@ macro_rules! impl_benchmark_test_suite {
 			exec_name = $exec_name:ident
 			$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
