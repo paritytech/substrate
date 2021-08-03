@@ -134,7 +134,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 mod benchmarks {
 	use super::pallet_test::{self, Value};
 	use crate::account;
-	use frame_support::{ensure, traits::Get, StorageValue};
+	use frame_support::{ensure, StorageValue};
 	use frame_system::RawOrigin;
 	use sp_std::prelude::*;
 
