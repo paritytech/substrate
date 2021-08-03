@@ -286,7 +286,6 @@ mod tests;
 pub mod inflation;
 pub mod migrations;
 pub mod slashing;
-pub mod voter_bags;
 pub mod weights;
 
 mod pallet;
@@ -340,9 +339,6 @@ type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-
-pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-pub type VotingDataOf<T> = (AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>);
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
@@ -498,7 +494,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -801,108 +797,21 @@ where
 	}
 }
 
-/// Trait to be implemented by a voter list provider.
-pub trait VoterListProvider<T: Config> {
-	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters(
-		slashing_spans: BTreeMap<AccountIdOf<T>, slashing::SlashingSpans>,
-	) -> Box<dyn Iterator<Item = VotingDataOf<T>>>;
-	// Hook for inserting a validator.
-	fn on_validator_insert(voter: &T::AccountId);
-	// Hook for inserting a nominator.
-	fn on_nominator_insert(voter: &T::AccountId);
-	/// Hook for updating the list when a voter is added, their voter type is changed,
-	/// or their weight changes.
-	fn on_voter_update(voter: &T::AccountId);
-	/// Hook for removing a voter from the list.
-	fn on_voter_remove(voter: &T::AccountId);
-	/// Sanity check internal state of list. Only meant for debug compilation.
-	fn sanity_check() -> Result<(), &'static str>;
-}
-
-// TODO this should have some tests?
 /// A simple voter list implementation that does not require any additional pallets.
-pub struct StakingVoterListStub;
-impl<T: Config> VoterListProvider<T> for StakingVoterListStub {
+pub struct StakingVoterListStub<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> frame_support::traits::VoterListProvider<T::AccountId> for StakingVoterListStub<T> {
 	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters(
-		slashing_spans: BTreeMap<AccountIdOf<T>, slashing::SlashingSpans>,
-	) -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
+	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
 		let weight_of = Pallet::<T>::weight_of_fn();
-		let vals = <Validators<T>>::iter().map(move |(validator, _)| {
-			(validator.clone(), weight_of(&validator), vec![validator.clone()])
-		});
-
-		let weight_of = Pallet::<T>::weight_of_fn();
-		let noms = Nominators::<T>::iter().filter_map(move |(nominator, nominations)| {
-			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
-
-			// Filter out nomination targets which were nominated before the most recent
-			// slashing span.
-			targets.retain(|stash| {
-				slashing_spans
-					.get(stash)
-					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-			});
-
-			if !targets.is_empty() {
-				let vote_weight = weight_of(&nominator);
-				Some((nominator, vote_weight, targets))
-			} else {
-				None
-			}
-		});
-
-		Box::new(vals.chain(noms))
+		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
-	// Hook for inserting a validator.
-	fn on_validator_insert(_voter: &T::AccountId) {}
-	// Hook for inserting a nominator.
-	fn on_nominator_insert(_voter: &T::AccountId) {}
-	/// Hook for updating a voter in the list (unused).
-	fn on_voter_update(_voter: &T::AccountId) {}
-	/// Hook for removing a voter from the list.
-	fn on_voter_remove(_voter: &T::AccountId) {}
+	fn count() -> u32 {
+		CounterForNominators::<T>::get()
+	}
+	fn on_insert(voter: &T::AccountId, weight: VoteWeight) {}
+	fn on_update(voter: &T::AccountId, weight: VoteWeight) {}
+	fn on_remove(voter: &T::AccountId) {}
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
-	}
-}
-
-// below is temp
-
-use voter_bags::VoterList;
-impl<T: Config> VoterListProvider<T> for VoterList<T> {
-	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters(
-		slashing_spans: BTreeMap<AccountIdOf<T>, slashing::SlashingSpans>,
-	) -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
-		let weight_of = Pallet::<T>::weight_of_fn();
-
-		Box::new(
-			VoterList::<T>::iter()
-				.filter_map(move |node| node.voting_data(&weight_of, &slashing_spans)),
-		)
-	}
-
-	fn on_validator_insert(voter: &T::AccountId) {
-		VoterList::<T>::insert_as(voter, voter_bags::VoterType::Validator);
-	}
-
-	fn on_nominator_insert(voter: &T::AccountId) {
-		VoterList::<T>::insert_as(voter, voter_bags::VoterType::Nominator);
-	}
-
-	/// Hook for updating a voter in the list (unused).
-	fn on_voter_update(voter: &T::AccountId) {
-		Pallet::<T>::do_rebag(voter); // TODO this will use voter_list rebag
-	}
-
-	/// Hook for removing a voter from the list.
-	fn on_voter_remove(voter: &T::AccountId) {
-		VoterList::<T>::remove(voter)
-	}
-
-	fn sanity_check() -> Result<(), &'static str> {
-		VoterList::<T>::sanity_check()
 	}
 }

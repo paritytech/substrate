@@ -22,10 +22,7 @@
 //!   voters doesn't particularly matter.
 
 use frame_election_provider_support::VoteWeight;
-use frame_support::traits::{Currency, CurrencyToVote, LockableCurrency};
 use frame_system::ensure_signed;
-use pallet_staking::{AccountIdOf, BalanceOf, GenesisConfig, VotingDataOf};
-use sp_std::collections::btree_map::BTreeMap;
 
 mod voter_list;
 pub mod weights;
@@ -51,7 +48,7 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::StakingVoteWeight};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -115,6 +112,8 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		type StakingVoteWeight: StakingVoteWeight<Self::AccountId>;
 	}
 
 	/// How many voters are registered.
@@ -128,15 +127,14 @@ pub mod pallet {
 	/// However, the `Node` data structure has helpers which can provide that information.
 	#[pallet::storage]
 	pub(crate) type VoterNodes<T: Config> =
-		StorageMap<_, Twox64Concat, AccountIdOf<T>, voter_list::Node<T>>;
+		StorageMap<_, Twox64Concat, T::AccountId, voter_list::Node<T>>;
 
 	/// Which bag currently contains a particular voter.
 	///
 	/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
 	/// slashed.
 	#[pallet::storage]
-	pub(crate) type VoterBagFor<T: Config> =
-		StorageMap<_, Twox64Concat, AccountIdOf<T>, VoteWeight>;
+	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VoteWeight>;
 
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
@@ -163,10 +161,32 @@ pub mod pallet {
 		/// Anyone can call this function about any stash.
 		// #[pallet::weight(T::WeightInfo::rebag())]
 		#[pallet::weight(123456789)] // TODO
-		pub fn rebag(origin: OriginFor<T>, stash: AccountIdOf<T>) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, stash: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			Pallet::<T>::do_rebag(&stash);
+			let weight = T::StakingVoteWeight::staking_vote_weight(&stash);
+			Pallet::<T>::do_rebag(&stash, weight);
 			Ok(())
+		}
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(|| {
+					assert!(
+						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+						T::SlashDeferDuration::get(),
+						T::BondingDuration::get(),
+					);
+
+					assert!(
+						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+						"Voter bag thresholds must strictly increase",
+					);
+				});
+			}
 		}
 	}
 }
@@ -175,13 +195,14 @@ impl<T: Config> Pallet<T> {
 	/// Move a stash account from one bag to another, depositing an event on success.
 	///
 	/// If the stash changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(stash: &T::AccountId) -> Option<(VoteWeight, VoteWeight)> {
+	pub fn do_rebag(
+		stash: &T::AccountId,
+		new_weight: VoteWeight,
+	) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = voter_list::Node::<T>::from_id(&stash).and_then(|node| {
-			let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
-			VoterList::update_position_for(node, weight_of)
-		});
+		let maybe_movement = voter_list::Node::<T>::from_id(&stash)
+			.and_then(|node| VoterList::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T>::Rebagged(stash.clone(), from, to));
 		};
@@ -189,35 +210,31 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub struct VoterBagsVoterListProvider;
-impl<T: Config> pallet_staking::VoterListProvider<T> for VoterBagsVoterListProvider {
+pub struct VoterBagsVoterListProvider<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> frame_support::traits::VoterListProvider<T::AccountId>
+	for VoterBagsVoterListProvider<T>
+{
 	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters(
-		slashing_spans: BTreeMap<AccountIdOf<T>, pallet_staking::slashing::SlashingSpans>,
-	) -> Box<dyn Iterator<Item = VotingDataOf<T>>> {
-		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
-
-		Box::new(
-			VoterList::<T>::iter()
-				.filter_map(move |node| node.voting_data(&weight_of, &slashing_spans)),
-		)
+	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
+		Box::new(VoterList::<T>::iter().map(|n| n.voter().clone()))
 	}
 
-	fn on_validator_insert(voter: &T::AccountId) {
-		VoterList::<T>::insert_as(voter, voter_list::VoterType::Validator);
+	fn count() -> u32 {
+		CounterForVoters::<T>::get()
 	}
 
-	fn on_nominator_insert(voter: &T::AccountId) {
-		VoterList::<T>::insert_as(voter, voter_list::VoterType::Nominator);
+	fn on_insert(voter: &T::AccountId, weight: VoteWeight) {
+		// TODO: change the interface to not use ref.
+		VoterList::<T>::insert(voter.clone(), weight);
 	}
 
 	/// Hook for updating a voter in the list (unused).
-	fn on_voter_update(voter: &T::AccountId) {
-		Pallet::<T>::do_rebag(voter);
+	fn on_update(voter: &T::AccountId, new_weight: VoteWeight) {
+		Pallet::<T>::do_rebag(voter, new_weight);
 	}
 
 	/// Hook for removing a voter from the list.
-	fn on_voter_remove(voter: &T::AccountId) {
+	fn on_remove(voter: &T::AccountId) {
 		VoterList::<T>::remove(voter)
 	}
 

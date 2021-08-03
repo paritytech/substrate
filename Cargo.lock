@@ -5801,6 +5801,7 @@ dependencies = [
  "log",
  "pallet-staking",
  "parity-scale-codec",
+ "sp-io",
  "sp-runtime",
  "sp-std",
 ]

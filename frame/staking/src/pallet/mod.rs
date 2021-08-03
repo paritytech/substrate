@@ -22,7 +22,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
-		LockableCurrency, OnUnbalanced, UnixTime,
+		LockableCurrency, OnUnbalanced, UnixTime, VoterListProvider,
 	},
 	weights::{
 		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
@@ -42,10 +42,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	log, migrations, slashing, voter_bags, weights::WeightInfo, AccountIdOf, ActiveEraInfo,
-	BalanceOf, EraIndex, EraPayout, EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf,
-	Nominations, PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakerStatus,
-	StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
+	Releases, RewardDestination, SessionInterface, StakerStatus, StakingLedger, UnappliedSlash,
+	UnlockChunk, ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -196,7 +196,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type VoterBagThresholds: Get<&'static [VoteWeight]>;
 
-		type VoterListProvider: crate::VoterListProvider<Self>;
+		type VoterListProvider: VoterListProvider<Self::AccountId>;
 	}
 
 	#[pallet::extra_constants]
@@ -493,41 +493,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
-	// The next storage items collectively comprise the voter bags: a composite data structure
-	// designed to allow efficient iteration of the top N voters by stake, mostly. See
-	// `mod voter_bags` for details.
-	//
-	// In each of these items, voter bags are indexed by their upper weight threshold.
-
-	/// How many voters are registered.
-	#[pallet::storage]
-	pub(crate) type CounterForVoters<T> = StorageValue<_, u32, ValueQuery>;
-
-	/// Which bag currently contains a particular voter.
-	///
-	/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
-	/// slashed.
-	#[pallet::storage]
-	pub(crate) type VoterBagFor<T: Config> =
-		StorageMap<_, Twox64Concat, AccountIdOf<T>, VoteWeight>;
-
-	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
-	/// mainly exists to store head and tail pointers to the appropriate nodes.
-	#[pallet::storage]
-	pub(crate) type VoterBags<T: Config> =
-		StorageMap<_, Twox64Concat, VoteWeight, voter_bags::Bag<T>>;
-
-	/// Voter nodes store links forward and back within their respective bags, the stash id, and
-	/// whether the voter is a validator or nominator.
-	///
-	/// There is nothing in this map directly identifying to which bag a particular node belongs.
-	/// However, the `Node` data structure has helpers which can provide that information.
-	#[pallet::storage]
-	pub(crate) type VoterNodes<T: Config> =
-		StorageMap<_, Twox64Concat, AccountIdOf<T>, voter_bags::Node<T>>;
-
-	// End of voter bags data.
-
 	/// The threshold for when users can start calling `chill_other` for other validators / nominators.
 	/// The threshold is compared to the actual number of validators / nominators (`CountFor*`) in
 	/// the system compared to the configured max (`Max*Count`).
@@ -603,7 +568,7 @@ pub mod pallet {
 					// TODO: later on, fix all the tests that trigger these warnings, and
 					// make these assertions. Genesis stakers should all be correct!
 					log!(warn, "failed to bond staker at genesis: {:?}.", why);
-					continue
+					continue;
 				}
 				match status {
 					StakerStatus::Validator => {
@@ -615,7 +580,7 @@ pub mod pallet {
 						} else {
 							num_voters += 1;
 						}
-					},
+					}
 					StakerStatus::Nominator(votes) => {
 						if let Err(why) = <Pallet<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
@@ -625,14 +590,14 @@ pub mod pallet {
 						} else {
 							num_voters += 1;
 						}
-					},
+					}
 					_ => (),
 				};
 			}
 
 			// all voters are inserted sanely.
 			assert_eq!(
-				CounterForVoters::<T>::get(),
+				T::VoterListProvider::count(),
 				num_voters,
 				"not all genesis stakers were inserted into bags, something is wrong."
 			);
@@ -768,35 +733,6 @@ pub mod pallet {
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
 		}
-
-		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(|| {
-					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					);
-
-					assert!(
-						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-						"Voter bag thresholds must strictly increase",
-					);
-
-					assert!(
-						{
-							let existential_weight = voter_bags::existential_weight::<T>();
-							T::VoterBagThresholds::get()
-								.first()
-								.map(|&lowest_threshold| lowest_threshold >= existential_weight)
-								.unwrap_or(true)
-						},
-						"Smallest bag should not be smaller than existential weight",
-					);
-				});
-			}
-		}
 	}
 
 	#[pallet::call]
@@ -903,9 +839,9 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
+				T::VoterListProvider::on_update(&stash, Self::weight_of_fn()(&ledger.stash));
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 				Self::update_ledger(&controller, &ledger);
-				Self::do_rebag(&stash);
 			}
 			Ok(())
 		}
@@ -965,7 +901,7 @@ pub mod pallet {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
-				Self::do_rebag(&ledger.stash);
+				T::VoterListProvider::on_update(&ledger.stash, Self::weight_of_fn()(&ledger.stash));
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1458,11 +1394,11 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
-			Self::do_rebag(&ledger.stash);
+			T::VoterListProvider::on_update(&ledger.stash, Self::weight_of_fn()(&ledger.stash)); // TODO we already have the ledger here.
 			Ok(Some(
-				35 * WEIGHT_PER_MICROS +
-					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
-					T::DbWeight::get().reads_writes(3, 2),
+				35 * WEIGHT_PER_MICROS
+					+ 50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight)
+					+ T::DbWeight::get().reads_writes(3, 2),
 			)
 			.into())
 		}
@@ -1677,20 +1613,6 @@ pub mod pallet {
 			}
 
 			Self::chill_stash(&stash);
-			Ok(())
-		}
-
-		/// Declare that some `stash` has, through rewards or penalties, sufficiently changed its
-		/// stake that it should properly fall into a different bag than its current position.
-		///
-		/// This will adjust its position into the appropriate bag. This will affect its position
-		/// among the nominator/validator set once the snapshot is prepared for the election.
-		///
-		/// Anyone can call this function about any stash.
-		#[pallet::weight(T::WeightInfo::rebag())]
-		pub fn rebag(origin: OriginFor<T>, stash: AccountIdOf<T>) -> DispatchResult {
-			ensure_signed(origin)?;
-			Pallet::<T>::do_rebag(&stash);
 			Ok(())
 		}
 	}

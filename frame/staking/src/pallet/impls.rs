@@ -17,13 +17,12 @@
 
 //! Implementations for the Staking FRAME Pallet.
 
-use crate::VoterListProvider;
 use frame_election_provider_support::{data_provider, ElectionProvider, Supports, VoteWeight};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, LockableCurrency,
-		OnUnbalanced, UnixTime, WithdrawReasons,
+		OnUnbalanced, UnixTime, VoterListProvider, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -40,12 +39,9 @@ use sp_staking::{
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing,
-	voter_bags::{self, VoterList},
-	weights::WeightInfo,
-	ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure, ExposureOf, Forcing,
-	IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination, SessionInterface,
-	StakingLedger, ValidatorPrefs, VotingDataOf,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
+	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -138,7 +134,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -229,8 +225,9 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) =>
-				Some(T::Currency::deposit_creating(&dest_account, amount)),
+			RewardDestination::Account(dest_account) => {
+				Some(T::Currency::deposit_creating(&dest_account, amount))
+			}
 			RewardDestination::None => None,
 		}
 	}
@@ -258,14 +255,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None
-				},
+					return None;
+				}
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some() &&
-				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some()
+				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -446,12 +443,12 @@ impl<T: Config> Pallet<T> {
 					// TODO: this should be simplified #8911
 					CurrentEra::<T>::put(0);
 					ErasStartSessionIndex::<T>::insert(&0, &start_session_index);
-				},
+				}
 				_ => (),
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None
+			return None;
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -653,12 +650,16 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
 		voter_count: usize,
-	) -> Vec<VotingDataOf<T>> {
+	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		T::VoterListProvider::get_voters(slashing_spans).take(wanted_voters).collect()
+		let unfiltered_voters: Vec<T::AccountId> =
+			T::VoterListProvider::get_voters().take(wanted_voters).collect();
+		// TODO: filter slashing spans
+		// concatenate account ids to voter data.
+		unimplemented!()
 	}
 
 	/// This is a very expensive function and result should be cached versus being called multiple times.
@@ -679,7 +680,7 @@ impl<T: Config> Pallet<T> {
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc())
 		}
 		Nominators::<T>::insert(who, nominations);
-		T::VoterListProvider::on_nominator_insert(who);
+		T::VoterListProvider::on_insert(who, Self::weight_of_fn()(who));
 		debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 	}
 
@@ -695,7 +696,7 @@ impl<T: Config> Pallet<T> {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
-			T::VoterListProvider::on_voter_remove(who);
+			T::VoterListProvider::on_remove(who);
 			debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 			true
 		} else {
@@ -716,8 +717,7 @@ impl<T: Config> Pallet<T> {
 			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
 		}
 		Validators::<T>::insert(who, prefs);
-		T::VoterListProvider::on_validator_insert(who);
-		// VoterList::<T>::insert_as(who, voter_bags::VoterType::Validator);
+		T::VoterListProvider::on_insert(who, Self::weight_of_fn()(who));
 		debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 	}
 
@@ -733,28 +733,12 @@ impl<T: Config> Pallet<T> {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
-			T::VoterListProvider::on_voter_remove(who);
+			T::VoterListProvider::on_remove(who);
 			debug_assert_eq!(T::VoterListProvider::sanity_check(), Ok(()));
 			true
 		} else {
 			false
 		}
-	}
-
-	/// Move a stash account from one bag to another, depositing an event on success.
-	///
-	/// If the stash changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(stash: &T::AccountId) -> Option<(VoteWeight, VoteWeight)> {
-		// if no voter at that node, don't do anything.
-		// the caller just wasted the fee to call this.
-		let maybe_movement = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
-			let weight_of = Self::weight_of_fn();
-			VoterList::update_position_for(node, weight_of)
-		});
-		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(stash.clone(), from, to));
-		};
-		maybe_movement
 	}
 }
 
@@ -797,7 +781,7 @@ impl<T: Config>
 		let target_count = CounterForValidators::<T>::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
-			return Err("Target snapshot too big")
+			return Err("Target snapshot too big");
 		}
 
 		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
@@ -1061,7 +1045,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight
+				return consumed_weight;
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1107,7 +1091,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue
+				continue;
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {

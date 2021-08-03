@@ -17,7 +17,7 @@
 
 //! VoterList implementation.
 
-use crate::{AccountIdOf, Config};
+use crate::Config;
 use codec::{Decode, Encode};
 use frame_election_provider_support::VoteWeight;
 use frame_support::{ensure, traits::Get, DefaultNoBound};
@@ -29,9 +29,6 @@ use sp_std::{
 	iter,
 	marker::PhantomData,
 };
-
-/// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
-pub type VoterOf<T> = Voter<AccountIdOf<T>>;
 
 /// Given a certain vote weight, which bag should contain this voter?
 ///
@@ -51,7 +48,7 @@ fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 }
 
 /// Find the upper threshold of the actual bag containing the current voter.
-fn current_bag_for<T: Config>(id: &AccountIdOf<T>) -> Option<VoteWeight> {
+fn current_bag_for<T: Config>(id: &T::AccountId) -> Option<VoteWeight> {
 	crate::VoterBagFor::<T>::try_get(id).ok()
 }
 
@@ -78,21 +75,113 @@ impl<T: Config> VoterList<T> {
 		crate::VoterNodes::<T>::remove_all(None);
 	}
 
+	/// Migrate the voter list from one set of thresholds to another.
+	///
+	/// This should only be called as part of an intentional migration; it's fairly expensive.
+	///
+	/// Returns the number of accounts affected.
+	///
+	/// Preconditions:
+	///
+	/// - `old_thresholds` is the previous list of thresholds.
+	/// - All `bag_upper` currently in storage are members of `old_thresholds`.
+	/// - `T::VoterBagThresholds` has already been updated.
+	///
+	/// Postconditions:
+	///
+	/// - All `bag_upper` currently in storage are members of `T::VoterBagThresholds`.
+	/// - No voter is changed unless required to by the difference between the old threshold list
+	///   and the new.
+	/// - Voters whose bags change at all are implicitly rebagged into the appropriate bag in the
+	///   new threshold set.
+	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
+		// we can't check all preconditions, but we can check one
+		debug_assert!(
+			crate::VoterBags::<T>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
+			"not all `bag_upper` currently in storage are members of `old_thresholds`",
+		);
+
+		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
+		let new_set: BTreeSet<_> = T::VoterBagThresholds::get().iter().copied().collect();
+
+		let mut affected_accounts = BTreeSet::new();
+		let mut affected_old_bags = BTreeSet::new();
+
+		// a new bag means that all accounts previously using the old bag's threshold must now
+		// be rebagged
+		for inserted_bag in new_set.difference(&old_set).copied() {
+			let affected_bag = notional_bag_for::<T>(inserted_bag);
+			if !affected_old_bags.insert(affected_bag) {
+				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
+				// no point iterating through bag 10 twice.
+				continue;
+			}
+
+			if let Some(bag) = Bag::<T>::get(affected_bag) {
+				affected_accounts.extend(bag.iter().map(|node| node.voter));
+			}
+		}
+
+		// a removed bag means that all members of that bag must be rebagged
+		for removed_bag in old_set.difference(&new_set).copied() {
+			if !affected_old_bags.insert(removed_bag) {
+				continue;
+			}
+
+			if let Some(bag) = Bag::<T>::get(removed_bag) {
+				affected_accounts.extend(bag.iter().map(|node| node.voter));
+			}
+		}
+
+		// migrate the
+		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
+		Self::remove_many(affected_accounts.iter().map(|voter| voter));
+		let num_affected = affected_accounts.len() as u32;
+		Self::insert_many(affected_accounts.into_iter(), weight_of);
+
+		// we couldn't previously remove the old bags because both insertion and removal assume that
+		// it's always safe to add a bag if it's not present. Now that that's sorted, we can get rid
+		// of them.
+		//
+		// it's pretty cheap to iterate this again, because both sets are in-memory and require no
+		// lookups.
+		for removed_bag in old_set.difference(&new_set).copied() {
+			debug_assert!(
+				!crate::VoterBagFor::<T>::iter().any(|(_voter, bag)| bag == removed_bag),
+				"no voter should be present in a removed bag",
+			);
+			crate::VoterBags::<T>::remove(removed_bag);
+		}
+
+		debug_assert!(
+			{
+				let thresholds = T::BVoterBagThresholds::get();
+				crate::VoterBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
+			},
+			"all `bag_upper` in storage must be members of the new thresholds",
+		);
+
+		num_affected
+	}
+
 	/// Regenerate voter data from the `Nominators` and `Validators` storage items.
 	///
 	/// This is expensive and should only ever be performed during a migration, never during
 	/// consensus.
 	///
 	/// Returns the number of voters migrated.
-	pub fn regenerate() -> u32 {
-		Self::clear();
+	// pub fn regenerate(weight_of: dyn FnOnce(&T::AccountId) -> VoteWeight) -> u32 {
+	// 	Self::clear();
 
-		let nominators_iter = staking::Nominators::<T>::iter().map(|(id, _)| Voter::nominator(id));
-		let validators_iter = staking::Validators::<T>::iter().map(|(id, _)| Voter::validator(id));
-		let weight_of = staking::Pallet::<T>::weight_of_fn();
+	// 	let nominators_iter = staking::Nominators::<T>::iter().map(|(id, _)| Voter::nominator(id));
+	// 	let validators_iter = staking::Validators::<T>::iter().map(|(id, _)| Voter::validator(id));
 
-		Self::insert_many(nominators_iter.chain(validators_iter), weight_of)
-	}
+	// 	nominators_iter.chain(validators_iter).for_each(|v| {
+	// 		let weight = weight_of(v);
+	// 		Self::insert(v, weight_of);
+	// 	});
+	// // TODO: use the new insert_at. it should work
+	// }
 
 	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
@@ -133,62 +222,49 @@ impl<T: Config> VoterList<T> {
 		iter.filter_map(Bag::get).flat_map(|bag| bag.iter())
 	}
 
-	/// Insert a new voter into the appropriate bag in the voter list.
-	///
-	/// If the voter is already present in the list, their type will be updated.
-	/// That case is cheaper than inserting a new voter.
-	pub fn insert_as(account_id: &AccountIdOf<T>, voter_type: VoterType) {
-		// if this is an update operation we can complete this easily and cheaply
-		if !Node::<T>::update_voter_type_for(account_id, voter_type) {
-			// otherwise, we need to insert from scratch
-			let weight_of = staking::Pallet::<T>::weight_of_fn();
-			let voter = Voter { id: account_id.clone(), voter_type };
-			Self::insert(voter, weight_of);
-		}
-	}
-
-	/// Insert a new voter into the appropriate bag in the voter list.
-	fn insert(voter: VoterOf<T>, weight_of: impl Fn(&T::AccountId) -> VoteWeight) {
-		Self::insert_many(sp_std::iter::once(voter), weight_of);
-	}
-
 	/// Insert several voters into the appropriate bags in the voter list.
 	///
 	/// This is more efficient than repeated calls to `Self::insert`.
 	fn insert_many(
-		voters: impl IntoIterator<Item = VoterOf<T>>,
+		voters: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
-	) -> u32 {
-		let mut bags = BTreeMap::new();
-		let mut count = 0;
+	) {
+		voters.into_iter().for_each(|v| {
+			let weight = weight_of(&v);
+			Self::insert(v, weight);
+		});
+	}
 
-		for voter in voters.into_iter() {
-			let weight = weight_of(&voter.id);
-			let bag = notional_bag_for::<T>(weight);
-			crate::log!(debug, "inserting {:?} with weight {} into bag {:?}", voter, weight, bag);
-			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
-			count += 1;
-		}
+	/// Insert a new voter into the appropriate bag in the voter list.
+	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
+		let bag_weight = notional_bag_for::<T>(weight);
+		crate::log!(
+			debug,
+			"inserting {:?} with weight {} into bag {:?}",
+			voter,
+			weight,
+			bag_weight
+		);
+		let mut bag = Bag::<T>::get_or_make(bag_weight);
+		bag.insert(voter);
 
-		for (_, bag) in bags {
-			bag.put();
-		}
+		// TODO: why are wr writing to the bag of the voter is neither head or tail????
+		bag.put();
 
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_add(count)
+			*prev_count = prev_count.saturating_add(1)
 		});
-		count
 	}
 
 	/// Remove a voter (by id) from the voter list.
-	pub fn remove(voter: &AccountIdOf<T>) {
+	pub fn remove(voter: &T::AccountId) {
 		Self::remove_many(sp_std::iter::once(voter));
 	}
 
 	/// Remove many voters (by id) from the voter list.
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
-	pub fn remove_many<'a>(voters: impl IntoIterator<Item = &'a AccountIdOf<T>>) {
+	pub fn remove_many<'a>(voters: impl IntoIterator<Item = &'a T::AccountId>) {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
@@ -231,9 +307,9 @@ impl<T: Config> VoterList<T> {
 	/// to call [`self.remove_many`] followed by [`self.insert_many`].
 	pub fn update_position_for(
 		mut node: Node<T>,
-		weight_of: impl Fn(&AccountIdOf<T>) -> VoteWeight,
+		new_weight: VoteWeight,
 	) -> Option<(VoteWeight, VoteWeight)> {
-		node.is_misplaced(&weight_of).then(move || {
+		node.is_misplaced(new_weight).then(move || {
 			let old_idx = node.bag_upper;
 
 			// TODO: there should be a way to move a non-head-tail node to another bag
@@ -249,12 +325,12 @@ impl<T: Config> VoterList<T> {
 				crate::log!(
 						error,
 						"Node for staker {:?} did not have a bag; VoterBags is in an inconsistent state",
-						node.voter.id,
+						node.voter,
 					);
 			}
 
 			// put the voter into the appropriate new bag
-			let new_idx = notional_bag_for::<T>(weight_of(&node.voter.id));
+			let new_idx = notional_bag_for::<T>(new_weight);
 			node.bag_upper = new_idx;
 			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
 			bag.insert_node(node);
@@ -262,94 +338,6 @@ impl<T: Config> VoterList<T> {
 
 			(old_idx, new_idx)
 		})
-	}
-
-	/// Migrate the voter list from one set of thresholds to another.
-	///
-	/// This should only be called as part of an intentional migration; it's fairly expensive.
-	///
-	/// Returns the number of accounts affected.
-	///
-	/// Preconditions:
-	///
-	/// - `old_thresholds` is the previous list of thresholds.
-	/// - All `bag_upper` currently in storage are members of `old_thresholds`.
-	/// - `T::VoterBagThresholds` has already been updated.
-	///
-	/// Postconditions:
-	///
-	/// - All `bag_upper` currently in storage are members of `T::VoterBagThresholds`.
-	/// - No voter is changed unless required to by the difference between the old threshold list
-	///   and the new.
-	/// - Voters whose bags change at all are implicitly rebagged into the appropriate bag in the
-	///   new threshold set.
-	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
-		// we can't check all preconditions, but we can check one
-		debug_assert!(
-			crate::VoterBags::<T>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
-			"not all `bag_upper` currently in storage are members of `old_thresholds`",
-		);
-
-		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
-		let new_set: BTreeSet<_> = T::VoterBagThresholds::get().iter().copied().collect();
-
-		let mut affected_accounts = BTreeSet::new();
-		let mut affected_old_bags = BTreeSet::new();
-
-		// a new bag means that all accounts previously using the old bag's threshold must now
-		// be rebagged
-		for inserted_bag in new_set.difference(&old_set).copied() {
-			let affected_bag = notional_bag_for::<T>(inserted_bag);
-			if !affected_old_bags.insert(affected_bag) {
-				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
-				// no point iterating through bag 10 twice.
-				continue
-			}
-
-			if let Some(bag) = Bag::<T>::get(affected_bag) {
-				affected_accounts.extend(bag.iter().map(|node| node.voter));
-			}
-		}
-
-		// a removed bag means that all members of that bag must be rebagged
-		for removed_bag in old_set.difference(&new_set).copied() {
-			if !affected_old_bags.insert(removed_bag) {
-				continue
-			}
-
-			if let Some(bag) = Bag::<T>::get(removed_bag) {
-				affected_accounts.extend(bag.iter().map(|node| node.voter));
-			}
-		}
-
-		// migrate the
-		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
-		Self::remove_many(affected_accounts.iter().map(|voter| &voter.id));
-		let num_affected = Self::insert_many(affected_accounts.into_iter(), weight_of);
-
-		// we couldn't previously remove the old bags because both insertion and removal assume that
-		// it's always safe to add a bag if it's not present. Now that that's sorted, we can get rid
-		// of them.
-		//
-		// it's pretty cheap to iterate this again, because both sets are in-memory and require no
-		// lookups.
-		for removed_bag in old_set.difference(&new_set).copied() {
-			debug_assert!(
-				!crate::VoterBagFor::<T>::iter().any(|(_voter, bag)| bag == removed_bag),
-				"no voter should be present in a removed bag",
-			);
-			crate::VoterBags::<T>::remove(removed_bag);
-		}
-
-		debug_assert!(
-			{
-				let thresholds = T::BVoterBagThresholds::get();
-				crate::VoterBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
-			},
-			"all `bag_upper` in storage must be members of the new thresholds",
-		);
-
-		num_affected
 	}
 
 	/// Sanity check the voter list.
@@ -366,7 +354,7 @@ impl<T: Config> VoterList<T> {
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
-			Self::iter().map(|node| node.voter.id).all(|voter| seen_in_list.insert(voter)),
+			Self::iter().map(|node| node.voter).all(|voter| seen_in_list.insert(voter)),
 			"duplicate identified",
 		);
 
@@ -399,8 +387,8 @@ impl<T: Config> VoterList<T> {
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Bag<T: Config> {
-	head: Option<AccountIdOf<T>>,
-	tail: Option<AccountIdOf<T>>,
+	head: Option<T::AccountId>,
+	tail: Option<T::AccountId>,
 
 	#[codec(skip)]
 	bag_upper: VoteWeight,
@@ -464,7 +452,7 @@ impl<T: Config> Bag<T> {
 	///
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
-	fn insert(&mut self, voter: VoterOf<T>) {
+	fn insert(&mut self, voter: T::AccountId) {
 		self.insert_node(Node::<T> { voter, prev: None, next: None, bag_upper: self.bag_upper });
 	}
 
@@ -477,15 +465,15 @@ impl<T: Config> Bag<T> {
 	/// `self.put()` after use.
 	fn insert_node(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
-			if *tail == node.voter.id {
+			if *tail == node.voter {
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return
+				return;
 			};
 		}
 
-		let id = node.voter.id.clone();
+		let id = node.voter.clone();
 
 		node.prev = self.tail.clone();
 		node.next = None;
@@ -527,10 +515,10 @@ impl<T: Config> Bag<T> {
 		}
 
 		// clear the bag head/tail pointers as necessary
-		if self.head.as_ref() == Some(&node.voter.id) {
+		if self.head.as_ref() == Some(&node.voter) {
 			self.head = node.next.clone();
 		}
-		if self.tail.as_ref() == Some(&node.voter.id) {
+		if self.tail.as_ref() == Some(&node.voter) {
 			self.tail = node.prev.clone();
 		}
 	}
@@ -565,7 +553,7 @@ impl<T: Config> Bag<T> {
 		let mut seen_in_bag = BTreeSet::new();
 		ensure!(
 			self.iter()
-				.map(|node| node.voter.id)
+				.map(|node| node.voter)
 				// each voter is only seen once, thus there is no cycle within a bag
 				.all(|voter| seen_in_bag.insert(voter)),
 			"Duplicate found in bag"
@@ -580,9 +568,9 @@ impl<T: Config> Bag<T> {
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq, Clone))]
 pub struct Node<T: Config> {
-	voter: Voter<AccountIdOf<T>>,
-	prev: Option<AccountIdOf<T>>,
-	next: Option<AccountIdOf<T>>,
+	voter: T::AccountId,
+	prev: Option<T::AccountId>,
+	next: Option<T::AccountId>,
 
 	/// The bag index is not stored in storage, but injected during all fetch operations.
 	#[codec(skip)]
@@ -591,7 +579,7 @@ pub struct Node<T: Config> {
 
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
-	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+	pub fn get(bag_upper: VoteWeight, account_id: &T::AccountId) -> Option<Node<T>> {
 		debug_assert!(
 			T::BVoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
@@ -606,19 +594,19 @@ impl<T: Config> Node<T> {
 	///
 	/// Note that this must perform two storage lookups: one to identify which bag is appropriate,
 	/// and another to actually fetch the node.
-	pub fn from_id(account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+	pub fn from_id(account_id: &T::AccountId) -> Option<Node<T>> {
 		let bag = current_bag_for::<T>(account_id)?;
 		Self::get(bag, account_id)
 	}
 
 	/// Get a node by account id, assuming it's in the same bag as this node.
-	pub fn in_bag(&self, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+	pub fn in_bag(&self, account_id: &T::AccountId) -> Option<Node<T>> {
 		Self::get(self.bag_upper, account_id)
 	}
 
 	/// Put the node back into storage.
 	pub fn put(self) {
-		crate::VoterNodes::<T>::insert(self.voter.id.clone(), self);
+		crate::VoterNodes::<T>::insert(self.voter.clone(), self);
 	}
 
 	/// Get the previous node in the bag.
@@ -631,50 +619,9 @@ impl<T: Config> Node<T> {
 		self.next.as_ref().and_then(|id| self.in_bag(id))
 	}
 
-	/// Get this voter's voting data.
-	pub fn voting_data(
-		&self,
-		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
-		slashing_spans: &BTreeMap<AccountIdOf<T>, staking::slashing::SlashingSpans>,
-	) -> Option<staking::VotingDataOf<T>> {
-		let voter_weight = weight_of(&self.voter.id);
-		match self.voter.voter_type {
-			VoterType::Validator =>
-				Some((self.voter.id.clone(), voter_weight, sp_std::vec![self.voter.id.clone()])),
-			VoterType::Nominator => {
-				let staking::Nominations { submitted_in, mut targets, .. } =
-					staking::Nominators::<T>::get(&self.voter.id)?;
-				// Filter out nomination targets which were nominated before the most recent
-				// slashing span.
-				targets.retain(|stash| {
-					slashing_spans
-						.get(stash)
-						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-				});
-
-				(!targets.is_empty()).then(move || (self.voter.id.clone(), voter_weight, targets))
-			},
-		}
-	}
-
 	/// `true` when this voter is in the wrong bag.
-	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
-		notional_bag_for::<T>(weight_of(&self.voter.id)) != self.bag_upper
-	}
-
-	/// Update the voter type associated with a particular node by id.
-	///
-	/// This updates storage immediately.
-	///
-	/// Returns whether the voter existed and was successfully updated.
-	pub fn update_voter_type_for(account_id: &AccountIdOf<T>, voter_type: VoterType) -> bool {
-		let node = Self::from_id(account_id);
-		let existed = node.is_some();
-		if let Some(mut node) = node {
-			node.voter.voter_type = voter_type;
-			node.put();
-		}
-		existed
+	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
 	/// Get the upper threshold of the bag that this node _should_ be in, given its vote weight.
@@ -688,37 +635,10 @@ impl<T: Config> Node<T> {
 	}
 
 	/// Get the underlying voter.
-	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	pub fn voter(&self) -> &Voter<T::AccountId> {
+	pub fn voter(&self) -> &T::AccountId {
 		&self.voter
 	}
 }
 
-/// Fundamental information about a voter.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, PartialOrd, Ord, sp_runtime::RuntimeDebug)]
-pub struct Voter<AccountId> {
-	/// Account Id of this voter
-	pub id: AccountId,
-	/// Whether the voter is a validator or nominator
-	pub voter_type: VoterType,
-}
-
-impl<AccountId> Voter<AccountId> {
-	pub fn nominator(id: AccountId) -> Self {
-		Self { id, voter_type: VoterType::Nominator }
-	}
-
-	pub fn validator(id: AccountId) -> Self {
-		Self { id, voter_type: VoterType::Validator }
-	}
-}
-
-/// Type of voter.
-///
-/// Similar to [`crate::StakerStatus`], but somewhat more limited.
-#[derive(Clone, Copy, Encode, Decode, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum VoterType {
-	Validator,
-	Nominator,
-}
+#[cfg(test)]
+mod test {}

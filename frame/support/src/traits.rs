@@ -87,3 +87,24 @@ pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+
+/// Trait to be implemented by a voter list provider.
+pub trait VoterListProvider<AccountId> {
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn get_voters() -> Box<dyn Iterator<Item = AccountId>>;
+	/// get the current count of voters.
+	fn count() -> u32;
+	// Hook for inserting a validator.
+	fn on_insert(voter: &AccountId, weight: u64); // TODO
+	/// Hook for updating the list when a voter is added, their voter type is changed,
+	/// or their weight changes.
+	fn on_update(voter: &AccountId, weight: u64);
+	/// Hook for removing a voter from the list.
+	fn on_remove(voter: &AccountId);
+	/// Sanity check internal state of list. Only meant for debug compilation.
+	fn sanity_check() -> Result<(), &'static str>;
+}
+
+pub trait StakingVoteWeight<AccountId> {
+	fn staking_vote_weight(who: &AccountId) -> u64;
+}
