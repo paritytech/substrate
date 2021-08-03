@@ -883,6 +883,10 @@ cfg_if! {
 					Vec::new()
 				}
 
+				fn current_set_id() -> sp_finality_grandpa::SetId {
+					0
+				}
+
 				fn submit_report_equivocation_unsigned_extrinsic(
 					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
@@ -1244,12 +1248,12 @@ mod tests {
 	use codec::Encode;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
+	use sp_consensus::BlockOrigin;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
-		prelude::*, runtime::TestAPI, sp_consensus::BlockOrigin, DefaultTestClientBuilderExt,
-		TestClientBuilder,
+		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
 	};
 
 	#[test]

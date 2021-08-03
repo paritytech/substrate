@@ -206,7 +206,7 @@ where
 		trace!(
 			target: "state",
 			method = "Get",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			result = ?result.as_ref().map(HexDisplay::from),
 			result_encoded = %HexDisplay::from(
@@ -228,10 +228,12 @@ where
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		trace!(target: "state", "{:04x}: Hash {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result,
+		trace!(
+			target: "state",
+			method = "Hash",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			key = %HexDisplay::from(&key),
+			?result,
 		);
 		result.map(|r| r.encode())
 	}
@@ -246,11 +248,13 @@ where
 				self.backend.child_storage(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 			});
 
-		trace!(target: "state", "{:04x}: GetChild({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
+		trace!(
+			target: "state",
+			method = "ChildGet",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			key = %HexDisplay::from(&key),
+			result = ?result.as_ref().map(HexDisplay::from)
 		);
 
 		result
@@ -266,11 +270,13 @@ where
 				self.backend.child_storage_hash(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 			});
 
-		trace!(target: "state", "{:04x}: ChildHash({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result,
+		trace!(
+			target: "state",
+			method = "ChildHash",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			key = %HexDisplay::from(&key),
+			?result,
 		);
 
 		result.map(|r| r.encode())
@@ -283,10 +289,12 @@ where
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(target: "state", "{:04x}: Exists {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result,
+		trace!(
+			target: "state",
+			method = "Exists",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			key = %HexDisplay::from(&key),
+			%result,
 		);
 
 		result
@@ -303,11 +311,13 @@ where
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(target: "state", "{:04x}: ChildExists({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result,
+		trace!(
+			target: "state",
+			method = "ChildExists",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			key = %HexDisplay::from(&key),
+			%result,
 		);
 		result
 	}
@@ -402,7 +412,7 @@ where
 		trace!(
 			target: "state",
 			method = "Put",
-			ext_id = self.id,
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			key = %HexDisplay::from(&key),
 			value = ?value.as_ref().map(HexDisplay::from),
 			value_encoded = %HexDisplay::from(
@@ -423,11 +433,13 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			value.as_ref().map(HexDisplay::from)
+		trace!(
+			target: "state",
+			method = "ChildPut",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			key = %HexDisplay::from(&key),
+			value = ?value.as_ref().map(HexDisplay::from),
 		);
 		let _guard = guard();
 
@@ -436,9 +448,11 @@ where
 	}
 
 	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32) {
-		trace!(target: "state", "{:04x}: KillChild({})",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
+		trace!(
+			target: "state",
+			method = "ChildKill",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
 		);
 		let _guard = guard();
 		self.mark_dirty();
@@ -447,14 +461,19 @@ where
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32) {
-		trace!(target: "state", "{:04x}: ClearPrefix {}",
-			self.id,
-			HexDisplay::from(&prefix),
+		trace!(
+			target: "state",
+			method = "ClearPrefix",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			prefix = %HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
 
 		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
-			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
+			warn!(
+				target: "trie",
+				"Refuse to directly clear prefix that is part or contains of child storage key",
+			);
 			return (false, 0)
 		}
 
@@ -469,10 +488,12 @@ where
 		prefix: &[u8],
 		limit: Option<u32>,
 	) -> (bool, u32) {
-		trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&prefix),
+		trace!(
+			target: "state",
+			method = "ChildClearPrefix",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			prefix = %HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
 
@@ -482,10 +503,12 @@ where
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
-		trace!(target: "state", "{:04x}: Append {}={}",
-			self.id,
-			HexDisplay::from(&key),
-			HexDisplay::from(&value),
+		trace!(
+			target: "state",
+			method = "Append",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			key = %HexDisplay::from(&key),
+			value = %HexDisplay::from(&value),
 		);
 
 		let _guard = guard();
@@ -501,15 +524,24 @@ where
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
-			trace!(target: "state", "{:04x}: Root(cached) {}",
-				self.id,
-				HexDisplay::from(&root.as_ref()),
+			trace!(
+				target: "state",
+				method = "StorageRoot",
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+				storage_root = %HexDisplay::from(&root.as_ref()),
+				cached = true,
 			);
 			return root.encode()
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
-		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
+		trace!(
+			target: "state",
+			method = "StorageRoot",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			storage_root = %HexDisplay::from(&root.as_ref()),
+			cached = false,
+		);
 		root.encode()
 	}
 
@@ -522,10 +554,13 @@ where
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
-			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
-				self.id,
-				HexDisplay::from(&storage_key),
-				HexDisplay::from(&root.as_ref()),
+			trace!(
+				target: "state",
+				method = "ChildStorageRoot",
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+				child_info = %HexDisplay::from(&storage_key),
+				storage_root = %HexDisplay::from(&root.as_ref()),
+				cached = true,
 			);
 			root.encode()
 		} else {
@@ -549,11 +584,15 @@ where
 					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
 				}
 
-				trace!(target: "state", "{:04x}: ChildRoot({}) {}",
-					self.id,
-					HexDisplay::from(&storage_key.as_ref()),
-					HexDisplay::from(&root.as_ref()),
+				trace!(
+					target: "state",
+					method = "ChildStorageRoot",
+					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+					child_info = %HexDisplay::from(&storage_key.as_ref()),
+					storage_root = %HexDisplay::from(&root.as_ref()),
+					cached = false,
 				);
+
 				root
 			} else {
 				// empty overlay
@@ -561,11 +600,16 @@ where
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
 					.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
-				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
-					self.id,
-					HexDisplay::from(&storage_key.as_ref()),
-					HexDisplay::from(&root.as_ref()),
+
+				trace!(
+					target: "state",
+					method = "ChildStorageRoot",
+					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+					child_info = %HexDisplay::from(&storage_key.as_ref()),
+					storage_root = %HexDisplay::from(&root.as_ref()),
+					cached = false,
 				);
+
 				root.encode()
 			}
 		}
@@ -574,12 +618,13 @@ where
 	fn storage_index_transaction(&mut self, index: u32, hash: &[u8], size: u32) {
 		trace!(
 			target: "state",
-			"{:04x}: IndexTransaction ({}): {}, {} bytes",
-			self.id,
-			index,
-			HexDisplay::from(&hash),
-			size,
+			method = "IndexTransaction",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			%index,
+			tx_hash = %HexDisplay::from(&hash),
+			%size,
 		);
+
 		self.overlay.add_transaction_index(IndexOperation::Insert {
 			extrinsic: index,
 			hash: hash.to_vec(),
@@ -591,11 +636,12 @@ where
 	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8]) {
 		trace!(
 			target: "state",
-			"{:04x}: RenewTransactionIndex ({}): {}",
-			self.id,
-			index,
-			HexDisplay::from(&hash),
+			method = "RenewTransactionIndex",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			%index,
+			tx_hash = %HexDisplay::from(&hash),
 		);
+
 		self.overlay
 			.add_transaction_index(IndexOperation::Renew { extrinsic: index, hash: hash.to_vec() });
 	}
@@ -612,10 +658,11 @@ where
 		{
 			trace!(
 				target: "state",
-				"{:04x}: ChangesRoot({})(cached) {:?}",
-				self.id,
-				HexDisplay::from(&parent_hash),
-				root,
+				method = "ChangesRoot",
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+				parent_hash = %HexDisplay::from(&parent_hash),
+				?root,
+				cached = true,
 			);
 
 			Ok(Some(root.encode()))
@@ -626,8 +673,8 @@ where
 				Decode::decode(&mut parent_hash).map_err(|e| {
 					trace!(
 						target: "state",
-						"Failed to decode changes root parent hash: {}",
-						e,
+						error = %e,
+						"Failed to decode changes root parent hash",
 					)
 				})?,
 				true,
@@ -636,10 +683,11 @@ where
 
 			trace!(
 				target: "state",
-				"{:04x}: ChangesRoot({}) {:?}",
-				self.id,
-				HexDisplay::from(&parent_hash),
-				root,
+				method = "ChangesRoot",
+				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+				parent_hash = %HexDisplay::from(&parent_hash),
+				?root,
+				cached = false,
 			);
 
 			root.map(|r| r.map(|o| o.encode()))
