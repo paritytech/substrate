@@ -80,12 +80,12 @@ pub trait RpcExtensionBuilder {
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output;
+	) -> Result<Self::Output, Error>;
 }
 
 impl<F, R> RpcExtensionBuilder for F
 where
-	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> Result<R, Error>,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
@@ -94,7 +94,7 @@ where
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
+	) -> Result<Self::Output, Error> {
 		(*self)(deny, subscription_executor)
 	}
 }
@@ -114,8 +114,8 @@ where
 		&self,
 		_deny: sc_rpc::DenyUnsafe,
 		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
-		self.0.clone()
+	) -> Result<Self::Output, Error> {
+		Ok(self.0.clone())
 	}
 }
 
@@ -655,7 +655,7 @@ where
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
 			sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser"),
-		)
+		)?
 		.into(),
 	));
 
@@ -742,7 +742,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -813,7 +813,7 @@ where
 		offchain::OffchainApi::to_delegate(offchain)
 	});
 
-	sc_rpc_server::rpc_handler(
+	Ok(sc_rpc_server::rpc_handler(
 		(
 			state::StateApi::to_delegate(state),
 			state::ChildStateApi::to_delegate(child_state),
@@ -821,10 +821,10 @@ where
 			maybe_offchain_rpc,
 			author::AuthorApi::to_delegate(author),
 			system::SystemApi::to_delegate(system),
-			rpc_extensions_builder.build(deny_unsafe, task_executor),
+			rpc_extensions_builder.build(deny_unsafe, task_executor)?,
 		),
 		rpc_middleware,
-	)
+	))
 }
 
 /// Parameters to pass into `build_network`.

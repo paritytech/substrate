@@ -127,7 +127,7 @@ pub use sp_consensus_babe::{
 		CompatibleDigestItem, NextConfigDescriptor, NextEpochDescriptor, PreDigest,
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
-	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight,
+	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
 	BabeEpochConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
 	VRF_OUTPUT_LENGTH,
 };
