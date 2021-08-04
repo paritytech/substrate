@@ -603,11 +603,6 @@ publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  needs:
-    - job:                         build-linux-substrate
-      artifacts:                   true
-    - job:                         build-linux-subkey
-      artifacts:                   true
   image:                           paritytech/awscli:latest
   variables:
     GIT_STRATEGY:                  none
