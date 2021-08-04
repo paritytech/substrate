@@ -96,4 +96,4 @@ diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 cargo update -p sp-core
 
 # Test Polkadot pr or master branch with this Substrate commit.
-time cargo test --all --release --verbose
+time cargo test --workspace --release --verbose --features=runtime-benchmarks
