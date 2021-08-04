@@ -11,7 +11,7 @@ parameter_types! {
 
 pub struct StakingMock;
 impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
-	fn vote_weight(who: &AccountId) -> VoteWeight {
+	fn vote_weight(_: &AccountId) -> VoteWeight {
 		NextVoteWeight::get()
 	}
 }
@@ -69,8 +69,6 @@ frame_support::construct_runtime!(
 );
 
 pub(crate) mod ext_builder {
-	use frame_support::RuntimeDebugNoBound;
-
 	use super::*;
 
 	/// Default AccountIds and their weights.
@@ -108,6 +106,10 @@ pub(crate) mod ext_builder {
 				test();
 				List::<Runtime>::sanity_check().expect("Sanity check post condition failed")
 			})
+		}
+
+		pub(crate) fn build_and_execute_no_post_check(self, test: impl FnOnce() -> ()) {
+			self.build().execute_with(test)
 		}
 	}
 }

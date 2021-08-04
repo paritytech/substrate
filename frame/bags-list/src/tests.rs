@@ -269,21 +269,24 @@ mod sorted_list_provider {
 
 	#[test]
 	fn sanity_check_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			assert_ok!(List::<Runtime>::sanity_check());
 		});
 
 		// make sure there are no duplicates.
-		ExtBuilder::default().build_and_execute(|| {
-			<BagsList as SortedListProvider<AccountId>>::on_insert(1, 10);
-			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			<BagsList as SortedListProvider<AccountId>>::on_insert(2, 10);
+			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified".to_string()));
 		});
 
 		// ensure count is in sync with `CounterForVoters`.
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			crate::CounterForVoters::<Runtime>::mutate(|counter| *counter += 1);
 			assert_eq!(crate::CounterForVoters::<Runtime>::get(), 5);
-			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != voter_count"));
+			assert_eq!(
+				List::<Runtime>::sanity_check(),
+				Err("iter_count 4 != stored_count 5".to_string())
+			);
 		});
 	}
 }

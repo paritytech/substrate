@@ -291,7 +291,6 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
-use frame_election_provider_support::VoteWeight;
 use frame_support::{
 	traits::{Currency, Get},
 	weights::Weight,
@@ -794,25 +793,5 @@ where
 
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
 		R::is_known_offence(offenders, time_slot)
-	}
-}
-
-/// A simple voter list implementation that does not require any additional pallets.
-pub struct StakingVoterListStub<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> frame_election_provider_support::SortedListProvider<T::AccountId>
-	for StakingVoterListStub<T>
-{
-	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
-	}
-	fn count() -> u32 {
-		CounterForNominators::<T>::get()
-	}
-	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) {}
-	fn on_update(_voter: &T::AccountId, _weight: VoteWeight) {}
-	fn on_remove(_voter: &T::AccountId) {}
-	fn sanity_check() -> Result<(), &'static str> {
-		Ok(())
 	}
 }

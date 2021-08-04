@@ -229,4 +229,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	fn on_remove(voter: &T::AccountId) {
 		List::<T>::remove(voter)
 	}
+	fn sanity_check() -> Result<(), &'static str> {
+		List::<T>::sanity_check()
+	}
 }

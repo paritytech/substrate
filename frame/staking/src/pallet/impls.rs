@@ -651,17 +651,54 @@ impl<T: Config> Pallet<T> {
 	/// `voter_count` voters. Use with care.
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
-		voter_count: usize,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
-		// Collect all slashing spans into a BTreeMap for further queries.
-		// let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		// TODO: weight this function and see how many can fit in a block.
+		let weight_of = Self::weight_of_fn();
+		let nominator_count = CounterForNominators::<T>::get() as usize;
+		let validator_count = CounterForValidators::<T>::get() as usize;
+		let all_voter_count = validator_count.saturating_add(nominator_count);
 
-		let unfiltered_voters: Vec<T::AccountId> =
-			T::SortedListProvider::get_voters().take(wanted_voters).collect();
-		// TODO: filter slashing spans
-		// concatenate account ids to voter data.
-		unimplemented!()
+		let total_len = maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count);
+		let mut all_voters = Vec::<_>::with_capacity(total_len);
+
+		// first, grab all validators.
+		for (validator, _) in <Validators<T>>::iter() {
+			// Append self vote.
+			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
+			all_voters.push(self_vote);
+		}
+
+		// see how many voters we can grab from nominator sorted list, and grab them.
+		let nominators_quota = total_len.saturating_sub(validator_count);
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		for nominator in T::SortedListProvider::iter().take(nominators_quota) {
+			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
+				<Nominators<T>>::get(&nominator)
+			{
+				targets.retain(|stash| {
+					slashing_spans
+						.get(stash)
+						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
+				});
+				if !targets.len().is_zero() {
+					all_voters.push((nominator.clone(), weight_of(&nominator), targets))
+				}
+			} else {
+				log!(warn, "invalid item in `SortedListProvider`: {:?}", nominator)
+			}
+		}
+
+		// all_voters should have not re-allocated.
+		debug_assert!(all_voters.capacity() == all_voters.len());
+
+		log!(
+			info,
+			"generated {} npos voters, {} from validators and {} nominators",
+			all_voter_count,
+			validator_count,
+			nominators_quota
+		);
+		all_voters
 	}
 
 	/// This is a very expensive function and result should be cached versus being called multiple times.
@@ -720,8 +757,6 @@ impl<T: Config> Pallet<T> {
 			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
 		}
 		Validators::<T>::insert(who, prefs);
-		T::SortedListProvider::on_insert(who.clone(), Self::weight_of_fn()(who));
-		debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a validator from the `Validators` storage map,
@@ -736,8 +771,6 @@ impl<T: Config> Pallet<T> {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
-			T::SortedListProvider::on_remove(who);
-			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 			true
 		} else {
 			false
@@ -759,16 +792,15 @@ impl<T: Config>
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
 		let nominator_count = CounterForNominators::<T>::get();
 		let validator_count = CounterForValidators::<T>::get();
-		let voter_count = nominator_count.saturating_add(validator_count) as usize;
 
 		// check a few counters one last time...
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
-		// debug_assert_eq!(
-		// 	voter_count,
-		// 	T::SortedListProvider::get_voters().count(),
-		// 	"voter_count must be accurate",
-		// );
+		debug_assert_eq!(
+			CounterForNominators::<T>::get(),
+			T::SortedListProvider::count(),
+			"voter_count must be accurate",
+		);
 
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(
@@ -777,7 +809,7 @@ impl<T: Config>
 			slashing_span_count as u32,
 		);
 
-		Ok((Self::get_npos_voters(maybe_max_len, voter_count), weight))
+		Ok((Self::get_npos_voters(maybe_max_len), weight))
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
@@ -1141,5 +1173,29 @@ where
 		}
 
 		consumed_weight
+	}
+}
+
+/// A simple voter list implementation that does not require any additional pallets.
+pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
+		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
+	}
+	fn count() -> u32 {
+		CounterForNominators::<T>::get()
+	}
+	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) {
+		// nothing to do on update.
+	}
+	fn on_update(_voter: &T::AccountId, _weight: VoteWeight) {
+		// nothing to do on update.
+	}
+	fn on_remove(_voter: &T::AccountId) {
+		// nothing to do on update.
+	}
+	fn sanity_check() -> Result<(), &'static str> {
+		Ok(())
 	}
 }

@@ -20,8 +20,7 @@
 use crate::Config;
 use codec::{Decode, Encode};
 use frame_election_provider_support::{VoteWeight, VoteWeightProvider};
-use frame_support::{ensure, traits::Get, DefaultNoBound};
-use sp_runtime::SaturatedConversion;
+use frame_support::{traits::Get, DefaultNoBound};
 use sp_std::{
 	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -96,6 +95,7 @@ impl<T: Config> List<T> {
 	///   and the new.
 	/// - Voters whose bags change at all are implicitly rebagged into the appropriate bag in the
 	///   new threshold set.
+	#[allow(dead_code)]
 	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
 		// we can't check all preconditions, but we can check one
 		debug_assert!(
@@ -172,23 +172,13 @@ impl<T: Config> List<T> {
 	/// consensus.
 	///
 	/// Returns the number of voters migrated.
+	#[allow(dead_code)]
 	pub fn regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) {
 		Self::clear();
 		Self::insert_many(all, weight_of);
-	}
-
-	/// Decode the length of the voter list.
-	pub fn decode_len() -> Option<usize> {
-		let maybe_len = crate::CounterForVoters::<T>::try_get().ok().map(|n| n.saturated_into());
-		debug_assert_eq!(
-			maybe_len.unwrap_or_default(),
-			crate::VoterNodes::<T>::iter().count(),
-			"stored length must match count of nodes",
-		);
-		maybe_len
 	}
 
 	/// Iterate over all nodes in all bags in the voter list.
@@ -317,12 +307,12 @@ impl<T: Config> List<T> {
 				bag.remove_node(&node);
 				bag.put();
 			} else {
-				debug_assert!(false, "every node must have an extant bag associated with it");
 				crate::log!(
-						error,
-						"Node for staker {:?} did not have a bag; VoterBags is in an inconsistent state",
-						node.id,
-					);
+					error,
+					"Node for voter {:?} did not have a bag; VoterBags is in an inconsistent state",
+					node.id,
+				);
+				debug_assert!(false, "every node must have an extant bag associated with it");
 			}
 
 			// put the voter into the appropriate new bag
@@ -346,7 +336,8 @@ impl<T: Config> List<T> {
 	/// * Iterate all voters and ensure their count is in sync with `CounterForVoters`.
 	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
 	///   checked per *any* update to `List`.
-	pub(crate) fn sanity_check() -> Result<(), &'static str> {
+	pub(crate) fn sanity_check() -> Result<(), String> {
+		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|voter| seen_in_list.insert(voter)),
@@ -355,11 +346,10 @@ impl<T: Config> List<T> {
 
 		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
 		let stored_count = crate::CounterForVoters::<T>::get();
-		ensure!(iter_count == stored_count, "iter_count != voter_count");
-
-		// let validators = staking::CounterForValidators::<T>::get(); TOOD can we just remove?
-		// let nominators = staking::CounterForNominators::<T>::get();
-		// ensure!(validators + nominators == stored_count, "validators + nominators != voters");
+		ensure!(
+			iter_count == stored_count,
+			format!("iter_count {} != stored_count {}", iter_count, stored_count)
+		);
 
 		let _ = T::BagThresholds::get()
 			.into_iter()
@@ -470,6 +460,7 @@ impl<T: Config> Bag<T> {
 	fn insert_node(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
+				// DOCUMENT_ME
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
@@ -477,8 +468,8 @@ impl<T: Config> Bag<T> {
 			};
 		}
 
+		// update this node now
 		let id = node.id.clone();
-
 		node.prev = self.tail.clone();
 		node.next = None;
 		node.put();
@@ -488,13 +479,17 @@ impl<T: Config> Bag<T> {
 			old_tail.next = Some(id.clone());
 			old_tail.put();
 		}
-
-		// update the internal bag links
-		if self.head.is_none() {
-			self.head = Some(id.clone());
-		}
 		self.tail = Some(id.clone());
 
+		// ensure head exist. This is typically only set when the length of the bag is just 1, i.e.
+		// if this is the first insertion into the bag. In this case, both head and tail should
+		// point to the same voter node.
+		if self.head.is_none() {
+			self.head = Some(id.clone());
+			debug_assert!(self.iter().count() == 1);
+		}
+
+		// update the voter's bag index.
 		crate::VoterBagFor::<T>::insert(id, self.bag_upper);
 	}
 
@@ -536,7 +531,7 @@ impl<T: Config> Bag<T> {
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
 	fn sanity_check(&self) -> Result<(), &'static str> {
-		ensure!(
+		frame_support::ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())
 				// if there is no head, then there must not be a tail, meaning that the bag is
@@ -545,7 +540,7 @@ impl<T: Config> Bag<T> {
 			"head has a prev"
 		);
 
-		ensure!(
+		frame_support::ensure!(
 			self.tail()
 				.map(|tail| tail.next().is_none())
 				// if there is no tail, then there must not be a head, meaning that the bag is
@@ -555,7 +550,7 @@ impl<T: Config> Bag<T> {
 		);
 
 		let mut seen_in_bag = BTreeSet::new();
-		ensure!(
+		frame_support::ensure!(
 			self.iter()
 				.map(|node| node.id)
 				// each voter is only seen once, thus there is no cycle within a bag
@@ -579,8 +574,6 @@ pub struct Node<T: Config> {
 	/// The bag index is not stored in storage, but injected during all fetch operations.
 	#[codec(skip)]
 	pub(crate) bag_upper: VoteWeight,
-	// TODO maybe
-	// - store voter data here i.e targets
 }
 
 impl<T: Config> Node<T> {

@@ -317,7 +317,6 @@ pub trait SortedListProvider<AccountId> {
 	/// Hook for removing a voter from the list.
 	fn on_remove(voter: &AccountId);
 	/// Sanity check internal state of list. Only meant for debug compilation.
-	#[cfg(test)]
 	fn sanity_check() -> Result<(), &'static str>;
 }
 

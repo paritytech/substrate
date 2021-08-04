@@ -18,8 +18,7 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use crate::voter_bags::VoterList;
-use frame_election_provider_support::{ElectionProvider, Support};
+use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::WithPostDispatchInfo,
@@ -178,11 +177,6 @@ fn basic_setup_works() {
 
 		// New era is not being forced
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-
-		// check the bags
-		assert_eq!(CounterForVoters::<Test>::get(), 4);
-
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])],);
 	});
 }
 
@@ -282,9 +276,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -320,9 +314,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -3833,95 +3827,6 @@ fn on_finalize_weight_is_nonzero() {
 	})
 }
 
-// end-to-end nodes of the voter bags operation.
-mod voter_bags {
-	use super::Origin;
-	use crate::{mock::*, ValidatorPrefs};
-	use frame_support::{assert_ok, traits::Currency};
-
-	#[test]
-	fn insert_and_remove_works() {
-		// we test insert/remove indirectly via `validate`, `nominate`, and chill
-		ExtBuilder::default().build_and_execute(|| {
-			// given
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
-
-			// `bond`
-			bond(42, 43, 2_000);
-			// does not insert the voter
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
-
-			// `validate`
-			assert_ok!(Staking::validate(Origin::signed(43).into(), ValidatorPrefs::default()));
-			// moves the voter into a bag
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
-			);
-
-			// `nominate`-ing, but not changing active stake (which implicitly calls remove)
-			assert_ok!(Staking::nominate(Origin::signed(43), vec![11]));
-			// does not change the voters position
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
-			);
-
-			// `chill`
-			assert_ok!(Staking::chill(Origin::signed(43)));
-			// removes the voter
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
-		});
-	}
-
-	#[test]
-	fn rebag_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			// add a nominator to genesis state
-			bond_nominator(42, 43, 20, vec![11]);
-			Balances::make_free_balance_be(&42, 2_000);
-
-			// given
-			assert_eq!(get_bags(), vec![(10, vec![31]), (20, vec![42]), (1000, vec![11, 21, 101])]);
-
-			// increase stake and implicitly rebag with `bond_extra` to the level of non-existent bag
-			assert_ok!(Staking::bond_extra(Origin::signed(42), 1_980)); // 20 + 1_980 = 2_000
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
-			);
-
-			// decrease stake within the range of the current bag
-			assert_ok!(Staking::unbond(Origin::signed(43), 999)); // 2000 - 999 = 1001
-													  // does not change bags
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
-			);
-
-			// reduce stake to the level of a non-existent bag
-			assert_ok!(Staking::unbond(Origin::signed(43), 971)); // 1001 - 971 = 30
-													  // creates the bag and moves the voter into it
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (30, vec![42]), (1000, vec![11, 21, 101]),]
-			);
-
-			// increase stake by `rebond`-ing to the level of a pre-existing bag
-			assert_ok!(Staking::rebond(Origin::signed(43), 31)); // 30 + 41 = 61
-													 // moves the voter to that bag
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101, 42]),]);
-
-			// TODO test rebag directly
-		});
-	}
-
-	// #[test] TODO
-	// fn rebag_head_works() {
-	// // rebagging the head of a bag results in the old bag having a new head and an overall correct state.
-	// }
-}
-
 mod election_data_provider {
 	use super::*;
 	use frame_election_provider_support::ElectionDataProvider;
@@ -3929,8 +3834,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -3947,8 +3852,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4021,7 +3926,7 @@ mod election_data_provider {
 	fn respects_snapshot_len_limits() {
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
 			// sum of all validators and nominators who'd be voters.
-			assert_eq!(VoterList::<Test>::decode_len().unwrap(), 5);
+			assert_eq!(<Test as Config>::SortedListProvider::count(), 5);
 
 			// if limits is less..
 			assert_eq!(Staking::voters(Some(1)).unwrap().0.len(), 1);
@@ -4407,5 +4312,14 @@ mod election_data_provider {
 				ValidatorPrefs::default()
 			));
 		})
+	}
+}
+
+mod sorted_list_provider {
+	#[test]
+	fn iter_works() {
+		// TODO: not sure if this is really needed. What should I check? if it returns the correct
+		// type, then it is correct from my PoV.
+		todo!()
 	}
 }

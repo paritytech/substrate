@@ -27,7 +27,6 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
-use crate::voter_bags::VoterList;
 use frame_support::{pallet_prelude::*, traits::Currency};
 use sp_runtime::{traits::StaticLookup, Perbill};
 use sp_std::prelude::*;
@@ -40,7 +39,6 @@ pub fn clear_validators_and_nominators<T: Config>() {
 	CounterForValidators::<T>::kill();
 	Nominators::<T>::remove_all(None);
 	CounterForNominators::<T>::kill();
-	VoterList::<T>::clear();
 }
 
 /// Grab a funded user.
@@ -74,7 +72,7 @@ pub fn create_stash_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	return Ok((stash, controller));
 }
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
@@ -96,7 +94,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	return Ok((stash, controller));
 }
 
 /// create `max` validators.

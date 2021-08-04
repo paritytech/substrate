@@ -17,9 +17,9 @@
 
 //! Test utilities
 
-use crate as staking;
-use crate::{voter_bags::VoterList, *};
+use crate::{self as pallet_staking, *};
 use frame_election_provider_support::onchain;
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -104,7 +104,7 @@ frame_support::construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		// VoterBags: pallet_voter_bags::{Pallet, Call, Storage, Event<T>},
 	}
@@ -283,9 +283,7 @@ impl crate::pallet::pallet::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
-	type VoterBagThresholds = VoterBagThresholds;
-	// type SortedListProvider = pallet_voter_bags::VoterBagsVoterListProvider;
-	type SortedListProvider = staking::VoterList<Self>;
+	type SortedListProvider = UseNominatorsMap<Self>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -459,7 +457,7 @@ impl ExtBuilder {
 				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated)),
 			];
 		}
-		let _ = staking::GenesisConfig::<Test> {
+		let _ = pallet_staking::GenesisConfig::<Test> {
 			stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
@@ -504,23 +502,13 @@ impl ExtBuilder {
 		ext.execute_with(test);
 		ext.execute_with(post_conditions);
 	}
-	/// WARNING: This should only be use for testing `VoterList` api or lower.
-	pub fn build_and_execute_without_check_count(self, test: impl FnOnce() -> ()) {
-		let mut ext = self.build();
-		ext.execute_with(test);
-		ext.execute_with(post_conditions_without_check_count);
-	}
 }
 
 fn post_conditions() {
-	post_conditions_without_check_count();
-	check_count();
-}
-
-fn post_conditions_without_check_count() {
 	check_nominators();
 	check_exposures();
 	check_ledgers();
+	check_count();
 }
 
 fn check_count() {
@@ -529,8 +517,9 @@ fn check_count() {
 	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
 	assert_eq!(validator_count, CounterForValidators::<Test>::get());
 
-	let voters_count = CounterForVoters::<Test>::get();
-	assert_eq!(voters_count, nominator_count + validator_count);
+	// the voters that the voter list is storing for us.
+	let external_voters = <Test as Config>::SortedListProvider::count();
+	assert_eq!(external_voters, nominator_count);
 }
 
 fn check_ledgers() {
@@ -833,7 +822,7 @@ macro_rules! assert_session_era {
 	};
 }
 
-pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
+pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -843,39 +832,4 @@ pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
-use crate::voter_bags::Bag;
-/// Returns the nodes of all non-empty bags.
-pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
-	VoterBagThresholds::get()
-		.into_iter()
-		.filter_map(|t| {
-			Bag::<Test>::get(*t)
-				.map(|bag| (*t, bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()))
-		})
-		.collect::<Vec<_>>()
-}
-
-pub(crate) fn bag_as_ids(bag: &Bag<Test>) -> Vec<AccountId> {
-	bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()
-}
-
-pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
-	VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>()
-}
-
-pub(crate) fn get_voter_list_as_voters() -> Vec<voter_bags::Voter<AccountId>> {
-	VoterList::<Test>::iter().map(|node| node.voter().clone()).collect::<Vec<_>>()
-}
-
-// Useful for when you want to change the effectively bonded value but you don't want to use
-// the bond extrinsics because they implicitly rebag.
-pub(crate) fn set_ledger_and_free_balance(account: &AccountId, value: Balance) {
-	Balances::make_free_balance_be(account, value);
-	let controller = Staking::bonded(account).unwrap();
-	let mut ledger = Staking::ledger(&controller).unwrap();
-	ledger.total = value;
-	ledger.active = value;
-	Staking::update_ledger(&controller, &ledger);
 }
