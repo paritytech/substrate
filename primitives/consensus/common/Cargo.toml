@@ -18,7 +18,7 @@ async-trait = "0.1.42"
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 log = "0.4.8"
-sp-core = { path= "../../core", version = "4.0.0-dev"}
+sp-core = { path = "../../core", version = "4.0.0-dev"}
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
 futures-timer = "3.0.1"

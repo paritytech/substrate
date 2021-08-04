@@ -38,9 +38,9 @@ pub use members::{
 
 mod validation;
 pub use validation::{
-	EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, KeyOwnerProofSystem, Lateness,
-	OneSessionHandler, ValidatorRegistration, ValidatorSet, ValidatorSetWithIdentification,
-	VerifySeal,
+	DisabledValidators, EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor,
+	KeyOwnerProofSystem, Lateness, OneSessionHandler, ValidatorRegistration, ValidatorSet,
+	ValidatorSetWithIdentification, VerifySeal,
 };
 
 mod filter;
