@@ -106,7 +106,6 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		// VoterBags: pallet_voter_bags::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -250,18 +249,6 @@ impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
-
-/// Thresholds used for bags.
-const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
-
-parameter_types! {
-	pub const VoterBagThresholds: &'static [VoteWeight] = &THRESHOLDS;
-}
-
-// impl pallet_voter_bags::Config for Test {
-// 	type Event = Event;
-// 	type BVoterBagThresholds = VoterBagThresholds;
-// }
 
 impl crate::pallet::pallet::Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;

@@ -18,7 +18,7 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionProvider, SortedListProvider, Supports, VoteWeight,
+	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports, VoteWeight,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -778,10 +778,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config>
-	frame_election_provider_support::ElectionDataProvider<T::AccountId, BlockNumberFor<T>>
-	for Pallet<T>
-{
+impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
 	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
 		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))

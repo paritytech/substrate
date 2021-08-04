@@ -545,7 +545,7 @@ pub mod pallet {
 			assert_eq!(
 				T::SortedListProvider::count(),
 				CounterForNominators::<T>::get(),
-				"not all genesis stakers were inserted into bags, something is wrong."
+				"not all genesis stakers were inserted into sorted list provider, something is wrong."
 			);
 		}
 	}
@@ -587,8 +587,6 @@ pub mod pallet {
 		Chilled(T::AccountId),
 		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
 		PayoutStarted(EraIndex, T::AccountId),
-		/// Moved an account from one bag to another. \[who, from, to\].
-		Rebagged(T::AccountId, VoteWeight, VoteWeight),
 	}
 
 	#[pallet::error]
