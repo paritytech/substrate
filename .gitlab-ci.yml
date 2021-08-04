@@ -522,9 +522,6 @@ build-rust-doc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
