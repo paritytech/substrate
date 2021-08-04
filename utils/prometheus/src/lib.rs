@@ -17,6 +17,7 @@
 
 #[cfg(not(target_os = "unknown"))]
 use futures_util::{future::Future, FutureExt};
+use prometheus::core::Collector;
 pub use prometheus::{
 	self,
 	core::{
@@ -28,7 +29,6 @@ pub use prometheus::{
 };
 #[cfg(not(target_os = "unknown"))]
 use prometheus::{Encoder, TextEncoder};
-use prometheus::core::Collector;
 use std::net::SocketAddr;
 
 #[cfg(not(target_os = "unknown"))]
