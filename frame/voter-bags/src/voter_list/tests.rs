@@ -610,4 +610,98 @@ mod bags {
 
 mod node {
 	use super::*;
+
+	#[test]
+	fn is_misplaced_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let node_31 = Node::<Runtime>::get(10, &31).unwrap();
+
+			// given
+			assert_eq!(node_31.bag_upper, 10);
+
+			// then
+			assert!(!node_31.is_misplaced(0));
+			assert!(!node_31.is_misplaced(9));
+			assert!(!node_31.is_misplaced(10));
+			assert!(node_31.is_misplaced(11));
+		});
+	}
+
+	// TODO a test similiar to this should exist in the staking pallet
+	// #[test]
+	// fn voting_data_works() {
+	// 	ExtBuilder::default().build_and_execute_without_check_count(|| {
+	// 		let weight_of = Staking::weight_of_fn();
+
+	// 		// add nominator with no targets
+	// 		bond_nominator(42, 43, 1_000, vec![11]);
+
+	// 		// given
+	// 		assert_eq!(
+	// 			get_voter_list_as_voters(),
+	// 			vec![
+	// 				Voter::validator(11),
+	// 				Voter::validator(21),
+	// 				Voter::nominator(101),
+	// 				Voter::nominator(42),
+	// 				Voter::validator(31),
+	// 			]
+	// 		);
+	// 		assert_eq!(active_era(), 0);
+
+	// 		let slashing_spans =
+	// 			<Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
+	// 		assert_eq!(slashing_spans.keys().len(), 0); // no pre-existing slashing spans
+
+	// 		let node_11 = Node::<Test>::get(10, &11).unwrap();
+	// 		assert_eq!(
+	// 			node_11.voting_data(&weight_of, &slashing_spans).unwrap(),
+	// 			(11, 1_000, vec![11])
+	// 		);
+
+	// 		// getting data for a nominators with 0 slashed targets
+	// 		let node_101 = Node::<Test>::get(1_000, &101).unwrap();
+	// 		assert_eq!(
+	// 			node_101.voting_data(&weight_of, &slashing_spans).unwrap(),
+	// 			(101, 500, vec![11, 21])
+	// 		);
+	// 		let node_42 = Node::<Test>::get(10, &42).unwrap();
+	// 		assert_eq!(
+	// 			node_42.voting_data(&weight_of, &slashing_spans).unwrap(),
+	// 			(42, 1_000, vec![11])
+	// 		);
+
+	// 		// roll ahead an era so any slashes will be after the previous nominations
+	// 		start_active_era(1);
+
+	// 		// when a validator gets a slash,
+	// 		add_slash(&11);
+	// 		let slashing_spans =
+	// 			<Staking as crate::Store>::SlashingSpans::iter().collect::<BTreeMap<_, _>>();
+
+	// 		assert_eq!(slashing_spans.keys().cloned().collect::<Vec<_>>(), vec![11, 42, 101]);
+	// 		// then its node no longer exists
+	// 		assert_eq!(
+	// 			get_voter_list_as_voters(),
+	// 			vec![
+	// 				Voter::validator(21),
+	// 				Voter::nominator(101),
+	// 				Voter::nominator(42),
+	// 				Voter::validator(31),
+	// 			]
+	// 		);
+	// 		// and its nominators no longer have it as a target
+	// 		let node_101 = Node::<Test>::get(10, &101).unwrap();
+	// 		assert_eq!(
+	// 			node_101.voting_data(&weight_of, &slashing_spans),
+	// 			Some((101, 475, vec![21])),
+	// 		);
+
+	// 		let node_42 = Node::<Test>::get(10, &42).unwrap();
+	// 		assert_eq!(
+	// 			node_42.voting_data(&weight_of, &slashing_spans),
+	// 			None, // no voting data since its 1 target has been slashed since nominating
+	// 		);
+	// 	});
+	// }
 }
