@@ -220,8 +220,7 @@ impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
 	}
 
 	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
-		// TODO: change the interface to not use ref.
-		VoterList::<T>::insert(voter.clone(), weight);
+		VoterList::<T>::insert(voter, weight);
 	}
 
 	/// Hook for updating a voter in the list (unused).

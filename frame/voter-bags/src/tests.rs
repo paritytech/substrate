@@ -1,7 +1,6 @@
 use super::*;
 use mock::*;
 
-
 mod voter_bag_list_provider {
 	use super::*;
 

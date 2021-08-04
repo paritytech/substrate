@@ -19,7 +19,7 @@
 
 use crate::Config;
 use codec::{Decode, Encode};
-use frame_election_provider_support::VoteWeight;
+use frame_election_provider_support::{StakingVoteWeight, VoteWeight};
 use frame_support::{ensure, traits::Get, DefaultNoBound};
 use sp_runtime::SaturatedConversion;
 use sp_std::{
@@ -28,7 +28,6 @@ use sp_std::{
 	iter,
 	marker::PhantomData,
 };
-use frame_election_provider_support::StakingVoteWeight;
 
 /// Given a certain vote weight, which bag should contain this voter?
 ///
@@ -68,6 +67,7 @@ pub struct VoterList<T: Config>(PhantomData<T>);
 
 impl<T: Config> VoterList<T> {
 	/// Remove all data associated with the voter list from storage.
+	#[cfg(test)]
 	pub fn clear() {
 		crate::CounterForVoters::<T>::kill();
 		crate::VoterBagFor::<T>::remove_all(None);
@@ -231,7 +231,12 @@ impl<T: Config> VoterList<T> {
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list.
+	// WARNING: This does not check if the inserted AccountId is duplicate with
+	// others in any bag.
 	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
+		// TODO: can check if this voter exists as a node by checking if `voter` exists
+		// in the nodes map and return early if it does.
+
 		let bag_weight = notional_bag_for::<T>(weight);
 		crate::log!(
 			debug,
@@ -391,7 +396,7 @@ pub struct Bag<T: Config> {
 
 impl<T: Config> Bag<T> {
 	/// Get a bag by its upper vote weight.
-	pub fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
+	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
 		debug_assert!(
 			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
@@ -403,7 +408,7 @@ impl<T: Config> Bag<T> {
 	}
 
 	/// Get a bag by its upper vote weight or make it, appropriately initialized.
-	pub fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
+	fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
 		debug_assert!(
 			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
@@ -412,12 +417,12 @@ impl<T: Config> Bag<T> {
 	}
 
 	/// `True` if self is empty.
-	pub fn is_empty(&self) -> bool {
+	fn is_empty(&self) -> bool {
 		self.head.is_none() && self.tail.is_none()
 	}
 
 	/// Put the bag back into storage.
-	pub fn put(self) {
+	fn put(self) {
 		if self.is_empty() {
 			crate::VoterBags::<T>::remove(self.bag_upper);
 		} else {
@@ -426,17 +431,17 @@ impl<T: Config> Bag<T> {
 	}
 
 	/// Get the head node in this bag.
-	pub fn head(&self) -> Option<Node<T>> {
+	fn head(&self) -> Option<Node<T>> {
 		self.head.as_ref().and_then(|id| Node::get(self.bag_upper, id))
 	}
 
 	/// Get the tail node in this bag.
-	pub fn tail(&self) -> Option<Node<T>> {
+	fn tail(&self) -> Option<Node<T>> {
 		self.tail.as_ref().and_then(|id| Node::get(self.bag_upper, id))
 	}
 
 	/// Iterate over the nodes in this bag.
-	pub fn iter(&self) -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
@@ -576,7 +581,7 @@ pub struct Node<T: Config> {
 
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
-	pub fn get(bag_upper: VoteWeight, account_id: &T::AccountId) -> Option<Node<T>> {
+	fn get(bag_upper: VoteWeight, account_id: &T::AccountId) -> Option<Node<T>> {
 		debug_assert!(
 			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
@@ -591,41 +596,152 @@ impl<T: Config> Node<T> {
 	///
 	/// Note that this must perform two storage lookups: one to identify which bag is appropriate,
 	/// and another to actually fetch the node.
-	pub fn from_id(account_id: &T::AccountId) -> Option<Node<T>> {
+	pub(crate) fn from_id(account_id: &T::AccountId) -> Option<Node<T>> {
 		let bag = current_bag_for::<T>(account_id)?;
 		Self::get(bag, account_id)
 	}
 
 	/// Get a node by account id, assuming it's in the same bag as this node.
-	pub fn in_bag(&self, account_id: &T::AccountId) -> Option<Node<T>> {
+	fn in_bag(&self, account_id: &T::AccountId) -> Option<Node<T>> {
 		Self::get(self.bag_upper, account_id)
 	}
 
 	/// Put the node back into storage.
-	pub fn put(self) {
+	fn put(self) {
 		crate::VoterNodes::<T>::insert(self.id.clone(), self);
 	}
 
 	/// Get the previous node in the bag.
-	pub fn prev(&self) -> Option<Node<T>> {
+	fn prev(&self) -> Option<Node<T>> {
 		self.prev.as_ref().and_then(|id| self.in_bag(id))
 	}
 
 	/// Get the next node in the bag.
-	pub fn next(&self) -> Option<Node<T>> {
+	fn next(&self) -> Option<Node<T>> {
 		self.next.as_ref().and_then(|id| self.in_bag(id))
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
 	/// Get the underlying voter.
-	pub fn id(&self) -> &T::AccountId {
+	pub(crate) fn id(&self) -> &T::AccountId {
 		&self.id
 	}
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+	use super::*;
+	use crate::{
+		mock::{ext_builder::*, test_utils::*, *},
+		CounterForVoters, VoterBagFor, VoterBags, VoterNodes,
+	};
+	use frame_support::{assert_ok, assert_storage_noop};
+
+	#[test]
+	fn setup_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// syntactic sugar to create a raw node
+			let node = |id, prev, next| Node::<Runtime> { id, prev, next, bag_upper: 0 };
+
+			assert_eq!(CounterForVoters::<Runtime>::get(), 4);
+			assert_eq!(VoterBagFor::<Runtime>::iter().count(), 4);
+			assert_eq!(VoterNodes::<Runtime>::iter().count(), 4);
+			assert_eq!(VoterBags::<Runtime>::iter().count(), 2);
+
+			// the state of the bags is as expected
+			assert_eq!(
+				VoterBags::<Runtime>::get(10).unwrap(),
+				Bag::<Runtime> { head: Some(31), tail: Some(31), bag_upper: 0 }
+			);
+			assert_eq!(
+				VoterBags::<Runtime>::get(1_000).unwrap(),
+				Bag::<Runtime> { head: Some(11), tail: Some(101), bag_upper: 0 }
+			);
+
+			assert_eq!(VoterBagFor::<Runtime>::get(11).unwrap(), 1000);
+			assert_eq!(
+				VoterNodes::<Runtime>::get(11).unwrap(),
+				node(11, None, Some(21))
+			);
+
+			assert_eq!(VoterBagFor::<Runtime>::get(21).unwrap(), 1000);
+			assert_eq!(
+				VoterNodes::<Runtime>::get(21).unwrap(),
+				node(21, Some(11), Some(101))
+			);
+
+			assert_eq!(VoterBagFor::<Runtime>::get(31).unwrap(), 10);
+			assert_eq!(
+				VoterNodes::<Runtime>::get(31).unwrap(),
+				node(31, None, None)
+			);
+
+			assert_eq!(VoterBagFor::<Runtime>::get(101).unwrap(), 1000);
+			assert_eq!(
+				VoterNodes::<Runtime>::get(101).unwrap(),
+				node(101, Some(21), None)
+			);
+
+			// non-existent id does not have a storage footprint
+			assert_eq!(VoterBagFor::<Runtime>::get(41), None);
+			assert_eq!(VoterNodes::<Runtime>::get(41), None);
+
+			// iteration of the bags would yield:
+			assert_eq!(
+				VoterList::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>(),
+				vec![11, 21, 101, 31],
+				//   ^^ note the order of insertion in genesis!
+			);
+
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
+		});
+	}
+
+		#[test]
+	fn notional_bag_for_works() {
+		// under a threshold gives the next threshold.
+		assert_eq!(notional_bag_for::<Runtime>(0), 10);
+		assert_eq!(notional_bag_for::<Runtime>(9), 10);
+		assert_eq!(notional_bag_for::<Runtime>(11), 20);
+
+		// at a threshold gives that threshold.
+		assert_eq!(notional_bag_for::<Runtime>(10), 10);
+
+		let max_explicit_threshold = *<Runtime as Config>::VoterBagThresholds::get().last().unwrap();
+		assert_eq!(max_explicit_threshold, 10_000);
+		// if the max explicit threshold is less than VoteWeight::MAX,
+		assert!(VoteWeight::MAX > max_explicit_threshold);
+		// anything above it will belong to the VoteWeight::MAX bag.
+		assert_eq!(notional_bag_for::<Runtime>(max_explicit_threshold + 1), VoteWeight::MAX);
+	}
+	mod bags {
+		#[test]
+		fn get_works() {}
+
+		#[test]
+		fn remove_last_voter_in_bags_cleans_bag() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given
+				assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
+
+				// Bump 31 to a bigger bag
+				VoterList::<Runtime>::remove(31);
+				VoterList::<Runtime>::insert(31);
+
+				// then the bag with bound 10 is wiped from storage.
+				assert_eq!(get_bags(), vec![(1000, vec![11, 21, 101]), (10_000, vec![31])]);
+
+				// and can be recreated again as needed
+				bond_validator(77, 777, 10);
+				assert_eq!(
+					get_bags(),
+					vec![(10, vec![77]), (1000, vec![11, 21, 101]), (10_000, vec![31])]
+				);
+			});
+		}
+	}
+}

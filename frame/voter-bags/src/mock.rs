@@ -73,3 +73,58 @@ frame_support::construct_runtime!(
 		VoterBags: crate::{Pallet, Call, Storage, Event<T>},
 	}
 );
+
+pub(crate) mod ext_builder {
+	use super::*;
+
+	/// Default AccountIds and their weights.
+	const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
+		[(31, 10), (11, 1_000), (21, 1_000), (101, 1_000)];
+	#[derive(Default)]
+	pub(crate) struct ExtBuilder {
+		ids: Vec<(AccountId, VoteWeight)>,
+	}
+
+	impl ExtBuilder {
+		/// Add some AccountIds to insert into `VoterList`.
+		pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
+			self.ids = ids;
+			self
+		}
+
+		pub(crate) fn build(self) -> sp_io::TestExternalities {
+			sp_tracing::try_init_simple();
+			let storage =
+				frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+			let mut ext = sp_io::TestExternalities::from(storage);
+			ext.execute_with(|| {
+				for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
+					VoterList::<Runtime>::insert(*id, *weight);
+				}
+			});
+
+			ext
+		}
+
+		pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
+			self.build().execute_with(test);
+		}
+	}
+}
+
+pub(crate) mod test_utils {
+	use super::*;
+	use voter_list::Bag;
+
+	/// Returns the nodes of all non-empty bags.
+	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
+		VoterBagThresholds::get()
+			.into_iter()
+			.filter_map(|t| {
+				Bag::<Runtime>::get(*t)
+					.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
+			})
+			.collect::<Vec<_>>()
+	}
+}
