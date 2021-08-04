@@ -311,7 +311,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 							value: 100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
 						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark { _remark: Vec::new() }),
+					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,

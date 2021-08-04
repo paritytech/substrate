@@ -43,7 +43,7 @@ fn should_submit_unsigned_transaction() {
 		};
 
 		let call =
-			pallet_im_online::Call::heartbeat { heartbeat: heartbeat_data, _signature: signature };
+			pallet_im_online::Call::heartbeat { heartbeat: heartbeat_data, signature };
 		SubmitTransaction::<Runtime, pallet_im_online::Call<Runtime>>::submit_unsigned_transaction(
 			call.into(),
 		)

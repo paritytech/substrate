@@ -39,7 +39,7 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 		T::MaxCalls::get().saturating_sub(1) as usize
 	];
 	// Last call will be the match for worst case scenario.
-	calls.push(frame_system::Call::<T>::remark { _remark: vec![] }.into());
+	calls.push(frame_system::Call::<T>::remark { remark: vec![] }.into());
 	let origin = T::ManagerOrigin::successful_origin();
 	Lottery::<T>::set_calls(origin.clone(), calls)?;
 	Lottery::<T>::start_lottery(origin, price, length, delay, repeat)?;
@@ -64,7 +64,7 @@ benchmarks! {
 		);
 		Participants::<T>::insert(&caller, already_called);
 
-		let call = frame_system::Call::<T>::remark { _remark: vec![] };
+		let call = frame_system::Call::<T>::remark { remark: vec![] };
 	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
 	verify {
 		assert_eq!(TicketsCount::<T>::get(), 1);
@@ -72,7 +72,7 @@ benchmarks! {
 
 	set_calls {
 		let n in 0 .. T::MaxCalls::get() as u32;
-		let calls = vec![frame_system::Call::<T>::remark { _remark: vec![] }.into(); n as usize];
+		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
 
 		let call = Call::<T>::set_calls { calls };
 		let origin = T::ManagerOrigin::successful_origin();
@@ -115,7 +115,7 @@ benchmarks! {
 		let lottery_account = Lottery::<T>::account_id();
 		T::Currency::make_free_balance_be(&lottery_account, T::Currency::minimum_balance() * 10u32.into());
 		// Buy a ticket
-		let call = frame_system::Call::<T>::remark { _remark: vec![] };
+		let call = frame_system::Call::<T>::remark { remark: vec![] };
 		Lottery::<T>::buy_ticket(RawOrigin::Signed(winner.clone()).into(), Box::new(call.into()))?;
 		// Kill user account for worst case
 		T::Currency::make_free_balance_be(&winner, 0u32.into());
@@ -146,7 +146,7 @@ benchmarks! {
 		let lottery_account = Lottery::<T>::account_id();
 		T::Currency::make_free_balance_be(&lottery_account, T::Currency::minimum_balance() * 10u32.into());
 		// Buy a ticket
-		let call = frame_system::Call::<T>::remark { _remark: vec![] };
+		let call = frame_system::Call::<T>::remark { remark: vec![] };
 		Lottery::<T>::buy_ticket(RawOrigin::Signed(winner.clone()).into(), Box::new(call.into()))?;
 		// Kill user account for worst case
 		T::Currency::make_free_balance_be(&winner, 0u32.into());

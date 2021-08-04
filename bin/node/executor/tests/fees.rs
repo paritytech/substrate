@@ -81,7 +81,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::System(frame_system::Call::remark { _remark: vec![0; 1] }),
+				function: Call::System(frame_system::Call::remark { remark: vec![0; 1] }),
 			},
 		],
 		(time2 / SLOT_DURATION).into(),

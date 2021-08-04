@@ -81,7 +81,7 @@ fn sudo_unchecked_weight_basics() {
 
 		// Controls the dispatched weight.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
-		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight { call, _weight: 1_000 };
+		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight { call, weight: 1_000 };
 		let info = sudo_unchecked_weight_call.get_dispatch_info();
 		assert_eq!(info.weight, 1_000);
 	});

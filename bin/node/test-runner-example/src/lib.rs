@@ -108,7 +108,7 @@ mod tests {
 			let alice = MultiSigner::from(Alice.public()).into_account();
 			let _hash = node
 				.submit_extrinsic(
-					frame_system::Call::remark { _remark: (b"hello world").to_vec() },
+					frame_system::Call::remark { remark: (b"hello world").to_vec() },
 					alice,
 				)
 				.await

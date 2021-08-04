@@ -60,6 +60,42 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|method| method.args.iter().map(|(_, name, _)| name.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
+	let args_name_stripped = methods
+		.iter()
+		.map(|method| {
+			method
+				.args
+				.iter()
+				.map(|(_, name, _)| {
+					syn::Ident::new(&name.to_string().trim_start_matches('_'), name.span())
+				})
+				.collect::<Vec<_>>()
+		})
+		.collect::<Vec<_>>();
+
+	let make_args_name_pattern = |ref_tok| {
+		args_name
+			.iter()
+			.zip(args_name_stripped.iter())
+			.map(|(args_name, args_name_stripped)| {
+				args_name
+					.iter()
+					.zip(args_name_stripped)
+					.map(|(args_name, args_name_stripped)| {
+						if args_name == args_name_stripped {
+							quote::quote!( #ref_tok #args_name )
+						} else {
+							quote::quote!( #args_name_stripped: #ref_tok #args_name )
+						}
+					})
+					.collect::<Vec<_>>()
+			})
+			.collect::<Vec<_>>()
+	};
+
+	let args_name_pattern = make_args_name_pattern(None);
+	let args_name_pattern_ref = make_args_name_pattern(Some(quote::quote!(ref)));
+
 	let args_type = methods
 		.iter()
 		.map(|method| method.args.iter().map(|(_, _, type_)| type_.clone()).collect::<Vec<_>>())
@@ -139,7 +175,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#(
 				#( #[doc = #fn_doc] )*
 				#fn_name {
-					#( #args_compact_attr #args_name: #args_type ),*
+					#( #args_compact_attr #args_name_stripped: #args_type ),*
 				},
 			)*
 		}
@@ -148,10 +184,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#(
 				#[doc = #new_call_variant_doc]
 				pub fn #new_call_variant_fn_name(
-					#( #args_name: #args_type ),*
+					#( #args_name_stripped: #args_type ),*
 				) -> Self {
 					Self::#fn_name {
-						#( #args_name ),*
+						#( #args_name_stripped ),*
 					}
 				}
 			)*
@@ -164,7 +200,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			fn get_dispatch_info(&self) -> #frame_support::dispatch::DispatchInfo {
 				match *self {
 					#(
-						Self::#fn_name { #( ref #args_name, )* } => {
+						Self::#fn_name { #( #args_name_pattern_ref, )* } => {
 							let __pallet_base_weight = #fn_weight;
 
 							let __pallet_weight = <
@@ -219,7 +255,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
-						Self::#fn_name { #( #args_name, )* } => {
+						Self::#fn_name { #( #args_name_pattern, )* } => {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);

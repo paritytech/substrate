@@ -1103,7 +1103,7 @@ mod tests {
 	}
 
 	fn make_proposal(value: u64) -> Call {
-		Call::System(frame_system::Call::remark { _remark: value.encode() })
+		Call::System(frame_system::Call::remark { remark: value.encode() })
 	}
 
 	#[test]

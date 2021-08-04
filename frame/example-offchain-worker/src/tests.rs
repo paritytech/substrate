@@ -275,7 +275,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 		assert_eq!(tx.signature, None);
 		if let Call::Example(crate::Call::submit_price_unsigned_with_signed_payload {
 			price_payload: body,
-			_signature: signature,
+			signature,
 		}) = tx.call
 		{
 			assert_eq!(body, price_payload);
@@ -335,7 +335,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 		assert_eq!(tx.signature, None);
 		if let Call::Example(crate::Call::submit_price_unsigned_with_signed_payload {
 			price_payload: body,
-			_signature: signature,
+			signature,
 		}) = tx.call
 		{
 			assert_eq!(body, price_payload);
@@ -375,7 +375,7 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 		assert_eq!(tx.signature, None);
 		assert_eq!(
 			tx.call,
-			Call::Example(crate::Call::submit_price_unsigned { _block_number: 1, price: 15523 })
+			Call::Example(crate::Call::submit_price_unsigned { block_number: 1, price: 15523 })
 		);
 	});
 }

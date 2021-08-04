@@ -132,7 +132,7 @@ fn heartbeat(
 
 	ImOnline::pre_dispatch(&crate::Call::heartbeat {
 		heartbeat: heartbeat.clone(),
-		_signature: signature.clone(),
+		signature: signature.clone(),
 	})
 	.map_err(|e| match e {
 		TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>

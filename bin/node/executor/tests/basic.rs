@@ -169,7 +169,7 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(nonce, 0))),
-				function: Call::System(frame_system::Call::remark { _remark: vec![0; size] }),
+				function: Call::System(frame_system::Call::remark { remark: vec![0; size] }),
 			},
 		],
 		(time * 1000 / SLOT_DURATION).into(),
