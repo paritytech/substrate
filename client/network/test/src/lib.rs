@@ -369,7 +369,7 @@ impl<D> Peer<D> {
 					};
 					builder.push(transfer.into_signed_tx()).unwrap();
 					nonce = nonce + 1;
-					builder.build().unwrap().block
+					builder.build(Default::default()).unwrap().block
 				},
 				headers_only
 			)
@@ -378,7 +378,7 @@ impl<D> Peer<D> {
 				at,
 				count,
 				BlockOrigin::File,
-				|builder| builder.build().unwrap().block,
+				|builder| builder.build(Default::default()).unwrap().block,
 				headers_only,
 			)
 		}
@@ -387,7 +387,7 @@ impl<D> Peer<D> {
 	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-			builder.build().unwrap().block
+			builder.build(Default::default()).unwrap().block
 		})
 	}
 
