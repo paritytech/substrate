@@ -173,10 +173,10 @@ macro_rules! whitelist {
 /// #[test]
 /// fn test_benchmarks() {
 ///   new_test_ext().execute_with(|| {
-///     assert_ok!(test_benchmark_dummy::<Test>());
-///     assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
-///     assert_ok!(test_benchmark_sort_vector::<Test>());
-///     assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
+///     assert_ok!(Pallet::<Test>::test_benchmark_dummy());
+///     assert_err!(Pallet::<Test>::test_benchmark_other_name(), "Bad origin");
+///     assert_ok!(Pallet::<Test>::test_benchmark_sort_vector());
+///     assert_err!(Pallet::<Test>::test_benchmark_broken_benchmark(), "You forgot to sort!");
 ///   });
 /// }
 /// ```
