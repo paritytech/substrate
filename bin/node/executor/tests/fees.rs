@@ -61,7 +61,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::System(frame_system::Call::fill_block {
-					_ratio: Perbill::from_percent(60),
+					ratio: Perbill::from_percent(60),
 				}),
 			},
 		],
