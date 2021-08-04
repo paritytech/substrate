@@ -51,17 +51,20 @@ pub use wasmi;
 
 pub use sc_executor_common::{error, sandbox};
 
-/// Provides runtime information.
-pub trait RuntimeInfo {
-	/// Native runtime information.
-	fn native_version(&self) -> &NativeVersion;
-
+/// Extracts the runtime version of a given runtime code.
+pub trait RuntimeVersionOf {
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
 	fn runtime_version(
 		&self,
 		ext: &mut dyn Externalities,
 		runtime_code: &sp_core::traits::RuntimeCode,
 	) -> error::Result<RuntimeVersion>;
+}
+
+/// Provides native runtime information.
+pub trait NativeRuntimeInfo {
+	/// Native runtime information.
+	fn native_version(&self) -> &NativeVersion;
 }
 
 #[cfg(test)]

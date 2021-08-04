@@ -106,7 +106,4 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
-
-	/// Get runtime version if supported.
-	fn native_runtime_version(&self) -> Option<&NativeVersion>;
 }
