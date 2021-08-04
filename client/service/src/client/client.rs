@@ -823,7 +823,7 @@ where
 						}
 						Some((main_sc, child_sc))
 					},
-					sp_consensus::StorageChanges::Import(changes) => {
+					sc_consensus::StorageChanges::Import(changes) => {
 						let mut storage = sp_storage::Storage::default();
 						for state in changes.state.0.into_iter() {
 							if state.parent_storage_keys.len() == 0 && state.state_root.len() == 0 {
