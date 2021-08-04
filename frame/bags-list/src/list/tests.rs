@@ -63,7 +63,7 @@ fn notional_bag_for_works() {
 	// at a threshold gives that threshold.
 	assert_eq!(notional_bag_for::<Runtime>(10), 10);
 
-	let max_explicit_threshold = *<Runtime as Config>::VoterBagThresholds::get().last().unwrap();
+	let max_explicit_threshold = *<Runtime as Config>::BagThresholds::get().last().unwrap();
 	assert_eq!(max_explicit_threshold, 10_000);
 	// if the max explicit threshold is less than VoteWeight::MAX,
 	assert!(VoteWeight::MAX > max_explicit_threshold);
@@ -332,7 +332,7 @@ mod bags {
 			check_bag(existing_bag_uppers[1], Some(11), Some(101), vec![11, 21, 101]);
 
 			// and all other uppers don't get bags.
-			<Runtime as Config>::VoterBagThresholds::get()
+			<Runtime as Config>::BagThresholds::get()
 				.iter()
 				.chain(iter::once(&VoteWeight::MAX))
 				.filter(|bag_upper| !existing_bag_uppers.contains(bag_upper))

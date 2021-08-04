@@ -103,11 +103,11 @@ pub mod pallet {
 		///
 		/// # Examples
 		///
-		/// - If `VoterBagThresholds::get().is_empty()`, then all voters are put into the same bag,
+		/// - If `BagThresholds::get().is_empty()`, then all voters are put into the same bag,
 		///   and iteration is strictly in insertion order.
-		/// - If `VoterBagThresholds::get().len() == 64`, and the thresholds are determined
+		/// - If `BagThresholds::get().len() == 64`, and the thresholds are determined
 		///   according to the procedure given above, then the constant ratio is equal to 2.
-		/// - If `VoterBagThresholds::get().len() == 200`, and the thresholds are determined
+		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined
 		///   according to the procedure given above, then the constant ratio is approximately equal
 		///   to 1.248.
 		/// - If the threshold list begins `[1, 2, 3, ...]`, then a voter with weight 0 or 1 will
@@ -119,7 +119,10 @@ pub mod pallet {
 		/// With that `List::migrate` can be called, which will perform the appropriate
 		/// migration.
 		#[pallet::constant]
-		type VoterBagThresholds: Get<&'static [VoteWeight]>;
+		type BagThresholds: Get<&'static [VoteWeight]>;
+
+		// TODO VoteWeight type could be made generic?
+		// TODO Node.id type could be made generic?
 	}
 
 	/// How many voters are registered.
@@ -181,7 +184,7 @@ pub mod pallet {
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(|| {
 					assert!(
-						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+						T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
 						"Voter bag thresholds must strictly increase",
 					);
 				});

@@ -52,12 +52,12 @@ impl frame_system::Config for Runtime {
 const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 
 parameter_types! {
-	pub const VoterBagThresholds: &'static [VoteWeight] = &THRESHOLDS;
+	pub const BagThresholds: &'static [VoteWeight] = &THRESHOLDS;
 }
 
 impl crate::Config for Runtime {
 	type Event = Event;
-	type VoterBagThresholds = VoterBagThresholds;
+	type BagThresholds = BagThresholds;
 	type StakingVoteWeight = StakingMock;
 }
 
@@ -119,7 +119,7 @@ pub(crate) mod test_utils {
 
 	/// Returns the nodes of all non-empty bags.
 	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
-		VoterBagThresholds::get()
+		BagThresholds::get()
 			.into_iter()
 			.filter_map(|t| {
 				Bag::<Runtime>::get(*t)

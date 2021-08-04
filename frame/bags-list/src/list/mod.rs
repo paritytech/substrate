@@ -35,16 +35,16 @@ mod tests;
 /// Given a certain vote weight, which bag should contain this voter?
 ///
 /// Bags are identified by their upper threshold; the value returned by this function is guaranteed
-/// to be a member of `T::VoterBagThresholds`.
+/// to be a member of `T::BagThresholds`.
 ///
-/// This is used instead of a simpler scheme, such as the index within `T::VoterBagThresholds`,
+/// This is used instead of a simpler scheme, such as the index within `T::BagThresholds`,
 /// because in the event that bags are inserted or deleted, the number of affected voters which need
 /// to be migrated is smaller.
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
 fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
-	let thresholds = T::VoterBagThresholds::get();
+	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
@@ -88,11 +88,11 @@ impl<T: Config> List<T> {
 	///
 	/// - `old_thresholds` is the previous list of thresholds.
 	/// - All `bag_upper` currently in storage are members of `old_thresholds`.
-	/// - `T::VoterBagThresholds` has already been updated.
+	/// - `T::BagThresholds` has already been updated.
 	///
 	/// Postconditions:
 	///
-	/// - All `bag_upper` currently in storage are members of `T::VoterBagThresholds`.
+	/// - All `bag_upper` currently in storage are members of `T::BagThresholds`.
 	/// - No voter is changed unless required to by the difference between the old threshold list
 	///   and the new.
 	/// - Voters whose bags change at all are implicitly rebagged into the appropriate bag in the
@@ -105,7 +105,7 @@ impl<T: Config> List<T> {
 		);
 
 		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
-		let new_set: BTreeSet<_> = T::VoterBagThresholds::get().iter().copied().collect();
+		let new_set: BTreeSet<_> = T::BagThresholds::get().iter().copied().collect();
 
 		let mut affected_accounts = BTreeSet::new();
 		let mut affected_old_bags = BTreeSet::new();
@@ -158,7 +158,7 @@ impl<T: Config> List<T> {
 
 		debug_assert!(
 			{
-				let thresholds = T::VoterBagThresholds::get();
+				let thresholds = T::BagThresholds::get();
 				crate::VoterBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
 			},
 			"all `bag_upper` in storage must be members of the new thresholds",
@@ -202,13 +202,13 @@ impl<T: Config> List<T> {
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
 	/// `.take(n)`.
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
-		// We need a touch of special handling here: because we permit `T::VoterBagThresholds` to
+		// We need a touch of special handling here: because we permit `T::BagThresholds` to
 		// omit the final bound, we need to ensure that we explicitly include that threshold in the
 		// list.
 		//
 		// It's important to retain the ability to omit the final bound because it makes tests much
-		// easier; they can just configure `type VoterBagThresholds = ()`.
-		let thresholds = T::VoterBagThresholds::get();
+		// easier; they can just configure `type BagThresholds = ()`.
+		let thresholds = T::BagThresholds::get();
 		let iter = thresholds.iter().copied();
 		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
 			// in the event that they included it, we can just pass the iterator through unchanged.
@@ -369,7 +369,7 @@ impl<T: Config> List<T> {
 		// let nominators = staking::CounterForNominators::<T>::get();
 		// ensure!(validators + nominators == stored_count, "validators + nominators != voters");
 
-		let _ = T::VoterBagThresholds::get()
+		let _ = T::BagThresholds::get()
 			.into_iter()
 			.map(|t| Bag::<T>::get(*t).unwrap_or_default())
 			.map(|b| b.sanity_check())
@@ -406,7 +406,7 @@ impl<T: Config> Bag<T> {
 	/// Get a bag by its upper vote weight.
 	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
 		debug_assert!(
-			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
 		crate::VoterBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
@@ -418,7 +418,7 @@ impl<T: Config> Bag<T> {
 	/// Get a bag by its upper vote weight or make it, appropriately initialized.
 	fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
 		debug_assert!(
-			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
@@ -591,7 +591,7 @@ impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	fn get(bag_upper: VoteWeight, account_id: &T::AccountId) -> Option<Node<T>> {
 		debug_assert!(
-			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
 		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
