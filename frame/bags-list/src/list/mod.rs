@@ -69,11 +69,27 @@ pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
 	/// Remove all data associated with the voter list from storage.
-	pub fn clear() {
+	// TODO @kian can we just move this code block to withing `generate` ?
+	fn clear() {
 		crate::CounterForVoters::<T>::kill();
 		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
 		crate::VoterNodes::<T>::remove_all(None);
+	}
+
+	/// Regenerate voter data from the given ids.
+	///
+	/// This is expensive and should only ever be performed during a migration, never during
+	/// consensus.
+	///
+	/// Returns the number of voters migrated.
+	#[allow(dead_code)]
+	pub fn regenerate(
+		all: impl IntoIterator<Item = T::AccountId>,
+		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) {
+		Self::clear();
+		Self::insert_many(all, weight_of);
 	}
 
 	/// Migrate the voter list from one set of thresholds to another.
@@ -166,21 +182,6 @@ impl<T: Config> List<T> {
 		num_affected
 	}
 
-	/// Regenerate voter data from the `Nominators` and `Validators` storage items.
-	///
-	/// This is expensive and should only ever be performed during a migration, never during
-	/// consensus.
-	///
-	/// Returns the number of voters migrated.
-	#[allow(dead_code)]
-	pub fn regenerate(
-		all: impl IntoIterator<Item = T::AccountId>,
-		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
-	) {
-		Self::clear();
-		Self::insert_many(all, weight_of);
-	}
-
 	/// Iterate over all nodes in all bags in the voter list.
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
@@ -204,9 +205,15 @@ impl<T: Config> List<T> {
 		iter.filter_map(Bag::get).flat_map(|bag| bag.iter())
 	}
 
-	/// Insert several voters into the appropriate bags in the voter list.
+	/// Insert several voters into the appropriate bags in the voter list. Does not check for
+	/// duplicates.
 	///
 	/// This is more efficient than repeated calls to `Self::insert`.
+	///
+	/// # ⚠️ WARNING ⚠️
+	///
+	/// Do not insert an id that already exists in the list; doing so can result in catastrophic
+	/// failure of your blockchain, including entering into an infinite loop during block execution.
 	fn insert_many(
 		voters: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
@@ -217,8 +224,12 @@ impl<T: Config> List<T> {
 		});
 	}
 
-	/// Insert a new voter into the appropriate bag in the voter list.
-	// WARNING: This does not check if the inserted AccountId is duplicate with others in any bag.
+	/// Insert a new voter into the appropriate bag in the voter list. Does not check for duplicates.
+	///
+	/// # ⚠️ WARNING ⚠️
+	///
+	/// Do not insert an id that already exists in the list; doing so can result in catastrophic
+	/// failure of your blockchain, including entering into an infinite loop during block execution.
 	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
 		// TODO: can check if this voter exists as a node by checking if `voter` exists in the nodes
 		// map and return early if it does.
@@ -244,14 +255,14 @@ impl<T: Config> List<T> {
 	}
 
 	/// Remove a voter (by id) from the voter list.
-	pub fn remove(voter: &T::AccountId) {
+	pub(crate) fn remove(voter: &T::AccountId) {
 		Self::remove_many(sp_std::iter::once(voter));
 	}
 
 	/// Remove many voters (by id) from the voter list.
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
-	pub fn remove_many<'a>(voters: impl IntoIterator<Item = &'a T::AccountId>) {
+	fn remove_many<'a>(voters: impl IntoIterator<Item = &'a T::AccountId>) {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
@@ -292,7 +303,7 @@ impl<T: Config> List<T> {
 	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
 	/// [`self.insert`]. However, given large quantities of voters to move, it may be more efficient
 	/// to call [`self.remove_many`] followed by [`self.insert_many`].
-	pub fn update_position_for(
+	pub(crate) fn update_position_for(
 		mut node: Node<T>,
 		new_weight: VoteWeight,
 	) -> Option<(VoteWeight, VoteWeight)> {

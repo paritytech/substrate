@@ -18,10 +18,16 @@
 //! A semi-sorted list, where items hold an `id` and `weight`.
 //! TODO items will also have a generic `data` field
 //!
+//! # ⚠️ WARNING ⚠️
+//!
+//! Do not insert an id that already exists in the list; doing so can result in catastrophic failure
+//! of your blockchain, including entering into an infinite loop during block execution.
+//!
 //! # Goals
 //!
-//! The data structure exposed by this pallet aims to be optimized for
-//! - insertions and removal
+//! The data structure exposed by this pallet aims to be optimized for:
+//!
+//! - insertions and removals
 //! - iteration over the top* N items by weight, where the precise ordering of items doesn't
 //!   particularly matter.
 //!
@@ -232,6 +238,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		CounterForVoters::<T>::get()
 	}
 
+	/// # ⚠️ WARNING ⚠️
+	///
+	/// Do not insert an id that already exists in the list; doing so can result in catastrophic
+	/// failure of your blockchain, including entering into an infinite loop during block execution.
 	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
 		List::<T>::insert(voter, weight);
 	}
