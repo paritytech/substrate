@@ -666,6 +666,7 @@ unleash-to-crates-io:
 deploy-prometheus-alerting-rules:
   stage:                           deploy
   needs:
+    # It's OK running this job right after test-prometheus-alerting-rules passes
     - job:                         test-prometheus-alerting-rules
       artifacts:                   false
   allow_failure:                   true
@@ -692,8 +693,9 @@ trigger-simnet:
       when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
-  needs:
-    - job:                         publish-docker-substrate
+  # FIXME: check if it gets an artifact from publish-docker-substrate
+  # needs:
+  #   - job:                         publish-docker-substrate
   # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
