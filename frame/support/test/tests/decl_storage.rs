@@ -289,12 +289,10 @@ mod tests {
 				StorageEntryMetadata {
 					name: "DOUBLEMAP",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						hasher: StorageHasher::Blake2_128Concat,
-						key1: scale_info::meta_type::<u32>(),
-						key2: scale_info::meta_type::<u32>(),
+					ty: StorageEntryType::Map {
+						hashers: vec! [ StorageHasher::Blake2_128Concat, StorageHasher::Blake2_128Concat ],
+						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
-						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: vec![0],
 					docs: vec![],
@@ -302,12 +300,10 @@ mod tests {
 				StorageEntryMetadata {
 					name: "DOUBLEMAP2",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						hasher: StorageHasher::Blake2_128Concat,
-						key1: scale_info::meta_type::<u32>(),
-						key2: scale_info::meta_type::<u32>(),
+					ty: StorageEntryType::Map {
+						hashers: vec! [ StorageHasher::Blake2_128Concat, StorageHasher::Blake2_128Concat ],
+						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
-						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: vec![0],
 					docs: vec![],
@@ -339,8 +335,8 @@ mod tests {
 				StorageEntryMetadata {
 					name: "NMAP",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::NMap {
-						keys: scale_info::meta_type::<(u32, u16)>(),
+					ty: StorageEntryType::Map {
+						key: scale_info::meta_type::<(u32, u16)>(),
 						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
 						value: scale_info::meta_type::<u8>(),
 					},
@@ -350,8 +346,8 @@ mod tests {
 				StorageEntryMetadata {
 					name: "NMAP2",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::NMap {
-						keys: scale_info::meta_type::<u32>(),
+					ty: StorageEntryType::Map {
+						key: scale_info::meta_type::<u32>(),
 						hashers: vec![StorageHasher::Blake2_128Concat],
 						value: scale_info::meta_type::<u8>(),
 					},

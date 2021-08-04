@@ -454,8 +454,8 @@ where
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 
 	fn ty() -> StorageEntryType {
-		StorageEntryType::NMap {
-			keys: scale_info::meta_type::<Key::Key>(),
+		StorageEntryType::Map {
+			key: scale_info::meta_type::<Key::Key>(),
 			hashers: Key::HASHER_METADATA.iter().cloned().collect(),
 			value: scale_info::meta_type::<Value>(),
 		}

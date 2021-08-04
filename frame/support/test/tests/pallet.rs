@@ -1072,7 +1072,7 @@ fn metadata() {
 						ty: StorageEntryType::Map {
 							key: scale_info::meta_type::<u8>(),
 							value: scale_info::meta_type::<u16>(),
-							hasher: StorageHasher::Blake2_128Concat,
+							hashers: vec![ StorageHasher::Blake2_128Concat ],
 						},
 						default: vec![4, 0],
 						docs: vec![],
@@ -1083,7 +1083,7 @@ fn metadata() {
 						ty: StorageEntryType::Map {
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
-							hasher: StorageHasher::Twox64Concat,
+							hashers: vec![ StorageHasher::Twox64Concat ],
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1091,12 +1091,10 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "DoubleMap",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::DoubleMap {
+						ty: StorageEntryType::Map {
 							value: scale_info::meta_type::<u32>(),
-							key1: scale_info::meta_type::<u8>(),
-							key2: scale_info::meta_type::<u16>(),
-							hasher: StorageHasher::Blake2_128Concat,
-							key2_hasher: StorageHasher::Twox64Concat,
+							hashers: vec![ StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat ]
+							key: scale_info::meta_type::<(u8, u16)>(),
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1106,10 +1104,8 @@ fn metadata() {
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::DoubleMap {
 							value: scale_info::meta_type::<u64>(),
-							key1: scale_info::meta_type::<u16>(),
-							key2: scale_info::meta_type::<u32>(),
-							hasher: StorageHasher::Twox64Concat,
-							key2_hasher: StorageHasher::Blake2_128Concat,
+							key: scale_info::meta_type::<(u16, u32)>(),
+							hashers: vec![ StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat ],
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1117,9 +1113,9 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<u8>(),
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<u8>(),
+							hashers: vec![ StorageHasher::Blake2_128Concat ],
 							value: scale_info::meta_type::<u32>(),
 						},
 						default: vec![0],
@@ -1128,8 +1124,8 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "NMap2",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<(u16, u32)>(),
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<(u16, u32)>(),
 							hashers: vec![
 								StorageHasher::Twox64Concat,
 								StorageHasher::Blake2_128Concat,
@@ -1154,7 +1150,7 @@ fn metadata() {
 						ty: StorageEntryType::Map {
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
-							hasher: StorageHasher::Twox64Concat,
+							hashers: vec![ StorageHasher::Twox64Concat ],
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1165,10 +1161,8 @@ fn metadata() {
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::DoubleMap {
 							value: scale_info::meta_type::<u32>(),
-							key1: scale_info::meta_type::<u8>(),
-							key2: scale_info::meta_type::<u16>(),
-							hasher: StorageHasher::Blake2_128Concat,
-							key2_hasher: StorageHasher::Twox64Concat,
+							key: scale_info::meta_type::<(u8, u16)>(),
+							hashers: vec![ StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat ],
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1177,8 +1171,8 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "ConditionalNMap",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<(u8, u16)>(),
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
@@ -1306,8 +1300,8 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<u8>(),
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<u8>(),
 							hashers: vec![StorageHasher::Blake2_128Concat],
 							value: scale_info::meta_type::<u32>(),
 						},
@@ -1317,8 +1311,8 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "NMap2",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<(u16, u32)>(),
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<(u16, u32)>(),
 							hashers: vec![
 								StorageHasher::Twox64Concat,
 								StorageHasher::Blake2_128Concat,
@@ -1366,8 +1360,8 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "ConditionalNMap",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<(u8, u16)>(),
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,

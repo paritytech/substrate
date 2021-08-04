@@ -352,7 +352,7 @@ where
 
 	fn ty() -> StorageEntryType {
 		StorageEntryType::Map {
-			hasher: Hasher::METADATA,
+			hashers: vec![ Hasher::METADATA ],
 			key: scale_info::meta_type::<Key>(),
 			value: scale_info::meta_type::<Value>(),
 		}
@@ -575,13 +575,22 @@ mod test {
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
 			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_matches!(
+
+			let assert_map_hashers = |ty, expected_hashers| {
+				if let StorageEntryType::Map { hashers, .. } = ty {
+					assert_eq!(hashers, expected_hashers)
+				} else {
+					assert_matches!(ty, StorageEntryType::Map { .. })
+				}
+			};
+
+			assert_map_hashers(
 				A::ty(),
-				StorageEntryType::Map { hasher: StorageHasher::Blake2_128Concat, .. }
+				vec![ StorageHasher::Blake2_128Concat ]
 			);
-			assert_matches!(
+			assert_map_hashers(
 				AValueQueryWithAnOnEmpty::ty(),
-				StorageEntryType::Map { hasher: StorageHasher::Blake2_128Concat, .. }
+				vec![ StorageHasher::Blake2_128Concat ]
 			);
 			assert_eq!(A::NAME, "foo");
 			assert_eq!(AValueQueryWithAnOnEmpty::default(), 97u32.encode());

@@ -529,11 +529,9 @@ where
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 
 	fn ty() -> StorageEntryType {
-		StorageEntryType::DoubleMap {
-			hasher: Hasher1::METADATA,
-			key2_hasher: Hasher2::METADATA,
-			key1: scale_info::meta_type::<Key1>(),
-			key2: scale_info::meta_type::<Key2>(),
+		StorageEntryType::Map {
+			hashers: vec! [ Hasher1::METADATA, Hasher2::METADATA ],
+			key: scale_info::meta_type::<(Key1, Key2)>(),
 			value: scale_info::meta_type::<Value>(),
 		}
 	}
@@ -771,21 +769,22 @@ mod test {
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
 			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_matches!(
+
+			let assert_map_hashers = |ty, expected_hashers| {
+				if let StorageEntryType::Map { hashers, .. } = ty {
+					assert_eq!(hashers, expected_hashers)
+				} else {
+					assert_matches!(ty, StorageEntryType::Map { .. })
+				}
+			};
+
+			assert_map_hashers(
 				A::ty(),
-				StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_128Concat,
-					key2_hasher: StorageHasher::Twox64Concat,
-					..
-				}
+				vec![ StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat ],
 			);
-			assert_matches!(
+			assert_map_hashers(
 				AValueQueryWithAnOnEmpty::ty(),
-				StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_128Concat,
-					key2_hasher: StorageHasher::Twox64Concat,
-					..
-				}
+				vec![ StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat ],
 			);
 
 			assert_eq!(A::NAME, "foo");

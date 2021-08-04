@@ -37,7 +37,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let key = &map.key;
 			quote! {
 				#scrate::metadata::StorageEntryType::Map {
-					hasher: #scrate::metadata::#hasher,
+					hashers: #scrate::sp_std::vec! [ #scrate::metadata::#hasher ],
 					key: #scrate::scale_info::meta_type::<#key>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
@@ -49,12 +49,13 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let key1 = &map.key1;
 			let key2 = &map.key2;
 			quote! {
-				#scrate::metadata::StorageEntryType::DoubleMap {
-					hasher: #scrate::metadata::#hasher1,
-					key1: #scrate::scale_info::meta_type::<#key1>(),
-					key2: #scrate::scale_info::meta_type::<#key2>(),
+				#scrate::metadata::StorageEntryType::Map {
+					hashers: #scrate::sp_std::vec! [
+						#scrate::metadata::#hasher1,
+						#scrate::metadata::#hasher2,
+					],
+					key: #scrate::scale_info::meta_type::<(#key1, #key2)>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
-					key2_hasher: #scrate::metadata::#hasher2,
 				}
 			}
 		},
@@ -66,11 +67,11 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 				.map(|hasher| hasher.to_storage_hasher_struct())
 				.collect::<Vec<_>>();
 			quote! {
-				#scrate::metadata::StorageEntryType::NMap {
-					keys: #scrate::scale_info::meta_type::<#key_tuple>(),
+				#scrate::metadata::StorageEntryType::Map {
 					hashers: #scrate::sp_std::vec! [
 						#( #scrate::metadata::StorageHasher::#hashers, )*
 					],
+					key: #scrate::scale_info::meta_type::<#key_tuple>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}

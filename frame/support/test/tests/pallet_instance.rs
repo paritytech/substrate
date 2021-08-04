@@ -671,8 +671,8 @@ fn metadata() {
 				StorageEntryMetadata {
 					name: "NMap",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::NMap {
-						keys: scale_info::meta_type::<u8>(),
+					ty: StorageEntryType::Map {
+						key: scale_info::meta_type::<u8>(),
 						hashers: vec![StorageHasher::Blake2_128Concat],
 						value: scale_info::meta_type::<u32>(),
 					},
@@ -682,8 +682,8 @@ fn metadata() {
 				StorageEntryMetadata {
 					name: "NMap2",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::NMap {
-						keys: scale_info::meta_type::<(u16, u32)>(),
+					ty: StorageEntryType::Map {
+						key: scale_info::meta_type::<(u16, u32)>(),
 						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
 						value: scale_info::meta_type::<u64>(),
 					},
