@@ -263,8 +263,7 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 
 	// and now open database assuming that it has the latest version
 	let mut db_config = kvdb_rocksdb::DatabaseConfig::with_columns(NUM_COLUMNS);
-	// TODO: uncomment when kvdb_rocksdb 0.13 is merged
-	//db_config.create_if_missing = create;
+	db_config.create_if_missing = create;
 	let path = path
 		.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
