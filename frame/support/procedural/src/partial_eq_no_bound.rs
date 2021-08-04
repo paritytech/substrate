@@ -30,41 +30,47 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 	let impl_ = match input.data {
 		syn::Data::Struct(struct_) => match struct_.fields {
 			syn::Fields::Named(named) => {
-				let fields = named.named.iter()
+				let fields = named
+					.named
+					.iter()
 					.map(|i| &i.ident)
 					.map(|i| quote::quote_spanned!(i.span() => self.#i == other.#i ));
 
 				quote::quote!( true #( && #fields )* )
 			},
 			syn::Fields::Unnamed(unnamed) => {
-				let fields = unnamed.unnamed.iter().enumerate()
+				let fields = unnamed
+					.unnamed
+					.iter()
+					.enumerate()
 					.map(|(i, _)| syn::Index::from(i))
 					.map(|i| quote::quote_spanned!(i.span() => self.#i == other.#i ));
 
 				quote::quote!( true #( && #fields )* )
 			},
 			syn::Fields::Unit => {
-				quote::quote!( true )
-			}
+				quote::quote!(true)
+			},
 		},
 		syn::Data::Enum(enum_) => {
-			let variants = enum_.variants.iter()
-				.map(|variant| {
+			let variants =
+				enum_.variants.iter().map(|variant| {
 					let ident = &variant.ident;
 					match &variant.fields {
 						syn::Fields::Named(named) => {
 							let names = named.named.iter().map(|i| &i.ident);
-							let other_names = names.clone()
-								.enumerate()
-								.map(|(n, ident)|
-									syn::Ident::new(&format!("_{}", n), ident.span())
-								);
+							let other_names = names.clone().enumerate().map(|(n, ident)| {
+								syn::Ident::new(&format!("_{}", n), ident.span())
+							});
 
 							let capture = names.clone();
-							let other_capture = names.clone().zip(other_names.clone())
+							let other_capture = names
+								.clone()
+								.zip(other_names.clone())
 								.map(|(i, other_i)| quote::quote!(#i: #other_i));
-							let eq = names.zip(other_names)
-								.map(|(i, other_i)| quote::quote_spanned!(i.span() => #i == #other_i));
+							let eq = names.zip(other_names).map(
+								|(i, other_i)| quote::quote_spanned!(i.span() => #i == #other_i),
+							);
 							quote::quote!(
 								(
 									Self::#ident { #( #capture, )* },
@@ -73,12 +79,18 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 							)
 						},
 						syn::Fields::Unnamed(unnamed) => {
-							let names = unnamed.unnamed.iter().enumerate()
+							let names = unnamed
+								.unnamed
+								.iter()
+								.enumerate()
 								.map(|(i, f)| syn::Ident::new(&format!("_{}", i), f.span()));
-							let other_names = unnamed.unnamed.iter().enumerate()
-								.map(|(i, f)| syn::Ident::new(&format!("_{}_other", i), f.span()));
-							let eq = names.clone().zip(other_names.clone())
-								.map(|(i, other_i)| quote::quote_spanned!(i.span() => #i == #other_i));
+							let other_names =
+								unnamed.unnamed.iter().enumerate().map(|(i, f)| {
+									syn::Ident::new(&format!("_{}_other", i), f.span())
+								});
+							let eq = names.clone().zip(other_names.clone()).map(
+								|(i, other_i)| quote::quote_spanned!(i.span() => #i == #other_i),
+							);
 							quote::quote!(
 								(
 									Self::#ident ( #( #names, )* ),
@@ -122,5 +134,6 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 				}
 			}
 		};
-	).into()
+	)
+	.into()
 }

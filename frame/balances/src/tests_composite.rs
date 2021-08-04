@@ -19,19 +19,15 @@
 
 #![cfg(test)]
 
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::Header,
+use crate::{self as pallet_balances, decl_tests, Config, Pallet};
+use frame_support::{
+	parameter_types,
+	weights::{DispatchInfo, IdentityFee, Weight},
 };
+use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_io;
-use frame_support::parameter_types;
-use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use pallet_transaction_payment::CurrencyAdapter;
-use crate::{
-	self as pallet_balances,
-	Module, Config, decl_tests,
-};
+use sp_runtime::{testing::Header, traits::IdentityLookup};
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -41,8 +37,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 	}
 );
 
@@ -53,7 +50,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
@@ -75,15 +72,20 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
+	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
+}
+
+parameter_types! {
+	pub const MaxReserves: u32 = 2;
 }
 
 impl Config for Test {
@@ -93,6 +95,8 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 
@@ -102,10 +106,7 @@ pub struct ExtBuilder {
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {
-			existential_deposit: 1,
-			monied: false,
-		}
+		Self { existential_deposit: 1, monied: false }
 	}
 }
 impl ExtBuilder {
@@ -130,12 +131,14 @@ impl ExtBuilder {
 					(2, 20 * self.existential_deposit),
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
-					(12, 10 * self.existential_deposit)
+					(12, 10 * self.existential_deposit),
 				]
 			} else {
 				vec![]
 			},
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| System::set_block_number(1));
@@ -143,4 +146,4 @@ impl ExtBuilder {
 	}
 }
 
-decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
+decl_tests! { Test, ExtBuilder, EXISTENTIAL_DEPOSIT }

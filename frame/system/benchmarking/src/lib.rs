@@ -20,25 +20,26 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use sp_std::vec;
-use sp_std::prelude::*;
-use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::{storage, traits::Get, weights::DispatchClass};
+use frame_system::{Call, DigestItemOf, Pallet as System, RawOrigin};
+use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
 use sp_runtime::traits::Hash;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{
-	storage,
-	traits::Get,
-	weights::DispatchClass,
-};
-use frame_system::{Module as System, Call, RawOrigin, DigestItemOf};
+use sp_std::{prelude::*, vec};
 
 mod mock;
 
-pub struct Module<T: Config>(System<T>);
+pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
 
 benchmarks! {
 	remark {
+		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
+		let remark_message = vec![1; b as usize];
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), remark_message)
+
+	remark_with_event {
 		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];
 		let caller = whitelisted_caller();
@@ -138,22 +139,4 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_remark::<Test>());
-			assert_ok!(test_benchmark_set_heap_pages::<Test>());
-			assert_ok!(test_benchmark_set_code_without_checks::<Test>());
-			assert_ok!(test_benchmark_set_changes_trie_config::<Test>());
-			assert_ok!(test_benchmark_set_storage::<Test>());
-			assert_ok!(test_benchmark_kill_storage::<Test>());
-			assert_ok!(test_benchmark_kill_prefix::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

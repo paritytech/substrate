@@ -32,7 +32,7 @@ struct Test;
 impl frame_support_test::Config for Test {
 	type BlockNumber = u32;
 	type Origin = ();
-	type PalletInfo = ();
+	type PalletInfo = frame_support_test::PanicPalletInfo;
 	type DbWeight = ();
 }
 
@@ -40,7 +40,5 @@ impl Config for Test {}
 
 #[test]
 fn init_genesis_config() {
-	GenesisConfig::<Test> {
-		t: Default::default(),
-	};
+	GenesisConfig::<Test> { t: Default::default() };
 }

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-babe"
-version = "2.0.1"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,32 +13,30 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.6", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
-pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
-pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
-serde = { version = "1.0.101", optional = true }
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-babe = { version = "0.8.0", default-features = false, path = "../../primitives/consensus/babe" }
-sp-consensus-vrf = { version = "0.8.0", default-features = false, path = "../../primitives/consensus/vrf" }
-sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
-sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
+pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
+sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/vrf" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-frame-benchmarking = { version = "2.0.0", path = "../benchmarking" }
-pallet-balances = { version = "2.0.0", path = "../balances" }
-pallet-offences = { version = "2.0.0", path = "../offences" }
-pallet-staking = { version = "2.0.0", path = "../staking" }
-pallet-staking-reward-curve = { version = "2.0.0", path = "../staking/reward-curve" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-offences = { version = "4.0.0-dev", path = "../offences" }
+pallet-staking = { version = "4.0.0-dev", path = "../staking" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 [features]
 default = ["std"]
@@ -50,16 +48,15 @@ std = [
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"pallet-timestamp/std",
-	"serde",
 	"sp-application-crypto/std",
 	"sp-consensus-babe/std",
 	"sp-consensus-vrf/std",
-	"sp-inherents/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"sp-timestamp/std",
+	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
+try-runtime = ["frame-support/try-runtime"]

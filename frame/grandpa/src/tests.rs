@@ -19,17 +19,16 @@
 
 #![cfg(test)]
 
-use super::{Call, *};
+use super::{Call, Event, *};
 use crate::mock::*;
-use codec::{Decode, Encode};
+use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
-	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	assert_err, assert_noop, assert_ok,
+	traits::{Currency, OnFinalize, OneSessionHandler},
 	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};
-use pallet_session::OneSessionHandler;
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;
@@ -44,21 +43,24 @@ fn authorities_change_logged() {
 		Grandpa::on_finalize(1);
 
 		let header = System::finalize();
-		assert_eq!(header.digest, Digest {
-			logs: vec![
-				grandpa_log(ConsensusLog::ScheduledChange(
-					ScheduledChange { delay: 0, next_authorities: to_authorities(vec![(4, 1), (5, 1), (6, 1)]) }
-				)),
-			],
-		});
+		assert_eq!(
+			header.digest,
+			Digest {
+				logs: vec![grandpa_log(ConsensusLog::ScheduledChange(ScheduledChange {
+					delay: 0,
+					next_authorities: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+				})),],
+			}
+		);
 
-		assert_eq!(System::events(), vec![
-			EventRecord {
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
 				phase: Phase::Finalization,
 				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
 				topics: vec![],
-			},
-		]);
+			},]
+		);
 	});
 }
 
@@ -69,13 +71,15 @@ fn authorities_change_logged_after_delay() {
 		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 1, None).unwrap();
 		Grandpa::on_finalize(1);
 		let header = System::finalize();
-		assert_eq!(header.digest, Digest {
-			logs: vec![
-				grandpa_log(ConsensusLog::ScheduledChange(
-					ScheduledChange { delay: 1, next_authorities: to_authorities(vec![(4, 1), (5, 1), (6, 1)]) }
-				)),
-			],
-		});
+		assert_eq!(
+			header.digest,
+			Digest {
+				logs: vec![grandpa_log(ConsensusLog::ScheduledChange(ScheduledChange {
+					delay: 1,
+					next_authorities: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+				})),],
+			}
+		);
 
 		// no change at this height.
 		assert_eq!(System::events(), vec![]);
@@ -85,13 +89,14 @@ fn authorities_change_logged_after_delay() {
 		Grandpa::on_finalize(2);
 
 		let _header = System::finalize();
-		assert_eq!(System::events(), vec![
-			EventRecord {
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
 				phase: Phase::Finalization,
 				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
 				topics: vec![],
-			},
-		]);
+			},]
+		);
 	});
 }
 
@@ -101,21 +106,27 @@ fn cannot_schedule_change_when_one_pending() {
 		initialize_block(1, Default::default());
 		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 1, None).unwrap();
 		assert!(<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
+		assert_noop!(
+			Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+			Error::<Test>::ChangePending
+		);
 
 		Grandpa::on_finalize(1);
 		let header = System::finalize();
 
 		initialize_block(2, header.hash());
 		assert!(<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
+		assert_noop!(
+			Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+			Error::<Test>::ChangePending
+		);
 
 		Grandpa::on_finalize(2);
 		let header = System::finalize();
 
 		initialize_block(3, header.hash());
 		assert!(!<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_ok());
+		assert_ok!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None));
 
 		Grandpa::on_finalize(3);
 		let _header = System::finalize();
@@ -123,33 +134,16 @@ fn cannot_schedule_change_when_one_pending() {
 }
 
 #[test]
-fn new_decodes_from_old() {
-	let old = OldStoredPendingChange {
-		scheduled_at: 5u32,
-		delay: 100u32,
-		next_authorities: to_authorities(vec![(1, 5), (2, 10), (3, 2)]),
-	};
-
-	let encoded = old.encode();
-	let new = StoredPendingChange::<u32>::decode(&mut &encoded[..]).unwrap();
-	assert!(new.forced.is_none());
-	assert_eq!(new.scheduled_at, old.scheduled_at);
-	assert_eq!(new.delay, old.delay);
-	assert_eq!(new.next_authorities, old.next_authorities);
-}
-
-#[test]
 fn dispatch_forced_change() {
 	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		initialize_block(1, Default::default());
-		Grandpa::schedule_change(
-			to_authorities(vec![(4, 1), (5, 1), (6, 1)]),
-			5,
-			Some(0),
-		).unwrap();
+		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 5, Some(0)).unwrap();
 
 		assert!(<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)).is_err());
+		assert_noop!(
+			Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)),
+			Error::<Test>::ChangePending
+		);
 
 		Grandpa::on_finalize(1);
 		let mut header = System::finalize();
@@ -158,8 +152,14 @@ fn dispatch_forced_change() {
 			initialize_block(i, header.hash());
 			assert!(<PendingChange<Test>>::get().unwrap().forced.is_some());
 			assert_eq!(Grandpa::next_forced(), Some(11));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)).is_err());
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+				Error::<Test>::ChangePending
+			);
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)),
+				Error::<Test>::ChangePending
+			);
 
 			Grandpa::on_finalize(i);
 			header = System::finalize();
@@ -170,8 +170,11 @@ fn dispatch_forced_change() {
 		{
 			initialize_block(7, header.hash());
 			assert!(!<PendingChange<Test>>::exists());
-			assert_eq!(Grandpa::grandpa_authorities(), to_authorities(vec![(4, 1), (5, 1), (6, 1)]));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_ok());
+			assert_eq!(
+				Grandpa::grandpa_authorities(),
+				to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+			);
+			assert_ok!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None));
 			Grandpa::on_finalize(7);
 			header = System::finalize();
 		}
@@ -180,8 +183,14 @@ fn dispatch_forced_change() {
 		{
 			initialize_block(8, header.hash());
 			assert!(<PendingChange<Test>>::exists());
-			assert_eq!(Grandpa::grandpa_authorities(), to_authorities(vec![(4, 1), (5, 1), (6, 1)]));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
+			assert_eq!(
+				Grandpa::grandpa_authorities(),
+				to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+			);
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+				Error::<Test>::ChangePending
+			);
 			Grandpa::on_finalize(8);
 			header = System::finalize();
 		}
@@ -193,7 +202,10 @@ fn dispatch_forced_change() {
 			assert!(!<PendingChange<Test>>::exists());
 			assert_eq!(Grandpa::grandpa_authorities(), to_authorities(vec![(5, 1)]));
 			assert_eq!(Grandpa::next_forced(), Some(11));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1)]), 5, Some(0)).is_err());
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1)]), 5, Some(0)),
+				Error::<Test>::TooSoon
+			);
 			Grandpa::on_finalize(i);
 			header = System::finalize();
 		}
@@ -201,7 +213,11 @@ fn dispatch_forced_change() {
 		{
 			initialize_block(11, header.hash());
 			assert!(!<PendingChange<Test>>::exists());
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1), (7, 1)]), 5, Some(0)).is_ok());
+			assert_ok!(Grandpa::schedule_change(
+				to_authorities(vec![(5, 1), (6, 1), (7, 1)]),
+				5,
+				Some(0)
+			));
 			assert_eq!(Grandpa::next_forced(), Some(21));
 			Grandpa::on_finalize(11);
 			header = System::finalize();
@@ -218,13 +234,7 @@ fn schedule_pause_only_when_live() {
 		Grandpa::schedule_pause(1).unwrap();
 
 		// we've switched to the pending pause state
-		assert_eq!(
-			Grandpa::state(),
-			StoredState::PendingPause {
-				scheduled_at: 1u64,
-				delay: 1,
-			},
-		);
+		assert_eq!(Grandpa::state(), StoredState::PendingPause { scheduled_at: 1u64, delay: 1 });
 
 		Grandpa::on_finalize(1);
 		let _ = System::finalize();
@@ -232,16 +242,13 @@ fn schedule_pause_only_when_live() {
 		initialize_block(2, Default::default());
 
 		// signaling a pause now should fail
-		assert!(Grandpa::schedule_pause(1).is_err());
+		assert_noop!(Grandpa::schedule_pause(1), Error::<Test>::PauseFailed);
 
 		Grandpa::on_finalize(2);
 		let _ = System::finalize();
 
 		// after finalizing block 2 the set should have switched to paused state
-		assert_eq!(
-			Grandpa::state(),
-			StoredState::Paused,
-		);
+		assert_eq!(Grandpa::state(), StoredState::Paused);
 	});
 }
 
@@ -251,22 +258,16 @@ fn schedule_resume_only_when_paused() {
 		initialize_block(1, Default::default());
 
 		// the set is currently live, resuming it is an error
-		assert!(Grandpa::schedule_resume(1).is_err());
+		assert_noop!(Grandpa::schedule_resume(1), Error::<Test>::ResumeFailed);
 
-		assert_eq!(
-			Grandpa::state(),
-			StoredState::Live,
-		);
+		assert_eq!(Grandpa::state(), StoredState::Live);
 
 		// we schedule a pause to be applied instantly
 		Grandpa::schedule_pause(0).unwrap();
 		Grandpa::on_finalize(1);
 		let _ = System::finalize();
 
-		assert_eq!(
-			Grandpa::state(),
-			StoredState::Paused,
-		);
+		assert_eq!(Grandpa::state(), StoredState::Paused);
 
 		// we schedule the set to go back live in 2 blocks
 		initialize_block(2, Default::default());
@@ -283,10 +284,7 @@ fn schedule_resume_only_when_paused() {
 		let _ = System::finalize();
 
 		// it should be live at block 4
-		assert_eq!(
-			Grandpa::state(),
-			StoredState::Live,
-		);
+		assert_eq!(Grandpa::state(), StoredState::Live);
 	});
 }
 
@@ -294,26 +292,11 @@ fn schedule_resume_only_when_paused() {
 fn time_slot_have_sane_ord() {
 	// Ensure that `Ord` implementation is sane.
 	const FIXTURE: &[GrandpaTimeSlot] = &[
-		GrandpaTimeSlot {
-			set_id: 0,
-			round: 0,
-		},
-		GrandpaTimeSlot {
-			set_id: 0,
-			round: 1,
-		},
-		GrandpaTimeSlot {
-			set_id: 1,
-			round: 0,
-		},
-		GrandpaTimeSlot {
-			set_id: 1,
-			round: 1,
-		},
-		GrandpaTimeSlot {
-			set_id: 1,
-			round: 2,
-		}
+		GrandpaTimeSlot { set_id: 0, round: 0 },
+		GrandpaTimeSlot { set_id: 0, round: 1 },
+		GrandpaTimeSlot { set_id: 1, round: 0 },
+		GrandpaTimeSlot { set_id: 1, round: 1 },
+		GrandpaTimeSlot { set_id: 1, round: 2 },
 	];
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
 }
@@ -321,16 +304,9 @@ fn time_slot_have_sane_ord() {
 /// Returns a list with 3 authorities with known keys:
 /// Alice, Bob and Charlie.
 pub fn test_authorities() -> AuthorityList {
-	let authorities = vec![
-		Ed25519Keyring::Alice,
-		Ed25519Keyring::Bob,
-		Ed25519Keyring::Charlie,
-	];
+	let authorities = vec![Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 
-	authorities
-		.into_iter()
-		.map(|id| (id.public().into(), 1u64))
-		.collect()
+	authorities.into_iter().map(|id| (id.public().into(), 1u64)).collect()
 }
 
 #[test]
@@ -353,11 +329,7 @@ fn report_equivocation_current_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(1, validator),
-				pallet_staking::Exposure {
-					total: 10_000,
-					own: 10_000,
-					others: vec![],
-				},
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
 
@@ -380,13 +352,11 @@ fn report_equivocation_current_set_works() {
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
-		assert_ok!(
-			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
-				equivocation_proof,
-				key_owner_proof,
-			),
-		);
+		assert_ok!(Grandpa::report_equivocation_unsigned(
+			Origin::none(),
+			equivocation_proof,
+			key_owner_proof,
+		),);
 
 		start_era(2);
 
@@ -397,17 +367,13 @@ fn report_equivocation_current_set_works() {
 		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 		assert_eq!(
 			Staking::eras_stakers(2, equivocation_validator_id),
-			pallet_staking::Exposure {
-				total: 0,
-				own: 0,
-				others: vec![],
-			},
+			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
 		);
 
 		// check that the balances of all other validators are left intact.
 		for validator in &validators {
 			if *validator == equivocation_validator_id {
-				continue;
+				continue
 			}
 
 			assert_eq!(Balances::total_balance(validator), 10_000_000);
@@ -415,11 +381,7 @@ fn report_equivocation_current_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(2, validator),
-				pallet_staking::Exposure {
-					total: 10_000,
-					own: 10_000,
-					others: vec![],
-				},
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
 	});
@@ -451,11 +413,7 @@ fn report_equivocation_old_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(2, validator),
-				pallet_staking::Exposure {
-					total: 10_000,
-					own: 10_000,
-					others: vec![],
-				},
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
 
@@ -472,13 +430,11 @@ fn report_equivocation_old_set_works() {
 
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
-		assert_ok!(
-			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
-				equivocation_proof,
-				key_owner_proof,
-			),
-		);
+		assert_ok!(Grandpa::report_equivocation_unsigned(
+			Origin::none(),
+			equivocation_proof,
+			key_owner_proof,
+		),);
 
 		start_era(3);
 
@@ -490,17 +446,13 @@ fn report_equivocation_old_set_works() {
 
 		assert_eq!(
 			Staking::eras_stakers(3, equivocation_validator_id),
-			pallet_staking::Exposure {
-				total: 0,
-				own: 0,
-				others: vec![],
-			},
+			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
 		);
 
 		// check that the balances of all other validators are left intact.
 		for validator in &validators {
 			if *validator == equivocation_validator_id {
-				continue;
+				continue
 			}
 
 			assert_eq!(Balances::total_balance(validator), 10_000_000);
@@ -508,11 +460,7 @@ fn report_equivocation_old_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(3, validator),
-				pallet_staking::Exposure {
-					total: 10_000,
-					own: 10_000,
-					others: vec![],
-				},
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
 	});
@@ -707,8 +655,8 @@ fn report_equivocation_invalid_equivocation_proof() {
 #[test]
 fn report_equivocation_validate_unsigned_prevents_duplicates() {
 	use sp_runtime::transaction_validity::{
-		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
-		TransactionValidity, ValidTransaction,
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
 	};
 
 	let authorities = test_authorities();
@@ -733,10 +681,8 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key_owner_proof =
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
-		let call = Call::report_equivocation_unsigned(
-			equivocation_proof.clone(),
-			key_owner_proof.clone(),
-		);
+		let call =
+			Call::report_equivocation_unsigned(equivocation_proof.clone(), key_owner_proof.clone());
 
 		// only local/inblock reports are allowed
 		assert_eq!(
@@ -748,11 +694,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		// the transaction is valid when passed as local
-		let tx_tag = (
-			equivocation_key,
-			set_id,
-			1u64,
-		);
+		let tx_tag = (equivocation_key, set_id, 1u64);
 
 		assert_eq!(
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
@@ -763,7 +705,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
 		);
@@ -776,6 +718,15 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid
+		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
+		assert_err!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			InvalidTransaction::Stale,
+		);
+
 		assert_err!(
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
 			InvalidTransaction::Stale,
@@ -848,23 +799,19 @@ fn always_schedules_a_change_on_new_session_when_stalled() {
 fn report_equivocation_has_valid_weight() {
 	// the weight depends on the size of the validator set,
 	// but there's a lower bound of 100 validators.
-	assert!(
-		(1..=100)
-			.map(<Test as Config>::WeightInfo::report_equivocation)
-			.collect::<Vec<_>>()
-			.windows(2)
-			.all(|w| w[0] == w[1])
-	);
+	assert!((1..=100)
+		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.collect::<Vec<_>>()
+		.windows(2)
+		.all(|w| w[0] == w[1]));
 
 	// after 100 validators the weight should keep increasing
 	// with every extra validator.
-	assert!(
-		(100..=1000)
-			.map(<Test as Config>::WeightInfo::report_equivocation)
-			.collect::<Vec<_>>()
-			.windows(2)
-			.all(|w| w[0] < w[1])
-	);
+	assert!((100..=1000)
+		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.collect::<Vec<_>>()
+		.windows(2)
+		.all(|w| w[0] < w[1]));
 }
 
 #[test]

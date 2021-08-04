@@ -35,21 +35,15 @@ where
 {
 	Vec::<(String, u8)>::deserialize(deserializer)?
 		.iter()
-		.map(|e| {
-			url_to_multiaddr(&e.0)
-				.map_err(serde::de::Error::custom)
-				.map(|m| (m, e.1))
-		})
+		.map(|e| url_to_multiaddr(&e.0).map_err(serde::de::Error::custom).map(|m| (m, e.1)))
 		.collect()
 }
 
 impl TelemetryEndpoints {
 	/// Create a `TelemetryEndpoints` based on a list of `(String, u8)`.
 	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
-		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints
-			.iter()
-			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
-			.collect();
+		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> =
+			endpoints.iter().map(|e| Ok((url_to_multiaddr(&e.0)?, e.1))).collect();
 		endpoints.map(Self)
 	}
 }
@@ -71,7 +65,7 @@ fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 
 	// If not, try the `ws://path/url` format.
 	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma);
+		return Ok(ma)
 	}
 
 	// If we have no clue about the format of that string, assume that we were expecting a
@@ -81,8 +75,7 @@ fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 
 #[cfg(test)]
 mod tests {
-	use super::url_to_multiaddr;
-	use super::TelemetryEndpoints;
+	use super::{url_to_multiaddr, TelemetryEndpoints};
 	use libp2p::Multiaddr;
 
 	#[test]
@@ -95,10 +88,7 @@ mod tests {
 			TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
-			res.push((
-				url_to_multiaddr(a).expect("provided url should be valid"),
-				*b,
-			))
+			res.push((url_to_multiaddr(a).expect("provided url should be valid"), *b))
 		}
 		assert_eq!(telem.0, res);
 	}

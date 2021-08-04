@@ -21,22 +21,27 @@
 
 use super::*;
 
-use frame_system::RawOrigin;
-use frame_benchmarking::benchmarks;
-use sp_core::OpaquePeerId;
-use sp_core::offchain::OpaqueMultiaddr;
-use sp_runtime::traits::{ValidateUnsigned, Zero};
-use sp_runtime::transaction_validity::TransactionSource;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::traits::UnfilteredDispatchable;
+use frame_system::RawOrigin;
+use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};
+use sp_runtime::{
+	traits::{ValidateUnsigned, Zero},
+	transaction_validity::TransactionSource,
+};
 
-use crate::Module as ImOnline;
+use crate::Pallet as ImOnline;
 
 const MAX_KEYS: u32 = 1000;
 const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
-pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
-	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
-{
+pub fn create_heartbeat<T: Config>(
+	k: u32,
+	e: u32,
+) -> Result<
+	(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature),
+	&'static str,
+> {
 	let mut keys = Vec::new();
 	for _ in 0..k {
 		keys.push(T::AuthorityId::generate_pair(None));
@@ -51,12 +56,12 @@ pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 		block_number: T::BlockNumber::zero(),
 		network_state,
 		session_index: 0,
-		authority_index: k-1,
+		authority_index: k - 1,
 		validators_len: keys.len() as u32,
 	};
 
 	let encoded_heartbeat = input_heartbeat.encode();
-	let authority_id = keys.get((k-1) as usize).ok_or("out of range")?;
+	let authority_id = keys.get((k - 1) as usize).ok_or("out of range")?;
 	let signature = authority_id.sign(&encoded_heartbeat).ok_or("couldn't make signature")?;
 
 	Ok((input_heartbeat, signature))
@@ -91,18 +96,4 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Runtime};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_heartbeat::<Runtime>());
-			assert_ok!(test_benchmark_validate_unsigned::<Runtime>());
-			assert_ok!(test_benchmark_validate_unsigned_and_then_heartbeat::<Runtime>());
-		});
-	}
-}
+impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);

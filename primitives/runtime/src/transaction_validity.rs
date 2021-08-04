@@ -17,9 +17,11 @@
 
 //! Transaction validity interface.
 
+use crate::{
+	codec::{Decode, Encode},
+	RuntimeDebug,
+};
 use sp_std::prelude::*;
-use crate::codec::{Encode, Decode};
-use crate::RuntimeDebug;
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
@@ -33,7 +35,7 @@ pub type TransactionTag = Vec<u8>;
 
 /// An invalid transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
 	Call,
@@ -81,18 +83,12 @@ pub enum InvalidTransaction {
 impl InvalidTransaction {
 	/// Returns if the reason for the invalidity was block resource exhaustion.
 	pub fn exhausted_resources(&self) -> bool {
-		match self {
-			Self::ExhaustsResources => true,
-			_ => false,
-		}
+		matches!(self, Self::ExhaustsResources)
 	}
 
 	/// Returns if the reason for the invalidity was a mandatory call failing.
 	pub fn was_mandatory(&self) -> bool {
-		match self {
-			Self::BadMandatory => true,
-			_ => false,
-		}
+		matches!(self, Self::BadMandatory)
 	}
 }
 
@@ -104,8 +100,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::Stale => "Transaction is outdated",
 			InvalidTransaction::BadProof => "Transaction has a bad signature",
 			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
-			InvalidTransaction::ExhaustsResources =>
-				"Transaction would exhaust the block limits",
+			InvalidTransaction::ExhaustsResources => "Transaction would exhaust the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
 			InvalidTransaction::BadMandatory =>
@@ -119,7 +114,7 @@ impl From<InvalidTransaction> for &'static str {
 
 /// An unknown transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
 	CannotLookup,
@@ -143,7 +138,7 @@ impl From<UnknownTransaction> for &'static str {
 
 /// Errors that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
 	Invalid(InvalidTransaction),
@@ -209,15 +204,15 @@ impl std::fmt::Display for TransactionValidityError {
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
 pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
 
-impl Into<TransactionValidity> for InvalidTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
+impl From<InvalidTransaction> for TransactionValidity {
+	fn from(invalid_transaction: InvalidTransaction) -> Self {
+		Err(TransactionValidityError::Invalid(invalid_transaction))
 	}
 }
 
-impl Into<TransactionValidity> for UnknownTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
+impl From<UnknownTransaction> for TransactionValidity {
+	fn from(unknown_transaction: UnknownTransaction) -> Self {
+		Err(TransactionValidityError::Unknown(unknown_transaction))
 	}
 }
 
@@ -226,7 +221,9 @@ impl Into<TransactionValidity> for UnknownTransaction {
 /// Depending on the source we might apply different validation schemes.
 /// For instance we can disallow specific kinds of transactions if they were not produced
 /// by our local node (for instance off-chain workers).
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, parity_util_mem::MallocSizeOf)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, parity_util_mem::MallocSizeOf,
+)]
 pub enum TransactionSource {
 	/// Transaction is already included in block.
 	///
@@ -285,7 +282,7 @@ pub struct ValidTransaction {
 
 impl Default for ValidTransaction {
 	fn default() -> Self {
-		ValidTransaction {
+		Self {
 			priority: 0,
 			requires: vec![],
 			provides: vec![],
@@ -301,20 +298,23 @@ impl ValidTransaction {
 	/// To avoid conflicts between different parts in runtime it's recommended to build `requires`
 	/// and `provides` tags with a unique prefix.
 	pub fn with_tag_prefix(prefix: &'static str) -> ValidTransactionBuilder {
-		ValidTransactionBuilder {
-			prefix: Some(prefix),
-			validity: Default::default(),
-		}
+		ValidTransactionBuilder { prefix: Some(prefix), validity: Default::default() }
 	}
 
 	/// Combine two instances into one, as a best effort. This will take the superset of each of the
 	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
 	/// the logic *And* of the propagate flags.
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
-		ValidTransaction {
+		Self {
 			priority: self.priority.saturating_add(other.priority),
-			requires: { self.requires.append(&mut other.requires); self.requires },
-			provides: { self.provides.append(&mut other.provides); self.provides },
+			requires: {
+				self.requires.append(&mut other.requires);
+				self.requires
+			},
+			provides: {
+				self.provides.append(&mut other.provides);
+				self.provides
+			},
 			longevity: self.longevity.min(other.longevity),
 			propagate: self.propagate && other.propagate,
 		}
@@ -418,7 +418,6 @@ impl From<ValidTransactionBuilder> for ValidTransaction {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -436,7 +435,10 @@ mod tests {
 		let encoded = v.encode();
 		assert_eq!(
 			encoded,
-			vec![0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0, 0]
+			vec![
+				0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0,
+				0, 0
+			]
 		);
 
 		// decode back
@@ -456,12 +458,15 @@ mod tests {
 			.priority(3)
 			.priority(6)
 			.into();
-		assert_eq!(a, ValidTransaction {
-			propagate: false,
-			longevity: 5,
-			priority: 6,
-			requires: vec![(PREFIX, 1).encode(), (PREFIX, 2).encode()],
-			provides: vec![(PREFIX, 3).encode(), (PREFIX, 4).encode()],
-		});
+		assert_eq!(
+			a,
+			ValidTransaction {
+				propagate: false,
+				longevity: 5,
+				priority: 6,
+				requires: vec![(PREFIX, 1).encode(), (PREFIX, 2).encode()],
+				provides: vec![(PREFIX, 3).encode(), (PREFIX, 4).encode()],
+			}
+		);
 	}
 }

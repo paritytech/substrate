@@ -18,16 +18,16 @@
 //! The for various partial storage decoders
 
 use super::*;
-use frame_support::storage::{migration, StorageMap, unhashed};
+use frame_support::storage::{migration, unhashed};
 
 #[test]
 fn test_decode_compact_u32_at() {
 	new_test_ext().execute_with(|| {
-		let v = codec::Compact(u64::max_value());
+		let v = codec::Compact(u64::MAX);
 		migration::put_storage_value(b"test", b"", &[], v);
 		assert_eq!(decode_compact_u32_at(b"test"), None);
 
-		for v in vec![0, 10, u32::max_value()] {
+		for v in vec![0, 10, u32::MAX] {
 			let compact_v = codec::Compact(v);
 			unhashed::put(b"test", &compact_v);
 			assert_eq!(decode_compact_u32_at(b"test"), Some(v));
@@ -58,15 +58,15 @@ fn pre_image() {
 		let key = Default::default();
 		let missing = PreimageStatus::Missing(0);
 		Preimages::<Test>::insert(key, missing);
-		assert!(Democracy::pre_image_data_len(key).is_err());
+		assert_noop!(Democracy::pre_image_data_len(key), Error::<Test>::PreimageMissing);
 		assert_eq!(Democracy::check_pre_image_is_missing(key), Ok(()));
 
 		Preimages::<Test>::remove(key);
-		assert!(Democracy::pre_image_data_len(key).is_err());
-		assert!(Democracy::check_pre_image_is_missing(key).is_err());
+		assert_noop!(Democracy::pre_image_data_len(key), Error::<Test>::PreimageMissing);
+		assert_noop!(Democracy::check_pre_image_is_missing(key), Error::<Test>::NotImminent);
 
 		for l in vec![0, 10, 100, 1000u32] {
-			let available = PreimageStatus::Available{
+			let available = PreimageStatus::Available {
 				data: (0..l).map(|i| i as u8).collect(),
 				provider: 0,
 				deposit: 0,
@@ -76,7 +76,10 @@ fn pre_image() {
 
 			Preimages::<Test>::insert(key, available);
 			assert_eq!(Democracy::pre_image_data_len(key), Ok(l));
-			assert!(Democracy::check_pre_image_is_missing(key).is_err());
+			assert_noop!(
+				Democracy::check_pre_image_is_missing(key),
+				Error::<Test>::DuplicatePreimage
+			);
 		}
 	})
 }

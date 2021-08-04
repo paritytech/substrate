@@ -20,20 +20,82 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
-use std::fmt;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+#[cfg(feature = "std")]
+use std::fmt;
 
-use codec::{Encode, Decode};
-use sp_runtime::RuntimeString;
+use codec::{Decode, Encode};
 pub use sp_runtime::create_runtime_str;
+use sp_runtime::RuntimeString;
 #[doc(hidden)]
 pub use sp_std;
 
 #[cfg(feature = "std")]
-use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+
+#[cfg(feature = "std")]
+pub mod embed;
+
+/// An attribute that accepts a version declaration of a runtime and generates a custom wasm section
+/// with the equivalent contents.
+///
+/// The custom section allows to read the version of the runtime without having to execute any code.
+/// Instead, the generated custom section can be relatively easily parsed from the wasm binary. The
+/// identifier of the custom section is "runtime_version".
+///
+/// A shortcoming of this macro is that it is unable to embed information regarding supported APIs.
+/// This is supported by the `construct_runtime!` macro.
+///
+/// # Usage
+///
+/// This macro accepts a const item like the following:
+///
+/// ```rust
+/// use sp_version::{create_runtime_str, RuntimeVersion};
+///
+/// #[sp_version::runtime_version]
+/// pub const VERSION: RuntimeVersion = RuntimeVersion {
+/// 	spec_name: create_runtime_str!("test"),
+/// 	impl_name: create_runtime_str!("test"),
+/// 	authoring_version: 10,
+/// 	spec_version: 265,
+/// 	impl_version: 1,
+/// 	apis: RUNTIME_API_VERSIONS,
+/// 	transaction_version: 2,
+/// };
+///
+/// # const RUNTIME_API_VERSIONS: sp_version::ApisVec = sp_version::create_apis_vec!([]);
+/// ```
+///
+/// It will pass it through and add code required for emitting a custom section. The information that
+/// will go into the custom section is parsed from the item declaration. Due to that, the macro is
+/// somewhat rigid in terms of the code it accepts. There are the following considerations:
+///
+/// - The `spec_name` and `impl_name` must be set by a macro-like expression. The name of the macro
+///   doesn't matter though.
+///
+/// - `authoring_version`, `spec_version`, `impl_version` and `transaction_version` must be set
+///   by a literal. Literal must be an integer. No other expressions are allowed there. In particular,
+///   you can't supply a constant variable.
+///
+/// - `apis` doesn't have any specific constraints. This is because this information doesn't get into
+///   the custom section and is not parsed.
+///
+/// # Compilation Target & "std" feature
+///
+/// This macro assumes it will be used within a runtime. By convention, a runtime crate defines a
+/// feature named "std". This feature is enabled when the runtime is compiled to native code and
+/// disabled when it is compiled to the wasm code.
+///
+/// The custom section can only be emitted while compiling to wasm. In order to detect the compilation
+/// target we use the "std" feature. This macro will emit the custom section only if the "std" feature
+/// is **not** enabled.
+///
+/// Including this macro in the context where there is no "std" feature and the code is not compiled
+/// to wasm can lead to cryptic linking errors.
+pub use sp_version_proc_macro::runtime_version;
 
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
@@ -44,7 +106,9 @@ pub type ApisVec = sp_std::borrow::Cow<'static, [(ApiId, u32)]>;
 /// Create a vector of Api declarations.
 #[macro_export]
 macro_rules! create_apis_vec {
-	( $y:expr ) => { $crate::sp_std::borrow::Cow::Borrowed(& $y) }
+	( $y:expr ) => {
+		$crate::sp_std::borrow::Cow::Borrowed(&$y)
+	};
 }
 
 /// Runtime version.
@@ -110,7 +174,9 @@ pub struct RuntimeVersion {
 #[cfg(feature = "std")]
 impl fmt::Display for RuntimeVersion {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}-{} ({}-{}.tx{}.au{})",
+		write!(
+			f,
+			"{}-{} ({}-{}.tx{}.au{})",
 			self.spec_name,
 			self.spec_version,
 			self.impl_name,
@@ -126,18 +192,19 @@ impl RuntimeVersion {
 	/// Check if this version matches other version for calling into runtime.
 	pub fn can_call_with(&self, other: &RuntimeVersion) -> bool {
 		self.spec_version == other.spec_version &&
-		self.spec_name == other.spec_name &&
-		self.authoring_version == other.authoring_version
+			self.spec_name == other.spec_name &&
+			self.authoring_version == other.authoring_version
 	}
 
 	/// Check if the given api with `api_id` is implemented and the version passes the given
 	/// `predicate`.
-	pub fn has_api_with<P: Fn(u32) -> bool>(
-		&self,
-		id: &ApiId,
-		predicate: P,
-	) -> bool {
+	pub fn has_api_with<P: Fn(u32) -> bool>(&self, id: &ApiId, predicate: P) -> bool {
 		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
+	}
+
+	/// Returns the api version found for api with `id`.
+	pub fn api_version(&self, id: &ApiId) -> Option<u32> {
+		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
 	}
 }
 
@@ -162,11 +229,10 @@ impl NativeVersion {
 		if self.runtime_version.spec_name != other.spec_name {
 			Err(format!(
 				"`spec_name` does not match `{}` vs `{}`",
-				self.runtime_version.spec_name,
-				other.spec_name,
+				self.runtime_version.spec_name, other.spec_name,
 			))
-		} else if self.runtime_version.authoring_version != other.authoring_version
-			&& !self.can_author_with.contains(&other.authoring_version)
+		} else if self.runtime_version.authoring_version != other.authoring_version &&
+			!self.can_author_with.contains(&other.authoring_version)
 		{
 			Err(format!(
 				"`authoring_version` does not match `{version}` vs `{other_version}` and \
@@ -205,15 +271,13 @@ impl<T: GetRuntimeVersion<Block>, Block: BlockT> GetRuntimeVersion<Block> for st
 mod apis_serialize {
 	use super::*;
 	use impl_serde::serialize as bytes;
-	use serde::{Serializer, de, ser::SerializeTuple};
+	use serde::{de, ser::SerializeTuple, Serializer};
 
 	#[derive(Serialize)]
-	struct ApiId<'a>(
-		#[serde(serialize_with="serialize_bytesref")] &'a super::ApiId,
-		&'a u32,
-	);
+	struct ApiId<'a>(#[serde(serialize_with = "serialize_bytesref")] &'a super::ApiId, &'a u32);
 
-	pub fn serialize<S>(apis: &ApisVec, ser: S) -> Result<S::Ok, S::Error> where
+	pub fn serialize<S>(apis: &ApisVec, ser: S) -> Result<S::Ok, S::Error>
+	where
 		S: Serializer,
 	{
 		let len = apis.len();
@@ -224,20 +288,18 @@ mod apis_serialize {
 		seq.end()
 	}
 
-	pub fn serialize_bytesref<S>(&apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
+	pub fn serialize_bytesref<S>(&apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error>
+	where
 		S: Serializer,
 	{
 		bytes::serialize(apis, ser)
 	}
 
 	#[derive(Deserialize)]
-	struct ApiIdOwned(
-		#[serde(deserialize_with="deserialize_bytes")]
-		super::ApiId,
-		u32,
-	);
+	struct ApiIdOwned(#[serde(deserialize_with = "deserialize_bytes")] super::ApiId, u32);
 
-	pub fn deserialize<'de, D>(deserializer: D) -> Result<ApisVec, D::Error> where
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<ApisVec, D::Error>
+	where
 		D: de::Deserializer<'de>,
 	{
 		struct Visitor;
@@ -248,7 +310,8 @@ mod apis_serialize {
 				formatter.write_str("a sequence of api id and version tuples")
 			}
 
-			fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error> where
+			fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
+			where
 				V: de::SeqAccess<'de>,
 			{
 				let mut apis = Vec::new();
@@ -261,8 +324,9 @@ mod apis_serialize {
 		deserializer.deserialize_seq(Visitor)
 	}
 
-	pub fn deserialize_bytes<'de, D>(d: D) -> Result<super::ApiId, D::Error> where
-		D: de::Deserializer<'de>
+	pub fn deserialize_bytes<'de, D>(d: D) -> Result<super::ApiId, D::Error>
+	where
+		D: de::Deserializer<'de>,
 	{
 		let mut arr = [0; 8];
 		bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(&mut arr[..]))?;

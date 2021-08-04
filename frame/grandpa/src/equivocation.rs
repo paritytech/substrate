@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//!
 //! An opt-in utility module for reporting equivocations.
 //!
 //! This module defines an offence type for GRANDPA equivocations
@@ -35,12 +34,11 @@
 //! When using this module for enabling equivocation reporting it is required
 //! that the `ValidateUnsigned` for the GRANDPA pallet is used in the runtime
 //! definition.
-//!
 
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::{debug, traits::KeyOwnerProofSystem};
+use frame_support::traits::{Get, KeyOwnerProofSystem};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	transaction_validity::{
@@ -54,7 +52,7 @@ use sp_staking::{
 	SessionIndex,
 };
 
-use super::{Call, Module, Config};
+use super::{Call, Config, Pallet};
 
 /// A trait with utility methods for handling equivocation reports in GRANDPA.
 /// The offence type is generic, and the trait provides , reporting an offence
@@ -63,6 +61,10 @@ use super::{Call, Module, Config};
 pub trait HandleEquivocation<T: Config> {
 	/// The offence type used for reporting offences on valid equivocation reports.
 	type Offence: GrandpaOffence<T::KeyOwnerIdentification>;
+
+	/// The longevity, in blocks, that the equivocation report is valid for. When using the staking
+	/// pallet this should be equal to the bonding duration (in blocks, not eras).
+	type ReportLongevity: Get<u64>;
 
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
@@ -88,6 +90,7 @@ pub trait HandleEquivocation<T: Config> {
 
 impl<T: Config> HandleEquivocation<T> for () {
 	type Offence = GrandpaEquivocationOffence<T::KeyOwnerIdentification>;
+	type ReportLongevity = ();
 
 	fn report_offence(
 		_reporters: Vec<T::AccountId>,
@@ -119,19 +122,17 @@ impl<T: Config> HandleEquivocation<T> for () {
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-pub struct EquivocationHandler<I, R, O = GrandpaEquivocationOffence<I>> {
-	_phantom: sp_std::marker::PhantomData<(I, R, O)>,
+pub struct EquivocationHandler<I, R, L, O = GrandpaEquivocationOffence<I>> {
+	_phantom: sp_std::marker::PhantomData<(I, R, L, O)>,
 }
 
-impl<I, R, O> Default for EquivocationHandler<I, R, O> {
+impl<I, R, L, O> Default for EquivocationHandler<I, R, L, O> {
 	fn default() -> Self {
-		Self {
-			_phantom: Default::default(),
-		}
+		Self { _phantom: Default::default() }
 	}
 }
 
-impl<T, R, O> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdentification, R, O>
+impl<T, R, L, O> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdentification, R, L, O>
 where
 	// We use the authorship pallet to fetch the current block author and use
 	// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
@@ -140,10 +141,14 @@ where
 	// A system for reporting offences after valid equivocation reports are
 	// processed.
 	R: ReportOffence<T::AccountId, T::KeyOwnerIdentification, O>,
+	// The longevity (in blocks) that the equivocation report is valid for. When using the staking
+	// pallet this should be the bonding duration.
+	L: Get<u64>,
 	// The offence type that should be used when reporting.
 	O: GrandpaOffence<T::KeyOwnerIdentification>,
 {
 	type Offence = O;
+	type ReportLongevity = L;
 
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		R::report_offence(reporters, offence)
@@ -162,15 +167,22 @@ where
 		let call = Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof);
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			Ok(()) => debug::info!("Submitted GRANDPA equivocation report."),
-			Err(e) => debug::error!("Error submitting equivocation report: {:?}", e),
+			Ok(()) => log::info!(
+				target: "runtime::afg",
+				"Submitted GRANDPA equivocation report.",
+			),
+			Err(e) => log::error!(
+				target: "runtime::afg",
+				"Error submitting equivocation report: {:?}",
+				e,
+			),
 		}
 
 		Ok(())
 	}
 
 	fn block_author() -> Option<T::AccountId> {
-		Some(<pallet_authorship::Module<T>>::author())
+		Some(<pallet_authorship::Pallet<T>>::author())
 	}
 }
 
@@ -184,25 +196,31 @@ pub struct GrandpaTimeSlot {
 	pub round: RoundNumber,
 }
 
-/// A `ValidateUnsigned` implementation that restricts calls to `report_equivocation_unsigned`
-/// to local calls (i.e. extrinsics generated on this node) or that already in a block. This
-/// guarantees that only block authors can include unsigned equivocation reports.
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
-	type Call = Call<T>;
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::report_equivocation_unsigned(equivocation_proof, _) = call {
+/// Methods for the `ValidateUnsigned` implementation:
+/// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
+/// on this node) or that already in a block. This guarantees that only block authors can include
+/// unsigned equivocation reports.
+impl<T: Config> Pallet<T> {
+	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
+		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 				_ => {
-					debug::warn!(
-						target: "afg",
+					log::warn!(
+						target: "runtime::afg",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
 
-					return InvalidTransaction::Call.into();
-				}
+					return InvalidTransaction::Call.into()
+				},
 			}
+
+			// check report staleness
+			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
+
+			let longevity =
+				<T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
 
 			ValidTransaction::with_tag_prefix("GrandpaEquivocation")
 				// We assign the maximum priority for any equivocation report.
@@ -213,6 +231,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 					equivocation_proof.set_id(),
 					equivocation_proof.round(),
 				))
+				.longevity(longevity)
 				// We don't propagate this. This can never be included on a remote node.
 				.propagate(false)
 				.build()
@@ -221,35 +240,38 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
-			// check the membership proof to extract the offender's id
-			let key = (
-				sp_finality_grandpa::KEY_TYPE,
-				equivocation_proof.offender().clone(),
-			);
-
-			let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
-				.ok_or(InvalidTransaction::BadProof)?;
-
-			// check if the offence has already been reported,
-			// and if so then we can discard the report.
-			let time_slot =
-				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new_time_slot(
-					equivocation_proof.set_id(),
-					equivocation_proof.round(),
-				);
-
-			let is_known_offence = T::HandleEquivocation::is_known_offence(&[offender], &time_slot);
-
-			if is_known_offence {
-				Err(InvalidTransaction::Stale.into())
-			} else {
-				Ok(())
-			}
+			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
+	}
+}
+
+fn is_known_offence<T: Config>(
+	equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
+	key_owner_proof: &T::KeyOwnerProof,
+) -> Result<(), TransactionValidityError> {
+	// check the membership proof to extract the offender's id
+	let key = (sp_finality_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
+
+	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
+		.ok_or(InvalidTransaction::BadProof)?;
+
+	// check if the offence has already been reported,
+	// and if so then we can discard the report.
+	let time_slot = <T::HandleEquivocation as HandleEquivocation<T>>::Offence::new_time_slot(
+		equivocation_proof.set_id(),
+		equivocation_proof.round(),
+	);
+
+	let is_known_offence = T::HandleEquivocation::is_known_offence(&[offender], &time_slot);
+
+	if is_known_offence {
+		Err(InvalidTransaction::Stale.into())
+	} else {
+		Ok(())
 	}
 }
 
@@ -330,7 +352,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 
 	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
+		let x = Perbill::from_rational(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()
 	}

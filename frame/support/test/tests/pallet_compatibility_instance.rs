@@ -17,7 +17,7 @@
 
 mod pallet_old {
 	use frame_support::{
-		decl_storage, decl_error, decl_event, decl_module, weights::Weight, traits::Get, Parameter
+		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
 	};
 	use frame_system::ensure_root;
 
@@ -39,7 +39,10 @@ mod pallet_old {
 	}
 
 	decl_event!(
-		pub enum Event<T, I = DefaultInstance> where Balance = <T as Config<I>>::Balance {
+		pub enum Event<T, I = DefaultInstance>
+		where
+			Balance = <T as Config<I>>::Balance,
+		{
 			/// Dummy event, just here so there's a generic type that's used.
 			Dummy(Balance),
 		}
@@ -83,12 +86,15 @@ mod pallet_old {
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-	use frame_system::ensure_root;
+	use frame_system::{ensure_root, pallet_prelude::*};
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default
+		type Balance: Parameter
+			+ codec::HasCompact
+			+ From<u32>
+			+ Into<Weight>
+			+ Default
 			+ MaybeSerializeDeserialize;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
@@ -113,9 +119,9 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::weight(<T::Balance as Into<Weight>>::into(new_value.clone()))]
-		fn set_dummy(
+		pub fn set_dummy(
 			origin: OriginFor<T>,
-			#[pallet::compact] new_value: T::Balance
+			#[pallet::compact] new_value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
@@ -151,12 +157,14 @@ pub mod pallet {
 	#[pallet::storage]
 	type Foo<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::Balance, ValueQuery, OnFooEmpty<T, I>>;
-	#[pallet::type_value] pub fn OnFooEmpty<T: Config<I>, I: 'static>() -> T::Balance { 3.into() }
+	#[pallet::type_value]
+	pub fn OnFooEmpty<T: Config<I>, I: 'static>() -> T::Balance {
+		3.into()
+	}
 
 	#[pallet::storage]
-	type Double<T, I = ()> = StorageDoubleMap<
-		_, Blake2_128Concat, u32, Twox64Concat, u64, u16, ValueQuery
-	>;
+	type Double<T, I = ()> =
+		StorageDoubleMap<_, Blake2_128Concat, u32, Twox64Concat, u64, u16, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
@@ -198,7 +206,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
@@ -217,6 +225,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
@@ -259,39 +268,37 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
-		Example: pallet::{Module, Call, Event<T>, Config<T>, Storage},
-		PalletOld: pallet_old::{Module, Call, Event<T>, Config<T>, Storage},
-		Instance2Example: pallet::<Instance2>::{Module, Call, Event<T>, Config<T>, Storage},
-		PalletOld2: pallet_old::<Instance2>::{Module, Call, Event<T>, Config<T>, Storage},
-		Instance3Example: pallet::<Instance3>::{Module, Call, Event<T>, Config<T>, Storage},
-		PalletOld3: pallet_old::<Instance3>::{Module, Call, Event<T>, Config<T>, Storage},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Example: pallet::{Pallet, Call, Event<T>, Config<T>, Storage},
+		PalletOld: pallet_old::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Instance2Example: pallet::<Instance2>::{Pallet, Call, Event<T>, Config<T>, Storage},
+		PalletOld2: pallet_old::<Instance2>::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Instance3Example: pallet::<Instance3>::{Pallet, Call, Event<T>, Config<T>, Storage},
+		PalletOld3: pallet_old::<Instance3>::{Pallet, Call, Event<T>, Config<T>, Storage},
 	}
 );
 
 #[cfg(test)]
 mod test {
-	use super::Runtime;
-	use super::pallet;
-	use super::pallet_old;
+	use super::{pallet, pallet_old, Runtime};
 	use codec::{Decode, Encode};
 
 	#[test]
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let modules = match metadata.1 {
-			frame_metadata::RuntimeMetadata::V12(frame_metadata::RuntimeMetadataV12 {
+			frame_metadata::RuntimeMetadata::V13(frame_metadata::RuntimeMetadataV13 {
 				modules: frame_metadata::DecodeDifferent::Encode(m),
 				..
 			}) => m,
 			_ => unreachable!(),
 		};
 		for i in vec![1, 3, 5].into_iter() {
-			pretty_assertions::assert_eq!(modules[i].storage, modules[i+1].storage);
-			pretty_assertions::assert_eq!(modules[i].calls, modules[i+1].calls);
-			pretty_assertions::assert_eq!(modules[i].event, modules[i+1].event);
-			pretty_assertions::assert_eq!(modules[i].constants, modules[i+1].constants);
-			pretty_assertions::assert_eq!(modules[i].errors, modules[i+1].errors);
+			pretty_assertions::assert_eq!(modules[i].storage, modules[i + 1].storage);
+			pretty_assertions::assert_eq!(modules[i].calls, modules[i + 1].calls);
+			pretty_assertions::assert_eq!(modules[i].event, modules[i + 1].event);
+			pretty_assertions::assert_eq!(modules[i].constants, modules[i + 1].constants);
+			pretty_assertions::assert_eq!(modules[i].errors, modules[i + 1].errors);
 		}
 	}
 
@@ -300,14 +307,16 @@ mod test {
 		assert_eq!(
 			pallet_old::Event::<Runtime>::decode(
 				&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]
-			).unwrap(),
+			)
+			.unwrap(),
 			pallet_old::Event::<Runtime>::Dummy(10),
 		);
 
 		assert_eq!(
 			pallet_old::Call::<Runtime>::decode(
 				&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]
-			).unwrap(),
+			)
+			.unwrap(),
 			pallet_old::Call::<Runtime>::set_dummy(10),
 		);
 	}

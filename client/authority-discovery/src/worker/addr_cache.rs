@@ -19,11 +19,14 @@
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
 use std::collections::HashMap;
 
-use sp_authority_discovery::AuthorityId;
 use sc_network::PeerId;
+use sp_authority_discovery::AuthorityId;
 
 /// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
+	// The addresses found in `authority_id_to_addresses` are guaranteed to always match
+	// the peerids found in `peer_id_to_authority_id`. In other words, these two hashmaps
+	// are similar to a bi-directional map.
 	authority_id_to_addresses: HashMap<AuthorityId, Vec<Multiaddr>>,
 	peer_id_to_authority_id: HashMap<PeerId, AuthorityId>,
 }
@@ -39,21 +42,50 @@ impl AddrCache {
 	/// Inserts the given [`AuthorityId`] and [`Vec<Multiaddr>`] pair for future lookups by
 	/// [`AuthorityId`] or [`PeerId`].
 	pub fn insert(&mut self, authority_id: AuthorityId, mut addresses: Vec<Multiaddr>) {
-		if addresses.is_empty() {
-			return;
-		}
+		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
 		// Insert into `self.peer_id_to_authority_id`.
-		let peer_ids = addresses.iter()
+		let peer_ids = addresses
+			.iter()
 			.map(|a| peer_id_from_multiaddr(a))
 			.filter_map(|peer_id| peer_id);
-		for peer_id in  peer_ids {
-			self.peer_id_to_authority_id.insert(peer_id, authority_id.clone());
+		for peer_id in peer_ids.clone() {
+			let former_auth =
+				match self.peer_id_to_authority_id.insert(peer_id, authority_id.clone()) {
+					Some(a) if a != authority_id => a,
+					_ => continue,
+				};
+
+			// PeerId was associated to a different authority id before.
+			// Remove corresponding authority from `self.authority_id_to_addresses`.
+			let former_auth_addrs = match self.authority_id_to_addresses.get_mut(&former_auth) {
+				Some(a) => a,
+				None => {
+					debug_assert!(false);
+					continue
+				},
+			};
+			former_auth_addrs.retain(|a| peer_id_from_multiaddr(a).map_or(true, |p| p != peer_id));
 		}
 
 		// Insert into `self.authority_id_to_addresses`.
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
-		self.authority_id_to_addresses.insert(authority_id, addresses);
+		for former_addr in self
+			.authority_id_to_addresses
+			.insert(authority_id.clone(), addresses.clone())
+			.unwrap_or_default()
+		{
+			// Must remove from `self.peer_id_to_authority_id` any PeerId formerly associated
+			// to that authority but that can't be found in its new addresses.
+
+			let peer_id = match peer_id_from_multiaddr(&former_addr) {
+				Some(p) => p,
+				None => continue,
+			};
+
+			if !peer_ids.clone().any(|p| p == peer_id) {
+				self.peer_id_to_authority_id.remove(&peer_id);
+			}
+		}
 	}
 
 	/// Returns the number of authority IDs in the cache.
@@ -62,7 +94,10 @@ impl AddrCache {
 	}
 
 	/// Returns the addresses for the given [`AuthorityId`].
-	pub fn get_addresses_by_authority_id(&self, authority_id: &AuthorityId) -> Option<&Vec<Multiaddr>> {
+	pub fn get_addresses_by_authority_id(
+		&self,
+		authority_id: &AuthorityId,
+	) -> Option<&Vec<Multiaddr>> {
 		self.authority_id_to_addresses.get(&authority_id)
 	}
 
@@ -75,7 +110,9 @@ impl AddrCache {
 	/// [`AuthorityId`]s.
 	pub fn retain_ids(&mut self, authority_ids: &Vec<AuthorityId>) {
 		// The below logic could be replaced by `BtreeMap::drain_filter` once it stabilized.
-		let authority_ids_to_remove = self.authority_id_to_addresses.iter()
+		let authority_ids_to_remove = self
+			.authority_id_to_addresses
+			.iter()
 			.filter(|(id, _addresses)| !authority_ids.contains(id))
 			.map(|entry| entry.0)
 			.cloned()
@@ -86,7 +123,8 @@ impl AddrCache {
 			let addresses = self.authority_id_to_addresses.remove(&authority_id_to_remove);
 
 			// Remove other entries from `self.peer_id_to_authority_id`.
-			let peer_ids = addresses.iter()
+			let peer_ids = addresses
+				.iter()
 				.flatten()
 				.map(|a| peer_id_from_multiaddr(a))
 				.filter_map(|peer_id| peer_id);
@@ -100,10 +138,12 @@ impl AddrCache {
 }
 
 fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
-	addr.iter().last().and_then(|protocol| if let Protocol::P2p(multihash) = protocol {
-		PeerId::from_multihash(multihash).ok()
-	} else {
-		None
+	addr.iter().last().and_then(|protocol| {
+		if let Protocol::P2p(multihash) = protocol {
+			PeerId::from_multihash(multihash).ok()
+		} else {
+			None
+		}
 	})
 }
 
@@ -113,7 +153,6 @@ mod tests {
 
 	use libp2p::multihash::{self, Multihash};
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
-	use rand::Rng;
 
 	use sp_authority_discovery::{AuthorityId, AuthorityPair};
 	use sp_core::crypto::Pair;
@@ -122,8 +161,8 @@ mod tests {
 	struct TestAuthorityId(AuthorityId);
 
 	impl Arbitrary for TestAuthorityId {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let seed: [u8; 32] = g.gen();
+		fn arbitrary(g: &mut Gen) -> Self {
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			TestAuthorityId(AuthorityPair::from_seed_slice(&seed).unwrap().public())
 		}
 	}
@@ -132,16 +171,40 @@ mod tests {
 	struct TestMultiaddr(Multiaddr);
 
 	impl Arbitrary for TestMultiaddr {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let seed: [u8; 32] = g.gen();
+		fn arbitrary(g: &mut Gen) -> Self {
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			let peer_id = PeerId::from_multihash(
-				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
-			).unwrap();
-			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap(),
+			)
+			.unwrap();
+			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
+				.parse::<Multiaddr>()
 				.unwrap()
 				.with(Protocol::P2p(peer_id.into()));
 
 			TestMultiaddr(multiaddr)
+		}
+	}
+
+	#[derive(Clone, Debug)]
+	struct TestMultiaddrsSamePeerCombo(Multiaddr, Multiaddr);
+
+	impl Arbitrary for TestMultiaddrsSamePeerCombo {
+		fn arbitrary(g: &mut Gen) -> Self {
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
+			let peer_id = PeerId::from_multihash(
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap(),
+			)
+			.unwrap();
+			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
+				.parse::<Multiaddr>()
+				.unwrap()
+				.with(Protocol::P2p(peer_id.clone().into()));
+			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133"
+				.parse::<Multiaddr>()
+				.unwrap()
+				.with(Protocol::P2p(peer_id.into()));
+			TestMultiaddrsSamePeerCombo(multiaddr1, multiaddr2)
 		}
 	}
 
@@ -176,11 +239,13 @@ mod tests {
 			cache.retain_ids(&vec![first.0, second.0]);
 
 			assert_eq!(
-				None, cache.get_addresses_by_authority_id(&third.0),
+				None,
+				cache.get_addresses_by_authority_id(&third.0),
 				"Expect `get_addresses_by_authority_id` to not return `None` for third authority."
 			);
 			assert_eq!(
-				None, cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
+				None,
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
 				"Expect `get_authority_id_by_peer_id` to return `None` for third authority."
 			);
 
@@ -190,5 +255,77 @@ mod tests {
 		QuickCheck::new()
 			.max_tests(10)
 			.quickcheck(property as fn(_, _, _) -> TestResult)
+	}
+
+	#[test]
+	fn keeps_consistency_between_authority_id_and_peer_id() {
+		fn property(
+			authority1: TestAuthorityId,
+			authority2: TestAuthorityId,
+			multiaddr1: TestMultiaddr,
+			multiaddr2: TestMultiaddr,
+			multiaddr3: TestMultiaddrsSamePeerCombo,
+		) -> TestResult {
+			let authority1 = authority1.0;
+			let authority2 = authority2.0;
+			let multiaddr1 = multiaddr1.0;
+			let multiaddr2 = multiaddr2.0;
+			let TestMultiaddrsSamePeerCombo(multiaddr3, multiaddr4) = multiaddr3;
+
+			let mut cache = AddrCache::new();
+
+			cache.insert(authority1.clone(), vec![multiaddr1.clone()]);
+			cache.insert(
+				authority1.clone(),
+				vec![multiaddr2.clone(), multiaddr3.clone(), multiaddr4.clone()],
+			);
+
+			assert_eq!(
+				None,
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr1).unwrap())
+			);
+			assert_eq!(
+				Some(&authority1),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+			);
+			assert_eq!(
+				Some(&authority1),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+			);
+			assert_eq!(
+				Some(&authority1),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr4).unwrap())
+			);
+
+			cache.insert(authority2.clone(), vec![multiaddr2.clone()]);
+
+			assert_eq!(
+				Some(&authority2),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+			);
+			assert_eq!(
+				Some(&authority1),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+			);
+			assert_eq!(cache.get_addresses_by_authority_id(&authority1).unwrap().len(), 2);
+
+			cache.insert(authority2.clone(), vec![multiaddr2.clone(), multiaddr3.clone()]);
+
+			assert_eq!(
+				Some(&authority2),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+			);
+			assert_eq!(
+				Some(&authority2),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+			);
+			assert!(cache.get_addresses_by_authority_id(&authority1).unwrap().is_empty());
+
+			TestResult::passed()
+		}
+
+		QuickCheck::new()
+			.max_tests(10)
+			.quickcheck(property as fn(_, _, _, _, _) -> TestResult)
 	}
 }

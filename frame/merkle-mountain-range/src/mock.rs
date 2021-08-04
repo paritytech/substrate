@@ -15,36 +15,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate as pallet_mmr;
 use crate::*;
 
-use codec::{Encode, Decode};
-use frame_support::{
-	impl_outer_origin, parameter_types,
-};
-use pallet_mmr_primitives::{LeafDataProvider, Compact};
+use codec::{Decode, Encode};
+use frame_support::parameter_types;
+use pallet_mmr_primitives::{Compact, LeafDataProvider};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{
-		BlakeTwo256, Keccak256, IdentityLookup,
-	},
+	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 };
-use sp_std::cell::RefCell;
-use sp_std::prelude::*;
+use sp_std::{cell::RefCell, prelude::*};
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		MMR: pallet_mmr::{Pallet, Storage},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
-	type Call = ();
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -52,18 +56,19 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl Config for Test {
@@ -71,7 +76,7 @@ impl Config for Test {
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
+	type LeafData = Compact<Keccak256, (frame_system::Pallet<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
@@ -84,10 +89,7 @@ pub struct LeafData {
 
 impl LeafData {
 	pub fn new(a: u64) -> Self {
-		Self {
-			a,
-			b: Default::default(),
-		}
+		Self { a, b: Default::default() }
 	}
 }
 
@@ -102,5 +104,3 @@ impl LeafDataProvider for LeafData {
 		LEAF_DATA.with(|r| r.borrow().clone())
 	}
 }
-
-pub(crate) type MMR = Module<Test>;

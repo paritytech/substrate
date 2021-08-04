@@ -15,7 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{env, path::{PathBuf, Path}, process};
+use std::{
+	env,
+	path::{Path, PathBuf},
+	process,
+};
 
 /// Returns the manifest dir from the `CARGO_MANIFEST_DIR` env.
 fn get_manifest_dir() -> PathBuf {
@@ -43,16 +47,14 @@ impl WasmBuilderSelectProject {
 			rust_flags: Vec::new(),
 			file_name: None,
 			project_cargo_toml: get_manifest_dir().join("Cargo.toml"),
+			features_to_enable: Vec::new(),
 		}
 	}
 
 	/// Use the given `path` as project for building the WASM binary.
 	///
 	/// Returns an error if the given `path` does not points to a `Cargo.toml`.
-	pub fn with_project(
-		self,
-		path: impl Into<PathBuf>,
-	) -> Result<WasmBuilder, &'static str> {
+	pub fn with_project(self, path: impl Into<PathBuf>) -> Result<WasmBuilder, &'static str> {
 		let path = path.into();
 
 		if path.ends_with("Cargo.toml") && path.exists() {
@@ -60,6 +62,7 @@ impl WasmBuilderSelectProject {
 				rust_flags: Vec::new(),
 				file_name: None,
 				project_cargo_toml: path,
+				features_to_enable: Vec::new(),
 			})
 		} else {
 			Err("Project path must point to the `Cargo.toml` of the project")
@@ -88,14 +91,14 @@ pub struct WasmBuilder {
 	/// The path to the `Cargo.toml` of the project that should be built
 	/// for wasm.
 	project_cargo_toml: PathBuf,
+	/// Features that should be enabled when building the wasm binary.
+	features_to_enable: Vec<String>,
 }
 
 impl WasmBuilder {
 	/// Create a new instance of the builder.
 	pub fn new() -> WasmBuilderSelectProject {
-		WasmBuilderSelectProject {
-			_ignore: (),
-		}
+		WasmBuilderSelectProject { _ignore: () }
 	}
 
 	/// Enable exporting `__heap_base` as global variable in the WASM binary.
@@ -132,10 +135,19 @@ impl WasmBuilder {
 		self
 	}
 
+	/// Enable the given feature when building the wasm binary.
+	///
+	/// `feature` needs to be a valid feature that is defined in the project `Cargo.toml`.
+	pub fn enable_feature(mut self, feature: impl Into<String>) -> Self {
+		self.features_to_enable.push(feature.into());
+		self
+	}
+
 	/// Build the WASM binary.
 	pub fn build(self) {
 		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
-		let file_path = out_dir.join(self.file_name.unwrap_or_else(|| "wasm_binary.rs".into()));
+		let file_path =
+			out_dir.join(self.file_name.clone().unwrap_or_else(|| "wasm_binary.rs".into()));
 
 		if check_skip_build() {
 			// If we skip the build, we still want to make sure to be called when an env variable
@@ -144,13 +156,15 @@ impl WasmBuilder {
 
 			provide_dummy_wasm_binary_if_not_exist(&file_path);
 
-			return;
+			return
 		}
 
 		build_project(
 			file_path,
 			self.project_cargo_toml,
 			self.rust_flags.into_iter().map(|f| format!("{} ", f)).collect(),
+			self.features_to_enable,
+			self.file_name,
 		);
 
 		// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
@@ -163,13 +177,17 @@ impl WasmBuilder {
 fn generate_crate_skip_build_env_name() -> String {
 	format!(
 		"SKIP_{}_WASM_BUILD",
-		env::var("CARGO_PKG_NAME").expect("Package name is set").to_uppercase().replace('-', "_"),
+		env::var("CARGO_PKG_NAME")
+			.expect("Package name is set")
+			.to_uppercase()
+			.replace('-', "_"),
 	)
 }
 
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
-	env::var(crate::SKIP_BUILD_ENV).is_ok() || env::var(generate_crate_skip_build_env_name()).is_ok()
+	env::var(crate::SKIP_BUILD_ENV).is_ok() ||
+		env::var(generate_crate_skip_build_env_name()).is_ok()
 }
 
 /// Provide a dummy WASM binary if there doesn't exist one.
@@ -200,10 +218,15 @@ fn generate_rerun_if_changed_instructions() {
 ///               constant `WASM_BINARY`, which contains the built WASM binary.
 /// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
+/// `features_to_enable` - Features that should be enabled for the project.
+/// `wasm_binary_name` - The optional wasm binary name that is extended with `.compact.compressed.wasm`.
+///                      If `None`, the project name will be used.
 fn build_project(
 	file_name: PathBuf,
 	project_cargo_toml: PathBuf,
 	default_rustflags: String,
+	features_to_enable: Vec<String>,
+	wasm_binary_name: Option<String>,
 ) {
 	let cargo_cmd = match crate::prerequisites::check() {
 		Ok(cmd) => cmd,
@@ -217,18 +240,14 @@ fn build_project(
 		&project_cargo_toml,
 		&default_rustflags,
 		cargo_cmd,
+		features_to_enable,
+		wasm_binary_name,
 	);
 
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {
-		(
-			wasm_binary.wasm_binary_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped(),
-		)
+		(wasm_binary.wasm_binary_path_escaped(), bloaty.wasm_binary_bloaty_path_escaped())
 	} else {
-		(
-			bloaty.wasm_binary_bloaty_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped(),
-		)
+		(bloaty.wasm_binary_bloaty_path_escaped(), bloaty.wasm_binary_bloaty_path_escaped())
 	};
 
 	crate::write_file_if_changed(

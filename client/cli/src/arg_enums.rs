@@ -20,35 +20,62 @@
 
 use structopt::clap::arg_enum;
 
-arg_enum! {
-	/// How to execute Wasm runtime code
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum WasmExecutionMethod {
-		// Uses an interpreter.
-		Interpreted,
-		// Uses a compiled runtime.
-		Compiled,
+/// How to execute Wasm runtime code.
+#[derive(Debug, Clone, Copy)]
+pub enum WasmExecutionMethod {
+	/// Uses an interpreter.
+	Interpreted,
+	/// Uses a compiled runtime.
+	Compiled,
+}
+
+impl std::fmt::Display for WasmExecutionMethod {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Interpreted => write!(f, "Interpreted"),
+			Self::Compiled => write!(f, "Compiled"),
+		}
+	}
+}
+
+impl std::str::FromStr for WasmExecutionMethod {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		if s.eq_ignore_ascii_case("interpreted-i-know-what-i-do") {
+			Ok(Self::Interpreted)
+		} else if s.eq_ignore_ascii_case("compiled") {
+			#[cfg(feature = "wasmtime")]
+			{
+				Ok(Self::Compiled)
+			}
+			#[cfg(not(feature = "wasmtime"))]
+			{
+				Err(format!("`Compiled` variant requires the `wasmtime` feature to be enabled"))
+			}
+		} else {
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
+		}
 	}
 }
 
 impl WasmExecutionMethod {
-	/// Returns list of variants that are not disabled by feature flags.
-	pub fn enabled_variants() -> Vec<&'static str> {
-		Self::variants()
-			.iter()
-			.cloned()
-			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
-			.collect()
+	/// Returns all the variants of this enum to be shown in the cli.
+	pub fn variants() -> &'static [&'static str] {
+		let variants = &["interpreted-i-know-what-i-do", "compiled"];
+		if cfg!(feature = "wasmtime") {
+			variants
+		} else {
+			&variants[..1]
+		}
 	}
 }
 
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => {
-				sc_service::config::WasmExecutionMethod::Interpreted
-			}
+			WasmExecutionMethod::Interpreted =>
+				sc_service::config::WasmExecutionMethod::Interpreted,
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
@@ -64,7 +91,6 @@ arg_enum! {
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum TracingReceiver {
 		Log,
-		Telemetry,
 	}
 }
 
@@ -72,7 +98,6 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 	fn into(self) -> sc_tracing::TracingReceiver {
 		match self {
 			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
 		}
 	}
 }
@@ -165,18 +190,35 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 	}
 }
 
-arg_enum! {
-	/// Database backend
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum Database {
-		// Facebooks RocksDB
-		RocksDb,
-		// ParityDb. https://github.com/paritytech/parity-db/
-		ParityDb,
+/// Database backend
+#[derive(Debug, Clone, Copy)]
+pub enum Database {
+	/// Facebooks RocksDB
+	RocksDb,
+	/// ParityDb. <https://github.com/paritytech/parity-db/>
+	ParityDb,
+}
+
+impl std::str::FromStr for Database {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		if s.eq_ignore_ascii_case("rocksdb") {
+			Ok(Self::RocksDb)
+		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
+			Ok(Self::ParityDb)
+		} else {
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
+		}
 	}
 }
 
+impl Database {
+	/// Returns all the variants of this enum to be shown in the cli.
+	pub fn variants() -> &'static [&'static str] {
+		&["rocksdb", "paritydb-experimental"]
+	}
+}
 
 arg_enum! {
 	/// Whether off-chain workers are enabled.
@@ -186,6 +228,35 @@ arg_enum! {
 		Always,
 		Never,
 		WhenValidating,
+	}
+}
+
+arg_enum! {
+	/// Syncing mode.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum SyncMode {
+		// Full sync. Donwnload end verify all blocks.
+		Full,
+		// Download blocks without executing them. Download latest state with proofs.
+		Fast,
+		// Download blocks without executing them. Download latest state without proofs.
+		FastUnsafe,
+		// Prove finality and download the latest state.
+		Warp,
+	}
+}
+
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
+		match self {
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast =>
+				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
+			SyncMode::FastUnsafe =>
+				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
+			SyncMode::Warp => sc_network::config::SyncMode::Warp,
+		}
 	}
 }
 

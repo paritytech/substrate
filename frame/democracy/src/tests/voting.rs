@@ -23,7 +23,10 @@ use super::*;
 fn overvoting_should_fail() {
 	new_test_ext().execute_with(|| {
 		let r = begin_referendum();
-		assert_noop!(Democracy::vote(Origin::signed(1), r, aye(2)), Error::<Test>::InsufficientFunds);
+		assert_noop!(
+			Democracy::vote(Origin::signed(1), r, aye(2)),
+			Error::<Test>::InsufficientFunds
+		);
 	});
 }
 
@@ -80,12 +83,12 @@ fn single_proposal_should_work() {
 		fast_forward_to(3);
 
 		// referendum still running
-		assert!(Democracy::referendum_status(0).is_ok());
+		assert_ok!(Democracy::referendum_status(0));
 
 		// referendum runs during 2 and 3, ends @ start of 4.
 		fast_forward_to(4);
 
-		assert!(Democracy::referendum_status(0).is_err());
+		assert_noop!(Democracy::referendum_status(0), Error::<Test>::ReferendumInvalid);
 		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_some());
 
 		// referendum passes and wait another two blocks for enactment.
@@ -102,7 +105,7 @@ fn controversial_voting_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 
 		assert_ok!(Democracy::vote(Origin::signed(1), r, big_aye(1)));
@@ -128,7 +131,7 @@ fn controversial_low_turnout_voting_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(5), r, big_nay(5)));
 		assert_ok!(Democracy::vote(Origin::signed(6), r, big_aye(6)));
@@ -152,7 +155,7 @@ fn passing_low_turnout_voting_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(4), r, big_aye(4)));
 		assert_ok!(Democracy::vote(Origin::signed(5), r, big_nay(5)));

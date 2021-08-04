@@ -18,21 +18,34 @@
 
 //! Service configuration.
 
+pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{
-	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
-	KeepBlocks, TransactionStorageMode
+	Database, DatabaseSettingsSrc as DatabaseConfig, KeepBlocks, PruningMode,
+	TransactionStorageMode,
 };
-pub use sc_network::Multiaddr;
-pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
-use sc_client_api::execution_extensions::ExecutionStrategies;
+pub use sc_network::{
+	config::{
+		ExtTransport, IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
+		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
+		TransportConfig,
+	},
+	Multiaddr,
+};
 
-use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::ChainSpec;
-use sp_core::crypto::SecretString;
-pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
+use sc_chain_spec::ChainSpec;
+pub use sc_telemetry::TelemetryEndpoints;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
+use sp_core::crypto::SecretString;
+use std::{
+	future::Future,
+	io,
+	net::SocketAddr,
+	path::{Path, PathBuf},
+	pin::Pin,
+	sync::Arc,
+};
 #[cfg(not(target_os = "unknown"))]
 use tempfile::TempDir;
 
@@ -85,10 +98,14 @@ pub struct Configuration {
 	pub rpc_ipc: Option<String>,
 	/// Maximum number of connections for WebSockets RPC server. `None` if default.
 	pub rpc_ws_max_connections: Option<usize>,
+	/// Size of the RPC HTTP server thread pool. `None` if default.
+	pub rpc_http_threads: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
 	pub rpc_methods: RpcMethods,
+	/// Maximum payload of rpc request/responses.
+	pub rpc_max_payload: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -96,11 +113,6 @@ pub struct Configuration {
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
 	/// endpoint, this transport will be tried in priority before all others.
 	pub telemetry_external_transport: Option<ExtTransport>,
-	/// Telemetry handle.
-	///
-	/// This is a handle to a `TelemetryWorker` instance. It is used to initialize the telemetry for
-	/// a substrate node.
-	pub telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -150,7 +162,7 @@ pub enum KeystoreConfig {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<SecretString>
+		password: Option<SecretString>,
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
@@ -191,7 +203,7 @@ impl PrometheusConfig {
 		Self {
 			port,
 			registry: Registry::new_custom(Some("substrate".into()), None)
-				.expect("this can only fail if the prefix is empty")
+				.expect("this can only fail if the prefix is empty"),
 		}
 	}
 }
@@ -207,29 +219,18 @@ impl Configuration {
 		self.prometheus_config.as_ref().map(|config| &config.registry)
 	}
 
-	/// Returns the telemetry endpoints if any and if the telemetry handle exists.
-	pub(crate) fn telemetry_endpoints(&self) -> Option<&TelemetryEndpoints> {
-		if self.telemetry_handle.is_none() {
-			return None;
-		}
-
-		match self.telemetry_endpoints.as_ref() {
-			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
-			Some(endpoints) if !endpoints.is_empty() => Some(endpoints),
-			_ => None,
-		}
-	}
-
 	/// Returns the network protocol id from the chain spec, or the default.
 	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
 		let protocol_id_full = match self.chain_spec.protocol_id() {
 			Some(pid) => pid,
 			None => {
-				log::warn!("Using default protocol ID {:?} because none is configured in the \
-					chain specs", crate::DEFAULT_PROTOCOL_ID
+				log::warn!(
+					"Using default protocol ID {:?} because none is configured in the \
+					chain specs",
+					crate::DEFAULT_PROTOCOL_ID
 				);
 				crate::DEFAULT_PROTOCOL_ID
-			}
+			},
 		};
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	}
@@ -271,9 +272,7 @@ impl BasePath {
 	/// instance is dropped.
 	#[cfg(not(target_os = "unknown"))]
 	pub fn new_temp_dir() -> io::Result<BasePath> {
-		Ok(BasePath::Temporary(
-			tempfile::Builder::new().prefix("substrate").tempdir()?,
-		))
+		Ok(BasePath::Temporary(tempfile::Builder::new().prefix("substrate").tempdir()?))
 	}
 
 	/// Create a `BasePath` instance based on an existing path on disk.

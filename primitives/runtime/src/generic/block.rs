@@ -23,14 +23,16 @@ use std::fmt;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-use sp_std::prelude::*;
-use sp_core::RuntimeDebug;
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{
-	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
-	NumberFor,
+use crate::{
+	codec::{Codec, Decode, Encode},
+	traits::{
+		self, Block as BlockT, Header as HeaderT, MaybeMallocSizeOf, MaybeSerialize, Member,
+		NumberFor,
+	},
+	Justifications,
 };
-use crate::Justification;
+use sp_core::RuntimeDebug;
+use sp_std::prelude::*;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
@@ -53,6 +55,19 @@ impl<Block: BlockT> BlockId<Block> {
 	/// Create a block ID from a number.
 	pub fn number(number: NumberFor<Block>) -> Self {
 		BlockId::Number(number)
+	}
+
+	/// Check if this block ID refers to the pre-genesis state.
+	pub fn is_pre_genesis(&self) -> bool {
+		match self {
+			BlockId::Hash(hash) => hash == &Default::default(),
+			BlockId::Number(_) => false,
+		}
+	}
+
+	/// Create a block ID for a pre-genesis state.
+	pub fn pre_genesis() -> Self {
+		BlockId::Hash(Default::default())
 	}
 }
 
@@ -112,5 +127,5 @@ pub struct SignedBlock<Block> {
 	/// Full block.
 	pub block: Block,
 	/// Block justification.
-	pub justification: Option<Justification>,
+	pub justifications: Option<Justifications>,
 }

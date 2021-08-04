@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::{
+	executor::block_on,
 	prelude::*,
 	ready,
 	task::{Context, Poll},
@@ -25,9 +26,7 @@ use libp2p::{
 	core::transport::{timeout::TransportTimeout, OptionalTransport},
 	wasm_ext, Transport,
 };
-use std::io;
-use std::pin::Pin;
-use std::time::Duration;
+use std::{io, pin::Pin, time::Duration};
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
@@ -47,7 +46,7 @@ pub(crate) fn initialize_transport(
 	// an external transport on desktop and the fallback is used all the time.
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.or_transport({
-		let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
+		let inner = block_on(libp2p::dns::DnsConfig::system(libp2p::tcp::TcpConfig::new()))?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
 			let connec = connec
 				.with(|item| {
@@ -110,7 +109,7 @@ impl<T: AsyncRead> Stream for StreamSink<T> {
 			Ok(n) => {
 				buf.truncate(n);
 				Poll::Ready(Some(Ok(buf)))
-			}
+			},
 			Err(err) => Poll::Ready(Some(Err(err))),
 		}
 	}
@@ -125,7 +124,7 @@ impl<T: AsyncWrite> StreamSink<T> {
 				log::error!(target: "telemetry",
 					"Detected some internal buffering happening in the telemetry");
 				let err = io::Error::new(io::ErrorKind::Other, "Internal buffering detected");
-				return Poll::Ready(Err(err));
+				return Poll::Ready(Err(err))
 			}
 		}
 

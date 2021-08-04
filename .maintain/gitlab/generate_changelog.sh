@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# shellcheck source=lib.sh
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/lib.sh"
+# shellcheck source=../common/lib.sh
+source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../common/lib.sh"
 
 version="$2"
 last_version="$1"
@@ -32,7 +32,7 @@ $line"
     runtime_changes="$runtime_changes
 $line"
   fi
-  if has_label 'paritytech/substrate' "$pr_id" 'D1-runtime-migration'; then
+  if has_label 'paritytech/substrate' "$pr_id" 'E1-runtime-migration'; then
     migrations="$migrations
 $line"
   fi

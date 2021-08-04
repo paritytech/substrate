@@ -15,12 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Module};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	traits::SignedExtension,
-	transaction_validity::TransactionValidityError,
-};
+use crate::{Config, Pallet};
+use codec::{Decode, Encode};
+use sp_runtime::{traits::SignedExtension, transaction_validity::TransactionValidityError};
 
 /// Ensure the transaction version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
@@ -53,6 +50,6 @@ impl<T: Config + Send + Sync> SignedExtension for CheckTxVersion<T> {
 	const IDENTIFIER: &'static str = "CheckTxVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().transaction_version)
+		Ok(<Pallet<T>>::runtime_version().transaction_version)
 	}
 }

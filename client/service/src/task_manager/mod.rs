@@ -18,23 +18,24 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, result::Result, pin::Pin};
+use crate::{
+	config::{JoinFuture, TaskExecutor, TaskType},
+	Error,
+};
 use exit_future::Signal;
-use log::{debug, error};
 use futures::{
-	Future, FutureExt, StreamExt,
-	future::{select, Either, BoxFuture, join_all, try_join_all, pending},
+	future::{join_all, pending, select, try_join_all, BoxFuture, Either},
 	sink::SinkExt,
+	Future, FutureExt, StreamExt,
 };
+use log::{debug, error};
 use prometheus_endpoint::{
-	exponential_buckets, register,
-	PrometheusError,
-	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
+	exponential_buckets, register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError,
+	Registry, U64,
 };
-use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use std::{panic, pin::Pin, result::Result};
 use tracing_futures::Instrument;
-use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
-use sc_telemetry::TelemetrySpan;
 
 mod prometheus_future;
 #[cfg(test)]
@@ -47,7 +48,6 @@ pub struct SpawnTaskHandle {
 	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 	task_notifier: TracingUnboundedSender<JoinFuture>,
-	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl SpawnTaskHandle {
@@ -64,7 +64,11 @@ impl SpawnTaskHandle {
 	}
 
 	/// Spawns the blocking task with the given name. See also `spawn`.
-	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+	pub fn spawn_blocking(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
 		self.spawn_inner(name, task, TaskType::Blocking)
 	}
 
@@ -77,7 +81,7 @@ impl SpawnTaskHandle {
 	) {
 		if self.task_notifier.is_closed() {
 			debug!("Attempt to spawn a new task has been prevented: {}", name);
-			return;
+			return
 		}
 
 		let on_exit = self.on_exit.clone();
@@ -91,16 +95,14 @@ impl SpawnTaskHandle {
 			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
 		}
 
-		let telemetry_span = self.telemetry_span.clone();
 		let future = async move {
-			let _telemetry_entered = telemetry_span.as_ref().map(|x| x.enter());
-
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
 					let poll_duration = metrics.poll_duration.with_label_values(&[name]);
 					let poll_start = metrics.poll_start.with_label_values(&[name]);
-					let inner = prometheus_future::with_poll_durations(poll_duration, poll_start, task);
+					let inner =
+						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
 					// away the `Future` after it has panicked.
 					panic::AssertUnwindSafe(inner).catch_unwind()
@@ -111,23 +113,23 @@ impl SpawnTaskHandle {
 					Either::Right((Err(payload), _)) => {
 						metrics.tasks_ended.with_label_values(&[name, "panic"]).inc();
 						panic::resume_unwind(payload)
-					}
+					},
 					Either::Right((Ok(()), _)) => {
 						metrics.tasks_ended.with_label_values(&[name, "finished"]).inc();
-					}
+					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
 						metrics.tasks_ended.with_label_values(&[name, "interrupted"]).inc();
-					}
+					},
 				}
-
 			} else {
 				futures::pin_mut!(task);
 				let _ = select(on_exit, task).await;
 			}
 		};
 
-		let join_handle = self.executor.spawn(Box::pin(future.in_current_span()), task_type);
+		let join_handle = self.executor.spawn(future.in_current_span().boxed(), task_type);
+
 		let mut task_notifier = self.task_notifier.clone();
 		self.executor.spawn(
 			Box::pin(async move {
@@ -154,6 +156,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 /// task spawned through it fails. The service should be on the receiver side
 /// and will shut itself down whenever it receives any message, i.e. an
 /// essential task has failed.
+#[derive(Clone)]
 pub struct SpawnEssentialTaskHandle {
 	essential_failed_tx: TracingUnboundedSender<()>,
 	inner: SpawnTaskHandle,
@@ -165,10 +168,7 @@ impl SpawnEssentialTaskHandle {
 		essential_failed_tx: TracingUnboundedSender<()>,
 		spawn_task_handle: SpawnTaskHandle,
 	) -> SpawnEssentialTaskHandle {
-		SpawnEssentialTaskHandle {
-			essential_failed_tx,
-			inner: spawn_task_handle,
-		}
+		SpawnEssentialTaskHandle { essential_failed_tx, inner: spawn_task_handle }
 	}
 
 	/// Spawns the given task with the given name.
@@ -196,14 +196,22 @@ impl SpawnEssentialTaskHandle {
 		task_type: TaskType,
 	) {
 		let essential_failed = self.essential_failed_tx.clone();
-		let essential_task = std::panic::AssertUnwindSafe(task)
-			.catch_unwind()
-			.map(move |_| {
-				log::error!("Essential task `{}` failed. Shutting down service.", name);
-				let _ = essential_failed.close_channel();
-			});
+		let essential_task = std::panic::AssertUnwindSafe(task).catch_unwind().map(move |_| {
+			log::error!("Essential task `{}` failed. Shutting down service.", name);
+			let _ = essential_failed.close_channel();
+		});
 
 		let _ = self.inner.spawn_inner(name, essential_task, task_type);
+	}
+}
+
+impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
+	fn spawn_essential_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn_blocking(name, future);
+	}
+
+	fn spawn_essential(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
 	}
 }
 
@@ -233,17 +241,14 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
-	/// A telemetry handle used to enter the telemetry span when a task is spawned.
-	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl TaskManager {
 	/// If a Prometheus registry is passed, it will be used to report statistics about the
 	/// service tasks.
-	pub(super) fn new(
+	pub fn new(
 		executor: TaskExecutor,
 		prometheus_registry: Option<&Registry>,
-		telemetry_span: Option<TelemetrySpan>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
 
@@ -256,10 +261,8 @@ impl TaskManager {
 		// NOTE: for_each_concurrent will await on all the JoinHandle futures at the same time. It
 		// is possible to limit this but it's actually better for the memory foot print to await
 		// them all to not accumulate anything on that stream.
-		let completion_future = executor.spawn(
-			Box::pin(background_tasks.for_each_concurrent(None, |x| x)),
-			TaskType::Async,
-		);
+		let completion_future = executor
+			.spawn(Box::pin(background_tasks.for_each_concurrent(None, |x| x)), TaskType::Async);
 
 		Ok(Self {
 			on_exit,
@@ -272,7 +275,6 @@ impl TaskManager {
 			task_notifier,
 			completion_future,
 			children: Vec::new(),
-			telemetry_span,
 		})
 	}
 
@@ -283,7 +285,6 @@ impl TaskManager {
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
 			task_notifier: self.task_notifier.clone(),
-			telemetry_span: self.telemetry_span.clone(),
 		}
 	}
 
@@ -321,16 +322,21 @@ impl TaskManager {
 	///
 	/// This function will not wait until the end of the remaining task. You must call and await
 	/// `clean_shutdown()` after this.
-	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+	pub fn future<'a>(
+		&'a mut self,
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
 		Box::pin(async move {
 			let mut t1 = self.essential_failed_rx.next().fuse();
 			let mut t2 = self.on_exit.clone().fuse();
 			let mut t3 = try_join_all(
-				self.children.iter_mut().map(|x| x.future())
+				self.children
+					.iter_mut()
+					.map(|x| x.future())
 					// Never end this future if there is no error because if there is no children,
 					// it must not stop
-					.chain(std::iter::once(pending().boxed()))
-			).fuse();
+					.chain(std::iter::once(pending().boxed())),
+			)
+			.fuse();
 
 			futures::select! {
 				_ = t1 => Err(Error::Other("Essential task failed.".into())),

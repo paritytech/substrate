@@ -19,30 +19,25 @@
 
 use super::*;
 
+use frame_benchmarking::{
+	account, benchmarks_instance, impl_benchmark_test_suite, whitelisted_caller,
+};
 use frame_system::RawOrigin as SystemOrigin;
-use frame_system::EventRecord;
-use frame_benchmarking::{benchmarks_instance, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_system::Call as SystemCall;
-use frame_system::Module as System;
 use crate::Module as Collective;
+use frame_system::{Call as SystemCall, Pallet as System};
 
 const SEED: u32 = 0;
 
 const MAX_BYTES: u32 = 1_024;
 
 fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>::Event) {
-	let events = System::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 benchmarks_instance! {
-	
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();
@@ -251,8 +246,7 @@ benchmarks_instance! {
 
 		let index = p - 1;
 		// Have almost everyone vote aye on last proposal, while keeping it from passing.
-		// Proposer already voted aye so we start at 1.
-		for j in 1 .. m - 3 {
+		for j in 0 .. m - 3 {
 			let voter = &members[j as usize];
 			let approve = true;
 			Collective::<T, _>::vote(
@@ -327,8 +321,7 @@ benchmarks_instance! {
 
 		let index = p - 1;
 		// Have most everyone vote aye on last proposal, while keeping it from passing.
-		// Proposer already voted aye so we start at 1.
-		for j in 1 .. m - 2 {
+		for j in 0 .. m - 2 {
 			let voter = &members[j as usize];
 			let approve = true;
 			Collective::<T, _>::vote(
@@ -561,6 +554,14 @@ benchmarks_instance! {
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
+		// The prime member votes aye, so abstentions default to aye.
+		Collective::<T, _>::vote(
+			SystemOrigin::Signed(caller.clone()).into(),
+			last_hash.clone(),
+			p - 1,
+			true // Vote aye.
+		)?;
+
 		// Have almost everyone vote nay on last proposal, while keeping it from failing.
 		// A few abstainers will be the aye votes needed to pass the vote.
 		for j in 2 .. m - 1 {
@@ -634,79 +635,4 @@ benchmarks_instance! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn set_members() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_members::<Test>());
-		});
-	}
-
-	#[test]
-	fn execute() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_execute::<Test>());
-		});
-	}
-
-	#[test]
-	fn propose_execute() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_execute::<Test>());
-		});
-	}
-
-	#[test]
-	fn propose_proposed() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_proposed::<Test>());
-		});
-	}
-
-	#[test]
-	fn vote() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_vote::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_early_disapproved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_early_disapproved::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_early_approved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_early_approved::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_disapproved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_disapproved::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_approved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_approved::<Test>());
-		});
-	}
-
-	#[test]
-	fn disapprove_proposal() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_disapprove_proposal::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);

@@ -20,7 +20,7 @@
 use std::sync::Arc;
 
 use jsonrpc_core::futures::sync::mpsc;
-use jsonrpc_pubsub::{Session, PubSubMetadata};
+use jsonrpc_pubsub::{PubSubMetadata, Session};
 
 /// RPC Metadata.
 ///
@@ -42,9 +42,7 @@ impl PubSubMetadata for Metadata {
 impl Metadata {
 	/// Create new `Metadata` with session (Pub/Sub) support.
 	pub fn new(transport: mpsc::Sender<String>) -> Self {
-		Metadata {
-			session: Some(Arc::new(Session::new(transport))),
-		}
+		Metadata { session: Some(Arc::new(Session::new(transport))) }
 	}
 
 	/// Create new `Metadata` for tests.

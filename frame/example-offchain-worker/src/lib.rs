@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! <!-- markdown-link-check-disable -->
-//! # Offchain Worker Example Module
+//! # Offchain Worker Example Pallet
 //!
 //! The Offchain Worker Example: A simple pallet demonstrating
 //! concepts, APIs and structures common to most offchain workers.
@@ -24,9 +24,9 @@
 //! Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's
 //! documentation.
 //!
-//! - [`pallet_example_offchain_worker::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Pallet`]
 //!
 //!
 //! ## Overview
@@ -42,33 +42,28 @@
 //! one unsigned transaction floating in the network.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
+use frame_support::traits::Get;
 use frame_system::{
 	self as system,
-	ensure_signed,
-	ensure_none,
 	offchain::{
-		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SendSignedTransaction,
-		SignedPayload, SigningTypes, Signer, SubmitTransaction,
-	}
-};
-use frame_support::{
-	debug,
-	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	traits::Get,
-};
-use sp_core::crypto::KeyTypeId;
-use sp_runtime::{
-	RuntimeDebug,
-	offchain::{http, Duration, storage::StorageValueRef},
-	traits::Zero,
-	transaction_validity::{
-		InvalidTransaction, ValidTransaction, TransactionValidity, TransactionSource,
-		TransactionPriority,
+		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
+		SignedPayload, Signer, SigningTypes, SubmitTransaction,
 	},
 };
-use codec::{Encode, Decode};
-use sp_std::vec::Vec;
 use lite_json::json::JsonValue;
+use sp_core::crypto::KeyTypeId;
+use sp_runtime::{
+	offchain::{
+		http,
+		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+		Duration,
+	},
+	traits::Zero,
+	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
+	RuntimeDebug,
+};
+use sp_std::vec::Vec;
 
 #[cfg(test)]
 mod tests;
@@ -87,96 +82,125 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
 /// the types with this pallet-specific identifier.
 pub mod crypto {
 	use super::KEY_TYPE;
+	use sp_core::sr25519::Signature as Sr25519Signature;
 	use sp_runtime::{
 		app_crypto::{app_crypto, sr25519},
 		traits::Verify,
 	};
-	use sp_core::sr25519::Signature as Sr25519Signature;
 	app_crypto!(sr25519, KEY_TYPE);
 
 	pub struct TestAuthId;
-	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for TestAuthId {
+	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+		for TestAuthId
+	{
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
 		type GenericPublic = sp_core::sr25519::Public;
 	}
 }
 
-/// This pallet's configuration trait
-pub trait Config: CreateSignedTransaction<Call<Self>> {
-	/// The identifier type for an offchain worker.
-	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+pub use pallet::*;
 
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
-	/// The overarching dispatch call type.
-	type Call: From<Call<Self>>;
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-	// Configuration parameters
+	/// This pallet's configuration trait
+	#[pallet::config]
+	pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config {
+		/// The identifier type for an offchain worker.
+		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
-	/// A grace period after we send transaction.
-	///
-	/// To avoid sending too many transactions, we only attempt to send one
-	/// every `GRACE_PERIOD` blocks. We use Local Storage to coordinate
-	/// sending between distinct runs of this offchain worker.
-	type GracePeriod: Get<Self::BlockNumber>;
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-	/// Number of blocks of cooldown after unsigned transaction is included.
-	///
-	/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
-	type UnsignedInterval: Get<Self::BlockNumber>;
+		/// The overarching dispatch call type.
+		type Call: From<Call<Self>>;
 
-	/// A configuration for base priority of unsigned transactions.
-	///
-	/// This is exposed so that it can be tuned for particular runtime, when
-	/// multiple pallets send unsigned transactions.
-	type UnsignedPriority: Get<TransactionPriority>;
-}
+		// Configuration parameters
 
-/// Payload used by this example crate to hold price
-/// data required to submit a transaction.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayload<Public, BlockNumber> {
-	block_number: BlockNumber,
-	price: u32,
-	public: Public,
-}
-
-impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
-	fn public(&self) -> T::Public {
-		self.public.clone()
-	}
-}
-
-decl_storage! {
-	trait Store for Module<T: Config> as ExampleOffchainWorker {
-		/// A vector of recently submitted prices.
+		/// A grace period after we send transaction.
 		///
-		/// This is used to calculate average price, should have bounded size.
-		Prices get(fn prices): Vec<u32>;
-		/// Defines the block when next unsigned transaction will be accepted.
+		/// To avoid sending too many transactions, we only attempt to send one
+		/// every `GRACE_PERIOD` blocks. We use Local Storage to coordinate
+		/// sending between distinct runs of this offchain worker.
+		#[pallet::constant]
+		type GracePeriod: Get<Self::BlockNumber>;
+
+		/// Number of blocks of cooldown after unsigned transaction is included.
 		///
-		/// To prevent spam of unsigned (and unpayed!) transactions on the network,
-		/// we only allow one transaction every `T::UnsignedInterval` blocks.
-		/// This storage entry defines when new transaction is going to be accepted.
-		NextUnsignedAt get(fn next_unsigned_at): T::BlockNumber;
-	}
-}
+		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
+		#[pallet::constant]
+		type UnsignedInterval: Get<Self::BlockNumber>;
 
-decl_event!(
-	/// Events generated by the module.
-	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
-		/// Event generated when new price is accepted to contribute to the average.
-		/// \[price, who\]
-		NewPrice(u32, AccountId),
+		/// A configuration for base priority of unsigned transactions.
+		///
+		/// This is exposed so that it can be tuned for particular runtime, when
+		/// multiple pallets send unsigned transactions.
+		#[pallet::constant]
+		type UnsignedPriority: Get<TransactionPriority>;
 	}
-);
 
-decl_module! {
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Offchain Worker entry point.
+		///
+		/// By implementing `fn offchain_worker` you declare a new offchain worker.
+		/// This function will be called when the node is fully synced and a new best block is
+		/// succesfuly imported.
+		/// Note that it's not guaranteed for offchain workers to run on EVERY block, there might
+		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
+		/// so the code should be able to handle that.
+		/// You can use `Local Storage` API to coordinate runs of the worker.
+		fn offchain_worker(block_number: T::BlockNumber) {
+			// Note that having logs compiled to WASM may cause the size of the blob to increase
+			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
+			// in WASM. The `sp-api` crate also provides a feature `disable-logging` to disable
+			// all logging and thus, remove any logging from the WASM.
+			log::info!("Hello World from offchain workers!");
+
+			// Since off-chain workers are just part of the runtime code, they have direct access
+			// to the storage and other included pallets.
+			//
+			// We can easily import `frame_system` and retrieve a block hash of the parent block.
+			let parent_hash = <system::Pallet<T>>::block_hash(block_number - 1u32.into());
+			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
+
+			// It's a good practice to keep `fn offchain_worker()` function minimal, and move most
+			// of the code to separate `impl` block.
+			// Here we call a helper function to calculate current average price.
+			// This function reads storage entries of the current state.
+			let average: Option<u32> = Self::average_price();
+			log::debug!("Current price: {:?}", average);
+
+			// For this example we are going to send both signed and unsigned transactions
+			// depending on the block number.
+			// Usually it's enough to choose one or the other.
+			let should_send = Self::choose_transaction_type(block_number);
+			let res = match should_send {
+				TransactionType::Signed => Self::fetch_price_and_send_signed(),
+				TransactionType::UnsignedForAny =>
+					Self::fetch_price_and_send_unsigned_for_any_account(block_number),
+				TransactionType::UnsignedForAll =>
+					Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
+				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
+				TransactionType::None => Ok(()),
+			};
+			if let Err(e) = res {
+				log::error!("Error: {}", e);
+			}
+		}
+	}
+
 	/// A public part of the pallet.
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Submit new price to the list.
 		///
 		/// This method is a public function of the module and can be called from within
@@ -191,13 +215,13 @@ decl_module! {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = 0]
-		pub fn submit_price(origin, price: u32) -> DispatchResult {
+		#[pallet::weight(0)]
+		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
 			// Add the price to the on-chain list.
 			Self::add_price(who, price);
-			Ok(())
+			Ok(().into())
 		}
 
 		/// Submit new price to the list via unsigned transaction.
@@ -216,85 +240,105 @@ decl_module! {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = 0]
-		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32)
-			-> DispatchResult
-		{
+		#[pallet::weight(0)]
+		pub fn submit_price_unsigned(
+			origin: OriginFor<T>,
+			_block_number: T::BlockNumber,
+			price: u32,
+		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
 			Self::add_price(Default::default(), price);
 			// now increment the block number at which we expect next unsigned transaction.
-			let current_block = <system::Module<T>>::block_number();
+			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
-			Ok(())
+			Ok(().into())
 		}
 
-		#[weight = 0]
+		#[pallet::weight(0)]
 		pub fn submit_price_unsigned_with_signed_payload(
-			origin,
+			origin: OriginFor<T>,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
 			_signature: T::Signature,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
 			Self::add_price(Default::default(), price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.
-			let current_block = <system::Module<T>>::block_number();
+			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
-			Ok(())
+			Ok(().into())
 		}
+	}
 
-		/// Offchain Worker entry point.
+	/// Events for the pallet.
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// Event generated when new price is accepted to contribute to the average.
+		/// \[price, who\]
+		NewPrice(u32, T::AccountId),
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		/// Validate unsigned call to this module.
 		///
-		/// By implementing `fn offchain_worker` within `decl_module!` you declare a new offchain
-		/// worker.
-		/// This function will be called when the node is fully synced and a new best block is
-		/// succesfuly imported.
-		/// Note that it's not guaranteed for offchain workers to run on EVERY block, there might
-		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
-		/// so the code should be able to handle that.
-		/// You can use `Local Storage` API to coordinate runs of the worker.
-		fn offchain_worker(block_number: T::BlockNumber) {
-			// It's a good idea to add logs to your offchain workers.
-			// Using the `frame_support::debug` module you have access to the same API exposed by
-			// the `log` crate.
-			// Note that having logs compiled to WASM may cause the size of the blob to increase
-			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
-			// in WASM or use `debug::native` namespace to produce logs only when the worker is
-			// running natively.
-			debug::native::info!("Hello World from offchain workers!");
-
-			// Since off-chain workers are just part of the runtime code, they have direct access
-			// to the storage and other included pallets.
-			//
-			// We can easily import `frame_system` and retrieve a block hash of the parent block.
-			let parent_hash = <system::Module<T>>::block_hash(block_number - 1u32.into());
-			debug::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
-
-			// It's a good practice to keep `fn offchain_worker()` function minimal, and move most
-			// of the code to separate `impl` block.
-			// Here we call a helper function to calculate current average price.
-			// This function reads storage entries of the current state.
-			let average: Option<u32> = Self::average_price();
-			debug::debug!("Current price: {:?}", average);
-
-			// For this example we are going to send both signed and unsigned transactions
-			// depending on the block number.
-			// Usually it's enough to choose one or the other.
-			let should_send = Self::choose_transaction_type(block_number);
-			let res = match should_send {
-				TransactionType::Signed => Self::fetch_price_and_send_signed(),
-				TransactionType::UnsignedForAny => Self::fetch_price_and_send_unsigned_for_any_account(block_number),
-				TransactionType::UnsignedForAll => Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
-				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
-				TransactionType::None => Ok(()),
-			};
-			if let Err(e) = res {
-				debug::error!("Error: {}", e);
+		/// By default unsigned transactions are disallowed, but implementing the validator
+		/// here we make sure that some particular calls (the ones produced by offchain worker)
+		/// are being whitelisted and marked as valid.
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			// Firstly let's check that we call the right function.
+			if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
+				call
+			{
+				let signature_valid =
+					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+				if !signature_valid {
+					return InvalidTransaction::BadProof.into()
+				}
+				Self::validate_transaction_parameters(&payload.block_number, &payload.price)
+			} else if let Call::submit_price_unsigned(block_number, new_price) = call {
+				Self::validate_transaction_parameters(block_number, new_price)
+			} else {
+				InvalidTransaction::Call.into()
 			}
 		}
+	}
+
+	/// A vector of recently submitted prices.
+	///
+	/// This is used to calculate average price, should have bounded size.
+	#[pallet::storage]
+	#[pallet::getter(fn prices)]
+	pub(super) type Prices<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
+
+	/// Defines the block when next unsigned transaction will be accepted.
+	///
+	/// To prevent spam of unsigned (and unpayed!) transactions on the network,
+	/// we only allow one transaction every `T::UnsignedInterval` blocks.
+	/// This storage entry defines when new transaction is going to be accepted.
+	#[pallet::storage]
+	#[pallet::getter(fn next_unsigned_at)]
+	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+}
+
+/// Payload used by this example crate to hold price
+/// data required to submit a transaction.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PricePayload<Public, BlockNumber> {
+	block_number: BlockNumber,
+	price: u32,
+	public: Public,
+}
+
+impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+	fn public(&self) -> T::Public {
+		self.public.clone()
 	}
 }
 
@@ -306,11 +350,7 @@ enum TransactionType {
 	None,
 }
 
-/// Most of the functions are moved outside of the `decl_module!` macro.
-///
-/// This greatly helps with error messages, as the ones inside the macro
-/// can sometimes be hard to debug.
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	/// Chooses which transaction type to send.
 	///
 	/// This function serves mostly to showcase `StorageValue` helper
@@ -332,19 +372,14 @@ impl<T: Config> Module<T> {
 		// low-level method of local storage API, which means that only one worker
 		// will be able to "acquire a lock" and send a transaction if multiple workers
 		// happen to be executed concurrently.
-		let res = val.mutate(|last_send: Option<Option<T::BlockNumber>>| {
-			// We match on the value decoded from the storage. The first `Option`
-			// indicates if the value was present in the storage at all,
-			// the second (inner) `Option` indicates if the value was succesfuly
-			// decoded to expected type (`T::BlockNumber` in our case).
+		let res = val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
 			match last_send {
 				// If we already have a value in storage and the block number is recent enough
 				// we avoid sending another transaction at this time.
-				Some(Some(block)) if block_number < block + T::GracePeriod::get() => {
-					Err(RECENTLY_SENT)
-				},
+				Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
+					Err(RECENTLY_SENT),
 				// In every other case we attempt to acquire the lock and send a transaction.
-				_ => Ok(block_number)
+				_ => Ok(block_number),
 			}
 		});
 
@@ -356,7 +391,7 @@ impl<T: Config> Module<T> {
 		// written to in the meantime.
 		match res {
 			// The value has been set correctly, which means we can safely send a transaction now.
-			Ok(Ok(block_number)) => {
+			Ok(block_number) => {
 				// Depending if the block is even or odd we will send a `Signed` or `Unsigned`
 				// transaction.
 				// Note that this logic doesn't really guarantee that the transactions will be sent
@@ -366,19 +401,24 @@ impl<T: Config> Module<T> {
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
 				let transaction_type = block_number % 3u32.into();
-				if transaction_type == Zero::zero() { TransactionType::Signed }
-				else if transaction_type == T::BlockNumber::from(1u32) { TransactionType::UnsignedForAny }
-				else if transaction_type == T::BlockNumber::from(2u32) { TransactionType::UnsignedForAll }
-				else { TransactionType::Raw }
+				if transaction_type == Zero::zero() {
+					TransactionType::Signed
+				} else if transaction_type == T::BlockNumber::from(1u32) {
+					TransactionType::UnsignedForAny
+				} else if transaction_type == T::BlockNumber::from(2u32) {
+					TransactionType::UnsignedForAll
+				} else {
+					TransactionType::Raw
+				}
 			},
 			// We are in the grace period, we should not send a transaction this time.
-			Err(RECENTLY_SENT) => TransactionType::None,
+			Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => TransactionType::None,
 			// We wanted to send a transaction, but failed to write the block number (acquire a
 			// lock). This indicates that another offchain worker that was running concurrently
 			// most likely executed the same logic and succeeded at writing to storage.
 			// Thus we don't really want to send the transaction, knowing that the other run
 			// already did.
-			Ok(Err(_)) => TransactionType::None,
+			Err(MutateStorageError::ConcurrentModification(_)) => TransactionType::None,
 		}
 	}
 
@@ -387,7 +427,7 @@ impl<T: Config> Module<T> {
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
 		if !signer.can_sign() {
 			return Err(
-				"No local accounts available. Consider adding one via `author_insertKey` RPC."
+				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
 			)?
 		}
 		// Make an external HTTP request to fetch the current price.
@@ -398,19 +438,17 @@ impl<T: Config> Module<T> {
 		// representing the call, we've just created.
 		// Submit signed will return a vector of results for all accounts that were found in the
 		// local keystore with expected `KEY_TYPE`.
-		let results = signer.send_signed_transaction(
-			|_account| {
-				// Received price is wrapped into a call to `submit_price` public function of this pallet.
-				// This means that the transaction, when executed, will simply call that function passing
-				// `price` as an argument.
-				Call::submit_price(price)
-			}
-		);
+		let results = signer.send_signed_transaction(|_account| {
+			// Received price is wrapped into a call to `submit_price` public function of this pallet.
+			// This means that the transaction, when executed, will simply call that function passing
+			// `price` as an argument.
+			Call::submit_price(price)
+		});
 
 		for (acc, res) in &results {
 			match res {
-				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc.id, price),
-				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+				Ok(()) => log::info!("[{:?}] Submitted price of {} cents", acc.id, price),
+				Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
 			}
 		}
 
@@ -450,7 +488,9 @@ impl<T: Config> Module<T> {
 	}
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn fetch_price_and_send_unsigned_for_any_account(
+		block_number: T::BlockNumber,
+	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -463,23 +503,23 @@ impl<T: Config> Module<T> {
 		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
 		// -- Sign using any account
-		let (_, result) = Signer::<T, T::AuthorityId>::any_account().send_unsigned_transaction(
-			|account| PricePayload {
-				price,
-				block_number,
-				public: account.public.clone()
-			},
-			|payload, signature| {
-				Call::submit_price_unsigned_with_signed_payload(payload, signature)
-			}
-		).ok_or("No local accounts accounts available.")?;
+		let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+			.send_unsigned_transaction(
+				|account| PricePayload { price, block_number, public: account.public.clone() },
+				|payload, signature| {
+					Call::submit_price_unsigned_with_signed_payload(payload, signature)
+				},
+			)
+			.ok_or("No local accounts accounts available.")?;
 		result.map_err(|()| "Unable to submit transaction")?;
 
 		Ok(())
 	}
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned_for_all_accounts(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn fetch_price_and_send_unsigned_for_all_accounts(
+		block_number: T::BlockNumber,
+	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -494,18 +534,14 @@ impl<T: Config> Module<T> {
 		// -- Sign using all accounts
 		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
 			.send_unsigned_transaction(
-				|account| PricePayload {
-					price,
-					block_number,
-					public: account.public.clone()
-				},
+				|account| PricePayload { price, block_number, public: account.public.clone() },
 				|payload, signature| {
 					Call::submit_price_unsigned_with_signed_payload(payload, signature)
-				}
+				},
 			);
 		for (_account_id, result) in transaction_results.into_iter() {
 			if result.is_err() {
-				return Err("Unable to submit transaction");
+				return Err("Unable to submit transaction")
 			}
 		}
 
@@ -524,16 +560,12 @@ impl<T: Config> Module<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let request = http::Request::get(
-			"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD"
-		);
+		let request =
+			http::Request::get("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD");
 		// We set the deadline for sending of the request, note that awaiting response can
 		// have a separate deadline. Next we send the request, before that it's also possible
 		// to alter request headers or stream body content in case of non-GET requests.
-		let pending = request
-			.deadline(deadline)
-			.send()
-			.map_err(|_| http::Error::IoError)?;
+		let pending = request.deadline(deadline).send().map_err(|_| http::Error::IoError)?;
 
 		// The request is already being processed by the host, we are free to do anything
 		// else in the worker (we can send multiple concurrent requests too).
@@ -541,12 +573,11 @@ impl<T: Config> Module<T> {
 		// so we can block current thread and wait for it to finish.
 		// Note that since the request is being driven by the host, we don't have to wait
 		// for the request to have it complete, we will just not read the response.
-		let response = pending.try_wait(deadline)
-			.map_err(|_| http::Error::DeadlineReached)??;
+		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
-			debug::warn!("Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
+			log::warn!("Unexpected status code: {}", response.code);
+			return Err(http::Error::Unknown)
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes.
@@ -556,19 +587,19 @@ impl<T: Config> Module<T> {
 
 		// Create a str slice from the body.
 		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
-			debug::warn!("No UTF8 body");
+			log::warn!("No UTF8 body");
 			http::Error::Unknown
 		})?;
 
 		let price = match Self::parse_price(body_str) {
 			Some(price) => Ok(price),
 			None => {
-				debug::warn!("Unable to extract price from the response: {:?}", body_str);
+				log::warn!("Unable to extract price from the response: {:?}", body_str);
 				Err(http::Error::Unknown)
-			}
+			},
 		}?;
 
-		debug::warn!("Got price: {} cents", price);
+		log::warn!("Got price: {} cents", price);
 
 		Ok(price)
 	}
@@ -578,18 +609,16 @@ impl<T: Config> Module<T> {
 	/// Returns `None` when parsing failed or `Some(price in cents)` when parsing is successful.
 	fn parse_price(price_str: &str) -> Option<u32> {
 		let val = lite_json::parse_json(price_str);
-		let price = val.ok().and_then(|v| match v {
+		let price = match val.ok()? {
 			JsonValue::Object(obj) => {
-				let mut chars = "USD".chars();
-				obj.into_iter()
-					.find(|(k, _)| k.iter().all(|k| Some(*k) == chars.next()))
-					.and_then(|v| match v.1 {
-						JsonValue::Number(number) => Some(number),
-						_ => None,
-					})
+				let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("USD".chars()))?;
+				match v {
+					JsonValue::Number(number) => number,
+					_ => return None,
+				}
 			},
-			_ => None
-		})?;
+			_ => return None,
+		};
 
 		let exp = price.fraction_length.checked_sub(2).unwrap_or(0);
 		Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
@@ -597,8 +626,8 @@ impl<T: Config> Module<T> {
 
 	/// Add new price to the list.
 	fn add_price(who: T::AccountId, price: u32) {
-		debug::info!("Adding to the average: {}", price);
-		Prices::mutate(|prices| {
+		log::info!("Adding to the average: {}", price);
+		<Prices<T>>::mutate(|prices| {
 			const MAX_LEN: usize = 64;
 
 			if prices.len() < MAX_LEN {
@@ -610,14 +639,14 @@ impl<T: Config> Module<T> {
 
 		let average = Self::average_price()
 			.expect("The average is not empty, because it was just mutated; qed");
-		debug::info!("Current average price is: {}", average);
+		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
-		Self::deposit_event(RawEvent::NewPrice(price, who));
+		Self::deposit_event(Event::NewPrice(price, who));
 	}
 
 	/// Calculate current average price.
 	fn average_price() -> Option<u32> {
-		let prices = Prices::get();
+		let prices = <Prices<T>>::get();
 		if prices.is_empty() {
 			None
 		} else {
@@ -632,12 +661,12 @@ impl<T: Config> Module<T> {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if &next_unsigned_at > block_number {
-			return InvalidTransaction::Stale.into();
+			return InvalidTransaction::Stale.into()
 		}
 		// Let's make sure to reject transactions from the future.
-		let current_block = <system::Module<T>>::block_number();
+		let current_block = <system::Pallet<T>>::block_number();
 		if &current_block < block_number {
-			return InvalidTransaction::Future.into();
+			return InvalidTransaction::Future.into()
 		}
 
 		// We prioritize transactions that are more far away from current average.
@@ -675,35 +704,5 @@ impl<T: Config> Module<T> {
 			// claim a reward.
 			.propagate(true)
 			.build()
-	}
-}
-
-#[allow(deprecated)] // ValidateUnsigned
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
-	type Call = Call<T>;
-
-	/// Validate unsigned call to this module.
-	///
-	/// By default unsigned transactions are disallowed, but implementing the validator
-	/// here we make sure that some particular calls (the ones produced by offchain worker)
-	/// are being whitelisted and marked as valid.
-	fn validate_unsigned(
-		_source: TransactionSource,
-		call: &Self::Call,
-	) -> TransactionValidity {
-		// Firstly let's check that we call the right function.
-		if let Call::submit_price_unsigned_with_signed_payload(
-			ref payload, ref signature
-		) = call {
-			let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
-			if !signature_valid {
-				return InvalidTransaction::BadProof.into();
-			}
-			Self::validate_transaction_parameters(&payload.block_number, &payload.price)
-		} else if let Call::submit_price_unsigned(block_number, new_price) = call {
-			Self::validate_transaction_parameters(block_number, new_price)
-		} else {
-			InvalidTransaction::Call.into()
-		}
 	}
 }

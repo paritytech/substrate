@@ -20,20 +20,18 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::Bounded;
 use core::convert::TryInto;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite};
+use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
 
-use crate::Module as Multisig;
+use crate::Pallet as Multisig;
 
 const SEED: u32 = 0;
 
-fn setup_multi<T: Config>(s: u32, z: u32)
-	-> Result<(Vec<T::AccountId>, Vec<u8>), &'static str>
-{
+fn setup_multi<T: Config>(s: u32, z: u32) -> Result<(Vec<T::AccountId>, Vec<u8>), &'static str> {
 	let mut signatories: Vec<T::AccountId> = Vec::new();
-	for i in 0 .. s {
+	for i in 0..s {
 		let signatory = account("signatory", i, SEED);
 		// Give them some balance for a possible deposit
 		let balance = BalanceOf::<T>::max_value();
@@ -298,25 +296,4 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_as_multi_threshold_1::<Test>());
-			assert_ok!(test_benchmark_as_multi_create::<Test>());
-			assert_ok!(test_benchmark_as_multi_create_store::<Test>());
-			assert_ok!(test_benchmark_as_multi_approve::<Test>());
-			assert_ok!(test_benchmark_as_multi_approve_store::<Test>());
-			assert_ok!(test_benchmark_as_multi_complete::<Test>());
-			assert_ok!(test_benchmark_approve_as_multi_create::<Test>());
-			assert_ok!(test_benchmark_approve_as_multi_approve::<Test>());
-			assert_ok!(test_benchmark_approve_as_multi_complete::<Test>());
-			assert_ok!(test_benchmark_cancel_as_multi::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);

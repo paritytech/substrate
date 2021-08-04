@@ -21,23 +21,37 @@
 
 use std::cell::RefCell;
 
-use crate::{Module, Config};
-use sp_runtime::Perbill;
-use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
-use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
+use frame_support::{parameter_types, weights::Weight};
+use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
-use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
+use sp_runtime::{
+	testing::{Header, TestXt, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill, Permill,
+};
+use sp_staking::{
+	offence::{OffenceError, ReportOffence},
+	SessionIndex,
+};
 
-impl_outer_origin!{
-	pub enum Origin for Runtime {}
-}
+use crate as imonline;
+use crate::Config;
 
-impl_outer_dispatch! {
-	pub enum Call for Runtime where origin: Origin {
-		imonline::ImOnline,
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type Block = frame_system::mocking::MockBlock<Runtime>;
+
+frame_support::construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		ImOnline: imonline::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session_historical::{Pallet},
 	}
-}
+);
 
 thread_local! {
 	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![
@@ -58,13 +72,11 @@ impl pallet_session::SessionManager<u64> for TestSessionManager {
 
 impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
-		VALIDATORS.with(|l| l
-			.borrow_mut()
-			.take()
-			.map(|validators| {
-				validators.iter().map(|v| (*v, *v)).collect()
-			})
-		)
+		VALIDATORS.with(|l| {
+			l.borrow_mut()
+				.take()
+				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
+		})
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
@@ -93,14 +105,9 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default()
-		.build_storage::<Runtime>()
-		.unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Runtime;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -109,7 +116,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -122,15 +129,16 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -144,12 +152,13 @@ parameter_types! {
 
 impl pallet_session::Config for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
-	type SessionHandler = (ImOnline, );
+	type SessionManager =
+		pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
+	type SessionHandler = (ImOnline,);
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
-	type Event = ();
+	type Event = Event;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
@@ -171,30 +180,62 @@ impl pallet_authorship::Config for Runtime {
 	type EventHandler = ImOnline;
 }
 
+thread_local! {
+	pub static MOCK_CURRENT_SESSION_PROGRESS: RefCell<Option<Option<Permill>>> = RefCell::new(None);
+}
+
+thread_local! {
+	pub static MOCK_AVERAGE_SESSION_LENGTH: RefCell<Option<u64>> = RefCell::new(None);
+}
+
+pub struct TestNextSessionRotation;
+
+impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSessionRotation {
+	fn average_session_length() -> u64 {
+		// take the mock result if any and return it
+		let mock = MOCK_AVERAGE_SESSION_LENGTH.with(|p| p.borrow_mut().take());
+
+		mock.unwrap_or(pallet_session::PeriodicSessions::<Period, Offset>::average_session_length())
+	}
+
+	fn estimate_current_session_progress(now: u64) -> (Option<Permill>, Weight) {
+		let (estimate, weight) =
+			pallet_session::PeriodicSessions::<Period, Offset>::estimate_current_session_progress(
+				now,
+			);
+
+		// take the mock result if any and return it
+		let mock = MOCK_CURRENT_SESSION_PROGRESS.with(|p| p.borrow_mut().take());
+
+		(mock.unwrap_or(estimate), weight)
+	}
+
+	fn estimate_next_session_rotation(now: u64) -> (Option<u64>, Weight) {
+		pallet_session::PeriodicSessions::<Period, Offset>::estimate_next_session_rotation(now)
+	}
+}
+
 parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
-	type Event = ();
+	type Event = Event;
+	type ValidatorSet = Historical;
+	type NextSessionRotation = TestNextSessionRotation;
 	type ReportUnresponsiveness = OffenceHandler;
-	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
 }
 
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
+where
 	Call: From<LocalCall>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
 }
-
-/// Im Online module.
-pub type ImOnline = Module<Runtime>;
-pub type System = frame_system::Module<Runtime>;
-pub type Session = pallet_session::Module<Runtime>;
 
 pub fn advance_session() {
 	let now = System::block_number().max(1);

@@ -16,15 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{pin::Pin, time::Duration, collections::HashMap, any::Any, borrow::Cow};
-use sc_client_api::ImportNotifications;
-use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
-use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, import_queue::BoxBlockImport};
-use futures::{prelude::*, task::{Context, Poll}};
+use futures::{
+	prelude::*,
+	task::{Context, Poll},
+};
 use futures_timer::Delay;
 use log::*;
+use sc_client_api::ImportNotifications;
+use sc_consensus::{BlockImportParams, BoxBlockImport, StateAction, StorageChanges};
+use sp_consensus::{BlockOrigin, Proposal};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+	DigestItem,
+};
+use std::{borrow::Cow, collections::HashMap, pin::Pin, time::Duration};
 
-use crate::{INTERMEDIATE_KEY, POW_ENGINE_ID, Seal, PowAlgorithm, PowIntermediate};
+use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, POW_ENGINE_ID};
 
 /// Mining metadata. This is the information needed to start an actual mining loop.
 #[derive(Clone, Eq, PartialEq)]
@@ -40,25 +48,40 @@ pub struct MiningMetadata<H, D> {
 }
 
 /// A build of mining, containing the metadata and the block proposal.
-pub struct MiningBuild<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
+pub struct MiningBuild<
+	Block: BlockT,
+	Algorithm: PowAlgorithm<Block>,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	Proof,
+> {
 	/// Mining metadata.
 	pub metadata: MiningMetadata<Block::Hash, Algorithm::Difficulty>,
 	/// Mining proposal.
-	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>>,
+	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>, Proof>,
 }
 
 /// Mining worker that exposes structs to query the current mining build and submit mined blocks.
-pub struct MiningWorker<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
-	pub(crate) build: Option<MiningBuild<Block, Algorithm, C>>,
+pub struct MiningWorker<
+	Block: BlockT,
+	Algorithm: PowAlgorithm<Block>,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	L: sc_consensus::JustificationSyncLink<Block>,
+	Proof,
+> {
+	pub(crate) build: Option<MiningBuild<Block, Algorithm, C, Proof>>,
 	pub(crate) algorithm: Algorithm,
 	pub(crate) block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
+	pub(crate) justification_sync_link: L,
 }
 
-impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
+impl<Block, Algorithm, C, L, Proof> MiningWorker<Block, Algorithm, C, L, Proof>
+where
 	Block: BlockT,
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
-	Algorithm::Difficulty: 'static,
+	Algorithm::Difficulty: 'static + Send,
+	L: sc_consensus::JustificationSyncLink<Block>,
+	sp_api::TransactionFor<C, Block>: Send + 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
 	/// major syncing.
@@ -70,10 +93,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 		self.build = None;
 	}
 
-	pub(crate) fn on_build(
-		&mut self,
-		build: MiningBuild<Block, Algorithm, C>,
-	) {
+	pub(crate) fn on_build(&mut self, build: MiningBuild<Block, Algorithm, C, Proof>) {
 		self.build = Some(build);
 	}
 
@@ -84,7 +104,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 	/// Submit a mined seal. The seal will be validated again. Returns true if the submission is
 	/// successful.
-	pub fn submit(&mut self, seal: Seal) -> bool {
+	pub async fn submit(&mut self, seal: Seal) -> bool {
 		if let Some(build) = self.build.take() {
 			match self.algorithm.verify(
 				&BlockId::Hash(build.metadata.best_hash),
@@ -117,19 +137,26 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(seal);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(build.proposal.storage_changes);
+			import_block.state_action =
+				StateAction::ApplyChanges(StorageChanges::Changes(build.proposal.storage_changes));
 
 			let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 				difficulty: Some(build.metadata.difficulty),
 			};
 
-			import_block.intermediates.insert(
-				Cow::from(INTERMEDIATE_KEY),
-				Box::new(intermediate) as Box<dyn Any>
-			);
+			import_block
+				.intermediates
+				.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
 
-			match self.block_import.import_block(import_block, HashMap::default()) {
-				Ok(_) => {
+			let header = import_block.post_header();
+			match self.block_import.import_block(import_block, HashMap::default()).await {
+				Ok(res) => {
+					res.handle_justification(
+						&header.hash(),
+						*header.number(),
+						&mut self.justification_sync_link,
+					);
+
 					info!(
 						target: "pow",
 						"✅ Successfully mined block on top of: {}",
@@ -165,15 +192,8 @@ pub struct UntilImportedOrTimeout<Block: BlockT> {
 
 impl<Block: BlockT> UntilImportedOrTimeout<Block> {
 	/// Create a new stream using the given import notification and timeout duration.
-	pub fn new(
-		import_notifications: ImportNotifications<Block>,
-		timeout: Duration,
-	) -> Self {
-		Self {
-			import_notifications,
-			timeout,
-			inner_delay: None,
-		}
+	pub fn new(import_notifications: ImportNotifications<Block>, timeout: Duration) -> Self {
+		Self { import_notifications, timeout, inner_delay: None }
 	}
 }
 

@@ -21,45 +21,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{result, prelude::*};
-use sp_std::collections::btree_set::BTreeSet;
-use frame_support::{decl_module, decl_storage, decl_error, dispatch, ensure};
-use frame_support::traits::{FindAuthor, VerifySeal, Get};
-use codec::{Encode, Decode};
-use frame_system::ensure_none;
-use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use frame_support::weights::{Weight, DispatchClass};
-use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
-use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
+use codec::{Decode, Encode};
+use frame_support::{
+	dispatch,
+	traits::{FindAuthor, Get, VerifySeal},
+};
+use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
+use sp_runtime::traits::{Header as HeaderT, One, Saturating};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*, result};
 
 const MAX_UNCLES: usize = 10;
 
-pub trait Config: frame_system::Config {
-	/// Find the author of a block.
-	type FindAuthor: FindAuthor<Self::AccountId>;
-	/// The number of blocks back we should accept uncles.
-	/// This means that we will deal with uncle-parents that are
-	/// `UncleGenerations + 1` before `now`.
-	type UncleGenerations: Get<Self::BlockNumber>;
-	/// A filter for uncles within a block. This is for implementing
-	/// further constraints on what uncles can be included, other than their ancestry.
-	///
-	/// For PoW, as long as the seals are checked, there is no need to use anything
-	/// but the `VerifySeal` implementation as the filter. This is because the cost of making many equivocating
-	/// uncles is high.
-	///
-	/// For PoS, there is no such limitation, so a further constraint must be imposed
-	/// beyond a seal check in order to prevent an arbitrary number of
-	/// equivocating uncles from being included.
-	///
-	/// The `OnePerAuthorPerHeight` filter is good for many slot-based PoS
-	/// engines.
-	type FilterUncle: FilterUncle<Self::Header, Self::AccountId>;
-	/// An event handler for authored blocks.
-	type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
-}
+pub use pallet::*;
 
-/// An event handler for the authorship module. There is a dummy implementation
+/// An event handler for the authorship pallet. There is a dummy implementation
 /// for `()`, which does nothing.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait EventHandler<Author, BlockNumber> {
@@ -82,15 +57,15 @@ pub trait FilterUncle<Header, Author> {
 
 	/// Do additional filtering on a seal-checked uncle block, with the accumulated
 	/// filter.
-	fn filter_uncle(header: &Header, acc: &mut Self::Accumulator)
-		-> Result<Option<Author>, &'static str>;
+	fn filter_uncle(
+		header: &Header,
+		acc: &mut Self::Accumulator,
+	) -> Result<Option<Author>, &'static str>;
 }
 
 impl<H, A> FilterUncle<H, A> for () {
 	type Accumulator = ();
-	fn filter_uncle(_: &H, _acc: &mut Self::Accumulator)
-		-> Result<Option<A>, &'static str>
-	{
+	fn filter_uncle(_: &H, _acc: &mut Self::Accumulator) -> Result<Option<A>, &'static str> {
 		Ok(None)
 	}
 }
@@ -100,14 +75,10 @@ impl<H, A> FilterUncle<H, A> for () {
 /// equivocating is high.
 pub struct SealVerify<T>(sp_std::marker::PhantomData<T>);
 
-impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
-	for SealVerify<T>
-{
+impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author> for SealVerify<T> {
 	type Accumulator = ();
 
-	fn filter_uncle(header: &Header, _acc: &mut ())
-		-> Result<Option<Author>, &'static str>
-	{
+	fn filter_uncle(header: &Header, _acc: &mut ()) -> Result<Option<Author>, &'static str> {
 		T::verify_seal(header)
 	}
 }
@@ -118,8 +89,7 @@ impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 /// This does O(n log n) work in the number of uncles included.
 pub struct OnePerAuthorPerHeight<T, N>(sp_std::marker::PhantomData<(T, N)>);
 
-impl<Header, Author, T> FilterUncle<Header, Author>
-	for OnePerAuthorPerHeight<T, Header::Number>
+impl<Header, Author, T> FilterUncle<Header, Author> for OnePerAuthorPerHeight<T, Header::Number>
 where
 	Header: HeaderT + PartialEq,
 	Header::Number: Ord,
@@ -128,15 +98,16 @@ where
 {
 	type Accumulator = BTreeSet<(Header::Number, Author)>;
 
-	fn filter_uncle(header: &Header, acc: &mut Self::Accumulator)
-		-> Result<Option<Author>, &'static str>
-	{
+	fn filter_uncle(
+		header: &Header,
+		acc: &mut Self::Accumulator,
+	) -> Result<Option<Author>, &'static str> {
 		let author = T::verify_seal(header)?;
 		let number = header.number();
 
 		if let Some(ref author) = author {
 			if !acc.insert((number.clone(), author.clone())) {
-				return Err("more than one uncle per number per author included");
+				return Err("more than one uncle per number per author included")
 			}
 		}
 
@@ -150,21 +121,82 @@ enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
 	Uncle(Hash, Option<Author>),
 }
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-decl_storage! {
-	trait Store for Module<T: Config> as Authorship {
-		/// Uncles
-		Uncles: Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>;
-		/// Author of current block.
-		Author: Option<T::AccountId>;
-		/// Whether uncles were already set in this block.
-		DidSetUncles: bool;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// Find the author of a block.
+		type FindAuthor: FindAuthor<Self::AccountId>;
+		/// The number of blocks back we should accept uncles.
+		/// This means that we will deal with uncle-parents that are
+		/// `UncleGenerations + 1` before `now`.
+		#[pallet::constant]
+		type UncleGenerations: Get<Self::BlockNumber>;
+		/// A filter for uncles within a block. This is for implementing
+		/// further constraints on what uncles can be included, other than their ancestry.
+		///
+		/// For PoW, as long as the seals are checked, there is no need to use anything
+		/// but the `VerifySeal` implementation as the filter. This is because the cost of making many equivocating
+		/// uncles is high.
+		///
+		/// For PoS, there is no such limitation, so a further constraint must be imposed
+		/// beyond a seal check in order to prevent an arbitrary number of
+		/// equivocating uncles from being included.
+		///
+		/// The `OnePerAuthorPerHeight` filter is good for many slot-based PoS
+		/// engines.
+		type FilterUncle: FilterUncle<Self::Header, Self::AccountId>;
+		/// An event handler for authored blocks.
+		type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
 	}
-}
 
-decl_error! {
-	/// Error for the authorship module.
-	pub enum Error for Module<T: Config> {
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
+			let uncle_generations = T::UncleGenerations::get();
+			// prune uncles that are older than the allowed number of generations.
+			if uncle_generations <= now {
+				let minimum_height = now - uncle_generations;
+				Self::prune_old_uncles(minimum_height)
+			}
+
+			<DidSetUncles<T>>::put(false);
+
+			T::EventHandler::note_author(Self::author());
+
+			0
+		}
+
+		fn on_finalize(_: T::BlockNumber) {
+			// ensure we never go to trie with these values.
+			<Author<T>>::kill();
+			<DidSetUncles<T>>::kill();
+		}
+	}
+
+	#[pallet::storage]
+	/// Uncles
+	pub(super) type Uncles<T: Config> =
+		StorageValue<_, Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>, ValueQuery>;
+
+	#[pallet::storage]
+	/// Author of current block.
+	pub(super) type Author<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+
+	#[pallet::storage]
+	/// Whether uncles were already set in this block.
+	pub(super) type DidSetUncles<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// The uncle parent not in the chain.
 		InvalidUncleParent,
 		/// Uncles already set in the block.
@@ -180,64 +212,104 @@ decl_error! {
 		/// The uncle isn't recent enough to be included.
 		OldUncle,
 	}
-}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
-		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let uncle_generations = T::UncleGenerations::get();
-			// prune uncles that are older than the allowed number of generations.
-			if uncle_generations <= now {
-				let minimum_height = now - uncle_generations;
-				Self::prune_old_uncles(minimum_height)
-			}
-
-			<Self as Store>::DidSetUncles::put(false);
-
-			T::EventHandler::note_author(Self::author());
-
-			0
-		}
-
-		fn on_finalize() {
-			// ensure we never go to trie with these values.
-			<Self as Store>::Author::kill();
-			<Self as Store>::DidSetUncles::kill();
-		}
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
-		#[weight = (0, DispatchClass::Mandatory)]
-		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
+		#[pallet::weight((0, DispatchClass::Mandatory))]
+		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
-			if <Self as Store>::DidSetUncles::get() {
+			if <DidSetUncles<T>>::get() {
 				Err(Error::<T>::UnclesAlreadySet)?
 			}
-			<Self as Store>::DidSetUncles::put(true);
+			<DidSetUncles<T>>::put(true);
 
 			Self::verify_and_import_uncles(new_uncles)
 		}
 	}
+
+	#[pallet::inherent]
+	impl<T: Config> ProvideInherent for Pallet<T> {
+		type Call = Call<T>;
+		type Error = InherentError;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+			let uncles = data.uncles().unwrap_or_default();
+			let mut set_uncles = Vec::new();
+
+			if !uncles.is_empty() {
+				let prev_uncles = <Uncles<T>>::get();
+				let mut existing_hashes: Vec<_> = prev_uncles
+					.into_iter()
+					.filter_map(|entry| match entry {
+						UncleEntryItem::InclusionHeight(_) => None,
+						UncleEntryItem::Uncle(h, _) => Some(h),
+					})
+					.collect();
+
+				let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator =
+					Default::default();
+
+				for uncle in uncles {
+					match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
+						Ok(_) => {
+							let hash = uncle.hash();
+							set_uncles.push(uncle);
+							existing_hashes.push(hash);
+
+							if set_uncles.len() == MAX_UNCLES {
+								break
+							}
+						},
+						Err(_) => {
+							// skip this uncle
+						},
+					}
+				}
+			}
+
+			if set_uncles.is_empty() {
+				None
+			} else {
+				Some(Call::set_uncles(set_uncles))
+			}
+		}
+
+		fn check_inherent(
+			call: &Self::Call,
+			_data: &InherentData,
+		) -> result::Result<(), Self::Error> {
+			match call {
+				Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES =>
+					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into())),
+				_ => Ok(()),
+			}
+		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::set_uncles(_))
+		}
+	}
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	/// Fetch the author of the block.
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
-		if let Some(author) = <Self as Store>::Author::get() {
-			return author;
+		if let Some(author) = <Author<T>>::get() {
+			return author
 		}
 
-		let digest = <frame_system::Module<T>>::digest();
+		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Self as Store>::Author::put(&author);
+			<Author<T>>::put(&author);
 			author
 		} else {
 			Default::default()
@@ -245,19 +317,18 @@ impl<T: Config> Module<T> {
 	}
 
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
-		let now = <frame_system::Module<T>>::block_number();
+		let now = <frame_system::Pallet<T>>::block_number();
 
-		let mut uncles = <Self as Store>::Uncles::get();
+		let mut uncles = <Uncles<T>>::get();
 		uncles.push(UncleEntryItem::InclusionHeight(now));
 
 		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
 		for uncle in new_uncles {
-			let prev_uncles = uncles.iter().filter_map(|entry|
-				match entry {
-					UncleEntryItem::InclusionHeight(_) => None,
-					UncleEntryItem::Uncle(h, _) => Some(h),
-				});
+			let prev_uncles = uncles.iter().filter_map(|entry| match entry {
+				UncleEntryItem::InclusionHeight(_) => None,
+				UncleEntryItem::Uncle(h, _) => Some(h),
+			});
 			let author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
 			let hash = uncle.hash();
 
@@ -268,25 +339,20 @@ impl<T: Config> Module<T> {
 			uncles.push(UncleEntryItem::Uncle(hash, author));
 		}
 
-		<Self as Store>::Uncles::put(&uncles);
+		<Uncles<T>>::put(&uncles);
 		Ok(())
 	}
 
-	fn verify_uncle<'a, I: IntoIterator<Item=&'a T::Hash>>(
+	fn verify_uncle<'a, I: IntoIterator<Item = &'a T::Hash>>(
 		uncle: &T::Header,
 		existing_uncles: I,
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
-	) -> Result<Option<T::AccountId>, dispatch::DispatchError>
-	{
-		let now = <frame_system::Module<T>>::block_number();
+	) -> Result<Option<T::AccountId>, dispatch::DispatchError> {
+		let now = <frame_system::Pallet<T>>::block_number();
 
 		let (minimum_height, maximum_height) = {
 			let uncle_generations = T::UncleGenerations::get();
-			let min = if now >= uncle_generations {
-				now - uncle_generations
-			} else {
-				Zero::zero()
-			};
+			let min = now.saturating_sub(uncle_generations);
 
 			(min, now)
 		};
@@ -294,27 +360,27 @@ impl<T: Config> Module<T> {
 		let hash = uncle.hash();
 
 		if uncle.number() < &One::one() {
-			return Err(Error::<T>::GenesisUncle.into());
+			return Err(Error::<T>::GenesisUncle.into())
 		}
 
 		if uncle.number() > &maximum_height {
-			return Err(Error::<T>::TooHighUncle.into());
+			return Err(Error::<T>::TooHighUncle.into())
 		}
 
 		{
 			let parent_number = uncle.number().clone() - One::one();
-			let parent_hash = <frame_system::Module<T>>::block_hash(&parent_number);
+			let parent_hash = <frame_system::Pallet<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
-				return Err(Error::<T>::InvalidUncleParent.into());
+				return Err(Error::<T>::InvalidUncleParent.into())
 			}
 		}
 
 		if uncle.number() < &minimum_height {
-			return Err(Error::<T>::OldUncle.into());
+			return Err(Error::<T>::OldUncle.into())
 		}
 
-		let duplicate = existing_uncles.into_iter().find(|h| **h == hash).is_some();
-		let in_chain = <frame_system::Module<T>>::block_hash(uncle.number()) == hash;
+		let duplicate = existing_uncles.into_iter().any(|h| *h == hash);
+		let in_chain = <frame_system::Pallet<T>>::block_hash(uncle.number()) == hash;
 
 		if duplicate || in_chain {
 			return Err(Error::<T>::UncleAlreadyIncluded.into())
@@ -325,84 +391,28 @@ impl<T: Config> Module<T> {
 	}
 
 	fn prune_old_uncles(minimum_height: T::BlockNumber) {
-		let mut uncles = <Self as Store>::Uncles::get();
+		let uncles = <Uncles<T>>::get();
 		let prune_entries = uncles.iter().take_while(|item| match item {
 			UncleEntryItem::Uncle(_, _) => true,
 			UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
 		});
 		let prune_index = prune_entries.count();
 
-		let _ = uncles.drain(..prune_index);
-		<Self as Store>::Uncles::put(uncles);
-	}
-}
-
-impl<T: Config> ProvideInherent for Module<T> {
-	type Call = Call<T>;
-	type Error = InherentError;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let uncles = data.uncles().unwrap_or_default();
-		let mut set_uncles = Vec::new();
-
-		if !uncles.is_empty() {
-			let prev_uncles = <Self as Store>::Uncles::get();
-			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
-				match entry {
-					UncleEntryItem::InclusionHeight(_) => None,
-					UncleEntryItem::Uncle(h, _) => Some(h),
-				}
-			).collect();
-
-			let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
-
-			for uncle in uncles {
-				match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
-					Ok(_) => {
-						let hash = uncle.hash();
-						set_uncles.push(uncle);
-						existing_hashes.push(hash);
-
-						if set_uncles.len() == MAX_UNCLES {
-							break
-						}
-					}
-					Err(_) => {
-						// skip this uncle
-					}
-				}
-			}
-		}
-
-		if set_uncles.is_empty() {
-			None
-		} else {
-			Some(Call::set_uncles(set_uncles))
-		}
-	}
-
-	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
-		match call {
-			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
-				Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
-			},
-			_ => {
-				Ok(())
-			},
-		}
+		<Uncles<T>>::put(&uncles[prune_index..]);
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate as pallet_authorship;
 	use super::*;
+	use crate as pallet_authorship;
+	use frame_support::{parameter_types, ConsensusEngineId};
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem,
+		generic::DigestItem,
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
 	};
-	use frame_support::{parameter_types, ConsensusEngineId};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -413,8 +423,8 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		}
 	);
 
@@ -425,7 +435,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
@@ -447,13 +457,14 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	parameter_types! {
 		pub const UncleGenerations: u64 = 5;
 	}
 
-	impl Config for Test {
+	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
 		type FilterUncle = SealVerify<VerifyBlock>;
@@ -466,11 +477,12 @@ mod tests {
 
 	impl FindAuthor<u64> for AuthorGiven {
 		fn find_author<'a, I>(digests: I) -> Option<u64>
-			where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+		where
+			I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 		{
 			for (id, data) in digests {
 				if id == TEST_ID {
-					return u64::decode(&mut &data[..]).ok();
+					return u64::decode(&mut &data[..]).ok()
 				}
 			}
 
@@ -485,10 +497,8 @@ mod tests {
 			let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 			let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
 
-			let author = match AuthorGiven::find_author(pre_runtime_digests) {
-				None => return Err("no author"),
-				Some(author) => author,
-			};
+			let author =
+				AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
 
 			for (id, seal) in seals {
 				if id == TEST_ID {
@@ -496,10 +506,10 @@ mod tests {
 						Err(_) => return Err("wrong seal"),
 						Ok(a) => {
 							if a != author {
-								return Err("wrong author in seal");
+								return Err("wrong author in seal")
 							}
 							break
-						}
+						},
 					}
 				}
 			}
@@ -519,13 +529,7 @@ mod tests {
 	}
 
 	fn create_header(number: u64, parent_hash: H256, state_root: H256) -> Header {
-		Header::new(
-			number,
-			Default::default(),
-			state_root,
-			parent_hash,
-			Default::default(),
-		)
+		Header::new(number, Default::default(), state_root, parent_hash, Default::default())
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
@@ -540,9 +544,14 @@ mod tests {
 			let hash = Default::default();
 			let author = Default::default();
 			let uncles = vec![
-				InclusionHeight(1u64), Uncle(hash, Some(author)), Uncle(hash, None), Uncle(hash, None),
-				InclusionHeight(2u64), Uncle(hash, None),
-				InclusionHeight(3u64), Uncle(hash, None),
+				InclusionHeight(1u64),
+				Uncle(hash, Some(author)),
+				Uncle(hash, None),
+				Uncle(hash, None),
+				InclusionHeight(2u64),
+				Uncle(hash, None),
+				InclusionHeight(3u64),
+				Uncle(hash, None),
 			];
 
 			<Authorship as Store>::Uncles::put(uncles);
@@ -581,15 +590,15 @@ mod tests {
 			}
 
 			let mut canon_chain = CanonChain {
-				inner: vec![seal_header(create_header(0, Default::default(), Default::default()), 999)],
+				inner: vec![seal_header(
+					create_header(0, Default::default(), Default::default()),
+					999,
+				)],
 			};
 
-			let initialize_block = |number, hash: H256| System::initialize(
-				&number,
-				&hash,
-				&Default::default(),
-				Default::default()
-			);
+			let initialize_block = |number, hash: H256| {
+				System::initialize(&number, &hash, &Default::default(), Default::default())
+			};
 
 			for number in 1..8 {
 				initialize_block(number, canon_chain.best_hash());
@@ -677,18 +686,11 @@ mod tests {
 	fn sets_author_lazily() {
 		new_test_ext().execute_with(|| {
 			let author = 42;
-			let mut header = seal_header(
-				create_header(1, Default::default(), [1; 32].into()),
-				author,
-			);
+			let mut header =
+				seal_header(create_header(1, Default::default(), [1; 32].into()), author);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(
-				&1,
-				&Default::default(),
-				header.digest(),
-				Default::default(),
-			);
+			System::initialize(&1, &Default::default(), header.digest(), Default::default());
 
 			assert_eq!(Authorship::author(), author);
 		});
@@ -702,27 +704,15 @@ mod tests {
 		let author_b = 43;
 
 		let mut acc: <Filter as FilterUncle<Header, u64>>::Accumulator = Default::default();
-		let header_a1 = seal_header(
-			create_header(1, Default::default(), [1; 32].into()),
-			author_a,
-		);
-		let header_b1 = seal_header(
-			create_header(1, Default::default(), [1; 32].into()),
-			author_b,
-		);
+		let header_a1 = seal_header(create_header(1, Default::default(), [1; 32].into()), author_a);
+		let header_b1 = seal_header(create_header(1, Default::default(), [1; 32].into()), author_b);
 
-		let header_a2_1 = seal_header(
-			create_header(2, Default::default(), [1; 32].into()),
-			author_a,
-		);
-		let header_a2_2 = seal_header(
-			create_header(2, Default::default(), [2; 32].into()),
-			author_a,
-		);
+		let header_a2_1 =
+			seal_header(create_header(2, Default::default(), [1; 32].into()), author_a);
+		let header_a2_2 =
+			seal_header(create_header(2, Default::default(), [2; 32].into()), author_a);
 
-		let mut check_filter = move |uncle| {
-			Filter::filter_uncle(uncle, &mut acc)
-		};
+		let mut check_filter = move |uncle| Filter::filter_uncle(uncle, &mut acc);
 
 		// same height, different author is OK.
 		assert_eq!(check_filter(&header_a1), Ok(Some(author_a)));

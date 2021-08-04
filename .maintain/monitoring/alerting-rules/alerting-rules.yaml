@@ -47,8 +47,8 @@ groups:
     # Under the assumption of an average block production of 6 seconds,
     # "best" and "finalized" being more than 10 blocks apart would imply
     # more than a 1 minute delay between block production and finalization.
-    expr: '(polkadot_block_height_number{status="best"} - ignoring(status)
-    polkadot_block_height_number{status="finalized"}) > 10'
+    expr: '(polkadot_block_height{status="best"} - ignoring(status)
+    polkadot_block_height{status="finalized"}) > 10'
     for: 8m
     labels:
       severity: critical
@@ -74,7 +74,7 @@ groups:
     increase(polkadot_sub_txpool_validations_finished[5m]) > 0'
     for: 30m
     labels:
-      severity: critical
+      severity: warning
     annotations:
       message: 'The transaction pool size on node {{ $labels.instance }} has
       been monotonically increasing for more than 30 minutes.'
@@ -83,7 +83,7 @@ groups:
     polkadot_sub_txpool_validations_finished > 10000'
     for: 5m
     labels:
-      severity: critical
+      severity: warning
     annotations:
       message: 'The transaction pool size on node {{ $labels.instance }} has
       been above 10_000 for more than 5 minutes.'
@@ -108,6 +108,13 @@ groups:
     annotations:
       message: 'The node {{ $labels.instance }} has less than 3 peers for more
       than 15 minutes'
+  - alert: NoIncomingConnection
+    expr: increase(polkadot_sub_libp2p_incoming_connections_total[20m]) == 0
+    labels:
+      severity: warning
+    annotations:
+      message: 'The node {{ $labels.instance }} has not received any new incoming
+      TCP connection in the past 20 minutes. Is it connected to the Internet?'
 
   ##############################################################################
   # System
@@ -127,8 +134,8 @@ groups:
   ##############################################################################
 
   - alert: ContinuousTaskEnded
-    expr: '(polkadot_tasks_spawned_total{task_name != "basic-authorship-proposer"} == 1)
-        - on(instance, task_name) (polkadot_tasks_ended_total == 1)'
+    expr: '(polkadot_tasks_spawned_total{task_name != "basic-authorship-proposer", task_name != "substrate-rpc-subscription"} == 1)
+        - on(instance, task_name) group_left() (polkadot_tasks_ended_total == 1)'
     for: 5m
     labels:
       severity: warning

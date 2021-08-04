@@ -15,27 +15,29 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+use crate::{
+	columns,
+	utils::{DatabaseType, NUM_COLUMNS},
+};
 /// A `Database` adapter for parity-db.
-
-use sp_database::{Database, Change, ColumnId, Transaction, error::DatabaseError};
-use crate::utils::{DatabaseType, NUM_COLUMNS};
-use crate::columns;
+use sp_database::{error::DatabaseError, Change, ColumnId, Database, Transaction};
 
 struct DbAdapter(parity_db::Db);
 
 fn handle_err<T>(result: parity_db::Result<T>) -> T {
 	match result {
 		Ok(r) => r,
-		Err(e) =>  {
+		Err(e) => {
 			panic!("Critical database error: {:?}", e);
-		}
+		},
 	}
 }
 
 /// Wrap parity-db database into a trait object that implements `sp_database::Database`
-pub fn open<H: Clone>(path: &std::path::Path, db_type: DatabaseType)
-	-> parity_db::Result<std::sync::Arc<dyn Database<H>>>
-{
+pub fn open<H: Clone + AsRef<[u8]>>(
+	path: &std::path::Path,
+	db_type: DatabaseType,
+) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
 	config.sync = true; // Flush each commit
 	if db_type == DatabaseType::Full {
@@ -48,15 +50,13 @@ pub fn open<H: Clone>(path: &std::path::Path, db_type: DatabaseType)
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 
-impl<H: Clone> Database<H> for DbAdapter {
+impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 	fn commit(&self, transaction: Transaction<H>) -> Result<(), DatabaseError> {
-		handle_err(self.0.commit(transaction.0.into_iter().map(|change|
-			match change {
-				Change::Set(col, key, value) => (col as u8, key, Some(value)),
-				Change::Remove(col, key) => (col as u8, key, None),
-				_ => unimplemented!(),
-			}))
-		);
+		handle_err(self.0.commit(transaction.0.into_iter().map(|change| match change {
+			Change::Set(col, key, value) => (col as u8, key, Some(value)),
+			Change::Remove(col, key) => (col as u8, key, None),
+			_ => unimplemented!(),
+		})));
 
 		Ok(())
 	}
@@ -65,7 +65,11 @@ impl<H: Clone> Database<H> for DbAdapter {
 		handle_err(self.0.get(col as u8, key))
 	}
 
-	fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
-		unimplemented!();
+	fn contains(&self, col: ColumnId, key: &[u8]) -> bool {
+		handle_err(self.0.get_size(col as u8, key)).is_some()
+	}
+
+	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
+		handle_err(self.0.get_size(col as u8, key)).map(|s| s as usize)
 	}
 }

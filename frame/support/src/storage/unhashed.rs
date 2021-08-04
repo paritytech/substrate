@@ -17,15 +17,15 @@
 
 //! Operation on unhashed runtime storage.
 
+use codec::{Decode, Encode};
 use sp_std::prelude::*;
-use codec::{Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	sp_io::storage::get(key).and_then(|val| {
 		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
-			runtime_print!("ERROR: Corrupted state at {:?}", key);
+			crate::runtime_print!("ERROR: Corrupted state at {:?}", key);
 			None
 		})
 	})
@@ -92,8 +92,8 @@ pub fn kill(key: &[u8]) {
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
-pub fn kill_prefix(prefix: &[u8]) {
-	sp_io::storage::clear_prefix(prefix);
+pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResult {
+	sp_io::storage::clear_prefix(prefix, limit)
 }
 
 /// Get a Vec of bytes from storage.

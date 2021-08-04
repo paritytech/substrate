@@ -17,16 +17,19 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
+use crate::testing::TaskExecutor;
 use assert_matches::assert_matches;
+use futures::{
+	compat::{Future01CompatExt, Stream01CompatExt},
+	executor,
+};
+use sc_block_builder::BlockBuilderProvider;
+use sp_consensus::BlockOrigin;
+use sp_rpc::list::ListOrValue;
 use substrate_test_runtime_client::{
 	prelude::*,
-	sp_consensus::BlockOrigin,
-	runtime::{H256, Block, Header},
+	runtime::{Block, Header, H256},
 };
-use sp_rpc::list::ListOrValue;
-use sc_block_builder::BlockBuilderProvider;
-use futures::{executor, compat::{Future01CompatExt, Stream01CompatExt}};
-use crate::testing::TaskExecutor;
 
 #[test]
 fn should_return_header() {
@@ -67,12 +70,12 @@ fn should_return_a_block() {
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
-	client.import(BlockOrigin::Own, block).unwrap();
+	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	// Genesis block is not justified
 	assert_matches!(
 		api.block(Some(client.genesis_hash()).into()).wait(),
-		Ok(Some(SignedBlock { justification: None, .. }))
+		Ok(Some(SignedBlock { justifications: None, .. }))
 	);
 
 	assert_matches!(
@@ -105,10 +108,7 @@ fn should_return_a_block() {
 		}
 	);
 
-	assert_matches!(
-		api.block(Some(H256::from_low_u64_be(5)).into()).wait(),
-		Ok(None)
-	);
+	assert_matches!(api.block(Some(H256::from_low_u64_be(5)).into()).wait(), Ok(None));
 }
 
 #[test]
@@ -121,7 +121,6 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 
-
 	assert_matches!(
 		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
 		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
@@ -133,7 +132,7 @@ fn should_return_block_hash() {
 	);
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block.clone()).unwrap();
+	executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 	assert_matches!(
 		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
@@ -154,7 +153,6 @@ fn should_return_block_hash() {
 	);
 }
 
-
 #[test]
 fn should_return_finalized_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -167,7 +165,7 @@ fn should_return_finalized_hash() {
 
 	// import new block
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
+	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	// no finalization yet
 	assert_matches!(
 		api.finalized_head(),
@@ -193,13 +191,10 @@ fn should_notify_about_latest_block() {
 		api.subscribe_all_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial head sent.
@@ -223,13 +218,10 @@ fn should_notify_about_best_block() {
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial head sent.
@@ -253,13 +245,10 @@ fn should_notify_about_finalized_block() {
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 
