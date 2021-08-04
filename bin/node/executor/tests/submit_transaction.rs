@@ -42,8 +42,7 @@ fn should_submit_unsigned_transaction() {
 			validators_len: 0,
 		};
 
-		let call =
-			pallet_im_online::Call::heartbeat { heartbeat: heartbeat_data, signature };
+		let call = pallet_im_online::Call::heartbeat { heartbeat: heartbeat_data, signature };
 		SubmitTransaction::<Runtime, pallet_im_online::Call<Runtime>>::submit_unsigned_transaction(
 			call.into(),
 		)

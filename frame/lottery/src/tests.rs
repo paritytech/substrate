@@ -222,8 +222,7 @@ fn buy_ticket_works() {
 		assert_eq!(TicketsCount::<Test>::get(), 1);
 
 		// Buy ticket for remark
-		let call =
-			Box::new(Call::System(SystemCall::remark { remark: b"hello, world!".to_vec() }));
+		let call = Box::new(Call::System(SystemCall::remark { remark: b"hello, world!".to_vec() }));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		assert_eq!(TicketsCount::<Test>::get(), 2);
 
