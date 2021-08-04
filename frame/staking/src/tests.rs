@@ -550,8 +550,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 800,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 1, value: 400 },
 						IndividualExposure { who: 3, value: 400 },
+						IndividualExposure { who: 1, value: 400 },
 					]
 				},
 			);
