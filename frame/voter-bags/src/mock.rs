@@ -11,13 +11,13 @@ thread_local! {
 }
 
 /// Set a mock return value for `StakingVoteWeight::staking_vote_weight`.
-fn set_staking_vote_weight(weight: VoteWeight) {
+pub(crate) fn set_staking_vote_weight(weight: VoteWeight) {
 	VOTE_WEIGHT.with(|w| *w.borrow_mut() = weight);
 }
 
 pub struct StakingMock;
 impl frame_election_provider_support::StakingVoteWeight<AccountId> for StakingMock {
-	fn staking_vote_weight(who: &AccountId) -> VoteWeight {
+	fn staking_vote_weight(_who: &AccountId) -> VoteWeight {
 		VOTE_WEIGHT.with(|h| h.borrow().clone())
 	}
 }

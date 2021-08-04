@@ -804,7 +804,6 @@ impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
 {
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
-		let weight_of = Pallet::<T>::weight_of_fn();
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
 	fn count() -> u32 {

@@ -654,7 +654,7 @@ impl<T: Config> Pallet<T> {
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 		// Collect all slashing spans into a BTreeMap for further queries.
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		// let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		let unfiltered_voters: Vec<T::AccountId> =
 			T::VoterListProvider::get_voters().take(wanted_voters).collect();
