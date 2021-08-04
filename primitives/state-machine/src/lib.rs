@@ -172,7 +172,6 @@ mod execution {
 	use super::*;
 	use codec::{Codec, Decode, Encode};
 	use hash_db::Hasher;
-	use log::{trace, warn};
 	use smallvec::SmallVec;
 	use sp_core::{
 		hexdisplay::HexDisplay,
@@ -311,6 +310,10 @@ mod execution {
 		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
 		runtime_code: &'a RuntimeCode<'a>,
 		stats: StateMachineStats,
+		/// The hash of the block the state machine will be executed on.
+		///
+		/// Used for logging.
+		parent_hash: Option<H::Out>,
 	}
 
 	impl<'a, B, H, N, Exec> Drop for StateMachine<'a, B, H, N, Exec>
@@ -358,6 +361,7 @@ mod execution {
 				storage_transaction_cache: None,
 				runtime_code,
 				stats: StateMachineStats::default(),
+				parent_hash: None,
 			}
 		}
 
@@ -371,6 +375,14 @@ mod execution {
 			cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
 		) -> Self {
 			self.storage_transaction_cache = cache;
+			self
+		}
+
+		/// Set the given `parent_hash` as the hash of the parent block.
+		///
+		/// This will be used for improved logging.
+		pub fn set_parent_hash(mut self, parent_hash: H::Out) -> Self {
+			self.parent_hash = Some(parent_hash);
 			self
 		}
 
@@ -421,13 +433,15 @@ mod execution {
 				Some(&mut self.extensions),
 			);
 
-			let id = ext.id;
+			let ext_id = ext.id;
+
 			trace!(
-				target: "state", "{:04x}: Call {} at {:?}. Input={:?}",
-				id,
-				self.method,
-				self.backend,
-				HexDisplay::from(&self.call_data),
+				target: "state",
+				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
+				method = %self.method,
+				parent_hash = %self.parent_hash.map(|h| format!("{:?}", h)).unwrap_or_else(|| String::from("None")),
+				input = ?HexDisplay::from(&self.call_data),
+				"Call",
 			);
 
 			let (result, was_native) = self.exec.call(
@@ -444,10 +458,11 @@ mod execution {
 				.expect("Runtime is not able to call this function in the overlay; qed");
 
 			trace!(
-				target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
-				id,
-				was_native,
-				result,
+				target: "state",
+				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
+				?was_native,
+				?result,
+				"Return",
 			);
 
 			(result, was_native)
@@ -560,7 +575,7 @@ mod execution {
 
 	/// Prove execution using the given state backend, overlayed changes, and call executor.
 	pub fn prove_execution<B, H, N, Exec, Spawn>(
-		mut backend: B,
+		backend: &mut B,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
 		spawn_handle: Spawn,
@@ -1533,10 +1548,10 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
+		let mut remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
-			remote_backend,
+			&mut remote_backend,
 			&mut Default::default(),
 			&executor,
 			TaskExecutor::new(),

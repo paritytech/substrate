@@ -30,11 +30,11 @@ use sp_core::{
 use sp_externalities::Extensions;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT},
 };
 use sp_state_machine::{
-	self, create_proof_check_backend, execution_proof_check_on_trie_backend,
-	Backend as StateBackend, ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof,
+	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager,
+	ExecutionStrategy, OverlayedChanges, StorageProof,
 };
 
 use sp_api::{ProofRecorder, StorageTransactionCache};
@@ -85,9 +85,10 @@ where
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
 	) -> ClientResult<Vec<u8>> {
-		match self.backend.is_local_state_available(id) {
-			true => self.local.call(id, method, call_data, strategy, extensions),
-			false => Err(ClientError::NotAvailableOnLightClient),
+		if self.backend.is_local_state_available(id) {
+			self.local.call(id, method, call_data, strategy, extensions)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
 		}
 	}
 
@@ -116,8 +117,8 @@ where
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
-		match self.backend.is_local_state_available(at) {
-			true => CallExecutor::contextual_call::<
+		if self.backend.is_local_state_available(at) {
+			CallExecutor::contextual_call::<
 				fn(
 					Result<NativeOrEncoded<R>, Local::Error>,
 					Result<NativeOrEncoded<R>, Local::Error>,
@@ -136,58 +137,35 @@ where
 				recorder,
 				extensions,
 			)
-			.map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
-			false => Err(ClientError::NotAvailableOnLightClient),
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
+		}
+	}
+
+	fn prove_execution(
+		&self,
+		at: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+	) -> ClientResult<(Vec<u8>, StorageProof)> {
+		if self.backend.is_local_state_available(at) {
+			self.local.prove_execution(at, method, call_data)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
 		}
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		match self.backend.is_local_state_available(id) {
-			true => self.local.runtime_version(id),
-			false => Err(ClientError::NotAvailableOnLightClient),
+		if self.backend.is_local_state_available(id) {
+			self.local.runtime_version(id)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
 		}
-	}
-
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
-		&self,
-		_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
-		_changes: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8],
-	) -> ClientResult<(Vec<u8>, StorageProof)> {
-		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		None
 	}
-}
-
-/// Prove contextual execution using given block header in environment.
-///
-/// Method is executed using passed header as environment' current block.
-/// Proof includes both environment preparation proof and method execution proof.
-pub fn prove_execution<Block, S, E>(
-	mut state: S,
-	executor: &E,
-	method: &str,
-	call_data: &[u8],
-) -> ClientResult<(Vec<u8>, StorageProof)>
-where
-	Block: BlockT,
-	S: StateBackend<HashFor<Block>>,
-	E: CallExecutor<Block>,
-{
-	let trie_state = state.as_trie_backend().ok_or_else(|| {
-		Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-			as Box<dyn sp_state_machine::Error>
-	})?;
-
-	// execute method + record execution proof
-	let (result, exec_proof) =
-		executor.prove_at_trie_state(&trie_state, &mut Default::default(), method, call_data)?;
-
-	Ok((result, exec_proof))
 }
 
 /// Check remote contextual execution proof using given backend.
@@ -200,7 +178,7 @@ pub fn check_execution_proof<Header, E, H>(
 	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
 where
-	Header: HeaderT,
+	Header: HeaderT<Hash = H::Out>,
 	E: CodeExecutor + Clone + 'static,
 	H: Hasher,
 	H::Out: Ord + codec::Codec + 'static,

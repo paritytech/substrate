@@ -24,7 +24,7 @@ use sp_runtime::{
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
-use crate::{import_queue::CacheKeyId, Error};
+use sp_consensus::{BlockOrigin, CacheKeyId, Error};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -92,23 +92,6 @@ impl ImportResult {
 	}
 }
 
-/// Block data origin.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum BlockOrigin {
-	/// Genesis block built into the client.
-	Genesis,
-	/// Block is part of the initial sync with the network.
-	NetworkInitialSync,
-	/// Block was broadcasted on the network.
-	NetworkBroadcast,
-	/// Block that was received from the network and validated in the consensus process.
-	ConsensusBroadcast,
-	/// Block that was collated by this node.
-	Own,
-	/// Block was imported from a file.
-	File,
-}
-
 /// Fork choice strategy.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ForkChoiceStrategy {
@@ -129,6 +112,8 @@ pub struct BlockCheckParams<Block: BlockT> {
 	pub parent_hash: Block::Hash,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Allow importing the block if parent block is missing.
+	pub allow_missing_parent: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
 }
@@ -323,6 +308,11 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			.downcast_mut::<T>()
 			.ok_or(Error::InvalidIntermediate)
 	}
+
+	/// Check if this block contains state import action
+	pub fn with_state(&self) -> bool {
+		matches!(self.state_action, StateAction::ApplyChanges(StorageChanges::Import(_)))
+	}
 }
 
 /// Block import trait.
@@ -354,7 +344,7 @@ impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImp
 where
 	Transaction: Send + 'static,
 {
-	type Error = crate::error::Error;
+	type Error = sp_consensus::error::Error;
 	type Transaction = Transaction;
 
 	/// Check block preconditions.

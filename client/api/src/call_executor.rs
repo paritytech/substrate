@@ -22,10 +22,7 @@ use codec::{Decode, Encode};
 use sc_executor::{NativeVersion, RuntimeVersion};
 use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, HashFor},
-};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof};
 use std::{cell::RefCell, panic::UnwindSafe, result};
 
@@ -100,31 +97,12 @@ pub trait CallExecutor<B: BlockT> {
 	/// No changes are made.
 	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
-	/// Execute a call to a contract on top of given state, gathering execution proof.
+	/// Prove the execution of the given `method`.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
+	fn prove_execution(
 		&self,
-		mut state: S,
-		overlay: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8],
-	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		let trie_state = state.as_trie_backend().ok_or_else(|| {
-			sp_blockchain::Error::from_state(Box::new(
-				sp_state_machine::ExecutionError::UnableToGenerateProof,
-			) as Box<_>)
-		})?;
-		self.prove_at_trie_state(trie_state, overlay, method, call_data)
-	}
-
-	/// Execute a call to a contract on top of given trie state, gathering execution proof.
-	///
-	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
-		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
-		overlay: &mut OverlayedChanges,
+		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
