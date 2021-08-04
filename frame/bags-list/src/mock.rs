@@ -70,7 +70,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
-		VoterBags: crate::{Pallet, Call, Storage, Event<T>},
+		PalletBagsList: crate::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -86,7 +86,7 @@ pub(crate) mod ext_builder {
 	}
 
 	impl ExtBuilder {
-		/// Add some AccountIds to insert into `VoterList`.
+		/// Add some AccountIds to insert into `List`.
 		pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
 			self.ids = ids;
 			self
@@ -100,7 +100,7 @@ pub(crate) mod ext_builder {
 			let mut ext = sp_io::TestExternalities::from(storage);
 			ext.execute_with(|| {
 				for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
-					VoterList::<Runtime>::insert(*id, *weight);
+					List::<Runtime>::insert(*id, *weight);
 				}
 			});
 
@@ -115,7 +115,7 @@ pub(crate) mod ext_builder {
 
 pub(crate) mod test_utils {
 	use super::*;
-	use voter_list::Bag;
+	use list::Bag;
 
 	/// Returns the nodes of all non-empty bags.
 	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
@@ -133,6 +133,6 @@ pub(crate) mod test_utils {
 	}
 
 	pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
-		VoterList::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>()
+		List::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>()
 	}
 }

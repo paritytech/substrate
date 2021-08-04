@@ -44,7 +44,7 @@ fn setup_works() {
 
 		// iteration of the bags would yield:
 		assert_eq!(
-			VoterList::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>(),
+			List::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>(),
 			vec![11, 21, 101, 31],
 			//   ^^ note the order of insertion in genesis!
 		);
@@ -78,14 +78,14 @@ fn remove_last_voter_in_bags_cleans_bag() {
 		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])]);
 
 		// Bump 31 to a bigger bag
-		VoterList::<Runtime>::remove(&31);
-		VoterList::<Runtime>::insert(31, 10_000);
+		List::<Runtime>::remove(&31);
+		List::<Runtime>::insert(31, 10_000);
 
 		// then the bag with bound 10 is wiped from storage.
 		assert_eq!(get_bags(), vec![(1_000, vec![11, 21, 101]), (10_000, vec![31])]);
 
 		// and can be recreated again as needed
-		VoterList::<Runtime>::insert(77, 10);
+		List::<Runtime>::insert(77, 10);
 		assert_eq!(
 			get_bags(),
 			vec![(10, vec![77]), (1_000, vec![11, 21, 101]), (10_000, vec![31])]
@@ -118,7 +118,7 @@ mod voter_list {
 				);
 
 				// when adding a voter that has a higher weight than pre-existing voters in the bag
-				VoterList::<Runtime>::insert(71, 10);
+				List::<Runtime>::insert(71, 10);
 
 				// then
 				assert_eq!(
@@ -147,7 +147,7 @@ mod voter_list {
 
 				// when
 				let iteration =
-					VoterList::<Runtime>::iter().map(|node| *node.id()).take(4).collect::<Vec<_>>();
+					List::<Runtime>::iter().map(|node| *node.id()).take(4).collect::<Vec<_>>();
 
 				// then
 				assert_eq!(
@@ -164,14 +164,14 @@ mod voter_list {
 	fn insert_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when inserting into an existing bag
-			VoterList::<Runtime>::insert(71, 1_000);
+			List::<Runtime>::insert(71, 1_000);
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 71, 31]);
 			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 71])]);
 
 			// when inserting into a non-existent bag
-			VoterList::<Runtime>::insert(81, 1_001);
+			List::<Runtime>::insert(81, 1_001);
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![81, 11, 21, 101, 71, 31]);
@@ -200,7 +200,7 @@ mod voter_list {
 			// when removing a non-existent voter
 			assert!(!VoterBagFor::<Runtime>::contains_key(42));
 			assert!(!VoterNodes::<Runtime>::contains_key(42));
-			VoterList::<Runtime>::remove(&42);
+			List::<Runtime>::remove(&42);
 
 			// then nothing changes
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
@@ -208,7 +208,7 @@ mod voter_list {
 			assert_eq!(CounterForVoters::<Runtime>::get(), 4);
 
 			// when removing a node from a bag with multiple nodes
-			VoterList::<Runtime>::remove(&11);
+			List::<Runtime>::remove(&11);
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![21, 101, 31]);
@@ -220,7 +220,7 @@ mod voter_list {
 			);
 
 			// when removing a node from a bag with only one node:
-			VoterList::<Runtime>::remove(&31);
+			List::<Runtime>::remove(&31);
 
 			// then
 			assert_eq!(get_voter_list_as_ids(), vec![21, 101]);
@@ -233,7 +233,7 @@ mod voter_list {
 			assert!(!VoterBags::<Runtime>::contains_key(10)); // bag 10 is removed
 
 			// remove remaining voters to make sure storage cleans up as expected
-			VoterList::<Runtime>::remove(&21);
+			List::<Runtime>::remove(&21);
 			check_storage(
 				21,
 				1,
@@ -241,7 +241,7 @@ mod voter_list {
 				vec![(1_000, vec![101])], // bags
 			);
 
-			VoterList::<Runtime>::remove(&101);
+			List::<Runtime>::remove(&101);
 			check_storage(
 				101,
 				0,
@@ -268,7 +268,7 @@ mod voter_list {
 
 			// then updating position moves it to the correct bag
 			assert_eq!(
-				VoterList::<Runtime>::update_position_for(node_31, weight_20),
+				List::<Runtime>::update_position_for(node_31, weight_20),
 				Some((10, 20))
 			);
 
@@ -278,7 +278,7 @@ mod voter_list {
 			// and if you try and update the position with no change in weight
 			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
 			assert_storage_noop!(assert_eq!(
-				VoterList::<Runtime>::update_position_for(node_31, weight_20),
+				List::<Runtime>::update_position_for(node_31, weight_20),
 				None,
 			));
 
@@ -288,7 +288,7 @@ mod voter_list {
 			// then updating positions moves it to the correct bag
 			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
 			assert_eq!(
-				VoterList::<Runtime>::update_position_for(node_31, weight_500),
+				List::<Runtime>::update_position_for(node_31, weight_500),
 				Some((20, 1_000))
 			);
 			assert_eq!(get_bags(), vec![(1_000, vec![11, 21, 101, 31])]);
@@ -300,7 +300,7 @@ mod voter_list {
 			// then nothing changes
 			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
 			assert_storage_noop!(assert_eq!(
-				VoterList::<Runtime>::update_position_for(node_31, weight_1000),
+				List::<Runtime>::update_position_for(node_31, weight_1000),
 				None,
 			));
 		});
@@ -342,7 +342,7 @@ mod bags {
 				});
 
 			// when we make a pre-existing bag empty
-			VoterList::<Runtime>::remove(&31);
+			List::<Runtime>::remove(&31);
 
 			// then
 			assert_eq!(Bag::<Runtime>::get(existing_bag_uppers[0]), None)

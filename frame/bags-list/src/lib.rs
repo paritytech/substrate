@@ -28,13 +28,13 @@ use frame_system::ensure_signed;
 mod mock;
 #[cfg(test)]
 mod tests;
-mod voter_list;
+mod list;
 pub mod weights;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-use voter_list::VoterList;
+use list::List;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::voter_bags";
 
@@ -116,7 +116,7 @@ pub mod pallet {
 		/// # Migration
 		///
 		/// In the event that this list ever changes, a copy of the old bags list must be retained.
-		/// With that `VoterList::migrate` can be called, which will perform the appropriate
+		/// With that `List::migrate` can be called, which will perform the appropriate
 		/// migration.
 		#[pallet::constant]
 		type VoterBagThresholds: Get<&'static [VoteWeight]>;
@@ -133,7 +133,7 @@ pub mod pallet {
 	/// However, the `Node` data structure has helpers which can provide that information.
 	#[pallet::storage]
 	pub(crate) type VoterNodes<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, voter_list::Node<T>>;
+		StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
 	/// Which bag currently contains a particular voter.
 	///
@@ -146,7 +146,7 @@ pub mod pallet {
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
 	#[pallet::storage]
 	pub(crate) type VoterBags<T: Config> =
-		StorageMap<_, Twox64Concat, VoteWeight, voter_list::Bag<T>>;
+		StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -200,8 +200,8 @@ impl<T: Config> Pallet<T> {
 	) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = voter_list::Node::<T>::from_id(&account)
-			.and_then(|node| VoterList::update_position_for(node, new_weight));
+		let maybe_movement = list::Node::<T>::from_id(&account)
+			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
 		};
@@ -209,13 +209,13 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub struct VoterBagsVoterListProvider<T>(sp_std::marker::PhantomData<T>);
+pub struct BagsListVoterListProvider<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
-	for VoterBagsVoterListProvider<T>
+	for BagsListVoterListProvider<T>
 {
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(VoterList::<T>::iter().map(|n| n.id().clone()))
+		Box::new(List::<T>::iter().map(|n| n.id().clone()))
 	}
 
 	fn count() -> u32 {
@@ -223,7 +223,7 @@ impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
 	}
 
 	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
-		VoterList::<T>::insert(voter, weight);
+		List::<T>::insert(voter, weight);
 	}
 
 	/// Hook for updating a voter in the list (unused).
@@ -233,10 +233,10 @@ impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
 
 	/// Hook for removing a voter from the list.
 	fn on_remove(voter: &T::AccountId) {
-		VoterList::<T>::remove(voter)
+		List::<T>::remove(voter)
 	}
 
 	fn sanity_check() -> Result<(), &'static str> {
-		VoterList::<T>::sanity_check()
+		List::<T>::sanity_check()
 	}
 }

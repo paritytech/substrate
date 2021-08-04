@@ -130,7 +130,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"frame/voter-bags",
+	"frame/bags-list",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",

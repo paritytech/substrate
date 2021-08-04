@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! VoterList implementation.
+//! List implementation.
 
 use crate::Config;
 use codec::{Decode, Encode};
@@ -66,9 +66,9 @@ fn current_bag_for<T: Config>(id: &T::AccountId) -> Option<VoteWeight> {
 /// iteration at any desired point; only those voters in the lowest bag (who are known to have
 /// relatively little power to affect the outcome) can be excluded. This satisfies both the desire
 /// for fairness and the requirement for efficiency.
-pub struct VoterList<T: Config>(PhantomData<T>);
+pub struct List<T: Config>(PhantomData<T>);
 
-impl<T: Config> VoterList<T> {
+impl<T: Config> List<T> {
 	/// Remove all data associated with the voter list from storage.
 	// #[cfg(test)] // TODO this is used for regenerate
 	// pub fn clear() {
@@ -353,7 +353,7 @@ impl<T: Config> VoterList<T> {
 	/// * Iterate all voters and ensure their count is in sync with `CounterForVoters`.
 	/// * Ensure `CounterForVoters` is `CounterForValidators + CounterForNominators`.
 	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
-	///   checked per *any* update to `VoterList`.
+	///   checked per *any* update to `List`.
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
@@ -456,7 +456,7 @@ impl<T: Config> Bag<T> {
 	/// Insert a new voter into this bag.
 	///
 	/// This is private on purpose because it's naive: it doesn't check whether this is the
-	/// appropriate bag for this voter at all. Generally, use [`VoterList::insert`] instead.
+	/// appropriate bag for this voter at all. Generally, use [`List::insert`] instead.
 	///
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
@@ -467,7 +467,7 @@ impl<T: Config> Bag<T> {
 	/// Insert a voter node into this bag.
 	///
 	/// This is private on purpose because it's naive; it doesn't check whether this is the
-	/// appropriate bag for this voter at all. Generally, use [`VoterList::insert`] instead.
+	/// appropriate bag for this voter at all. Generally, use [`List::insert`] instead.
 	///
 	/// Storage note: this modifies storage, but only for the node. You still need to call
 	/// `self.put()` after use.
@@ -505,7 +505,7 @@ impl<T: Config> Bag<T> {
 	/// Remove a voter node from this bag.
 	///
 	/// This is private on purpose because it doesn't check whether this bag contains the voter in
-	/// the first place. Generally, use [`VoterList::remove`] instead.
+	/// the first place. Generally, use [`List::remove`] instead.
 	///
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
 	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
@@ -534,7 +534,7 @@ impl<T: Config> Bag<T> {
 	/// Sanity check this bag.
 	///
 	/// Should be called by the call-site, after each mutating operation on a bag. The call site of
-	/// this struct is always `VoterList`.
+	/// this struct is always `List`.
 	///
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
