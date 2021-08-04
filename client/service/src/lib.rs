@@ -59,7 +59,7 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseConfig, KeepBlocks, PruningMode, Role, RpcMethods,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
 	TaskExecutor, TaskType, TransactionStorageMode,
 };
 pub use sc_chain_spec::{
