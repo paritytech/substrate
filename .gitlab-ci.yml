@@ -595,9 +595,6 @@ publish-docker-substrate:
 publish-docker-subkey:
   stage:                           publish
   <<:                              *build-push-docker-image
-  needs:
-    - job:                         build-linux-subkey
-      artifacts:                   true
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       subkey
