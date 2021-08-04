@@ -19,7 +19,7 @@
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
 use codec::{Decode, Encode};
 use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
-use sc_executor::{NativeRuntimeInfo, NativeVersion, RuntimeVersion, RuntimeVersionOf};
+use sc_executor::{NativeRuntimeInfo, RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
 use sp_core::{
 	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
