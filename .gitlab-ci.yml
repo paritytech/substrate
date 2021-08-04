@@ -583,9 +583,6 @@ publish-docker-substrate:
   stage:                           publish
   <<:                              *build-push-docker-image
   <<:                              *build-refs
-  needs:
-    - job:                         build-linux-substrate
-      artifacts:                   true
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
