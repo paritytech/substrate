@@ -131,4 +131,8 @@ pub(crate) mod test_utils {
 	pub(crate) fn bag_as_ids(bag: &Bag<Runtime>) -> Vec<AccountId> {
 		bag.iter().map(|n| *n.id()).collect::<Vec<_>>()
 	}
+
+	pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
+		VoterList::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>()
+	}
 }

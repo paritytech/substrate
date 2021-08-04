@@ -92,6 +92,218 @@ fn remove_last_voter_in_bags_cleans_bag() {
 		);
 	});
 }
+
+
+mod voter_list {
+	use super::*;
+
+	#[test]
+	fn iteration_is_semi_sorted() {
+		ExtBuilder::default()
+		.add_ids(vec![(51, 2_000), (61, 2_000)])
+		.build_and_execute(|| {
+			// given
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
+			);
+
+			// then
+			assert_eq!(
+				get_voter_list_as_ids(),
+				vec![
+					51, 61, // best bag
+					11, 21, 101, // middle bag
+					31,  // last bag.
+				]
+			);
+
+			// when adding a voter that has a higher weight than pre-existing voters in the bag
+			VoterList::<Runtime>::insert(71, 10);
+
+			// then
+			assert_eq!(
+				get_voter_list_as_ids(),
+				vec![
+					51, 61, // best bag
+					11, 21, 101, // middle bag
+					31,
+					71, // last bag; the new voter is last, because it is order of insertion
+				]
+			);
+		})
+	}
+
+	/// This tests that we can `take` x voters, even if that quantity ends midway through a list.
+	#[test]
+	fn take_works() {
+		ExtBuilder::default()
+		.add_ids(vec![(51, 2_000), (61, 2_000)])
+		.build_and_execute(|| {
+			// given
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
+			);
+
+			// when
+			let iteration =
+				VoterList::<Runtime>::iter().map(|node| *node.id()).take(4).collect::<Vec<_>>();
+
+			// then
+			assert_eq!(
+				iteration,
+				vec![
+					51, 61, // best bag, fully iterated
+					11, 21, // middle bag, partially iterated
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// when inserting into an existing bag
+			VoterList::<Runtime>::insert(71, 1_000);
+
+			// then
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 71, 31]);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 71])]);
+
+			// when inserting into a non-existent bag
+			VoterList::<Runtime>::insert(81, 1_001);
+
+			// then
+			assert_eq!(get_voter_list_as_ids(), vec![81, 11, 21, 101, 71, 31]);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1_000, vec![11, 21, 101, 71]), (2_000, vec![81])]
+			);
+		});
+	}
+
+	#[test]
+	fn remove_works() {
+		use crate::{CounterForVoters, VoterBags, VoterNodes};
+
+		let check_storage = |id, counter, voters, bags| {
+			assert!(!VoterBagFor::<Runtime>::contains_key(id));
+			assert!(!VoterNodes::<Runtime>::contains_key(id));
+			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
+			assert_eq!(VoterBagFor::<Runtime>::iter().count() as u32, counter);
+			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
+			assert_eq!(get_voter_list_as_ids(), voters);
+			assert_eq!(get_bags(), bags);
+		};
+
+		ExtBuilder::default().build_and_execute(|| {
+			// when removing a non-existent voter
+			assert!(!VoterBagFor::<Runtime>::contains_key(42));
+			assert!(!VoterNodes::<Runtime>::contains_key(42));
+			VoterList::<Runtime>::remove(&42);
+
+			// then nothing changes
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+			assert_eq!(CounterForVoters::<Runtime>::get(), 4);
+
+			// when removing a node from a bag with multiple nodes
+			VoterList::<Runtime>::remove(&11);
+
+			// then
+			assert_eq!(get_voter_list_as_ids(), vec![21, 101, 31]);
+			check_storage(
+				11,
+				3,
+				vec![21, 101, 31],                            // voter list
+				vec![(10, vec![31]), (1_000, vec![21, 101])], // bags
+			);
+
+			// when removing a node from a bag with only one node:
+			VoterList::<Runtime>::remove(&31);
+
+			// then
+			assert_eq!(get_voter_list_as_ids(), vec![21, 101]);
+			check_storage(
+				31,
+				2,
+				vec![21, 101],                // voter list
+				vec![(1_000, vec![21, 101])], // bags
+			);
+			assert!(!VoterBags::<Runtime>::contains_key(10)); // bag 10 is removed
+
+			// remove remaining voters to make sure storage cleans up as expected
+			VoterList::<Runtime>::remove(&21);
+			check_storage(
+				21,
+				1,
+				vec![101],                // voter list
+				vec![(1_000, vec![101])], // bags
+			);
+
+			VoterList::<Runtime>::remove(&101);
+			check_storage(
+				101,
+				0,
+				Vec::<u32>::new(), // voter list
+				vec![],            // bags
+			);
+			assert!(!VoterBags::<Runtime>::contains_key(1_000)); // bag 1_000 is removed
+
+			// bags are deleted via removals
+			assert_eq!(VoterBags::<Runtime>::iter().count(), 0);
+		});
+	}
+
+	#[test]
+	fn update_position_for_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given a correctly placed account 31
+			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
+			assert!(!node_31.is_misplaced(10));
+
+			// when account 31's weight becomes 20, it is then misplaced.
+			let weight_20 = 20;
+			assert!(node_31.is_misplaced(weight_20));
+
+			// then updating position moves it to the correct bag
+			assert_eq!(VoterList::<Runtime>::update_position_for(node_31, weight_20), Some((10, 20)));
+
+			assert_eq!(get_bags(), vec![(20, vec![31]), (1_000, vec![11, 21, 101])]);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+
+			// and if you try and update the position with no change in weight
+			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
+			assert_storage_noop!(assert_eq!(
+				VoterList::<Runtime>::update_position_for(node_31, weight_20),
+				None,
+			));
+
+			// when account 31 needs to be moved to an existing higher bag
+			let weight_500 = 500;
+
+			// then updating positions moves it to the correct bag
+			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
+			assert_eq!(
+				VoterList::<Runtime>::update_position_for(node_31, weight_500),
+				Some((20, 1_000))
+			);
+			assert_eq!(get_bags(), vec![(1_000, vec![11, 21, 101, 31])]);
+			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
+
+			// when account 31 has a higher but within its current bag
+			let weight_1000 = 1_000;
+
+			// then nothing changes
+			let node_31 = Node::<Runtime>::from_id(&31).unwrap();
+			assert_storage_noop!(assert_eq!(
+				VoterList::<Runtime>::update_position_for(node_31, weight_1000),
+				None,
+			));
+		});
+	}
+}
 mod bags {
 	use super::*;
 
@@ -394,4 +606,8 @@ mod bags {
 			assert_ok!(bag_1000.sanity_check());
 		});
 	}
+}
+
+mod node {
+	use super::*;
 }
