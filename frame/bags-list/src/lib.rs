@@ -15,11 +15,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implement a data structure for pallet-staking designed for the properties that:
+//! A semi-sorted list, where items hold an `id` and `weight`.
+//! TODO items will also have a generic `data` field
 //!
-//! - It's efficient to insert or remove a voter
-//! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
-//!   voters doesn't particularly matter.
+//! # Goals
+//!
+//! The data structure exposed by this pallet aims to be optimized for
+//! - insertions and removal
+//! - iteration over the top* N items by weight, where the precise ordering of items doesn't
+//!   particularly matter.
+//!
+//! # Details
+//!
+//! - items are kept in bags, which are delineated by their range of weight. (See [`BagThresholds`])
+//! - for iteration bags are chained together from highest to lowest and elements within the bag
+//!   are iterated from head to tail.
+//! - items within a bag are in order of insertion. Thus removing an item and re-inserting it
+//!   will worsen its position in list iteration; this reduces incentives for some types
+//!   of spam that involve consistently removing and inserting for better position. Further,
+//!   ordering granularity is thus dictated by range between each bag threshold.
+//! - if an items weight changes to a value no longer within the range of its current bag its
+//!   position will need to be updated by an external actor with rebag or removal & insertion.
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
@@ -119,8 +135,6 @@ pub mod pallet {
 		/// migration.
 		#[pallet::constant]
 		type BagThresholds: Get<&'static [VoteWeight]>;
-
-		// TODO Node.id type could be made generic?
 	}
 
 	/// How many voters are registered.
@@ -229,6 +243,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	fn on_remove(voter: &T::AccountId) {
 		List::<T>::remove(voter)
 	}
+
 	fn sanity_check() -> Result<(), &'static str> {
 		List::<T>::sanity_check()
 	}

@@ -205,7 +205,7 @@ mod sorted_list_provider {
 				vec![42, 2, 3, 4, 1]
 			);
 
-			// when increasing weight to the level of a non-existent bag
+			// when increasing weight to the level of a non-existent bag with the max threshold
 			<BagsList as SortedListProvider<AccountId>>::on_update(&42, VoteWeight::MAX);
 
 			// the the new bag is created with the voter in it,
@@ -276,7 +276,7 @@ mod sorted_list_provider {
 			ensure_left(4, 1);
 			<BagsList as SortedListProvider<AccountId>>::on_remove(&3);
 
-			// then storage is completely cleaned up
+			// then the storage is completely cleaned up
 			assert_eq!(get_voter_list_as_ids(), Vec::<AccountId>::new());
 			ensure_left(3, 0);
 		});
