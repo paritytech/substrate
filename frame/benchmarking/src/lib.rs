@@ -143,8 +143,8 @@ macro_rules! whitelist {
 /// ```
 ///
 /// Test functions are automatically generated for each benchmark and are accessible to you when you
-/// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, expect you to pass them
-/// the Runtime Config, and run them in a test externalities environment. The test function runs your
+/// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, implemented on the
+/// Pallet struct, and run them in a test externalities environment. The test function runs your
 /// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
 /// each component. The function will return `Ok(())` if the benchmarks return no errors.
 ///
