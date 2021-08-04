@@ -22,8 +22,8 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime"}
 sp-inherents = { version = "2.0.0", default-features = false, path = "../inherents"}
 
 [dev-dependencies]
-sp-io ={ version = "2.0.0" }
-sp-core = { version = "2.0.0" }
+sp-io ={ version = "2.0.0", path="../io" }
+sp-core = { version = "2.0.0" , path="../core"}
 
 [features]
 default = ["std"]

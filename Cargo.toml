@@ -260,3 +260,26 @@ panic = "unwind"
 
 [patch."https://github.com/mangata-finance/open-runtime-module-library"]
 orml-tokens = {path="../tokens/tokens"}
+
+[patch."https://github.com/mangata-finance/substrate"]
+sp-core = {path="./primitives/core"}
+frame-metadata = { path = "./frame/metadata" }
+frame-support-procedural-tools-derive = { path = "./frame/support/procedural/tools/derive" }
+frame-support-procedural-tools = {path = "./frame/support/procedural/tools"}
+frame-support-procedural = {path = "./frame/support/procedural"}
+frame-support = { path = "./frame/support" }
+frame-system = { path = "./frame/system" }
+sp-application-crypto = { path = "./primitives/application-crypto" }
+sp-arithmetic = { path = "./primitives/arithmetic" }
+sp-debug-derive = { path = "./primitives/debug-derive" }
+sp-inherents = { path = "./primitives/inherents" }
+sp-io = { path = "./primitives/io" }
+sp-runtime-interface-proc-macro = { path = "./primitives/runtime-interface/proc-macro" }
+sp-runtime-interface = { path = "./primitives/runtime-interface" }
+sp-runtime = { path = "./primitives/runtime" }
+sp-std = { path = "./primitives/std" }
+sp-storage = { path = "./primitives/storage" }
+sp-tracing = { path = "./primitives/tracing" }
+sp-version = { path = "./primitives/version" }
+sp-wasm-interface = { path = "./primitives/wasm-interface" }
+

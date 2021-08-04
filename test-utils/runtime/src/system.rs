@@ -149,7 +149,7 @@ pub struct BlockExecutor;
 
 impl frame_executive::ExecuteBlock<Block> for BlockExecutor {
 	fn execute_block(block: Block) {
-		execute_block(block);
+		execute_block(block, Default::default());
 	}
 }
 

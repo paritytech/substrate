@@ -31,7 +31,7 @@ sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 extrinsic-info-runtime-api = { version = "2.0.0", path='../../primitives/extrinsic-info-runtime-api' }
 sc-proposer-metrics = { version = "0.8.0", path = "../proposer-metrics" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
-sc-transaction-pool = {  version = "2.0.0"}
+sc-transaction-pool = {  version = "2.0.0", path = "../transaction-pool" }
 
 [dev-dependencies]
 # sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
