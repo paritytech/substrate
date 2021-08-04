@@ -152,6 +152,8 @@ skip-if-draft:
   <<:                              *kubernetes-env
   stage:                           .pre
   rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
@@ -165,8 +167,7 @@ check-runtime:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  <<:                              *test-refs-no-trigger-prs-only
   variables:
     <<:                            *default-vars
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
@@ -189,8 +190,7 @@ check-line-width:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  <<:                              *test-refs-no-trigger-prs-only
   script:
     - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
@@ -199,8 +199,7 @@ test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  <<:                              *test-refs-no-trigger-prs-only
   script:
     - .maintain/ensure-deps.sh
 
@@ -224,8 +223,7 @@ check-polkadot-companion-status:
   stage:                           build
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  <<:                              *test-refs-no-trigger-prs-only
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
@@ -280,7 +278,7 @@ node-bench-regression-guard:
     # this is a DAG
     - job:                         cargo-check-benches
       artifacts:                   true
-    # this does not like a DAG, just polls the artifact
+    # this does not work like a DAG, just polls the artifact from master
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
@@ -449,8 +447,7 @@ cargo-check-macos:
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  <<:                              *test-refs-no-trigger-prs-only
   script:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
   after_script:
@@ -543,7 +540,6 @@ build-rust-doc:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  <<:                              *build-refs
   <<:                              *kubernetes-env
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
@@ -595,6 +591,7 @@ publish-docker-substrate:
 publish-docker-subkey:
   stage:                           publish
   <<:                              *build-push-docker-image
+  <<:                              *build-refs
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       subkey
@@ -673,9 +670,9 @@ deploy-prometheus-alerting-rules:
   trigger:
     project:  parity/infrastructure/cloud-infra
   variables:
-    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
-    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
-    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
+    SUBSTRATE_CI_COMMIT_NAME:      "${CI_COMMIT_REF_NAME}"
+    SUBSTRATE_CI_COMMIT_REF:       "${CI_COMMIT_SHORT_SHA}"
+    UPSTREAM_TRIGGER_PROJECT:      "${CI_PROJECT_PATH}"
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
