@@ -498,9 +498,6 @@ build-linux-subkey:                &build-subkey
   <<:                              *collect-artifacts
   <<:                              *docker-env
   <<:                              *build-refs
-  needs:
-    - job:                         cargo-check-subkey
-      artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
