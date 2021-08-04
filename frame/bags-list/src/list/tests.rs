@@ -451,134 +451,155 @@ mod bags {
 	fn remove_node_happy_paths_works() {
 		ExtBuilder::default()
 			.add_ids(vec![
-				(51, 1_000),
-				(61, 1_000),
-				(71, 10),
-				(81, 10),
-				(91, 2_000),
-				(161, 2_000),
-				(171, 2_000),
-				(181, 2_000),
-				(191, 2_000),
+				(11, 10),
+				(12, 10),
+				(13, 1_000),
+				(14, 1_000),
+				(15, 2_000),
+				(16, 2_000),
+				(17, 2_000),
+				(18, 2_000),
+				(19, 2_000),
 			])
-			.build_and_execute(|| {
+			.build_and_execute_no_post_check(|| {
 				let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
 				let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 				let mut bag_2000 = Bag::<Runtime>::get(2_000).unwrap();
 
 				// given
-				assert_eq!(bag_as_ids(&bag_10), vec![31, 71, 81]);
-				assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 101, 51, 61]);
-				assert_eq!(bag_as_ids(&bag_2000), vec![91, 161, 171, 181, 191]);
+				assert_eq!(bag_as_ids(&bag_10), vec![1, 11, 12]);
+				assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4, 13, 14]);
+				assert_eq!(bag_as_ids(&bag_2000), vec![15, 16, 17, 18, 19]);
 
-				// remove node that is not pointing at head or tail
-				let node_101 = Node::<Runtime>::get(bag_1000.bag_upper, &101).unwrap();
-				let node_101_pre_remove = node_101.clone();
-				bag_1000.remove_node(&node_101);
-				assert_eq!(bag_as_ids(&bag_1000), vec![11, 21, 51, 61]);
+				// when removing a node that is not pointing at the head or tail
+				let node_4 = Node::<Runtime>::get(bag_1000.bag_upper, &4).unwrap();
+				let node_4_pre_remove = node_4.clone();
+				bag_1000.remove_node(&node_4);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 13, 14]);
 				assert_ok!(bag_1000.sanity_check());
-				// node isn't mutated when its removed
-				assert_eq!(node_101, node_101_pre_remove);
+				// and the node isn't mutated when its removed
+				assert_eq!(node_4, node_4_pre_remove);
 
-				// remove head when its not pointing at tail
-				let node_11 = Node::<Runtime>::get(bag_1000.bag_upper, &11).unwrap();
-				bag_1000.remove_node(&node_11);
-				assert_eq!(bag_as_ids(&bag_1000), vec![21, 51, 61]);
-				assert_ok!(bag_1000.sanity_check());
+				// when removing a head that is not pointing at the tail
+				let node_2 = Node::<Runtime>::get(bag_1000.bag_upper, &2).unwrap();
+				bag_1000.remove_node(&node_2);
 
-				// remove tail when its not pointing at head
-				let node_61 = Node::<Runtime>::get(bag_1000.bag_upper, &61).unwrap();
-				bag_1000.remove_node(&node_61);
-				assert_eq!(bag_as_ids(&bag_1000), vec![21, 51]);
+				// then
+				assert_eq!(bag_as_ids(&bag_1000), vec![3, 13, 14]);
 				assert_ok!(bag_1000.sanity_check());
 
-				// remove tail when its pointing at head
-				let node_51 = Node::<Runtime>::get(bag_1000.bag_upper, &51).unwrap();
-				bag_1000.remove_node(&node_51);
-				assert_eq!(bag_as_ids(&bag_1000), vec![21]);
+				// when removing a tail that is not pointing at the head
+				let node_14 = Node::<Runtime>::get(bag_1000.bag_upper, &14).unwrap();
+				bag_1000.remove_node(&node_14);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_1000), vec![3, 13]);
 				assert_ok!(bag_1000.sanity_check());
 
-				// remove node that is head & tail
-				let node_21 = Node::<Runtime>::get(bag_1000.bag_upper, &21).unwrap();
-				bag_1000.remove_node(&node_21);
-				bag_1000.put(); // put into storage so get returns the updated bag
+				// when removing a tail that is pointing at the head
+				let node_13 = Node::<Runtime>::get(bag_1000.bag_upper, &13).unwrap();
+				bag_1000.remove_node(&node_13);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_1000), vec![3]);
+				assert_ok!(bag_1000.sanity_check());
+
+				// when removing a node that is both the head & tail
+				let node_3 = Node::<Runtime>::get(bag_1000.bag_upper, &3).unwrap();
+				bag_1000.remove_node(&node_3);
+				bag_1000.put(); // put into storage so `get` returns the updated bag
+
+				// then
 				assert_eq!(Bag::<Runtime>::get(1_000), None);
 
-				// remove node that is pointing at head and tail
-				let node_71 = Node::<Runtime>::get(bag_10.bag_upper, &71).unwrap();
-				bag_10.remove_node(&node_71);
-				assert_eq!(bag_as_ids(&bag_10), vec![31, 81]);
+				// when removing a node that is pointing at both the head & tail
+				let node_11 = Node::<Runtime>::get(bag_10.bag_upper, &11).unwrap();
+				bag_10.remove_node(&node_11);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_10), vec![1, 12]);
 				assert_ok!(bag_10.sanity_check());
 
-				// remove head when pointing at tail
-				let node_31 = Node::<Runtime>::get(bag_10.bag_upper, &31).unwrap();
-				bag_10.remove_node(&node_31);
-				assert_eq!(bag_as_ids(&bag_10), vec![81]);
+				// when removing a head that is pointing at the tail
+				let node_1 = Node::<Runtime>::get(bag_10.bag_upper, &1).unwrap();
+				bag_10.remove_node(&node_1);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_10), vec![12]);
 				assert_ok!(bag_10.sanity_check());
-				bag_10.put(); // since we updated the bag's head/tail, we need to write this storage
+				// and since we updated the bag's head/tail, we need to write this storage so we
+				// can correctly `get` it again in later checks
+				bag_10.put();
 
-				// remove node that is pointing at head, but not tail
-				let node_161 = Node::<Runtime>::get(bag_2000.bag_upper, &161).unwrap();
-				bag_2000.remove_node(&node_161);
-				assert_eq!(bag_as_ids(&bag_2000), vec![91, 171, 181, 191]);
+				// when removing a node that is pointing at the head but not the tail
+				let node_16 = Node::<Runtime>::get(bag_2000.bag_upper, &16).unwrap();
+				bag_2000.remove_node(&node_16);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_2000), vec![15, 17, 18, 19]);
 				assert_ok!(bag_2000.sanity_check());
 
-				// remove node that is pointing at tail, but not head
-				let node_181 = Node::<Runtime>::get(bag_2000.bag_upper, &181).unwrap();
-				bag_2000.remove_node(&node_181);
-				assert_eq!(bag_as_ids(&bag_2000), vec![91, 171, 191]);
+				// when removing a node that is pointing at tail, but not head
+				let node_18 = Node::<Runtime>::get(bag_2000.bag_upper, &18).unwrap();
+				bag_2000.remove_node(&node_18);
+
+				// then
+				assert_eq!(bag_as_ids(&bag_2000), vec![15, 17, 19]);
 				assert_ok!(bag_2000.sanity_check());
 
-				// state of all bags is as expected
-				assert_eq!(get_bags(), vec![(10, vec![81]), (2_000, vec![91, 171, 191])]);
+				// finally, when read from storage the state of all bags is as expected
+				assert_eq!(get_bags(), vec![(10, vec![12]), (2_000, vec![15, 17, 19])]);
 			});
 	}
 
 	#[test]
 	fn remove_node_bad_paths_documented() {
-		ExtBuilder::default().build_and_execute(|| {
-			// removing a node that is in the bag but has the wrong upper works.
-
-			let bad_upper_node_11 = Node::<Runtime> {
-				id: 11,
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			let bad_upper_node_2 = Node::<Runtime> {
+				id: 2,
 				prev: None,
-				next: Some(21),
+				next: Some(3),
 				bag_upper: 10, // should be 1_000
 			};
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
-			bag_1000.remove_node(&bad_upper_node_11);
+
+			// when removing a node that is in the bag but has the wrong upper
+			bag_1000.remove_node(&bad_upper_node_2);
 			bag_1000.put();
 
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![21, 101])]);
+			// then the node is no longer in any bags
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
+			// .. and the bag it was removed from
 			let bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
+			// is sane
 			assert_ok!(bag_1000.sanity_check());
-			assert_eq!(bag_1000.head, Some(21));
-			assert_eq!(bag_1000.tail, Some(101));
+			// and has the correct head and tail
+			assert_eq!(bag_1000.head, Some(3));
+			assert_eq!(bag_1000.tail, Some(4));
 		});
 
-		ExtBuilder::default().build_and_execute(|| {
-			// removing a node that is in another bag, will mess up the
-			// other bag.
+		// Removing a node that is in another bag, will mess up the other bag.
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			// given a tail node is in bag 1_000
+			let node_4 = Node::<Runtime>::get(1_000, &4).unwrap();
 
-			let node_101 = Node::<Runtime>::get(1_000, &101).unwrap();
+			// when we remove it from bag 10
 			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
-			bag_10.remove_node(&node_101); // node_101 is in bag 1_000
+			bag_10.remove_node(&node_4); // node_101 is in bag 1_000
 			bag_10.put();
 
-			// the node was removed from its actual bag, bag_1000.
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21])]);
-
-			// the bag remove was called on is ok.
+			// then bag remove was called on is ok,
 			let bag_10 = Bag::<Runtime>::get(10).unwrap();
-			assert_eq!(bag_10.tail, Some(31));
-			assert_eq!(bag_10.head, Some(31));
+			assert_eq!(bag_10.tail, Some(1));
+			assert_eq!(bag_10.head, Some(1));
 
 			// but the bag that the node belonged to is in an invalid state
 			let bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 			// because it still has the removed node as its tail.
-			assert_eq!(bag_1000.tail, Some(101));
-			assert_eq!(bag_1000.head, Some(11));
-			assert_ok!(bag_1000.sanity_check());
+			assert_eq!(bag_1000.tail, Some(4));
+			assert_eq!(bag_1000.head, Some(2));
 		});
 	}
 }
@@ -594,10 +615,12 @@ mod node {
 			// given
 			assert_eq!(node.bag_upper, 10);
 
-			// then
+			// then within bag 10 its not misplaced,
 			assert!(!node.is_misplaced(0));
 			assert!(!node.is_misplaced(9));
 			assert!(!node.is_misplaced(10));
+
+			// and out of bag 10 it is misplaced
 			assert!(node.is_misplaced(11));
 		});
 	}

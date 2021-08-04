@@ -116,7 +116,7 @@ impl<T: Config> List<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue;
+				continue
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
@@ -127,7 +127,7 @@ impl<T: Config> List<T> {
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in old_set.difference(&new_set).copied() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue;
+				continue
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
@@ -222,6 +222,7 @@ impl<T: Config> List<T> {
 	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
 		// TODO: can check if this voter exists as a node by checking if `voter` exists in the nodes
 		// map and return early if it does.
+		// OR create a can_insert
 
 		let bag_weight = notional_bag_for::<T>(weight);
 		crate::log!(
@@ -336,7 +337,7 @@ impl<T: Config> List<T> {
 	/// * Iterate all voters and ensure their count is in sync with `CounterForVoters`.
 	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
 	///   checked per *any* update to `List`.
-	pub(crate) fn sanity_check() -> Result<(), String> {
+	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
@@ -348,7 +349,10 @@ impl<T: Config> List<T> {
 		let stored_count = crate::CounterForVoters::<T>::get();
 		ensure!(
 			iter_count == stored_count,
-			format!("iter_count {} != stored_count {}", iter_count, stored_count)
+			// TODO @kian how strongly do you feel about this String?
+			// afaict its non-trivial to get this work with compile flags etc.
+			// format!("iter_count {} != stored_count {}", iter_count, stored_count)
+			"iter_count != stored_count",
 		);
 
 		let _ = T::BagThresholds::get()
@@ -464,7 +468,7 @@ impl<T: Config> Bag<T> {
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return;
+				return
 			};
 		}
 

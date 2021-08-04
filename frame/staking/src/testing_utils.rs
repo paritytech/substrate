@@ -72,7 +72,7 @@ pub fn create_stash_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller));
+	return Ok((stash, controller))
 }
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
@@ -94,7 +94,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller));
+	return Ok((stash, controller))
 }
 
 /// create `max` validators.

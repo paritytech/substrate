@@ -136,7 +136,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -227,9 +227,8 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) => {
-				Some(T::Currency::deposit_creating(&dest_account, amount))
-			}
+			RewardDestination::Account(dest_account) =>
+				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			RewardDestination::None => None,
 		}
 	}
@@ -257,14 +256,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None;
-				}
+					return None
+				},
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some()
-				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some() &&
+				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -445,12 +444,12 @@ impl<T: Config> Pallet<T> {
 					// TODO: this should be simplified #8911
 					CurrentEra::<T>::put(0);
 					ErasStartSessionIndex::<T>::insert(&0, &start_session_index);
-				}
+				},
 				_ => (),
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None;
+			return None
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -816,7 +815,7 @@ impl<T: Config>
 		let target_count = CounterForValidators::<T>::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
-			return Err("Target snapshot too big");
+			return Err("Target snapshot too big")
 		}
 
 		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
@@ -1080,7 +1079,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight;
+				return consumed_weight
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1126,7 +1125,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue;
+				continue
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
