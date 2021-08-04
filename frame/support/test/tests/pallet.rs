@@ -1348,7 +1348,7 @@ fn metadata() {
 						ty: StorageEntryType::Map {
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
-							hasher: StorageHasher::Twox64Concat,
+							hashers: vec![StorageHasher::Twox64Concat],
 						},
 						default: vec![0],
 						docs: vec![],
