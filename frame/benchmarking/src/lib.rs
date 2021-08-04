@@ -21,7 +21,10 @@
 
 #[cfg(feature = "std")]
 mod analysis;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_instance;
 mod utils;
 
 #[cfg(feature = "std")]
@@ -140,8 +143,8 @@ macro_rules! whitelist {
 /// ```
 ///
 /// Test functions are automatically generated for each benchmark and are accessible to you when you
-/// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, expect you to pass them
-/// the Runtime Config, and run them in a test externalities environment. The test function runs your
+/// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, implemented on the
+/// Pallet struct, and run them in a test externalities environment. The test function runs your
 /// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
 /// each component. The function will return `Ok(())` if the benchmarks return no errors.
 ///
@@ -170,10 +173,10 @@ macro_rules! whitelist {
 /// #[test]
 /// fn test_benchmarks() {
 ///   new_test_ext().execute_with(|| {
-///     assert_ok!(test_benchmark_dummy::<Test>());
-///     assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
-///     assert_ok!(test_benchmark_sort_vector::<Test>());
-///     assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
+///     assert_ok!(Pallet::<Test>::test_benchmark_dummy());
+///     assert_err!(Pallet::<Test>::test_benchmark_other_name(), "Bad origin");
+///     assert_ok!(Pallet::<Test>::test_benchmark_sort_vector());
+///     assert_err!(Pallet::<Test>::test_benchmark_broken_benchmark(), "You forgot to sort!");
 ///   });
 /// }
 /// ```
@@ -879,28 +882,30 @@ macro_rules! impl_benchmark {
 			}
 		}
 
-		/// Test a particular benchmark by name.
-		///
-		/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
-		/// writes a benchmark, itself called `by_name`; the function would be shadowed in
-		/// that case.
-		///
-		/// This is generally intended to be used by child test modules such as those created
-		/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
-		/// author chooses not to implement benchmarks.
 		#[cfg(test)]
-		#[allow(unused)]
-		fn test_bench_by_name<T>(name: &[u8]) -> Result<(), &'static str>
-		where
-			T: Config + frame_system::Config, $( $where_clause )*
+		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
+			Pallet<T $(, $instance)? >
+		where T: frame_system::Config, $( $where_clause )*
 		{
-			let name = $crate::sp_std::str::from_utf8(name)
-				.map_err(|_| "`name` is not a valid utf8 string!")?;
-			match name {
-				$( stringify!($name) => {
-					$crate::paste::paste! { [< test_benchmark_ $name >]::<T>() }
-				} )*
-				_ => Err("Could not find test for requested benchmark."),
+			/// Test a particular benchmark by name.
+			///
+			/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
+			/// writes a benchmark, itself called `by_name`; the function would be shadowed in
+			/// that case.
+			///
+			/// This is generally intended to be used by child test modules such as those created
+			/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
+			/// author chooses not to implement benchmarks.
+			#[allow(unused)]
+			fn test_bench_by_name(name: &[u8]) -> Result<(), &'static str> {
+				let name = $crate::sp_std::str::from_utf8(name)
+					.map_err(|_| "`name` is not a valid utf8 string!")?;
+				match name {
+					$( stringify!($name) => {
+						$crate::paste::paste! { Self::[< test_benchmark_ $name >]() }
+					} )*
+					_ => Err("Could not find test for requested benchmark."),
+				}
 			}
 		}
 	};
@@ -918,59 +923,66 @@ macro_rules! impl_benchmark_test {
 		$name:ident
 	) => {
 		$crate::paste::item! {
-			fn [<test_benchmark_ $name>] <T: Config > () -> Result<(), &'static str>
-				where T: frame_system::Config, $( $where_clause )*
+			#[cfg(test)]
+			impl<T: Config $(<$instance>, $instance: $instance_bound )? >
+				Pallet<T $(, $instance)? >
+			where T: frame_system::Config, $( $where_clause )*
 			{
-				let selected_benchmark = SelectedBenchmark::$name;
-				let components = <
-					SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
-				>::components(&selected_benchmark);
-
-				let execute_benchmark = |
-					c: $crate::Vec<($crate::BenchmarkParameter, u32)>
-				| -> Result<(), &'static str> {
-					// Set up the benchmark, return execution + verification function.
-					let closure_to_verify = <
+				#[allow(unused)]
+				fn [<test_benchmark_ $name>] () -> Result<(), &'static str> {
+					let selected_benchmark = SelectedBenchmark::$name;
+					let components = <
 						SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
-					>::instance(&selected_benchmark, &c, true)?;
+					>::components(&selected_benchmark);
 
-					// Set the block number to at least 1 so events are deposited.
-					if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
-						frame_system::Pallet::<T>::set_block_number(1u32.into());
-					}
+					let execute_benchmark = |
+						c: $crate::Vec<($crate::BenchmarkParameter, u32)>
+					| -> Result<(), &'static str> {
+						// Set up the benchmark, return execution + verification function.
+						let closure_to_verify = <
+							SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
+						>::instance(&selected_benchmark, &c, true)?;
 
-					// Run execution + verification
-					closure_to_verify()?;
+						// Set the block number to at least 1 so events are deposited.
+						if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+							frame_system::Pallet::<T>::set_block_number(1u32.into());
+						}
 
-					// Reset the state
-					$crate::benchmarking::wipe_db();
+						// Run execution + verification
+						closure_to_verify()?;
 
-					Ok(())
-				};
+						// Reset the state
+						$crate::benchmarking::wipe_db();
 
-				if components.is_empty() {
-					execute_benchmark(Default::default())?;
-				} else {
-					for (_, (name, low, high)) in components.iter().enumerate() {
-						// Test only the low and high value, assuming values in the middle won't break
-						for component_value in $crate::vec![low, high] {
-							// Select the max value for all the other components.
-							let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components.iter()
-								.enumerate()
-								.map(|(_, (n, _, h))|
-									if n == name {
-										(*n, *component_value)
-									} else {
-										(*n, *h)
-									}
-								)
-								.collect();
+						Ok(())
+					};
 
-							execute_benchmark(c)?;
+					if components.is_empty() {
+						execute_benchmark(Default::default())?;
+					} else {
+						for (_, (name, low, high)) in components.iter().enumerate() {
+							// Test only the low and high value, assuming values in the middle
+							// won't break
+							for component_value in $crate::vec![low, high] {
+								// Select the max value for all the other components.
+								let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components
+									.iter()
+									.enumerate()
+									.map(|(_, (n, _, h))|
+										if n == name {
+											(*n, *component_value)
+										} else {
+											(*n, *h)
+										}
+									)
+									.collect();
+
+								execute_benchmark(c)?;
+							}
 						}
 					}
+					Ok(())
 				}
-				Ok(())
 			}
 		}
 	};
@@ -1084,7 +1096,7 @@ macro_rules! impl_benchmark_test_suite {
 		$test:path
 		$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1109,7 +1121,7 @@ macro_rules! impl_benchmark_test_suite {
 			benchmarks_path = $benchmarks_path:ident
 			$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1134,7 +1146,7 @@ macro_rules! impl_benchmark_test_suite {
 			extra = $extra:expr
 			$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1159,7 +1171,7 @@ macro_rules! impl_benchmark_test_suite {
 			exec_name = $exec_name:ident
 			$(, $( $rest:tt )* )?
 	) => {
-		impl_benchmark_test_suite!(
+		$crate::impl_benchmark_test_suite!(
 			@selected:
 				$bench_module,
 				$new_test_ext,
@@ -1185,7 +1197,6 @@ macro_rules! impl_benchmark_test_suite {
 	) => {
 		#[cfg(test)]
 		mod benchmark_tests {
-			use $path_to_benchmarks_invocation::test_bench_by_name;
 			use super::$bench_module;
 
 			#[test]
@@ -1196,7 +1207,9 @@ macro_rules! impl_benchmark_test_suite {
 					let mut anything_failed = false;
 					println!("failing benchmark tests:");
 					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
-						match std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
+						match std::panic::catch_unwind(|| {
+							$bench_module::<$test>::test_bench_by_name(benchmark_name)
+						}) {
 							Err(err) => {
 								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
 								anything_failed = true;
