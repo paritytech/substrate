@@ -21,7 +21,7 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
-use frame_election_provider_support::VoteWeight;
+use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
 
 mod list;
@@ -36,7 +36,7 @@ pub use weights::WeightInfo;
 
 use list::List;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::voter_bags";
+pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -52,7 +52,6 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_election_provider_support::StakingVoteWeight;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -69,7 +68,7 @@ pub mod pallet {
 		// type WeightInfo: WeightInfo;
 
 		// Something that implements `trait StakingVoteWeight`.
-		type StakingVoteWeight: StakingVoteWeight<Self::AccountId>;
+		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
 
 		/// The list of thresholds separating the various voter bags.
 		///
@@ -121,7 +120,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type BagThresholds: Get<&'static [VoteWeight]>;
 
-		// TODO VoteWeight type could be made generic?
 		// TODO Node.id type could be made generic?
 	}
 
@@ -143,7 +141,7 @@ pub mod pallet {
 	/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
 	/// slashed.
 	#[pallet::storage]
-	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VoteWeight>;
+	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VoteWeight>; // TODO: retire this storage item.
 
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
@@ -171,7 +169,7 @@ pub mod pallet {
 		#[pallet::weight(123456789)] // TODO
 		pub fn rebag(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let weight = T::StakingVoteWeight::staking_vote_weight(&account);
+			let weight = T::VoteWeightProvider::vote_weight(&account);
 			Pallet::<T>::do_rebag(&account, weight);
 			Ok(())
 		}
@@ -211,12 +209,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub struct BagsListVoterListProvider<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
-	for BagsListVoterListProvider<T>
-{
-	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
+impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
+	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(List::<T>::iter().map(|n| n.id().clone()))
 	}
 
@@ -228,17 +222,11 @@ impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
 		List::<T>::insert(voter, weight);
 	}
 
-	/// Hook for updating a voter in the list (unused).
 	fn on_update(voter: &T::AccountId, new_weight: VoteWeight) {
 		Pallet::<T>::do_rebag(voter, new_weight);
 	}
 
-	/// Hook for removing a voter from the list.
 	fn on_remove(voter: &T::AccountId) {
 		List::<T>::remove(voter)
-	}
-
-	fn sanity_check() -> Result<(), &'static str> {
-		List::<T>::sanity_check()
 	}
 }

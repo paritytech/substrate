@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! List implementation.
+//! Basic implementation of a doubly-linked list
 
 use crate::Config;
 use codec::{Decode, Encode};
-use frame_election_provider_support::{StakingVoteWeight, VoteWeight};
+use frame_election_provider_support::{VoteWeight, VoteWeightProvider};
 use frame_support::{ensure, traits::Get, DefaultNoBound};
 use sp_runtime::SaturatedConversion;
 use sp_std::{
@@ -70,13 +70,12 @@ pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
 	/// Remove all data associated with the voter list from storage.
-	// #[cfg(test)] // TODO this is used for regenerate
-	// pub fn clear() {
-	// 	crate::CounterForVoters::<T>::kill();
-	// 	crate::VoterBagFor::<T>::remove_all(None);
-	// 	crate::VoterBags::<T>::remove_all(None);
-	// 	crate::VoterNodes::<T>::remove_all(None);
-	// }
+	pub fn clear() {
+		crate::CounterForVoters::<T>::kill();
+		crate::VoterBagFor::<T>::remove_all(None);
+		crate::VoterBags::<T>::remove_all(None);
+		crate::VoterNodes::<T>::remove_all(None);
+	}
 
 	/// Migrate the voter list from one set of thresholds to another.
 	///
@@ -117,7 +116,7 @@ impl<T: Config> List<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
@@ -128,7 +127,7 @@ impl<T: Config> List<T> {
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in old_set.difference(&new_set).copied() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
@@ -137,7 +136,7 @@ impl<T: Config> List<T> {
 		}
 
 		// migrate the
-		let weight_of = T::StakingVoteWeight::staking_vote_weight;
+		let weight_of = T::VoteWeightProvider::vote_weight;
 		Self::remove_many(affected_accounts.iter().map(|voter| voter));
 		let num_affected = affected_accounts.len() as u32;
 		Self::insert_many(affected_accounts.into_iter(), weight_of);
@@ -173,18 +172,13 @@ impl<T: Config> List<T> {
 	/// consensus.
 	///
 	/// Returns the number of voters migrated.
-	// pub fn regenerate(weight_of: dyn FnOnce(&T::AccountId) -> VoteWeight) -> u32 {
-	// 	Self::clear();
-
-	// 	let nominators_iter = staking::Nominators::<T>::iter().map(|(id, _)| Voter::nominator(id));
-	// 	let validators_iter = staking::Validators::<T>::iter().map(|(id, _)| Voter::validator(id));
-
-	// 	nominators_iter.chain(validators_iter).for_each(|v| {
-	// 		let weight = weight_of(v);
-	// 		Self::insert(v, weight_of);
-	// 	});
-	// // TODO: use the new insert_at. it should work
-	// }
+	pub fn regenerate(
+		all: impl IntoIterator<Item = T::AccountId>,
+		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) {
+		Self::clear();
+		Self::insert_many(all, weight_of);
+	}
 
 	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
@@ -234,11 +228,10 @@ impl<T: Config> List<T> {
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list.
-	// WARNING: This does not check if the inserted AccountId is duplicate with
-	// others in any bag.
+	// WARNING: This does not check if the inserted AccountId is duplicate with others in any bag.
 	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
-		// TODO: can check if this voter exists as a node by checking if `voter` exists
-		// in the nodes map and return early if it does.
+		// TODO: can check if this voter exists as a node by checking if `voter` exists in the nodes
+		// map and return early if it does.
 
 		let bag_weight = notional_bag_for::<T>(weight);
 		crate::log!(
@@ -480,7 +473,7 @@ impl<T: Config> Bag<T> {
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return
+				return;
 			};
 		}
 

@@ -1,106 +1,117 @@
 use frame_support::assert_ok;
 
 use super::*;
-use frame_election_provider_support::VoterListProvider;
+use frame_election_provider_support::SortedListProvider;
 use list::Bag;
 use mock::{ext_builder::*, test_utils::*, *};
 
 mod extrinsics {
 	use super::*;
 
+	#[test]
 	fn rebag_works() {
 		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
-			assert_eq!(get_bags(), vec![(10, vec![31]), (20, vec![42]), (1000, vec![11, 21, 101])]);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![42]), (1000, vec![2, 3, 4])]);
 
 			// increase vote weight and implicitly rebag to the level of non-existent bag
-			set_staking_vote_weight(2_000);
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 42));
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
-			);
+			NextVoteWeight::set(2000);
+			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4]), (2000, vec![42])]);
 
 			// decrease weight within the range of the current bag
-			set_staking_vote_weight(1_001);
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 42));
+			NextVoteWeight::set(1001);
+			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 			// does not change bags
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![42])]
-			);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4]), (2000, vec![42])]);
 
 			// reduce weight to the level of a non-existent bag
-			set_staking_vote_weight(1_001);
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 42));
+			NextVoteWeight::set(30);
+			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 			// creates the bag and moves the voter into it
-			assert_eq!(get_bags(), vec![(10, vec![31]), (30, vec![42]), (1000, vec![11, 21, 101])]);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (30, vec![42]), (1000, vec![2, 3, 4])]);
 
 			// increase weight to a pre-existing bag
-			set_staking_vote_weight(1_001);
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 42));
+			NextVoteWeight::set(500);
+			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 			// moves the voter to that bag
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101, 42])]);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4, 42])]);
 		});
 	}
 
-	// Rebagging the tail of a bag results in the old bag having a new tail and an overall correct state.
+	// Rebagging the tail of a bag results in the old bag having a new tail and an overall correct
+	// state.
 	#[test]
 	fn rebag_tail_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// when
-			set_staking_vote_weight(10);
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 101));
-
-			// then
-			assert_eq!(get_bags(), vec![(10, vec![31, 101]), (1000, vec![11, 21])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(11), Some(21), 1_000));
+			// given
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4])]);
 
 			// when
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 21));
+			NextVoteWeight::set(10);
+			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![31, 101, 21]), (1000, vec![11])]);
+			assert_eq!(get_bags(), vec![(10, vec![1, 4]), (1000, vec![2, 3])]);
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(3), 1_000));
+
+			// when
+			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
+
+			// then
+			assert_eq!(get_bags(), vec![(10, vec![1, 4, 3]), (1000, vec![2])]);
+
+			assert_eq!(Bag::<Runtime>::get(10).unwrap(), Bag::new(Some(1), Some(3), 10));
+			// TODO: This might be wrong, should be None.
+			assert_eq!(Bag::<Runtime>::get(1000).unwrap(), Bag::new(Some(2), Some(2), 1000));
+			assert_eq!(get_voter_list_as_ids(), vec![2u32, 1, 4, 3]);
+
+			// when
+			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
+
+			// then
+			assert_eq!(get_bags(), vec![(10, vec![1, 4, 3, 2])]);
 		});
 	}
 
-	// Rebagging the head of a bag results in the old bag having a new head and an overall correct state.
+	// Rebagging the head of a bag results in the old bag having a new head and an overall correct
+	// state.
 	#[test]
 	fn rebag_head_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when
-			set_staking_vote_weight(10);
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 11));
+			NextVoteWeight::set(10);
+			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![31, 11]), (1000, vec![21, 101])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(21), Some(101), 1_000));
+			assert_eq!(get_bags(), vec![(10, vec![1, 2]), (1000, vec![3, 4])]);
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(3), Some(4), 1_000));
 
 			// when
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 21));
+			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![31, 11, 21]), (1000, vec![101])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(101), Some(101), 1_000));
+			assert_eq!(get_bags(), vec![(10, vec![1, 2, 3]), (1000, vec![4])]);
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(4), Some(4), 1_000));
 
 			// when
-			assert_ok!(PalletBagsList::rebag(Origin::signed(0), 101));
+			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![31, 11, 21, 101])]);
+			assert_eq!(get_bags(), vec![(10, vec![1, 2, 3, 4])]);
 			assert_eq!(Bag::<Runtime>::get(1_000), None);
 		});
 	}
 }
 
-mod bags_list_voter_list_provider {
+mod sorted_list_provider {
 	use super::*;
 
 	#[test]
-	fn get_voters_works() {
+	fn iter_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			let expected = vec![11, 21, 101, 31];
-			for (i, id) in BagsListVoterListProvider::<Runtime>::get_voters().enumerate() {
+			let expected = vec![2, 3, 4, 1];
+			for (i, id) in <BagsList as SortedListProvider<AccountId>>::iter().enumerate() {
 				assert_eq!(id, expected[i])
 			}
 		});
@@ -109,218 +120,170 @@ mod bags_list_voter_list_provider {
 	#[test]
 	fn count_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 4);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 4);
 
-			BagsListVoterListProvider::<Runtime>::on_insert(201, 0);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
+			<BagsList as SortedListProvider<AccountId>>::on_insert(201, 0);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
 
-			BagsListVoterListProvider::<Runtime>::on_remove(&201);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 4);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&201);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 4);
 
-			BagsListVoterListProvider::<Runtime>::on_remove(&31);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 3);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&1);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 3);
 
-			BagsListVoterListProvider::<Runtime>::on_remove(&21);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 3);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&2);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 2);
 		});
 	}
 
 	#[test]
 	fn on_insert_works() {
-		// when
-		BagsListVoterListProvider::<Runtime>::on_insert(71, 1_000);
+		ExtBuilder::default().build_and_execute(|| {
+			// when
+			<BagsList as SortedListProvider<AccountId>>::on_insert(71, 1_000);
 
-		// then
-		assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 71])]);
-		assert_eq!(
-			BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-			vec![11, 21, 101, 71, 31]
-		);
-		assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
-		assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			// then
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 71])]);
+			assert_eq!(
+				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				vec![2, 3, 4, 71, 1]
+			);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_ok!(List::<Runtime>::sanity_check());
 
-		// when
-		List::<Runtime>::insert(81, 1_001);
+			// when
+			List::<Runtime>::insert(81, 1_001);
 
-		// then
-		assert_eq!(
-			BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-			vec![81, 11, 21, 101, 71, 31]
-		);
-		assert_eq!(
-			get_bags(),
-			vec![(10, vec![31]), (1_000, vec![11, 21, 101, 71]), (2_000, vec![81])]
-		);
-		assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 6);
-		assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			// then
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4, 71]), (2000, vec![81])]
+			);
+			assert_eq!(
+				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				vec![81, 2, 3, 4, 71, 1]
+			);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 6);
+		})
 	}
 
 	#[test]
 	fn on_update_works() {
 		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (20, vec![42]), (1_000, vec![11, 21, 101])]
-			);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]);
 
 			// update weight to the level of non-existent bag
-			BagsListVoterListProvider::<Runtime>::on_update(&42, 2_000);
+			<BagsList as SortedListProvider<AccountId>>::on_update(&42, 2_000);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1_000, vec![11, 21, 101]), (2_000, vec![42])]
+				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				vec![42, 2, 3, 4, 1]
 			);
-			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-				vec![42, 11, 21, 101, 31]
-			);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
-			assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_ok!(List::<Runtime>::sanity_check());
 
 			// decrease weight within the range of the current bag
-			BagsListVoterListProvider::<Runtime>::on_update(&42, 1_001);
+			<BagsList as SortedListProvider<AccountId>>::on_update(&42, 1_001);
 			// does not change bags
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1_000, vec![11, 21, 101]), (2_000, vec![42])]
+				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				vec![42, 2, 3, 4, 1]
 			);
-			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-				vec![42, 11, 21, 101, 31]
-			);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
-			assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_ok!(List::<Runtime>::sanity_check());
 
-			// reduce weight to the level of a non-existent bag
-			BagsListVoterListProvider::<Runtime>::on_update(&42, VoteWeight::MAX);
+			// increase weight to the level of a non-existent bag
+			<BagsList as SortedListProvider<AccountId>>::on_update(&42, VoteWeight::MAX);
 			// creates the bag and moves the voter into it
 			assert_eq!(
 				get_bags(),
-				vec![(10, vec![31]), (1_000, vec![11, 21, 101]), (VoteWeight::MAX, vec![42])]
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (VoteWeight::MAX, vec![42])]
 			);
 			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-				vec![42, 11, 21, 101, 31]
+				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				vec![42, 2, 3, 4, 1]
 			);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
-			assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_ok!(List::<Runtime>::sanity_check());
 
-			// increase weight to a pre-existing bag
-			BagsListVoterListProvider::<Runtime>::on_update(&42, 999);
-			// moves the voter to that bag
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101, 42])]);
+			// decrease the weight to a pre-existing bag
+			<BagsList as SortedListProvider<AccountId>>::on_update(&42, 999);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]);
 			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-				vec![11, 21, 101, 42, 31]
+				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				vec![2, 3, 4, 42, 1]
 			);
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
-			assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
 		});
 	}
 
 	#[test]
 	fn on_remove_works() {
-		let check_storage = |id, counter, accounts, bags| {
+		let ensure_left = |id, counter| {
 			assert!(!VoterBagFor::<Runtime>::contains_key(id));
 			assert!(!VoterNodes::<Runtime>::contains_key(id));
-			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), counter);
+			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), counter);
 			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
 			assert_eq!(VoterBagFor::<Runtime>::iter().count() as u32, counter);
 			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
-			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-				accounts
-			);
-			assert_eq!(get_bags(), bags);
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
 			// when removing a non-existent voter
-			assert!(!BagsListVoterListProvider::<Runtime>::get_voters()
-				.collect::<Vec<_>>()
-				.contains(&42));
+			assert!(!get_voter_list_as_ids().contains(&42));
 			assert!(!VoterNodes::<Runtime>::contains_key(42));
-			BagsListVoterListProvider::<Runtime>::on_remove(&42);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&42);
 
 			// then nothing changes
-			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
-				vec![11, 21, 101, 31]
-			);
-			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+			assert_eq!(get_voter_list_as_ids(), vec![2, 3, 4, 1]);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// when removing a node from a bag with multiple nodes
-			BagsListVoterListProvider::<Runtime>::on_remove(&11);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&2);
 
 			// then
-			assert_eq!(get_voter_list_as_ids(), vec![21, 101, 31]);
-			check_storage(
-				11,
-				3,
-				vec![21, 101, 31],                            // list
-				vec![(10, vec![31]), (1_000, vec![21, 101])], // bags
-			);
+			assert_eq!(get_voter_list_as_ids(), vec![3, 4, 1]);
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
+			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node:
-			BagsListVoterListProvider::<Runtime>::on_remove(&31);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&1);
 
 			// then
-			assert_eq!(get_voter_list_as_ids(), vec![21, 101]);
-			check_storage(
-				31,
-				2,
-				vec![21, 101],                // list
-				vec![(1_000, vec![21, 101])], // bags
-			);
-			assert!(!VoterBags::<Runtime>::contains_key(10)); // bag 10 is removed
+			assert_eq!(get_voter_list_as_ids(), vec![3, 4]);
+			assert_eq!(get_bags(), vec![(1_000, vec![3, 4])]);
+			ensure_left(1, 2);
 
 			// remove remaining voters to make sure storage cleans up as expected
-			BagsListVoterListProvider::<Runtime>::on_remove(&21);
-			check_storage(
-				21,
-				1,
-				vec![101],                // list
-				vec![(1_000, vec![101])], // bags
-			);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&4);
+			assert_eq!(get_voter_list_as_ids(), vec![3]);
+			ensure_left(4, 1);
 
-			BagsListVoterListProvider::<Runtime>::on_remove(&101);
-			check_storage(
-				101,
-				0,
-				Vec::<u32>::new(), // list
-				vec![],            // bags
-			);
-			assert!(!VoterBags::<Runtime>::contains_key(1_000)); // bag 1_000 is removed
-
-			// bags are deleted via removals
-			assert_eq!(VoterBags::<Runtime>::iter().count(), 0);
+			<BagsList as SortedListProvider<AccountId>>::on_remove(&3);
+			assert_eq!(get_voter_list_as_ids(), Vec::<AccountId>::new());
+			ensure_left(3, 0);
 		});
 	}
 
 	#[test]
 	fn sanity_check_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+			assert_ok!(List::<Runtime>::sanity_check());
 		});
 
 		// make sure there are no duplicates.
 		ExtBuilder::default().build_and_execute(|| {
-			BagsListVoterListProvider::<Runtime>::on_insert(11, 10);
-			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::sanity_check(),
-				Err("duplicate identified")
-			);
-
+			<BagsList as SortedListProvider<AccountId>>::on_insert(1, 10);
+			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
 		});
 
 		// ensure count is in sync with `CounterForVoters`.
 		ExtBuilder::default().build_and_execute(|| {
 			crate::CounterForVoters::<Runtime>::mutate(|counter| *counter += 1);
 			assert_eq!(crate::CounterForVoters::<Runtime>::get(), 5);
-			assert_eq!(
-				BagsListVoterListProvider::<Runtime>::sanity_check(),
-				Err("iter_count != voter_count")
-			);
+			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != voter_count"));
 		});
 	}
 }

@@ -1,24 +1,18 @@
 use super::*;
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
-use std::cell::RefCell;
 
-type AccountId = u32;
-type Balance = u32;
+pub type AccountId = u32;
+pub type Balance = u32;
 
-thread_local! {
-	static VOTE_WEIGHT: RefCell<VoteWeight> = RefCell::new(Default::default())
-}
-
-/// Set a mock return value for `StakingVoteWeight::staking_vote_weight`.
-pub(crate) fn set_staking_vote_weight(weight: VoteWeight) {
-	VOTE_WEIGHT.with(|w| *w.borrow_mut() = weight);
+parameter_types! {
+	pub static NextVoteWeight: VoteWeight = 0;
 }
 
 pub struct StakingMock;
-impl frame_election_provider_support::StakingVoteWeight<AccountId> for StakingMock {
-	fn staking_vote_weight(_who: &AccountId) -> VoteWeight {
-		VOTE_WEIGHT.with(|h| h.borrow().clone())
+impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
+	fn vote_weight(who: &AccountId) -> VoteWeight {
+		NextVoteWeight::get()
 	}
 }
 
@@ -58,7 +52,7 @@ parameter_types! {
 impl crate::Config for Runtime {
 	type Event = Event;
 	type BagThresholds = BagThresholds;
-	type StakingVoteWeight = StakingMock;
+	type VoteWeightProvider = StakingMock;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -70,16 +64,18 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
-		PalletBagsList: crate::{Pallet, Call, Storage, Event<T>},
+		BagsList: crate::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
 pub(crate) mod ext_builder {
+	use frame_support::RuntimeDebugNoBound;
+
 	use super::*;
 
 	/// Default AccountIds and their weights.
-	const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
-		[(31, 10), (11, 1_000), (21, 1_000), (101, 1_000)];
+	const GENESIS_IDS: [(AccountId, VoteWeight); 4] = [(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
+
 	#[derive(Default)]
 	pub(crate) struct ExtBuilder {
 		ids: Vec<(AccountId, VoteWeight)>,
@@ -108,7 +104,10 @@ pub(crate) mod ext_builder {
 		}
 
 		pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
-			self.build().execute_with(test);
+			self.build().execute_with(|| {
+				test();
+				List::<Runtime>::sanity_check().expect("Sanity check post condition failed")
+			})
 		}
 	}
 }

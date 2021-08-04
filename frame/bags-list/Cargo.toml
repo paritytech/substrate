@@ -18,12 +18,11 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
-
-pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
 
 log = { version = "0.4.14", default-features = false }
 
@@ -39,13 +38,12 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 default = ["std"]
 std = [
 	"codec/std",
+	"sp-runtime/std",
+	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
-  "frame-election-provider-support/std",
-  "sp-runtime/std",
-  "sp-std/std",
-  "pallet-staking/std",
-  "log/std",
+	"frame-election-provider-support/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

@@ -293,25 +293,37 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	}
 }
 
-// TODO not sure where to put these, but put them here just because this is where
-// export voteweight from into the staking pallet
-/// Trait to be implemented by a voter list provider.
-pub trait VoterListProvider<AccountId> {
+/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
+///
+/// This is generic over the `AccountId`'d sole, and it can represent a validator, a nominator, or
+/// any other entity.
+///
+/// On the contrary, to simplify the trait, the `VoteWeight` is hardcoded as the weight of each
+/// entity. The weights are scending, the higher, the better. In the long term, if this trait ends
+/// up having use cases outside of the election context, it is easy enough to make it generic over
+/// the `VoteWeight`.
+///
+/// Something that implements this trait will do a best-effort sort over voters, and thus can be
+/// used on the implementing side of `ElectionDataProvider`.
+pub trait SortedListProvider<AccountId> {
 	/// Returns iterator over voter list, which can have `take` called on it.
-	fn get_voters() -> Box<dyn Iterator<Item = AccountId>>;
+	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 	/// get the current count of voters.
 	fn count() -> u32;
-	// Hook for inserting a validator.
-	fn on_insert(voter: AccountId, weight: VoteWeight); // TODO
-	/// Hook for updating the list when a voter is added, their voter type is changed,
-	/// or their weight changes.
+	// Hook for inserting a voter.
+	fn on_insert(voter: AccountId, weight: VoteWeight);
+	/// Hook for updating a single voter.
 	fn on_update(voter: &AccountId, weight: VoteWeight);
 	/// Hook for removing a voter from the list.
 	fn on_remove(voter: &AccountId);
 	/// Sanity check internal state of list. Only meant for debug compilation.
+	#[cfg(test)]
 	fn sanity_check() -> Result<(), &'static str>;
 }
 
-pub trait StakingVoteWeight<AccountId> {
-	fn staking_vote_weight(who: &AccountId) -> VoteWeight;
+/// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
+/// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
+/// `SortedListProvider`.
+pub trait VoteWeightProvider<AccountId> {
+	fn vote_weight(who: &AccountId) -> VoteWeight;
 }

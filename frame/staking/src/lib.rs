@@ -494,7 +494,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -799,7 +799,7 @@ where
 
 /// A simple voter list implementation that does not require any additional pallets.
 pub struct StakingVoterListStub<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
+impl<T: Config> frame_election_provider_support::SortedListProvider<T::AccountId>
 	for StakingVoterListStub<T>
 {
 	/// Returns iterator over voter list, which can have `take` called on it.

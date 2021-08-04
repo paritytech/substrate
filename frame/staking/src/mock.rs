@@ -284,8 +284,8 @@ impl crate::pallet::pallet::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 	type VoterBagThresholds = VoterBagThresholds;
-	// type VoterListProvider = pallet_voter_bags::VoterBagsVoterListProvider;
-	type VoterListProvider = staking::VoterList<Self>;
+	// type SortedListProvider = pallet_voter_bags::VoterBagsVoterListProvider;
+	type SortedListProvider = staking::VoterList<Self>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -576,7 +576,7 @@ fn check_nominators() {
 						e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
 					let len = individual.len();
 					match len {
-						0 => { /* not supporting this validator at all. */ },
+						0 => { /* not supporting this validator at all. */ }
 						1 => sum += individual[0].value,
 						_ => panic!("nominator cannot back a validator more than once."),
 					};
@@ -760,9 +760,9 @@ pub(crate) fn on_offence_in_era(
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
 			let _ = Staking::on_offence(offenders, slash_fraction, start_session);
-			return
+			return;
 		} else if bonded_era > era {
-			break
+			break;
 		}
 	}
 
