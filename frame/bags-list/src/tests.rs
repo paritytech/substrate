@@ -157,9 +157,12 @@ mod bags_list_voter_list_provider {
 
 	#[test]
 	fn on_update_works() {
-			ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
+		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
-			assert_eq!(get_bags(), vec![(10, vec![31]), (20, vec![42]), (1_000, vec![11, 21, 101])]);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (20, vec![42]), (1_000, vec![11, 21, 101])]
+			);
 
 			// update weight to the level of non-existent bag
 			BagsListVoterListProvider::<Runtime>::on_update(&42, 2_000);
@@ -191,7 +194,10 @@ mod bags_list_voter_list_provider {
 			// reduce weight to the level of a non-existent bag
 			BagsListVoterListProvider::<Runtime>::on_update(&42, VoteWeight::MAX);
 			// creates the bag and moves the voter into it
-			assert_eq!(get_bags(), vec![(10, vec![31]),  (1_000, vec![11, 21, 101]), (VoteWeight::MAX, vec![42])]);
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1_000, vec![11, 21, 101]), (VoteWeight::MAX, vec![42])]
+			);
 			assert_eq!(
 				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
 				vec![42, 11, 21, 101, 31]
@@ -214,11 +220,107 @@ mod bags_list_voter_list_provider {
 
 	#[test]
 	fn on_remove_works() {
-		todo!();
+		let check_storage = |id, counter, accounts, bags| {
+			assert!(!VoterBagFor::<Runtime>::contains_key(id));
+			assert!(!VoterNodes::<Runtime>::contains_key(id));
+			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), counter);
+			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
+			assert_eq!(VoterBagFor::<Runtime>::iter().count() as u32, counter);
+			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
+			assert_eq!(
+				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
+				accounts
+			);
+			assert_eq!(get_bags(), bags);
+		};
+
+		ExtBuilder::default().build_and_execute(|| {
+			// when removing a non-existent voter
+			assert!(!BagsListVoterListProvider::<Runtime>::get_voters()
+				.collect::<Vec<_>>()
+				.contains(&42));
+			assert!(!VoterNodes::<Runtime>::contains_key(42));
+			BagsListVoterListProvider::<Runtime>::on_remove(&42);
+
+			// then nothing changes
+			assert_eq!(
+				BagsListVoterListProvider::<Runtime>::get_voters().collect::<Vec<_>>(),
+				vec![11, 21, 101, 31]
+			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1_000, vec![11, 21, 101])]);
+
+			// when removing a node from a bag with multiple nodes
+			BagsListVoterListProvider::<Runtime>::on_remove(&11);
+
+			// then
+			assert_eq!(get_voter_list_as_ids(), vec![21, 101, 31]);
+			check_storage(
+				11,
+				3,
+				vec![21, 101, 31],                            // list
+				vec![(10, vec![31]), (1_000, vec![21, 101])], // bags
+			);
+
+			// when removing a node from a bag with only one node:
+			BagsListVoterListProvider::<Runtime>::on_remove(&31);
+
+			// then
+			assert_eq!(get_voter_list_as_ids(), vec![21, 101]);
+			check_storage(
+				31,
+				2,
+				vec![21, 101],                // list
+				vec![(1_000, vec![21, 101])], // bags
+			);
+			assert!(!VoterBags::<Runtime>::contains_key(10)); // bag 10 is removed
+
+			// remove remaining voters to make sure storage cleans up as expected
+			BagsListVoterListProvider::<Runtime>::on_remove(&21);
+			check_storage(
+				21,
+				1,
+				vec![101],                // list
+				vec![(1_000, vec![101])], // bags
+			);
+
+			BagsListVoterListProvider::<Runtime>::on_remove(&101);
+			check_storage(
+				101,
+				0,
+				Vec::<u32>::new(), // list
+				vec![],            // bags
+			);
+			assert!(!VoterBags::<Runtime>::contains_key(1_000)); // bag 1_000 is removed
+
+			// bags are deleted via removals
+			assert_eq!(VoterBags::<Runtime>::iter().count(), 0);
+		});
 	}
 
 	#[test]
 	fn sanity_check_works() {
-		todo!();
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(BagsListVoterListProvider::<Runtime>::sanity_check());
+		});
+
+		// make sure there are no duplicates.
+		ExtBuilder::default().build_and_execute(|| {
+			BagsListVoterListProvider::<Runtime>::on_insert(11, 10);
+			assert_eq!(
+				BagsListVoterListProvider::<Runtime>::sanity_check(),
+				Err("duplicate identified")
+			);
+
+		});
+
+		// ensure count is in sync with `CounterForVoters`.
+		ExtBuilder::default().build_and_execute(|| {
+			crate::CounterForVoters::<Runtime>::mutate(|counter| *counter += 1);
+			assert_eq!(crate::CounterForVoters::<Runtime>::get(), 5);
+			assert_eq!(
+				BagsListVoterListProvider::<Runtime>::sanity_check(),
+				Err("iter_count != voter_count")
+			);
+		});
 	}
 }

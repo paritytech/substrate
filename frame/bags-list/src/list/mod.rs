@@ -351,7 +351,6 @@ impl<T: Config> List<T> {
 	///
 	/// * Iterate all voters in list and make sure there are no duplicates.
 	/// * Iterate all voters and ensure their count is in sync with `CounterForVoters`.
-	/// * Ensure `CounterForVoters` is `CounterForValidators + CounterForNominators`.
 	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
 	///   checked per *any* update to `List`.
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
@@ -365,7 +364,7 @@ impl<T: Config> List<T> {
 		let stored_count = crate::CounterForVoters::<T>::get();
 		ensure!(iter_count == stored_count, "iter_count != voter_count");
 
-		// let validators = staking::CounterForValidators::<T>::get();
+		// let validators = staking::CounterForValidators::<T>::get(); TOOD can we just remove?
 		// let nominators = staking::CounterForNominators::<T>::get();
 		// ensure!(validators + nominators == stored_count, "validators + nominators != voters");
 
@@ -568,7 +567,7 @@ impl<T: Config> Bag<T> {
 				.map(|node| node.id)
 				// each voter is only seen once, thus there is no cycle within a bag
 				.all(|voter| seen_in_bag.insert(voter)),
-			"Duplicate found in bag"
+			"duplicate found in bag"
 		);
 
 		Ok(())

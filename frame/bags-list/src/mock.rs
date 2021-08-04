@@ -121,7 +121,7 @@ pub(crate) mod test_utils {
 	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
 		BagThresholds::get()
 			.into_iter()
-			.chain(std::iter::once(&VoteWeight::MAX))
+			.chain(std::iter::once(&VoteWeight::MAX)) // assumes this is not an explicit threshold
 			.filter_map(|t| {
 				Bag::<Runtime>::get(*t)
 					.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
