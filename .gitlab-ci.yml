@@ -474,9 +474,6 @@ build-linux-substrate:             &build-binary
   <<:                              *collect-artifacts
   <<:                              *docker-env
   <<:                              *build-refs
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
