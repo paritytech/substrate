@@ -1,10 +1,14 @@
-use frame_support::{assert_ok, assert_storage_noop};
+use frame_support::{assert_ok};
 
 use super::*;
 use mock::{ext_builder::*, test_utils::*, *};
 use list::Bag;
+use frame_election_provider_support::VoterListProvider;
 
-fn rebag_works() {
+mod extrinsics {
+	use super::*;
+
+	fn rebag_works() {
 	ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 		// given
 		assert_eq!(get_bags(), vec![(10, vec![31]), (20, vec![42]), (1000, vec![11, 21, 101])]);
@@ -93,18 +97,39 @@ fn rebag_head_works() {
 		);
 	});
 }
+}
+
 
 mod bags_list_voter_list_provider {
 	use super::*;
 
 	#[test]
 	fn get_voters_works() {
-		todo!();
+		ExtBuilder::default().build_and_execute(|| {
+			let expected = vec![11, 21, 101, 31];
+			for (i, id) in BagsListVoterListProvider::<Runtime>::get_voters().enumerate() {
+				assert_eq!(id, expected[i])
+			}
+		});
 	}
 
 	#[test]
 	fn count_works() {
-		todo!();
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 4);
+
+			BagsListVoterListProvider::<Runtime>::on_insert(201, 0);
+			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 5);
+
+			BagsListVoterListProvider::<Runtime>::on_remove(&201);
+			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 4);
+
+			BagsListVoterListProvider::<Runtime>::on_remove(&31);
+			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 3);
+
+			BagsListVoterListProvider::<Runtime>::on_remove(&21);
+			assert_eq!(BagsListVoterListProvider::<Runtime>::count(), 3);
+		});
 	}
 
 	#[test]
