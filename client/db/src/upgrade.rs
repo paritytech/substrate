@@ -176,7 +176,7 @@ mod tests {
 				state_cache_size: 0,
 				state_cache_child_ratio: None,
 				state_pruning: PruningMode::ArchiveAll,
-				source: DatabaseSource::RocksDb { path: db_path.to_owned(), cache_size: 128 },
+				source: DatabaseSource::Auto { path: db_path.to_owned(), cache_size: 128 },
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},

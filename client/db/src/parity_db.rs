@@ -72,4 +72,8 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
 		handle_err(self.0.get_size(col as u8, key)).map(|s| s as usize)
 	}
+
+	fn supports_ref_counting(&self) -> bool {
+		true
+	}
 }
