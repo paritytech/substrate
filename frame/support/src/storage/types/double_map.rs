@@ -530,7 +530,7 @@ where
 
 	fn ty() -> StorageEntryType {
 		StorageEntryType::Map {
-			hashers: vec! [ Hasher1::METADATA, Hasher2::METADATA ],
+			hashers: vec![Hasher1::METADATA, Hasher2::METADATA],
 			key: scale_info::meta_type::<(Key1, Key2)>(),
 			value: scale_info::meta_type::<Value>(),
 		}
@@ -780,11 +780,11 @@ mod test {
 
 			assert_map_hashers(
 				A::ty(),
-				vec![ StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat ],
+				vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
 			);
 			assert_map_hashers(
 				AValueQueryWithAnOnEmpty::ty(),
-				vec![ StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat ],
+				vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
 			);
 
 			assert_eq!(A::NAME, "foo");

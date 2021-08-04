@@ -290,7 +290,10 @@ mod tests {
 					name: "DOUBLEMAP",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hashers: vec! [ StorageHasher::Blake2_128Concat, StorageHasher::Blake2_128Concat ],
+						hashers: vec![
+							StorageHasher::Blake2_128Concat,
+							StorageHasher::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
@@ -301,7 +304,10 @@ mod tests {
 					name: "DOUBLEMAP2",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hashers: vec! [ StorageHasher::Blake2_128Concat, StorageHasher::Blake2_128Concat ],
+						hashers: vec![
+							StorageHasher::Blake2_128Concat,
+							StorageHasher::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
