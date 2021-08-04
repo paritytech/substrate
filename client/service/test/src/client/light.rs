@@ -256,10 +256,6 @@ impl CallExecutor<Block> for DummyCallExecutor {
 	) -> Result<(Vec<u8>, StorageProof), ClientError> {
 		unreachable!()
 	}
-
-	fn native_runtime_version(&self) -> Option<&NativeVersion> {
-		unreachable!()
-	}
 }
 
 fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
