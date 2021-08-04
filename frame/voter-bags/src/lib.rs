@@ -24,6 +24,10 @@
 use frame_election_provider_support::VoteWeight;
 use frame_system::ensure_signed;
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 mod voter_list;
 pub mod weights;
 
@@ -48,7 +52,8 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::StakingVoteWeight};
+	use frame_election_provider_support::StakingVoteWeight;
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -56,9 +61,15 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + pallet_staking::Config {
+	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Weight information for extrinsics in this pallet.
+		// type WeightInfo: WeightInfo;
+
+		// Something that implements `trait StakingVoteWeight`.
+		type StakingVoteWeight: StakingVoteWeight<Self::AccountId>;
 
 		/// The list of thresholds separating the various voter bags.
 		///
@@ -108,12 +119,7 @@ pub mod pallet {
 		/// With that `VoterList::migrate` can be called, which will perform the appropriate
 		/// migration.
 		#[pallet::constant]
-		type BVoterBagThresholds: Get<&'static [VoteWeight]>;
-
-		/// Weight information for extrinsics in this pallet.
-		type WeightInfo: WeightInfo;
-
-		type StakingVoteWeight: StakingVoteWeight<Self::AccountId>;
+		type VoterBagThresholds: Get<&'static [VoteWeight]>;
 	}
 
 	/// How many voters are registered.
@@ -175,13 +181,6 @@ pub mod pallet {
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(|| {
 					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					);
-
-					assert!(
 						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
 						"Voter bag thresholds must strictly increase",
 					);
@@ -192,38 +191,35 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Move a stash account from one bag to another, depositing an event on success.
+	/// Move an account from one bag to another, depositing an event on success.
 	///
-	/// If the stash changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(
-		stash: &T::AccountId,
-		new_weight: VoteWeight,
-	) -> Option<(VoteWeight, VoteWeight)> {
+	/// If the account changed bags, returns `Some((from, to))`.
+	pub fn do_rebag(id: &T::AccountId, new_weight: VoteWeight) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = voter_list::Node::<T>::from_id(&stash)
+		let maybe_movement = voter_list::Node::<T>::from_id(&id)
 			.and_then(|node| VoterList::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(stash.clone(), from, to));
+			Self::deposit_event(Event::<T>::Rebagged(id.clone(), from, to));
 		};
 		maybe_movement
 	}
 }
 
 pub struct VoterBagsVoterListProvider<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> frame_support::traits::VoterListProvider<T::AccountId>
+impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
 	for VoterBagsVoterListProvider<T>
 {
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(VoterList::<T>::iter().map(|n| n.voter().clone()))
+		Box::new(VoterList::<T>::iter().map(|n| n.id().clone()))
 	}
 
 	fn count() -> u32 {
 		CounterForVoters::<T>::get()
 	}
 
-	fn on_insert(voter: &T::AccountId, weight: VoteWeight) {
+	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
 		// TODO: change the interface to not use ref.
 		VoterList::<T>::insert(voter.clone(), weight);
 	}

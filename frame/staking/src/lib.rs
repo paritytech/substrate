@@ -494,7 +494,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 
 			if unlocking_balance >= value {
-				break;
+				break
 			}
 		}
 
@@ -799,7 +799,9 @@ where
 
 /// A simple voter list implementation that does not require any additional pallets.
 pub struct StakingVoterListStub<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> frame_support::traits::VoterListProvider<T::AccountId> for StakingVoterListStub<T> {
+impl<T: Config> frame_election_provider_support::VoterListProvider<T::AccountId>
+	for StakingVoterListStub<T>
+{
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn get_voters() -> Box<dyn Iterator<Item = T::AccountId>> {
 		let weight_of = Pallet::<T>::weight_of_fn();
@@ -808,9 +810,9 @@ impl<T: Config> frame_support::traits::VoterListProvider<T::AccountId> for Staki
 	fn count() -> u32 {
 		CounterForNominators::<T>::get()
 	}
-	fn on_insert(voter: &T::AccountId, weight: VoteWeight) {}
-	fn on_update(voter: &T::AccountId, weight: VoteWeight) {}
-	fn on_remove(voter: &T::AccountId) {}
+	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) {}
+	fn on_update(_voter: &T::AccountId, _weight: VoteWeight) {}
+	fn on_remove(_voter: &T::AccountId) {}
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}

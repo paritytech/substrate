@@ -21,7 +21,6 @@ use crate::Config;
 use codec::{Decode, Encode};
 use frame_election_provider_support::VoteWeight;
 use frame_support::{ensure, traits::Get, DefaultNoBound};
-use pallet_staking as staking;
 use sp_runtime::SaturatedConversion;
 use sp_std::{
 	boxed::Box,
@@ -29,6 +28,7 @@ use sp_std::{
 	iter,
 	marker::PhantomData,
 };
+use frame_election_provider_support::StakingVoteWeight;
 
 /// Given a certain vote weight, which bag should contain this voter?
 ///
@@ -42,7 +42,7 @@ use sp_std::{
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
 fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
-	let thresholds = T::BVoterBagThresholds::get();
+	let thresholds = T::VoterBagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
@@ -114,27 +114,27 @@ impl<T: Config> VoterList<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue;
+				continue
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
-				affected_accounts.extend(bag.iter().map(|node| node.voter));
+				affected_accounts.extend(bag.iter().map(|node| node.id));
 			}
 		}
 
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in old_set.difference(&new_set).copied() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue;
+				continue
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
-				affected_accounts.extend(bag.iter().map(|node| node.voter));
+				affected_accounts.extend(bag.iter().map(|node| node.id));
 			}
 		}
 
 		// migrate the
-		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
+		let weight_of = T::StakingVoteWeight::staking_vote_weight;
 		Self::remove_many(affected_accounts.iter().map(|voter| voter));
 		let num_affected = affected_accounts.len() as u32;
 		Self::insert_many(affected_accounts.into_iter(), weight_of);
@@ -155,7 +155,7 @@ impl<T: Config> VoterList<T> {
 
 		debug_assert!(
 			{
-				let thresholds = T::BVoterBagThresholds::get();
+				let thresholds = T::VoterBagThresholds::get();
 				crate::VoterBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
 			},
 			"all `bag_upper` in storage must be members of the new thresholds",
@@ -191,11 +191,6 @@ impl<T: Config> VoterList<T> {
 			crate::VoterNodes::<T>::iter().count(),
 			"stored length must match count of nodes",
 		);
-		debug_assert_eq!(
-			maybe_len.unwrap_or_default() as u32,
-			staking::CounterForNominators::<T>::get() + staking::CounterForValidators::<T>::get(),
-			"voter count must be sum of validator and nominator count",
-		);
 		maybe_len
 	}
 
@@ -210,7 +205,7 @@ impl<T: Config> VoterList<T> {
 		//
 		// It's important to retain the ability to omit the final bound because it makes tests much
 		// easier; they can just configure `type VoterBagThresholds = ()`.
-		let thresholds = T::BVoterBagThresholds::get();
+		let thresholds = T::VoterBagThresholds::get();
 		let iter = thresholds.iter().copied();
 		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
 			// in the event that they included it, we can just pass the iterator through unchanged.
@@ -248,7 +243,7 @@ impl<T: Config> VoterList<T> {
 		let mut bag = Bag::<T>::get_or_make(bag_weight);
 		bag.insert(voter);
 
-		// TODO: why are wr writing to the bag of the voter is neither head or tail????
+		// TODO: why are we writing to the bag of the voter is neither head or tail????
 		bag.put();
 
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
@@ -325,7 +320,7 @@ impl<T: Config> VoterList<T> {
 				crate::log!(
 						error,
 						"Node for staker {:?} did not have a bag; VoterBags is in an inconsistent state",
-						node.voter,
+						node.id,
 					);
 			}
 
@@ -354,7 +349,7 @@ impl<T: Config> VoterList<T> {
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
-			Self::iter().map(|node| node.voter).all(|voter| seen_in_list.insert(voter)),
+			Self::iter().map(|node| node.id).all(|voter| seen_in_list.insert(voter)),
 			"duplicate identified",
 		);
 
@@ -398,7 +393,7 @@ impl<T: Config> Bag<T> {
 	/// Get a bag by its upper vote weight.
 	pub fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
 		debug_assert!(
-			T::BVoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
 		crate::VoterBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
@@ -410,7 +405,7 @@ impl<T: Config> Bag<T> {
 	/// Get a bag by its upper vote weight or make it, appropriately initialized.
 	pub fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
 		debug_assert!(
-			T::BVoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
@@ -452,8 +447,8 @@ impl<T: Config> Bag<T> {
 	///
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
-	fn insert(&mut self, voter: T::AccountId) {
-		self.insert_node(Node::<T> { voter, prev: None, next: None, bag_upper: self.bag_upper });
+	fn insert(&mut self, id: T::AccountId) {
+		self.insert_node(Node::<T> { id, prev: None, next: None, bag_upper: self.bag_upper });
 	}
 
 	/// Insert a voter node into this bag.
@@ -465,15 +460,15 @@ impl<T: Config> Bag<T> {
 	/// `self.put()` after use.
 	fn insert_node(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
-			if *tail == node.voter {
+			if *tail == node.id {
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return;
+				return
 			};
 		}
 
-		let id = node.voter.clone();
+		let id = node.id.clone();
 
 		node.prev = self.tail.clone();
 		node.next = None;
@@ -515,10 +510,10 @@ impl<T: Config> Bag<T> {
 		}
 
 		// clear the bag head/tail pointers as necessary
-		if self.head.as_ref() == Some(&node.voter) {
+		if self.head.as_ref() == Some(&node.id) {
 			self.head = node.next.clone();
 		}
-		if self.tail.as_ref() == Some(&node.voter) {
+		if self.tail.as_ref() == Some(&node.id) {
 			self.tail = node.prev.clone();
 		}
 	}
@@ -553,7 +548,7 @@ impl<T: Config> Bag<T> {
 		let mut seen_in_bag = BTreeSet::new();
 		ensure!(
 			self.iter()
-				.map(|node| node.voter)
+				.map(|node| node.id)
 				// each voter is only seen once, thus there is no cycle within a bag
 				.all(|voter| seen_in_bag.insert(voter)),
 			"Duplicate found in bag"
@@ -568,7 +563,7 @@ impl<T: Config> Bag<T> {
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq, Clone))]
 pub struct Node<T: Config> {
-	voter: T::AccountId,
+	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
 
@@ -583,7 +578,7 @@ impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	pub fn get(bag_upper: VoteWeight, account_id: &T::AccountId) -> Option<Node<T>> {
 		debug_assert!(
-			T::BVoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
 		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
@@ -608,7 +603,7 @@ impl<T: Config> Node<T> {
 
 	/// Put the node back into storage.
 	pub fn put(self) {
-		crate::VoterNodes::<T>::insert(self.voter.clone(), self);
+		crate::VoterNodes::<T>::insert(self.id.clone(), self);
 	}
 
 	/// Get the previous node in the bag.
@@ -626,19 +621,9 @@ impl<T: Config> Node<T> {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
-	/// Get the upper threshold of the bag that this node _should_ be in, given its vote weight.
-	///
-	/// This is a helper intended only for benchmarking and should not be used in production.
-	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	pub fn proper_bag_for(&self) -> VoteWeight {
-		let weight_of = staking::Pallet::<T>::weight_of_fn();
-		let current_weight = weight_of(&self.voter.id);
-		notional_bag_for::<T>(current_weight)
-	}
-
 	/// Get the underlying voter.
-	pub fn voter(&self) -> &T::AccountId {
-		&self.voter
+	pub fn id(&self) -> &T::AccountId {
+		&self.id
 	}
 }
 

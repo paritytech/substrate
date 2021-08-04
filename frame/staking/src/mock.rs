@@ -106,7 +106,6 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		// VoterBags: pallet_voter_bags::{Pallet, Call, Storage, Event<T>},
 	}
 );
 

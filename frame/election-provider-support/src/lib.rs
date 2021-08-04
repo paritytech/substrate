@@ -292,3 +292,26 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 		Err("<() as ElectionProvider> cannot do anything.")
 	}
 }
+
+// TODO not sure where to put these, but put them here just because this is where
+// export voteweight from into the staking pallet
+/// Trait to be implemented by a voter list provider.
+pub trait VoterListProvider<AccountId> {
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn get_voters() -> Box<dyn Iterator<Item = AccountId>>;
+	/// get the current count of voters.
+	fn count() -> u32;
+	// Hook for inserting a validator.
+	fn on_insert(voter: AccountId, weight: VoteWeight); // TODO
+	/// Hook for updating the list when a voter is added, their voter type is changed,
+	/// or their weight changes.
+	fn on_update(voter: &AccountId, weight: VoteWeight);
+	/// Hook for removing a voter from the list.
+	fn on_remove(voter: &AccountId);
+	/// Sanity check internal state of list. Only meant for debug compilation.
+	fn sanity_check() -> Result<(), &'static str>;
+}
+
+pub trait StakingVoteWeight<AccountId> {
+	fn staking_vote_weight(who: &AccountId) -> VoteWeight;
+}

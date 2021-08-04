@@ -17,12 +17,12 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::VoteWeight;
+use frame_election_provider_support::{VoteWeight, VoterListProvider};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
-		LockableCurrency, OnUnbalanced, UnixTime, VoterListProvider,
+		LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::{
 		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
@@ -568,7 +568,7 @@ pub mod pallet {
 					// TODO: later on, fix all the tests that trigger these warnings, and
 					// make these assertions. Genesis stakers should all be correct!
 					log!(warn, "failed to bond staker at genesis: {:?}.", why);
-					continue;
+					continue
 				}
 				match status {
 					StakerStatus::Validator => {
@@ -580,7 +580,7 @@ pub mod pallet {
 						} else {
 							num_voters += 1;
 						}
-					}
+					},
 					StakerStatus::Nominator(votes) => {
 						if let Err(why) = <Pallet<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
@@ -590,7 +590,7 @@ pub mod pallet {
 						} else {
 							num_voters += 1;
 						}
-					}
+					},
 					_ => (),
 				};
 			}
@@ -1396,9 +1396,9 @@ pub mod pallet {
 			Self::update_ledger(&controller, &ledger);
 			T::VoterListProvider::on_update(&ledger.stash, Self::weight_of_fn()(&ledger.stash)); // TODO we already have the ledger here.
 			Ok(Some(
-				35 * WEIGHT_PER_MICROS
-					+ 50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight)
-					+ T::DbWeight::get().reads_writes(3, 2),
+				35 * WEIGHT_PER_MICROS +
+					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
+					T::DbWeight::get().reads_writes(3, 2),
 			)
 			.into())
 		}
