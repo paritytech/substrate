@@ -224,7 +224,7 @@ mod tests {
 					name: "MAPU32",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hashers: vec![StorageHasher::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
@@ -235,7 +235,7 @@ mod tests {
 					name: "PUBMAPU32",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hashers: vec![StorageHasher::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
@@ -246,7 +246,7 @@ mod tests {
 					name: "GETMAPU32",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hashers: vec![StorageHasher::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
@@ -257,7 +257,7 @@ mod tests {
 					name: "PUBGETMAPU32",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hashers: vec![StorageHasher::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
@@ -268,7 +268,7 @@ mod tests {
 					name: "GETMAPU32MYDEF",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hashers: vec![StorageHasher::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
@@ -279,7 +279,7 @@ mod tests {
 					name: "PUBGETMAPU32MYDEF",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hashers: vec![StorageHasher::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},

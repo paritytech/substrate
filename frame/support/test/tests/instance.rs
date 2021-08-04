@@ -426,7 +426,7 @@ fn expected_metadata() -> PalletStorageMetadata {
 				name: "Map",
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Identity,
+					hashers: vec![StorageHasher::Identity],
 					key: scale_info::meta_type::<u64>(),
 					value: scale_info::meta_type::<u64>(),
 				},
@@ -437,7 +437,7 @@ fn expected_metadata() -> PalletStorageMetadata {
 				name: "DoubleMap",
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Map {
-					hashers: vec![ StorageHasher::Identity, StorageHasher::Identity ],
+					hashers: vec![StorageHasher::Identity, StorageHasher::Identity],
 					key: scale_info::meta_type::<(u64, u64)>(),
 					value: scale_info::meta_type::<u64>(),
 				},
