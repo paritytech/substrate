@@ -93,72 +93,71 @@ fn remove_last_voter_in_bags_cleans_bag() {
 	});
 }
 
-
 mod voter_list {
 	use super::*;
 
 	#[test]
 	fn iteration_is_semi_sorted() {
 		ExtBuilder::default()
-		.add_ids(vec![(51, 2_000), (61, 2_000)])
-		.build_and_execute(|| {
-			// given
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
-			);
+			.add_ids(vec![(51, 2_000), (61, 2_000)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					get_bags(),
+					vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
+				);
 
-			// then
-			assert_eq!(
-				get_voter_list_as_ids(),
-				vec![
-					51, 61, // best bag
-					11, 21, 101, // middle bag
-					31,  // last bag.
-				]
-			);
+				// then
+				assert_eq!(
+					get_voter_list_as_ids(),
+					vec![
+						51, 61, // best bag
+						11, 21, 101, // middle bag
+						31,  // last bag.
+					]
+				);
 
-			// when adding a voter that has a higher weight than pre-existing voters in the bag
-			VoterList::<Runtime>::insert(71, 10);
+				// when adding a voter that has a higher weight than pre-existing voters in the bag
+				VoterList::<Runtime>::insert(71, 10);
 
-			// then
-			assert_eq!(
-				get_voter_list_as_ids(),
-				vec![
-					51, 61, // best bag
-					11, 21, 101, // middle bag
-					31,
-					71, // last bag; the new voter is last, because it is order of insertion
-				]
-			);
-		})
+				// then
+				assert_eq!(
+					get_voter_list_as_ids(),
+					vec![
+						51, 61, // best bag
+						11, 21, 101, // middle bag
+						31,
+						71, // last bag; the new voter is last, because it is order of insertion
+					]
+				);
+			})
 	}
 
 	/// This tests that we can `take` x voters, even if that quantity ends midway through a list.
 	#[test]
 	fn take_works() {
 		ExtBuilder::default()
-		.add_ids(vec![(51, 2_000), (61, 2_000)])
-		.build_and_execute(|| {
-			// given
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
-			);
+			.add_ids(vec![(51, 2_000), (61, 2_000)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					get_bags(),
+					vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
+				);
 
-			// when
-			let iteration =
-				VoterList::<Runtime>::iter().map(|node| *node.id()).take(4).collect::<Vec<_>>();
+				// when
+				let iteration =
+					VoterList::<Runtime>::iter().map(|node| *node.id()).take(4).collect::<Vec<_>>();
 
-			// then
-			assert_eq!(
-				iteration,
-				vec![
-					51, 61, // best bag, fully iterated
-					11, 21, // middle bag, partially iterated
-				]
-			);
-		})
+				// then
+				assert_eq!(
+					iteration,
+					vec![
+						51, 61, // best bag, fully iterated
+						11, 21, // middle bag, partially iterated
+					]
+				);
+			})
 	}
 
 	#[test]
@@ -268,7 +267,10 @@ mod voter_list {
 			assert!(node_31.is_misplaced(weight_20));
 
 			// then updating position moves it to the correct bag
-			assert_eq!(VoterList::<Runtime>::update_position_for(node_31, weight_20), Some((10, 20)));
+			assert_eq!(
+				VoterList::<Runtime>::update_position_for(node_31, weight_20),
+				Some((10, 20))
+			);
 
 			assert_eq!(get_bags(), vec![(20, vec![31]), (1_000, vec![11, 21, 101])]);
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);
@@ -447,8 +449,7 @@ mod bags {
 			// and the re-fetched node has bad pointers
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &11).unwrap(),
-				node(11, Some(101), None, bag_1000.bag_upper)
-				//         ^^^ despite being the bags head, it has a prev
+				node(11, Some(101), None, bag_1000.bag_upper) //         ^^^ despite being the bags head, it has a prev
 			);
 
 			assert_eq!(bag_1000, Bag { head: Some(11), tail: Some(11), bag_upper: 1_000 })

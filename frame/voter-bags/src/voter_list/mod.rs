@@ -398,6 +398,11 @@ pub struct Bag<T: Config> {
 }
 
 impl<T: Config> Bag<T> {
+	#[cfg(test)]
+	pub(crate) fn new(head: Option<T::AccountId>, tail: Option<T::AccountId>, bag_upper: VoteWeight) -> Self {
+		Self { head, tail, bag_upper }
+	}
+
 	/// Get a bag by its upper vote weight.
 	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
 		debug_assert!(

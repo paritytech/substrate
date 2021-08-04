@@ -194,7 +194,10 @@ impl<T: Config> Pallet<T> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
 	/// If the account changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(account: &T::AccountId, new_weight: VoteWeight) -> Option<(VoteWeight, VoteWeight)> {
+	pub fn do_rebag(
+		account: &T::AccountId,
+		new_weight: VoteWeight,
+	) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
 		let maybe_movement = voter_list::Node::<T>::from_id(&account)
