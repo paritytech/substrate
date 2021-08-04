@@ -220,6 +220,15 @@ test-prometheus-alerting-rules:
     - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml |
         promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
+check-polkadot-companion-status:
+  stage:                           build
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-env
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
 #### stage:                        test
 
 cargo-deny:
@@ -436,15 +445,6 @@ cargo-check-macos:
     - osx
 
 #### stage:                        build
-
-check-polkadot-companion-status:
-  stage:                           build
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
 check-polkadot-companion-build:
   stage:                           build
