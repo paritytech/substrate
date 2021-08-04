@@ -461,9 +461,6 @@ test-browser-node:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  needs:
-    - job:                         check-web-wasm
-      artifacts:                   false
   variables:
     <<:                                         *default-vars
     CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
