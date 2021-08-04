@@ -30,7 +30,7 @@ use sc_client_api::{
 	RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
 	RemoteReadChildRequest, RemoteReadRequest, Storage, StorageProof, StorageProvider,
 };
-use sc_executor::{NativeExecutor, NativeVersion, RuntimeVersion, WasmExecutionMethod};
+use sc_executor::{NativeExecutor, RuntimeVersion, WasmExecutionMethod};
 use sc_light::{
 	backend::{Backend, GenesisOrUnavailableState},
 	blockchain::{Blockchain, BlockchainCache},
