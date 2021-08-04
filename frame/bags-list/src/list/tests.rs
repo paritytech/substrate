@@ -267,10 +267,7 @@ mod voter_list {
 			assert!(node_31.is_misplaced(weight_20));
 
 			// then updating position moves it to the correct bag
-			assert_eq!(
-				List::<Runtime>::update_position_for(node_31, weight_20),
-				Some((10, 20))
-			);
+			assert_eq!(List::<Runtime>::update_position_for(node_31, weight_20), Some((10, 20)));
 
 			assert_eq!(get_bags(), vec![(20, vec![31]), (1_000, vec![11, 21, 101])]);
 			assert_eq!(get_voter_list_as_ids(), vec![11, 21, 101, 31]);

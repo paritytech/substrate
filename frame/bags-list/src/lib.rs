@@ -24,11 +24,11 @@
 use frame_election_provider_support::VoteWeight;
 use frame_system::ensure_signed;
 
+mod list;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
-mod list;
 pub mod weights;
 
 pub use pallet::*;
@@ -148,8 +148,7 @@ pub mod pallet {
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
 	#[pallet::storage]
-	pub(crate) type VoterBags<T: Config> =
-		StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub(crate) type VoterBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]

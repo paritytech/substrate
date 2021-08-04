@@ -399,7 +399,11 @@ pub struct Bag<T: Config> {
 
 impl<T: Config> Bag<T> {
 	#[cfg(test)]
-	pub(crate) fn new(head: Option<T::AccountId>, tail: Option<T::AccountId>, bag_upper: VoteWeight) -> Self {
+	pub(crate) fn new(
+		head: Option<T::AccountId>,
+		tail: Option<T::AccountId>,
+		bag_upper: VoteWeight,
+	) -> Self {
 		Self { head, tail, bag_upper }
 	}
 
