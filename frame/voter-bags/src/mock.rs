@@ -127,4 +127,8 @@ pub(crate) mod test_utils {
 			})
 			.collect::<Vec<_>>()
 	}
+
+	pub(crate) fn bag_as_ids(bag: &Bag<Runtime>) -> Vec<AccountId> {
+		bag.iter().map(|n| *n.id()).collect::<Vec<_>>()
+	}
 }
