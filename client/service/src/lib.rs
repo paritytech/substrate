@@ -348,28 +348,31 @@ fn start_rpc_servers<
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
 		sc_rpc_server::RpcMiddleware,
-	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
+	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>,
 >(
 	config: &Configuration,
 	mut gen_handler: H,
 	rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, Error> {
 	fn maybe_start_server<T, F>(
 		address: Option<SocketAddr>,
 		mut start: F,
-	) -> Result<Option<T>, io::Error>
+	) -> Result<Option<T>, Error>
 	where
-		F: FnMut(&SocketAddr) -> Result<T, io::Error>,
+		F: FnMut(&SocketAddr) -> Result<T, Error>,
 	{
 		address
 			.map(|mut address| {
-				start(&address).or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind RPC server to {}. Trying random port.", address);
-						address.set_port(0);
-						start(&address)
+				start(&address).or_else(|e| match e {
+					Error::Io(e) => match e.kind() {
+						io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
+							warn!("Unable to bind RPC server to {}. Trying random port.", address);
+							address.set_port(0);
+							start(&address)
+						},
+						_ => Err(e.into()),
 					},
-					_ => Err(e),
+					e => Err(e),
 				})
 			})
 			.transpose()
@@ -390,8 +393,9 @@ fn start_rpc_servers<
 				gen_handler(
 					sc_rpc::DenyUnsafe::No,
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
-				),
+				)?,
 			)
+			.map_err(Error::from)
 		}),
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
@@ -401,9 +405,10 @@ fn start_rpc_servers<
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http"),
-				),
+				)?,
 				config.rpc_max_payload,
 			)
+			.map_err(Error::from)
 		})?
 		.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(config.rpc_ws, |address| {
@@ -414,9 +419,10 @@ fn start_rpc_servers<
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws"),
-				),
+				)?,
 				config.rpc_max_payload,
 			)
+			.map_err(Error::from)
 		})?
 		.map(|s| waiting::WsServer(Some(s))),
 	)))
@@ -428,7 +434,7 @@ fn start_rpc_servers<
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
 		sc_rpc_server::RpcMiddleware,
-	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
+	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>,
 >(
 	_: &Configuration,
 	_: H,

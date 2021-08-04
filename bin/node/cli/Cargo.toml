@@ -77,6 +77,7 @@ sc-service = { version = "0.10.0-dev", default-features = false, path = "../../.
 sc-tracing = { version = "4.0.0-dev", path = "../../../client/tracing" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
+sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 
 # frame dependencies
 pallet-indices = { version = "4.0.0-dev", path = "../../../frame/indices" }

@@ -291,13 +291,13 @@ mod benchmarks {
 	#[test]
 	fn benchmarks_generate_unit_tests() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_value::<Test>());
-			assert_ok!(test_benchmark_other_name::<Test>());
-			assert_ok!(test_benchmark_sort_vector::<Test>());
-			assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
-			assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
-			assert_ok!(test_benchmark_no_components::<Test>());
-			assert_ok!(test_benchmark_variable_components::<Test>());
+			assert_ok!(Pallet::<Test>::test_benchmark_set_value());
+			assert_ok!(Pallet::<Test>::test_benchmark_other_name());
+			assert_ok!(Pallet::<Test>::test_benchmark_sort_vector());
+			assert_err!(Pallet::<Test>::test_benchmark_bad_origin(), "Bad origin");
+			assert_err!(Pallet::<Test>::test_benchmark_bad_verify(), "You forgot to sort!");
+			assert_ok!(Pallet::<Test>::test_benchmark_no_components());
+			assert_ok!(Pallet::<Test>::test_benchmark_variable_components());
 		});
 	}
 }
