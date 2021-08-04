@@ -151,9 +151,9 @@ dependencies = [
 
 [[package]]
 name = "arbitrary"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
+checksum = "237430fd6ed3740afe94eefcc278ae21e050285be882804e0d6e8695f0c94691"
 
 [[package]]
 name = "arrayref"
@@ -4723,6 +4723,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-all"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-election-provider-support",
+ "frame-executive",
+ "frame-metadata",
+ "frame-support",
+ "frame-support-procedural",
+ "frame-support-procedural-tools",
+ "frame-support-procedural-tools-derive",
+ "frame-support-test",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
+ "getrandom 0.2.3",
+ "pallet-assets",
+ "pallet-atomic-swap",
+ "pallet-aura",
+ "pallet-authority-discovery",
+ "pallet-authorship",
+ "pallet-babe",
+ "pallet-balances",
+ "pallet-bounties",
+ "pallet-collective",
+ "pallet-contracts",
+ "pallet-contracts-rpc",
+ "pallet-contracts-rpc-runtime-api",
+ "pallet-democracy",
+ "pallet-election-provider-multi-phase",
+ "pallet-elections",
+ "pallet-example",
+ "pallet-example-offchain-worker",
+ "pallet-example-parallel",
+ "pallet-gilt",
+ "pallet-grandpa",
+ "pallet-identity",
+ "pallet-im-online",
+ "pallet-indices",
+ "pallet-lottery",
+ "pallet-membership",
+ "pallet-mmr",
+ "pallet-mmr-primitives",
+ "pallet-mmr-rpc",
+ "pallet-multisig",
+ "pallet-nicks",
+ "pallet-node-authorization",
+ "pallet-offences",
+ "pallet-proxy",
+ "pallet-randomness-collective-flip",
+ "pallet-recovery",
+ "pallet-scheduler",
+ "pallet-scored-pool",
+ "pallet-session",
+ "pallet-society",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-staking-reward-fn",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-tips",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc",
+ "pallet-transaction-payment-rpc-runtime-api",
+ "pallet-transaction-storage",
+ "pallet-treasury",
+ "pallet-uniques",
+ "pallet-utility",
+ "pallet-vesting",
+ "sp-all",
+]
+
+[[package]]
 name = "pallet-assets"
 version = "4.0.0-dev"
 dependencies = [
@@ -8685,6 +8759,67 @@ dependencies = [
  "log",
  "rand 0.8.4",
  "sha-1 0.9.4",
+]
+
+[[package]]
+name = "sp-all"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.3",
+ "sp-api",
+ "sp-api-proc-macro",
+ "sp-api-test",
+ "sp-application-crypto",
+ "sp-application-crypto-test",
+ "sp-arithmetic",
+ "sp-arithmetic-fuzzer",
+ "sp-authority-discovery",
+ "sp-authorship",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-aura",
+ "sp-consensus-babe",
+ "sp-consensus-pow",
+ "sp-consensus-vrf",
+ "sp-core",
+ "sp-database",
+ "sp-debug-derive",
+ "sp-externalities",
+ "sp-finality-grandpa",
+ "sp-inherents",
+ "sp-io",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-maybe-compressed-blob",
+ "sp-npos-elections",
+ "sp-npos-elections-compact",
+ "sp-npos-elections-fuzzer",
+ "sp-offchain",
+ "sp-panic-handler",
+ "sp-rpc",
+ "sp-runtime",
+ "sp-runtime-interface",
+ "sp-runtime-interface-proc-macro",
+ "sp-runtime-interface-test",
+ "sp-runtime-interface-test-wasm",
+ "sp-runtime-interface-test-wasm-deprecated",
+ "sp-sandbox",
+ "sp-serializer",
+ "sp-session",
+ "sp-staking",
+ "sp-state-machine",
+ "sp-std",
+ "sp-storage",
+ "sp-tasks",
+ "sp-timestamp",
+ "sp-tracing",
+ "sp-transaction-pool",
+ "sp-transaction-storage-proof",
+ "sp-trie",
+ "sp-utils",
+ "sp-version",
+ "sp-wasm-interface",
 ]
 
 [[package]]
