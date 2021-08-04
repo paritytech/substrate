@@ -1,19 +1,19 @@
 [workspace]
 members = [
-	"bin/node-template/node",
-	"bin/node-template/runtime",
-	"bin/node-template/pallets/template",
-	"bin/node/bench",
-	"bin/node/browser-testing",
-	"bin/node/cli",
-	"bin/node/executor",
-	"bin/node/primitives",
-	"bin/node/rpc-client",
-	"bin/node/rpc",
-	"bin/node/runtime",
-	"bin/node/testing",
-	"bin/utils/subkey",
-	"bin/utils/chain-spec-builder",
+	# "bin/node-template/node",
+	# "bin/node-template/runtime",
+	# "bin/node-template/pallets/template",
+	# "bin/node/bench",
+	# "bin/node/browser-testing",
+	# "bin/node/cli",
+	# "bin/node/executor",
+	# "bin/node/primitives",
+	# "bin/node/rpc-client",
+	# "bin/node/rpc",
+	# "bin/node/runtime",
+	# "bin/node/testing",
+	# "bin/utils/subkey",
+	# "bin/utils/chain-spec-builder",
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
@@ -257,3 +257,6 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch."https://github.com/mangata-finance/open-runtime-module-library"]
+orml-tokens = {path="../tokens/tokens"}
