@@ -167,10 +167,10 @@ pub mod pallet {
 		/// Anyone can call this function about any stash.
 		// #[pallet::weight(T::WeightInfo::rebag())]
 		#[pallet::weight(123456789)] // TODO
-		pub fn rebag(origin: OriginFor<T>, stash: T::AccountId) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let weight = T::StakingVoteWeight::staking_vote_weight(&stash);
-			Pallet::<T>::do_rebag(&stash, weight);
+			let weight = T::StakingVoteWeight::staking_vote_weight(&account);
+			Pallet::<T>::do_rebag(&account, weight);
 			Ok(())
 		}
 	}
@@ -194,13 +194,13 @@ impl<T: Config> Pallet<T> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
 	/// If the account changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(id: &T::AccountId, new_weight: VoteWeight) -> Option<(VoteWeight, VoteWeight)> {
+	pub fn do_rebag(account: &T::AccountId, new_weight: VoteWeight) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = voter_list::Node::<T>::from_id(&id)
+		let maybe_movement = voter_list::Node::<T>::from_id(&account)
 			.and_then(|node| VoterList::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(id.clone(), from, to));
+			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
 		};
 		maybe_movement
 	}
