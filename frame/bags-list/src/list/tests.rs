@@ -238,7 +238,6 @@ mod voter_list {
 
 			// get the new updated node; try and update the position with no change in weight.
 			let node = Node::<Runtime>::get(&1).unwrap();
-			// TODO: we can pass a ref to node to this function as well.
 			assert_storage_noop!(assert_eq!(
 				List::<Runtime>::update_position_for(node.clone(), 20),
 				None

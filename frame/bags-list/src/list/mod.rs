@@ -219,7 +219,7 @@ impl<T: Config> List<T> {
 			count += 1;
 		});
 
-		count // TODO check if this is really necessary
+		count
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list. Does not check for duplicates.
