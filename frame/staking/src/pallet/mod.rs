@@ -518,7 +518,7 @@ pub mod pallet {
 					// TODO: later on, fix all the tests that trigger these warnings, and
 					// make these assertions. Genesis stakers should all be correct!
 					log!(warn, "failed to bond staker at genesis: {:?}.", why);
-					continue;
+					continue
 				}
 				match status {
 					StakerStatus::Validator => {
@@ -528,7 +528,7 @@ pub mod pallet {
 						) {
 							log!(warn, "failed to validate staker at genesis: {:?}.", why);
 						}
-					}
+					},
 					StakerStatus::Nominator(votes) => {
 						if let Err(why) = <Pallet<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
@@ -536,7 +536,7 @@ pub mod pallet {
 						) {
 							log!(warn, "failed to nominate staker at genesis: {:?}.", why);
 						}
-					}
+					},
 					_ => (),
 				};
 			}
@@ -783,7 +783,9 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				T::SortedListProvider::on_update(&stash, Self::weight_of_fn()(&ledger.stash));
+				if T::SortedListProvider::contains(&stash) {
+					T::SortedListProvider::on_update(&stash, Self::weight_of_fn()(&ledger.stash));
+				}
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 				Self::update_ledger(&controller, &ledger);
 			}
@@ -845,10 +847,9 @@ pub mod pallet {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
-				T::SortedListProvider::on_update(
-					&ledger.stash,
-					Self::weight_of_fn()(&ledger.stash),
-				);
+				if T::SortedListProvider::contains(&ledger.stash) {
+					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				}
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1341,13 +1342,11 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
-			T::SortedListProvider::on_update(&ledger.stash, Self::weight_of_fn()(&ledger.stash)); // TODO we already have the ledger here.
-			Ok(Some(
-				35 * WEIGHT_PER_MICROS
-					+ 50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight)
-					+ T::DbWeight::get().reads_writes(3, 2),
-			)
-			.into())
+			if T::SortedListProvider::contains(&ledger.stash) {
+				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			}
+			// TODO: fix this in master earlier.
+			Ok(Some(T::WeightInfo::rebond(ledger.unlocking.len() as u32)).into())
 		}
 
 		/// Set `HistoryDepth` value. This function will delete any history information

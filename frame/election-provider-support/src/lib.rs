@@ -310,6 +310,8 @@ pub trait SortedListProvider<AccountId> {
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 	/// get the current count of voters.
 	fn count() -> u32;
+	/// Return true if the insertion can happen.
+	fn contains(voter: &AccountId) -> bool;
 	// Hook for inserting a voter.
 	fn on_insert(voter: AccountId, weight: VoteWeight);
 	/// Hook for updating a single voter.

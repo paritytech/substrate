@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Basic implementation of a doubly-linked list
+//! Basic implementation of a doubly-linked list.
+
+// TODO: further testings: fuzzer for the outer API, dev chain with a lot of nominators.
 
 use crate::Config;
 use codec::{Decode, Encode};
@@ -226,7 +228,6 @@ impl<T: Config> List<T> {
 	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
 		// TODO: can check if this voter exists as a node by checking if `voter` exists in the nodes
 		// map and return early if it does.
-		// OR create a can_insert
 
 		let bag_weight = notional_bag_for::<T>(weight);
 		crate::log!(
@@ -258,6 +259,8 @@ impl<T: Config> List<T> {
 	fn remove_many<'a>(voters: impl IntoIterator<Item = &'a T::AccountId>) {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
+
+		// TODO: assert that it is noop with bad data.
 
 		for voter_id in voters.into_iter() {
 			let node = match Node::<T>::get(voter_id) {
@@ -311,8 +314,8 @@ impl<T: Config> List<T> {
 
 			// clear the old bag head/tail pointers as necessary
 			if !node.is_terminal() {
-				// this node is not a head or a tail, so we can just cut it out of the list.
-				// update and put the prev and next of this node, we do `node.put` later.
+				// this node is not a head or a tail, so we can just cut it out of the list. update
+				// and put the prev and next of this node, we do `node.put` inside `insert_note`.
 				node.excise();
 			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
 				// this is a head or tail, so the bag must be updated.
@@ -326,9 +329,6 @@ impl<T: Config> List<T> {
 				);
 				debug_assert!(false, "every node must have an extant bag associated with it");
 			}
-
-			// TODO: go through all APIs, and make a standard out of when things will put and when
-			// they don't.
 
 			// put the voter into the appropriate new bag.
 			let new_bag_upper = notional_bag_for::<T>(new_weight);
