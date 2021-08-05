@@ -1,5 +1,4 @@
-use frame_support::pallet_prelude::Weight;
-use frame_support::weights::constants::RocksDbWeight;
+use frame_support::{pallet_prelude::Weight, weights::constants::RocksDbWeight};
 
 pub trait WeightInfo {
 	fn rebag_middle() -> Weight;

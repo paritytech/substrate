@@ -185,7 +185,7 @@ impl<T: Config> List<T> {
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
 	/// `.take(n)`.
-	pub fn iter() -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter() -> impl Iterator<Item = Node<T>> {
 		// We need a touch of special handling here: because we permit `T::BagThresholds` to
 		// omit the final bound, we need to ensure that we explicitly include that threshold in the
 		// list.
@@ -245,7 +245,10 @@ impl<T: Config> List<T> {
 		let mut bag = Bag::<T>::get_or_make(bag_weight);
 		bag.insert(voter);
 
-		// TODO: why are we writing to the bag of the voter is neither head or tail????
+		// new inserts are always the tail, so we must write the bag.
+		// TODO: @kianenigma maybe an optimization is to make the tail actually be a dummy node in storage
+		// then we could just update the tail dummy to point at the inserted node.. but then we have
+		// to write the tail dummy to storage... which doesn't seem any better
 		bag.put();
 
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
@@ -262,7 +265,7 @@ impl<T: Config> List<T> {
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
 	fn remove_many<'a>(voters: impl IntoIterator<Item = &'a T::AccountId>) {
-		let mut bags = BTreeMap::new();
+		let mut bags = BTreeMap::<VoteWeight, (Bag<T>, bool)>::new();
 		let mut count = 0;
 
 		for voter_id in voters.into_iter() {
@@ -272,19 +275,31 @@ impl<T: Config> List<T> {
 			};
 			count += 1;
 
-			// clear the bag head/tail pointers as necessary
-			let bag = bags
-				.entry(node.bag_upper)
-				.or_insert_with(|| Bag::<T>::get_or_make(node.bag_upper));
-			bag.remove_node(&node);
+			// check if node.is_terminal
+
+			if !node.is_terminal {
+				// this node is not a head or a tail and thus the bag does not need to be updated
+				node.excise()
+			} else {
+				// this node is a head or tail, so the bag needs to be updated
+				let bag = bags
+					.entry(node.bag_upper)
+					.or_insert_with(|| (Bag::<T>::get_or_make(node.bag_upper), false));
+				if bag.0.remove_node(&node) {
+					// if the bag head or tail was updated, mark that the bag should be put.
+					bag.1 = true;
+				}
+			}
 
 			// now get rid of the node itself
 			crate::VoterNodes::<T>::remove(voter_id);
 			crate::VoterBagFor::<T>::remove(voter_id);
 		}
 
-		for (_, bag) in bags {
-			bag.put();
+		for (_, (bag, should_put)) in bags {
+			if should_put {
+				bag.put();
+			}
 		}
 
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
@@ -314,9 +329,14 @@ impl<T: Config> List<T> {
 			// https://github.com/paritytech/substrate/pull/9468/files/83289aa4a15d61e6cb334f9d7e7f6804cb7e3537..44875c511ebdc79270100720320c8e3d2d56eb4a#r680559166
 
 			// clear the old bag head/tail pointers as necessary
-			if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
-				bag.remove_node(&node);
-				bag.put();
+			if !node.is_terminal {
+				// this node is not a head or a tail, so we do not need to update its current bag.
+				node.excise();
+			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
+				if bag.remove_node(&node) {
+					// only right the bag to storage if the bag head OR tail changed.
+					bag.put();
+				}
 			} else {
 				crate::log!(
 					error,
@@ -461,7 +481,13 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
 	fn insert(&mut self, id: T::AccountId) {
-		self.insert_node(Node::<T> { id, prev: None, next: None, bag_upper: self.bag_upper });
+		self.insert_node(Node::<T> {
+			id,
+			prev: None,
+			next: None,
+			bag_upper: self.bag_upper,
+			is_terminal: false,
+		});
 	}
 
 	/// Insert a voter node into this bag.
@@ -482,20 +508,22 @@ impl<T: Config> Bag<T> {
 			};
 		}
 
-		// update this node now
+		// update this node now, treating as the new tail.
 		let id = node.id.clone();
 		node.prev = self.tail.clone();
 		node.next = None;
+		node.is_terminal = true;
 		node.put();
 
 		// update the previous tail
 		if let Some(mut old_tail) = self.tail() {
 			old_tail.next = Some(id.clone());
+			old_tail.is_terminal = false;
 			old_tail.put();
 		}
 		self.tail = Some(id.clone());
 
-		// ensure head exist. This is typically only set when the length of the bag is just 1, i.e.
+		// ensure head exist. This is only set when the length of the bag is just 1, i.e.
 		// if this is the first insertion into the bag. In this case, both head and tail should
 		// point to the same voter node.
 		if self.head.is_none() {
@@ -507,7 +535,7 @@ impl<T: Config> Bag<T> {
 		crate::VoterBagFor::<T>::insert(id, self.bag_upper);
 	}
 
-	/// Remove a voter node from this bag.
+	/// Remove a voter node from this bag. Returns true iff the bag's head or tail is updated.
 	///
 	/// This is private on purpose because it doesn't check whether this bag contains the voter in
 	/// the first place. Generally, use [`List::remove`] instead.
@@ -515,25 +543,48 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
 	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
 	/// to update storage for the bag and `node`.
-	fn remove_node(&mut self, node: &Node<T>) {
-		// Update previous node.
+	//
+	// TODO, @kianenigma if decide to keep is_terminal then we don't need to return a bool here
+	// afaict keeping is_terminal is a better optimization because in some case we don't need
+	// to fetch the bag remove is called on.
+	fn remove_node(&mut self, node: &Node<T>) -> bool {
+		let mut removed = false;
+
+		// clear the bag head/tail pointers as necessary
+		if self.tail.as_ref() == Some(&node.id) {
+			self.tail = node.prev.clone();
+			removed = true;
+		}
+		if self.head.as_ref() == Some(&node.id) {
+			self.head = node.next.clone();
+			removed = true;
+		}
+
+		// set neighbors to point to each other. Note that instead of using node.excise here we
+		// recreate some of the logic but update the neighboring nodes `is_terminal` in case they
+		// become a head or tail.
 		if let Some(mut prev) = node.prev() {
 			prev.next = node.next.clone();
+
+			if self.tail.as_ref() == Some(&prev.id) {
+				// if prev is the new tail, we mark it as terminal
+				prev.is_terminal = true;
+			}
+
 			prev.put();
 		}
-		// Update next node.
 		if let Some(mut next) = node.next() {
 			next.prev = node.prev.clone();
+
+			if self.head.as_ref() == Some(&next.id) {
+				// if next is the new head, we mark it as terminal
+				next.is_terminal = true;
+			}
+
 			next.put();
 		}
 
-		// clear the bag head/tail pointers as necessary
-		if self.head.as_ref() == Some(&node.id) {
-			self.head = node.next.clone();
-		}
-		if self.tail.as_ref() == Some(&node.id) {
-			self.tail = node.prev.clone();
-		}
+		removed
 	}
 
 	/// Sanity check this bag.
@@ -622,6 +673,22 @@ impl<T: Config> Node<T> {
 		crate::VoterNodes::<T>::insert(self.id.clone(), self);
 	}
 
+	/// Update neighboring nodes to point to reach other.
+	///
+	/// Does _not_ update storage, so the user may need to call `self.put`.
+	fn excise(&self) {
+		// Update previous node.
+		if let Some(mut prev) = self.prev() {
+			prev.next = self.next.clone();
+			prev.put();
+		}
+		// Update next self.
+		if let Some(mut next) = self.next() {
+			next.prev = self.prev.clone();
+			next.put();
+		}
+	}
+
 	/// Get the previous node in the bag.
 	fn prev(&self) -> Option<Node<T>> {
 		self.prev.as_ref().and_then(|id| self.in_bag(id))
@@ -635,6 +702,10 @@ impl<T: Config> Node<T> {
 	/// `true` when this voter is in the wrong bag.
 	fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
+	}
+
+	fn is_terminal(&self) -> bool {
+		self.head.is_none() || self.tail.is_none()
 	}
 
 	/// Get the underlying voter.

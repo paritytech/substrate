@@ -68,7 +68,7 @@ mod extrinsics {
 
 			assert_eq!(Bag::<Runtime>::get(10).unwrap(), Bag::new(Some(1), Some(3), 10));
 			assert_eq!(Bag::<Runtime>::get(1000).unwrap(), Bag::new(Some(2), Some(2), 1000));
-			assert_eq!(get_voter_list_as_ids(), vec![2u32, 1, 4, 3]);
+			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
 			// when
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
@@ -258,7 +258,7 @@ mod sorted_list_provider {
 			<BagsList as SortedListProvider<AccountId>>::on_remove(&2);
 
 			// then
-			assert_eq!(get_voter_list_as_ids(), vec![3, 4, 1]);
+			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
 			ensure_left(2, 3);
 
@@ -266,18 +266,18 @@ mod sorted_list_provider {
 			<BagsList as SortedListProvider<AccountId>>::on_remove(&1);
 
 			// then
-			assert_eq!(get_voter_list_as_ids(), vec![3, 4]);
+			assert_eq!(get_list_as_ids(), vec![3, 4]);
 			assert_eq!(get_bags(), vec![(1_000, vec![3, 4])]);
 			ensure_left(1, 2);
 
 			// when removing all remaining voters
 			<BagsList as SortedListProvider<AccountId>>::on_remove(&4);
-			assert_eq!(get_voter_list_as_ids(), vec![3]);
+			assert_eq!(get_list_as_ids(), vec![3]);
 			ensure_left(4, 1);
 			<BagsList as SortedListProvider<AccountId>>::on_remove(&3);
 
 			// then the storage is completely cleaned up
-			assert_eq!(get_voter_list_as_ids(), Vec::<AccountId>::new());
+			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 			ensure_left(3, 0);
 		});
 	}

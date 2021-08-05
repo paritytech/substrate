@@ -136,7 +136,7 @@ pub(crate) mod test_utils {
 	}
 
 	// TODO change this to get_list_as_ids
-	pub(crate) fn get_voter_list_as_ids() -> Vec<AccountId> {
+	pub(crate) fn get_list_as_ids() -> Vec<AccountId> {
 		List::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>()
 	}
 }

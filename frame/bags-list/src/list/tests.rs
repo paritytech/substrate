@@ -9,7 +9,8 @@ use frame_support::{assert_ok, assert_storage_noop};
 fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// syntactic sugar to create a raw node
-		let node = |id, prev, next| Node::<Runtime> { id, prev, next, bag_upper: 0 };
+		let node =
+			|id, prev, next, is_terminal| Node::<Runtime> { id, prev, next, bag_upper: 0, is_terminal };
 
 		assert_eq!(CounterForVoters::<Runtime>::get(), 4);
 		assert_eq!(VoterBagFor::<Runtime>::iter().count(), 4);
@@ -29,13 +30,13 @@ fn basic_setup_works() {
 		);
 
 		assert_eq!(VoterBagFor::<Runtime>::get(2).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3)));
+		assert_eq!(VoterNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), true));
 
 		assert_eq!(VoterBagFor::<Runtime>::get(3).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4)));
+		assert_eq!(VoterNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4), false));
 
 		assert_eq!(VoterBagFor::<Runtime>::get(4).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None));
+		assert_eq!(VoterNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None, true));
 
 		assert_eq!(VoterBagFor::<Runtime>::get(1).unwrap(), 10);
 		assert_eq!(VoterNodes::<Runtime>::get(1).unwrap(), node(1, None, None));
@@ -110,7 +111,7 @@ mod voter_list {
 
 				// then
 				assert_eq!(
-					get_voter_list_as_ids(),
+					get_list_as_ids(),
 					vec![
 						5, 6, // best bag
 						2, 3, 4, // middle bag
@@ -123,7 +124,7 @@ mod voter_list {
 
 				// then
 				assert_eq!(
-					get_voter_list_as_ids(),
+					get_list_as_ids(),
 					vec![
 						5, 6, // best bag
 						2, 3, 4, // middle bag
@@ -168,14 +169,14 @@ mod voter_list {
 
 			// then
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4, 5])]);
-			assert_eq!(get_voter_list_as_ids(), vec![2, 3, 4, 5, 1]);
+			assert_eq!(get_list_as_ids(), vec![2, 3, 4, 5, 1]);
 
 			// when inserting into a non-existent bag
 			List::<Runtime>::insert(6, 1_001);
 
 			// then
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4, 5]), (2000, vec![6])]);
-			assert_eq!(get_voter_list_as_ids(), vec![6, 2, 3, 4, 5, 1]);
+			assert_eq!(get_list_as_ids(), vec![6, 2, 3, 4, 5, 1]);
 		});
 	}
 
@@ -197,7 +198,7 @@ mod voter_list {
 			List::<Runtime>::remove(&42);
 
 			// then nothing changes
-			assert_eq!(get_voter_list_as_ids(), vec![2, 3, 4, 1]);
+			assert_eq!(get_list_as_ids(), vec![2, 3, 4, 1]);
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4])]);
 			assert_eq!(CounterForVoters::<Runtime>::get(), 4);
 
@@ -205,7 +206,7 @@ mod voter_list {
 			List::<Runtime>::remove(&2);
 
 			// then
-			assert_eq!(get_voter_list_as_ids(), vec![3, 4, 1]);
+			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![3, 4])]);
 			ensure_left(2, 3);
 
@@ -213,7 +214,7 @@ mod voter_list {
 			List::<Runtime>::remove(&1);
 
 			// then
-			assert_eq!(get_voter_list_as_ids(), vec![3, 4]);
+			assert_eq!(get_list_as_ids(), vec![3, 4]);
 			assert_eq!(get_bags(), vec![(1000, vec![3, 4])]);
 			ensure_left(1, 2);
 			// bag 10 is removed
@@ -222,11 +223,11 @@ mod voter_list {
 			// remove remaining voters to make sure storage cleans up as expected
 			List::<Runtime>::remove(&3);
 			ensure_left(3, 1);
-			assert_eq!(get_voter_list_as_ids(), vec![4]);
+			assert_eq!(get_list_as_ids(), vec![4]);
 
 			List::<Runtime>::remove(&4);
 			ensure_left(4, 0);
-			assert_eq!(get_voter_list_as_ids(), Vec::<AccountId>::new());
+			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 
 			// bags are deleted via removals
 			assert_eq!(VoterBags::<Runtime>::iter().count(), 0);
@@ -327,7 +328,13 @@ mod bags {
 	#[test]
 	fn insert_node_happy_paths_works() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			let node = |id, bag_upper| Node::<Runtime> { id, prev: None, next: None, bag_upper };
+			let node = |id, bag_upper| Node::<Runtime> {
+				id,
+				prev: None,
+				next: None,
+				bag_upper,
+				is_terminal: false,
+			};
 
 			// when inserting into a bag with 1 node
 			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
@@ -349,15 +356,26 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_20), vec![62]);
 
 			// when inserting a node pointing to the accounts not in the bag
-			let node_61 =
-				Node::<Runtime> { id: 61, prev: Some(21), next: Some(101), bag_upper: 20 };
+			let node_61 = Node::<Runtime> {
+				id: 61,
+				prev: Some(21),
+				next: Some(101),
+				bag_upper: 20,
+				is_terminal: false,
+			};
 			bag_20.insert_node(node_61);
 			// then ids are in order
 			assert_eq!(bag_as_ids(&bag_20), vec![62, 61]);
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
 				Node::<Runtime>::get(20, &61).unwrap(),
-				Node::<Runtime> { id: 61, prev: Some(62), next: None, bag_upper: 20 }
+				Node::<Runtime> {
+					id: 61,
+					prev: Some(62),
+					next: None,
+					bag_upper: 20,
+					is_terminal: false
+				}
 			);
 
 			// state of all bags is as expected
@@ -372,12 +390,18 @@ mod bags {
 	// Document improper ways `insert_node` may be getting used.
 	#[test]
 	fn insert_node_bad_paths_documented() {
-		let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
+		let node = |id, prev, next, bag_upper, is_terminal| Node::<Runtime> {
+			id,
+			prev,
+			next,
+			bag_upper,
+			is_terminal,
+		};
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
 			// bag.
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
-			bag_1000.insert_node(node(42, Some(1), Some(1), 0));
+			bag_1000.insert_node(node(42, Some(1), Some(1), 0, false));
 
 			// then the proper perv and next is set.
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4, 42]);
@@ -385,7 +409,7 @@ mod bags {
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &42).unwrap(),
-				node(42, Some(4), None, bag_1000.bag_upper)
+				node(42, Some(4), None, bag_1000.bag_upper, true)
 			);
 		});
 
@@ -395,18 +419,18 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4]);
 
 			// when inserting a node with duplicate id 3
-			bag_1000.insert_node(node(3, None, None, bag_1000.bag_upper));
+			bag_1000.insert_node(node(3, None, None, bag_1000.bag_upper, false));
 
 			// then all the nodes after the duplicate are lost (because it is set as the tail)
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3]);
 			// also in the full iteration, 2 and 3 are from the 1000 bag and 1 from bag 10.
-			assert_eq!(get_voter_list_as_ids(), vec![2, 3, 1]);
+			assert_eq!(get_list_as_ids(), vec![2, 3, 1]);
 
 			// and the last accessible node has an **incorrect** prev pointer.
 			// TODO: consider doing a check on insert, it is cheap.
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &3).unwrap(),
-				node(3, Some(4), None, bag_1000.bag_upper)
+				node(3, Some(4), None, bag_1000.bag_upper, false)
 			);
 		});
 
@@ -414,7 +438,7 @@ mod bags {
 			// when inserting a duplicate id of the head
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4]);
-			bag_1000.insert_node(node(2, None, None, 0));
+			bag_1000.insert_node(node(2, None, None, 0, false));
 
 			// then all nodes after the head are lost
 			assert_eq!(bag_as_ids(&bag_1000), vec![2]);
@@ -422,7 +446,7 @@ mod bags {
 			// and the re-fetched node has bad pointers
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &2).unwrap(),
-				node(2, Some(4), None, bag_1000.bag_upper)
+				node(2, Some(4), None, bag_1000.bag_upper, true)
 			);
 			//         ^^^ despite being the bags head, it has a prev
 
@@ -435,7 +459,13 @@ mod bags {
 	#[should_panic = "system logic error: inserting a node who has the id of tail"]
 	fn insert_node_duplicate_tail_panics_with_debug_assert() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
+			let node = |id, prev, next, bag_upper| Node::<Runtime> {
+				id,
+				prev,
+				next,
+				bag_upper,
+				is_terminal: false,
+			};
 
 			// given
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4])],);
@@ -562,6 +592,7 @@ mod bags {
 				prev: None,
 				next: Some(3),
 				bag_upper: 10, // should be 1_000
+				is_terminal: false,
 			};
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 

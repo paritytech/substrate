@@ -3,7 +3,7 @@
 use super::*;
 use crate::list::{Bag, List};
 // use frame_benchmarking::{account, whitelisted_caller};
-use frame_benchmarking::{account};
+use frame_benchmarking::account;
 use frame_support::traits::Get;
 // use frame_system::RawOrigin;
 
@@ -95,7 +95,6 @@ frame_benchmarking::benchmarks! {
 
 	// }
 }
-
 
 use frame_benchmarking::impl_benchmark_test_suite;
 impl_benchmark_test_suite!(
