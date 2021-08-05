@@ -71,7 +71,7 @@ sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-au
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
-sc-finality-grandpa-warp-sync = { version = "0.10.0-dev", path = "../../../client/finality-grandpa-warp-sync", optional = true }
+sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
@@ -147,7 +147,6 @@ cli = [
 	"frame-benchmarking-cli",
 	"substrate-frame-cli",
 	"sc-service/db",
-	"sc-finality-grandpa-warp-sync",
 	"structopt",
 	"substrate-build-script-utils",
 	"try-runtime-cli",

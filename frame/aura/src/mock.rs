@@ -20,13 +20,17 @@
 #![cfg(test)]
 
 use crate as pallet_aura;
-use frame_support::{parameter_types, traits::GenesisBuild};
-use sp_consensus_aura::ed25519::AuthorityId;
+use frame_support::{
+	parameter_types,
+	traits::{DisabledValidators, GenesisBuild},
+};
+use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
 use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::IdentityLookup,
 };
+use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -83,8 +87,32 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
+thread_local! {
+	static DISABLED_VALIDATORS: RefCell<Vec<AuthorityIndex>> = RefCell::new(Default::default());
+}
+
+pub struct MockDisabledValidators;
+
+impl MockDisabledValidators {
+	pub fn disable_validator(index: AuthorityIndex) {
+		DISABLED_VALIDATORS.with(|v| {
+			let mut disabled = v.borrow_mut();
+			if let Err(i) = disabled.binary_search(&index) {
+				disabled.insert(i, index);
+			}
+		})
+	}
+}
+
+impl DisabledValidators for MockDisabledValidators {
+	fn is_disabled(index: AuthorityIndex) -> bool {
+		DISABLED_VALIDATORS.with(|v| v.borrow().binary_search(&index).is_ok())
+	}
+}
+
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
+	type DisabledValidators = MockDisabledValidators;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {

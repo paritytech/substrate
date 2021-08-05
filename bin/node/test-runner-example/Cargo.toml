@@ -25,5 +25,4 @@ sc-executor = { path = "../../../client/executor" }
 sc-consensus = { path = "../../../client/consensus/common" }
 
 sp-runtime = { path = "../../../primitives/runtime" }
-sp-consensus = { path = "../../../primitives/consensus/common" }
 sp-keyring = { path = "../../../primitives/keyring" }

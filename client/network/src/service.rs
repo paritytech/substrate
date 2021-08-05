@@ -68,8 +68,8 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
+use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
-use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
@@ -186,6 +186,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		);
 
 		let default_notif_handshake_message = Roles::from(&params.role).encode();
+
+		let (warp_sync_provider, warp_sync_protocol_config) = match params.warp_sync {
+			Some((p, c)) => (Some(p), Some(c)),
+			None => (None, None),
+		};
+
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
@@ -203,6 +209,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				.collect(),
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
+			warp_sync_provider,
 		)?;
 
 		// List of multiaddresses that we know in the network.
@@ -346,6 +353,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					discovery_config,
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
+					warp_sync_protocol_config,
 					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
@@ -461,6 +469,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
 			state_sync: status.state_sync,
+			warp_sync: status.warp_sync,
 		}
 	}
 
@@ -1265,7 +1274,7 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a Netwo
 	}
 }
 
-impl<B: BlockT, H: ExHashT> sp_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
+impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		NetworkService::request_justification(self, hash, number);
 	}
@@ -2104,7 +2113,7 @@ impl<'a, B: BlockT> Link<B> for NetworkLink<'a, B> {
 		&mut self,
 		imported: usize,
 		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) {
 		self.protocol
 			.behaviour_mut()
