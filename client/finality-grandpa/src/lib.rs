@@ -64,7 +64,7 @@ use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
-	TransactionFor,
+	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
@@ -119,6 +119,7 @@ mod notification;
 mod observer;
 mod until_imported;
 mod voting_rule;
+pub mod warp_proof;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
@@ -335,6 +336,7 @@ pub trait ClientForGrandpa<Block, BE>:
 	+ ProvideRuntimeApi<Block>
 	+ ExecutorProvider<Block>
 	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+	+ StorageProvider<Block, BE>
 where
 	BE: Backend<Block>,
 	Block: BlockT,
@@ -353,7 +355,8 @@ where
 		+ BlockchainEvents<Block>
 		+ ProvideRuntimeApi<Block>
 		+ ExecutorProvider<Block>
-		+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,
+		+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+		+ StorageProvider<Block, BE>,
 {
 }
 

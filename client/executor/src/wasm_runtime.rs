@@ -143,7 +143,7 @@ impl VersionedRuntime {
 }
 
 const MAX_RUNTIMES: usize = 2;
-const MAX_OFFCHAIN_RUNTIME_INSTANCES: usize = 1;
+const MAX_OFFCHAIN_RUNTIME_INSTANCES: usize = 2;
 
 /// Cache for the runtimes.
 ///
@@ -179,7 +179,10 @@ impl RuntimeCache {
 	///
 	/// `cache_path` allows to specify an optional directory where the executor can store files
 	/// for caching.
-	pub fn new(max_consensus_runtime_instances: usize, cache_path: Option<PathBuf>) -> RuntimeCache {
+	pub fn new(
+		max_consensus_runtime_instances: usize,
+		cache_path: Option<PathBuf>,
+	) -> RuntimeCache {
 		RuntimeCache {
 			consensus_runtimes: Default::default(),
 			offchain_runtimes: Default::default(),
@@ -348,6 +351,7 @@ pub fn create_wasm_runtime_with_code(
 			blob,
 			sc_executor_wasmtime::Config {
 				heap_pages: heap_pages as u32,
+				max_memory_pages: None,
 				allow_missing_func_imports,
 				cache_path: cache_path.map(ToOwned::to_owned),
 				semantics: sc_executor_wasmtime::Semantics {
