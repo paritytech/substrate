@@ -285,7 +285,7 @@ impl<T: Config> List<T> {
 				let bag = bags
 					.entry(node.bag_upper)
 					.or_insert_with(|| (Bag::<T>::get_or_make(node.bag_upper), false));
-				if bag.0.remove_node(&node) {
+				if bag.0.remove_node(&node) { // TODO remove node doesn't need this bc is_terminal 
 					// if the bag head or tail was updated, mark that the bag should be put.
 					bag.1 = true;
 				}
@@ -333,7 +333,7 @@ impl<T: Config> List<T> {
 				// this node is not a head or a tail, so we do not need to update its current bag.
 				node.excise();
 			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
-				if bag.remove_node(&node) {
+				if bag.remove_node(&node) { // TODO remove node doesn't need this bc is_terminal 
 					// only right the bag to storage if the bag head OR tail changed.
 					bag.put();
 				}
