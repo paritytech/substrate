@@ -13,10 +13,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-# Parity
+# parity
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
-# Primitives
+# primitives
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
@@ -25,7 +25,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
-# Third party
+# third party
 log = { version = "0.4.14", default-features = false }
 
 # Optional imports for benchmarking
@@ -35,7 +35,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core", optional = tr
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", optional = true, default-features = false }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true, default-features = false }
 
-# Optional imports for making voter bags lists
+# optional imports for making voter bags lists
 chrono = { version = "0.4.19", optional = true }
 git2 = { version = "0.13.20", default-features = false, optional = true }
 num-format = { version = "0.4.0", optional = true }

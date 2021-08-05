@@ -1,0 +1,24 @@
+[package]
+name = "node-runtime-bag-thresholds"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Bag threshold generation script for pallet-bag-list and node-runtime."
+readme = "README.md"
+
+[dependencies]
+node-runtime = { version = "3.0.0-dev", path = "../../../bin/node/runtime" }
+
+# FRAME
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list", features = ["make-bags"] }
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
+
+# primitives
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+
+# third-party
+structopt = "0.3.21"
