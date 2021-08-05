@@ -4470,10 +4470,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-runtime-voter-bags"
+name = "node-runtime-bag-thresholds"
 version = "3.0.0"
 dependencies = [
+ "frame-support",
  "node-runtime",
+ "pallet-bags-list",
  "pallet-staking",
  "sp-io",
  "structopt",
@@ -4882,11 +4884,14 @@ dependencies = [
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 dependencies = [
+ "chrono",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
+ "git2",
  "log",
+ "num-format",
  "pallet-balances",
  "parity-scale-codec",
  "sp-core",

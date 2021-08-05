@@ -83,8 +83,7 @@ impl<T: Config> List<T> {
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
 		Self::clear();
-		Self::insert_many(all, weight_of);
-		0 // TODO
+		Self::insert_many(all, weight_of)
 	}
 
 	/// Migrate the voter list from one set of thresholds to another.
@@ -150,7 +149,7 @@ impl<T: Config> List<T> {
 		let weight_of = T::VoteWeightProvider::vote_weight;
 		Self::remove_many(affected_accounts.iter().map(|voter| voter));
 		let num_affected = affected_accounts.len() as u32;
-		Self::insert_many(affected_accounts.into_iter(), weight_of);
+		let _ = Self::insert_many(affected_accounts.into_iter(), weight_of);
 
 		// we couldn't previously remove the old bags because both insertion and removal assume that
 		// it's always safe to add a bag if it's not present. Now that that's sorted, we can get rid
@@ -212,11 +211,15 @@ impl<T: Config> List<T> {
 	fn insert_many(
 		voters: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
-	) {
+	) -> u32 {
+		let mut count = 0;
 		voters.into_iter().for_each(|v| {
 			let weight = weight_of(&v);
 			Self::insert(v, weight);
+			count += 1;
 		});
+
+		count // TODO check if this is really necessary
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list. Does not check for duplicates.
@@ -269,10 +272,8 @@ impl<T: Config> List<T> {
 			};
 			count += 1;
 
-			// check if node.is_terminal
-
 			if !node.is_terminal() {
-				// this node is not a head or a tail and thus the bag does not need to be updated.
+				// this node is not a head or a tail and thus the bag does not need to be updated
 				node.excise()
 			} else {
 				// this node is a head or tail, so the bag needs to be updated
@@ -312,7 +313,6 @@ impl<T: Config> List<T> {
 		node.is_misplaced(new_weight).then(move || {
 			let old_bag_upper = node.bag_upper;
 
-			// clear the old bag head/tail pointers as necessary
 			if !node.is_terminal() {
 				// this node is not a head or a tail, so we can just cut it out of the list. update
 				// and put the prev and next of this node, we do `node.put` inside `insert_note`.

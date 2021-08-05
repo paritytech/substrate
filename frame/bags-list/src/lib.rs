@@ -44,7 +44,7 @@
 //! - items are kept in bags, which are delineated by their range of weight (See [`BagThresholds`]).
 //! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
-//! - thus, items within a bag are iterated in order of insertion. Thus removing an item and
+//! - items within a bag are iterated in order of insertion. Thus removing an item and
 //!   re-inserting it will worsen its position in list iteration; this reduces incentives for some
 //!   types of spam that involve consistently removing and inserting for better position. Further,
 //!   ordering granularity is thus dictated by range between each bag threshold.
@@ -65,6 +65,8 @@ use sp_std::prelude::*;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 mod list;
+#[cfg(feature = "make-bags")]
+pub mod make_bags;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -107,7 +109,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
-		// Something that provides the weights of voters.
+		/// Something that provides the weights of voters.
 		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
 
 		/// The list of thresholds separating the various voter bags.

@@ -13,23 +13,32 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+# Parity
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
+# Primitives
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
+# FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
+# Third party
 log = { version = "0.4.14", default-features = false }
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
+pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", optional = true, default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", optional = true, default-features = false }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true, default-features = false }
-pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
+
+# Optional imports for making voter bags lists
+chrono = { version = "0.4.19", optional = true }
+git2 = { version = "0.13.20", default-features = false, optional = true }
+num-format = { version = "0.4.0", optional = true }
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core"}
@@ -56,4 +65,10 @@ runtime-benchmarks = [
 	"sp-io",
 	"pallet-balances",
 	"sp-tracing",
+]
+make-bags = [
+	"chrono",
+	"git2",
+	"num-format",
+	"std",
 ]
