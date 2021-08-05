@@ -48,11 +48,6 @@ fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
 
-/// Find the upper threshold of the actual bag containing the current voter.
-fn current_bag_for<T: Config>(id: &T::AccountId) -> Option<VoteWeight> {
-	crate::VoterBagFor::<T>::try_get(id).ok()
-}
-
 /// Data structure providing efficient mostly-accurate selection of the top N voters by stake.
 ///
 /// It's implemented as a set of linked lists. Each linked list comprises a bag of voters of
@@ -71,7 +66,6 @@ impl<T: Config> List<T> {
 	/// Remove all data associated with the voter list from storage.
 	pub(crate) fn clear() {
 		crate::CounterForVoters::<T>::kill();
-		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
 		crate::VoterNodes::<T>::remove_all(None);
 	}
@@ -131,7 +125,7 @@ impl<T: Config> List<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
@@ -142,7 +136,7 @@ impl<T: Config> List<T> {
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in old_set.difference(&new_set).copied() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
@@ -164,7 +158,7 @@ impl<T: Config> List<T> {
 		// lookups.
 		for removed_bag in old_set.difference(&new_set).copied() {
 			debug_assert!(
-				!crate::VoterBagFor::<T>::iter().any(|(_voter, bag)| bag == removed_bag),
+				!crate::VoterNodes::<T>::iter().any(|(_, node)| node.bag_upper == removed_bag),
 				"no voter should be present in a removed bag",
 			);
 			crate::VoterBags::<T>::remove(removed_bag);
@@ -266,7 +260,7 @@ impl<T: Config> List<T> {
 		let mut count = 0;
 
 		for voter_id in voters.into_iter() {
-			let node = match Node::<T>::from_id(voter_id) {
+			let node = match Node::<T>::get(voter_id) {
 				Some(node) => node,
 				None => continue,
 			};
@@ -287,7 +281,6 @@ impl<T: Config> List<T> {
 
 			// now get rid of the node itself
 			crate::VoterNodes::<T>::remove(voter_id);
-			crate::VoterBagFor::<T>::remove(voter_id);
 		}
 
 		for (_, bag) in bags {
@@ -446,12 +439,12 @@ impl<T: Config> Bag<T> {
 
 	/// Get the head node in this bag.
 	fn head(&self) -> Option<Node<T>> {
-		self.head.as_ref().and_then(|id| Node::get(self.bag_upper, id))
+		self.head.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// Get the tail node in this bag.
 	fn tail(&self) -> Option<Node<T>> {
-		self.tail.as_ref().and_then(|id| Node::get(self.bag_upper, id))
+		self.tail.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// Iterate over the nodes in this bag.
@@ -467,6 +460,7 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
 	fn insert(&mut self, id: T::AccountId) {
+		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values.
 		self.insert_node(Node::<T> { id, prev: None, next: None, bag_upper: self.bag_upper });
 	}
 
@@ -480,13 +474,16 @@ impl<T: Config> Bag<T> {
 	fn insert_node(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
-				// DOCUMENT_ME
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return
+				return;
 			};
 		}
+
+		// re-set the `bag_upper`. Regardless of whatever the node had previously, now it is going
+		// to be `self.bag_upper`.
+		node.bag_upper = self.bag_upper;
 
 		// update this node now, treating as the new tail.
 		let id = node.id.clone();
@@ -501,16 +498,13 @@ impl<T: Config> Bag<T> {
 		}
 		self.tail = Some(id.clone());
 
-		// ensure head exist. This is only set when the length of the bag is just 1, i.e.
-		// if this is the first insertion into the bag. In this case, both head and tail should
-		// point to the same voter node.
+		// ensure head exist. This is only set when the length of the bag is just 1, i.e. if this is
+		// the first insertion into the bag. In this case, both head and tail should point to the
+		// same voter node.
 		if self.head.is_none() {
 			self.head = Some(id.clone());
 			debug_assert!(self.iter().count() == 1);
 		}
-
-		// update the voter's bag index.
-		crate::VoterBagFor::<T>::insert(id, self.bag_upper);
 	}
 
 	/// Remove a voter node from this bag. Returns true iff the bag's head or tail is updated.
@@ -519,8 +513,7 @@ impl<T: Config> Bag<T> {
 	/// the first place. Generally, use [`List::remove`] instead.
 	///
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
-	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
-	/// to update storage for the bag and `node`.
+	/// `self.put()` and `VoterNodes::remove(voter_id)` to update storage for the bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
 		// reassign neighboring nodes.
 		node.excise();
@@ -578,41 +571,17 @@ impl<T: Config> Bag<T> {
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq, Clone))]
-pub struct Node<T: Config> {
+pub(crate) struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
-
-	/// The bag index is not stored in storage, but injected during all fetch operations.
-	#[codec(skip)]
-	pub(crate) bag_upper: VoteWeight,
+	bag_upper: VoteWeight,
 }
 
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
-	fn get(bag_upper: VoteWeight, account_id: &T::AccountId) -> Option<Node<T>> {
-		debug_assert!(
-			T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
-			"it is a logic error to attempt to get a bag which is not in the thresholds list"
-		);
-		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
-			node.bag_upper = bag_upper;
-			node
-		})
-	}
-
-	/// Get a node by account id.
-	///
-	/// Note that this must perform two storage lookups: one to identify which bag is appropriate,
-	/// and another to actually fetch the node.
-	pub(crate) fn from_id(account_id: &T::AccountId) -> Option<Node<T>> {
-		let bag = current_bag_for::<T>(account_id)?;
-		Self::get(bag, account_id)
-	}
-
-	/// Get a node by account id, assuming it's in the same bag as this node.
-	fn in_bag(&self, account_id: &T::AccountId) -> Option<Node<T>> {
-		Self::get(self.bag_upper, account_id)
+	pub(crate) fn get(account_id: &T::AccountId) -> Option<Node<T>> {
+		crate::VoterNodes::<T>::try_get(account_id).ok()
 	}
 
 	/// Put the node back into storage.
@@ -638,12 +607,12 @@ impl<T: Config> Node<T> {
 
 	/// Get the previous node in the bag.
 	fn prev(&self) -> Option<Node<T>> {
-		self.prev.as_ref().and_then(|id| self.in_bag(id))
+		self.prev.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// Get the next node in the bag.
 	fn next(&self) -> Option<Node<T>> {
-		self.next.as_ref().and_then(|id| self.in_bag(id))
+		self.next.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// `true` when this voter is in the wrong bag.

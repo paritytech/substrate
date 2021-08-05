@@ -276,9 +276,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -314,9 +314,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -561,8 +561,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 1200,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 1, value: 600 },
 						IndividualExposure { who: 3, value: 600 },
+						IndividualExposure { who: 1, value: 600 },
 					]
 				},
 			);
@@ -3834,8 +3834,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -3852,8 +3852,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -3925,8 +3925,12 @@ mod election_data_provider {
 	#[test]
 	fn respects_snapshot_len_limits() {
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
-			// sum of all validators and nominators who'd be voters.
-			assert_eq!(<Test as Config>::SortedListProvider::count(), 5);
+			// sum of all nominators who'd be voters, plus the self votes.
+			assert_eq!(
+				<Test as Config>::SortedListProvider::count()
+					+ <Validators<Test>>::iter().count() as u32,
+				5
+			);
 
 			// if limits is less..
 			assert_eq!(Staking::voters(Some(1)).unwrap().0.len(), 1);
@@ -4312,14 +4316,5 @@ mod election_data_provider {
 				ValidatorPrefs::default()
 			));
 		})
-	}
-}
-
-mod sorted_list_provider {
-	#[test]
-	fn iter_works() {
-		// TODO: not sure if this is really needed. What should I check? if it returns the correct
-		// type, then it is correct from my PoV.
-		todo!()
 	}
 }

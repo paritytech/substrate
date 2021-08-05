@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
@@ -518,7 +518,7 @@ pub mod pallet {
 					// TODO: later on, fix all the tests that trigger these warnings, and
 					// make these assertions. Genesis stakers should all be correct!
 					log!(warn, "failed to bond staker at genesis: {:?}.", why);
-					continue
+					continue;
 				}
 				match status {
 					StakerStatus::Validator => {
@@ -528,7 +528,7 @@ pub mod pallet {
 						) {
 							log!(warn, "failed to validate staker at genesis: {:?}.", why);
 						}
-					},
+					}
 					StakerStatus::Nominator(votes) => {
 						if let Err(why) = <Pallet<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
@@ -536,7 +536,7 @@ pub mod pallet {
 						) {
 							log!(warn, "failed to nominate staker at genesis: {:?}.", why);
 						}
-					},
+					}
 					_ => (),
 				};
 			}
@@ -1343,9 +1343,9 @@ pub mod pallet {
 			Self::update_ledger(&controller, &ledger);
 			T::SortedListProvider::on_update(&ledger.stash, Self::weight_of_fn()(&ledger.stash)); // TODO we already have the ledger here.
 			Ok(Some(
-				35 * WEIGHT_PER_MICROS +
-					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
-					T::DbWeight::get().reads_writes(3, 2),
+				35 * WEIGHT_PER_MICROS
+					+ 50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight)
+					+ T::DbWeight::get().reads_writes(3, 2),
 			)
 			.into())
 		}

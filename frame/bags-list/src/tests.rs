@@ -238,11 +238,9 @@ mod sorted_list_provider {
 	#[test]
 	fn on_remove_works() {
 		let ensure_left = |id, counter| {
-			assert!(!VoterBagFor::<Runtime>::contains_key(id));
 			assert!(!VoterNodes::<Runtime>::contains_key(id));
 			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), counter);
 			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
-			assert_eq!(VoterBagFor::<Runtime>::iter().count() as u32, counter);
 			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
 		};
 
