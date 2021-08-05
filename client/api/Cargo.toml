@@ -14,7 +14,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+    "derive",
+] }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }
@@ -37,7 +39,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-kvdb-memorydb = "0.10.0"
+# kvdb-memorydb = "0.10.0"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime"  }
+substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 thiserror = "1.0.21"

@@ -14,7 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -24,9 +26,9 @@ pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "..
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-io ={ version = "4.0.0-dev", path = "../../primitives/io" }
-lazy_static = "1.4.0"
-parking_lot = "0.11.1"
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+# lazy_static = "1.4.0"
+# parking_lot = "0.11.1"
 
 [features]
 default = ["std"]
