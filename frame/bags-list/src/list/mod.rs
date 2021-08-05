@@ -277,7 +277,7 @@ impl<T: Config> List<T> {
 
 			// check if node.is_terminal
 
-			if !node.is_terminal {
+			if !node.is_terminal() {
 				// this node is not a head or a tail and thus the bag does not need to be updated
 				node.excise()
 			} else {
@@ -329,7 +329,7 @@ impl<T: Config> List<T> {
 			// https://github.com/paritytech/substrate/pull/9468/files/83289aa4a15d61e6cb334f9d7e7f6804cb7e3537..44875c511ebdc79270100720320c8e3d2d56eb4a#r680559166
 
 			// clear the old bag head/tail pointers as necessary
-			if !node.is_terminal {
+			if !node.is_terminal() {
 				// this node is not a head or a tail, so we do not need to update its current bag.
 				node.excise();
 			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
@@ -486,7 +486,6 @@ impl<T: Config> Bag<T> {
 			prev: None,
 			next: None,
 			bag_upper: self.bag_upper,
-			is_terminal: false,
 		});
 	}
 
@@ -512,13 +511,11 @@ impl<T: Config> Bag<T> {
 		let id = node.id.clone();
 		node.prev = self.tail.clone();
 		node.next = None;
-		node.is_terminal = true;
 		node.put();
 
 		// update the previous tail
 		if let Some(mut old_tail) = self.tail() {
 			old_tail.next = Some(id.clone());
-			old_tail.is_terminal = false;
 			old_tail.put();
 		}
 		self.tail = Some(id.clone());
@@ -548,8 +545,10 @@ impl<T: Config> Bag<T> {
 	// afaict keeping is_terminal is a better optimization because in some case we don't need
 	// to fetch the bag remove is called on.
 	fn remove_node(&mut self, node: &Node<T>) -> bool {
-		let mut removed = false;
+		// reassign neigbhoring nodes.
+		node.excise();
 
+		let mut removed = false;
 		// clear the bag head/tail pointers as necessary
 		if self.tail.as_ref() == Some(&node.id) {
 			self.tail = node.prev.clone();
@@ -558,30 +557,6 @@ impl<T: Config> Bag<T> {
 		if self.head.as_ref() == Some(&node.id) {
 			self.head = node.next.clone();
 			removed = true;
-		}
-
-		// set neighbors to point to each other. Note that instead of using node.excise here we
-		// recreate some of the logic but update the neighboring nodes `is_terminal` in case they
-		// become a head or tail.
-		if let Some(mut prev) = node.prev() {
-			prev.next = node.next.clone();
-
-			if self.tail.as_ref() == Some(&prev.id) {
-				// if prev is the new tail, we mark it as terminal
-				prev.is_terminal = true;
-			}
-
-			prev.put();
-		}
-		if let Some(mut next) = node.next() {
-			next.prev = node.prev.clone();
-
-			if self.head.as_ref() == Some(&next.id) {
-				// if next is the new head, we mark it as terminal
-				next.is_terminal = true;
-			}
-
-			next.put();
 		}
 
 		removed
@@ -704,8 +679,9 @@ impl<T: Config> Node<T> {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
+	/// `true` when this voter is a bag head or tail.
 	fn is_terminal(&self) -> bool {
-		self.head.is_none() || self.tail.is_none()
+		self.prev.is_none() || self.next.is_none()
 	}
 
 	/// Get the underlying voter.

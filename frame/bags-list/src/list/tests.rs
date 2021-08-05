@@ -10,7 +10,7 @@ fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// syntactic sugar to create a raw node
 		let node =
-			|id, prev, next, is_terminal| Node::<Runtime> { id, prev, next, bag_upper: 0, is_terminal };
+			|id, prev, next| Node::<Runtime> { id, prev, next, bag_upper: 0 };
 
 		assert_eq!(CounterForVoters::<Runtime>::get(), 4);
 		assert_eq!(VoterBagFor::<Runtime>::iter().count(), 4);
@@ -30,13 +30,13 @@ fn basic_setup_works() {
 		);
 
 		assert_eq!(VoterBagFor::<Runtime>::get(2).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), true));
+		assert_eq!(VoterNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3)));
 
 		assert_eq!(VoterBagFor::<Runtime>::get(3).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4), false));
+		assert_eq!(VoterNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4)));
 
 		assert_eq!(VoterBagFor::<Runtime>::get(4).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None, true));
+		assert_eq!(VoterNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None));
 
 		assert_eq!(VoterBagFor::<Runtime>::get(1).unwrap(), 10);
 		assert_eq!(VoterNodes::<Runtime>::get(1).unwrap(), node(1, None, None));
@@ -283,8 +283,6 @@ mod bags {
 	fn get_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let check_bag = |bag_upper, head, tail, ids| {
-				// @zeke TODO: why?
-				assert_storage_noop!(Bag::<Runtime>::get(bag_upper));
 				let bag = Bag::<Runtime>::get(bag_upper).unwrap();
 				let bag_ids = bag.iter().map(|n| *n.id()).collect::<Vec<_>>();
 
@@ -333,7 +331,6 @@ mod bags {
 				prev: None,
 				next: None,
 				bag_upper,
-				is_terminal: false,
 			};
 
 			// when inserting into a bag with 1 node
@@ -361,7 +358,6 @@ mod bags {
 				prev: Some(21),
 				next: Some(101),
 				bag_upper: 20,
-				is_terminal: false,
 			};
 			bag_20.insert_node(node_61);
 			// then ids are in order
@@ -374,7 +370,6 @@ mod bags {
 					prev: Some(62),
 					next: None,
 					bag_upper: 20,
-					is_terminal: false
 				}
 			);
 
@@ -390,18 +385,17 @@ mod bags {
 	// Document improper ways `insert_node` may be getting used.
 	#[test]
 	fn insert_node_bad_paths_documented() {
-		let node = |id, prev, next, bag_upper, is_terminal| Node::<Runtime> {
+		let node = |id, prev, next, bag_upper| Node::<Runtime> {
 			id,
 			prev,
 			next,
 			bag_upper,
-			is_terminal,
 		};
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
 			// bag.
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
-			bag_1000.insert_node(node(42, Some(1), Some(1), 0, false));
+			bag_1000.insert_node(node(42, Some(1), Some(1), 0));
 
 			// then the proper perv and next is set.
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4, 42]);
@@ -409,7 +403,7 @@ mod bags {
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &42).unwrap(),
-				node(42, Some(4), None, bag_1000.bag_upper, true)
+				node(42, Some(4), None, bag_1000.bag_upper)
 			);
 		});
 
@@ -419,7 +413,7 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4]);
 
 			// when inserting a node with duplicate id 3
-			bag_1000.insert_node(node(3, None, None, bag_1000.bag_upper, false));
+			bag_1000.insert_node(node(3, None, None, bag_1000.bag_upper));
 
 			// then all the nodes after the duplicate are lost (because it is set as the tail)
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3]);
@@ -430,7 +424,7 @@ mod bags {
 			// TODO: consider doing a check on insert, it is cheap.
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &3).unwrap(),
-				node(3, Some(4), None, bag_1000.bag_upper, false)
+				node(3, Some(4), None, bag_1000.bag_upper)
 			);
 		});
 
@@ -438,7 +432,7 @@ mod bags {
 			// when inserting a duplicate id of the head
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4]);
-			bag_1000.insert_node(node(2, None, None, 0, false));
+			bag_1000.insert_node(node(2, None, None, 0));
 
 			// then all nodes after the head are lost
 			assert_eq!(bag_as_ids(&bag_1000), vec![2]);
@@ -446,7 +440,7 @@ mod bags {
 			// and the re-fetched node has bad pointers
 			assert_eq!(
 				Node::<Runtime>::get(1_000, &2).unwrap(),
-				node(2, Some(4), None, bag_1000.bag_upper, true)
+				node(2, Some(4), None, bag_1000.bag_upper)
 			);
 			//         ^^^ despite being the bags head, it has a prev
 
@@ -464,7 +458,6 @@ mod bags {
 				prev,
 				next,
 				bag_upper,
-				is_terminal: false,
 			};
 
 			// given
@@ -592,7 +585,6 @@ mod bags {
 				prev: None,
 				next: Some(3),
 				bag_upper: 10, // should be 1_000
-				is_terminal: false,
 			};
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 
