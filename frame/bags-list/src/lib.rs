@@ -90,7 +90,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Weight information for extrinsics in this pallet.
-		// type WeightInfo: WeightInfo;
+		type WeightInfo: weights::WeightInfo;
 
 		// Something that implements `trait StakingVoteWeight`.
 		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
@@ -189,7 +189,7 @@ pub mod pallet {
 		///
 		/// Anyone can call this function about any stash.
 		// #[pallet::weight(T::WeightInfo::rebag())]
-		#[pallet::weight(123456789)] // TODO
+		#[pallet::weight(T::WeightInfo::rebag_middle())]
 		pub fn rebag(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let weight = T::VoteWeightProvider::vote_weight(&account);

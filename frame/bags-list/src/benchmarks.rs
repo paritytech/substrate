@@ -2,10 +2,10 @@
 
 use super::*;
 use crate::list::{Bag, List};
-use frame_benchmarking::{account, whitelisted_caller};
+// use frame_benchmarking::{account, whitelisted_caller};
+use frame_benchmarking::{account};
 use frame_support::traits::Get;
-use frame_system::RawOrigin;
-// use frame_election_provider_support::VoteWeight;
+// use frame_system::RawOrigin;
 
 fn get_bags<T: Config>() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
 	T::BagThresholds::get()

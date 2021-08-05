@@ -51,6 +51,7 @@ parameter_types! {
 
 impl crate::Config for Runtime {
 	type Event = Event;
+	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
 	type VoteWeightProvider = StakingMock;
 }
