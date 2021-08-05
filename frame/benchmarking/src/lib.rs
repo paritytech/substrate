@@ -954,15 +954,14 @@ macro_rules! impl_benchmark_test {
 					if components.is_empty() {
 						execute_benchmark(Default::default())?;
 					} else {
-						for (_, (name, low, high)) in components.iter().enumerate() {
+						for (name, low, high) in components.iter() {
 							// Test only the low and high value, assuming values in the middle
 							// won't break
 							for component_value in $crate::vec![low, high] {
 								// Select the max value for all the other components.
 								let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components
 									.iter()
-									.enumerate()
-									.map(|(_, (n, _, h))|
+									.map(|(n, _, h)|
 										if n == name {
 											(*n, *component_value)
 										} else {

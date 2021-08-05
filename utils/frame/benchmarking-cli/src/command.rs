@@ -216,6 +216,31 @@ impl BenchmarkCmd {
 				all_components
 			};
 			for selected_components in all_components {
+				if !self.no_verify {
+					// Dont use these results since verification code will add overhead
+					let _results = StateMachine::<_, _, NumberFor<BB>, _>::new(
+						&state,
+						None,
+						&mut changes,
+						&executor,
+						"Benchmark_dispatch_benchmark",
+						&(
+							&pallet.clone(),
+							&extrinsic.clone(),
+							&selected_components.clone(),
+							true, // run verification code
+						)
+							.encode(),
+						extensions(),
+						&sp_state_machine::backend::BackendRuntimeCode::new(&state)
+							.runtime_code()?,
+						sp_core::testing::TaskExecutor::new(),
+					)
+					.execute(strategy.into())
+					.map_err(|e| {
+						format!("Error executing and verifying runtime benchmark: {:?}", e)
+					})?;
+				}
 				for r in 0..self.repeat {
 					// This should run only a single instance of a benchmark for `pallet` and
 					// `extrinsic`. All loops happen above.
@@ -229,7 +254,7 @@ impl BenchmarkCmd {
 							&pallet.clone(),
 							&extrinsic.clone(),
 							&selected_components.clone(),
-							!self.no_verify,
+							false, // dont run verification code for final values
 						)
 							.encode(),
 						extensions(),
