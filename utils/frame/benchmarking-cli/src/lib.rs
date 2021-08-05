@@ -130,11 +130,9 @@ pub struct BenchmarkCmd {
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
 
-	/// List the benchmarks available.
+	/// List the benchmarks that match your query rather than running them.
 	///
-	/// * If nothing else is specified, all pallets and benchmarks will be listed.
-	/// * If the `pallet` argument is passed, then we will only list benchmarks for that pallet.
-	/// * If the `extrinsic` argument is set to `*`, we will hide the individual benchmarks.
+	/// When nothing is provided, we list all benchmarks.
 	#[structopt(long)]
 	pub list: bool,
 }

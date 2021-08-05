@@ -18,7 +18,8 @@
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{
-	Analysis, BenchmarkBatch, BenchmarkList, BenchmarkResults, BenchmarkSelector,
+	Analysis, BenchmarkBatch, BenchmarkList, BenchmarkParameter, BenchmarkResults,
+	BenchmarkSelector,
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
@@ -147,29 +148,39 @@ impl BenchmarkCmd {
 			<(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
 				.map_err(|e| format!("Failed to decode benchmark metadata: {:?}", e))?;
 
-		if self.list {
-			list_benchmark(pallet, extrinsic, list);
-			return Ok(())
-		}
-
 		// Use the benchmark list and the user input to determine the set of benchmarks to run.
 		let mut benchmarks_to_run = Vec::new();
-		for item in list {
-			if pallet == &item.pallet[..] || pallet == &b"*"[..] {
-				if &pallet[..] == &b"*"[..] || &extrinsic[..] == &b"*"[..] {
-					for benchmark in item.benchmarks {
-						benchmarks_to_run.push((item.pallet.clone(), benchmark.name));
+		list.iter()
+			.filter(|item| pallet.is_empty() || pallet == &b"*"[..] || pallet == &item.pallet[..])
+			.for_each(|item| {
+				for benchmark in &item.benchmarks {
+					if extrinsic.is_empty() ||
+						&extrinsic[..] == &b"*"[..] ||
+						extrinsic == benchmark.name
+					{
+						benchmarks_to_run.push((
+							item.pallet.clone(),
+							benchmark.name.clone(),
+							benchmark.components.clone(),
+						))
 					}
-				} else {
-					benchmarks_to_run.push((pallet.to_vec(), extrinsic.to_vec()));
 				}
-			}
+			});
+
+		if benchmarks_to_run.is_empty() {
+			return Err("No benchmarks found which match your input.".into())
+		}
+
+		if self.list {
+			// List benchmarks instead of running them
+			list_benchmark(benchmarks_to_run);
+			return Ok(())
 		}
 
 		// Run the benchmarks
 		let mut batches = Vec::new();
 		let mut timer = time::SystemTime::now();
-		for (pallet, extrinsic) in benchmarks_to_run {
+		for (pallet, extrinsic, _components) in benchmarks_to_run {
 			for s in 0..self.steps {
 				for r in 0..self.repeat {
 					// This should run only a single instance of a benchmark for `pallet` and
@@ -335,39 +346,9 @@ impl CliConfiguration for BenchmarkCmd {
 }
 
 /// List the benchmarks available in the runtime, in a CSV friendly format.
-///
-/// If `pallet_input` and `extrinsic_input` is empty, we list everything.
-///
-/// If `pallet_input` is present, we only list the benchmarks for that pallet.
-///
-/// If `extrinsic_input` is `*`, we will hide the individual benchmarks for each pallet, and just
-/// show a single line for each available pallet.
-fn list_benchmark(pallet_input: &[u8], extrinsic_input: &[u8], list: Vec<BenchmarkList>) {
-	let filtered_list = list
-		.into_iter()
-		.filter(|item| pallet_input.is_empty() || pallet_input == &item.pallet)
-		.collect::<Vec<_>>();
-
-	if filtered_list.is_empty() {
-		println!("Pallet not found.");
-		return
-	}
-
+fn list_benchmark(benchmarks_to_run: Vec<(Vec<u8>, Vec<u8>, Vec<(BenchmarkParameter, u32, u32)>)>) {
 	println!("pallet, benchmark");
-	for item in filtered_list {
-		let pallet_string =
-			String::from_utf8(item.pallet.clone()).expect("Encoded from String; qed");
-
-		if extrinsic_input == &b"*"[..] {
-			println!("{}, *", pallet_string)
-		} else {
-			for benchmark in item.benchmarks {
-				println!(
-					"{}, {}",
-					pallet_string,
-					String::from_utf8(benchmark.name).expect("Encoded from String; qed"),
-				);
-			}
-		}
+	for (pallet, extrinsic, _components) in benchmarks_to_run {
+		println!("{}, {}", String::from_utf8_lossy(&pallet), String::from_utf8_lossy(&extrinsic));
 	}
 }
