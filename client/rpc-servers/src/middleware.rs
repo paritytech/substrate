@@ -19,20 +19,25 @@
 //! Middleware for RPC requests.
 
 use jsonrpc_core::{
-	Call, FutureOutput, FutureResponse, Metadata, Middleware as RequestMiddleware, Output, Request, Response
+	Call, FutureOutput, FutureResponse, Metadata, Middleware as RequestMiddleware, Output, Request,
+	Response,
 };
-use prometheus_endpoint::{Registry, CounterVec, PrometheusError,Opts, register, U64};
+use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 
 use futures::{future::Either, Future};
 
-
 /// Custom rpc middleware
 pub trait CustomMiddleware<M: Metadata>:
-	Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput> {}
+	Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput>
+{
+}
 
 impl<M, T> CustomMiddleware<M> for T
-	where M: Metadata, T: Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput>
-{}
+where
+	M: Metadata,
+	T: Clone + Default + RequestMiddleware<M, Future = FutureResponse, CallFuture = FutureOutput>,
+{
+}
 
 /// Metrics for RPC middleware
 #[derive(Debug, Clone)]
@@ -84,7 +89,11 @@ impl<M: Metadata, CM: CustomMiddleware<M>> RpcMiddleware<M, CM> {
 	///
 	/// - `metrics`: Will be used to report statistics.
 	/// - `transport_label`: The label that is used when reporting the statistics.
-	pub fn new_with_custom_middleware(metrics: RpcMetrics, transport_label: &str, custom_middleware: CM) -> Self {
+	pub fn new_with_custom_middleware(
+		metrics: RpcMetrics,
+		transport_label: &str,
+		custom_middleware: CM,
+	) -> Self {
 		RpcMiddleware {
 			metrics,
 			transport_label: String::from(transport_label),

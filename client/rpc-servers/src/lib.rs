@@ -126,7 +126,7 @@ mod inner {
 	/// **Note**: Only available if `not(target_os = "unknown")`.
 	pub fn start_ws<
 		M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>> + Sync,
-		CM: CustomMiddleware<M>
+		CM: CustomMiddleware<M>,
 	>(
 		addr: &std::net::SocketAddr,
 		max_connections: Option<usize>,

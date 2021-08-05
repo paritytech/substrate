@@ -47,7 +47,8 @@ use sp_state_machine::Ext;
 /// also holds logs from the process.
 pub struct Node<T: ChainInfo> {
 	/// rpc handler for communicating with the node over rpc.
-	rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware<sc_rpc::Metadata>>>,
+	rpc_handler:
+		Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware<sc_rpc::Metadata>>>,
 	/// handle to the running node.
 	task_manager: Option<TaskManager>,
 	/// client instance
@@ -84,7 +85,9 @@ where
 {
 	/// Creates a new node.
 	pub fn new(
-		rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware<sc_rpc::Metadata>>>,
+		rpc_handler: Arc<
+			MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware<sc_rpc::Metadata>>,
+		>,
 		task_manager: TaskManager,
 		client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
 		pool: Arc<

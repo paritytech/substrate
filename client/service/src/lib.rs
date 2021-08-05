@@ -124,9 +124,7 @@ impl<CM: CustomMiddleware<RpcMetadata>> RpcHandlers<CM> {
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(
-		&self,
-	) -> Arc<jsonrpc_core::MetaIoHandler<RpcMetadata, RpcMiddleware<CM>>> {
+	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<RpcMetadata, RpcMiddleware<CM>>> {
 		self.0.clone()
 	}
 }

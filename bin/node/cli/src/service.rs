@@ -28,8 +28,8 @@ use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_network::{Event, NetworkService};
 use sc_service::{
-	CustomMiddleware, NoopCustomMiddleware, RpcHandlers, RpcMetadata, TaskManager,
-	config::Configuration, error::Error as ServiceError
+	config::Configuration, error::Error as ServiceError, CustomMiddleware, NoopCustomMiddleware,
+	RpcHandlers, RpcMetadata, TaskManager,
 };
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_runtime::traits::Block as BlockT;
@@ -592,20 +592,23 @@ pub fn new_light_base_with_rpc_middleware<CM: CustomMiddleware<RpcMetadata>>(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let rpc_handlers = sc_service::spawn_tasks_with_rpc_middleware(sc_service::SpawnTasksParams {
-		on_demand: Some(on_demand),
-		remote_blockchain: Some(backend.remote_blockchain()),
-		rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
-		client: client.clone(),
-		transaction_pool: transaction_pool.clone(),
-		keystore: keystore_container.sync_keystore(),
-		config,
-		backend,
-		system_rpc_tx,
-		network: network.clone(),
-		task_manager: &mut task_manager,
-		telemetry: telemetry.as_mut(),
-	}, rpc_middleware)?;
+	let rpc_handlers = sc_service::spawn_tasks_with_rpc_middleware(
+		sc_service::SpawnTasksParams {
+			on_demand: Some(on_demand),
+			remote_blockchain: Some(backend.remote_blockchain()),
+			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			keystore: keystore_container.sync_keystore(),
+			config,
+			backend,
+			system_rpc_tx,
+			network: network.clone(),
+			task_manager: &mut task_manager,
+			telemetry: telemetry.as_mut(),
+		},
+		rpc_middleware,
+	)?;
 
 	network_starter.start_network();
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))

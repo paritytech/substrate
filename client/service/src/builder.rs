@@ -22,8 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, MallocSizeOfWasm, RpcHandlers, RpcMiddleware, SpawnTaskHandle,
-	TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, MallocSizeOfWasm, RpcHandlers, RpcMiddleware, SpawnTaskHandle, TaskManager,
+	TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpc_pubsub::manager::SubscriptionManager;
@@ -669,8 +669,7 @@ where
 	);
 
 	// RPC
-	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe,
-	                   rpc_middleware: RpcMiddleware<TCm>| {
+	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe, rpc_middleware: RpcMiddleware<TCm>| {
 		gen_handler(
 			deny_unsafe,
 			rpc_middleware,
@@ -692,7 +691,11 @@ where
 	let rpc_handlers = RpcHandlers(Arc::new(
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
-			RpcMiddleware::<TCm>::new_with_custom_middleware(rpc_metrics, "inbrowser", rpc_middleware),
+			RpcMiddleware::<TCm>::new_with_custom_middleware(
+				rpc_metrics,
+				"inbrowser",
+				rpc_middleware,
+			),
 		)?
 		.into(),
 	));
