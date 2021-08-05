@@ -136,7 +136,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -227,8 +227,9 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) =>
-				Some(T::Currency::deposit_creating(&dest_account, amount)),
+			RewardDestination::Account(dest_account) => {
+				Some(T::Currency::deposit_creating(&dest_account, amount))
+			}
 			RewardDestination::None => None,
 		}
 	}
@@ -256,14 +257,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None
-				},
+					return None;
+				}
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some() &&
-				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some()
+				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -444,12 +445,12 @@ impl<T: Config> Pallet<T> {
 					// TODO: this should be simplified #8911
 					CurrentEra::<T>::put(0);
 					ErasStartSessionIndex::<T>::insert(&0, &start_session_index);
-				},
+				}
 				_ => (),
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None
+			return None;
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -636,8 +637,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Get all of the voters that are eligible for the npos election.
 	///
-	/// `voter_count` imposes an implicit cap on the number of voters returned; care should be taken
-	/// to ensure that it is accurate.
+	/// `voter_count` imposes a cap on the number of voters returned; care should be taken to ensure
+	/// that it is accurate.
 	///
 	/// This will use all on-chain nominators, and all the validators will inject a self vote.
 	///
@@ -645,30 +646,30 @@ impl<T: Config> Pallet<T> {
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
 	/// auto-chilled.
-	///
-	/// Note that this is fairly expensive: it must iterate over the min of `maybe_max_len` and
-	/// `voter_count` voters. Use with care.
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		// TODO: weight this function and see how many can fit in a block.
 		let weight_of = Self::weight_of_fn();
+
 		let nominator_count = CounterForNominators::<T>::get() as usize;
 		let validator_count = CounterForValidators::<T>::get() as usize;
 		let all_voter_count = validator_count.saturating_add(nominator_count);
 
-		let total_len = maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count);
-		let mut all_voters = Vec::<_>::with_capacity(total_len);
+		let max_allowed_len = maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count);
+		drop(all_voter_count);
 
-		// first, grab all validators.
-		for (validator, _) in <Validators<T>>::iter() {
+		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+
+		// first, grab all validators, capped by the maximum allowed length.
+		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
 		}
 
-		// see how many voters we can grab from nominator sorted list, and grab them.
-		let nominators_quota = total_len.saturating_sub(validator_count);
+		// .. and grab whatever we have left from nominators.
+		let nominators_quota = max_allowed_len.saturating_sub(validator_count);
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 		for nominator in T::SortedListProvider::iter().take(nominators_quota) {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
@@ -683,7 +684,7 @@ impl<T: Config> Pallet<T> {
 					all_voters.push((nominator.clone(), weight_of(&nominator), targets))
 				}
 			} else {
-				log!(warn, "invalid item in `SortedListProvider`: {:?}", nominator)
+				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
 			}
 		}
 
@@ -693,7 +694,7 @@ impl<T: Config> Pallet<T> {
 		log!(
 			info,
 			"generated {} npos voters, {} from validators and {} nominators",
-			all_voter_count,
+			all_voters.len(),
 			validator_count,
 			nominators_quota
 		);
@@ -812,7 +813,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		let target_count = CounterForValidators::<T>::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
-			return Err("Target snapshot too big")
+			return Err("Target snapshot too big");
 		}
 
 		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
@@ -1076,7 +1077,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight
+				return consumed_weight;
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1122,7 +1123,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue
+				continue;
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
