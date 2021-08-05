@@ -31,6 +31,11 @@ sp-io = { version = "4.0.0-dev", path = "../../primitives/io", optional = true, 
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true, default-features = false }
 pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
 
+# Optional imports for making voter bags lists
+chrono = { version = "0.4.19", optional = true }
+git2 = { version = "0.13.20", default-features = false, optional = true }
+num-format = { version = "0.4.0", optional = true }
+
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core"}
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
@@ -55,4 +60,10 @@ runtime-benchmarks = [
 	"sp-io",
 	"pallet-balances",
 	"sp-tracing",
+]
+make-bags = [
+	"chrono",
+	"git2",
+	"num-format",
+	"std",
 ]

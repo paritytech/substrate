@@ -1,5 +1,5 @@
 [package]
-name = "node-runtime-voter-bags"
+name = "node-runtime-bag-thresholds"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -11,6 +11,6 @@ readme = "README.md"
 
 [dependencies]
 node-runtime = { version = "3.0.0-dev", path = ".." }
-pallet-staking = { version = "4.0.0-dev", path = "../../../../frame/staking", features = ["make-bags"] }
+pallet-bags-list = { version = "4.0.0-dev", path = "../../../../frame/bags-list", features = ["make-bags"] }
 sp-io = { version = "4.0.0-dev", path = "../../../../primitives/io" }
 structopt = "0.3.21"

@@ -65,6 +65,8 @@ use sp_std::prelude::*;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 mod list;
+#[cfg(feature = "make-bags")]
+pub mod make_bags;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -107,7 +109,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
-		// Something that provides the weights of voters.
+		/// Something that provides the weights of voters.
 		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
 
 		/// The list of thresholds separating the various voter bags.
