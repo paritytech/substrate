@@ -15,8 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A semi-sorted list, where items hold an `id` and `weight`.
-//! TODO items will also have a generic `data` field
+//! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
+//! can be synonym to a `Voter` and `VoteWeight` signifies the chance of each voter being included
+//! in the final [`VoteWeightProvider::iter`].
+//!
+//! It implements [`sp_election_provider_support::SortedListProvider`] to provide a semi-sorted list
+//! of accounts to another pallet. It needs some other pallet to give it some information about the
+//! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
 //!
 //! # ⚠️ WARNING ⚠️
 //!
@@ -27,21 +32,26 @@
 //!
 //! The data structure exposed by this pallet aims to be optimized for:
 //!
-//! - insertions and removals
+//! - insertions and removals.
 //! - iteration over the top* N items by weight, where the precise ordering of items doesn't
 //!   particularly matter.
 //!
 //! # Details
 //!
-//! - items are kept in bags, which are delineated by their range of weight. (See [`BagThresholds`])
-//! - for iteration bags are chained together from highest to lowest and elements within the bag
+//! - items are kept in bags, which are delineated by their range of weight (See [`BagThresholds`]).
+//! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
-//! - items within a bag are in order of insertion. Thus removing an item and re-inserting it
-//!   will worsen its position in list iteration; this reduces incentives for some types
-//!   of spam that involve consistently removing and inserting for better position. Further,
+//! - thus, items within a bag are iterated in order of insertion. Thus removing an item and
+//!   re-inserting it will worsen its position in list iteration; this reduces incentives for some
+//!   types of spam that involve consistently removing and inserting for better position. Further,
 //!   ordering granularity is thus dictated by range between each bag threshold.
 //! - if an items weight changes to a value no longer within the range of its current bag its
 //!   position will need to be updated by an external actor with rebag or removal & insertion.
+//
+//! ### Further Plans
+//!
+//! *new terminology*: fully decouple this pallet from voting names, use account id instead of
+//! voter and priority instead of weight.
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
@@ -92,7 +102,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
-		// Something that implements `trait StakingVoteWeight`.
+		// Something that provides the weights of voters.
 		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
 
 		/// The list of thresholds separating the various voter bags.
@@ -159,13 +169,6 @@ pub mod pallet {
 	pub(crate) type VoterNodes<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
-	/// Which bag currently contains a particular voter.
-	///
-	/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
-	/// slashed.
-	#[pallet::storage]
-	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VoteWeight>; // TODO: retire this storage item.
-
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
 	#[pallet::storage]
@@ -223,7 +226,7 @@ impl<T: Config> Pallet<T> {
 	) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T>::from_id(&account)
+		let maybe_movement = list::Node::<T>::get(&account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));

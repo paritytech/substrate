@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
 	mock::{ext_builder::*, test_utils::*, *},
-	CounterForVoters, VoterBagFor, VoterBags, VoterNodes,
+	CounterForVoters, VoterBags, VoterNodes,
 };
 use frame_support::{assert_ok, assert_storage_noop};
 
@@ -9,10 +9,9 @@ use frame_support::{assert_ok, assert_storage_noop};
 fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// syntactic sugar to create a raw node
-		let node = |id, prev, next| Node::<Runtime> { id, prev, next, bag_upper: 0 };
+		let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
 
 		assert_eq!(CounterForVoters::<Runtime>::get(), 4);
-		assert_eq!(VoterBagFor::<Runtime>::iter().count(), 4);
 		assert_eq!(VoterNodes::<Runtime>::iter().count(), 4);
 		assert_eq!(VoterBags::<Runtime>::iter().count(), 2);
 
@@ -28,20 +27,12 @@ fn basic_setup_works() {
 			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0 }
 		);
 
-		assert_eq!(VoterBagFor::<Runtime>::get(2).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3)));
-
-		assert_eq!(VoterBagFor::<Runtime>::get(3).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4)));
-
-		assert_eq!(VoterBagFor::<Runtime>::get(4).unwrap(), 1000);
-		assert_eq!(VoterNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None));
-
-		assert_eq!(VoterBagFor::<Runtime>::get(1).unwrap(), 10);
-		assert_eq!(VoterNodes::<Runtime>::get(1).unwrap(), node(1, None, None));
+		assert_eq!(VoterNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), 1000));
+		assert_eq!(VoterNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4), 1000));
+		assert_eq!(VoterNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None, 1000));
+		assert_eq!(VoterNodes::<Runtime>::get(1).unwrap(), node(1, None, None, 10));
 
 		// non-existent id does not have a storage footprint
-		assert_eq!(VoterBagFor::<Runtime>::get(41), None);
 		assert_eq!(VoterNodes::<Runtime>::get(41), None);
 
 		// iteration of the bags would yield:
@@ -183,16 +174,13 @@ mod voter_list {
 	fn remove_works() {
 		use crate::{CounterForVoters, VoterBags, VoterNodes};
 		let ensure_left = |id, counter| {
-			assert!(!VoterBagFor::<Runtime>::contains_key(id));
 			assert!(!VoterNodes::<Runtime>::contains_key(id));
 			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
-			assert_eq!(VoterBagFor::<Runtime>::iter().count() as u32, counter);
 			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
 			// when removing a non-existent voter
-			assert!(!VoterBagFor::<Runtime>::contains_key(42));
 			assert!(!VoterNodes::<Runtime>::contains_key(42));
 			List::<Runtime>::remove(&42);
 
@@ -237,7 +225,7 @@ mod voter_list {
 	fn update_position_for_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a correctly placed account 1
-			let node = Node::<Runtime>::from_id(&1).unwrap();
+			let node = Node::<Runtime>::get(&1).unwrap();
 			assert!(!node.is_misplaced(10));
 
 			// .. it is invalid with weight 20
@@ -249,7 +237,7 @@ mod voter_list {
 			assert_eq!(get_bags(), vec![(20, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// get the new updated node; try and update the position with no change in weight.
-			let node = Node::<Runtime>::from_id(&1).unwrap();
+			let node = Node::<Runtime>::get(&1).unwrap();
 			// TODO: we can pass a ref to node to this function as well.
 			assert_storage_noop!(assert_eq!(
 				List::<Runtime>::update_position_for(node.clone(), 20),
@@ -261,7 +249,7 @@ mod voter_list {
 			assert_eq!(get_bags(), vec![(1_000, vec![2, 3, 4, 1])]);
 
 			// moving withing that bag again is a noop
-			let node = Node::<Runtime>::from_id(&1).unwrap();
+			let node = Node::<Runtime>::get(&1).unwrap();
 			assert_storage_noop!(assert_eq!(
 				List::<Runtime>::update_position_for(node.clone(), 750),
 				None,
@@ -322,6 +310,23 @@ mod bags {
 	}
 
 	#[test]
+	fn insert_node_sets_proper_bag() {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			let node = |id, bag_upper| Node::<Runtime> { id, prev: None, next: None, bag_upper };
+
+			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4])]);
+
+			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
+			bag_10.insert_node(node(42, 5));
+
+			assert_eq!(
+				VoterNodes::<Runtime>::get(&42).unwrap(),
+				Node { bag_upper: 10, prev: Some(1), next: None, id: 42 }
+			);
+		});
+	}
+
+	#[test]
 	fn insert_node_happy_paths_works() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let node = |id, bag_upper| Node::<Runtime> { id, prev: None, next: None, bag_upper };
@@ -353,7 +358,7 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_20), vec![62, 61]);
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
-				Node::<Runtime>::get(20, &61).unwrap(),
+				Node::<Runtime>::get(&61).unwrap(),
 				Node::<Runtime> { id: 61, prev: Some(62), next: None, bag_upper: 20 }
 			);
 
@@ -374,14 +379,14 @@ mod bags {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
 			// bag.
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
-			bag_1000.insert_node(node(42, Some(1), Some(1), 0));
+			bag_1000.insert_node(node(42, Some(1), Some(1), 500));
 
 			// then the proper perv and next is set.
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4, 42]);
 
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
-				Node::<Runtime>::get(1_000, &42).unwrap(),
+				Node::<Runtime>::get(&42).unwrap(),
 				node(42, Some(4), None, bag_1000.bag_upper)
 			);
 		});
@@ -402,7 +407,7 @@ mod bags {
 			// and the last accessible node has an **incorrect** prev pointer.
 			// TODO: consider doing a check on insert, it is cheap.
 			assert_eq!(
-				Node::<Runtime>::get(1_000, &3).unwrap(),
+				Node::<Runtime>::get(&3).unwrap(),
 				node(3, Some(4), None, bag_1000.bag_upper)
 			);
 		});
@@ -418,7 +423,7 @@ mod bags {
 
 			// and the re-fetched node has bad pointers
 			assert_eq!(
-				Node::<Runtime>::get(1_000, &2).unwrap(),
+				Node::<Runtime>::get(&2).unwrap(),
 				node(2, Some(4), None, bag_1000.bag_upper)
 			);
 			//         ^^^ despite being the bags head, it has a prev
@@ -469,7 +474,7 @@ mod bags {
 				assert_eq!(bag_as_ids(&bag_2000), vec![15, 16, 17, 18, 19]);
 
 				// when removing a node that is not pointing at the head or tail
-				let node_4 = Node::<Runtime>::get(bag_1000.bag_upper, &4).unwrap();
+				let node_4 = Node::<Runtime>::get(&4).unwrap();
 				let node_4_pre_remove = node_4.clone();
 				bag_1000.remove_node(&node_4);
 
@@ -480,7 +485,7 @@ mod bags {
 				assert_eq!(node_4, node_4_pre_remove);
 
 				// when removing a head that is not pointing at the tail
-				let node_2 = Node::<Runtime>::get(bag_1000.bag_upper, &2).unwrap();
+				let node_2 = Node::<Runtime>::get(&2).unwrap();
 				bag_1000.remove_node(&node_2);
 
 				// then
@@ -488,7 +493,7 @@ mod bags {
 				assert_ok!(bag_1000.sanity_check());
 
 				// when removing a tail that is not pointing at the head
-				let node_14 = Node::<Runtime>::get(bag_1000.bag_upper, &14).unwrap();
+				let node_14 = Node::<Runtime>::get(&14).unwrap();
 				bag_1000.remove_node(&node_14);
 
 				// then
@@ -496,7 +501,7 @@ mod bags {
 				assert_ok!(bag_1000.sanity_check());
 
 				// when removing a tail that is pointing at the head
-				let node_13 = Node::<Runtime>::get(bag_1000.bag_upper, &13).unwrap();
+				let node_13 = Node::<Runtime>::get(&13).unwrap();
 				bag_1000.remove_node(&node_13);
 
 				// then
@@ -504,7 +509,7 @@ mod bags {
 				assert_ok!(bag_1000.sanity_check());
 
 				// when removing a node that is both the head & tail
-				let node_3 = Node::<Runtime>::get(bag_1000.bag_upper, &3).unwrap();
+				let node_3 = Node::<Runtime>::get(&3).unwrap();
 				bag_1000.remove_node(&node_3);
 				bag_1000.put(); // put into storage so `get` returns the updated bag
 
@@ -512,7 +517,7 @@ mod bags {
 				assert_eq!(Bag::<Runtime>::get(1_000), None);
 
 				// when removing a node that is pointing at both the head & tail
-				let node_11 = Node::<Runtime>::get(bag_10.bag_upper, &11).unwrap();
+				let node_11 = Node::<Runtime>::get(&11).unwrap();
 				bag_10.remove_node(&node_11);
 
 				// then
@@ -520,7 +525,7 @@ mod bags {
 				assert_ok!(bag_10.sanity_check());
 
 				// when removing a head that is pointing at the tail
-				let node_1 = Node::<Runtime>::get(bag_10.bag_upper, &1).unwrap();
+				let node_1 = Node::<Runtime>::get(&1).unwrap();
 				bag_10.remove_node(&node_1);
 
 				// then
@@ -531,7 +536,7 @@ mod bags {
 				bag_10.put();
 
 				// when removing a node that is pointing at the head but not the tail
-				let node_16 = Node::<Runtime>::get(bag_2000.bag_upper, &16).unwrap();
+				let node_16 = Node::<Runtime>::get(&16).unwrap();
 				bag_2000.remove_node(&node_16);
 
 				// then
@@ -539,7 +544,7 @@ mod bags {
 				assert_ok!(bag_2000.sanity_check());
 
 				// when removing a node that is pointing at tail, but not head
-				let node_18 = Node::<Runtime>::get(bag_2000.bag_upper, &18).unwrap();
+				let node_18 = Node::<Runtime>::get(&18).unwrap();
 				bag_2000.remove_node(&node_18);
 
 				// then
@@ -580,7 +585,7 @@ mod bags {
 		// Removing a node that is in another bag, will mess up the other bag.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// given a tail node is in bag 1_000
-			let node_4 = Node::<Runtime>::get(1_000, &4).unwrap();
+			let node_4 = Node::<Runtime>::get(&4).unwrap();
 
 			// when we remove it from bag 10
 			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
@@ -607,7 +612,7 @@ mod node {
 	#[test]
 	fn is_misplaced_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node = Node::<Runtime>::get(10, &1).unwrap();
+			let node = Node::<Runtime>::get(&1).unwrap();
 
 			// given
 			assert_eq!(node.bag_upper, 10);
