@@ -180,8 +180,42 @@ impl BenchmarkCmd {
 		// Run the benchmarks
 		let mut batches = Vec::new();
 		let mut timer = time::SystemTime::now();
-		for (pallet, extrinsic, _components) in benchmarks_to_run {
-			for s in 0..self.steps {
+		for (pallet, extrinsic, components) in benchmarks_to_run {
+			let all_components = if components.is_empty() {
+				vec![Default::default()]
+			} else {
+				let mut all_components = Vec::new();
+				for (idx, (name, low, high)) in components.iter().enumerate() {
+					let lowest = self.lowest_range_values.get(idx).cloned().unwrap_or(*low);
+					let highest = self.highest_range_values.get(idx).cloned().unwrap_or(*high);
+
+					let diff = highest - lowest;
+
+					// Create up to `STEPS` steps for that component between high and low.
+					let step_size = (diff / self.steps).max(1);
+					let num_of_steps = diff / step_size + 1;
+					for s in 0..num_of_steps {
+						// This is the value we will be testing for component `name`
+						let component_value = lowest + step_size * s;
+
+						// Select the max value for all the other components.
+						let c: Vec<(BenchmarkParameter, u32)> = components
+							.iter()
+							.enumerate()
+							.map(|(idx, (n, _, h))| {
+								if n == name {
+									(*n, component_value)
+								} else {
+									(*n, *self.highest_range_values.get(idx).unwrap_or(h))
+								}
+							})
+							.collect();
+						all_components.push(c);
+					}
+				}
+				all_components
+			};
+			for selected_components in all_components {
 				for r in 0..self.repeat {
 					// This should run only a single instance of a benchmark for `pallet` and
 					// `extrinsic`. All loops happen above.
@@ -194,12 +228,8 @@ impl BenchmarkCmd {
 						&(
 							&pallet.clone(),
 							&extrinsic.clone(),
-							self.lowest_range_values.clone(),
-							self.highest_range_values.clone(),
-							(s, self.steps),
-							(r, self.repeat),
+							&selected_components.clone(),
 							!self.no_verify,
-							self.extra,
 						)
 							.encode(),
 						extensions(),
@@ -228,7 +258,7 @@ impl BenchmarkCmd {
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								s,
+								self.steps, // todo show step
 								self.steps,
 								r,
 								self.repeat,
