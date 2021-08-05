@@ -148,7 +148,7 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
 pub struct BlockExecutor;
 
 impl frame_executive::ExecuteBlock<Block> for BlockExecutor {
-	fn execute_block(block: Block) {
+	fn execute_block(block: Block, info: Vec<Option<sp_runtime::AccountId32>>) {
 		execute_block(block);
 	}
 }

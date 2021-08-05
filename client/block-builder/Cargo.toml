@@ -15,17 +15,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
-sp-state-machine = "0.8.0"
-sp-runtime = "2.0.0"
-sp-api = "2.0.0"
-sp-consensus = "0.8.0"
-sp-blockchain = "2.0.0"
-sp-core = "2.0.0"
-sp-block-builder = "2.0.0"
-sp-inherents = "2.0.0"
-sp-std = { default-features = false, version = '2.0.0' }
-sp-transaction-pool = { version = "2.0.0"}
-sc-client-api = "2.0.0"
+sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-block-builder = { version = "2.0.0", path = "../../primitives/block-builder" }
+sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+sp-std = { default-features = false, version = '2.0.0' , path = "../../primitives/std"}
+sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool"}
 codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
 extrinsic-info-runtime-api = { path='../../primitives/extrinsic-info-runtime-api', version='2.0.0' }
 extrinsic-shuffler = { path='../../client/shuffler', version='0.8.0' }
@@ -35,7 +35,7 @@ rand = "0.7.3"
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
-sp-trie = "2.0.0"
+sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
 
 
 [features]
