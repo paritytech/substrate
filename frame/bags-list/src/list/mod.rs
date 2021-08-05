@@ -316,9 +316,8 @@ impl<T: Config> List<T> {
 		node.is_misplaced(new_weight).then(move || {
 			let old_idx = node.bag_upper;
 
-			// clear the old bag head/tail pointers as necessary
 			if !node.is_terminal() {
-				// this node is not a head or a tail, so we can just cut it out of the list.
+				// this node is not a head or a tail, so we can just cut it out of the bag.
 				node.excise();
 			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
 				// this is a head or tail, so the bag must be updated.
