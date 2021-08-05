@@ -23,6 +23,9 @@
 //! of accounts to another pallet. It needs some other pallet to give it some information about the
 //! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
 //!
+//! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
+//! the `SortedListProvider` (i.e. `on_insert`) at their genesis.
+//!
 //! # ⚠️ WARNING ⚠️
 //!
 //! Do not insert an id that already exists in the list; doing so can result in catastrophic failure
@@ -53,13 +56,16 @@
 //! *new terminology*: fully decouple this pallet from voting names, use account id instead of
 //! voter and priority instead of weight.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
+use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 mod list;
-#[cfg(any(feature = "runtime-benchmarks", test))]
+#[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
@@ -250,6 +256,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	fn on_remove(voter: &T::AccountId) {
 		List::<T>::remove(voter)
+	}
+
+	fn regenerate(
+		all: impl IntoIterator<Item = T::AccountId>,
+		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) -> u32 {
+		List::<T>::regenerate(all, weight_of)
 	}
 
 	fn sanity_check() -> Result<(), &'static str> {

@@ -515,6 +515,9 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
 		pallet_election_provider_multi_phase::OnChainConfig<Self>,
 	>;
+	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
+	// Note that this method does not scale to a very large number of nominators.
+	type SortedListProvider = BagsList;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
@@ -605,7 +608,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
 
-// TODO: where' the file that generated this??
 parameter_types! {
 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
 }
@@ -1241,7 +1243,7 @@ construct_runtime!(
 		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Config<T>, Event<T>},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Config<T>, Event<T>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -1575,6 +1577,7 @@ impl_runtime_apis! {
 
 			list_benchmark!(list, extra, pallet_assets, Assets);
 			list_benchmark!(list, extra, pallet_babe, Babe);
+			list_benchmark!(list, extra, pallet_bags_list, BagsList);
 			list_benchmark!(list, extra, pallet_balances, Balances);
 			list_benchmark!(list, extra, pallet_bounties, Bounties);
 			list_benchmark!(list, extra, pallet_collective, Council);

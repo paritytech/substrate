@@ -76,13 +76,13 @@ impl<T: Config> List<T> {
 	/// consensus.
 	///
 	/// Returns the number of voters migrated.
-	#[allow(dead_code)]
 	pub fn regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
-	) {
+	) -> u32 {
 		Self::clear();
 		Self::insert_many(all, weight_of);
+		0 // TODO
 	}
 
 	/// Migrate the voter list from one set of thresholds to another.
@@ -125,7 +125,7 @@ impl<T: Config> List<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue;
+				continue
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
@@ -136,7 +136,7 @@ impl<T: Config> List<T> {
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in old_set.difference(&new_set).copied() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue;
+				continue
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
@@ -303,11 +303,11 @@ impl<T: Config> List<T> {
 	/// [`self.insert`]. However, given large quantities of voters to move, it may be more efficient
 	/// to call [`self.remove_many`] followed by [`self.insert_many`].
 	pub(crate) fn update_position_for(
-		mut node: Node<T>,
+		node: Node<T>,
 		new_weight: VoteWeight,
 	) -> Option<(VoteWeight, VoteWeight)> {
 		node.is_misplaced(new_weight).then(move || {
-			let old_idx = node.bag_upper;
+			let old_bag_upper = node.bag_upper;
 
 			// clear the old bag head/tail pointers as necessary
 			if !node.is_terminal() {
@@ -338,7 +338,7 @@ impl<T: Config> List<T> {
 			bag.insert_node(node);
 			bag.put();
 
-			(old_idx, new_idx)
+			(old_bag_upper, new_bag_upper)
 		})
 	}
 
@@ -483,7 +483,7 @@ impl<T: Config> Bag<T> {
 				// this should never happen, but this check prevents a worst case infinite loop
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return;
+				return
 			};
 		}
 

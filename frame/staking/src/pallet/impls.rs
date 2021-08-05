@@ -1188,7 +1188,8 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
-		let active: BalanceOf<T> = weight.try_into().unwrap();
+		use sp_std::convert::TryInto;
+		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;
 		<Ledger<T>>::insert(who, ledger);
@@ -1213,6 +1214,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	}
 	fn on_remove(_voter: &T::AccountId) {
 		// nothing to do on update.
+	}
+	fn regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
 	}
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())

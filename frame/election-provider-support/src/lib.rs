@@ -318,6 +318,13 @@ pub trait SortedListProvider<AccountId> {
 	fn on_remove(voter: &AccountId);
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
+	/// Regenerate this list from scratch. Returns the count of items inserted.
+	///
+	/// This should typically only be used to enable this flag at a runtime upgrade.
+	fn regenerate(
+		all: impl IntoIterator<Item = AccountId>,
+		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+	) -> u32;
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
