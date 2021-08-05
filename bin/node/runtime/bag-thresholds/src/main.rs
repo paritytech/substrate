@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Make the set of voting bag thresholds to be used in `voter_bags.rs`.
+//! Make the set of bag thresholds to be used in pallet-bags-list.
 
-use pallet_voter_bags::make_bags::generate_thresholds_module;
+use pallet_bags_list::make_bags::generate_thresholds_module;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use node_runtime::Runtime;
@@ -39,11 +39,14 @@ fn main() -> Result<(), std::io::Error> {
 
 
 
-	ext.execute_with(||
-		let existential_deposit = <Runtime::Currency as Currency<AccountIdOf<T>>>::minimum_balance();
-		let issuance = <Runtime::Currency as Currency<AccountIdOf<T>>>::total_issuance();
-		let existential_weight = Runtime::CurrencyToVote::to_vote(existential_deposit, issuance);
+	let res = ext.execute_with(||{
+		// let existential_deposit = <Runtime::Currency as Currency<Runtime::AccountId>>::minimum_balance();
+		let existential_deposit = <Runtime as pallet_staking::Config>::Currency::minimum_balance();
+		let issuance = <Runtime as pallet_staking::Config>::Currency::total_issuance();
+		let existential_weight = <Runtime as pallet_staking::Config>::CurrencyToVote::to_vote(existential_deposit, issuance);
 
 		generate_thresholds_module::<node_runtime::Runtime>(n_bags, existential_weight, &output);
-	)
+	});
+
+	Ok(res)
 }

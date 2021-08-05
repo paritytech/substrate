@@ -4473,8 +4473,10 @@ dependencies = [
 name = "node-runtime-bag-thresholds"
 version = "3.0.0"
 dependencies = [
+ "frame-support",
  "node-runtime",
  "pallet-bags-list",
+ "pallet-staking",
  "sp-io",
  "structopt",
 ]
