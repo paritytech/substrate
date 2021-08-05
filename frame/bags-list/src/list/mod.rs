@@ -332,7 +332,7 @@ impl<T: Config> List<T> {
 
 			// put the voter into the appropriate new bag.
 			let new_bag_upper = notional_bag_for::<T>(new_weight);
-			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
+			let mut bag = Bag::<T>::get_or_make(new_bag_upper);
 			// prev, next, and bag_upper of the node are updated inside `insert_node`, also
 			// `node.put` is in there.
 			bag.insert_node(node);
