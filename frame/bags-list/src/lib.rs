@@ -46,7 +46,10 @@
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarks;
 mod list;
+// #[cfg(any(feature = "runtime-benchmarks", test))]
 #[cfg(test)]
 mod mock;
 #[cfg(test)]

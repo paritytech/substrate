@@ -69,8 +69,7 @@ pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
 	/// Remove all data associated with the voter list from storage.
-	// TODO @kian can we just move this code block to withing `generate` ?
-	fn clear() {
+	pub(crate) fn clear() {
 		crate::CounterForVoters::<T>::kill();
 		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
