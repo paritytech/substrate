@@ -275,12 +275,9 @@ mod sorted_list_provider {
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
-			// when removing a non-existent voter
+			// it is a noop removing a non-existent voter
 			assert!(!VoterNodes::<Runtime>::contains_key(42));
-			<BagsList as SortedListProvider<AccountId>>::on_remove(&42);
-
-			// then nothing changes
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+			assert_storage_noop!(BagsList::on_remove(&42));
 
 			// when removing a node from a bag with multiple nodes
 			<BagsList as SortedListProvider<AccountId>>::on_remove(&2);

@@ -3,6 +3,7 @@ use crate::{
 	mock::{ext_builder::*, test_utils::*, *},
 	CounterForVoters, VoterBags, VoterNodes,
 };
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, assert_storage_noop};
 
 #[test]
@@ -180,14 +181,9 @@ mod voter_list {
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
-			// when removing a non-existent voter
+			// removing a non-existent voter is a noop
 			assert!(!VoterNodes::<Runtime>::contains_key(42));
-			List::<Runtime>::remove(&42);
-
-			// then nothing changes
-			assert_eq!(get_list_as_ids(), vec![2, 3, 4, 1]);
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4])]);
-			assert_eq!(CounterForVoters::<Runtime>::get(), 4);
+			assert_storage_noop!(List::<Runtime>::remove(&42));
 
 			// when removing a node from a bag with multiple nodes
 			List::<Runtime>::remove(&2);
@@ -218,6 +214,19 @@ mod voter_list {
 
 			// bags are deleted via removals
 			assert_eq!(VoterBags::<Runtime>::iter().count(), 0);
+		});
+	}
+
+	#[test]
+	fn remove_many_is_noop_with_non_existent_ids() {
+		ExtBuilder::default().build_and_execute(|| {
+			let non_existent_ids = vec![&42, &666, &13];
+
+			// when account ids don' exist in the list
+			assert!(non_existent_ids.iter().all(|id| !BagsList::contains(id)));
+
+			// then removing them is a noop
+			assert_storage_noop!(List::<Runtime>::remove_many(non_existent_ids));
 		});
 	}
 

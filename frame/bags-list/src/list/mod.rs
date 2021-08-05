@@ -263,8 +263,6 @@ impl<T: Config> List<T> {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
-		// TODO: assert that it is noop with bad data.
-
 		for voter_id in voters.into_iter() {
 			let node = match Node::<T>::get(voter_id) {
 				Some(node) => node,
