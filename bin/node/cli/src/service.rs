@@ -322,7 +322,13 @@ pub fn new_full_base(
 							slot_duration,
 						);
 
-					Ok((timestamp, slot, uncles))
+					let storage_proof =
+						sp_transaction_storage_proof::registration::new_data_provider(
+							&*client_clone,
+							&parent,
+						)?;
+
+					Ok((timestamp, slot, uncles, storage_proof))
 				}
 			},
 			force_authoring,
