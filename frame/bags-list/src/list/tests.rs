@@ -9,8 +9,7 @@ use frame_support::{assert_ok, assert_storage_noop};
 fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// syntactic sugar to create a raw node
-		let node =
-			|id, prev, next| Node::<Runtime> { id, prev, next, bag_upper: 0 };
+		let node = |id, prev, next| Node::<Runtime> { id, prev, next, bag_upper: 0 };
 
 		assert_eq!(CounterForVoters::<Runtime>::get(), 4);
 		assert_eq!(VoterBagFor::<Runtime>::iter().count(), 4);
@@ -245,7 +244,6 @@ mod voter_list {
 			assert!(node.is_misplaced(20));
 
 			// then updating position moves it to the correct bag
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 			assert_eq!(List::<Runtime>::update_position_for(node, 20), Some((10, 20)));
 
 			assert_eq!(get_bags(), vec![(20, vec![1]), (1_000, vec![2, 3, 4])]);
@@ -326,12 +324,7 @@ mod bags {
 	#[test]
 	fn insert_node_happy_paths_works() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			let node = |id, bag_upper| Node::<Runtime> {
-				id,
-				prev: None,
-				next: None,
-				bag_upper,
-			};
+			let node = |id, bag_upper| Node::<Runtime> { id, prev: None, next: None, bag_upper };
 
 			// when inserting into a bag with 1 node
 			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
@@ -353,24 +346,15 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_20), vec![62]);
 
 			// when inserting a node pointing to the accounts not in the bag
-			let node_61 = Node::<Runtime> {
-				id: 61,
-				prev: Some(21),
-				next: Some(101),
-				bag_upper: 20,
-			};
+			let node_61 =
+				Node::<Runtime> { id: 61, prev: Some(21), next: Some(101), bag_upper: 20 };
 			bag_20.insert_node(node_61);
 			// then ids are in order
 			assert_eq!(bag_as_ids(&bag_20), vec![62, 61]);
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
 				Node::<Runtime>::get(20, &61).unwrap(),
-				Node::<Runtime> {
-					id: 61,
-					prev: Some(62),
-					next: None,
-					bag_upper: 20,
-				}
+				Node::<Runtime> { id: 61, prev: Some(62), next: None, bag_upper: 20 }
 			);
 
 			// state of all bags is as expected
@@ -385,12 +369,7 @@ mod bags {
 	// Document improper ways `insert_node` may be getting used.
 	#[test]
 	fn insert_node_bad_paths_documented() {
-		let node = |id, prev, next, bag_upper| Node::<Runtime> {
-			id,
-			prev,
-			next,
-			bag_upper,
-		};
+		let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
 			// bag.
@@ -453,12 +432,7 @@ mod bags {
 	#[should_panic = "system logic error: inserting a node who has the id of tail"]
 	fn insert_node_duplicate_tail_panics_with_debug_assert() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node = |id, prev, next, bag_upper| Node::<Runtime> {
-				id,
-				prev,
-				next,
-				bag_upper,
-			};
+			let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
 
 			// given
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4])],);

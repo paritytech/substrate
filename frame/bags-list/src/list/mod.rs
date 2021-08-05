@@ -246,9 +246,6 @@ impl<T: Config> List<T> {
 		bag.insert(voter);
 
 		// new inserts are always the tail, so we must write the bag.
-		// TODO: @kianenigma maybe an optimization is to make the tail actually be a dummy node in storage
-		// then we could just update the tail dummy to point at the inserted node.. but then we have
-		// to write the tail dummy to storage... which doesn't seem any better
 		bag.put();
 
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
@@ -265,7 +262,7 @@ impl<T: Config> List<T> {
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
 	fn remove_many<'a>(voters: impl IntoIterator<Item = &'a T::AccountId>) {
-		let mut bags = BTreeMap::<VoteWeight, (Bag<T>, bool)>::new();
+		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
 		for voter_id in voters.into_iter() {
@@ -278,17 +275,14 @@ impl<T: Config> List<T> {
 			// check if node.is_terminal
 
 			if !node.is_terminal() {
-				// this node is not a head or a tail and thus the bag does not need to be updated
+				// this node is not a head or a tail and thus the bag does not need to be updated.
 				node.excise()
 			} else {
 				// this node is a head or tail, so the bag needs to be updated
 				let bag = bags
 					.entry(node.bag_upper)
-					.or_insert_with(|| (Bag::<T>::get_or_make(node.bag_upper), false));
-				if bag.0.remove_node(&node) { // TODO remove node doesn't need this bc is_terminal 
-					// if the bag head or tail was updated, mark that the bag should be put.
-					bag.1 = true;
-				}
+					.or_insert_with(|| Bag::<T>::get_or_make(node.bag_upper));
+				bag.remove_node(&node);
 			}
 
 			// now get rid of the node itself
@@ -296,10 +290,8 @@ impl<T: Config> List<T> {
 			crate::VoterBagFor::<T>::remove(voter_id);
 		}
 
-		for (_, (bag, should_put)) in bags {
-			if should_put {
-				bag.put();
-			}
+		for (_, bag) in bags {
+			bag.put();
 		}
 
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
@@ -324,19 +316,14 @@ impl<T: Config> List<T> {
 		node.is_misplaced(new_weight).then(move || {
 			let old_idx = node.bag_upper;
 
-			// TODO: there should be a way to move a non-head-tail node to another bag
-			// with just 1 bag read of the destination bag and zero writes
-			// https://github.com/paritytech/substrate/pull/9468/files/83289aa4a15d61e6cb334f9d7e7f6804cb7e3537..44875c511ebdc79270100720320c8e3d2d56eb4a#r680559166
-
 			// clear the old bag head/tail pointers as necessary
 			if !node.is_terminal() {
-				// this node is not a head or a tail, so we do not need to update its current bag.
+				// this node is not a head or a tail, so we can just cut it out of the list.
 				node.excise();
 			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
-				if bag.remove_node(&node) { // TODO remove node doesn't need this bc is_terminal 
-					// only right the bag to storage if the bag head OR tail changed.
-					bag.put();
-				}
+				// this is a head or tail, so the bag must be updated.
+				bag.remove_node(&node);
+				bag.put();
 			} else {
 				crate::log!(
 					error,
@@ -481,12 +468,7 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
 	fn insert(&mut self, id: T::AccountId) {
-		self.insert_node(Node::<T> {
-			id,
-			prev: None,
-			next: None,
-			bag_upper: self.bag_upper,
-		});
+		self.insert_node(Node::<T> { id, prev: None, next: None, bag_upper: self.bag_upper });
 	}
 
 	/// Insert a voter node into this bag.
@@ -540,26 +522,17 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
 	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
 	/// to update storage for the bag and `node`.
-	//
-	// TODO, @kianenigma if decide to keep is_terminal then we don't need to return a bool here
-	// afaict keeping is_terminal is a better optimization because in some case we don't need
-	// to fetch the bag remove is called on.
-	fn remove_node(&mut self, node: &Node<T>) -> bool {
-		// reassign neigbhoring nodes.
+	fn remove_node(&mut self, node: &Node<T>) {
+		// reassign neighboring nodes.
 		node.excise();
 
-		let mut removed = false;
 		// clear the bag head/tail pointers as necessary
 		if self.tail.as_ref() == Some(&node.id) {
 			self.tail = node.prev.clone();
-			removed = true;
 		}
 		if self.head.as_ref() == Some(&node.id) {
 			self.head = node.next.clone();
-			removed = true;
 		}
-
-		removed
 	}
 
 	/// Sanity check this bag.
