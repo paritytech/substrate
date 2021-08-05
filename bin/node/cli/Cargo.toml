@@ -43,7 +43,7 @@ rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
 
 # primitives
-sp-authority-discovery = { version = "4.0.0-dev",  path = "../../../primitives/authority-discovery" }
+sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
@@ -54,6 +54,8 @@ sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
+sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
@@ -70,7 +72,7 @@ sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
-sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
+sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 
 # frame dependencies
@@ -93,14 +95,24 @@ try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../ut
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.73", optional = true }
 wasm-bindgen-futures = { version = "0.4.18", optional = true }
-browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev"}
-libp2p-wasm-ext = { version = "0.28", features = ["websocket"], optional = true }
+browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev" }
+libp2p-wasm-ext = { version = "0.28", features = [
+	"websocket",
+], optional = true }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
-node-executor = { version = "4.0.0-dev", path = "../executor", features = [ "wasmtime" ] }
-sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
-sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/trie", features = ["memory-tracker"] }
+node-executor = { version = "4.0.0-dev", path = "../executor", features = [
+	"wasmtime",
+] }
+sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [
+	"wasmtime",
+] }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
+	"wasmtime",
+] }
+sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/trie", features = [
+	"memory-tracker",
+] }
 
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
@@ -133,7 +145,7 @@ path = "../../../client/cli"
 optional = true
 
 [features]
-default = [ "cli" ]
+default = ["cli"]
 browser = [
 	"browser-utils",
 	"wasm-bindgen",
@@ -157,7 +169,4 @@ runtime-benchmarks = [
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = [
-	"node-runtime/try-runtime",
-	"try-runtime-cli",
-]
+try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]

@@ -4227,6 +4227,8 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
+ "sp-transaction-pool",
+ "sp-transaction-storage-proof",
  "sp-trie",
  "structopt",
  "substrate-browser-utils",
