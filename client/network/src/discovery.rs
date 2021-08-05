@@ -941,7 +941,7 @@ mod tests {
 		},
 		identity::Keypair,
 		noise,
-		swarm::Swarm,
+		swarm::{Swarm, SwarmEvent},
 		yamux, Multiaddr, PeerId,
 	};
 	use std::{collections::HashSet, task::Poll};
@@ -1010,8 +1010,8 @@ mod tests {
 					match swarms[swarm_n].0.poll_next_unpin(cx) {
 						Poll::Ready(Some(e)) => {
 							match e {
-								DiscoveryOut::UnroutablePeer(other) |
-								DiscoveryOut::Discovered(other) => {
+								SwarmEvent::Behaviour(DiscoveryOut::UnroutablePeer(other)) |
+								SwarmEvent::Behaviour(DiscoveryOut::Discovered(other)) => {
 									// Call `add_self_reported_address` to simulate identify
 									// happening.
 									let addr = swarms
@@ -1032,7 +1032,7 @@ mod tests {
 
 									to_discover[swarm_n].remove(&other);
 								},
-								DiscoveryOut::RandomKademliaStarted(_) => {},
+								SwarmEvent::Behaviour(DiscoveryOut::RandomKademliaStarted(_)) => {},
 								e => {
 									panic!("Unexpected event: {:?}", e)
 								},
