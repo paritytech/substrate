@@ -1267,7 +1267,8 @@ macro_rules! impl_benchmark_test_suite {
 
 					let mut anything_failed = false;
 					println!("failing benchmark tests:");
-					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
+					for benchmark_metadata in $bench_module::<$test>::benchmarks($extra) {
+						let benchmark_name = &benchmark_metadata.name;
 						match std::panic::catch_unwind(|| {
 							$bench_module::<$test>::test_bench_by_name(benchmark_name)
 						}) {
