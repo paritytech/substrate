@@ -352,8 +352,8 @@ fn start_rpc_servers<
 	CM: CustomMiddleware<RpcMetadata>,
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
-		sc_rpc_server::RpcMiddleware,
-	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata, CM>>, Error>,
+		RpcMiddleware<CM>,
+	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata, CM>, Error>,
 >(
 	config: &Configuration,
 	mut gen_handler: H,

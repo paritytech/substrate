@@ -581,7 +581,7 @@ where
 		+ Chain<TBl>
 		+ BlockBackend<TBl>
 		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
-		+ ProofProvider<TBl>P
+		+ ProofProvider<TBl>
 		+ HeaderBackend<TBl>
 		+ BlockchainEvents<TBl>
 		+ ExecutorProvider<TBl>
