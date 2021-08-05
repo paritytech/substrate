@@ -486,7 +486,6 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub OffchainRepeat: BlockNumber = 5;
-	pub const VoterBagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
 }
 
 use frame_election_provider_support::onchain;
@@ -517,7 +516,6 @@ impl pallet_staking::Config for Runtime {
 		pallet_election_provider_multi_phase::OnChainConfig<Self>,
 	>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
-	type VoterBagThresholds = VoterBagThresholds;
 }
 
 parameter_types! {
@@ -605,6 +603,18 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = BenchmarkConfig;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+}
+
+// TODO: where' the file that generated this??
+parameter_types! {
+	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
+}
+
+impl pallet_bags_list::Config for Runtime {
+	type Event = Event;
+	type VoteWeightProvider = Staking;
+	type WeightInfo = ();
+	type BagThresholds = BagThresholds;
 }
 
 parameter_types! {
@@ -1231,6 +1241,7 @@ construct_runtime!(
 		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Config<T>, Event<T>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 

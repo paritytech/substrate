@@ -325,4 +325,7 @@ pub trait SortedListProvider<AccountId> {
 /// `SortedListProvider`.
 pub trait VoteWeightProvider<AccountId> {
 	fn vote_weight(who: &AccountId) -> VoteWeight;
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
 }

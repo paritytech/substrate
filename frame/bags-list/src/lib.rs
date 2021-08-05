@@ -56,11 +56,10 @@
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
 
-#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 mod list;
-// #[cfg(any(feature = "runtime-benchmarks", test))]
-#[cfg(test)]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 mod mock;
 #[cfg(test)]
 mod tests;
@@ -204,14 +203,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(|| {
-					assert!(
-						T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-						"Voter bag thresholds must strictly increase",
-					);
-				});
-			}
+			assert!(
+				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+				"Voter bag thresholds must strictly increase",
+			);
 		}
 	}
 }
