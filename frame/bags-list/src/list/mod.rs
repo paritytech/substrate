@@ -616,7 +616,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	pub(crate) fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 

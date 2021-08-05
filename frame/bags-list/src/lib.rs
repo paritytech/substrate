@@ -203,7 +203,7 @@ pub mod pallet {
 		pub fn rebag(origin: OriginFor<T>, reposition: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let current_weight = T::VoteWeightProvider::vote_weight(&reposition);
-			Pallet::<T>::do_rebag(&reposition, current_weight);
+			let _ = Pallet::<T>::do_rebag(&reposition, current_weight);
 			Ok(())
 		}
 	}

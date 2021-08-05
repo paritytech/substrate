@@ -1,4 +1,4 @@
-use frame_support::assert_ok;
+use frame_support::{assert_ok, assert_storage_noop};
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
@@ -110,9 +110,21 @@ mod pallet {
 
 	#[test]
 	fn wrong_rebag_is_noop() {
-		// if rebag is wrong,
-		// or the target is non-existent, then it is a noop
-		todo!()
+		ExtBuilder::default().build_and_execute(|| {
+			let node_3 = list::Node::<Runtime>::get(&3).unwrap();
+			// when account 3 is _not_ misplaced with weight 500
+			NextVoteWeight::set(500);
+			assert!(!node_3.is_misplaced(500));
+
+			// then calling rebag on account 3 with weight 500 is a noop
+			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 3), Ok(())));
+
+			// when account 42 is not in the list
+			assert!(!BagsList::contains(&42));
+
+			// then rebag-ing account 42 is a noop
+			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 42), Ok(())));
+		});
 	}
 
 	#[test]
