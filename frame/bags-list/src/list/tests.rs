@@ -224,14 +224,14 @@ mod voter_list {
 	#[test]
 	fn update_position_for_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// given a correctly placed account 1
+			// given a correctly placed account 1 at bag 10.
 			let node = Node::<Runtime>::get(&1).unwrap();
 			assert!(!node.is_misplaced(10));
 
 			// .. it is invalid with weight 20
 			assert!(node.is_misplaced(20));
 
-			// then updating position moves it to the correct bag
+			// move it to bag 20.
 			assert_eq!(List::<Runtime>::update_position_for(node, 20), Some((10, 20)));
 
 			assert_eq!(get_bags(), vec![(20, vec![1]), (1_000, vec![2, 3, 4])]);

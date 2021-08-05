@@ -14,7 +14,7 @@ impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingM
 	fn vote_weight(_: &AccountId) -> VoteWeight {
 		NextVoteWeight::get()
 	}
-	#[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn set_vote_weight_of(_: &AccountId, weight: VoteWeight) {
 		// we don't really keep a mapping, just set weight for everyone.
 		NextVoteWeight::set(weight)

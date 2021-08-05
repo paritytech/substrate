@@ -723,11 +723,38 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
-			CounterForNominators::<T>::mutate(|x| x.saturating_inc())
+			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
+			if !T::SortedListProvider::contains(who) {
+				T::SortedListProvider::on_insert(who.clone(), Self::weight_of_fn()(who));
+				debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+			} else {
+				// TODO: emit a lot of warnings.
+			}
 		}
+		// TODO: test: re-nominate should not increase the counter and T::SortedListProvider::count()
+		// consider these cases as well:
+		// chilled
+		// 		- validate
+		// 		- nominate
+		// 		- chill
+		// 		- bond-extra
+		// 		- unbond
+		// 		- rebond
+		// nominator
+		// 		- validate
+		// 		- nominate
+		// 		- chill
+		// 		- bond-extra
+		// 		- unbond
+		// 		- rebond
+		// validators
+		// 		- validate
+		// 		- nominate
+		// 		- chill
+		// 		- bond-extra
+		// 		- unbond
+		// 		- rebond
 		Nominators::<T>::insert(who, nominations);
-		T::SortedListProvider::on_insert(who.clone(), Self::weight_of_fn()(who));
-		debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -1181,7 +1208,12 @@ where
 
 impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn vote_weight(who: &T::AccountId) -> VoteWeight {
-		Self::weight_of(who)
+		// TODO: def. remove this.
+		if cfg!(feature = "runtime-benchmarks") {
+			Self::slashable_balance_of_vote_weight(who, sp_runtime::traits::Bounded::max_value())
+		} else {
+			Self::weight_of(who)
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1193,6 +1225,12 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;
 		<Ledger<T>>::insert(who, ledger);
+
+		// also, we play a trick to make sure that a issuance based-`CurrencyToVote` behaves well:
+		// This will make sure that total issuance is zero, thus the currency to vote will be a 1-1
+		// conversion.
+		// TODO
+		// let imbalance = T::Currency::burn(T::Currency::total_issuance());
 	}
 }
 
@@ -1205,6 +1243,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	}
 	fn count() -> u32 {
 		CounterForNominators::<T>::get()
+	}
+	fn contains(voter: &T::AccountId) -> bool {
+		Nominators::<T>::contains_key(voter)
 	}
 	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.

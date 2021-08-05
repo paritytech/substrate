@@ -45,6 +45,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core"}
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support", features = ["runtime-benchmarks"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
 [features]

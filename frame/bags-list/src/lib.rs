@@ -248,6 +248,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		CounterForVoters::<T>::get()
 	}
 
+	fn contains(voter: &T::AccountId) -> bool {
+		VoterNodes::<T>::contains_key(voter)
+	}
+
 	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
 		List::<T>::insert(voter, weight);
 	}
