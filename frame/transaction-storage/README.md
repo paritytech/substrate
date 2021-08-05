@@ -19,7 +19,8 @@ Edit the json chain spec file to customise the chain. The storage chain genesis 
 Note that `storagePeriod` is specified in blocks and changing it also requires code changes at the moment.
 
 Build a raw spec from the init spec.
-```
+
+```bash
 cargo run --release build-spec --chain=sc_init.json --raw > sc.json
 ```
 
