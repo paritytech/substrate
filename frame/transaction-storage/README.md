@@ -2,17 +2,19 @@
 
 Indexes transactions and manages storage proofs.
 
-Allows storing arbitrary data on the shain. Data is automaticcaly removed after `StoragePeriod` blocks, unless the storage is renewed.
+Allows storing arbitrary data on the chain. Data is automatically removed after `StoragePeriod` blocks, unless the storage is renewed.
 Validators must submit proof of storing a random chunk of data for block `N - StoragePeriod` when producing block `N`.
 
-# Runing a chain
+# Running a chain
 
-The following describes how to setup a new storage chain.
+The following describes how to set up a new storage chain.
 
 Start with generating a chain spec.
-```
+
+```bash
 cargo run --release -- build-spec --chain=local > sc_init.json
 ```
+
 Edit the json chain spec file to customise the chain. The storage chain genesis params are configured in the `transactionStorage` section.
 Note that `storagePeriod` is specified in blocks and changing it also requires code changes at the moment.
 
@@ -20,9 +22,10 @@ Build a raw spec from the init spec.
 ```
 cargo run --release build-spec --chain=sc_init.json --raw > sc.json
 ```
+
 Run a few validator nodes.
 
-```
+```bash
 cargo run --release -- --chain=sc.json -d /tmp/alice --storage-chain --keep-blocks=100800 --ipfs-server --validator --alice
 cargo run --release -- --chain=sc.json -d /tmp/bob --storage-chain --keep-blocks=100800 --ipfs-server --validator --bob
 ```
@@ -31,11 +34,12 @@ cargo run --release -- --chain=sc.json -d /tmp/bob --storage-chain --keep-blocks
 `--keep-blocks=100800` enables block pruning. The value here should be greater or equal than the storage period.
 `--ipfs-server` enables serving stored content over IPFS.
 
-Once the network is started, any other joining nodes need to sync with `--sync=fast`. Regular sync will fail because block pruning removes old blocks. The chain does noot keep full block history.
+Once the network is started, any other joining nodes need to sync with `--sync=fast`. Regular sync will fail because block pruning removes old blocks. The chain does not keep full block history.
 
-```
+```bash
 cargo run --release -- --chain=sc.json -d /tmp/charlie --storage-chain --keep-blocks=100800 --ipfs-server --validator --charlie --sync=fast
 ```
+
 # Making transactions
 
 To store data use the `transactionStorage.store` extrinsic. And IPFS CID can be generated from the Blake2-256 hash of the data.
@@ -50,7 +54,7 @@ To store data use the `transactionStorage.store` extrinsic. And IPFS CID can be 
 ```
 Data can be queried over IPFS
 
-```
+```bash
 ipfs swarm connect <substrate peer address>
 ipfs block get /ipfs/<CID> > kitten.jpeg
 ```
@@ -60,4 +64,3 @@ where `block` is the block number of the previous store or renew transction, and
 
 
 License: Apache-2.0
-
