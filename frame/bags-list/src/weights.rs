@@ -1,24 +1,18 @@
 use frame_support::{pallet_prelude::Weight, weights::constants::RocksDbWeight};
 
 pub trait WeightInfo {
-	fn rebag_middle() -> Weight;
+	fn rebag() -> Weight;
 }
 
 pub struct SubstrateWeight<T>(sp_std::marker::PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn rebag_middle() -> Weight {
-		// FAKE numbers
-		(84_501_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	fn rebag() -> Weight {
+		0
 	}
 }
 
 impl WeightInfo for () {
-	fn rebag_middle() -> Weight {
-		// FAKE numbers
-		(84_501_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	fn rebag() -> Weight {
+		0
 	}
 }

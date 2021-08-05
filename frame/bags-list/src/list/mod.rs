@@ -36,9 +36,9 @@ mod tests;
 /// Bags are identified by their upper threshold; the value returned by this function is guaranteed
 /// to be a member of `T::BagThresholds`.
 ///
-/// This is used instead of a simpler scheme, such as the index within `T::BagThresholds`,
-/// because in the event that bags are inserted or deleted, the number of affected voters which need
-/// to be migrated is smaller.
+/// This is used instead of a simpler scheme, such as the index within `T::BagThresholds`, because
+/// in the event that bags are inserted or deleted, the number of affected voters which need to be
+/// migrated is smaller.
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
@@ -54,12 +54,12 @@ fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 /// arbitrary and unbounded length, all having a vote weight within a particular constant range.
 /// This structure means that voters can be added and removed in `O(1)` time.
 ///
-/// Iteration is accomplished by chaining the iteration of each bag, from greatest to least.
-/// While the users within any particular bag are sorted in an entirely arbitrary order, the overall
-/// stake decreases as successive bags are reached. This means that it is valid to truncate
-/// iteration at any desired point; only those voters in the lowest bag (who are known to have
-/// relatively little power to affect the outcome) can be excluded. This satisfies both the desire
-/// for fairness and the requirement for efficiency.
+/// Iteration is accomplished by chaining the iteration of each bag, from greatest to least. While
+/// the users within any particular bag are sorted in an entirely arbitrary order, the overall stake
+/// decreases as successive bags are reached. This means that it is valid to truncate iteration at
+/// any desired point; only those voters in the lowest bag (who are known to have relatively little
+/// power to affect the outcome) can be excluded. This satisfies both the desire for fairness and
+/// the requirement for efficiency.
 pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
@@ -376,9 +376,9 @@ impl<T: Config> List<T> {
 
 /// A Bag is a doubly-linked list of voters.
 ///
-/// Note that we maintain both head and tail pointers. While it would be possible to get away
-/// with maintaining only a head pointer and cons-ing elements onto the front of the list, it's
-/// more desirable to ensure that there is some element of first-come, first-serve to the list's
+/// Note that we maintain both head and tail pointers. While it would be possible to get away with
+/// maintaining only a head pointer and cons-ing elements onto the front of the list, it's more
+/// desirable to ensure that there is some element of first-come, first-serve to the list's
 /// iteration so that there's no incentive to churn voter positioning to improve the chances of
 /// appearing within the voter set.
 #[derive(DefaultNoBound, Encode, Decode)]
