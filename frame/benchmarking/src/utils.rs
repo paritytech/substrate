@@ -123,7 +123,13 @@ pub struct BenchmarkConfig {
 pub struct BenchmarkList {
 	pub pallet: Vec<u8>,
 	pub instance: Vec<u8>,
-	pub benchmarks: Vec<Vec<u8>>,
+	pub benchmarks: Vec<BenchmarkMetadata>,
+}
+
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkMetadata {
+	pub name: Vec<u8>,
+	pub components: Vec<(BenchmarkParameter, u32, u32)>,
 }
 
 sp_api::decl_runtime_apis! {
@@ -228,7 +234,7 @@ pub trait Benchmarking<T> {
 	/// Parameters
 	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
 	///            needed for weight calculation.
-	fn benchmarks(extra: bool) -> Vec<&'static [u8]>;
+	fn benchmarks(extra: bool) -> Vec<BenchmarkMetadata>;
 
 	/// Run the benchmarks for this pallet.
 	///

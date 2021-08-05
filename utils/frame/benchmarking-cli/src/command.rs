@@ -158,7 +158,7 @@ impl BenchmarkCmd {
 			if pallet == &item.pallet[..] || pallet == &b"*"[..] {
 				if &pallet[..] == &b"*"[..] || &extrinsic[..] == &b"*"[..] {
 					for benchmark in item.benchmarks {
-						benchmarks_to_run.push((item.pallet.clone(), benchmark));
+						benchmarks_to_run.push((item.pallet.clone(), benchmark.name));
 					}
 				} else {
 					benchmarks_to_run.push((pallet.to_vec(), extrinsic.to_vec()));
@@ -365,7 +365,7 @@ fn list_benchmark(pallet_input: &[u8], extrinsic_input: &[u8], list: Vec<Benchma
 				println!(
 					"{}, {}",
 					pallet_string,
-					String::from_utf8(benchmark).expect("Encoded from String; qed"),
+					String::from_utf8(benchmark.name).expect("Encoded from String; qed"),
 				);
 			}
 		}

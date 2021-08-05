@@ -744,13 +744,26 @@ macro_rules! impl_benchmark {
 			$crate::Benchmarking<$crate::BenchmarkResults> for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*
 		{
-			fn benchmarks(extra: bool) -> $crate::Vec<&'static [u8]> {
-				let mut all = $crate::vec![ $( stringify!($name).as_ref() ),* ];
+			fn benchmarks(extra: bool) -> $crate::Vec<$crate::BenchmarkMetadata> {
+				let mut all_names = $crate::vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
 					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
-					all.retain(|x| !extra.contains(x));
+					all_names.retain(|x| !extra.contains(x));
 				}
-				all
+				all_names.into_iter().map(|benchmark| {
+					let selected_benchmark = match benchmark {
+						$( stringify!($name) => SelectedBenchmark::$name, )*
+						_ => panic!("all benchmarks should be selectable"),
+					};
+					let components = <
+						SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
+					>::components(&selected_benchmark);
+
+					$crate::BenchmarkMetadata {
+						name: benchmark.as_bytes().to_vec(),
+						components,
+					}
+				}).collect::<$crate::Vec<_>>()
 			}
 
 			fn run_benchmark(
@@ -1444,10 +1457,7 @@ macro_rules! list_benchmark {
 	( $list:ident, $extra:ident, $name:path, $( $location:tt )* ) => (
 		let pallet_string = stringify!($name).as_bytes();
 		let instance_string = stringify!( $( $location )* ).as_bytes();
-		let benchmarks = $( $location )*::benchmarks($extra)
-			.iter()
-			.map(|b| b.to_vec())
-			.collect::<Vec<_>>();
+		let benchmarks = $( $location )*::benchmarks($extra);
 		let pallet_benchmarks = BenchmarkList {
 			pallet: pallet_string.to_vec(),
 			instance: instance_string.to_vec(),
