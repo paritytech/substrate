@@ -283,19 +283,21 @@ where
 		method: String,
 		call_data: Bytes,
 	) -> FutureResult<Bytes> {
-		let r = self.block_or_best(block)
-			.and_then(|block| self
-				.client
-				.executor()
-				.call(
-					&BlockId::Hash(block),
-					&method,
-					&*call_data,
-					self.client.execution_extensions().configs().other,
-					None,
-				)
-				.map(Into::into)
-			).map_err(client_err);
+		let r = self
+			.block_or_best(block)
+			.and_then(|block| {
+				self.client
+					.executor()
+					.call(
+						&BlockId::Hash(block),
+						&method,
+						&*call_data,
+						self.client.execution_extensions().configs().other,
+						None,
+					)
+					.map(Into::into)
+			})
+			.map_err(client_err);
 		Box::new(result(r))
 	}
 

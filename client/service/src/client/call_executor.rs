@@ -31,8 +31,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 };
 use sp_state_machine::{
-	self, backend::Backend as _, ExecutionManager, Ext, OverlayedChanges,
-	StateMachine, StorageProof,
+	self, backend::Backend as _, ExecutionManager, Ext, OverlayedChanges, StateMachine,
+	StorageProof,
 };
 use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
@@ -102,7 +102,10 @@ where
 		{
 			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
-		} else if let Some(s) = self.wasm_substitutes.get(spec, onchain_code.heap_pages, onchain_code.context, id) {
+		} else if let Some(s) =
+			self.wasm_substitutes
+				.get(spec, onchain_code.heap_pages, onchain_code.context, id)
+		{
 			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
 			s
 		} else {
@@ -157,8 +160,9 @@ where
 			backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
 		let state = self.backend.state_at(*at)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		let runtime_code =
-			state_runtime_code.runtime_code(config.context).map_err(sp_blockchain::Error::RuntimeCode)?;
+		let runtime_code = state_runtime_code
+			.runtime_code(config.context)
+			.map_err(sp_blockchain::Error::RuntimeCode)?;
 
 		let runtime_code = self.check_override(runtime_code, at)?;
 
@@ -230,7 +234,8 @@ where
 					sp_state_machine::backend::BackendRuntimeCode::new(trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
-				let runtime_code = state_runtime_code.runtime_code(execution_manager.context)
+				let runtime_code = state_runtime_code
+					.runtime_code(execution_manager.context)
 					.map_err(sp_blockchain::Error::RuntimeCode)?;
 				let runtime_code = self.check_override(runtime_code, at)?;
 
@@ -260,7 +265,8 @@ where
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				let runtime_code = state_runtime_code.runtime_code(execution_manager.context)
+				let runtime_code = state_runtime_code
+					.runtime_code(execution_manager.context)
 					.map_err(sp_blockchain::Error::RuntimeCode)?;
 				let runtime_code = self.check_override(runtime_code, at)?;
 
@@ -318,8 +324,9 @@ where
 		})?;
 
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
-		let runtime_code =
-			state_runtime_code.runtime_code(sp_core::traits::CodeContext::Consensus).map_err(sp_blockchain::Error::RuntimeCode)?;
+		let runtime_code = state_runtime_code
+			.runtime_code(sp_core::traits::CodeContext::Consensus)
+			.map_err(sp_blockchain::Error::RuntimeCode)?;
 		let runtime_code = self.check_override(runtime_code, at)?;
 
 		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _, _>(
@@ -367,8 +374,7 @@ mod tests {
 
 	#[test]
 	fn should_get_override_if_exists() {
-		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, 1);
+		let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, 1);
 
 		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());

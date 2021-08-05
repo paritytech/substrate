@@ -191,8 +191,7 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
+	let executor = NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
 
 	let ext = {
 		let builder = match command.state {
@@ -265,8 +264,7 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
+	let executor = NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
 
 	let mode = match command.state {
 		State::Live { snapshot_path, modules } => {
@@ -347,8 +345,7 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
+	let executor = NativeExecutor::<ExecDispatch>::new(wasm_method.into(), max_runtime_instances);
 
 	let block_hash = shared.block_at::<Block>()?;
 	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;

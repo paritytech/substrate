@@ -32,8 +32,8 @@ use sp_core::{
 use sp_externalities::Extensions;
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{generic::BlockId, traits};
-pub use sp_state_machine::{ExecutionStrategy, ExecutionConfig};
 use sp_state_machine::{DefaultHandler, ExecutionManager};
+pub use sp_state_machine::{ExecutionConfig, ExecutionStrategy};
 use std::sync::{Arc, Weak};
 
 /// Execution configurations, per operation type.

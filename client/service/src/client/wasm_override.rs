@@ -153,7 +153,8 @@ where
 			match path.extension().map(|e| e.to_str()).flatten() {
 				Some("wasm") => {
 					let wasm = WasmBlob::new(fs::read(&path).map_err(handle_err)?);
-					let version = Self::runtime_version(executor, &wasm, Some(128), CodeContext::Consensus)?;
+					let version =
+						Self::runtime_version(executor, &wasm, Some(128), CodeContext::Consensus)?;
 					log::info!(
 						target: "wasm_overrides",
 						"Found wasm override in file: `{:?}`, version: {}",
@@ -231,8 +232,7 @@ mod tests {
 	#[test]
 	fn should_get_runtime_version() {
 		let wasm = WasmBlob::new(substrate_test_runtime::wasm_binary_unwrap().to_vec());
-		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, 1);
+		let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, 1);
 
 		let version =
 			WasmOverride::runtime_version(&executor, &wasm, Some(128), CodeContext::Consensus)

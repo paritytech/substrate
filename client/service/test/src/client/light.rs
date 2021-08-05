@@ -429,13 +429,15 @@ fn code_is_executed_at_genesis_only() {
 
 	let genesis_executor = GenesisCallExecutor::new(backend, DummyCallExecutor);
 	assert_eq!(
-		genesis_executor.call(
-			&BlockId::Number(0),
-			"test_method",
-			&[],
-			ExecutionStrategy::NativeElseWasm.in_consensus(),
-			None,
-		).unwrap(),
+		genesis_executor
+			.call(
+				&BlockId::Number(0),
+				"test_method",
+				&[],
+				ExecutionStrategy::NativeElseWasm.in_consensus(),
+				None,
+			)
+			.unwrap(),
 		vec![42],
 	);
 

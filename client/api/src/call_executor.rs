@@ -23,7 +23,7 @@ use sc_executor::{NativeVersion, RuntimeVersion};
 use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use sp_state_machine::{ExecutionManager, OverlayedChanges, StorageProof, ExecutionConfig};
+use sp_state_machine::{ExecutionConfig, ExecutionManager, OverlayedChanges, StorageProof};
 use std::{cell::RefCell, panic::UnwindSafe, result};
 
 use crate::execution_extensions::ExecutionExtensions;

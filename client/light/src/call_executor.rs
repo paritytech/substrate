@@ -33,8 +33,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 };
 use sp_state_machine::{
-	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager,
-	ExecutionStrategy, OverlayedChanges, StorageProof, ExecutionConfig,
+	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionConfig,
+	ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof,
 };
 
 use sp_api::{ProofRecorder, StorageTransactionCache};

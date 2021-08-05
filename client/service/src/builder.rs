@@ -291,10 +291,8 @@ where
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let executor = NativeExecutor::<TExecDisp>::new(
-		config.wasm_method,
-		config.max_runtime_instances,
-	);
+	let executor =
+		NativeExecutor::<TExecDisp>::new(config.wasm_method, config.max_runtime_instances);
 
 	let chain_spec = &config.chain_spec;
 	let fork_blocks = get_extension::<ForkBlocks<TBl>>(chain_spec.extensions())
@@ -381,10 +379,8 @@ where
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let executor = NativeExecutor::<TExecDisp>::new(
-		config.wasm_method,
-		config.max_runtime_instances,
-	);
+	let executor =
+		NativeExecutor::<TExecDisp>::new(config.wasm_method, config.max_runtime_instances);
 
 	let db_storage = {
 		let db_settings = sc_client_db::DatabaseSettings {

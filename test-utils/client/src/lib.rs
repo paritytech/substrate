@@ -24,7 +24,7 @@ pub mod client_ext;
 pub use self::client_ext::{ClientBlockImportExt, ClientExt};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionConfigs, ExecutionExtensions},
-	ForkBlocks, BadBlocks,
+	BadBlocks, ForkBlocks,
 };
 pub use sc_client_db::{self, Backend};
 pub use sc_executor::{self, NativeExecutor, WasmExecutionMethod};
@@ -35,7 +35,7 @@ pub use sp_keyring::{
 };
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 pub use sp_runtime::{Storage, StorageChild};
-pub use sp_state_machine::{ExecutionStrategy, ExecutionConfig};
+pub use sp_state_machine::{ExecutionConfig, ExecutionStrategy};
 
 use futures::{
 	future::{Future, FutureExt},

@@ -41,7 +41,7 @@ use node_runtime::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
-	execution_extensions::{ExecutionExtensions, ExecutionConfigs, ExecutionConfig},
+	execution_extensions::{ExecutionConfig, ExecutionConfigs, ExecutionExtensions},
 	BlockBackend, ExecutionStrategy,
 };
 use sc_client_db::PruningMode;

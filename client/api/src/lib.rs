@@ -39,7 +39,7 @@ pub use proof_provider::*;
 pub use sp_blockchain as blockchain;
 pub use sp_blockchain::HeaderBackend;
 
-pub use sp_state_machine::{ExecutionStrategy, StorageProof, ExecutionConfig};
+pub use sp_state_machine::{ExecutionConfig, ExecutionStrategy, StorageProof};
 pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
 
 /// Usage Information Provider interface

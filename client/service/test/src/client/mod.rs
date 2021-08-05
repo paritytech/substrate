@@ -220,9 +220,9 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
-	).execute(
-		ExecutionStrategy::NativeElseWasm.in_consensus(),
-	).unwrap();
+	)
+	.execute(ExecutionStrategy::NativeElseWasm.in_consensus())
+	.unwrap();
 	header = Header::decode(&mut &ret_data[..]).unwrap();
 
 	(vec![].and(&Block { header, extrinsics: transactions }), hash)
@@ -275,9 +275,9 @@ fn construct_genesis_should_work_with_native() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-	).execute(
-		ExecutionStrategy::NativeElseWasm.in_consensus(),
-	).unwrap();
+	)
+	.execute(ExecutionStrategy::NativeElseWasm.in_consensus())
+	.unwrap();
 }
 
 #[test]
@@ -312,9 +312,9 @@ fn construct_genesis_should_work_with_wasm() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-	).execute(
-		ExecutionStrategy::AlwaysWasm.in_consensus(),
-	).unwrap();
+	)
+	.execute(ExecutionStrategy::AlwaysWasm.in_consensus())
+	.unwrap();
 }
 
 #[test]
@@ -349,9 +349,8 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-	).execute(
-		ExecutionStrategy::NativeElseWasm.in_consensus(),
-	);
+	)
+	.execute(ExecutionStrategy::NativeElseWasm.in_consensus());
 	assert!(r.is_err());
 }
 

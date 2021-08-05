@@ -34,8 +34,8 @@ pub use sc_network::{
 };
 
 use prometheus_endpoint::Registry;
-pub use sc_client_api::execution_extensions::ExecutionConfigs;
 use sc_chain_spec::ChainSpec;
+pub use sc_client_api::execution_extensions::ExecutionConfigs;
 pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;

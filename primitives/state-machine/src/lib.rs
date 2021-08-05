@@ -175,7 +175,7 @@ mod execution {
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::ChildInfo,
-		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed, CodeContext},
+		traits::{CodeContext, CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_externalities::Extensions;
@@ -270,12 +270,10 @@ mod execution {
 			};
 
 			let strategy = match self.strategy {
-				ExecutionStrategy::AlwaysWasm => {
-					ExecutionStrategyWithHandler::AlwaysWasm(BackendTrustLevel::Trusted)
-				}
-				ExecutionStrategy::NativeWhenPossible => {
-					ExecutionStrategyWithHandler::NativeWhenPossible
-				}
+				ExecutionStrategy::AlwaysWasm =>
+					ExecutionStrategyWithHandler::AlwaysWasm(BackendTrustLevel::Trusted),
+				ExecutionStrategy::NativeWhenPossible =>
+					ExecutionStrategyWithHandler::NativeWhenPossible,
 				ExecutionStrategy::NativeElseWasm => ExecutionStrategyWithHandler::NativeElseWasm,
 				ExecutionStrategy::Both => ExecutionStrategyWithHandler::Both(failure_handler),
 			};
@@ -334,9 +332,8 @@ mod execution {
 	impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionConfig {
 		fn from(s: &'a ExecutionManager<F>) -> Self {
 			let strategy = match s.strategy {
-				ExecutionStrategyWithHandler::NativeWhenPossible => {
-					ExecutionStrategy::NativeWhenPossible
-				}
+				ExecutionStrategyWithHandler::NativeWhenPossible =>
+					ExecutionStrategy::NativeWhenPossible,
 				ExecutionStrategyWithHandler::AlwaysWasm(_) => ExecutionStrategy::AlwaysWasm,
 				ExecutionStrategyWithHandler::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
 				ExecutionStrategyWithHandler::Both(_) => ExecutionStrategy::Both,
@@ -621,11 +618,12 @@ mod execution {
 		) -> Result<NativeOrEncoded<R>, Box<dyn Error>>
 		where
 			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
+			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
+				+ UnwindSafe,
 			Handler: FnOnce(
 				CallResult<R, Exec::Error>,
 				CallResult<R, Exec::Error>,
-			) -> CallResult<R, Exec::Error>
+			) -> CallResult<R, Exec::Error>,
 		{
 			let changes_tries_enabled = self.changes_trie_state.is_some();
 			self.overlay.set_collect_extrinsics(changes_tries_enabled);
@@ -634,21 +632,18 @@ mod execution {
 				match manager.strategy {
 					ExecutionStrategyWithHandler::Both(on_consensus_failure) => self
 						.execute_call_with_both_strategy(native_call.take(), on_consensus_failure),
-					ExecutionStrategyWithHandler::NativeElseWasm => {
-						self.execute_call_with_native_else_wasm_strategy(native_call.take())
-					}
+					ExecutionStrategyWithHandler::NativeElseWasm =>
+						self.execute_call_with_native_else_wasm_strategy(native_call.take()),
 					ExecutionStrategyWithHandler::AlwaysWasm(trust_level) => {
 						let _abort_guard = match trust_level {
 							BackendTrustLevel::Trusted => None,
-							BackendTrustLevel::Untrusted => {
-								Some(sp_panic_handler::AbortGuard::never_abort())
-							}
+							BackendTrustLevel::Untrusted =>
+								Some(sp_panic_handler::AbortGuard::never_abort()),
 						};
 						self.execute_aux(false, native_call).0
-					}
-					ExecutionStrategyWithHandler::NativeWhenPossible => {
-						self.execute_aux(true, native_call).0
-					}
+					},
+					ExecutionStrategyWithHandler::NativeWhenPossible =>
+						self.execute_aux(true, native_call).0,
 				}
 			};
 
@@ -1167,7 +1162,9 @@ mod tests {
 		);
 
 		assert_eq!(
-			state_machine.execute(ExecutionStrategy::NativeWhenPossible.in_consensus()).unwrap(),
+			state_machine
+				.execute(ExecutionStrategy::NativeWhenPossible.in_consensus())
+				.unwrap(),
 			vec![66],
 		);
 	}

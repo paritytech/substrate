@@ -301,10 +301,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// `fallback_method` - Method used to execute fallback Wasm code.
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
-	pub fn new(
-		fallback_method: WasmExecutionMethod,
-		max_runtime_instances: usize,
-	) -> Self {
+	pub fn new(fallback_method: WasmExecutionMethod, max_runtime_instances: usize) -> Self {
 		let extended = D::ExtendHostFunctions::host_functions();
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
 			.into_iter()

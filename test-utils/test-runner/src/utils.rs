@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::FutureExt;
+use sc_client_api::execution_extensions::ExecutionConfigs;
 use sc_executor::WasmExecutionMethod;
 use sc_informant::OutputFormat;
 use sc_network::{
@@ -28,7 +29,6 @@ use sc_service::{
 	TaskExecutor, TaskType, TransactionStorageMode,
 };
 use sp_keyring::sr25519::Keyring::Alice;
-use sc_client_api::execution_extensions::ExecutionConfigs;
 use tokio::runtime::Handle;
 
 pub use sc_cli::build_runtime;
@@ -85,11 +85,21 @@ pub fn default_config(
 		chain_spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
 		execution_configs: ExecutionConfigs {
-			syncing: sc_client_api::ExecutionConfig::new_offchain(sc_client_api::ExecutionStrategy::AlwaysWasm),
-			importing: sc_client_api::ExecutionConfig::new_offchain(sc_client_api::ExecutionStrategy::AlwaysWasm),
-			block_construction: sc_client_api::ExecutionConfig::new_offchain(sc_client_api::ExecutionStrategy::AlwaysWasm),
-			offchain_worker: sc_client_api::ExecutionConfig::new_offchain(sc_client_api::ExecutionStrategy::AlwaysWasm),
-			other: sc_client_api::ExecutionConfig::new_offchain(sc_client_api::ExecutionStrategy::AlwaysWasm),
+			syncing: sc_client_api::ExecutionConfig::new_offchain(
+				sc_client_api::ExecutionStrategy::AlwaysWasm,
+			),
+			importing: sc_client_api::ExecutionConfig::new_offchain(
+				sc_client_api::ExecutionStrategy::AlwaysWasm,
+			),
+			block_construction: sc_client_api::ExecutionConfig::new_offchain(
+				sc_client_api::ExecutionStrategy::AlwaysWasm,
+			),
+			offchain_worker: sc_client_api::ExecutionConfig::new_offchain(
+				sc_client_api::ExecutionStrategy::AlwaysWasm,
+			),
+			other: sc_client_api::ExecutionConfig::new_offchain(
+				sc_client_api::ExecutionStrategy::AlwaysWasm,
+			),
 		},
 		rpc_http: None,
 		rpc_ws: None,
