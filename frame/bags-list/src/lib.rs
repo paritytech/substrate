@@ -197,7 +197,7 @@ pub mod pallet {
 		///
 		/// Will never return an error; if `reposition` does not exist or doesn't need a rebag, then
 		/// it is a noop and only fees are collected from `origin`.
-		#[pallet::weight(T::WeightInfo::rebag_middle())]
+		#[pallet::weight(T::WeightInfo::rebag())]
 		pub fn rebag(origin: OriginFor<T>, reposition: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let current_weight = T::VoteWeightProvider::vote_weight(&reposition);
