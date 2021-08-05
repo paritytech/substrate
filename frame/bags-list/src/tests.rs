@@ -5,7 +5,7 @@ use frame_election_provider_support::SortedListProvider;
 use list::Bag;
 use mock::{ext_builder::*, test_utils::*, *};
 
-mod extrinsics {
+mod pallet {
 	use super::*;
 
 	#[test]
@@ -106,6 +106,24 @@ mod extrinsics {
 			assert_eq!(get_bags(), vec![(10, vec![1, 2, 3, 4])]);
 			assert_eq!(Bag::<Runtime>::get(1_000), None);
 		});
+	}
+
+	#[test]
+	fn wrong_rebag_is_noop() {
+		// if rebag is wrong,
+		// or the target is non-existent, then it is a noop
+		todo!()
+	}
+
+	#[test]
+	fn duplicate_in_bags_threshold_panics() {
+		todo!()
+		// probably needs some UI test
+	}
+
+	#[test]
+	fn decreasing_in_bags_threshold_panics() {
+		todo!()
 	}
 }
 

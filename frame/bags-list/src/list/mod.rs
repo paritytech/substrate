@@ -312,6 +312,7 @@ impl<T: Config> List<T> {
 			// clear the old bag head/tail pointers as necessary
 			if !node.is_terminal() {
 				// this node is not a head or a tail, so we can just cut it out of the list.
+				// update and put the prev and next of this node, we do `node.put` later.
 				node.excise();
 			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
 				// this is a head or tail, so the bag must be updated.
@@ -326,10 +327,14 @@ impl<T: Config> List<T> {
 				debug_assert!(false, "every node must have an extant bag associated with it");
 			}
 
-			// put the voter into the appropriate new bag
-			let new_idx = notional_bag_for::<T>(new_weight);
-			node.bag_upper = new_idx;
+			// TODO: go through all APIs, and make a standard out of when things will put and when
+			// they don't.
+
+			// put the voter into the appropriate new bag.
+			let new_bag_upper = notional_bag_for::<T>(new_weight);
 			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
+			// prev, next, and bag_upper of the node are updated inside `insert_node`, also
+			// `node.put` is in there.
 			bag.insert_node(node);
 			bag.put();
 
