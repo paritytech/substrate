@@ -20,9 +20,6 @@
 use pallet_bags_list::make_bags::generate_thresholds_module;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use node_runtime::Runtime;
-use frame_support::traits::{Currency, CurrencyToVote};
-
 #[derive(Debug, StructOpt)]
 struct Opt {
 	/// How many bags to generate.
@@ -37,16 +34,5 @@ fn main() -> Result<(), std::io::Error> {
 	let Opt { n_bags, output } = Opt::from_args();
 	let mut ext = sp_io::TestExternalities::new_empty();
 
-
-
-	let res = ext.execute_with(||{
-		// let existential_deposit = <Runtime::Currency as Currency<Runtime::AccountId>>::minimum_balance();
-		let existential_deposit = <Runtime as pallet_staking::Config>::Currency::minimum_balance();
-		let issuance = <Runtime as pallet_staking::Config>::Currency::total_issuance();
-		let existential_weight = <Runtime as pallet_staking::Config>::CurrencyToVote::to_vote(existential_deposit, issuance);
-
-		generate_thresholds_module::<node_runtime::Runtime>(n_bags, existential_weight, &output);
-	});
-
-	Ok(res)
+	ext.execute_with(|| generate_thresholds_module::<node_runtime::Runtime>(n_bags, &output))
 }

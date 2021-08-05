@@ -4893,6 +4893,7 @@ dependencies = [
  "log",
  "num-format",
  "pallet-balances",
+ "pallet-staking",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
