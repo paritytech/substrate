@@ -36,6 +36,7 @@ use sc_client_api::{
 	ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
+use sc_consensus::import_queue::ImportQueue;
 use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
 use sc_keystore::LocalKeystore;
 use sc_network::{
@@ -43,6 +44,7 @@ use sc_network::{
 	config::{OnDemand, Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
+	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
 use sc_rpc_server::{CustomMiddleware, NoopCustomMiddleware};
@@ -50,9 +52,8 @@ use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUB
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{
-	block_validation::{BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator},
-	import_queue::ImportQueue,
+use sp_consensus::block_validation::{
+	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
@@ -80,12 +81,12 @@ pub trait RpcExtensionBuilder {
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output;
+	) -> Result<Self::Output, Error>;
 }
 
 impl<F, R> RpcExtensionBuilder for F
 where
-	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> Result<R, Error>,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
@@ -94,7 +95,7 @@ where
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
+	) -> Result<Self::Output, Error> {
 		(*self)(deny, subscription_executor)
 	}
 }
@@ -114,8 +115,8 @@ where
 		&self,
 		_deny: sc_rpc::DenyUnsafe,
 		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
-		self.0.clone()
+	) -> Result<Self::Output, Error> {
+		Ok(self.0.clone())
 	}
 }
 
@@ -355,7 +356,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. }
+					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
 				),
 				wasm_runtime_substitutes,
 			},
@@ -692,7 +693,7 @@ where
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
 			RpcMiddleware::<TCm>::new_with_custom_middleware(rpc_metrics, "inbrowser", rpc_middleware),
-		)
+		)?
 		.into(),
 	));
 
@@ -779,7 +780,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl, TCm>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata, TCm>
+) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata, TCm>, Error>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -851,7 +852,7 @@ where
 		offchain::OffchainApi::to_delegate(offchain)
 	});
 
-	sc_rpc_server::rpc_handler(
+	Ok(sc_rpc_server::rpc_handler(
 		(
 			state::StateApi::to_delegate(state),
 			state::ChildStateApi::to_delegate(child_state),
@@ -859,10 +860,10 @@ where
 			maybe_offchain_rpc,
 			author::AuthorApi::to_delegate(author),
 			system::SystemApi::to_delegate(system),
-			rpc_extensions_builder.build(deny_unsafe, task_executor),
+			rpc_extensions_builder.build(deny_unsafe, task_executor)?,
 		),
 		rpc_middleware,
-	)
+	))
 }
 
 /// Parameters to pass into `build_network`.
@@ -882,6 +883,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// A block announce validator builder.
 	pub block_announce_validator_builder:
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	/// An optional warp sync provider.
+	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -917,6 +920,7 @@ where
 		import_queue,
 		on_demand,
 		block_announce_validator_builder,
+		warp_sync,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -967,6 +971,20 @@ where
 		}
 	};
 
+	let warp_sync_params = warp_sync.map(|provider| {
+		let protocol_config = if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			warp_request_handler::generate_request_response_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) =
+				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			spawn_handle.spawn("warp_sync_request_handler", handler.run());
+			protocol_config
+		};
+		(provider, protocol_config)
+	});
+
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
@@ -1004,6 +1022,7 @@ where
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
+		warp_sync: warp_sync_params,
 		light_client_request_protocol_config,
 	};
 
