@@ -486,7 +486,6 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub OffchainRepeat: BlockNumber = 5;
-	pub const VoterBagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
 }
 
 use frame_election_provider_support::onchain;
@@ -516,8 +515,10 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
 		pallet_election_provider_multi_phase::OnChainConfig<Self>,
 	>;
+	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
+	// Note that this method does not scale to a very large number of nominators.
+	type SortedListProvider = BagsList;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
-	type VoterBagThresholds = VoterBagThresholds;
 }
 
 parameter_types! {
@@ -605,6 +606,17 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = BenchmarkConfig;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+}
+
+parameter_types! {
+	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
+}
+
+impl pallet_bags_list::Config for Runtime {
+	type Event = Event;
+	type VoteWeightProvider = Staking;
+	type WeightInfo = ();
+	type BagThresholds = BagThresholds;
 }
 
 parameter_types! {
@@ -1231,6 +1243,7 @@ construct_runtime!(
 		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Config<T>, Event<T>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -1564,6 +1577,7 @@ impl_runtime_apis! {
 
 			list_benchmark!(list, extra, pallet_assets, Assets);
 			list_benchmark!(list, extra, pallet_babe, Babe);
+			list_benchmark!(list, extra, pallet_bags_list, BagsList);
 			list_benchmark!(list, extra, pallet_balances, Balances);
 			list_benchmark!(list, extra, pallet_bounties, Bounties);
 			list_benchmark!(list, extra, pallet_collective, Council);

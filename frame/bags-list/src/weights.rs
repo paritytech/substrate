@@ -4,7 +4,7 @@ pub trait WeightInfo {
 	fn rebag_middle() -> Weight;
 }
 
-pub struct SubstrateWeight<T>(std::marker::PhantomData<T>);
+pub struct SubstrateWeight<T>(sp_std::marker::PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn rebag_middle() -> Weight {
 		// FAKE numbers

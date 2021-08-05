@@ -28,8 +28,6 @@ frame_benchmarking::benchmarks! {
 		// - The node to be rebagged should exist as a non-terminal node in a bag with at least
 		//   2 other nodes so both its prev and next are nodes that will need be updated
 		//   when it is removed.
-		//   TODO once we optimize for not writing the bag being removed we will have the case
-		//    of removing head/tail from a bag with at least 2 nodes
 		// - The destination bag is not empty, because then we need to update the `next` pointer
 		//   of the previous node in addition to the work we do otherwise.
 
@@ -62,7 +60,10 @@ frame_benchmarking::benchmarks! {
 		// and the ags are in the expected state after insertions.
 		assert_eq!(
 			get_bags::<T>(),
-			vec![(origin_bag_thresh, vec![origin_head.clone(), origin_middle.clone(), origin_tail.clone()]), (dest_bag_thresh, vec![dest_head.clone()])]
+			vec![
+				(origin_bag_thresh, vec![origin_head.clone(), origin_middle.clone(), origin_tail.clone()]),
+				(dest_bag_thresh, vec![dest_head.clone()])
+			]
 		);
 	}: {
 		// TODO need to figure out how to mock a return value for VoteWeightProvider::vote_weight
@@ -81,19 +82,6 @@ frame_benchmarking::benchmarks! {
 			vec![(origin_bag_thresh, vec![origin_head, origin_tail]), (dest_bag_thresh, vec![dest_head, origin_middle])]
 		);
 	}
-
-	// rebag_head { TODO once we have optimized so we only write the origin bag if head tail was updated
-		// An expensive case for rebagging
-		//
-		// - the node being rebagged is a head node, so origin bag must be updated with a new head
-		//   and second node in the bag must have its prev pointer updated.
-		// - The destination bag is not empty, because then we need to update the `next` pointer
-		//   of the previous node in addition to the work we do otherwise.
-
-	// } _(Origin::signed(white_listed_caller()), origin_head)
-	// verify {
-
-	// }
 }
 
 use frame_benchmarking::impl_benchmark_test_suite;

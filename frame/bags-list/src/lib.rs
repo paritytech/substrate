@@ -23,6 +23,9 @@
 //! of accounts to another pallet. It needs some other pallet to give it some information about the
 //! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
 //!
+//! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
+//! the `SortedListProvider` (i.e. `on_insert`) at their genesis.
+//!
 //! # ⚠️ WARNING ⚠️
 //!
 //! Do not insert an id that already exists in the list; doing so can result in catastrophic failure
@@ -53,13 +56,15 @@
 //! *new terminology*: fully decouple this pallet from voting names, use account id instead of
 //! voter and priority instead of weight.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
+use sp_std::prelude::*;
 
-#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 mod list;
-// #[cfg(any(feature = "runtime-benchmarks", test))]
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -184,19 +189,19 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Declare that some `stash` has, through rewards or penalties, sufficiently changed its
-		/// stake that it should properly fall into a different bag than its current position.
+		/// Declare that some `reposition` account has, through rewards or penalties, sufficiently
+		/// changed its weight that it should properly fall into a different bag than its current
+		/// one.
 		///
-		/// This will adjust its position into the appropriate bag. This will affect its position
-		/// among the nominator/validator set once the snapshot is prepared for the election.
+		/// Anyone can call this function about any target account.
 		///
-		/// Anyone can call this function about any stash.
-		// #[pallet::weight(T::WeightInfo::rebag())]
+		/// Will never return an error; if `reposition` does not exist or doesn't need a rebag, then
+		/// it is a noop and only fees are collected from `origin`.
 		#[pallet::weight(T::WeightInfo::rebag_middle())]
-		pub fn rebag(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, reposition: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let weight = T::VoteWeightProvider::vote_weight(&account);
-			Pallet::<T>::do_rebag(&account, weight);
+			let current_weight = T::VoteWeightProvider::vote_weight(&reposition);
+			Pallet::<T>::do_rebag(&reposition, current_weight);
 			Ok(())
 		}
 	}
@@ -204,14 +209,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(|| {
-					assert!(
-						T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-						"Voter bag thresholds must strictly increase",
-					);
-				});
-			}
+			// ensure they are strictly increasing, this also implies that duplicates are detected.
+			assert!(
+				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+				"Voter bag thresholds must strictly increase, and have no duplicates",
+			);
 		}
 	}
 }
@@ -244,10 +246,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		CounterForVoters::<T>::get()
 	}
 
-	/// # ⚠️ WARNING ⚠️
-	///
-	/// Do not insert an id that already exists in the list; doing so can result in catastrophic
-	/// failure of your blockchain, including entering into an infinite loop during block execution.
 	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
 		List::<T>::insert(voter, weight);
 	}
@@ -258,6 +256,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	fn on_remove(voter: &T::AccountId) {
 		List::<T>::remove(voter)
+	}
+
+	fn regenerate(
+		all: impl IntoIterator<Item = T::AccountId>,
+		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) -> u32 {
+		List::<T>::regenerate(all, weight_of)
 	}
 
 	fn sanity_check() -> Result<(), &'static str> {

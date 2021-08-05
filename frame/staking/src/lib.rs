@@ -427,6 +427,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
