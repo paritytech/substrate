@@ -103,6 +103,8 @@ pub struct BenchmarkConfig {
 	pub selected_components: Vec<(BenchmarkParameter, u32)>,
 	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
 	pub verify: bool,
+	/// Number of times to repeat benchmark within the Wasm environment. (versus in the client)
+	pub internal_repeats: u32,
 }
 
 /// A list of benchmarks available for a particular pallet and instance.
@@ -231,6 +233,7 @@ pub trait Benchmarking<T> {
 		selected_components: &[(BenchmarkParameter, u32)],
 		whitelist: &[TrackedStorageKey],
 		verify: bool,
+		internal_repeats: u32,
 	) -> Result<Vec<T>, &'static str>;
 }
 

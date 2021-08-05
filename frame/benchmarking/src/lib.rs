@@ -771,6 +771,7 @@ macro_rules! impl_benchmark {
 				c: &[($crate::BenchmarkParameter, u32)],
 				whitelist: &[$crate::TrackedStorageKey],
 				verify: bool,
+				internal_repeats: u32,
 			) -> Result<$crate::Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = $crate::sp_std::str::from_utf8(extrinsic)
@@ -789,88 +790,89 @@ macro_rules! impl_benchmark {
 				whitelist.push(whitelisted_caller_key.into());
 				$crate::benchmarking::set_whitelist(whitelist);
 
-				// Set up the externalities environment for the setup we want to
-				// benchmark.
-				let closure_to_benchmark = <
-					SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
-				>::instance(&selected_benchmark, c, verify)?;
-
-				// Set the block number to at least 1 so events are deposited.
-				if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
-					frame_system::Pallet::<T>::set_block_number(1u32.into());
-				}
-
-				// Commit the externalities to the database, flushing the DB cache.
-				// This will enable worst case scenario for reading from the database.
-				$crate::benchmarking::commit_db();
-
-				// Reset the read/write counter so we don't count operations in the setup process.
-				$crate::benchmarking::reset_read_write_count();
-
 				let mut results: $crate::Vec<$crate::BenchmarkResults> = $crate::Vec::new();
 
-				// TODO internal repeats here
+				for i in 0 .. internal_repeats.max(1) {
 
-				// Time the extrinsic logic.
-				$crate::log::trace!(
-					target: "benchmark",
-					"Start Benchmark: {:?}", c
-				);
+					// Set up the externalities environment for the setup we want to
+					// benchmark.
+					let closure_to_benchmark = <
+						SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
+					>::instance(&selected_benchmark, c, verify)?;
 
-				let start_pov = $crate::benchmarking::proof_size();
-				let start_extrinsic = $crate::benchmarking::current_time();
+					// Set the block number to at least 1 so events are deposited.
+					if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						frame_system::Pallet::<T>::set_block_number(1u32.into());
+					}
 
-				closure_to_benchmark()?;
+					// Commit the externalities to the database, flushing the DB cache.
+					// This will enable worst case scenario for reading from the database.
+					$crate::benchmarking::commit_db();
 
-				let finish_extrinsic = $crate::benchmarking::current_time();
-				let end_pov = $crate::benchmarking::proof_size();
+					// Reset the read/write counter so we don't count operations in the setup process.
+					$crate::benchmarking::reset_read_write_count();
 
-				// Calculate the diff caused by the benchmark.
-				let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
-				let diff_pov = match (start_pov, end_pov) {
-					(Some(start), Some(end)) => end.saturating_sub(start),
-					_ => Default::default(),
-				};
+					// Time the extrinsic logic.
+					$crate::log::trace!(
+						target: "benchmark",
+						"Start Benchmark: {:?}", c
+					);
 
-				// Commit the changes to get proper write count
-				$crate::benchmarking::commit_db();
-				$crate::log::trace!(
-					target: "benchmark",
-					"End Benchmark: {} ns", elapsed_extrinsic
-				);
-				let read_write_count = $crate::benchmarking::read_write_count();
-				$crate::log::trace!(
-					target: "benchmark",
-					"Read/Write Count {:?}", read_write_count
-				);
+					let start_pov = $crate::benchmarking::proof_size();
+					let start_extrinsic = $crate::benchmarking::current_time();
 
-				// Time the storage root recalculation.
-				let start_storage_root = $crate::benchmarking::current_time();
-				$crate::storage_root();
-				let finish_storage_root = $crate::benchmarking::current_time();
-				let elapsed_storage_root = finish_storage_root - start_storage_root;
+					closure_to_benchmark()?;
 
-				let skip_meta = [ $( stringify!($name_skip_meta).as_ref() ),* ];
-				let read_and_written_keys = if (&skip_meta).contains(&extrinsic) {
-					$crate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
-				} else {
-					$crate::benchmarking::get_read_and_written_keys()
-				};
+					let finish_extrinsic = $crate::benchmarking::current_time();
+					let end_pov = $crate::benchmarking::proof_size();
 
-				results.push($crate::BenchmarkResults {
-					components: c.to_vec(),
-					extrinsic_time: elapsed_extrinsic,
-					storage_root_time: elapsed_storage_root,
-					reads: read_write_count.0,
-					repeat_reads: read_write_count.1,
-					writes: read_write_count.2,
-					repeat_writes: read_write_count.3,
-					proof_size: diff_pov,
-					keys: read_and_written_keys,
-				});
+					// Calculate the diff caused by the benchmark.
+					let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
+					let diff_pov = match (start_pov, end_pov) {
+						(Some(start), Some(end)) => end.saturating_sub(start),
+						_ => Default::default(),
+					};
 
-				// Wipe the DB back to the genesis state.
-				$crate::benchmarking::wipe_db();
+					// Commit the changes to get proper write count
+					$crate::benchmarking::commit_db();
+					$crate::log::trace!(
+						target: "benchmark",
+						"End Benchmark: {} ns", elapsed_extrinsic
+					);
+					let read_write_count = $crate::benchmarking::read_write_count();
+					$crate::log::trace!(
+						target: "benchmark",
+						"Read/Write Count {:?}", read_write_count
+					);
+
+					// Time the storage root recalculation.
+					let start_storage_root = $crate::benchmarking::current_time();
+					$crate::storage_root();
+					let finish_storage_root = $crate::benchmarking::current_time();
+					let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+					let skip_meta = [ $( stringify!($name_skip_meta).as_ref() ),* ];
+					let read_and_written_keys = if (&skip_meta).contains(&extrinsic) {
+						$crate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
+					} else {
+						$crate::benchmarking::get_read_and_written_keys()
+					};
+
+					results.push($crate::BenchmarkResults {
+						components: c.to_vec(),
+						extrinsic_time: elapsed_extrinsic,
+						storage_root_time: elapsed_storage_root,
+						reads: read_write_count.0,
+						repeat_reads: read_write_count.1,
+						writes: read_write_count.2,
+						repeat_writes: read_write_count.3,
+						proof_size: diff_pov,
+						keys: read_and_written_keys,
+					});
+
+					// Wipe the DB back to the genesis state.
+					$crate::benchmarking::wipe_db();
+				}
 
 				return Ok(results);
 			}
@@ -1321,6 +1323,7 @@ macro_rules! add_benchmark {
 			benchmark,
 			selected_components,
 			verify,
+			internal_repeats,
 		} = config;
 		if &pallet[..] == &name_string[..] {
 			$batches.push($crate::BenchmarkBatch {
@@ -1332,6 +1335,7 @@ macro_rules! add_benchmark {
 					&selected_components[..],
 					whitelist,
 					*verify,
+					*internal_repeats,
 				).map_err(|e| {
 					$crate::show_benchmark_debug_info(
 						instance_string,

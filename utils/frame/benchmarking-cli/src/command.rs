@@ -229,6 +229,7 @@ impl BenchmarkCmd {
 							&extrinsic.clone(),
 							&selected_components.clone(),
 							true, // run verification code
+							1,    // no need to do internal repeats
 						)
 							.encode(),
 						extensions(),
@@ -255,6 +256,7 @@ impl BenchmarkCmd {
 							&extrinsic.clone(),
 							&selected_components.clone(),
 							false, // dont run verification code for final values
+							self.internal_repeat,
 						)
 							.encode(),
 						extensions(),
