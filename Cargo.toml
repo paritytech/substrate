@@ -258,8 +258,8 @@ zeroize = { opt-level = 3 }
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
-[patch."https://github.com/mangata-finance/open-runtime-module-library"]
-orml-tokens = {path="../tokens/tokens"}
+# [patch."https://github.com/mangata-finance/open-runtime-module-library"]
+# orml-tokens = {path="../tokens/tokens"}
 
 [patch."https://github.com/mangata-finance/substrate"]
 sp-core = {path="./primitives/core"}

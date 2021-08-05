@@ -3754,6 +3754,7 @@ checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 [[package]]
 name = "orml-tokens"
 version = "0.3.1"
+source = "git+https://github.com/mangata-finance/open-runtime-module-library?branch=test#7e5a08e8cff66160ca7a5fab587b08454a9ac792"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -3768,6 +3769,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.3.1"
+source = "git+https://github.com/mangata-finance/open-runtime-module-library?branch=test#7e5a08e8cff66160ca7a5fab587b08454a9ac792"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
