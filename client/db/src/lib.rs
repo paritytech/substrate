@@ -329,8 +329,10 @@ pub enum DatabaseSource {
 	/// Check given path, and see if there is an existing database there. If it's either `RocksDb`
 	/// or `ParityDb`, use it. If there is none, create a new instance of `ParityDb`.
 	Auto {
-		/// Path to the database.
-		path: PathBuf,
+		/// Path to the paritydb database.
+		paritydb_path: PathBuf,
+		/// Path to the rocksdb database.
+		rocksdb_path: PathBuf,
 		/// Cache size in MiB. Used only by `RocksDb` variant of `DatabaseSource`.
 		cache_size: usize,
 	},
@@ -356,9 +358,11 @@ impl DatabaseSource {
 	/// Return dabase path for databases that are on the disk.
 	pub fn path(&self) -> Option<&Path> {
 		match self {
-			DatabaseSource::Auto { path, .. } |
-			DatabaseSource::RocksDb { path, .. } |
-			DatabaseSource::ParityDb { path } => Some(&path),
+			DatabaseSource::Auto { .. } => {
+				// TODO:
+				unimplemented!();
+			},
+			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(&path),
 			DatabaseSource::Custom(..) => None,
 		}
 	}
