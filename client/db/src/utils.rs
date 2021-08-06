@@ -204,7 +204,7 @@ where
 	})
 }
 
-fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
+fn backend_err(feat: &'static str) -> sp_blockchain::Error {
 	sp_blockchain::Error::Backend(feat.to_string())
 }
 
@@ -219,15 +219,14 @@ pub fn open_database<Block: BlockT>(
 		DatabaseSource::ParityDb { path } =>
 			match open_kvdb_rocksdb::<Block>(&path, db_type, false, 0) {
 				Ok(_db) =>
-					return Err(db_open_error(
+					return Err(backend_err(
 						"cannot open paritydb. rocksdb exists at given location",
 					)),
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
 					open_parity_db::<Block>(&path, db_type, true)?,
 				Err(_) =>
-					return Err(db_open_error(
-						"cannon open paritydb. corrupted rocksdb exists
-												   at given location",
+					return Err(backend_err(
+						"cannon open paritydb. corrupted rocksdb exists at given location",
 					)),
 			},
 
@@ -236,15 +235,14 @@ pub fn open_database<Block: BlockT>(
 		DatabaseSource::RocksDb { path, cache_size } =>
 			match open_parity_db::<Block>(&path, db_type, false) {
 				Ok(_db) =>
-					return Err(db_open_error(
+					return Err(backend_err(
 						"cannot open rocksdb. paritydb exists at given location",
 					)),
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
 					open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
 				Err(_) =>
-					return Err(db_open_error(
-						"cannot open rocksdb. corrupted paritydb exists
-				at given location",
+					return Err(backend_err(
+						"cannot open rocksdb. corrupted paritydb exists at given location",
 					)),
 			},
 
@@ -254,7 +252,7 @@ pub fn open_database<Block: BlockT>(
 				Ok(db) => db,
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
 					open_parity_db::<Block>(path, db_type, true)?,
-				Err(_) => return Err(db_open_error("cannot open rocksdb. corrupted database")),
+				Err(_) => return Err(backend_err("cannot open rocksdb. corrupted database")),
 			},
 		DatabaseSource::Custom(db) => db.clone(),
 	};
