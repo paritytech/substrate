@@ -65,7 +65,16 @@ frame_benchmarking::benchmarks! {
 		// check the bags have updated as expected.
 		assert_eq!(
 			get_bags::<T>(),
-			vec![(origin_bag_thresh, vec![origin_head, origin_tail]), (dest_bag_thresh, vec![dest_head, origin_middle])]
+			vec![
+				(
+					origin_bag_thresh,
+					vec![origin_head, origin_tail],
+				),
+				(
+					dest_bag_thresh,
+					vec![dest_head, origin_middle],
+				)
+			]
 		);
 	}
 }

@@ -1219,29 +1219,25 @@ where
 
 impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn vote_weight(who: &T::AccountId) -> VoteWeight {
-		// TODO: def. remove this.
-		if cfg!(feature = "runtime-benchmarks") {
-			Self::slashable_balance_of_vote_weight(who, sp_runtime::traits::Bounded::max_value())
-		} else {
-			Self::weight_of(who)
-		}
+		Self::weight_of(who)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
-		use sp_std::convert::TryInto;
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;
 		<Ledger<T>>::insert(who, ledger);
+		<Bonded<T>>::insert(who, who);
 
 		// also, we play a trick to make sure that a issuance based-`CurrencyToVote` behaves well:
 		// This will make sure that total issuance is zero, thus the currency to vote will be a 1-1
 		// conversion.
 		// TODO
-		// let imbalance = T::Currency::burn(T::Currency::total_issuance());
+		let imbalance = T::Currency::burn(T::Currency::total_issuance());
+		sp_std::mem::forget(imbalance);
 	}
 }
 
