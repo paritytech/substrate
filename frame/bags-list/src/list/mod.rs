@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Basic implementation of a doubly-linked list.
+//! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated
+//! by configurable thresholds that delineate the boundaries of bags. Within the bounds of each bag
+//! ordering is dictated by insertion order.
 
 use crate::Config;
 use codec::{Decode, Encode};
@@ -90,6 +92,7 @@ impl<T: Config> List<T> {
 		Self::insert_many(all, weight_of)
 	}
 
+	// TODO test this
 	/// Migrate the voter list from one set of thresholds to another.
 	///
 	/// This should only be called as part of an intentional migration; it's fairly expensive.
@@ -120,12 +123,20 @@ impl<T: Config> List<T> {
 		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
 		let new_set: BTreeSet<_> = T::BagThresholds::get().iter().copied().collect();
 
+		// accounts that need to be rebaged
 		let mut affected_accounts = BTreeSet::new();
+		// track affected old bags to make sure we only iterate them once
 		let mut affected_old_bags = BTreeSet::new();
 
+		let new_bags = new_set.difference(&old_set).copied();
 		// a new bag means that all accounts previously using the old bag's threshold must now
 		// be rebagged
-		for inserted_bag in new_set.difference(&old_set).copied() {
+		for inserted_bag in new_bags {
+			// TODO: why use notional_bag_for here? This affected_bag is a new bag since
+			// new_set.difference(&old_set) is just the new bags; notional_bag_for is using the
+			// T::BagThresholds, which are the new threhsholds .. so plugging in a threhold to
+			// notional_bag_for will just give back that threshold. I think we want to instead
+			// use notional_bag_for logic with old_thresholds?
 			let affected_bag = notional_bag_for::<T>(inserted_bag);
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
@@ -138,8 +149,9 @@ impl<T: Config> List<T> {
 			}
 		}
 
+		let removed_bags = old_set.difference(&new_set).copied();
 		// a removed bag means that all members of that bag must be rebagged
-		for removed_bag in old_set.difference(&new_set).copied() {
+		for removed_bag in removed_bags {
 			if !affected_old_bags.insert(removed_bag) {
 				continue
 			}
@@ -149,7 +161,7 @@ impl<T: Config> List<T> {
 			}
 		}
 
-		// migrate the
+		// migrate the voters whose bag has changed
 		let weight_of = T::VoteWeightProvider::vote_weight;
 		Self::remove_many(affected_accounts.iter().map(|voter| voter));
 		let num_affected = affected_accounts.len() as u32;
@@ -161,7 +173,7 @@ impl<T: Config> List<T> {
 		//
 		// it's pretty cheap to iterate this again, because both sets are in-memory and require no
 		// lookups.
-		for removed_bag in old_set.difference(&new_set).copied() {
+		for removed_bag in removed_bags {
 			debug_assert!(
 				!crate::VoterNodes::<T>::iter().any(|(_, node)| node.bag_upper == removed_bag),
 				"no voter should be present in a removed bag",

@@ -329,7 +329,7 @@ pub trait SortedListProvider<AccountId> {
 		all: impl IntoIterator<Item = AccountId>,
 		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
 	) -> u32;
-	/// Remove everything
+	/// Remove everything.
 	fn clear();
 }
 
