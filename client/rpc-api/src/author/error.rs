@@ -112,12 +112,12 @@ impl From<Error> for CallError {
 			Error::Verification(e) => Self::Custom {
 				code: VERIFICATION_ERROR,
 				message: format!("Verification Error: {}", e).into(),
-				data: JsonRawValue::from_string(format!("{:?}", e)).ok(),
+				data: JsonRawValue::from_string(format!("\"{:?}\"", e)).ok(),
 			},
 			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => Self::Custom {
 				code: POOL_INVALID_TX,
 				message: "Invalid Transaction".into(),
-				data: JsonRawValue::from_string(format!("Custom error: {}", e)).ok(),
+				data: JsonRawValue::from_string(format!("\"Custom error: {}\"", e)).ok(),
 			},
 			Error::Pool(PoolError::InvalidTransaction(e)) => {
 				Self::Custom {
@@ -139,7 +139,7 @@ impl From<Error> for CallError {
 			Error::Pool(PoolError::AlreadyImported(hash)) => Self::Custom {
 				code: (POOL_ALREADY_IMPORTED),
 				message: "Transaction Already Imported".into(),
-				data: JsonRawValue::from_string(format!("{:?}", hash)).ok(),
+				data: JsonRawValue::from_string(format!("\"{:?}\"", hash)).ok(),
 			},
 			Error::Pool(PoolError::TooLowPriority { old, new }) => Self::Custom {
 				code: (POOL_TOO_LOW_PRIORITY),
