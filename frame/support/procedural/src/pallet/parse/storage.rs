@@ -344,13 +344,16 @@ fn process_named_generics(
 			)?;
 
 			StorageGenerics::CountedMap {
-				hasher: parsed.remove("Hasher")
+				hasher: parsed
+					.remove("Hasher")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				key: parsed.remove("Key")
+				key: parsed
+					.remove("Key")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				value: parsed.remove("Value")
+				value: parsed
+					.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
@@ -461,10 +464,7 @@ fn process_unnamed_generics(
 		),
 		StorageKind::CountedMap => (
 			None,
-			Metadata::CountedMap {
-				key: retrieve_arg(2)?,
-				value: retrieve_arg(3)?,
-			},
+			Metadata::CountedMap { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
 		),
 		StorageKind::DoubleMap => (

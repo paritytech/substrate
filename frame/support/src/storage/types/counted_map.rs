@@ -1,20 +1,19 @@
-use codec::{FullCodec, Decode, EncodeLike, Encode, Ref, MaxEncodedLen};
 use crate::{
-	Never,
-	traits::{StorageInstance, GetDefault, Get, StorageInfo},
 	storage::{
-		StorageAppend, StorageTryAppend, StorageDecodeLength, generator::StorageMap as _,
+		generator::StorageMap as _,
 		types::{
-			OptionQuery, ValueQuery, StorageMap, StorageValue, QueryKindTrait,
-			StorageMapMetadata, StorageValueMetadata
+			OptionQuery, QueryKindTrait, StorageMap, StorageMapMetadata, StorageValue,
+			StorageValueMetadata, ValueQuery,
 		},
+		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	Never,
 };
-use sp_std::prelude::*;
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_runtime::traits::Saturating;
-use frame_metadata::{
-	DefaultByteGetter, StorageEntryModifier,
-};
+use sp_std::prelude::*;
 
 /// A wrapper around a `StorageMap` and a `StorageValue<Value=u32>` to keep track of how many items
 /// are in a map, without needing to iterate all the values.
@@ -29,10 +28,14 @@ use frame_metadata::{
 /// Whenever the counter needs to be updated, an additional read and write occurs to update that
 /// counter.
 pub struct CountedStorageMap<
-	Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault, MaxValues=GetDefault,
->(
-	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>
-);
+	Prefix,
+	Hasher,
+	Key,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	MaxValues = GetDefault,
+>(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>);
 
 /// The requirement for an instance of [`CountedStorageMap`].
 pub trait CountedStorageMapInstance: StorageInstance {
@@ -45,8 +48,7 @@ trait Helper {
 	type Map;
 }
 
-impl<P: CountedStorageMapInstance, H, K, V, Q, O, M>
-	Helper
+impl<P: CountedStorageMapInstance, H, K, V, Q, O, M> Helper
 	for CountedStorageMap<P, H, K, V, Q, O, M>
 {
 	type Map = StorageMap<P, H, K, V, Q, O, M>;
@@ -58,8 +60,7 @@ type CounterFor<P> = StorageValue<<P as CountedStorageMapInstance>::CounterPrefi
 /// [`crate::storage::PrefixIterator`].
 pub struct OnRemovalCounterUpdate<Prefix>(core::marker::PhantomData<Prefix>);
 
-impl<Prefix: CountedStorageMapInstance>
-	crate::storage::PrefixIteratorOnRemoval
+impl<Prefix: CountedStorageMapInstance> crate::storage::PrefixIteratorOnRemoval
 	for OnRemovalCounterUpdate<Prefix>
 {
 	fn on_removal() {
@@ -106,7 +107,10 @@ where
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
+	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(
+		key: KeyArg,
+		val: ValArg,
+	) {
 		if !<Self as Helper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
@@ -124,7 +128,7 @@ where
 	/// Mutate the value under a key.
 	pub fn mutate<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut QueryKind::Query) -> R>(
 		key: KeyArg,
-		f: F
+		f: F,
 	) -> R {
 		Self::try_mutate(key, |v| Ok::<R, Never>(f(v)))
 			.expect("`Never` can not be constructed; qed")
@@ -149,7 +153,7 @@ where
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
 	pub fn mutate_exists<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
-		f: F
+		f: F,
 	) -> R {
 		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v)))
 			.expect("`Never` can not be constructed; qed")
@@ -181,10 +185,8 @@ where
 
 	/// Take the value under a key.
 	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
-		let removed_value = <Self as Helper>::Map::mutate_exists(
-			key,
-			|value| core::mem::replace(value, None)
-		);
+		let removed_value =
+			<Self as Helper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
@@ -204,7 +206,7 @@ where
 		EncodeLikeKey: EncodeLike<Key> + Clone,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		Value: StorageAppend<Item>
+		Value: StorageAppend<Item>,
 	{
 		if !<Self as Helper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
@@ -225,7 +227,8 @@ where
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
 	pub fn decode_len<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Option<usize>
-		where Value: StorageDecodeLength,
+	where
+		Value: StorageDecodeLength,
 	{
 		<Self as Helper>::Map::decode_len(key)
 	}
@@ -234,7 +237,7 @@ where
 	///
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
 	pub fn migrate_key<OldHasher: crate::hash::StorageHasher, KeyArg: EncodeLike<Key>>(
-		key: KeyArg
+		key: KeyArg,
 	) -> Option<Value> {
 		<Self as Helper>::Map::migrate_key::<OldHasher, _>(key)
 	}
@@ -286,10 +289,7 @@ where
 	/// Try and append the given item to the value in the storage.
 	///
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
-	pub fn try_append<KArg, Item, EncodeLikeItem>(
-		key: KArg,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
+	pub fn try_append<KArg, Item, EncodeLikeItem>(key: KArg, item: EncodeLikeItem) -> Result<(), ()>
 	where
 		KArg: EncodeLike<Key> + Clone,
 		Item: Encode,
@@ -395,7 +395,8 @@ pub trait CountedStorageMapMetadata {
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> CountedStorageMapMetadata
-	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> where
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
@@ -415,9 +416,8 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> CountedStorageMa
 	const COUNTER_DOC: &'static str = &"Counter for the related counted storage map";
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::traits::StorageInfoTrait for
-	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -435,21 +435,26 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_io::{TestExternalities, hashing::twox_128};
-	use crate::hash::*;
-	use crate::storage::types::ValueQuery;
-	use crate::storage::bounded_vec::BoundedVec;
-	use crate::traits::ConstU32;
+	use crate::{
+		hash::*,
+		storage::{bounded_vec::BoundedVec, types::ValueQuery},
+		traits::ConstU32,
+	};
+	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
-		fn pallet_prefix() -> &'static str { "test" }
+		fn pallet_prefix() -> &'static str {
+			"test"
+		}
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
 	struct CounterPrefix;
 	impl StorageInstance for CounterPrefix {
-		fn pallet_prefix() -> &'static str { "test" }
+		fn pallet_prefix() -> &'static str {
+			"test"
+		}
 		const STORAGE_PREFIX: &'static str = "counter_for_foo";
 	}
 	impl CountedStorageMapInstance for Prefix {
@@ -560,7 +565,9 @@ mod test {
 				assert_eq!(*query, ADefault::get());
 				*query = 4;
 				Result::<(), ()>::Err(())
-			}).err().unwrap();
+			})
+			.err()
+			.unwrap();
 
 			assert_eq!(A::try_get(2), Err(()));
 			assert_eq!(A::count(), 2);
@@ -570,7 +577,8 @@ mod test {
 				assert_eq!(*query, ADefault::get());
 				*query = 41;
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(A::try_get(2), Ok(41));
 			assert_eq!(A::count(), 3);
@@ -580,7 +588,8 @@ mod test {
 				assert_eq!(*query, 41);
 				*query = 41;
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(A::try_get(2), Ok(41));
 			assert_eq!(A::count(), 3);
@@ -590,7 +599,9 @@ mod test {
 				assert_eq!(*query, None);
 				*query = Some(4);
 				Result::<(), ()>::Err(())
-			}).err().unwrap();
+			})
+			.err()
+			.unwrap();
 
 			assert_eq!(A::try_get(1), Err(()));
 			assert_eq!(A::count(), 3);
@@ -600,7 +611,8 @@ mod test {
 				assert_eq!(*query, None);
 				*query = Some(43);
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(A::try_get(1), Ok(43));
 			assert_eq!(A::count(), 4);
@@ -610,7 +622,8 @@ mod test {
 				assert_eq!(*query, Some(43));
 				*query = Some(43);
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(A::try_get(1), Ok(43));
 			assert_eq!(A::count(), 4);
@@ -618,8 +631,10 @@ mod test {
 			// Try succeed mutate existing to non-existing.
 			A::try_mutate_exists(1, |query| {
 				assert_eq!(*query, Some(43));
-				*query = None; Result::<(), ()>::Ok(())
-			}).unwrap();
+				*query = None;
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
 
 			assert_eq!(A::try_get(1), Err(()));
 			assert_eq!(A::count(), 3);
@@ -768,7 +783,9 @@ mod test {
 				assert_eq!(*query, None);
 				*query = Some(4);
 				Result::<(), ()>::Err(())
-			}).err().unwrap();
+			})
+			.err()
+			.unwrap();
 
 			assert_eq!(B::try_get(2), Err(()));
 			assert_eq!(B::count(), 2);
@@ -778,7 +795,8 @@ mod test {
 				assert_eq!(*query, None);
 				*query = Some(41);
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(B::try_get(2), Ok(41));
 			assert_eq!(B::count(), 3);
@@ -788,7 +806,8 @@ mod test {
 				assert_eq!(*query, Some(41));
 				*query = Some(41);
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(B::try_get(2), Ok(41));
 			assert_eq!(B::count(), 3);
@@ -798,7 +817,8 @@ mod test {
 				assert_eq!(*query, Some(41));
 				*query = None;
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(B::try_get(2), Err(()));
 			assert_eq!(B::count(), 2);
@@ -810,7 +830,9 @@ mod test {
 				assert_eq!(*query, None);
 				*query = Some(4);
 				Result::<(), ()>::Err(())
-			}).err().unwrap();
+			})
+			.err()
+			.unwrap();
 
 			assert_eq!(B::try_get(1), Err(()));
 			assert_eq!(B::count(), 3);
@@ -820,7 +842,8 @@ mod test {
 				assert_eq!(*query, None);
 				*query = Some(43);
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(B::try_get(1), Ok(43));
 			assert_eq!(B::count(), 4);
@@ -830,7 +853,8 @@ mod test {
 				assert_eq!(*query, Some(43));
 				*query = Some(43);
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(B::try_get(1), Ok(43));
 			assert_eq!(B::count(), 4);
@@ -840,7 +864,8 @@ mod test {
 				assert_eq!(*query, Some(43));
 				*query = None;
 				Result::<(), ()>::Ok(())
-			}).unwrap();
+			})
+			.unwrap();
 
 			assert_eq!(B::try_get(1), Err(()));
 			assert_eq!(B::count(), 3);
@@ -930,11 +955,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			A::insert(1, 1);
 			A::insert(2, 2);
-			A::translate_values::<u32, _>(|old_value| if old_value == 1 {
-				None
-			} else {
-				Some(1)
-			});
+			A::translate_values::<u32, _>(|old_value| if old_value == 1 { None } else { Some(1) });
 			assert_eq!(A::count(), 1);
 			assert_eq!(A::get(2), Some(1));
 		})
@@ -951,11 +972,9 @@ mod test {
 
 			assert_eq!(A::count(), 2);
 
-			A::translate::<u32, _>(|key, value| if key == 1 {
-				None
-			} else {
-				Some(key as u32 * value)
-			});
+			A::translate::<u32, _>(
+				|key, value| if key == 1 { None } else { Some(key as u32 * value) },
+			);
 
 			assert_eq!(A::count(), 1);
 
@@ -964,5 +983,4 @@ mod test {
 			assert_eq!(A::count(), 0);
 		})
 	}
-
 }

@@ -790,7 +790,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 /// If any decoding fails it skips it and continues to the next key.
 ///
 /// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
-pub struct PrefixIterator<T, OnRemoval=()> {
+pub struct PrefixIterator<T, OnRemoval = ()> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -825,7 +825,13 @@ impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn, phantom: Default::default() }
+		PrefixIterator {
+			prefix,
+			previous_key,
+			drain: false,
+			closure: decode_fn,
+			phantom: Default::default(),
+		}
 	}
 
 	/// Get the last key that has been iterated upon and return it.

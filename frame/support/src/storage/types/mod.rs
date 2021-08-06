@@ -21,13 +21,14 @@
 use codec::FullCodec;
 use frame_metadata::{DefaultByte, StorageEntryModifier};
 
+mod counted_map;
 mod double_map;
 mod key;
 mod map;
 mod nmap;
 mod value;
-mod counted_map;
 
+pub use counted_map::{CountedStorageMap, CountedStorageMapInstance, CountedStorageMapMetadata};
 pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
 pub use key::{
 	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
@@ -36,7 +37,6 @@ pub use key::{
 pub use map::{StorageMap, StorageMapMetadata};
 pub use nmap::{StorageNMap, StorageNMapMetadata};
 pub use value::{StorageValue, StorageValueMetadata};
-pub use counted_map::{CountedStorageMap, CountedStorageMapMetadata, CountedStorageMapInstance};
 
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///

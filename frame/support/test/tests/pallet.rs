@@ -325,11 +325,8 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::storage_prefix = "RenamedCountedMap"]
 	#[pallet::getter(fn counted_storage_map)]
-	pub type SomeCountedStorageMap<T> = CountedStorageMap<
-		Hasher = Twox64Concat,
-		Key = u8,
-		Value = u32,
-	>;
+	pub type SomeCountedStorageMap<T> =
+		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]

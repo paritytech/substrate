@@ -61,7 +61,7 @@ fn check_prefix_duplicates(
 	if let Some(other_dup_err) = set.insert(prefix.clone(), dup_err.clone()) {
 		let mut err = dup_err;
 		err.combine(other_dup_err);
-		return Err(err);
+		return Err(err)
 	}
 
 	if let Metadata::CountedMap { .. } = storage_def.metadata {
@@ -78,7 +78,7 @@ fn check_prefix_duplicates(
 		if let Some(other_dup_err) = set.insert(counter_prefix.clone(), counter_dup_err.clone()) {
 			let mut err = counter_dup_err;
 			err.combine(other_dup_err);
-			return Err(err);
+			return Err(err)
 		}
 	}
 
@@ -146,7 +146,12 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(max_values));
 				},
 				StorageGenerics::CountedMap {
-					hasher, key, value, query_kind, on_empty, max_values
+					hasher,
+					key,
+					value,
+					query_kind,
+					on_empty,
+					max_values,
 				} => {
 					args.args.push(syn::GenericArgument::Type(hasher));
 					args.args.push(syn::GenericArgument::Type(key));
@@ -212,7 +217,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 	// Check for duplicate prefixes
 	let mut prefix_set = HashMap::new();
-	let mut errors = def.storages.iter()
+	let mut errors = def
+		.storages
+		.iter()
 		.filter_map(|storage_def| check_prefix_duplicates(storage_def, &mut prefix_set).err());
 	if let Some(mut final_error) = errors.next() {
 		errors.for_each(|error| final_error.combine(error));
