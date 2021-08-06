@@ -187,6 +187,7 @@ impl BenchmarkCmd {
 
 		// Run the benchmarks
 		let mut batches = Vec::new();
+		let mut batches_db = Vec::new();
 		let mut timer = time::SystemTime::now();
 		for (pallet, extrinsic, components) in benchmarks_to_run {
 			let all_components = if components.is_empty() {
@@ -252,10 +253,42 @@ impl BenchmarkCmd {
 						format!("Error executing and verifying runtime benchmark: {:?}", e)
 					})?;
 				}
-				// TODO add one loop for state tracking
+				// Do one loop of DB tracking.
+				{
+					let state = &state_with_tracking;
+					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+						state, // todo remove tracking
+						None,
+						&mut changes,
+						&executor,
+						"Benchmark_dispatch_benchmark",
+						&(
+							&pallet.clone(),
+							&extrinsic.clone(),
+							&selected_components.clone(),
+							false, // dont run verification code for final values
+							self.internal_repeat,
+						)
+							.encode(),
+						extensions(),
+						&sp_state_machine::backend::BackendRuntimeCode::new(state)
+							.runtime_code()?,
+						sp_core::testing::TaskExecutor::new(),
+					)
+					.execute(strategy.into())
+					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+
+					let batch =
+						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
+							&mut &result[..],
+						)
+						.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
+
+					batches_db.extend(batch);
+				}
 				// Finally run a bunch of loops to get extrinsic timing information.
 				for r in 0..self.repeat {
-					let state = &state_with_tracking;
+					let state = &state_without_tracking;
 					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 						state, // todo remove tracking
 						None,
