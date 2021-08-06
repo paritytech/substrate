@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::{
-	columns,
+	columns, light,
 	utils::{DatabaseType, NUM_COLUMNS},
 };
 /// A `Database` adapter for parity-db.
@@ -40,11 +40,31 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 	create: bool,
 ) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
-	if db_type == DatabaseType::Full {
-		let mut state_col = &mut config.columns[columns::STATE as usize];
-		state_col.ref_counted = true;
-		state_col.preimage = true;
-		state_col.uniform = true;
+
+	match db_type {
+		DatabaseType::Full => {
+			let indexes = [
+				columns::STATE,
+				columns::HEADER,
+				columns::BODY,
+				columns::TRANSACTION,
+				columns::JUSTIFICATIONS,
+			];
+
+			for i in indexes {
+				let mut column = &mut config.columns[i as usize];
+				column.compression = parity_db::CompressionType::Lz4;
+			}
+
+			let mut state_col = &mut config.columns[columns::STATE as usize];
+			state_col.ref_counted = true;
+			state_col.preimage = true;
+			state_col.uniform = true;
+		},
+		DatabaseType::Light => {
+			config.columns[light::columns::HEADER as usize].compression =
+				parity_db::CompressionType::Lz4;
+		},
 	}
 
 	let db = if create {
