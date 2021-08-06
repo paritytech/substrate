@@ -7,7 +7,7 @@ use crate::{
 		},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
-	traits::{Get, GetDefault, StorageInfo, StorageInstance, StorageInfoTrait},
+	traits::{Get, GetDefault, StorageInfo, StorageInfoTrait, StorageInstance},
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
@@ -446,13 +446,10 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
-		[
-			<Self as Helper>::Map::partial_storage_info(),
-			CounterFor::<Prefix>::storage_info(),
-		].concat()
+		[<Self as Helper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]
+			.concat()
 	}
 }
-
 
 #[cfg(test)]
 mod test {
