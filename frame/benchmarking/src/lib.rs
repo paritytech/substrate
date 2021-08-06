@@ -792,8 +792,8 @@ macro_rules! impl_benchmark {
 
 				let mut results: $crate::Vec<$crate::BenchmarkResults> = $crate::Vec::new();
 
-				for i in 0 .. internal_repeats.max(1) {
-
+				// Always do at least one internal repeat...
+				for _ in 0 .. internal_repeats.max(1) {
 					// Set up the externalities environment for the setup we want to
 					// benchmark.
 					let closure_to_benchmark = <
