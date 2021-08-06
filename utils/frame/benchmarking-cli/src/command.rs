@@ -111,7 +111,10 @@ impl BenchmarkCmd {
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
-		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof)?;
+		let state_with_tracking =
+			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, true)?;
+		let state_without_tracking =
+			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			self.heap_pages,
@@ -216,10 +219,11 @@ impl BenchmarkCmd {
 				all_components
 			};
 			for selected_components in all_components {
+				// First we run a verification
 				if !self.no_verify {
 					// Dont use these results since verification code will add overhead
 					let _results = StateMachine::<_, _, NumberFor<BB>, _>::new(
-						&state,
+						&state_without_tracking,
 						None,
 						&mut changes,
 						&executor,
@@ -242,11 +246,11 @@ impl BenchmarkCmd {
 						format!("Error executing and verifying runtime benchmark: {:?}", e)
 					})?;
 				}
+				// TODO add one loop for state tracking
+				// Finally run a bunch of loops to get extrinsic timing information.
 				for r in 0..self.repeat {
-					// This should run only a single instance of a benchmark for `pallet` and
-					// `extrinsic`. All loops happen above.
 					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-						&state,
+						&state_with_tracking, // todo remove tracking
 						None,
 						&mut changes,
 						&executor,

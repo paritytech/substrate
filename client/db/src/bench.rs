@@ -72,9 +72,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		}
 	}
 }
-
-const ENABLE_TRACKING: bool = false;
-
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
@@ -96,6 +93,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<B::Hash>>,
 	proof_recorder_root: Cell<B::Hash>,
+	enable_tracking: bool,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -104,6 +102,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		genesis: Storage,
 		_cache_size_mb: Option<usize>,
 		record_proof: bool,
+		enable_tracking: bool,
 	) -> Result<Self, String> {
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
@@ -122,6 +121,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
 			proof_recorder_root: Cell::new(root.clone()),
+			enable_tracking,
 		};
 
 		state.add_whitelist_to_tracker();
@@ -189,7 +189,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
 	fn add_read_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
-		if !ENABLE_TRACKING {
+		if !self.enable_tracking {
 			return
 		}
 
@@ -230,7 +230,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
 	fn add_write_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
-		if !ENABLE_TRACKING {
+		if !self.enable_tracking {
 			return
 		}
 
@@ -639,7 +639,8 @@ mod test {
 	#[test]
 	fn read_to_main_and_child_tries() {
 		let bench_state =
-			BenchmarkingState::<crate::tests::Block>::new(Default::default(), None, false).unwrap();
+			BenchmarkingState::<crate::tests::Block>::new(Default::default(), None, false, true)
+				.unwrap();
 
 		for _ in 0..2 {
 			let child1 = sp_core::storage::ChildInfo::new_default(b"child1");
