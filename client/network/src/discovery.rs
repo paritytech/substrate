@@ -1010,32 +1010,42 @@ mod tests {
 					match swarms[swarm_n].0.poll_next_unpin(cx) {
 						Poll::Ready(Some(e)) => {
 							match e {
-								SwarmEvent::Behaviour(DiscoveryOut::UnroutablePeer(other)) |
-								SwarmEvent::Behaviour(DiscoveryOut::Discovered(other)) => {
-									// Call `add_self_reported_address` to simulate identify
-									// happening.
-									let addr = swarms
-										.iter()
-										.find_map(|(s, a)| {
-											if s.behaviour().local_peer_id == other {
-												Some(a.clone())
-											} else {
-												None
-											}
-										})
-										.unwrap();
-									swarms[swarm_n].0.behaviour_mut().add_self_reported_address(
-										&other,
-										[protocol_name_from_protocol_id(&protocol_id)].iter(),
-										addr,
-									);
+								SwarmEvent::Behaviour(behavior) => {
+									match behavior {
+										DiscoveryOut::UnroutablePeer(other) |
+										DiscoveryOut::Discovered(other) => {
+											// Call `add_self_reported_address` to simulate identify
+											// happening.
+											let addr = swarms
+												.iter()
+												.find_map(|(s, a)| {
+													if s.behaviour().local_peer_id == other {
+														Some(a.clone())
+													} else {
+														None
+													}
+												})
+												.unwrap();
+											swarms[swarm_n]
+												.0
+												.behaviour_mut()
+												.add_self_reported_address(
+													&other,
+													[protocol_name_from_protocol_id(&protocol_id)]
+														.iter(),
+													addr,
+												);
 
-									to_discover[swarm_n].remove(&other);
+											to_discover[swarm_n].remove(&other);
+										},
+										DiscoveryOut::RandomKademliaStarted(_) => {},
+										e => {
+											panic!("Unexpected event: {:?}", e)
+										},
+									}
 								},
-								SwarmEvent::Behaviour(DiscoveryOut::RandomKademliaStarted(_)) => {},
-								e => {
-									panic!("Unexpected event: {:?}", e)
-								},
+								// ignore non Behaviour events
+								_ => {},
 							}
 							continue 'polling
 						},
