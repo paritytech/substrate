@@ -312,11 +312,7 @@ impl From<io::Error> for OpenDbError {
 }
 
 #[cfg(feature = "with-parity-db")]
-fn open_parity_db<Block: BlockT>(
-	path: &Path,
-	db_type: DatabaseType,
-	create: bool,
-) -> OpenDbResult {
+fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool) -> OpenDbResult {
 	let db = crate::parity_db::open(path, db_type, create)?;
 	Ok(db)
 }
