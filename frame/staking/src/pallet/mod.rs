@@ -1316,7 +1316,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
 
-			let removed_chunks = 1u32 // account the case where last iterated chunk is not removed
+			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)
 				.saturating_sub(ledger.unlocking.len() as u32);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
