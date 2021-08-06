@@ -1,6 +1,6 @@
 [package]
 name = "pallet-election-provider-multi-phase"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -17,19 +17,19 @@ static_assertions = "1.1.0"
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
-sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
-frame-election-provider-support = { version = "3.0.0", default-features = false, path = "../election-provider-support" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
-frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 rand = { version = "0.7.3", default-features = false, optional = true, features = ["alloc", "small_rng"] }
 
 [dev-dependencies]
@@ -37,14 +37,14 @@ paste = "1.0.3"
 parking_lot = "0.11.0"
 rand = { version = "0.7.3" }
 hex-literal = "0.3.1"
-substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
-sp-npos-elections = { version = "3.0.0", default-features = false, features = [ "mocks" ], path = "../../primitives/npos-elections" }
-sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
-frame-election-provider-support = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../election-provider-support" }
-pallet-balances = { version = "3.0.0", path = "../balances" }
-frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
+substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, features = [ "mocks" ], path = "../../primitives/npos-elections" }
+sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
 [features]
 default = ["std"]

@@ -17,9 +17,8 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use sp_runtime::traits::{StoredMapError, Block as BlockT};
-use sp_arithmetic::traits::AtLeast32Bit;
 use crate::dispatch::Parameter;
+use sp_runtime::{traits::Block as BlockT, DispatchError};
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -27,7 +26,10 @@ pub trait Len {
 	fn len(&self) -> usize;
 }
 
-impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: ExactSizeIterator {
+impl<T: IntoIterator + Clone> Len for T
+where
+	<T as IntoIterator>::IntoIter: ExactSizeIterator,
+{
 	fn len(&self) -> usize {
 		self.clone().into_iter().len()
 	}
@@ -42,7 +44,9 @@ pub trait Get<T> {
 }
 
 impl<T: Default> Get<T> for () {
-	fn get() -> T { T::default() }
+	fn get() -> T {
+		T::default()
+	}
 }
 
 /// Implement Get by returning Default for any type that implements Default.
@@ -123,7 +127,10 @@ impl<A, B> SameOrOther<A, B> {
 		}
 	}
 
-	pub fn same(self) -> Result<A, B> where A: Default {
+	pub fn same(self) -> Result<A, B>
+	where
+		A: Default,
+	{
 		match self {
 			SameOrOther::Same(a) => Ok(a),
 			SameOrOther::None => Ok(A::default()),
@@ -131,7 +138,10 @@ impl<A, B> SameOrOther<A, B> {
 		}
 	}
 
-	pub fn other(self) -> Result<B, A> where B: Default {
+	pub fn other(self) -> Result<B, A>
+	where
+		B: Default,
+	{
 		match self {
 			SameOrOther::Same(a) => Err(a),
 			SameOrOther::None => Ok(B::default()),
@@ -157,16 +167,20 @@ pub trait OnKilledAccount<AccountId> {
 /// A simple, generic one-parameter event notifier/handler.
 pub trait HandleLifetime<T> {
 	/// An account was created.
-	fn created(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
+	fn created(_t: &T) -> Result<(), DispatchError> {
+		Ok(())
+	}
 
 	/// An account was killed.
-	fn killed(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
+	fn killed(_t: &T) -> Result<(), DispatchError> {
+		Ok(())
+	}
 }
 
 impl<T> HandleLifetime<T> for () {}
 
 pub trait Time {
-	type Moment: AtLeast32Bit + Parameter + Default + Copy;
+	type Moment: sp_arithmetic::traits::AtLeast32Bit + Parameter + Default + Copy;
 
 	fn now() -> Self::Moment;
 }
@@ -195,10 +209,18 @@ pub trait IsType<T>: Into<T> + From<T> {
 }
 
 impl<T> IsType<T> for T {
-	fn from_ref(t: &T) -> &Self { t }
-	fn into_ref(&self) -> &T { self }
-	fn from_mut(t: &mut T) -> &mut Self { t }
-	fn into_mut(&mut self) -> &mut T { self }
+	fn from_ref(t: &T) -> &Self {
+		t
+	}
+	fn into_ref(&self) -> &T {
+		self
+	}
+	fn from_mut(t: &mut T) -> &mut Self {
+		t
+	}
+	fn into_mut(&mut self) -> &mut T {
+		self
+	}
 }
 
 /// Something that can be checked to be a of sub type `T`.
@@ -284,7 +306,7 @@ pub trait OffchainWorker<BlockNumber> {
 	fn offchain_worker(_n: BlockNumber) {}
 }
 
-/// Some amount of backing from a group. The precise defintion of what it means to "back" something
+/// Some amount of backing from a group. The precise definition of what it means to "back" something
 /// is left flexible.
 pub struct Backing {
 	/// The number of members of the group that back some motion.
@@ -299,8 +321,6 @@ pub trait GetBacking {
 	/// implicit motion. `None` if it does not.
 	fn get_backing(&self) -> Option<Backing>;
 }
-
-
 
 /// A trait to ensure the inherent are before non-inherent in a block.
 ///
@@ -319,7 +339,8 @@ pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
 }
 
 #[cfg(feature = "std")]
-impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> where
+impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra>
+where
 	Call: codec::Codec + Sync + Send,
 {
 	fn call(&self) -> &Self::Call {
@@ -328,11 +349,30 @@ impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> whe
 }
 
 impl<Address, Call, Signature, Extra> ExtrinsicCall
-for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: sp_runtime::traits::SignedExtension,
 {
 	fn call(&self) -> &Self::Call {
 		&self.function
+	}
+}
+
+/// Something that can estimate the fee of a (frame-based) call.
+///
+/// Typically, the same pallet that will charge transaction fees will implement this.
+pub trait EstimateCallFee<Call, Balance> {
+	/// Estimate the fee of this call.
+	///
+	/// The dispatch info and the length is deduced from the call. The post info can optionally be
+	/// provided.
+	fn estimate_call_fee(call: &Call, post_info: crate::weights::PostDispatchInfo) -> Balance;
+}
+
+// Useful for building mocks.
+#[cfg(feature = "std")]
+impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
+	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
+		T.into()
 	}
 }
