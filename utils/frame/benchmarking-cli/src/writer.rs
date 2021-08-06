@@ -501,7 +501,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use frame_benchmarking::{BenchmarkBatch, BenchmarkParameter, BenchmarkResults};
+	use frame_benchmarking::{BenchmarkBatchSplitResults, BenchmarkParameter, BenchmarkResults};
 
 	fn test_data(
 		pallet: &[u8],
