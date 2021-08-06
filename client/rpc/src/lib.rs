@@ -63,3 +63,16 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SubscriptionTas
 		Ok(())
 	}
 }
+
+/// Helper macro to bail early in async context when you want to
+/// return `Box::pin(future::err(e))` once an error occurs.
+/// Because `Try` is not implemented for it.
+#[macro_export]
+macro_rules! unwrap_or_fut_err {
+    ( $e:expr ) => {
+        match $e {
+            Ok(x) => x,
+            Err(e) => return Box::pin(future::err(e)),
+        }
+    }
+}

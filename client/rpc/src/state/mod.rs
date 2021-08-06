@@ -26,7 +26,7 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::SubscriptionTaskExecutor;
+use crate::{SubscriptionTaskExecutor, unwrap_or_fut_err};
 
 use futures::future;
 use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
@@ -246,10 +246,11 @@ impl<Block, Client> StateApi<Block, Client>
 		let mut module = RpcModule::new(self);
 
 		module.register_async_method("state_call", |params, state| {
-			let (method, data, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let method = unwrap_or_fut_err!(seq.next());
+			let data = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
 				state.backend.call(block, method, data).await.map_err(call_err)
@@ -259,31 +260,36 @@ impl<Block, Client> StateApi<Block, Client>
 		module.register_alias("state_callAt", "state_call")?;
 
 		module.register_async_method("state_getKeys", |params, state| {
-			let (key_prefix, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let key_prefix = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage_keys(block, key_prefix).await.map_err(call_err)
 			}.boxed()
 		})?;
 
 		module.register_async_method("state_getPairs", |params, state| {
-			let (key_prefix, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.storage_pairs(block, key_prefix).await.map_err(call_err)
+				state.backend.storage_pairs(block, key).await.map_err(call_err)
 			}.boxed()
 		})?;
 
 		module.register_async_method("state_getKeysPaged", |params, state| {
-			let (prefix, count, start_key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let prefix = unwrap_or_fut_err!(seq.optional_next());
+			let count = unwrap_or_fut_err!(seq.next());
+			let start_key = unwrap_or_fut_err!(seq.optional_next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
 					return Err(JsonRpseeCallError::Failed(Box::new(Error::InvalidCount {
@@ -301,10 +307,11 @@ impl<Block, Client> StateApi<Block, Client>
 		module.register_alias("state_getKeysPagedAt", "state_getKeysPaged")?;
 
 		module.register_async_method("state_getStorage", |params, state| {
-			let (key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage(block, key).await.map_err(call_err)
 			}.boxed()
@@ -313,10 +320,11 @@ impl<Block, Client> StateApi<Block, Client>
 		module.register_alias("state_getStorageAt", "state_getStorage")?;
 
 		module.register_async_method("state_getStorageHash", |params, state| {
-			let (key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage(block, key).await.map_err(call_err)
 			}.boxed()
@@ -325,10 +333,11 @@ impl<Block, Client> StateApi<Block, Client>
 		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
 
 		module.register_async_method("state_getStorageSize", |params, state| {
-			let (key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage_size(block, key).await.map_err(call_err)
 			}.boxed()
@@ -354,10 +363,12 @@ impl<Block, Client> StateApi<Block, Client>
 		module.register_alias("chain_getRuntimeVersion", "state_getRuntimeVersion")?;
 
 		module.register_async_method("state_queryStorage", |params, state| {
-			let (keys, from, to) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let keys = unwrap_or_fut_err!(seq.next());
+			let from = unwrap_or_fut_err!(seq.next());
+			let to = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.query_storage(from, to, keys).await
@@ -366,10 +377,11 @@ impl<Block, Client> StateApi<Block, Client>
 		})?;
 
 		module.register_async_method("state_queryStorageAt", |params, state| {
-			let (keys, at) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let keys = unwrap_or_fut_err!(seq.next());
+			let at = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.query_storage_at(keys, at).await
@@ -378,10 +390,11 @@ impl<Block, Client> StateApi<Block, Client>
 		})?;
 
 		module.register_async_method("state_getReadProof", |params, state| {
-			let (keys, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let keys = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.read_proof(block, keys).await.map_err(call_err)
@@ -389,10 +402,12 @@ impl<Block, Client> StateApi<Block, Client>
 		})?;
 
 		module.register_async_method("state_traceBlock", |params, state| {
-			let (block, targets, storage_keys) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let block = unwrap_or_fut_err!(seq.next());
+			let targets = unwrap_or_fut_err!(seq.optional_next());
+			let storage_keys = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.trace_block(block, targets, storage_keys).await
@@ -414,10 +429,9 @@ impl<Block, Client> StateApi<Block, Client>
 			"state_subscribeStorage",
 			"state_unsubscribeStorage",
 			|params, sink, ctx| {
-				let keys = params.one::<Option<Vec<StorageKey>>>()?;
+				let keys = params.one::<Vec<StorageKey>>().ok();
 				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
 		})?;
-
 
 		Ok(module)
 	}
@@ -503,10 +517,12 @@ impl<Block, Client> ChildState<Block, Client>
 		// DEPRECATED: Please use `childstate_getKeysPaged` with proper paging support.
 		// Returns the keys with prefix from a child storage, leave empty to get all the keys
 		module.register_async_method("childstate_getKeys", |params, state| {
-			let (storage_key, key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let storage_key = unwrap_or_fut_err!(seq.next());
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage_keys(block, storage_key, key)
 					.await
@@ -519,10 +535,13 @@ impl<Block, Client> ChildState<Block, Client>
 		// If `start_key` is passed, return next keys in storage in lexicographic order.
 		module.register_async_method("childstate_getKeysPaged", |params, state| {
 			// TODO: (dp) what is the order of the params here? https://polkadot.js.org/docs/substrate/rpc/#getkeyspagedkey-storagekey-count-u32-startkey-storagekey-at-blockhash-vecstoragekey is a bit unclear on what the `prefix` is here.
-			let (storage_key, prefix, count, start_key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let storage_key = unwrap_or_fut_err!(seq.next());
+			let prefix = unwrap_or_fut_err!(seq.optional_next());
+			let count = unwrap_or_fut_err!(seq.next());
+			let start_key = unwrap_or_fut_err!(seq.optional_next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
 				state.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
@@ -531,12 +550,16 @@ impl<Block, Client> ChildState<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_alias("childstate_getKeysPagedAt", "childstate_getKeysPaged")?;
+
 		// Returns a child storage entry at a specific block's state.
 		module.register_async_method("childstate_getStorage", |params, state| {
-			let (storage_key, key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let storage_key = unwrap_or_fut_err!(seq.next());
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage(block, storage_key, key)
 					.await
@@ -546,10 +569,12 @@ impl<Block, Client> ChildState<Block, Client>
 
 		// Returns the hash of a child storage entry at a block's state.
 		module.register_async_method("childstate_getStorageHash", |params, state| {
-			let (storage_key, key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let storage_key = unwrap_or_fut_err!(seq.next());
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage_hash(block, storage_key, key)
 					.await
@@ -559,10 +584,12 @@ impl<Block, Client> ChildState<Block, Client>
 
 		// Returns the size of a child storage entry at a block's state.
 		module.register_async_method("childstate_getStorageSize", |params, state| {
-			let (storage_key, key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
+			let mut seq = params.sequence();
+
+			let storage_key = unwrap_or_fut_err!(seq.next());
+			let key = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.storage_size(block, storage_key, key)
 					.await
@@ -572,10 +599,12 @@ impl<Block, Client> ChildState<Block, Client>
 
 		// Returns proof of storage for child key entries at a specific block's state.
 		module.register_async_method("childstate_getChildReadProof", |params, state| {
-			let (storage_key, keys, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e))
-			};
+			let mut seq = params.sequence();
+
+			let storage_key = unwrap_or_fut_err!(seq.next());
+			let keys = unwrap_or_fut_err!(seq.next());
+			let block = unwrap_or_fut_err!(seq.optional_next());
+
 			async move {
 				state.backend.read_child_proof(block, storage_key, keys)
         			.await
