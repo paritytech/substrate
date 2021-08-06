@@ -7,7 +7,7 @@ use crate::{
 		},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
-	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance, StorageInfoTrait},
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
@@ -431,6 +431,28 @@ where
 		[<Self as Helper>::Map::storage_info(), CounterFor::<Prefix>::storage_info()].concat()
 	}
 }
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: CountedStorageMapInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		[
+			<Self as Helper>::Map::partial_storage_info(),
+			CounterFor::<Prefix>::storage_info(),
+		].concat()
+	}
+}
+
 
 #[cfg(test)]
 mod test {

@@ -419,6 +419,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
+// and that a pallet without the attribute generate_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};
@@ -448,6 +449,10 @@ pub mod pallet2 {
 
 	#[pallet::storage]
 	pub type SomeValue<T: Config> = StorageValue<_, Vec<u32>>;
+
+	#[pallet::storage]
+	pub type SomeCountedStorageMap<T> =
+		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
 	pub enum Event {
@@ -1445,12 +1450,28 @@ fn test_storage_info() {
 
 	assert_eq!(
 		Example2::storage_info(),
-		vec![StorageInfo {
-			pallet_name: b"Example2".to_vec(),
-			storage_name: b"SomeValue".to_vec(),
-			prefix: prefix(b"Example2", b"SomeValue").to_vec(),
-			max_values: Some(1),
-			max_size: None,
-		},],
+		vec![
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"SomeValue".to_vec(),
+				prefix: prefix(b"Example2", b"SomeValue").to_vec(),
+				max_values: Some(1),
+				max_size: None,
+			},
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"SomeCountedStorageMap".to_vec(),
+				prefix: prefix(b"Example2", b"SomeCountedStorageMap").to_vec(),
+				max_values: None,
+				max_size: None,
+			},
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"CounterForSomeCountedStorageMap".to_vec(),
+				prefix: prefix(b"Example2", b"CounterForSomeCountedStorageMap").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
+		],
 	);
 }
