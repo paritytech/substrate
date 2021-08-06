@@ -57,7 +57,7 @@ pub struct BenchmarkCmd {
 	/// Select how many repetitions of this benchmark should run from the client.
 	///
 	/// NOTE: Using this alone may give slower results, but will afford you maximum Wasm memory.
-	#[structopt(short, long, default_value = "1")]
+	#[structopt(long, default_value = "1")]
 	pub external_repeat: u32,
 
 	/// Print the raw results.
