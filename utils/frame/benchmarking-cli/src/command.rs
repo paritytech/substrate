@@ -238,7 +238,7 @@ impl BenchmarkCmd {
 				}
 				all_components
 			};
-			for selected_components in all_components {
+			for (s, selected_components) in all_components.iter().enumerate() {
 				// First we run a verification
 				if !self.no_verify {
 					// Dont use these results since verification code will add overhead
@@ -281,7 +281,7 @@ impl BenchmarkCmd {
 							&extrinsic.clone(),
 							&selected_components.clone(),
 							false, // dont run verification code for final values
-							self.internal_repeat,
+							self.repeat,
 						)
 							.encode(),
 						extensions(),
@@ -301,7 +301,7 @@ impl BenchmarkCmd {
 					batches_db.extend(batch);
 				}
 				// Finally run a bunch of loops to get extrinsic timing information.
-				for r in 0..self.repeat {
+				for r in 0..self.external_repeat {
 					let state = &state_without_tracking;
 					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 						state, // todo remove tracking
@@ -314,7 +314,7 @@ impl BenchmarkCmd {
 							&extrinsic.clone(),
 							&selected_components.clone(),
 							false, // dont run verification code for final values
-							self.internal_repeat,
+							self.repeat,
 						)
 							.encode(),
 						extensions(),
@@ -343,10 +343,10 @@ impl BenchmarkCmd {
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								self.steps, // todo show step
+								s, // todo show step
 								self.steps,
 								r,
-								self.repeat,
+								self.external_repeat,
 							);
 						}
 					}
