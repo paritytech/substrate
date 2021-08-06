@@ -1,4 +1,4 @@
-use frame_support::{pallet_prelude::Weight};
+use frame_support::pallet_prelude::Weight;
 
 pub trait WeightInfo {
 	fn rebag() -> Weight;

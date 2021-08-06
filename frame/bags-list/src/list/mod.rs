@@ -228,7 +228,7 @@ impl<T: Config> List<T> {
 	/// Returns an error if the list already contains `voter`.
 	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), ()> {
 		if Self::contains(&voter) {
-			return Err(());
+			return Err(())
 		}
 
 		let bag_weight = notional_bag_for::<T>(weight);

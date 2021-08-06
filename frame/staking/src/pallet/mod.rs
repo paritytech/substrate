@@ -24,10 +24,7 @@ use frame_support::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
 		LockableCurrency, OnUnbalanced, UnixTime,
 	},
-	weights::{
-		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-		Weight,
-	},
+	weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{

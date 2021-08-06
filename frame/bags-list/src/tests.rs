@@ -189,10 +189,7 @@ mod sorted_list_provider {
 			// then the bags
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6])]);
 			// and list correctly include the new id,
-			assert_eq!(
-				BagsList::iter().collect::<Vec<_>>(),
-				vec![2, 3, 4, 6, 1]
-			);
+			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![2, 3, 4, 6, 1]);
 			// and the count is incremented.
 			assert_eq!(BagsList::count(), 5);
 
@@ -202,10 +199,7 @@ mod sorted_list_provider {
 			// then the bags
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6]), (2000, vec![7])]);
 			// and list correctly include the new id,
-			assert_eq!(
-				BagsList::iter().collect::<Vec<_>>(),
-				vec![7, 2, 3, 4, 6, 1]
-			);
+			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![7, 2, 3, 4, 6, 1]);
 			// and the count is incremented.
 			assert_eq!(BagsList::count(), 6);
 		})
@@ -224,10 +218,7 @@ mod sorted_list_provider {
 			// then the bag is created with the voter in it,
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			// and the id position is updated in the list.
-			assert_eq!(
-				BagsList::iter().collect::<Vec<_>>(),
-				vec![42, 2, 3, 4, 1]
-			);
+			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when decreasing weight within the range of the current bag
 			BagsList::on_update(&42, 1_001);
@@ -235,10 +226,7 @@ mod sorted_list_provider {
 			// then the voter does not change bags,
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			// or change position in the list.
-			assert_eq!(
-				BagsList::iter().collect::<Vec<_>>(),
-				vec![42, 2, 3, 4, 1]
-			);
+			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when increasing weight to the level of a non-existent bag with the max threshold
 			BagsList::on_update(&42, VoteWeight::MAX);
@@ -249,10 +237,7 @@ mod sorted_list_provider {
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (VoteWeight::MAX, vec![42])]
 			);
 			// and the id position is updated in the list.
-			assert_eq!(
-				BagsList::iter().collect::<Vec<_>>(),
-				vec![42, 2, 3, 4, 1]
-			);
+			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when decreasing the weight to a pre-existing bag
 			BagsList::on_update(&42, 1_000);
@@ -260,10 +245,7 @@ mod sorted_list_provider {
 			// then voter is moved to the correct bag (as the last member),
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]);
 			// and the id position is updated in the list.
-			assert_eq!(
-				BagsList::iter().collect::<Vec<_>>(),
-				vec![2, 3, 4, 42, 1]
-			);
+			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![2, 3, 4, 42, 1]);
 
 			// since we have only called on_update, the `count` has not changed.
 			assert_eq!(BagsList::count(), 5);
