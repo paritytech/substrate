@@ -652,3 +652,12 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 
 	assert!(format!("{}", error_result).contains("Spawned task"));
 }
+
+test_wasm_execution!(allocate_two_gigabyte);
+fn allocate_two_gigabyte(wasm_method: WasmExecutionMethod) {
+	let runtime = mk_test_runtime(wasm_method, 50);
+
+	let instance = runtime.new_instance().unwrap();
+	let res = instance.call_export("allocate_two_gigabyte", &[0]).unwrap();
+	assert_eq!(10 * 1024 * 1024 * 205, u32::decode(&mut &res[..]).unwrap());
+}

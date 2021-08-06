@@ -27,3 +27,10 @@ mod freeing_bump;
 
 pub use error::Error;
 pub use freeing_bump::FreeingBumpHeapAllocator;
+
+pub trait Memory {
+	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R;
+	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R;
+	fn grow(&mut self, additional: u32) -> Result<(), ()>;
+	fn pages(&self) -> u32;
+}

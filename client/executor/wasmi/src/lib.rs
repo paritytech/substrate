@@ -20,6 +20,7 @@
 
 use codec::{Decode, Encode};
 use log::{debug, error, trace};
+use sc_allocator::{FreeingBumpHeapAllocator, Memory as MemoryT};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
@@ -39,9 +40,40 @@ use wasmi::{
 	TableRef,
 };
 
+/// Wrapper around [`MemorRef`] that implements [`MemoryT`].
+struct MemoryWrapper<'a>(&'a MemoryRef);
+
+impl MemoryT for MemoryWrapper<'_> {
+	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R {
+		self.0.with_direct_access_mut(run)
+	}
+
+	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R {
+		self.0.with_direct_access(run)
+	}
+
+	fn pages(&self) -> u32 {
+		self.0.current_size().0 as _
+	}
+
+	fn grow(&mut self, additional: u32) -> Result<(), ()> {
+		self.0
+			.grow(Pages(additional as _))
+			.map_err(|e| {
+				log::error!(
+					target: "wasm-executor",
+					"Failed to grow memory by {} pages: {:?}",
+					additional,
+					e,
+				)
+			})
+			.map(drop)
+	}
+}
+
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
-	heap: sc_allocator::FreeingBumpHeapAllocator,
+	heap: FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
@@ -60,7 +92,7 @@ impl<'a> FunctionExecutor<'a> {
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: sc_allocator::FreeingBumpHeapAllocator::new(heap_base),
+			heap: FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
 			host_functions,
@@ -91,6 +123,7 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 			],
 			self,
 		);
+
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
 			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
@@ -109,15 +142,15 @@ impl<'a> FunctionContext for FunctionExecutor<'a> {
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		let heap = &mut self.heap;
-		self.memory
-			.with_direct_access_mut(|mem| heap.allocate(mem, size).map_err(|e| e.to_string()))
+		let mut memory = MemoryWrapper(&self.memory);
+
+		self.heap.allocate(&mut memory, size).map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		let heap = &mut self.heap;
-		self.memory
-			.with_direct_access_mut(|mem| heap.deallocate(mem, ptr).map_err(|e| e.to_string()))
+		let mut memory = MemoryWrapper(&self.memory);
+
+		self.heap.deallocate(&mut memory, ptr).map_err(|e| e.to_string())
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
@@ -322,7 +355,11 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 		}
 
 		if self.allow_missing_func_imports {
-			trace!(target: "wasm-executor", "Could not find function `{}`, a stub will be provided instead.", name);
+			trace!(
+				target: "wasm-executor",
+				"Could not find function `{}`, a stub will be provided instead.",
+				name,
+			);
 			let id = self.missing_functions.borrow().len() + self.host_functions.len();
 			self.missing_functions.borrow_mut().push(name.to_string());
 
@@ -359,7 +396,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 					} else {
 						let memory = MemoryInstance::alloc(
 							Pages(memory_type.initial() as usize + self.heap_pages),
-							Some(Pages(memory_type.initial() as usize + self.heap_pages)),
+							None,
 						)?;
 						*memory_ref = Some(memory.clone());
 						Ok(memory)
@@ -711,7 +748,7 @@ impl WasmInstance for WasmiInstance {
 		// Third, restore the global variables to their initial values.
 		self.global_vals_snapshot.apply(&self.instance)?;
 
-		call_in_wasm_module(
+		let res = call_in_wasm_module(
 			&self.instance,
 			&self.memory,
 			method,
@@ -719,7 +756,15 @@ impl WasmInstance for WasmiInstance {
 			self.host_functions.as_ref(),
 			self.allow_missing_func_imports,
 			self.missing_functions.as_ref(),
-		)
+		);
+
+		/// Erase the memory to let the OS reclaim it.
+		///
+		/// We are not interested in the result here, if this failed, we will retry it in the next
+		/// call to the runtime again.
+		let _ = self.memory.erase();
+
+		res
 	}
 
 	fn get_global_const(&self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {
@@ -733,5 +778,9 @@ impl WasmInstance for WasmiInstance {
 			)),
 			None => Ok(None),
 		}
+	}
+
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		Some(self.memory.direct_access().as_ref().as_ptr())
 	}
 }
