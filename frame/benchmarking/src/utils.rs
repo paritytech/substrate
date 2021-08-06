@@ -76,6 +76,21 @@ pub struct BenchmarkBatch {
 	pub results: Vec<BenchmarkResults>,
 }
 
+/// The results of a single of benchmark.
+#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+pub struct BenchmarkBatchSplitResults {
+	/// The pallet containing this benchmark.
+	pub pallet: Vec<u8>,
+	/// The instance of this pallet being benchmarked.
+	pub instance: Vec<u8>,
+	/// The extrinsic (or benchmark name) of this benchmark.
+	pub benchmark: Vec<u8>,
+	/// The extrinsic timing results from this benchmark.
+	pub time_results: Vec<BenchmarkResults>,
+	/// The db tracking results from this benchmark.
+	pub db_results: Vec<BenchmarkResults>,
+}
+
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
