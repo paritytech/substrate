@@ -83,7 +83,7 @@ pub struct Meta<N, H> {
 	pub genesis_hash: H,
 	/// Finalized state, if any
 	pub finalized_state: Option<(H, N)>,
-	/// Block gap, if any.
+	/// Block gap, start and end inclusive, if any.
 	pub block_gap: Option<(N, N)>,
 }
 
