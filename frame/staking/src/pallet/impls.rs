@@ -1203,6 +1203,7 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
+		use sp_std::convert::TryInto;
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;
