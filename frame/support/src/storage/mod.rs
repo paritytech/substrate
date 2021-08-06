@@ -825,7 +825,7 @@ impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
+		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn, phantom: Default::default() }
 	}
 
 	/// Get the last key that has been iterated upon and return it.

@@ -1,4 +1,4 @@
-use codec::{FullCodec, Decode, EncodeLike, Encode, Ref};
+use codec::{FullCodec, Decode, EncodeLike, Encode, Ref, MaxEncodedLen};
 use crate::{
 	Never,
 	traits::{StorageInstance, GetDefault, Get, StorageInfo},
@@ -15,7 +15,6 @@ use sp_runtime::traits::Saturating;
 use frame_metadata::{
 	DefaultByteGetter, StorageEntryModifier,
 };
-use max_encoded_len::MaxEncodedLen;
 
 /// A wrapper around a `StorageMap` and a `StorageValue<Value=u32>` to keep track of how many items
 /// are in a map, without needing to iterate all the values.

@@ -1430,12 +1430,16 @@ fn test_storage_info() {
 				}
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"RenamedCountedMap"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"RenamedCountedMap".to_vec(),
+				prefix: prefix(b"Example", b"RenamedCountedMap").to_vec(),
 				max_values: None,
 				max_size: Some(1 + 4 + 8),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"CounterForRenamedCountedMap"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CounterForRenamedCountedMap".to_vec(),
+				prefix: prefix(b"Example", b"CounterForRenamedCountedMap").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
 			},
