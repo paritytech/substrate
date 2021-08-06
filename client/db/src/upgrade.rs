@@ -94,22 +94,19 @@ impl fmt::Display for UpgradeError {
 
 /// Upgrade database to current version.
 pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> UpgradeResult<()> {
-	let is_empty = db_path.read_dir().map_or(true, |mut d| d.next().is_none());
-	if !is_empty {
-		let db_version = current_version(db_path)?;
-		match db_version {
-			0 => return Err(UpgradeError::UnsupportedVersion(db_version)),
-			1 => {
-				migrate_1_to_2::<Block>(db_path, db_type)?;
-				migrate_2_to_3::<Block>(db_path, db_type)?
-			},
-			2 => migrate_2_to_3::<Block>(db_path, db_type)?,
-			CURRENT_VERSION => (),
-			_ => return Err(UpgradeError::FutureDatabaseVersion(db_version)),
-		}
+	let db_version = current_version(db_path)?;
+	match db_version {
+		0 => return Err(UpgradeError::UnsupportedVersion(db_version)),
+		1 => {
+			migrate_1_to_2::<Block>(db_path, db_type)?;
+			migrate_2_to_3::<Block>(db_path, db_type)?
+		},
+		2 => migrate_2_to_3::<Block>(db_path, db_type)?,
+		CURRENT_VERSION => (),
+		_ => return Err(UpgradeError::FutureDatabaseVersion(db_version)),
 	}
-
-	update_version(db_path)
+	update_version(db_path)?;
+	Ok(())
 }
 
 /// Migration from version1 to version2:
@@ -166,7 +163,7 @@ fn current_version(path: &Path) -> UpgradeResult<u32> {
 
 /// Writes current database version to the file.
 /// Creates a new file if the version file does not exist yet.
-fn update_version(path: &Path) -> UpgradeResult<()> {
+pub fn update_version(path: &Path) -> io::Result<()> {
 	fs::create_dir_all(path)?;
 	let mut file = fs::File::create(version_file_path(path))?;
 	file.write_all(format!("{}", CURRENT_VERSION).as_bytes())?;

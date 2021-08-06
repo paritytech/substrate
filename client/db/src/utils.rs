@@ -19,7 +19,7 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{convert::TryInto, error::Error, io, path::Path, sync::Arc};
+use std::{convert::TryInto, fmt, io, path::Path, sync::Arc};
 
 use log::debug;
 
@@ -204,12 +204,8 @@ where
 	})
 }
 
-#[allow(unused)]
 fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
-	sp_blockchain::Error::Backend(format!(
-		"`{}` feature not enabled, database can not be opened",
-		feat
-	))
+	sp_blockchain::Error::Backend(feat.to_string())
 }
 
 /// Opens the configured database.
@@ -226,10 +222,8 @@ pub fn open_database<Block: BlockT>(
 					return Err(db_open_error(
 						"cannot open paritydb. rocksdb exists at given location",
 					)),
-				Err(e) if e.to_string().contains("create_if_missing is false") =>
-					open_parity_db::<Block>(&path, db_type, true)
-						.map_err(|e| e.to_string())
-						.map_err(sp_blockchain::Error::Backend)?,
+				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
+					open_parity_db::<Block>(&path, db_type, true)?,
 				Err(_) =>
 					return Err(db_open_error(
 						"cannon open paritydb. corrupted rocksdb exists
@@ -245,10 +239,8 @@ pub fn open_database<Block: BlockT>(
 					return Err(db_open_error(
 						"cannot open rocksdb. paritydb exists at given location",
 					)),
-				Err(e) if e.to_string().contains("use open_or_create") =>
-					open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)
-						.map_err(|e| e.to_string())
-						.map_err(sp_blockchain::Error::Backend)?,
+				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
+					open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
 				Err(_) =>
 					return Err(db_open_error(
 						"cannot open rocksdb. corrupted paritydb exists
@@ -260,10 +252,8 @@ pub fn open_database<Block: BlockT>(
 		DatabaseSource::Auto { path, cache_size } =>
 			match open_kvdb_rocksdb::<Block>(&path, db_type, false, *cache_size) {
 				Ok(db) => db,
-				Err(e) if e.to_string().contains("create_if_missing is false") =>
-					open_parity_db::<Block>(path, db_type, true)
-						.map_err(|e| e.to_string())
-						.map_err(sp_blockchain::Error::Backend)?,
+				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
+					open_parity_db::<Block>(path, db_type, true)?,
 				Err(_) => return Err(db_open_error("cannot open rocksdb. corrupted database")),
 			},
 		DatabaseSource::Custom(db) => db.clone(),
@@ -274,22 +264,68 @@ pub fn open_database<Block: BlockT>(
 	Ok(db)
 }
 
+#[derive(Debug)]
+enum OpenDbError<T> {
+	// constructed only when rocksdb and paritydb are disabled
+	#[allow(dead_code)]
+	NotEnabled(&'static str),
+	DoesNotExist,
+	Internal(T),
+}
+
+type OpenParityDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError<parity_db::Error>>;
+type OpenRocksDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError<io::Error>>;
+
+impl<T: fmt::Display> fmt::Display for OpenDbError<T> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			OpenDbError::Internal(e) => write!(f, "{}", e.to_string()),
+			OpenDbError::DoesNotExist => write!(f, "Database does not exist at given location"),
+			OpenDbError::NotEnabled(feat) =>
+				write!(f, "`{}` feature not enabled, database can not be opened", feat),
+		}
+	}
+}
+
+impl<T: fmt::Display> From<OpenDbError<T>> for sp_blockchain::Error {
+	fn from(err: OpenDbError<T>) -> Self {
+		sp_blockchain::Error::Backend(err.to_string())
+	}
+}
+
+impl From<parity_db::Error> for OpenDbError<parity_db::Error> {
+	fn from(err: parity_db::Error) -> Self {
+		if err.to_string().contains("use open_or_create") {
+			OpenDbError::DoesNotExist
+		} else {
+			OpenDbError::Internal(err)
+		}
+	}
+}
+
+impl From<io::Error> for OpenDbError<io::Error> {
+	fn from(err: io::Error) -> Self {
+		if err.to_string().contains("create_if_missing is false") {
+			OpenDbError::DoesNotExist
+		} else {
+			OpenDbError::Internal(err)
+		}
+	}
+}
+
 #[cfg(feature = "with-parity-db")]
 fn open_parity_db<Block: BlockT>(
 	path: &Path,
 	db_type: DatabaseType,
 	create: bool,
-) -> parity_db::Result<Arc<dyn Database<DbHash>>> {
-	crate::parity_db::open(path, db_type, create)
+) -> OpenParityDbResult {
+	let db = crate::parity_db::open(path, db_type, create)?;
+	Ok(db)
 }
 
 #[cfg(not(feature = "with-parity-db"))]
-fn open_parity_db<Block: BlockT>(
-	_path: &Path,
-	_db_type: DatabaseType,
-) -> parity_db::Result<Arc<dyn Database<DbHash>>> {
-	// TODO: shutdown?
-	//Err(db_open_error("with-parity-db"))
+fn open_parity_db<Block: BlockT>(_path: &Path, _db_type: DatabaseType) -> OpenParityDbResult {
+	Err(OpenDbError::NotEnabled("with-parity-db"))
 }
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -298,12 +334,12 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	db_type: DatabaseType,
 	create: bool,
 	cache_size: usize,
-) -> io::Result<Arc<dyn Database<DbHash>>> {
+) -> OpenRocksDbResult {
 	// first upgrade database to required version
 	match crate::upgrade::upgrade_db::<Block>(&path, db_type) {
 		// in case of missing version file, assume that database simply does not exist at given location
 		Ok(_) | Err(crate::upgrade::UpgradeError::MissingDatabaseVersionFile) => (),
-		Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+		Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
 	}
 
 	// and now open database assuming that it has the latest version
@@ -348,6 +384,8 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	db_config.memory_budget = memory_budget;
 
 	let db = kvdb_rocksdb::Database::open(&db_config, path)?;
+	// write database version only after the database is succesfully opened
+	crate::upgrade::update_version(path)?;
 	Ok(sp_database::as_database(db))
 }
 
@@ -357,8 +395,8 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	_db_type: DatabaseType,
 	_create: bool,
 	_cache_size: usize,
-) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	Err(db_open_error("with-kvdb-rocksdb"))
+) -> OpenRocksDbResult {
+	Err(OpenDbError::NotEnabled("with-kvdb-rocksdb"))
 }
 
 /// Check database type.
