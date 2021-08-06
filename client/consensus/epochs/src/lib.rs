@@ -314,6 +314,11 @@ impl<E: Epoch> AsRef<E> for IncrementedEpoch<E> {
 }
 
 /// A pair of epochs for the gap block download validation.
+/// Block gap is created after the warp sync is complete. Blocks
+/// are imported both at the tip of the chain and at the start of the gap.
+/// This holds a pair of epochs that are required to validate headers
+/// at the start of the gap. Since gap download does not allow forks we don't
+/// need to keep a tree of epochs.
 #[derive(Clone, Encode, Decode, Debug)]
 pub struct GapEpochs<Hash, Number, E: Epoch> {
 	current: (Hash, Number, PersistedEpoch<E>),
@@ -433,7 +438,8 @@ where
 ///
 /// Further epochs (epoch_2, ..., epoch_n) each get their own entry.
 ///
-/// Also maintains gap epochs as long as there's an active gap download after a warp sync.
+/// Also maintains a pair of epochs for the start of the gap,
+/// as long as there's an active gap download after a warp sync.
 #[derive(Clone, Encode, Decode, Debug)]
 pub struct EpochChanges<Hash, Number, E: Epoch> {
 	inner: ForkTree<Hash, Number, PersistedEpochHeader<E>>,
@@ -749,6 +755,9 @@ where
 				Err(e) => e,
 			}
 		} else if !self.epochs.is_empty() && matches!(epoch, PersistedEpoch::Genesis(_, _)) {
+			// There's a genesis epoch imported when we already have an active epoch.
+			// This happens after the warp sync as the ancient blocks download start.
+			// We need to start tracking gap epochs here.
 			self.gap = Some(GapEpochs { current: (hash, number, epoch), next: None });
 			return Ok(())
 		}

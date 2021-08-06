@@ -24,7 +24,7 @@ use log::info;
 use crate::{migration::EpochV0, Epoch};
 use sc_client_api::backend::AuxStore;
 use sc_consensus_epochs::{
-	migration::{EpochChangesForV0, EpochChangesForV1},
+	migration::{EpochChangesV0For, EpochChangesV1For},
 	EpochChangesFor, SharedEpochChanges,
 };
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -63,13 +63,13 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 
 	let maybe_epoch_changes = match version {
 		None =>
-			load_decode::<_, EpochChangesForV0<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			load_decode::<_, EpochChangesV0For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
 				.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config))),
 		Some(1) =>
-			load_decode::<_, EpochChangesFor<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v1| v1.map(|_, _, epoch| epoch.migrate(config))),
+			load_decode::<_, EpochChangesV1For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+				.map(|v1| v1.migrate().map(|_, _, epoch| epoch.migrate(config))),
 		Some(2) =>
-			load_decode::<_, EpochChangesForV1<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			load_decode::<_, EpochChangesV1For<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
 				.map(|v2| v2.migrate()),
 		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) =>
 			load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?,
@@ -170,7 +170,7 @@ mod test {
 			.insert_aux(
 				&[(
 					BABE_EPOCH_CHANGES_KEY,
-					&EpochChangesForV0::<TestBlock, EpochV0>::from_raw(v0_tree).encode()[..],
+					&EpochChangesV0For::<TestBlock, EpochV0>::from_raw(v0_tree).encode()[..],
 				)],
 				&[],
 			)

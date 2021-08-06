@@ -1568,6 +1568,7 @@ where
 				// imported.
 				let prune_and_import = || {
 					prune_finalized(self.client.clone(), &mut epoch_changes)?;
+
 					epoch_changes
 						.import(
 							descendent_query(&*self.client),
