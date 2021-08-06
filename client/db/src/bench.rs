@@ -27,6 +27,7 @@ use std::{
 use crate::storage_cache::{new_shared_cache, CachingState, SharedCache};
 use hash_db::{Hasher, Prefix};
 use kvdb::{DBTransaction, KeyValueDB};
+use linked_hash_map::LinkedHashMap;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{ChildInfo, TrackedStorageKey},
@@ -84,12 +85,12 @@ pub struct BenchmarkingState<B: BlockT> {
 	/// Key tracker for keys in the main trie.
 	/// We track the total number of reads and writes to these keys,
 	/// not de-duplicated for repeats.
-	main_key_tracker: RefCell<HashMap<Vec<u8>, TrackedStorageKey>>,
+	main_key_tracker: RefCell<LinkedHashMap<Vec<u8>, TrackedStorageKey>>,
 	/// Key tracker for keys in a child trie.
 	/// Child trie are identified by their storage key (i.e. `ChildInfo::storage_key()`)
 	/// We track the total number of reads and writes to these keys,
 	/// not de-duplicated for repeats.
-	child_key_tracker: RefCell<HashMap<Vec<u8>, HashMap<Vec<u8>, TrackedStorageKey>>>,
+	child_key_tracker: RefCell<LinkedHashMap<Vec<u8>, LinkedHashMap<Vec<u8>, TrackedStorageKey>>>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<B::Hash>>,
 	proof_recorder_root: Cell<B::Hash>,
@@ -182,8 +183,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 	}
 
 	fn wipe_tracker(&self) {
-		*self.main_key_tracker.borrow_mut() = HashMap::new();
-		*self.child_key_tracker.borrow_mut() = HashMap::new();
+		*self.main_key_tracker.borrow_mut() = LinkedHashMap::new();
+		*self.child_key_tracker.borrow_mut() = LinkedHashMap::new();
 		self.add_whitelist_to_tracker();
 	}
 
@@ -197,7 +198,9 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(|| HashMap::new())
+			child_key_tracker
+				.entry(childtrie.to_vec())
+				.or_insert_with(|| LinkedHashMap::new())
 		} else {
 			&mut main_key_tracker
 		};
@@ -238,7 +241,9 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(|| HashMap::new())
+			child_key_tracker
+				.entry(childtrie.to_vec())
+				.or_insert_with(|| LinkedHashMap::new())
 		} else {
 			&mut main_key_tracker
 		};
