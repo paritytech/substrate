@@ -101,7 +101,7 @@ impl TempDatabase {
 				column_options.ref_counted = true;
 				column_options.preimage = true;
 				column_options.uniform = true;
-				parity_db::Db::open(&options).expect("db open error")
+				parity_db::Db::open_or_create(&options).expect("db open error")
 			})),
 		}
 	}

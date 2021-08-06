@@ -51,7 +51,7 @@ use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
 	io,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::Arc,
 };
 
@@ -350,6 +350,18 @@ pub enum DatabaseSource {
 
 	/// Use a custom already-open database.
 	Custom(Arc<dyn Database<DbHash>>),
+}
+
+impl DatabaseSource {
+	/// Return dabase path for databases that are on the disk.
+	pub fn path(&self) -> Option<&Path> {
+		match self {
+			DatabaseSource::Auto { path, .. } |
+			DatabaseSource::RocksDb { path, .. } |
+			DatabaseSource::ParityDb { path } => Some(&path),
+			DatabaseSource::Custom(..) => None,
+		}
+	}
 }
 
 impl std::fmt::Display for DatabaseSource {

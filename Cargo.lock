@@ -3131,9 +3131,9 @@ dependencies = [
 
 [[package]]
 name = "kvdb-rocksdb"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39fd3defa7bd8884a3ba17585a28d8cf7ae5f26c8be857be128bf76ba06a753b"
+checksum = "9b1b6ea8f2536f504b645ad78419c8246550e19d2c3419a167080ce08edee35a"
 dependencies = [
  "fs-swap",
  "kvdb",
@@ -4163,7 +4163,7 @@ dependencies = [
  "node-primitives",
  "node-runtime",
  "node-testing",
- "parity-db 0.2.4",
+ "parity-db",
  "parity-util-mem",
  "rand 0.7.3",
  "sc-basic-authorship",
@@ -5775,26 +5775,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.2.4"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e337f62db341435f0da05b8f6b97e984ef4ea5800510cd07c2d624688c40b47"
-dependencies = [
- "blake2-rfc",
- "crc32fast",
- "fs2",
- "hex",
- "libc",
- "log",
- "memmap2",
- "parking_lot 0.11.1",
- "rand 0.8.4",
-]
-
-[[package]]
-name = "parity-db"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "604a4bd86c2fa386ee16a977621402418c7a86389642c69c2f52f5dd8130284c"
+checksum = "241f9c5d25063080f2c02846221f13e1d0e5e18fa00c32c234aad585b744ee55"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
@@ -7290,7 +7273,7 @@ dependencies = [
  "kvdb-rocksdb",
  "linked-hash-map",
  "log",
- "parity-db 0.3.0",
+ "parity-db",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",

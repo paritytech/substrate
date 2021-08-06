@@ -27,7 +27,7 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig,
+		BasePath, Configuration, DatabaseSource, ExtTransport, KeystoreConfig,
 		NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
 		Role, RpcMethods, TaskExecutor, TelemetryEndpoints, TransactionPoolOptions,
 		WasmExecutionMethod,
@@ -220,10 +220,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-	) -> Result<DatabaseConfig> {
+	) -> Result<DatabaseSource> {
 		Ok(match database {
-			Database::RocksDb => DatabaseConfig::RocksDb { path: base_path.join("db"), cache_size },
-			Database::ParityDb => DatabaseConfig::ParityDb { path: base_path.join("paritydb") },
+			Database::RocksDb => DatabaseSource::RocksDb { path: base_path.join("db"), cache_size },
+			Database::ParityDb => DatabaseSource::ParityDb { path: base_path.join("paritydb") },
 		})
 	}
 

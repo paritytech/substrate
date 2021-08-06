@@ -37,6 +37,7 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 pub fn open<H: Clone + AsRef<[u8]>>(
 	path: &std::path::Path,
 	db_type: DatabaseType,
+	create: bool,
 ) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
 	if db_type == DatabaseType::Full {
@@ -46,7 +47,12 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 		state_col.uniform = true;
 	}
 
-	let db = parity_db::Db::open_or_create(&config)?;
+	let db = if create {
+		parity_db::Db::open_or_create(&config)?
+	} else {
+		parity_db::Db::open(&config)?
+	};
+
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 
