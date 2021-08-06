@@ -151,7 +151,7 @@ impl<T: Config> List<T> {
 
 		let removed_bags = old_set.difference(&new_set).copied();
 		// a removed bag means that all members of that bag must be rebagged
-		for removed_bag in removed_bags {
+		for removed_bag in removed_bags.clone() {
 			if !affected_old_bags.insert(removed_bag) {
 				continue
 			}
