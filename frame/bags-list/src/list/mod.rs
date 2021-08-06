@@ -17,7 +17,7 @@
 
 //! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated
 //! by configurable thresholds that delineate the boundaries of bags. Within the bounds of each bag
-//! ordering is dictated by insertion order.
+//! ordering is dictated by insertion order. Each bag is a doubly linked-list of items (voters).
 
 use crate::Config;
 use codec::{Decode, Encode};
@@ -362,13 +362,12 @@ impl<T: Config> List<T> {
 	/// Sanity check the voter list.
 	///
 	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)
-	/// is being used, after all other staking data (such as counter) has been updated. It checks
-	/// that:
+	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
-	/// * Iterate all voters in list and make sure there are no duplicates.
-	/// * Iterate all voters and ensure their count is in sync with `CounterForVoters`.
-	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
-	///   checked per *any* update to `List`.
+	/// * there are no duplicate ids,
+	/// * length of this list are in sync with `CounterForVoters`.
+	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
+	///   are checked per *any* update to `List`.
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
@@ -377,7 +376,7 @@ impl<T: Config> List<T> {
 			"duplicate identified",
 		);
 
-		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
+		let iter_count = Self::iter().count() as u32;
 		let stored_count = crate::CounterForVoters::<T>::get();
 		ensure!(iter_count == stored_count, "iter_count != stored_count",);
 
@@ -417,6 +416,11 @@ impl<T: Config> Bag<T> {
 		bag_upper: VoteWeight,
 	) -> Self {
 		Self { head, tail, bag_upper }
+	}
+
+	/// Iterate over the nodes in this bag.
+	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
+		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
 	/// Get a bag by its upper vote weight.
@@ -464,11 +468,6 @@ impl<T: Config> Bag<T> {
 		self.tail.as_ref().and_then(|id| Node::get(id))
 	}
 
-	/// Iterate over the nodes in this bag.
-	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
-		sp_std::iter::successors(self.head(), |prev| prev.next())
-	}
-
 	/// Insert a new voter into this bag.
 	///
 	/// This is private on purpose because it's naive: it doesn't check whether this is the
@@ -491,7 +490,7 @@ impl<T: Config> Bag<T> {
 	fn insert_node(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
-				// this should never happen, but this check prevents a worst case infinite loop
+				// this should never happen, but this check prevents a worst case infinite loop.
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
 				return
@@ -502,13 +501,13 @@ impl<T: Config> Bag<T> {
 		// to be `self.bag_upper`.
 		node.bag_upper = self.bag_upper;
 
-		// update this node now, treating as the new tail.
 		let id = node.id.clone();
+		// update this node now, treating it as the new tail.
 		node.prev = self.tail.clone();
 		node.next = None;
 		node.put();
 
-		// update the previous tail
+		// update the previous tail.
 		if let Some(mut old_tail) = self.tail() {
 			old_tail.next = Some(id.clone());
 			old_tail.put();
@@ -524,18 +523,18 @@ impl<T: Config> Bag<T> {
 		}
 	}
 
-	/// Remove a voter node from this bag. Returns true iff the bag's head or tail is updated.
+	/// Remove a node from this bag.
 	///
 	/// This is private on purpose because it doesn't check whether this bag contains the voter in
 	/// the first place. Generally, use [`List::remove`] instead.
 	///
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
-	/// `self.put()` and `VoterNodes::remove(voter_id)` to update storage for the bag and `node`.
+	/// `self.put()` and `VoterNodes::remove(id)` to update storage for this bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
 		// reassign neighboring nodes.
 		node.excise();
 
-		// clear the bag head/tail pointers as necessary
+		// clear the bag head/tail pointers as necessary.
 		if self.tail.as_ref() == Some(&node.id) {
 			self.tail = node.prev.clone();
 		}
