@@ -75,13 +75,13 @@ fn remove_last_voter_in_bags_cleans_bag() {
 
 		// bump 1 to a bigger bag
 		List::<Runtime>::remove(&1);
-		List::<Runtime>::insert(1, 10_000);
+		assert_ok!(List::<Runtime>::insert(1, 10_000));
 
 		// then the bag with bound 10 is wiped from storage.
 		assert_eq!(get_bags(), vec![(1_000, vec![2, 3, 4]), (10_000, vec![1])]);
 
 		// and can be recreated again as needed.
-		List::<Runtime>::insert(77, 10);
+		assert_ok!(List::<Runtime>::insert(77, 10));
 		assert_eq!(get_bags(), vec![(10, vec![77]), (1_000, vec![2, 3, 4]), (10_000, vec![1])]);
 	});
 }
@@ -111,7 +111,7 @@ mod voter_list {
 				);
 
 				// when adding a voter that has a higher weight than pre-existing voters in the bag
-				List::<Runtime>::insert(7, 10);
+				assert_ok!(List::<Runtime>::insert(7, 10));
 
 				// then
 				assert_eq!(
@@ -156,14 +156,14 @@ mod voter_list {
 	fn insert_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when inserting into an existing bag
-			List::<Runtime>::insert(5, 1_000);
+			assert_ok!(List::<Runtime>::insert(5, 1_000));
 
 			// then
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4, 5])]);
 			assert_eq!(get_list_as_ids(), vec![2, 3, 4, 5, 1]);
 
 			// when inserting into a non-existent bag
-			List::<Runtime>::insert(6, 1_001);
+			assert_ok!(List::<Runtime>::insert(6, 1_001));
 
 			// then
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4, 5]), (2000, vec![6])]);
@@ -266,6 +266,26 @@ mod voter_list {
 				List::<Runtime>::update_position_for(node, 1000),
 				None,
 			));
+		});
+	}
+
+	#[test]
+	fn sanity_check_works() {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			assert_ok!(List::<Runtime>::sanity_check());
+		});
+
+		// make sure there are no duplicates.
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			Bag::<Runtime>::get(10).unwrap().insert(2);
+			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
+		});
+
+		// ensure count is in sync with `CounterForVoters`.
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			crate::CounterForVoters::<Runtime>::mutate(|counter| *counter += 1);
+			assert_eq!(crate::CounterForVoters::<Runtime>::get(), 5);
+			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
 		});
 	}
 }

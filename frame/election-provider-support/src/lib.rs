@@ -313,7 +313,7 @@ pub trait SortedListProvider<AccountId> {
 	/// Return true if the insertion can happen.
 	fn contains(voter: &AccountId) -> bool;
 	// Hook for inserting a voter.
-	fn on_insert(voter: AccountId, weight: VoteWeight);
+	fn on_insert(voter: AccountId, weight: VoteWeight) -> Result<(), ()>;
 	/// Hook for updating a single voter.
 	fn on_update(voter: &AccountId, weight: VoteWeight);
 	/// Hook for removing a voter from the list.

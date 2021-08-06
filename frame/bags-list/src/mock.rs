@@ -100,7 +100,9 @@ pub(crate) mod ext_builder {
 			let mut ext = sp_io::TestExternalities::from(storage);
 			ext.execute_with(|| {
 				for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
-					List::<Runtime>::insert(*id, *weight);
+					frame_support::assert_ok!(
+						List::<Runtime>::insert(*id, *weight)
+					);
 				}
 			});
 

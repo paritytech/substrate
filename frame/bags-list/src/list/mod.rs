@@ -176,6 +176,11 @@ impl<T: Config> List<T> {
 		num_affected
 	}
 
+	/// Returns true if the list contains `id`, otherwise returns `false`.
+	pub(crate) fn contains(voter: &T::AccountId) -> bool {
+		crate::VoterNodes::<T>::contains_key(voter)
+	}
+
 	/// Iterate over all nodes in all bags in the voter list.
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
@@ -200,14 +205,9 @@ impl<T: Config> List<T> {
 	}
 
 	/// Insert several voters into the appropriate bags in the voter list. Does not check for
-	/// duplicates.
+	/// duplicates; instead continues with insertions if duplicates are detected.
 	///
 	/// This is more efficient than repeated calls to `Self::insert`.
-	///
-	/// # ⚠️ WARNING ⚠️
-	///
-	/// Do not insert an id that already exists in the list; doing so can result in catastrophic
-	/// failure of your blockchain, including entering into an infinite loop during block execution.
 	fn insert_many(
 		voters: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
@@ -215,22 +215,21 @@ impl<T: Config> List<T> {
 		let mut count = 0;
 		voters.into_iter().for_each(|v| {
 			let weight = weight_of(&v);
-			Self::insert(v, weight);
-			count += 1;
+			if Self::insert(v, weight).is_ok() {
+				count += 1;
+			}
 		});
 
 		count
 	}
 
-	/// Insert a new voter into the appropriate bag in the voter list. Does not check for duplicates.
+	/// Insert a new voter into the appropriate bag in the voter list.
 	///
-	/// # ⚠️ WARNING ⚠️
-	///
-	/// Do not insert an id that already exists in the list; doing so can result in catastrophic
-	/// failure of your blockchain, including entering into an infinite loop during block execution.
-	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) {
-		// TODO: can check if this voter exists as a node by checking if `voter` exists in the nodes
-		// map and return early if it does.
+	/// Returns an error if the list already contains `voter`.
+	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), ()> {
+		if Self::contains(&voter) {
+			return Err(());
+		}
 
 		let bag_weight = notional_bag_for::<T>(weight);
 		crate::log!(
@@ -249,6 +248,8 @@ impl<T: Config> List<T> {
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
 			*prev_count = prev_count.saturating_add(1)
 		});
+
+		Ok(())
 	}
 
 	/// Remove a voter (by id) from the voter list.

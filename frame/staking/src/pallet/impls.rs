@@ -1247,14 +1247,15 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn contains(voter: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(voter)
 	}
-	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) {
-		// nothing to do on update.
+	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) -> Result<(), ()>{
+		// nothing to do on insert.
+		Ok(())
 	}
 	fn on_update(_voter: &T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.
 	}
 	fn on_remove(_voter: &T::AccountId) {
-		// nothing to do on update.
+		// nothing to do on remove.
 	}
 	fn regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,

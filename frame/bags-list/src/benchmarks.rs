@@ -5,7 +5,7 @@ use crate::list::{Bag, List};
 // use frame_benchmarking::{account, whitelisted_caller};
 use frame_benchmarking::{account, whitelisted_caller};
 use frame_election_provider_support::VoteWeightProvider;
-use frame_support::traits::Get;
+use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 
 fn get_bags<T: Config>() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
@@ -37,17 +37,17 @@ frame_benchmarking::benchmarks! {
 
 		// seed items in the origin bag.
 		let origin_head: T::AccountId = account("origin_head", 0, 0);
-		List::<T>::insert(origin_head.clone(), origin_bag_thresh);
+		assert_ok!(List::<T>::insert(origin_head.clone(), origin_bag_thresh));
 
 		let origin_middle: T::AccountId  = account("origin_middle", 0, 0);
-		List::<T>::insert(origin_middle.clone(), origin_bag_thresh);
+		assert_ok!(List::<T>::insert(origin_middle.clone(), origin_bag_thresh));
 
 		let origin_tail: T::AccountId  = account("origin_tail", 0, 0);
-		List::<T>::insert(origin_tail.clone(), origin_bag_thresh);
+		assert_ok!(List::<T>::insert(origin_tail.clone(), origin_bag_thresh));
 
 		// seed items in the destination bag.
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
-		List::<T>::insert(dest_head.clone(), dest_bag_thresh);
+		assert_ok!(List::<T>::insert(dest_head.clone(), dest_bag_thresh));
 
 		// and the ags are in the expected state after insertions.
 		assert_eq!(

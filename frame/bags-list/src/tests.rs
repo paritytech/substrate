@@ -151,7 +151,7 @@ mod sorted_list_provider {
 	fn iter_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let expected = vec![2, 3, 4, 1];
-			for (i, id) in <BagsList as SortedListProvider<AccountId>>::iter().enumerate() {
+			for (i, id) in BagsList::iter().enumerate() {
 				assert_eq!(id, expected[i])
 			}
 		});
@@ -161,22 +161,22 @@ mod sorted_list_provider {
 	fn count_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 4);
+			assert_eq!(BagsList::count(), 4);
 
 			// when inserting
-			<BagsList as SortedListProvider<AccountId>>::on_insert(201, 0);
+			assert_ok!(BagsList::on_insert(201, 0));
 			// then the count goes up
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_eq!(BagsList::count(), 5);
 
 			// when removing
-			<BagsList as SortedListProvider<AccountId>>::on_remove(&201);
+			BagsList::on_remove(&201);
 			// then the count goes down
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 4);
+			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			<BagsList as SortedListProvider<AccountId>>::on_update(&201, VoteWeight::MAX);
+			BagsList::on_update(&201, VoteWeight::MAX);
 			// then the count stays the same
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 4);
+			assert_eq!(BagsList::count(), 4);
 		});
 	}
 
@@ -184,30 +184,30 @@ mod sorted_list_provider {
 	fn on_insert_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when
-			<BagsList as SortedListProvider<AccountId>>::on_insert(6, 1_000);
+			assert_ok!(BagsList::on_insert(6, 1_000));
 
 			// then the bags
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6])]);
 			// and list correctly include the new id,
 			assert_eq!(
-				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				BagsList::iter().collect::<Vec<_>>(),
 				vec![2, 3, 4, 6, 1]
 			);
 			// and the count is incremented.
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_eq!(BagsList::count(), 5);
 
 			// when
-			List::<Runtime>::insert(7, 1_001);
+			assert_ok!(BagsList::on_insert(7, 1_001));
 
 			// then the bags
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6]), (2000, vec![7])]);
 			// and list correctly include the new id,
 			assert_eq!(
-				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				BagsList::iter().collect::<Vec<_>>(),
 				vec![7, 2, 3, 4, 6, 1]
 			);
 			// and the count is incremented.
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 6);
+			assert_eq!(BagsList::count(), 6);
 		})
 	}
 
@@ -216,32 +216,32 @@ mod sorted_list_provider {
 		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
 			assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]);
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_eq!(BagsList::count(), 5);
 
 			// when increasing weight to the level of non-existent bag
-			<BagsList as SortedListProvider<AccountId>>::on_update(&42, 2_000);
+			BagsList::on_update(&42, 2_000);
 
 			// then the bag is created with the voter in it,
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			// and the id position is updated in the list.
 			assert_eq!(
-				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				BagsList::iter().collect::<Vec<_>>(),
 				vec![42, 2, 3, 4, 1]
 			);
 
 			// when decreasing weight within the range of the current bag
-			<BagsList as SortedListProvider<AccountId>>::on_update(&42, 1_001);
+			BagsList::on_update(&42, 1_001);
 
 			// then the voter does not change bags,
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			// or change position in the list.
 			assert_eq!(
-				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				BagsList::iter().collect::<Vec<_>>(),
 				vec![42, 2, 3, 4, 1]
 			);
 
 			// when increasing weight to the level of a non-existent bag with the max threshold
-			<BagsList as SortedListProvider<AccountId>>::on_update(&42, VoteWeight::MAX);
+			BagsList::on_update(&42, VoteWeight::MAX);
 
 			// the the new bag is created with the voter in it,
 			assert_eq!(
@@ -250,23 +250,23 @@ mod sorted_list_provider {
 			);
 			// and the id position is updated in the list.
 			assert_eq!(
-				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				BagsList::iter().collect::<Vec<_>>(),
 				vec![42, 2, 3, 4, 1]
 			);
 
 			// when decreasing the weight to a pre-existing bag
-			<BagsList as SortedListProvider<AccountId>>::on_update(&42, 1_000);
+			BagsList::on_update(&42, 1_000);
 
 			// then voter is moved to the correct bag (as the last member),
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]);
 			// and the id position is updated in the list.
 			assert_eq!(
-				<BagsList as SortedListProvider<AccountId>>::iter().collect::<Vec<_>>(),
+				BagsList::iter().collect::<Vec<_>>(),
 				vec![2, 3, 4, 42, 1]
 			);
 
 			// since we have only called on_update, the `count` has not changed.
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), 5);
+			assert_eq!(BagsList::count(), 5);
 		});
 	}
 
@@ -274,7 +274,7 @@ mod sorted_list_provider {
 	fn on_remove_works() {
 		let ensure_left = |id, counter| {
 			assert!(!VoterNodes::<Runtime>::contains_key(id));
-			assert_eq!(<BagsList as SortedListProvider<AccountId>>::count(), counter);
+			assert_eq!(BagsList::count(), counter);
 			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
 			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
 		};
@@ -285,7 +285,7 @@ mod sorted_list_provider {
 			assert_storage_noop!(BagsList::on_remove(&42));
 
 			// when removing a node from a bag with multiple nodes
-			<BagsList as SortedListProvider<AccountId>>::on_remove(&2);
+			BagsList::on_remove(&2);
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
@@ -293,7 +293,7 @@ mod sorted_list_provider {
 			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node
-			<BagsList as SortedListProvider<AccountId>>::on_remove(&1);
+			BagsList::on_remove(&1);
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
@@ -301,34 +301,14 @@ mod sorted_list_provider {
 			ensure_left(1, 2);
 
 			// when removing all remaining voters
-			<BagsList as SortedListProvider<AccountId>>::on_remove(&4);
+			BagsList::on_remove(&4);
 			assert_eq!(get_list_as_ids(), vec![3]);
 			ensure_left(4, 1);
-			<BagsList as SortedListProvider<AccountId>>::on_remove(&3);
+			BagsList::on_remove(&3);
 
 			// then the storage is completely cleaned up
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 			ensure_left(3, 0);
-		});
-	}
-
-	#[test]
-	fn sanity_check_works() {
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			assert_ok!(List::<Runtime>::sanity_check());
-		});
-
-		// make sure there are no duplicates.
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			<BagsList as SortedListProvider<AccountId>>::on_insert(2, 10);
-			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
-		});
-
-		// ensure count is in sync with `CounterForVoters`.
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			crate::CounterForVoters::<Runtime>::mutate(|counter| *counter += 1);
-			assert_eq!(crate::CounterForVoters::<Runtime>::get(), 5);
-			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
 		});
 	}
 }

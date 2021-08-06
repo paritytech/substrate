@@ -29,7 +29,9 @@
 //! # ⚠️ WARNING ⚠️
 //!
 //! Do not insert an id that already exists in the list; doing so can result in catastrophic failure
-//! of your blockchain, including entering into an infinite loop during block execution.
+//! of your blockchain, including entering into an infinite loop during block execution. This
+//! situation can be avoided by strictly using [`Pallet::<T>::on_insert`] for insertions because
+//! it will exit early and return an error if the id is a duplicate.
 //!
 //! # Goals
 //!
@@ -48,8 +50,9 @@
 //!   re-inserting it will worsen its position in list iteration; this reduces incentives for some
 //!   types of spam that involve consistently removing and inserting for better position. Further,
 //!   ordering granularity is thus dictated by range between each bag threshold.
-//! - if an items weight changes to a value no longer within the range of its current bag its
-//!   position will need to be updated by an external actor with rebag or removal & insertion.
+//! - if an items weight changes to a value no longer within the range of its current bag the item's
+//!   position will need to be updated by an external actor with rebag (update), or removal and
+//!   insertion.
 //
 //! ### Further Plans
 //!
@@ -249,11 +252,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	fn contains(voter: &T::AccountId) -> bool {
-		VoterNodes::<T>::contains_key(voter)
+		List::<T>::contains(voter)
 	}
 
-	fn on_insert(voter: T::AccountId, weight: VoteWeight) {
-		List::<T>::insert(voter, weight);
+	fn on_insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), ()> {
+		List::<T>::insert(voter, weight)
 	}
 
 	fn on_update(voter: &T::AccountId, new_weight: VoteWeight) {
