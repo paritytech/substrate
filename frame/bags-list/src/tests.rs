@@ -1,4 +1,4 @@
-use frame_support::{assert_ok, assert_storage_noop};
+use frame_support::{assert_ok, assert_storage_noop, traits::IntegrityTest};
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
@@ -128,14 +128,19 @@ mod pallet {
 	}
 
 	#[test]
+	#[should_panic = "Voter bag thresholds must strictly increase, and have no duplicates"]
 	fn duplicate_in_bags_threshold_panics() {
-		todo!()
-		// probably needs some UI test
+		const DUPE_THRESH: &[VoteWeight; 4] = &[10, 20, 30, 30];
+		set_bag_thresholds(DUPE_THRESH);
+		BagsList::integrity_test();
 	}
 
 	#[test]
+	#[should_panic = "Voter bag thresholds must strictly increase, and have no duplicates"]
 	fn decreasing_in_bags_threshold_panics() {
-		todo!()
+		const DECREASING_THRESH: &[VoteWeight; 4] = &[10, 30, 20, 40];
+		set_bag_thresholds(DECREASING_THRESH);
+		BagsList::integrity_test();
 	}
 }
 

@@ -51,7 +51,7 @@ impl frame_system::Config for Runtime {
 const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 
 parameter_types! {
-	pub const BagThresholds: &'static [VoteWeight] = &THRESHOLDS;
+	pub static BagThresholds: &'static [VoteWeight] = &THRESHOLDS;
 }
 
 impl crate::Config for Runtime {
@@ -142,5 +142,9 @@ pub(crate) mod test_utils {
 
 	pub(crate) fn get_list_as_ids() -> Vec<AccountId> {
 		List::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>()
+	}
+
+	pub(crate) fn set_bag_thresholds(thresholds: &'static [VoteWeight]) {
+		BagThresholds::set(thresholds);
 	}
 }
