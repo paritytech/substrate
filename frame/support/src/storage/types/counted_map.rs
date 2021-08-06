@@ -63,7 +63,7 @@ pub struct OnRemovalCounterUpdate<Prefix>(core::marker::PhantomData<Prefix>);
 impl<Prefix: CountedStorageMapInstance> crate::storage::PrefixIteratorOnRemoval
 	for OnRemovalCounterUpdate<Prefix>
 {
-	fn on_removal() {
+	fn on_removal(_key: &[u8], _value: &[u8]) {
 		CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 	}
 }

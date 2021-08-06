@@ -803,12 +803,13 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 
 /// Trait for specialising on removal logic of [`PrefixIterator`].
 pub trait PrefixIteratorOnRemoval {
-	fn on_removal();
+	/// This function is called whenever a key/value is removed.
+	fn on_removal(key: &[u8], value: &[u8]);
 }
 
-/// No-op implement.
+/// No-op implementation.
 impl PrefixIteratorOnRemoval for () {
-	fn on_removal() {}
+	fn on_removal(_key: &[u8], _value: &[u8]) {}
 }
 
 impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
@@ -878,7 +879,7 @@ impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRem
 					};
 					if self.drain {
 						unhashed::kill(&self.previous_key);
-						OnRemoval::on_removal();
+						OnRemoval::on_removal(&self.previous_key, &raw_value);
 					}
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
@@ -1620,7 +1621,7 @@ mod test {
 
 			assert_eq!(final_vec, vec![1, 2, 3, 4, 5]);
 
-			let mut iter = PrefixIterator::new(
+			let mut iter = PrefixIterator::<_>::new(
 				iter.prefix().to_vec(),
 				stored_key,
 				|mut raw_key_without_prefix, mut raw_value| {
