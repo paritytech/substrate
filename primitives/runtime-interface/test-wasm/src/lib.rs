@@ -22,7 +22,7 @@
 use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use sp_std::{prelude::*, mem, convert::TryFrom};
+use sp_std::{convert::TryFrom, mem, prelude::*};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
@@ -33,8 +33,10 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
-	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.")
+	WASM_BINARY.expect(
+		"Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.",
+	)
 }
 
 /// Used in the `test_array_as_mutable_reference` test.
@@ -226,11 +228,11 @@ wasm_export_functions! {
 	}
 
 	fn test_u128_i128_as_parameter_and_return_value() {
-		for val in &[u128::max_value(), 1u128, 5000u128, u64::max_value() as u128] {
+		for val in &[u128::MAX, 1u128, 5000u128, u64::MAX as u128] {
 			assert_eq!(*val, test_api::get_and_return_u128(*val));
 		}
 
-		for val in &[i128::max_value(), i128::min_value(), 1i128, 5000i128, u64::max_value() as i128] {
+		for val in &[i128::MAX, i128::MIN, 1i128, 5000i128, u64::MAX as i128] {
 			assert_eq!(*val, test_api::get_and_return_i128(*val));
 		}
 	}

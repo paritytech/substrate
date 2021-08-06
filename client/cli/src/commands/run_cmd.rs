@@ -16,15 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::RpcMethods;
-use crate::error::{Error, Result};
-use crate::params::ImportParams;
-use crate::params::KeystoreParams;
-use crate::params::NetworkParams;
-use crate::params::OffchainWorkerParams;
-use crate::params::SharedParams;
-use crate::params::TransactionPoolParams;
-use crate::CliConfiguration;
+use crate::{
+	arg_enums::RpcMethods,
+	error::{Error, Result},
+	params::{
+		ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
+		TransactionPoolParams,
+	},
+	CliConfiguration,
+};
 use regex::Regex;
 use sc_service::{
 	config::{BasePath, PrometheusConfig, TransactionPoolOptions},
@@ -42,12 +42,11 @@ pub struct RunCmd {
 	/// The node will be started with the authority role and actively
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
-	#[structopt(
-		long = "validator"
-	)]
+	#[structopt(long)]
 	pub validator: bool,
 
-	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
+	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA
+	/// observer.
 	#[structopt(long)]
 	pub no_grandpa: bool,
 
@@ -57,8 +56,8 @@ pub struct RunCmd {
 
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details:
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
+	/// proxy server to filter out dangerous methods. More details:
 	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
@@ -74,8 +73,8 @@ pub struct RunCmd {
 	///
 	/// - `Unsafe`: Exposes every RPC method.
 	/// - `Safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is passed,
-	///   otherwise acts as `Unsafe`.
+	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
+	///   passed, otherwise acts as `Unsafe`.
 	#[structopt(
 		long,
 		value_name = "METHOD SET",
@@ -88,8 +87,9 @@ pub struct RunCmd {
 
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details: <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
+	/// proxy server to filter out dangerous methods. More details:
+	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -100,7 +100,12 @@ pub struct RunCmd {
 	#[structopt(long = "unsafe-ws-external")]
 	pub unsafe_ws_external: bool,
 
-	/// Listen to all Prometheus data source interfaces.
+	/// Set the the maximum RPC payload size for both requests and responses (both http and ws), in
+	/// megabytes. Default is 15MiB.
+	#[structopt(long = "rpc-max-payload")]
+	pub rpc_max_payload: Option<usize>,
+
+	/// Expose Prometheus exporter on all interfaces.
 	///
 	/// Default is local.
 	#[structopt(long = "prometheus-external")]
@@ -135,11 +140,11 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify Prometheus data source server TCP Port.
+	/// Specify Prometheus exporter TCP Port.
 	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
-	/// Do not expose a Prometheus metric endpoint.
+	/// Do not expose a Prometheus exporter endpoint.
 	///
 	/// Prometheus metric endpoint is enabled by default.
 	#[structopt(long = "no-prometheus")]
@@ -194,7 +199,8 @@ pub struct RunCmd {
 	#[structopt(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub bob: bool,
 
-	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to keystore.
+	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to
+	/// keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
 	pub charlie: bool,
 
@@ -302,7 +308,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-		))
+			))
 		})?;
 
 		Ok(name)
@@ -357,18 +363,13 @@ impl CliConfiguration for RunCmd {
 		Ok(if self.no_prometheus {
 			None
 		} else {
-			let interface = if self.prometheus_external {
-				Ipv4Addr::UNSPECIFIED
-			} else {
-				Ipv4Addr::LOCALHOST
-			};
+			let interface =
+				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
-			Some(PrometheusConfig::new_with_default_registry(
-				SocketAddr::new(
-					interface.into(),
-					self.prometheus_port.unwrap_or(default_listen_port),
-				)
-			))
+			Some(PrometheusConfig::new_with_default_registry(SocketAddr::new(
+				interface.into(),
+				self.prometheus_port.unwrap_or(default_listen_port),
+			)))
 		})
 	}
 
@@ -410,7 +411,7 @@ impl CliConfiguration for RunCmd {
 			self.rpc_external,
 			self.unsafe_rpc_external,
 			self.rpc_methods,
-			self.validator
+			self.validator,
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
@@ -435,6 +436,10 @@ impl CliConfiguration for RunCmd {
 		Ok(self.rpc_methods.into())
 	}
 
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_payload)
+	}
+
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		Ok(self.pool_config.transaction_pool())
 	}
@@ -456,19 +461,19 @@ impl CliConfiguration for RunCmd {
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long");
+		return Err("Node name too long")
 	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'");
+		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
 	let invalid_patterns = r"(https?:\\/+)?(www)+";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain urls");
+		return Err("Node name should not contain urls")
 	}
 
 	Ok(())
@@ -482,19 +487,18 @@ fn rpc_interface(
 ) -> Result<IpAddr> {
 	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(Error::Input(
-			"--rpc-external and --ws-external options shouldn't be \
-		used if the node is running as a validator. Use `--unsafe-rpc-external` \
-		or `--rpc-methods=unsafe` if you understand the risks. See the options \
-		description for more information."
+			"--rpc-external and --ws-external options shouldn't be used if the node is running as \
+			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
+			 the risks. See the options description for more information."
 				.to_owned(),
-		));
+		))
 	}
 
 	if is_external || is_unsafe_external {
 		if rpc_methods == RpcMethods::Unsafe {
 			log::warn!(
 				"It isn't safe to expose RPC publicly without a proxy server that filters \
-			available set of RPC methods."
+				 available set of RPC methods."
 			);
 		}
 
@@ -527,11 +531,10 @@ fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Telem
 		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
 			let url = s[..pos_].to_string();
-			let verbosity = s[pos_ + 1..]
-				.parse()
-				.map_err(TelemetryParsingError::VerbosityParsingError)?;
+			let verbosity =
+				s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
-		}
+		},
 	}
 }
 
@@ -564,17 +567,13 @@ fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> 
 		match part {
 			"all" | "*" => {
 				is_all = true;
-				break;
-			}
+				break
+			},
 			other => origins.push(other.to_owned()),
 		}
 	}
 
-	Ok(if is_all {
-		Cors::All
-	} else {
-		Cors::List(origins)
-	})
+	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
 
 #[cfg(test)]
@@ -590,7 +589,8 @@ mod tests {
 	fn tests_node_name_bad() {
 		assert!(is_node_name_valid(
 			"very very long names are really not very cool for the ui at all, really they're not"
-		).is_err());
+		)
+		.is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());

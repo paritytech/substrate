@@ -18,7 +18,7 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use sp_arithmetic::traits::{UniqueSaturatedInto, UniqueSaturatedFrom, SaturatedConversion};
+use sp_arithmetic::traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto};
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
@@ -42,20 +42,20 @@ pub trait CurrencyToVote<B> {
 
 /// An implementation of `CurrencyToVote` tailored for chain's that have a balance type of u128.
 ///
-/// The factor is the `(total_issuance / u64::max()).max(1)`, represented as u64. Let's look at the
+/// The factor is the `(total_issuance / u64::MAX).max(1)`, represented as u64. Let's look at the
 /// important cases:
 ///
-/// If the chain's total issuance is less than u64::max(), this will always be 1, which means that
+/// If the chain's total issuance is less than u64::MAX, this will always be 1, which means that
 /// the factor will not have any effect. In this case, any account's balance is also less. Thus,
 /// both of the conversions are basically an `as`; Any balance can fit in u64.
 ///
-/// If the chain's total issuance is more than 2*u64::max(), then a factor might be multiplied and
+/// If the chain's total issuance is more than 2*u64::MAX, then a factor might be multiplied and
 /// divided upon conversion.
 pub struct U128CurrencyToVote;
 
 impl U128CurrencyToVote {
 	fn factor(issuance: u128) -> u128 {
-		(issuance / u64::max_value() as u128).max(1)
+		(issuance / u64::MAX as u128).max(1)
 	}
 }
 
@@ -69,7 +69,6 @@ impl CurrencyToVote<u128> for U128CurrencyToVote {
 	}
 }
 
-
 /// A naive implementation of `CurrencyConvert` that simply saturates all conversions.
 ///
 /// # Warning
@@ -77,7 +76,9 @@ impl CurrencyToVote<u128> for U128CurrencyToVote {
 /// This is designed to be used mostly for testing. Use with care, and think about the consequences.
 pub struct SaturatingCurrencyToVote;
 
-impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for SaturatingCurrencyToVote {
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
+	for SaturatingCurrencyToVote
+{
 	fn to_vote(value: B, _: B) -> u64 {
 		value.unique_saturated_into()
 	}

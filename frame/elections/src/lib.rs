@@ -22,30 +22,33 @@
 //!
 //! ---
 //!
-//! Election module for stake-weighted membership selection of a collective.
+//! Election pallet for stake-weighted membership selection of a collective.
 //!
 //! The composition of a set of account IDs works according to one or more approval votes
 //! weighted by stake. There is a partial carry-over facility to give greater weight to those
 //! whose voting is serially unsuccessful.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-use sp_std::prelude::*;
-use sp_runtime::{
-	RuntimeDebug, DispatchResult, print,
-	traits::{Zero, One, StaticLookup, Saturating},
-};
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, DispatchClass},
+	ensure,
+	pallet_prelude::*,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReasons, ChangeMembers,
-	}
+		BalanceStatus, ChangeMembers, Currency, ExistenceRequirement, LockIdentifier,
+		LockableCurrency, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+	},
+	weights::{DispatchClass, Weight},
 };
-use codec::{Encode, Decode};
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::pallet_prelude::*;
+pub use pallet::*;
+use sp_runtime::{
+	print,
+	traits::{One, Saturating, StaticLookup, Zero},
+	RuntimeDebug,
+};
+use sp_std::prelude::*;
 
 mod mock;
 mod tests;
@@ -139,9 +142,11 @@ pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 /// Index used to access chunks.
 type SetIndex = u32;
@@ -152,141 +157,242 @@ type ApprovalFlag = u32;
 /// Number of approval flags that can fit into [`ApprovalFlag`] type.
 const APPROVAL_FLAG_LEN: usize = 32;
 
-pub trait Config: frame_system::Config {
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
 
-	/// Identifier for the elections pallet's lock
-	type PalletId: Get<LockIdentifier>;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-	/// The currency that people are electing with.
-	type Currency:
-		LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>
-		+ ReservableCurrency<Self::AccountId>;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-	/// Handler for the unbalanced reduction when slashing a validator.
-	type BadPresentation: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Identifier for the elections pallet's lock
+		#[pallet::constant]
+		type PalletId: Get<LockIdentifier>;
 
-	/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
-	type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// The currency that people are electing with.
+		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+			+ ReservableCurrency<Self::AccountId>;
 
-	/// Handler for the unbalanced reduction when submitting a bad `voter_index`.
-	type BadVoterIndex: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Handler for the unbalanced reduction when slashing a validator.
+		type BadPresentation: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner up)
-	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
+		type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// What to do when the members change.
-	type ChangeMembers: ChangeMembers<Self::AccountId>;
+		/// Handler for the unbalanced reduction when submitting a bad `voter_index`.
+		type BadVoterIndex: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// How much should be locked up in order to submit one's candidacy. A reasonable
-	/// default value is 9.
-	type CandidacyBond: Get<BalanceOf<Self>>;
+		/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner up)
+		type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// How much should be locked up in order to be able to submit votes.
-	type VotingBond: Get<BalanceOf<Self>>;
+		/// What to do when the members change.
+		type ChangeMembers: ChangeMembers<Self::AccountId>;
 
-	/// The amount of fee paid upon each vote submission, unless if they submit a
-	/// _hole_ index and replace it.
-	type VotingFee: Get<BalanceOf<Self>>;
+		/// How much should be locked up in order to submit one's candidacy. A reasonable
+		/// default value is 9.
+		#[pallet::constant]
+		type CandidacyBond: Get<BalanceOf<Self>>;
 
-	/// Minimum about that can be used as the locked value for voting.
-	type MinimumVotingLock: Get<BalanceOf<Self>>;
+		/// How much should be locked up in order to be able to submit votes.
+		#[pallet::constant]
+		type VotingBond: Get<BalanceOf<Self>>;
 
-	/// The punishment, per voter, if you provide an invalid presentation. A
-	/// reasonable default value is 1.
-	type PresentSlashPerVoter: Get<BalanceOf<Self>>;
+		/// The amount of fee paid upon each vote submission, unless if they submit a
+		/// _hole_ index and replace it.
+		#[pallet::constant]
+		type VotingFee: Get<BalanceOf<Self>>;
 
-	/// How many runners-up should have their approvals persist until the next
-	/// vote. A reasonable default value is 2.
-	type CarryCount: Get<u32>;
+		/// Minimum about that can be used as the locked value for voting.
+		#[pallet::constant]
+		type MinimumVotingLock: Get<BalanceOf<Self>>;
 
-	/// How many vote indices need to go by after a target voter's last vote before
-	/// they can be reaped if their approvals are moot. A reasonable default value
-	/// is 1.
-	type InactiveGracePeriod: Get<VoteIndex>;
+		/// The punishment, per voter, if you provide an invalid presentation. A
+		/// reasonable default value is 1.
+		#[pallet::constant]
+		type PresentSlashPerVoter: Get<BalanceOf<Self>>;
 
-	/// How often (in blocks) to check for new votes. A reasonable default value
-	/// is 1000.
-	type VotingPeriod: Get<Self::BlockNumber>;
+		/// How many runners-up should have their approvals persist until the next
+		/// vote. A reasonable default value is 2.
+		#[pallet::constant]
+		type CarryCount: Get<u32>;
 
-	/// Decay factor of weight when being accumulated. It should typically be set to
-	/// __at least__ `membership_size -1` to keep the collective secure.
-	/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
-	/// increment step `t`. 0 will result in no weight being added at all (normal
-	/// approval voting). A reasonable default value is 24.
-	type DecayRatio: Get<u32>;
-}
+		/// How many vote indices need to go by after a target voter's last vote before
+		/// they can be reaped if their approvals are moot. A reasonable default value
+		/// is 1.
+		#[pallet::constant]
+		type InactiveGracePeriod: Get<VoteIndex>;
 
-decl_storage! {
-	trait Store for Module<T: Config> as Elections {
-		// ---- parameters
+		/// How often (in blocks) to check for new votes. A reasonable default value
+		/// is 1000.
+		#[pallet::constant]
+		type VotingPeriod: Get<Self::BlockNumber>;
 
-		/// How long to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(fn presentation_duration) config(): T::BlockNumber;
-		/// How long each position is active for.
-		pub TermDuration get(fn term_duration) config(): T::BlockNumber;
-		/// Number of accounts that should constitute the collective.
-		pub DesiredSeats get(fn desired_seats) config(): u32;
-
-		// ---- permanent state (always relevant, changes only at the finalization of voting)
-
-		///  The current membership. When there's a vote going on, this should still be used for
-		///  executive matters. The block number (second element in the tuple) is the block that
-		///  their position is active until (calculated by the sum of the block number when the
-		///  member was elected and their term duration).
-		pub Members get(fn members) config(): Vec<(T::AccountId, T::BlockNumber)>;
-		/// The total number of vote rounds that have happened or are in progress.
-		pub VoteCount get(fn vote_index): VoteIndex;
-
-		// ---- persistent state (always relevant, changes constantly)
-
-		// A list of votes for each voter. The votes are stored as numeric values and parsed in a
-		// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
-		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
-		// `APPROVAL_SET_SIZE`.
-		///
-		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash and `SetIndex` is not
-		/// attacker-controlled.
-		pub ApprovalsOf get(fn approvals_of):
-			map hasher(twox_64_concat) (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
-		/// The vote index and list slot that the candidate `who` was registered or `None` if they
-		/// are not currently registered.
-		///
-		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
-		pub RegisterInfoOf get(fn candidate_reg_info):
-			map hasher(twox_64_concat) T::AccountId => Option<(VoteIndex, u32)>;
-		/// Basic information about a voter.
-		///
-		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
-		pub VoterInfoOf get(fn voter_info):
-			map hasher(twox_64_concat) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
-		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
-		///
-		/// TWOX-NOTE: OKAY ― `SetIndex` is not user-controlled data.
-		pub Voters get(fn voters): map hasher(twox_64_concat) SetIndex => Vec<Option<T::AccountId>>;
-		/// the next free set to store a voter in. This will keep growing.
-		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
-		/// Current number of Voters.
-		pub VoterCount get(fn voter_count): SetIndex = 0;
-		/// The present candidate list.
-		pub Candidates get(fn candidates): Vec<T::AccountId>; // has holes
-		/// Current number of active candidates
-		pub CandidateCount get(fn candidate_count): u32;
-
-		// ---- temporary state (only relevant during finalization/presentation)
-
-		/// The accounts holding the seats that will become free on the next tally.
-		pub NextFinalize get(fn next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
-		/// Get the leaderboard if we're in the presentation phase. The first element is the weight
-		/// of each entry; It may be the direct summed approval stakes, or a weighted version of it.
-		/// Sorted from low to high.
-		pub Leaderboard get(fn leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >;
+		/// Decay factor of weight when being accumulated. It should typically be set to
+		/// __at least__ `membership_size -1` to keep the collective secure.
+		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
+		/// increment step `t`. 0 will result in no weight being added at all (normal
+		/// approval voting). A reasonable default value is 24.
+		#[pallet::constant]
+		type DecayRatio: Get<u32>;
 	}
-}
 
-decl_error! {
-	/// Error for the elections module.
-	pub enum Error for Module<T: Config> {
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		/// The chunk size of the voter vector.
+		#[allow(non_snake_case)]
+		fn VOTER_SET_SIZE() -> u32 {
+			VOTER_SET_SIZE as u32
+		}
+
+		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		/// The chunk size of the approval vector.
+		#[allow(non_snake_case)]
+		fn APPROVAL_SET_SIZE() -> u32 {
+			APPROVAL_SET_SIZE as u32
+		}
+	}
+
+	// ---- permanent state (always relevant, changes only at the finalization of voting)
+
+	/// How long to give each top candidate to present themselves after the vote ends.
+	#[pallet::storage]
+	#[pallet::getter(fn presentation_duration)]
+	pub type PresentationDuration<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	/// How long each position is active for.
+	#[pallet::storage]
+	#[pallet::getter(fn term_duration)]
+	pub type TermDuration<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	/// Number of accounts that should constitute the collective.
+	#[pallet::storage]
+	#[pallet::getter(fn desired_seats)]
+	pub type DesiredSeats<T> = StorageValue<_, u32, ValueQuery>;
+
+	// ---- permanent state (always relevant, changes only at the finalization of voting)
+
+	///  The current membership. When there's a vote going on, this should still be used for
+	///  executive matters. The block number (second element in the tuple) is the block that
+	///  their position is active until (calculated by the sum of the block number when the
+	///  member was elected and their term duration).
+	#[pallet::storage]
+	#[pallet::getter(fn members)]
+	pub type Members<T: Config> = StorageValue<_, Vec<(T::AccountId, T::BlockNumber)>, ValueQuery>;
+
+	/// The total number of vote rounds that have happened or are in progress.
+	#[pallet::storage]
+	#[pallet::getter(fn vote_index)]
+	pub type VoteCount<T> = StorageValue<_, VoteIndex, ValueQuery>;
+
+	// ---- persistent state (always relevant, changes constantly)
+
+	// A list of votes for each voter. The votes are stored as numeric values and parsed in a
+	// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
+	// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
+	// `APPROVAL_SET_SIZE`.
+	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash and `SetIndex` is not
+	/// attacker-controlled.
+	#[pallet::storage]
+	#[pallet::getter(fn approvals_of)]
+	pub type ApprovalsOf<T: Config> =
+		StorageMap<_, Twox64Concat, (T::AccountId, SetIndex), Vec<ApprovalFlag>, ValueQuery>;
+
+	/// The vote index and list slot that the candidate `who` was registered or `None` if they
+	/// are not currently registered.
+	///
+	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
+	#[pallet::storage]
+	#[pallet::getter(fn candidate_reg_info)]
+	pub type RegisterInfoOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, (VoteIndex, u32)>;
+
+	/// Basic information about a voter.
+	///
+	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
+	#[pallet::storage]
+	#[pallet::getter(fn voter_info)]
+	pub type VoterInfoOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, VoterInfo<BalanceOf<T>>>;
+
+	/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
+	///
+	/// TWOX-NOTE: OKAY ― `SetIndex` is not user-controlled data.
+	#[pallet::storage]
+	#[pallet::getter(fn voters)]
+	pub type Voters<T: Config> =
+		StorageMap<_, Twox64Concat, SetIndex, Vec<Option<T::AccountId>>, ValueQuery>;
+
+	/// the next free set to store a voter in. This will keep growing.
+	#[pallet::storage]
+	#[pallet::getter(fn next_nonfull_voter_set)]
+	pub type NextVoterSet<T> = StorageValue<_, SetIndex, ValueQuery>;
+
+	/// Current number of Voters.
+	#[pallet::storage]
+	#[pallet::getter(fn voter_count)]
+	pub type VoterCount<T> = StorageValue<_, SetIndex, ValueQuery>;
+
+	/// The present candidate list.
+	#[pallet::storage]
+	#[pallet::getter(fn candidates)]
+	pub type Candidates<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>; // has holes
+
+	/// Current number of active candidates
+	#[pallet::storage]
+	#[pallet::getter(fn candidate_count)]
+	pub type CandidateCount<T> = StorageValue<_, u32, ValueQuery>;
+
+	// ---- temporary state (only relevant during finalization/presentation)
+
+	/// The accounts holding the seats that will become free on the next tally.
+	#[pallet::storage]
+	#[pallet::getter(fn next_finalize)]
+	pub type NextFinalize<T: Config> = StorageValue<_, (T::BlockNumber, u32, Vec<T::AccountId>)>;
+
+	/// Get the leaderboard if we're in the presentation phase. The first element is the weight
+	/// of each entry; It may be the direct summed approval stakes, or a weighted version of it.
+	/// Sorted from low to high.
+	#[pallet::storage]
+	#[pallet::getter(fn leaderboard)]
+	pub type Leaderboard<T: Config> = StorageValue<_, Vec<(BalanceOf<T>, T::AccountId)>>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub presentation_duration: T::BlockNumber,
+		pub term_duration: T::BlockNumber,
+		pub desired_seats: u32,
+		pub members: Vec<(T::AccountId, T::BlockNumber)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			GenesisConfig {
+				presentation_duration: Default::default(),
+				term_duration: Default::default(),
+				desired_seats: Default::default(),
+				members: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			PresentationDuration::<T>::put(self.presentation_duration);
+			TermDuration::<T>::put(self.term_duration);
+			DesiredSeats::<T>::put(self.desired_seats);
+			Members::<T>::put(&self.members);
+		}
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// Reporter must be a voter.
 		NotVoter,
 		/// Target for inactivity cleanup must be active.
@@ -342,64 +448,41 @@ decl_error! {
 		/// No approval changes during presentation period.
 		ApprovalPresentation,
 	}
-}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
+			if let Err(e) = Self::end_block(n) {
+				print("Guru meditation");
+				print(e);
+			}
+			0
+		}
+	}
 
-		/// How much should be locked up in order to submit one's candidacy. A reasonable
-		/// default value is 9.
-		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId", Vec<T::AccountId> = "Vec<AccountId>")]
+	pub enum Event<T: Config> {
+		/// Reaped \[voter, reaper\].
+		VoterReaped(T::AccountId, T::AccountId),
+		/// Slashed \[reaper\].
+		BadReaperSlashed(T::AccountId),
+		/// A tally (for approval votes of \[seats\]) has started.
+		TallyStarted(u32),
+		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
+		/// \[incoming, outgoing\]
+		TallyFinalized(Vec<T::AccountId>, Vec<T::AccountId>),
+	}
 
-		/// How much should be locked up in order to be able to submit votes.
-		const VotingBond: BalanceOf<T> = T::VotingBond::get();
-
-		/// The amount of fee paid upon each vote submission, unless if they submit a
-		/// _hole_ index and replace it.
-		const VotingFee: BalanceOf<T> = T::VotingFee::get();
-
-		/// The punishment, per voter, if you provide an invalid presentation. A
-		/// reasonable default value is 1.
-		const PresentSlashPerVoter: BalanceOf<T> = T::PresentSlashPerVoter::get();
-
-		/// How many runners-up should have their approvals persist until the next
-		/// vote. A reasonable default value is 2.
-		const CarryCount: u32 = T::CarryCount::get();
-
-		/// How many vote indices need to go by after a target voter's last vote before
-		/// they can be reaped if their approvals are moot. A reasonable default value
-		/// is 1.
-		const InactiveGracePeriod: VoteIndex = T::InactiveGracePeriod::get();
-
-		/// How often (in blocks) to check for new votes. A reasonable default value
-		/// is 1000.
-		const VotingPeriod: T::BlockNumber = T::VotingPeriod::get();
-
-		/// Minimum about that can be used as the locked value for voting.
-		const MinimumVotingLock: BalanceOf<T> = T::MinimumVotingLock::get();
-
-		/// Decay factor of weight when being accumulated. It should typically be set to
-		/// __at least__ `membership_size -1` to keep the collective secure.
-		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
-		/// increment step `t`. 0 will result in no weight being added at all (normal
-		/// approval voting). A reasonable default value is 24.
-		const DecayRatio: u32 = T::DecayRatio::get();
-
-		/// The chunk size of the voter vector.
-		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
-		/// The chunk size of the approval vector.
-		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
-
-		const PalletId: LockIdentifier = T::PalletId::get();
-
-		fn deposit_event() = default;
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
 		///
-		/// Locks `value` from the balance of `origin` indefinitely. Only [`retract_voter`] or
-		/// [`reap_inactive_voter`] can unlock the balance.
+		/// Locks `value` from the balance of `origin` indefinitely. Only
+		/// [`retract_voter`](Self::retract_voter) or
+		/// [`reap_inactive_voter`](Self::reap_inactive_voter) can unlock the balance.
 		///
 		/// `hint` argument is interpreted differently based on:
 		/// - if `origin` is setting approvals for the first time: The index will be checked for
@@ -407,7 +490,7 @@ decl_module! {
 		///   - if the hint is correctly pointing to a hole, no fee is deducted from `origin`.
 		///   - Otherwise, the call will succeed but the index is ignored and simply a push to the
 		///     last chunk with free space happens. If the new push causes a new chunk to be
-		///     created, a fee indicated by [`VotingFee`] is deducted.
+		///     created, a fee indicated by [`Config::VotingFee`] is deducted.
 		/// - if `origin` is already a voter: the index __must__ be valid and point to the correct
 		///   position of the `origin` in the current voters list.
 		///
@@ -419,13 +502,13 @@ decl_module! {
 		/// - Two extra DB entries, one DB change.
 		/// - Argument `votes` is limited in length to number of candidates.
 		/// # </weight>
-		#[weight = 2_500_000_000]
-		fn set_approvals(
-			origin,
+		#[pallet::weight(2_500_000_000)]
+		pub fn set_approvals(
+			origin: OriginFor<T>,
 			votes: Vec<bool>,
-			#[compact] index: VoteIndex,
+			#[pallet::compact] index: VoteIndex,
 			hint: SetIndex,
-			#[compact] value: BalanceOf<T>,
+			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
@@ -435,7 +518,11 @@ decl_module! {
 		/// must now be either unregistered or registered to a candidate that registered the slot
 		/// after the voter gave their last approval set.
 		///
-		/// Both indices must be provided as explained in [`voter_at`] function.
+		/// Both indices must be provided according to the following principle:
+		/// Voter index does not take holes into account. This means that any account submitting an
+		/// index at any point in time should submit:
+		/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in
+		/// the first `set_index` sets.
 		///
 		/// May be called by anyone. Returns the voter deposit to `signed`.
 		///
@@ -443,14 +530,14 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
-		#[weight = 2_500_000_000]
-		fn reap_inactive_voter(
-			origin,
-			#[compact] reporter_index: u32,
+		#[pallet::weight(2_500_000_000)]
+		pub fn reap_inactive_voter(
+			origin: OriginFor<T>,
+			#[pallet::compact] reporter_index: u32,
 			who: <T::Lookup as StaticLookup>::Source,
-			#[compact] who_index: u32,
-			#[compact] assumed_vote_index: VoteIndex,
-		) {
+			#[pallet::compact] who_index: u32,
+			#[pallet::compact] assumed_vote_index: VoteIndex,
+		) -> DispatchResult {
 			let reporter = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -468,7 +555,8 @@ decl_module! {
 
 			let reporter_index = reporter_index as usize;
 			let who_index = who_index as usize;
-			let assumed_reporter = Self::voter_at(reporter_index).ok_or(Error::<T>::InvalidReporterIndex)?;
+			let assumed_reporter =
+				Self::voter_at(reporter_index).ok_or(Error::<T>::InvalidReporterIndex)?;
 			let assumed_who = Self::voter_at(who_index).ok_or(Error::<T>::InvalidTargetIndex)?;
 
 			ensure!(assumed_reporter == reporter, Error::<T>::InvalidReporterIndex);
@@ -476,49 +564,59 @@ decl_module! {
 
 			// will definitely kill one of reporter or who now.
 
-			let valid = !Self::all_approvals_of(&who).iter()
-				.zip(Self::candidates().iter())
-				.any(|(&appr, addr)|
-					 appr &&
+			let valid = !Self::all_approvals_of(&who).iter().zip(Self::candidates().iter()).any(
+				|(&appr, addr)| {
+					appr &&
 					 *addr != T::AccountId::default() &&
 					 // defensive only: all items in candidates list are registered
 					 Self::candidate_reg_info(addr).map_or(false, |x| x.0 <= last_active)
-				);
+				},
+			);
 
 			Self::remove_voter(
 				if valid { &who } else { &reporter },
-				if valid { who_index } else { reporter_index }
+				if valid { who_index } else { reporter_index },
 			);
 
-			T::Currency::remove_lock(
-				T::PalletId::get(),
-				if valid { &who } else { &reporter }
-			);
+			T::Currency::remove_lock(T::PalletId::get(), if valid { &who } else { &reporter });
 
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its
 				// the origin. Still, it's no more harmful to propagate any error at this point.
-				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
-				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
+				T::Currency::repatriate_reserved(
+					&who,
+					&reporter,
+					T::VotingBond::get(),
+					BalanceStatus::Free,
+				)?;
+				Self::deposit_event(Event::<T>::VoterReaped(who, reporter));
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
 				T::BadReaper::on_unbalanced(imbalance);
-				Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
+				Self::deposit_event(Event::<T>::BadReaperSlashed(reporter));
 			}
+			Ok(())
 		}
 
 		/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 		///
-		/// The index must be provided as explained in [`voter_at`] function.
+		/// The index must be provided according to the following principle:
+		/// Voter index does not take holes into account. This means that any account submitting an
+		/// index at any point in time should submit:
+		/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in
+		/// the first `set_index` sets.
 		///
-		/// Also removes the lock on the balance of the voter. See [`do_set_approvals()`].
+		/// Also removes the lock on the balance of the voter.
 		///
 		/// # <weight>
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
-		#[weight = 1_250_000_000]
-		fn retract_voter(origin, #[compact] index: u32) {
+		#[pallet::weight(1_250_000_000)]
+		pub fn retract_voter(
+			origin: OriginFor<T>,
+			#[pallet::compact] index: u32,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::presentation_active(), Error::<T>::CannotRetractPresenting);
@@ -530,14 +628,16 @@ decl_module! {
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
 			T::Currency::remove_lock(T::PalletId::get(), &who);
+			Ok(())
 		}
 
 		/// Submit oneself for candidacy.
 		///
 		/// Account must have enough transferrable funds in it to pay the bond.
 		///
-		/// NOTE: if `origin` has already assigned approvals via [`set_approvals`],
-		/// it will NOT have any usable funds to pass candidacy bond and must first retract.
+		/// NOTE: if `origin` has already assigned approvals via
+		/// [`set_approvals`](Self::set_approvals), it will NOT have any usable funds to pass
+		/// candidacy bond and must first retract.
 		/// Note that setting approvals will lock the entire balance of the voter until
 		/// retraction or being reported.
 		///
@@ -545,8 +645,11 @@ decl_module! {
 		/// - Independent of input.
 		/// - Three DB changes.
 		/// # </weight>
-		#[weight = 2_500_000_000]
-		fn submit_candidacy(origin, #[compact] slot: u32) {
+		#[pallet::weight(2_500_000_000)]
+		pub fn submit_candidacy(
+			origin: OriginFor<T>,
+			#[pallet::compact] slot: u32,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::is_a_candidate(&who), Error::<T>::DuplicatedCandidate);
@@ -570,7 +673,8 @@ decl_module! {
 				candidates[slot] = who;
 			}
 			<Candidates<T>>::put(candidates);
-			CandidateCount::put(count as u32 + 1);
+			CandidateCount::<T>::put(count as u32 + 1);
+			Ok(())
 		}
 
 		/// Claim that `candidate` is one of the top `carry_count + desired_seats` candidates. Only
@@ -582,46 +686,39 @@ decl_module! {
 		/// - O(voters) compute.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = 10_000_000_000]
-		fn present_winner(
-			origin,
+		#[pallet::weight(10_000_000_000)]
+		pub fn present_winner(
+			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
-			#[compact] total: BalanceOf<T>,
-			#[compact] index: VoteIndex,
+			#[pallet::compact] total: BalanceOf<T>,
+			#[pallet::compact] index: VoteIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(
-				!total.is_zero(),
-				Error::<T>::ZeroDeposit,
-			);
+			ensure!(!total.is_zero(), Error::<T>::ZeroDeposit);
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
-			let (_, _, expiring) = Self::next_finalize()
-				.ok_or(Error::<T>::NotPresentationPeriod)?;
+			let (_, _, expiring) =
+				Self::next_finalize().ok_or(Error::<T>::NotPresentationPeriod)?;
 			let bad_presentation_punishment =
-				T::PresentSlashPerVoter::get()
-				* BalanceOf::<T>::from(Self::voter_count() as u32);
+				T::PresentSlashPerVoter::get() * BalanceOf::<T>::from(Self::voter_count() as u32);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
 				Error::<T>::InsufficientPresenterFunds,
 			);
 
-			let mut leaderboard = Self::leaderboard()
-				.ok_or(Error::<T>::LeaderboardMustExist)?;
+			let mut leaderboard = Self::leaderboard().ok_or(Error::<T>::LeaderboardMustExist)?;
 			ensure!(total > leaderboard[0].0, Error::<T>::UnworthyCandidate);
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
-				ensure!(
-					p < expiring.len(),
-					Error::<T>::DuplicatedCandidate,
-				);
+				ensure!(p < expiring.len(), Error::<T>::DuplicatedCandidate);
 			}
 
 			let voters = Self::all_voters();
 			let (registered_since, candidate_index): (VoteIndex, u32) =
 				Self::candidate_reg_info(&candidate).ok_or(Error::<T>::InvalidCandidate)?;
-			let actual_total = voters.iter()
+			let actual_total = voters
+				.iter()
 				.filter_map(|maybe_voter| maybe_voter.as_ref())
 				.filter_map(|voter| match Self::voter_info(voter) {
 					Some(b) if b.last_active >= registered_since => {
@@ -632,7 +729,9 @@ decl_module! {
 						let weight = stake + offset + b.pot;
 						if Self::approvals_of_at(voter, candidate_index as usize) {
 							Some(weight)
-						} else { None }
+						} else {
+							None
+						}
 					},
 					_ => None,
 				})
@@ -649,77 +748,73 @@ decl_module! {
 				// better safe than sorry.
 				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
 				T::BadPresentation::on_unbalanced(imbalance);
-				Err(if dupe { Error::<T>::DuplicatedPresentation } else { Error::<T>::IncorrectTotal })?
+				Err(if dupe {
+					Error::<T>::DuplicatedPresentation
+				} else {
+					Error::<T>::IncorrectTotal
+				})?
 			}
 		}
 
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
-		#[weight = (0, DispatchClass::Operational)]
-		fn set_desired_seats(origin, #[compact] count: u32) {
+		#[pallet::weight((0, DispatchClass::Operational))]
+		pub fn set_desired_seats(
+			origin: OriginFor<T>,
+			#[pallet::compact] count: u32,
+		) -> DispatchResult {
 			ensure_root(origin)?;
-			DesiredSeats::put(count);
+			DesiredSeats::<T>::put(count);
+			Ok(())
 		}
 
 		/// Remove a particular member from the set. This is effective immediately.
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		#[weight = (0, DispatchClass::Operational)]
-		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
+		#[pallet::weight((0, DispatchClass::Operational))]
+		pub fn remove_member(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let new_set: Vec<(T::AccountId, T::BlockNumber)> = Self::members()
-				.into_iter()
-				.filter(|i| i.0 != who)
-				.collect();
+			let new_set: Vec<(T::AccountId, T::BlockNumber)> =
+				Self::members().into_iter().filter(|i| i.0 != who).collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
 			T::ChangeMembers::change_members(&[], &[who], new_set);
+			Ok(())
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = (0, DispatchClass::Operational)]
-		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
+		#[pallet::weight((0, DispatchClass::Operational))]
+		pub fn set_presentation_duration(
+			origin: OriginFor<T>,
+			#[pallet::compact] count: T::BlockNumber,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
+			Ok(())
 		}
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = (0, DispatchClass::Operational)]
-		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
+		#[pallet::weight((0, DispatchClass::Operational))]
+		pub fn set_term_duration(
+			origin: OriginFor<T>,
+			#[pallet::compact] count: T::BlockNumber,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
-		}
-
-		fn on_initialize(n: T::BlockNumber) -> Weight {
-			if let Err(e) = Self::end_block(n) {
-				print("Guru meditation");
-				print(e);
-			}
-			0
+			Ok(())
 		}
 	}
 }
 
-decl_event!(
-	pub enum Event<T> where <T as frame_system::Config>::AccountId {
-		/// Reaped \[voter, reaper\].
-		VoterReaped(AccountId, AccountId),
-		/// Slashed \[reaper\].
-		BadReaperSlashed(AccountId),
-		/// A tally (for approval votes of \[seats\]) has started.
-		TallyStarted(u32),
-		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
-		/// \[incoming, outgoing\]
-		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
-	}
-);
-
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	// exposed immutables.
 
 	/// True if we're currently in a presentation period.
@@ -734,7 +829,8 @@ impl<T: Config> Module<T> {
 
 	/// Iff the member `who` still has a seat at blocknumber `n` returns `true`.
 	pub fn will_still_be_member_at(who: &T::AccountId, n: T::BlockNumber) -> bool {
-		Self::members().iter()
+		Self::members()
+			.iter()
 			.find(|&&(ref a, _)| a == who)
 			.map(|&(_, expires)| expires > n)
 			.unwrap_or(false)
@@ -772,7 +868,8 @@ impl<T: Config> Module<T> {
 				} else {
 					Some(c[c.len() - (desired_seats - coming) as usize].1)
 				}
-			}.map(Self::next_vote_from)
+			}
+			.map(Self::next_vote_from)
 		}
 	}
 
@@ -800,7 +897,7 @@ impl<T: Config> Module<T> {
 		let mut set = Self::voters(set_index);
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
-		VoterCount::mutate(|c| *c = *c - 1);
+		VoterCount::<T>::mutate(|c| *c = *c - 1);
 		Self::remove_all_approvals_of(voter);
 		<VoterInfoOf<T>>::remove(voter);
 	}
@@ -819,18 +916,12 @@ impl<T: Config> Module<T> {
 
 		ensure!(!Self::presentation_active(), Error::<T>::ApprovalPresentation);
 		ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
-		ensure!(
-			!candidates_len.is_zero(),
-			Error::<T>::ZeroCandidates,
-		);
+		ensure!(!candidates_len.is_zero(), Error::<T>::ZeroCandidates);
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
 		// length since otherwise an attacker may be able to submit a very long list of `votes` that
 		// far exceeds the amount of candidates and waste more computation than a reasonable voting
 		// bond would cover.
-		ensure!(
-			candidates_len >= votes.len(),
-			Error::<T>::TooManyVotes,
-		);
+		ensure!(candidates_len >= votes.len(), Error::<T>::TooManyVotes);
 		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
 		// Amount to be locked up.
@@ -879,22 +970,17 @@ impl<T: Config> Module<T> {
 						locked_balance -= T::VotingFee::get();
 					}
 					if set_len + 1 == VOTER_SET_SIZE {
-						NextVoterSet::put(next + 1);
+						NextVoterSet::<T>::put(next + 1);
 					}
 					<Voters<T>>::append(next, Some(who.clone()));
-				}
+				},
 			}
 
 			T::Currency::reserve(&who, T::VotingBond::get())?;
-			VoterCount::mutate(|c| *c = *c + 1);
+			VoterCount::<T>::mutate(|c| *c = *c + 1);
 		}
 
-		T::Currency::set_lock(
-			T::PalletId::get(),
-			&who,
-			locked_balance,
-			WithdrawReasons::all(),
-		);
+		T::Currency::set_lock(T::PalletId::get(), &who, locked_balance, WithdrawReasons::all());
 
 		<VoterInfoOf<T>>::insert(
 			&who,
@@ -903,7 +989,7 @@ impl<T: Config> Module<T> {
 				last_win: index,
 				stake: locked_balance,
 				pot: pot_to_set,
-			}
+			},
 		);
 		Self::set_approvals_chunked(&who, votes);
 
@@ -915,20 +1001,28 @@ impl<T: Config> Module<T> {
 		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
 		let number = <frame_system::Pallet<T>>::block_number();
-		let expiring =
-			members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
+		let expiring = members
+			.iter()
+			.take_while(|i| i.1 <= number)
+			.map(|i| i.0.clone())
+			.collect::<Vec<_>>();
 		let retaining_seats = members.len() - expiring.len();
 		if retaining_seats < desired_seats {
 			let empty_seats = desired_seats - retaining_seats;
-			<NextFinalize<T>>::put(
-				(number + Self::presentation_duration(), empty_seats as u32, expiring)
-			);
+			<NextFinalize<T>>::put((
+				number + Self::presentation_duration(),
+				empty_seats as u32,
+				expiring,
+			));
 
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
-			<Leaderboard<T>>::put(vec![(BalanceOf::<T>::zero(), T::AccountId::default()); leaderboard_size]);
+			<Leaderboard<T>>::put(vec![
+				(BalanceOf::<T>::zero(), T::AccountId::default());
+				leaderboard_size
+			]);
 
-			Self::deposit_event(RawEvent::TallyStarted(empty_seats as u32));
+			Self::deposit_event(Event::<T>::TallyStarted(empty_seats as u32));
 		}
 	}
 
@@ -940,19 +1034,22 @@ impl<T: Config> Module<T> {
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
 			<NextFinalize<T>>::take()
 				.ok_or("finalize can only be called after a tally is started.")?;
-		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
-			.unwrap_or_default();
+		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> =
+			<Leaderboard<T>>::take().unwrap_or_default();
 		let new_expiry = <frame_system::Pallet<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
 		let candidacy_bond = T::CandidacyBond::get();
-		let incoming: Vec<_> = leaderboard.iter()
+		let incoming: Vec<_> = leaderboard
+			.iter()
 			.rev()
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
 			.map(|(_, a)| a)
 			.cloned()
-			.inspect(|a| { T::Currency::unreserve(a, candidacy_bond); })
+			.inspect(|a| {
+				T::Currency::unreserve(a, candidacy_bond);
+			})
 			.collect();
 
 		// Update last win index for anyone voted for any of the incomings.
@@ -962,14 +1059,16 @@ impl<T: Config> Module<T> {
 				.iter()
 				.filter_map(|mv| mv.as_ref())
 				.filter(|v| Self::approvals_of_at(*v, index))
-				.for_each(|v| <VoterInfoOf<T>>::mutate(v, |a| {
-					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
-				}));
+				.for_each(|v| {
+					<VoterInfoOf<T>>::mutate(v, |a| {
+						if let Some(activity) = a {
+							activity.last_win = Self::vote_index() + 1;
+						}
+					})
+				});
 		});
 		let members = Self::members();
-		let outgoing: Vec<_> = members.iter()
-			.take(expiring.len())
-			.map(|a| a.0.clone()).collect();
+		let outgoing: Vec<_> = members.iter().take(expiring.len()).map(|a| a.0.clone()).collect();
 
 		// set the new membership set.
 		let mut new_set: Vec<_> = members
@@ -985,8 +1084,9 @@ impl<T: Config> Module<T> {
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
-		let mut new_candidates = vec![T::AccountId::default(); candidates.len()];	// shrink later.
-		let runners_up = leaderboard.into_iter()
+		let mut new_candidates = vec![T::AccountId::default(); candidates.len()]; // shrink later.
+		let runners_up = leaderboard
+			.into_iter()
 			.rev()
 			.take_while(|&(b, _)| !b.is_zero())
 			.skip(coming as usize)
@@ -1011,17 +1111,16 @@ impl<T: Config> Module<T> {
 			}
 		}
 		// discard any superfluous slots.
-		if let Some(last_index) = new_candidates
-			.iter()
-			.rposition(|c| *c != T::AccountId::default()) {
-				new_candidates.truncate(last_index + 1);
-			}
+		if let Some(last_index) = new_candidates.iter().rposition(|c| *c != T::AccountId::default())
+		{
+			new_candidates.truncate(last_index + 1);
+		}
 
-		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
+		Self::deposit_event(Event::<T>::TallyFinalized(incoming, outgoing));
 
 		<Candidates<T>>::put(new_candidates);
-		CandidateCount::put(count);
-		VoteCount::put(Self::vote_index() + 1);
+		CandidateCount::<T>::put(count);
+		VoteCount::<T>::put(Self::vote_index() + 1);
 		Ok(())
 	}
 
@@ -1044,7 +1143,7 @@ impl<T: Config> Module<T> {
 		loop {
 			let next_set = <Voters<T>>::get(index);
 			if next_set.is_empty() {
-				break;
+				break
 			} else {
 				index += 1;
 				all.extend(next_set);
@@ -1090,9 +1189,7 @@ impl<T: Config> Module<T> {
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert(
-				(&who, index as SetIndex), slice)
-			);
+			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert((&who, index as SetIndex), slice));
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
@@ -1117,7 +1214,7 @@ impl<T: Config> Module<T> {
 	/// Return true of the bit `n` of scalar `x` is set to `1` and false otherwise.
 	fn bit_at(x: ApprovalFlag, n: usize) -> bool {
 		if n < APPROVAL_FLAG_LEN {
-			x & ( 1 << n ) != 0
+			x & (1 << n) != 0
 		} else {
 			false
 		}
@@ -1128,7 +1225,7 @@ impl<T: Config> Module<T> {
 	pub fn bool_to_flag(x: Vec<bool>) -> Vec<ApprovalFlag> {
 		let mut result: Vec<ApprovalFlag> = Vec::with_capacity(x.len() / APPROVAL_FLAG_LEN);
 		if x.is_empty() {
-			return result;
+			return result
 		}
 		result.push(0);
 		let mut index = 0;
@@ -1137,7 +1234,9 @@ impl<T: Config> Module<T> {
 			let shl_index = counter % APPROVAL_FLAG_LEN;
 			result[index] += (if x[counter] { 1 } else { 0 }) << shl_index;
 			counter += 1;
-			if counter > x.len() - 1 { break; }
+			if counter > x.len() - 1 {
+				break
+			}
 			if counter % APPROVAL_FLAG_LEN == 0 {
 				result.push(0);
 				index += 1;
@@ -1149,15 +1248,18 @@ impl<T: Config> Module<T> {
 	/// Convert a vec of flags (u32) to boolean.
 	pub fn flag_to_bool(chunk: Vec<ApprovalFlag>) -> Vec<bool> {
 		let mut result = Vec::with_capacity(chunk.len());
-		if chunk.is_empty() { return vec![] }
-		chunk.into_iter()
-			.map(|num|
+		if chunk.is_empty() {
+			return vec![]
+		}
+		chunk
+			.into_iter()
+			.map(|num| {
 				(0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>()
-			)
+			})
 			.for_each(|c| {
 				let last_approve = match c.iter().rposition(|n| *n) {
 					Some(index) => index + 1,
-					None => 0
+					None => 0,
 				};
 				result.extend(c.into_iter().take(last_approve));
 			});
@@ -1171,7 +1273,9 @@ impl<T: Config> Module<T> {
 		let mut index = 0_u32;
 		loop {
 			let chunk = Self::approvals_of((who.clone(), index));
-			if chunk.is_empty() { break; }
+			if chunk.is_empty() {
+				break
+			}
 			all.extend(Self::flag_to_bool(chunk));
 			index += 1;
 		}
@@ -1204,7 +1308,9 @@ impl<T: Config> Module<T> {
 	/// returned if `t` is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
 		let decay_ratio: BalanceOf<T> = T::DecayRatio::get().into();
-		if t > 150 { return stake * decay_ratio }
+		if t > 150 {
+			return stake * decay_ratio
+		}
 		let mut offset = stake;
 		let mut r = Zero::zero();
 		let decay = decay_ratio + One::one();

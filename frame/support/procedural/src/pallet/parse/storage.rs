@@ -16,9 +16,9 @@
 // limitations under the License.
 
 use super::helper;
-use syn::spanned::Spanned;
 use quote::ToTokens;
 use std::collections::HashMap;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -69,11 +69,10 @@ impl syn::parse::Parse for PalletStorageAttr {
 
 			let renamed_prefix = content.parse::<syn::LitStr>()?;
 			// Ensure the renamed prefix is a proper Rust identifier
-			syn::parse_str::<syn::Ident>(&renamed_prefix.value())
-				.map_err(|_| {
-					let msg = format!("`{}` is not a valid identifier", renamed_prefix.value());
-					syn::Error::new(renamed_prefix.span(), msg)
-				})?;
+			syn::parse_str::<syn::Ident>(&renamed_prefix.value()).map_err(|_| {
+				let msg = format!("`{}` is not a valid identifier", renamed_prefix.value());
+				syn::Error::new(renamed_prefix.span(), msg)
+			})?;
 
 			Ok(Self::StorageName(renamed_prefix, attr_span))
 		} else {
@@ -87,16 +86,8 @@ pub enum Metadata {
 	Value { value: syn::Type },
 	Map { value: syn::Type, key: syn::Type },
 	CountedMap { value: syn::Type, key: syn::Type },
-	DoubleMap {
-		value: syn::Type,
-		key1: syn::Type,
-		key2: syn::Type
-	},
-	NMap {
-		keys: Vec<syn::Type>,
-		keygen: syn::Type,
-		value: syn::Type,
-	},
+	DoubleMap { value: syn::Type, key1: syn::Type, key2: syn::Type },
+	NMap { keys: Vec<syn::Type>, keygen: syn::Type, value: syn::Type },
 }
 
 pub enum QueryKind {
@@ -191,11 +182,8 @@ impl StorageGenerics {
 			Self::Map { value, key, .. } => Metadata::Map { value, key },
 			Self::CountedMap { value, key, .. } => Metadata::CountedMap { value, key },
 			Self::Value { value, .. } => Metadata::Value { value },
-			Self::NMap { keygen, value, .. } => Metadata::NMap {
-				keys: collect_keys(&keygen)?,
-				keygen,
-				value,
-			},
+			Self::NMap { keygen, value, .. } =>
+				Metadata::NMap { keys: collect_keys(&keygen)?, keygen, value },
 		};
 
 		Ok(res)
@@ -204,12 +192,11 @@ impl StorageGenerics {
 	/// Return the query kind from the defined generics
 	fn query_kind(&self) -> Option<syn::Type> {
 		match &self {
-			Self::DoubleMap { query_kind, .. }
-			| Self::Map { query_kind, .. }
-			| Self::CountedMap { query_kind, .. }
-			| Self::Value { query_kind, .. }
-			| Self::NMap { query_kind, .. }
-				=> query_kind.clone(),
+			Self::DoubleMap { query_kind, .. } |
+			Self::Map { query_kind, .. } |
+			Self::CountedMap { query_kind, .. } |
+			Self::Value { query_kind, .. } |
+			Self::NMap { query_kind, .. } => query_kind.clone(),
 		}
 	}
 }
@@ -237,7 +224,10 @@ fn check_generics(
 		let mut e = format!(
 			"`{}` expect generics {}and optional generics {}",
 			storage_type_name,
-			mandatory_generics.iter().map(|name| format!("`{}`, ", name)).collect::<String>(),
+			mandatory_generics
+				.iter()
+				.map(|name| format!("`{}`, ", name))
+				.collect::<String>(),
 			&optional_generics.iter().map(|name| format!("`{}`, ", name)).collect::<String>(),
 		);
 		e.pop();
@@ -247,14 +237,12 @@ fn check_generics(
 	};
 
 	for (gen_name, gen_binding) in map {
-		if !mandatory_generics.contains(&gen_name.as_str())
-			&& !optional_generics.contains(&gen_name.as_str())
+		if !mandatory_generics.contains(&gen_name.as_str()) &&
+			!optional_generics.contains(&gen_name.as_str())
 		{
 			let msg = format!(
 				"Invalid pallet::storage, Unexpected generic `{}` for `{}`. {}",
-				gen_name,
-				storage_type_name,
-				expectation,
+				gen_name, storage_type_name, expectation,
 			);
 			errors.push(syn::Error::new(gen_binding.span(), msg));
 		}
@@ -264,8 +252,7 @@ fn check_generics(
 		if !map.contains_key(&mandatory_generic.to_string()) {
 			let msg = format!(
 				"Invalid pallet::storage, cannot find `{}` generic, required for `{}`.",
-				mandatory_generic,
-				storage_type_name
+				mandatory_generic, storage_type_name
 			);
 			errors.push(syn::Error::new(args_span, msg));
 		}
@@ -296,7 +283,7 @@ fn process_named_generics(
 			let msg = "Invalid pallet::storage, Duplicated named generic";
 			let mut err = syn::Error::new(arg.ident.span(), msg);
 			err.combine(syn::Error::new(other.ident.span(), msg));
-			return Err(err);
+			return Err(err)
 		}
 		parsed.insert(arg.ident.to_string(), arg.clone());
 	}
@@ -312,15 +299,14 @@ fn process_named_generics(
 			)?;
 
 			StorageGenerics::Value {
-				value: parsed.remove("Value")
+				value: parsed
+					.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				query_kind: parsed.remove("QueryKind")
-					.map(|binding| binding.ty),
-				on_empty: parsed.remove("OnEmpty")
-					.map(|binding| binding.ty),
+				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
 			}
-		}
+		},
 		StorageKind::Map => {
 			check_generics(
 				&parsed,
@@ -331,20 +317,23 @@ fn process_named_generics(
 			)?;
 
 			StorageGenerics::Map {
-				hasher: parsed.remove("Hasher")
+				hasher: parsed
+					.remove("Hasher")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				key: parsed.remove("Key")
+				key: parsed
+					.remove("Key")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				value: parsed.remove("Value")
+				value: parsed
+					.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
-		}
+		},
 		StorageKind::CountedMap => {
 			check_generics(
 				&parsed,
@@ -368,7 +357,7 @@ fn process_named_generics(
 				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
-		}
+		},
 		StorageKind::DoubleMap => {
 			check_generics(
 				&parsed,
@@ -379,26 +368,31 @@ fn process_named_generics(
 			)?;
 
 			StorageGenerics::DoubleMap {
-				hasher1: parsed.remove("Hasher1")
+				hasher1: parsed
+					.remove("Hasher1")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				key1: parsed.remove("Key1")
+				key1: parsed
+					.remove("Key1")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				hasher2: parsed.remove("Hasher2")
+				hasher2: parsed
+					.remove("Hasher2")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				key2: parsed.remove("Key2")
+				key2: parsed
+					.remove("Key2")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				value: parsed.remove("Value")
+				value: parsed
+					.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
-		}
+		},
 		StorageKind::NMap => {
 			check_generics(
 				&parsed,
@@ -409,17 +403,19 @@ fn process_named_generics(
 			)?;
 
 			StorageGenerics::NMap {
-				keygen: parsed.remove("Key")
+				keygen: parsed
+					.remove("Key")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				value: parsed.remove("Value")
+				value: parsed
+					.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
-		}
+		},
 	};
 
 	let metadata = generics.metadata()?;
@@ -435,41 +431,32 @@ fn process_unnamed_generics(
 	args: &[syn::Type],
 ) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
 	let retrieve_arg = |arg_pos| {
-		args.get(arg_pos)
-			.cloned()
-			.ok_or_else(|| {
-				let msg = format!(
-					"Invalid pallet::storage, unexpected number of generic argument, \
+		args.get(arg_pos).cloned().ok_or_else(|| {
+			let msg = format!(
+				"Invalid pallet::storage, unexpected number of generic argument, \
 						expect at least {} args, found {}.",
-					arg_pos + 1,
-					args.len(),
-				);
-				syn::Error::new(args_span, msg)
-			})
+				arg_pos + 1,
+				args.len(),
+			);
+			syn::Error::new(args_span, msg)
+		})
 	};
 
 	let prefix_arg = retrieve_arg(0)?;
-	syn::parse2::<syn::Token![_]>(prefix_arg.to_token_stream())
-		.map_err(|e| {
-			let msg = "Invalid pallet::storage, for unnamed generic arguments the type \
+	syn::parse2::<syn::Token![_]>(prefix_arg.to_token_stream()).map_err(|e| {
+		let msg = "Invalid pallet::storage, for unnamed generic arguments the type \
 				first generic argument must be `_`, the argument is then replaced by macro.";
-			let mut err = syn::Error::new(prefix_arg.span(), msg);
-			err.combine(e);
-			err
-		})?;
+		let mut err = syn::Error::new(prefix_arg.span(), msg);
+		err.combine(e);
+		err
+	})?;
 
 	let res = match storage {
-		StorageKind::Value => (
-			None,
-			Metadata::Value { value: retrieve_arg(1)? },
-			retrieve_arg(2).ok(),
-		),
+		StorageKind::Value =>
+			(None, Metadata::Value { value: retrieve_arg(1)? }, retrieve_arg(2).ok()),
 		StorageKind::Map => (
 			None,
-			Metadata::Map {
-				key: retrieve_arg(2)?,
-				value: retrieve_arg(3)?,
-			},
+			Metadata::Map { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
 		),
 		StorageKind::CountedMap => (
@@ -492,15 +479,7 @@ fn process_unnamed_generics(
 		StorageKind::NMap => {
 			let keygen = retrieve_arg(1)?;
 			let keys = collect_keys(&keygen)?;
-			(
-				None,
-				Metadata::NMap {
-					keys,
-					keygen,
-					value: retrieve_arg(2)?,
-				},
-				retrieve_arg(3).ok(),
-			)
+			(None, Metadata::NMap { keys, keygen, value: retrieve_arg(2)? }, retrieve_arg(3).ok())
 		},
 	};
 
@@ -524,8 +503,8 @@ fn process_generics(
 				found `{}`.",
 				found,
 			);
-			return Err(syn::Error::new(segment.ident.span(), msg));
-		}
+			return Err(syn::Error::new(segment.ident.span(), msg))
+		},
 	};
 
 	let args_span = segment.arguments.span();
@@ -535,12 +514,14 @@ fn process_generics(
 		_ => {
 			let msg = "Invalid pallet::storage, invalid number of generic generic arguments, \
 				expect more that 0 generic arguments.";
-			return Err(syn::Error::new(segment.span(), msg));
-		}
+			return Err(syn::Error::new(segment.span(), msg))
+		},
 	};
 
 	if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::Type(_))) {
-		let args = args.args.iter()
+		let args = args
+			.args
+			.iter()
 			.map(|gen| match gen {
 				syn::GenericArgument::Type(gen) => gen.clone(),
 				_ => unreachable!("It is asserted above that all generics are types"),
@@ -548,7 +529,9 @@ fn process_generics(
 			.collect::<Vec<_>>();
 		process_unnamed_generics(&storage_kind, args_span, &args)
 	} else if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::Binding(_))) {
-		let args = args.args.iter()
+		let args = args
+			.args
+			.iter()
 			.map(|gen| match gen {
 				syn::GenericArgument::Binding(gen) => gen.clone(),
 				_ => unreachable!("It is asserted above that all generics are bindings"),
@@ -566,11 +549,7 @@ fn process_generics(
 /// Parse the 2nd type argument to `StorageNMap` and return its keys.
 fn collect_keys(keygen: &syn::Type) -> syn::Result<Vec<syn::Type>> {
 	if let syn::Type::Tuple(tup) = keygen {
-		tup
-			.elems
-			.iter()
-			.map(extract_key)
-			.collect::<syn::Result<Vec<_>>>()
+		tup.elems.iter().map(extract_key).collect::<syn::Result<Vec<_>>>()
 	} else {
 		Ok(vec![extract_key(keygen)?])
 	}
@@ -582,7 +561,7 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 		typ
 	} else {
 		let msg = "Invalid pallet::storage, expected type path";
-		return Err(syn::Error::new(ty.span(), msg));
+		return Err(syn::Error::new(ty.span(), msg))
 	};
 
 	let key_struct = typ.path.segments.last().ok_or_else(|| {
@@ -591,28 +570,31 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 	})?;
 	if key_struct.ident != "Key" && key_struct.ident != "NMapKey" {
 		let msg = "Invalid pallet::storage, expected Key or NMapKey struct";
-		return Err(syn::Error::new(key_struct.ident.span(), msg));
+		return Err(syn::Error::new(key_struct.ident.span(), msg))
 	}
 
 	let ty_params = if let syn::PathArguments::AngleBracketed(args) = &key_struct.arguments {
 		args
 	} else {
 		let msg = "Invalid pallet::storage, expected angle bracketed arguments";
-		return Err(syn::Error::new(key_struct.arguments.span(), msg));
+		return Err(syn::Error::new(key_struct.arguments.span(), msg))
 	};
 
 	if ty_params.args.len() != 2 {
-		let msg = format!("Invalid pallet::storage, unexpected number of generic arguments \
-			for Key struct, expected 2 args, found {}", ty_params.args.len());
-		return Err(syn::Error::new(ty_params.span(), msg));
+		let msg = format!(
+			"Invalid pallet::storage, unexpected number of generic arguments \
+			for Key struct, expected 2 args, found {}",
+			ty_params.args.len()
+		);
+		return Err(syn::Error::new(ty_params.span(), msg))
 	}
 
 	let key = match &ty_params.args[1] {
 		syn::GenericArgument::Type(key_ty) => key_ty.clone(),
 		_ => {
 			let msg = "Invalid pallet::storage, expected type";
-			return Err(syn::Error::new(ty_params.args[1].span(), msg));
-		}
+			return Err(syn::Error::new(ty_params.args[1].span(), msg))
+		},
 	};
 
 	Ok(key)
@@ -621,8 +603,7 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 impl StorageDef {
 	/// Return the storage prefix for this storage item
 	pub fn prefix(&self) -> String {
-		self
-			.rename_as
+		self.rename_as
 			.as_ref()
 			.map(syn::LitStr::value)
 			.unwrap_or(self.ident.to_string())
@@ -631,11 +612,7 @@ impl StorageDef {
 	/// Return either the span of the ident or the span of the literal in the
 	/// #[storage_prefix] attribute
 	pub fn prefix_span(&self) -> proc_macro2::Span {
-		self
-			.rename_as
-			.as_ref()
-			.map(syn::LitStr::span)
-			.unwrap_or(self.ident.span())
+		self.rename_as.as_ref().map(syn::LitStr::span).unwrap_or(self.ident.span())
 	}
 
 	pub fn try_from(
@@ -646,7 +623,7 @@ impl StorageDef {
 		let item = if let syn::Item::Type(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expect item type."));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expect item type."))
 		};
 
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
@@ -655,23 +632,19 @@ impl StorageDef {
 			.partition::<Vec<_>, _>(|attr| matches!(attr, PalletStorageAttr::Getter(..)));
 		if getters.len() > 1 {
 			let msg = "Invalid pallet::storage, multiple argument pallet::getter found";
-			return Err(syn::Error::new(getters[1].attr_span(), msg));
+			return Err(syn::Error::new(getters[1].attr_span(), msg))
 		}
 		if names.len() > 1 {
 			let msg = "Invalid pallet::storage, multiple argument pallet::storage_prefix found";
-			return Err(syn::Error::new(names[1].attr_span(), msg));
+			return Err(syn::Error::new(names[1].attr_span(), msg))
 		}
-		let getter = getters.pop().map(|attr| {
-			match attr {
-				PalletStorageAttr::Getter(ident, _) => ident,
-				_ => unreachable!(),
-			}
+		let getter = getters.pop().map(|attr| match attr {
+			PalletStorageAttr::Getter(ident, _) => ident,
+			_ => unreachable!(),
 		});
-		let rename_as = names.pop().map(|attr| {
-			match attr {
-				PalletStorageAttr::StorageName(lit, _) => lit,
-				_ => unreachable!(),
-			}
+		let rename_as = names.pop().map(|attr| match attr {
+			PalletStorageAttr::StorageName(lit, _) => lit,
+			_ => unreachable!(),
 		});
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
@@ -686,12 +659,12 @@ impl StorageDef {
 			typ
 		} else {
 			let msg = "Invalid pallet::storage, expected type path";
-			return Err(syn::Error::new(item.ty.span(), msg));
+			return Err(syn::Error::new(item.ty.span(), msg))
 		};
 
 		if typ.path.segments.len() != 1 {
 			let msg = "Invalid pallet::storage, expected type path with one segment";
-			return Err(syn::Error::new(item.ty.span(), msg));
+			return Err(syn::Error::new(item.ty.span(), msg))
 		}
 
 		let (named_generics, metadata, query_kind) = process_generics(&typ.path.segments[0])?;
@@ -699,11 +672,11 @@ impl StorageDef {
 		let query_kind = query_kind
 			.map(|query_kind| match query_kind {
 				syn::Type::Path(path)
-					if path.path.segments.last().map_or(false, |s| s.ident == "OptionQuery")
-				=> Some(QueryKind::OptionQuery),
+					if path.path.segments.last().map_or(false, |s| s.ident == "OptionQuery") =>
+					Some(QueryKind::OptionQuery),
 				syn::Type::Path(path)
-					if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery")
-				=> Some(QueryKind::ValueQuery),
+					if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery") =>
+					Some(QueryKind::ValueQuery),
 				_ => None,
 			})
 			.unwrap_or(Some(QueryKind::OptionQuery)); // This value must match the default generic.
@@ -712,7 +685,7 @@ impl StorageDef {
 			let msg = "Invalid pallet::storage, cannot generate getter because QueryKind is not \
 				identifiable. QueryKind must be `OptionQuery`, `ValueQuery`, or default one to be \
 				identifiable.";
-			return Err(syn::Error::new(getter.unwrap().span(), msg));
+			return Err(syn::Error::new(getter.unwrap().span(), msg))
 		}
 
 		Ok(StorageDef {

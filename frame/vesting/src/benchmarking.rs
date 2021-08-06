@@ -21,15 +21,16 @@
 
 use super::*;
 
-use frame_system::{RawOrigin, Pallet as System};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Vesting;
 
 const SEED: u32 = 0;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 	for id in 0..n {
@@ -226,6 +227,6 @@ benchmarks! {
 
 impl_benchmark_test_suite!(
 	Vesting,
-	crate::tests::ExtBuilder::default().existential_deposit(256).build(),
-	crate::tests::Test,
+	crate::mock::ExtBuilder::default().existential_deposit(256).build(),
+	crate::mock::Test,
 );

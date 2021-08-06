@@ -18,17 +18,16 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
-use sp_std::prelude::*;
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode};
+use crate::{
+	storage::{StorageDecodeLength, StorageTryAppend},
+	traits::Get,
+};
+use codec::{Decode, Encode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use crate::{
-	traits::{Get, MaxEncodedLen},
-	storage::{StorageDecodeLength, StorageTryAppend},
-};
+use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -88,6 +87,14 @@ impl<T, S> WeakBoundedVec<T, S> {
 	/// Exactly the same semantics as [`Vec::retain`].
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
+	}
+
+	/// Exactly the same semantics as [`Vec::get_mut`].
+	pub fn get_mut<I: SliceIndex<[T]>>(
+		&mut self,
+		index: I,
+	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
+		self.0.get_mut(index)
 	}
 }
 
@@ -309,9 +316,9 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
+	use crate::Twox128;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

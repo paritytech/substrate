@@ -37,7 +37,6 @@
 //!
 //! Once a panic is found, it can be debugged with
 //! `HFUZZ_RUN_ARGS="-t 10" cargo hfuzz run-debug phragmen_pjr hfuzz_workspace/phragmen_pjr/*.fuzz`.
-//!
 
 #[cfg(fuzzing)]
 use honggfuzz::fuzz;

@@ -74,9 +74,8 @@ impl WasmExecutionMethod {
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => {
-				sc_service::config::WasmExecutionMethod::Interpreted
-			}
+			WasmExecutionMethod::Interpreted =>
+				sc_service::config::WasmExecutionMethod::Interpreted,
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
@@ -229,6 +228,35 @@ arg_enum! {
 		Always,
 		Never,
 		WhenValidating,
+	}
+}
+
+arg_enum! {
+	/// Syncing mode.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum SyncMode {
+		// Full sync. Donwnload end verify all blocks.
+		Full,
+		// Download blocks without executing them. Download latest state with proofs.
+		Fast,
+		// Download blocks without executing them. Download latest state without proofs.
+		FastUnsafe,
+		// Prove finality and download the latest state.
+		Warp,
+	}
+}
+
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
+		match self {
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast =>
+				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
+			SyncMode::FastUnsafe =>
+				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
+			SyncMode::Warp => sc_network::config::SyncMode::Warp,
+		}
 	}
 }
 

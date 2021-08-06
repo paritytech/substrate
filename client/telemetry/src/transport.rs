@@ -26,9 +26,7 @@ use libp2p::{
 	core::transport::{timeout::TransportTimeout, OptionalTransport},
 	wasm_ext, Transport,
 };
-use std::io;
-use std::pin::Pin;
-use std::time::Duration;
+use std::{io, pin::Pin, time::Duration};
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
@@ -111,7 +109,7 @@ impl<T: AsyncRead> Stream for StreamSink<T> {
 			Ok(n) => {
 				buf.truncate(n);
 				Poll::Ready(Some(Ok(buf)))
-			}
+			},
 			Err(err) => Poll::Ready(Some(Err(err))),
 		}
 	}
@@ -126,7 +124,7 @@ impl<T: AsyncWrite> StreamSink<T> {
 				log::error!(target: "telemetry",
 					"Detected some internal buffering happening in the telemetry");
 				let err = io::Error::new(io::ErrorKind::Other, "Internal buffering detected");
-				return Poll::Ready(Err(err));
+				return Poll::Ready(Err(err))
 			}
 		}
 
