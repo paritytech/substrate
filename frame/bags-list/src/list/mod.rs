@@ -583,7 +583,7 @@ impl<T: Config> Bag<T> {
 	}
 }
 
-/// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
+/// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq, Clone))]
@@ -595,7 +595,7 @@ pub(crate) struct Node<T: Config> {
 }
 
 impl<T: Config> Node<T> {
-	/// Get a node by bag idx and account id.
+	/// Get a node by account id.
 	pub(crate) fn get(account_id: &T::AccountId) -> Option<Node<T>> {
 		crate::VoterNodes::<T>::try_get(account_id).ok()
 	}
