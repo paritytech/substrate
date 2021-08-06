@@ -830,7 +830,7 @@ macro_rules! impl_benchmark {
 					let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
 					let diff_pov = match (start_pov, end_pov) {
 						(Some(start), Some(end)) => end.saturating_sub(start),
-						_ => return Err("PoV was not generated"),
+						_ => Default::default(),
 					};
 
 					// Commit the changes to get proper write count
