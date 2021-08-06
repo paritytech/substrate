@@ -321,7 +321,7 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 fn open_parity_db<Block: BlockT>(
 	_path: &Path,
 	_db_type: DatabaseType,
-	create: bool,
+	_create: bool,
 ) -> OpenDbResult {
 	Err(OpenDbError::NotEnabled("with-parity-db"))
 }
