@@ -111,8 +111,12 @@ impl BenchmarkCmd {
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
-		let state_with_tracking =
-			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, true)?;
+		let state_with_tracking = BenchmarkingState::<BB>::new(
+			genesis_storage.clone(),
+			cache_size,
+			self.record_proof,
+			true,
+		)?;
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
@@ -133,15 +137,16 @@ impl BenchmarkCmd {
 		};
 
 		// Get Benchmark List
+		let state = &state_without_tracking;
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-			&state,
+			state,
 			None,
 			&mut changes,
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
 			extensions(),
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
@@ -222,8 +227,9 @@ impl BenchmarkCmd {
 				// First we run a verification
 				if !self.no_verify {
 					// Dont use these results since verification code will add overhead
+					let state = &state_without_tracking;
 					let _results = StateMachine::<_, _, NumberFor<BB>, _>::new(
-						&state_without_tracking,
+						state,
 						None,
 						&mut changes,
 						&executor,
@@ -237,7 +243,7 @@ impl BenchmarkCmd {
 						)
 							.encode(),
 						extensions(),
-						&sp_state_machine::backend::BackendRuntimeCode::new(&state)
+						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
 					)
@@ -249,8 +255,9 @@ impl BenchmarkCmd {
 				// TODO add one loop for state tracking
 				// Finally run a bunch of loops to get extrinsic timing information.
 				for r in 0..self.repeat {
+					let state = &state_with_tracking;
 					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-						&state_with_tracking, // todo remove tracking
+						state, // todo remove tracking
 						None,
 						&mut changes,
 						&executor,
@@ -264,7 +271,7 @@ impl BenchmarkCmd {
 						)
 							.encode(),
 						extensions(),
-						&sp_state_machine::backend::BackendRuntimeCode::new(&state)
+						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
 					)
