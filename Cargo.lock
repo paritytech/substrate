@@ -9548,6 +9548,7 @@ dependencies = [
  "hex-literal",
  "memory-db",
  "parity-scale-codec",
+ "scale-info",
  "sp-core",
  "sp-runtime",
  "sp-std",
