@@ -4319,22 +4319,27 @@ mod election_data_provider {
 	}
 }
 
-#[test]
-fn re_nominate_does_not_change_counters_or_list() {
-	ExtBuilder::default().nominate(true).build_and_execute(|| {
-		// given
-		let pre_insert_nominator_count = Nominators::<Test>::iter().count() as u32;
-		assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-		assert!(Nominators::<Test>::contains_key(101));
-		assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+mod sorted_list_provider {
+	use super::*;
+	use frame_election_provider_support::SortedListProvider;
 
-		// when account 101 renominates
-		assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
+	#[test]
+	fn re_nominate_does_not_change_counters_or_list() {
+		ExtBuilder::default().nominate(true).build_and_execute(|| {
+			// given
+			let pre_insert_nominator_count = Nominators::<Test>::iter().count() as u32;
+			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
+			assert!(Nominators::<Test>::contains_key(101));
+			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
 
-		// then counts don't change
-		assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-		assert_eq!(Nominators::<Test>::iter().count() as u32, pre_insert_nominator_count);
-		// and the list is the same
-		assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
-	});
+			// when account 101 renominates
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
+
+			// then counts don't change
+			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
+			assert_eq!(Nominators::<Test>::iter().count() as u32, pre_insert_nominator_count);
+			// and the list is the same
+			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+		});
+	}
 }

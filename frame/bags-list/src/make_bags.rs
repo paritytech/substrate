@@ -19,7 +19,7 @@
 //!
 //! NOTE: this assume the runtime implements [`pallet_staking::Config`], as it requires an
 //! implementation of the traits [`frame_support::traits::Currency`] and
-//! [`frame_support::traits::Currency`].
+//! [`frame_support::traits::CurrencyToVote`].
 //!
 //! The process of adding voter bags to a runtime requires only four steps.
 //!

@@ -724,31 +724,20 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
-
-			// TODO: should we only mutate the counter if they are in not Nominators && SortedListProvider?
-			// To preserve current behavior not stopping adding them if SortedListProvider has issues
-
-			if !T::SortedListProvider::contains(who) {
-				if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
-					// insertion only fails if the voter is "contained" in `SortedListProvider`.
-					// Since we check if the voter is in the list above getting here is
-					// impossible.
-					log!(
+			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
+				// insertion only fails if the voter is "contained" in `SortedListProvider`.
+				// Since we check if the voter is in the list above getting here is
+				// impossible.
+				log!(
 						warn,
 						"attempt to insert duplicate nominator ({:#?}) despite `List::contain` return false",
 						who
 					);
-					debug_assert!(false, "attempt to insert duplicate nominator despite `List::contain` return false");
-				};
-			} else {
-				// we are in a very bad situation
-				log!(
-					warn,
-					"Nominators and SortedListProvider out of sync: tried to insert into list a duplicate nominator ({:#?})",
-					who
+				debug_assert!(
+					false,
+					"attempt to insert duplicate nominator despite `List::contain` return false"
 				);
-				debug_assert!(false, "Nominators and SortedListProvider out of sync: tried to insert into list a duplicate nominator");
-			}
+			};
 
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 		}
@@ -1259,6 +1248,8 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 /// A simple voter list implementation that does not require any additional pallets.
 pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
+	type Error = ();
+
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
@@ -1269,7 +1260,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn contains(voter: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(voter)
 	}
-	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) -> Result<(), ()> {
+	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}

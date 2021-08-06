@@ -79,6 +79,7 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+pub use list::Error;
 use list::List;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
@@ -243,6 +244,8 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
+	type Error = Error;
+
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(List::<T>::iter().map(|n| n.id().clone()))
 	}
@@ -255,7 +258,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::contains(voter)
 	}
 
-	fn on_insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), ()> {
+	fn on_insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
 		List::<T>::insert(voter, weight)
 	}
 

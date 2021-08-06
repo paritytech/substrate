@@ -178,7 +178,10 @@ mod voter_list {
 			assert!(get_list_as_ids().contains(&3));
 
 			// then
-			assert_storage_noop!(assert_eq!(List::<Runtime>::insert(3, 20), Err(())));
+			assert_storage_noop!(assert_eq!(
+				List::<Runtime>::insert(3, 20).unwrap_err(),
+				Error::Duplicate
+			));
 		});
 	}
 

@@ -212,7 +212,10 @@ mod sorted_list_provider {
 			assert!(get_list_as_ids().contains(&3));
 
 			// then
-			assert_storage_noop!(assert_eq!(BagsList::on_insert(3, 20), Err(())));
+			assert_storage_noop!(assert_eq!(
+				BagsList::on_insert(3, 20).unwrap_err(),
+				Error::Duplicate
+			));
 		});
 	}
 

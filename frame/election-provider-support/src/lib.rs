@@ -306,6 +306,8 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 /// Something that implements this trait will do a best-effort sort over voters, and thus can be
 /// used on the implementing side of `ElectionDataProvider`.
 pub trait SortedListProvider<AccountId> {
+	type Error;
+
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 	/// get the current count of voters.
@@ -313,7 +315,7 @@ pub trait SortedListProvider<AccountId> {
 	/// Return true if the insertion can happen.
 	fn contains(voter: &AccountId) -> bool;
 	// Hook for inserting a voter.
-	fn on_insert(voter: AccountId, weight: VoteWeight) -> Result<(), ()>;
+	fn on_insert(voter: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
 	/// Hook for updating a single voter.
 	fn on_update(voter: &AccountId, weight: VoteWeight);
 	/// Hook for removing a voter from the list.

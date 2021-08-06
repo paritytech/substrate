@@ -30,6 +30,12 @@ use sp_std::{
 	marker::PhantomData,
 };
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum Error {
+	/// A duplicate voter has been detected.
+	Duplicate,
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -204,10 +210,10 @@ impl<T: Config> List<T> {
 		iter.filter_map(Bag::get).flat_map(|bag| bag.iter())
 	}
 
-	/// Insert several voters into the appropriate bags in the voter list. Does not check for
-	/// duplicates; instead continues with insertions if duplicates are detected.
+	/// Insert several voters into the appropriate bags in the voter Continues with insertions if
+	/// duplicates are detected.
 	///
-	/// This is more efficient than repeated calls to `Self::insert`.
+	/// Return the final count of number of voters inserted.
 	fn insert_many(
 		voters: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
@@ -226,9 +232,9 @@ impl<T: Config> List<T> {
 	/// Insert a new voter into the appropriate bag in the voter list.
 	///
 	/// Returns an error if the list already contains `voter`.
-	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), ()> {
+	pub(crate) fn insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
 		if Self::contains(&voter) {
-			return Err(())
+			return Err(Error::Duplicate)
 		}
 
 		let bag_weight = notional_bag_for::<T>(weight);
