@@ -313,6 +313,5 @@ mod sorted_list_provider {
 			let non_existent_ids = vec![&42, &666, &13];
 			assert!(non_existent_ids.iter().all(|id| !BagsList::contains(id)));
 		})
-
 	}
 }

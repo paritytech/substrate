@@ -750,15 +750,9 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(false, "Nominators and SortedListProvider out of sync: tried to insert into list a duplicate nominator");
 			}
 
-			debug_assert_eq!(
-				CounterForNominators::<T>::get(),
-				T::SortedListProvider::count(),
-				"voter_count must be accurate",
-			);
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 		}
-		// TODO: test: re-nominate should not increase the counter and T::SortedListProvider::count()
-		// consider these cases as well:
+		// TODO:
 		// chilled
 		// 		- validate
 		// 		- nominate

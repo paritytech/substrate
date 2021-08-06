@@ -308,7 +308,6 @@ mod voter_list {
 			let non_existent_ids = vec![&42, &666, &13];
 			assert!(non_existent_ids.iter().all(|id| !List::<Runtime>::contains(id)));
 		})
-
 	}
 }
 
