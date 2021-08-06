@@ -75,154 +75,154 @@ pub trait WeightInfo {
 /// Weights for pallet_democracy using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	// Storage: Democracy PublicPropCount (r:1 w:1)
 	// Storage: Democracy Blacklist (r:1 w:0)
+	// Storage: Democracy PublicPropCount (r:1 w:1)
 	// Storage: Democracy PublicProps (r:1 w:1)
 	// Storage: Democracy DepositOf (r:0 w:1)
 	fn propose() -> Weight {
-		(60_473_000 as Weight)
+		(67_749_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn second(s: u32, ) -> Weight {
-		(40_878_000 as Weight)
+		(42_102_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((157_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((178_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy VotingOf (r:1 w:1)
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn vote_new(r: u32, ) -> Weight {
-		(46_689_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((179_000 as Weight).saturating_mul(r as Weight))
+		(47_148_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((230_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn vote_existing(r: u32, ) -> Weight {
-		(46_624_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((174_000 as Weight).saturating_mul(r as Weight))
+		(47_433_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((213_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	// Storage: Democracy Cancellations (r:1 w:1)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
+	// Storage: Democracy Cancellations (r:1 w:1)
 	fn emergency_cancel() -> Weight {
-		(27_730_000 as Weight)
+		(27_391_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy PublicProps (r:1 w:1)
-	// Storage: Democracy NextExternal (r:1 w:1)
 	// Storage: Democracy Blacklist (r:0 w:1)
+	// Storage: Democracy NextExternal (r:1 w:1)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn blacklist(p: u32, ) -> Weight {
-		(80_687_000 as Weight)
+		(79_792_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((495_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((523_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
 	// Storage: Democracy NextExternal (r:1 w:1)
 	// Storage: Democracy Blacklist (r:1 w:0)
 	fn external_propose(v: u32, ) -> Weight {
-		(13_725_000 as Weight)
+		(13_734_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((91_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((89_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy NextExternal (r:0 w:1)
 	fn external_propose_majority() -> Weight {
-		(3_044_000 as Weight)
+		(2_934_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy NextExternal (r:0 w:1)
 	fn external_propose_default() -> Weight {
-		(3_026_000 as Weight)
+		(2_950_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy ReferendumInfoOf (r:0 w:1)
-	// Storage: Democracy NextExternal (r:1 w:1)
 	// Storage: Democracy ReferendumCount (r:1 w:1)
+	// Storage: Democracy NextExternal (r:1 w:1)
 	fn fast_track() -> Weight {
-		(28_457_000 as Weight)
+		(28_417_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	// Storage: Democracy Blacklist (r:1 w:1)
 	// Storage: Democracy NextExternal (r:1 w:1)
+	// Storage: Democracy Blacklist (r:1 w:1)
 	fn veto_external(v: u32, ) -> Weight {
-		(29_556_000 as Weight)
+		(29_747_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((134_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((132_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	// Storage: System Account (r:1 w:1)
 	// Storage: Democracy PublicProps (r:1 w:1)
+	// Storage: System Account (r:1 w:1)
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn cancel_proposal(p: u32, ) -> Weight {
-		(54_400_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((483_000 as Weight).saturating_mul(p as Weight))
+		(54_933_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((476_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Democracy ReferendumInfoOf (r:0 w:1)
 	fn cancel_referendum() -> Weight {
-		(17_561_000 as Weight)
+		(17_338_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Scheduler Agenda (r:1 w:1)
 	// Storage: Scheduler Lookup (r:1 w:1)
+	// Storage: Scheduler Agenda (r:1 w:1)
 	fn cancel_queued(r: u32, ) -> Weight {
-		(30_399_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_695_000 as Weight).saturating_mul(r as Weight))
+		(31_090_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_667_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	// Storage: Democracy ReferendumCount (r:1 w:0)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:0)
-	// Storage: Democracy LowestUnbaked (r:1 w:0)
 	// Storage: Democracy NextExternal (r:1 w:0)
 	// Storage: Democracy PublicProps (r:1 w:0)
+	// Storage: Democracy LowestUnbaked (r:1 w:0)
 	// Storage: Democracy LastTabledWasExternal (r:1 w:0)
+	// Storage: Democracy ReferendumCount (r:1 w:0)
 	fn on_initialize_base(r: u32, ) -> Weight {
-		(7_195_000 as Weight)
+		(7_307_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((5_121_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((5_184_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
 	}
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy VotingOf (r:3 w:3)
 	// Storage: Balances Locks (r:1 w:1)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn delegate(r: u32, ) -> Weight {
-		(55_542_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((7_310_000 as Weight).saturating_mul(r as Weight))
+		(53_925_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((7_411_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(r as Weight)))
 	}
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy VotingOf (r:2 w:2)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn undelegate(r: u32, ) -> Weight {
-		(24_376_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((7_301_000 as Weight).saturating_mul(r as Weight))
+		(24_738_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((7_434_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -230,12 +230,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Democracy PublicProps (r:0 w:1)
 	fn clear_public_proposals() -> Weight {
-		(3_214_000 as Weight)
+		(3_119_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy Preimages (r:1 w:1)
 	fn note_preimage(b: u32, ) -> Weight {
-		(45_495_000 as Weight)
+		(45_688_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((3_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
@@ -243,7 +243,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Democracy Preimages (r:1 w:1)
 	fn note_imminent_preimage(b: u32, ) -> Weight {
-		(29_427_000 as Weight)
+		(29_658_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((3_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
@@ -252,47 +252,47 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Democracy Preimages (r:1 w:1)
 	// Storage: System Account (r:1 w:0)
 	fn reap_preimage(b: u32, ) -> Weight {
-		(40_908_000 as Weight)
+		(41_299_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	// Storage: Democracy VotingOf (r:1 w:1)
 	fn unlock_remove(r: u32, ) -> Weight {
-		(39_745_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((45_000 as Weight).saturating_mul(r as Weight))
+		(40_191_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((98_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
+	// Storage: Democracy VotingOf (r:1 w:1)
 	fn unlock_set(r: u32, ) -> Weight {
-		(37_365_000 as Weight)
+		(38_076_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((166_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((205_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn remove_vote(r: u32, ) -> Weight {
-		(21_066_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((162_000 as Weight).saturating_mul(r as Weight))
+		(21_501_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((208_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn remove_other_vote(r: u32, ) -> Weight {
-		(21_045_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((166_000 as Weight).saturating_mul(r as Weight))
+		(21_393_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((207_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -300,154 +300,154 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: Democracy PublicPropCount (r:1 w:1)
 	// Storage: Democracy Blacklist (r:1 w:0)
+	// Storage: Democracy PublicPropCount (r:1 w:1)
 	// Storage: Democracy PublicProps (r:1 w:1)
 	// Storage: Democracy DepositOf (r:0 w:1)
 	fn propose() -> Weight {
-		(60_473_000 as Weight)
+		(67_749_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn second(s: u32, ) -> Weight {
-		(40_878_000 as Weight)
+		(42_102_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((157_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((178_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy VotingOf (r:1 w:1)
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn vote_new(r: u32, ) -> Weight {
-		(46_689_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((179_000 as Weight).saturating_mul(r as Weight))
+		(47_148_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((230_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn vote_existing(r: u32, ) -> Weight {
-		(46_624_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((174_000 as Weight).saturating_mul(r as Weight))
+		(47_433_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((213_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	// Storage: Democracy Cancellations (r:1 w:1)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
+	// Storage: Democracy Cancellations (r:1 w:1)
 	fn emergency_cancel() -> Weight {
-		(27_730_000 as Weight)
+		(27_391_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy PublicProps (r:1 w:1)
-	// Storage: Democracy NextExternal (r:1 w:1)
 	// Storage: Democracy Blacklist (r:0 w:1)
+	// Storage: Democracy NextExternal (r:1 w:1)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn blacklist(p: u32, ) -> Weight {
-		(80_687_000 as Weight)
+		(79_792_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((495_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((523_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
 	// Storage: Democracy NextExternal (r:1 w:1)
 	// Storage: Democracy Blacklist (r:1 w:0)
 	fn external_propose(v: u32, ) -> Weight {
-		(13_725_000 as Weight)
+		(13_734_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((91_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((89_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy NextExternal (r:0 w:1)
 	fn external_propose_majority() -> Weight {
-		(3_044_000 as Weight)
+		(2_934_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy NextExternal (r:0 w:1)
 	fn external_propose_default() -> Weight {
-		(3_026_000 as Weight)
+		(2_950_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy ReferendumInfoOf (r:0 w:1)
-	// Storage: Democracy NextExternal (r:1 w:1)
 	// Storage: Democracy ReferendumCount (r:1 w:1)
+	// Storage: Democracy NextExternal (r:1 w:1)
 	fn fast_track() -> Weight {
-		(28_457_000 as Weight)
+		(28_417_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	// Storage: Democracy Blacklist (r:1 w:1)
 	// Storage: Democracy NextExternal (r:1 w:1)
+	// Storage: Democracy Blacklist (r:1 w:1)
 	fn veto_external(v: u32, ) -> Weight {
-		(29_556_000 as Weight)
+		(29_747_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((134_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((132_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	// Storage: System Account (r:1 w:1)
 	// Storage: Democracy PublicProps (r:1 w:1)
+	// Storage: System Account (r:1 w:1)
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn cancel_proposal(p: u32, ) -> Weight {
-		(54_400_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((483_000 as Weight).saturating_mul(p as Weight))
+		(54_933_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((476_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Democracy ReferendumInfoOf (r:0 w:1)
 	fn cancel_referendum() -> Weight {
-		(17_561_000 as Weight)
+		(17_338_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Scheduler Agenda (r:1 w:1)
 	// Storage: Scheduler Lookup (r:1 w:1)
+	// Storage: Scheduler Agenda (r:1 w:1)
 	fn cancel_queued(r: u32, ) -> Weight {
-		(30_399_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_695_000 as Weight).saturating_mul(r as Weight))
+		(31_090_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_667_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	// Storage: Democracy ReferendumCount (r:1 w:0)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:0)
-	// Storage: Democracy LowestUnbaked (r:1 w:0)
 	// Storage: Democracy NextExternal (r:1 w:0)
 	// Storage: Democracy PublicProps (r:1 w:0)
+	// Storage: Democracy LowestUnbaked (r:1 w:0)
 	// Storage: Democracy LastTabledWasExternal (r:1 w:0)
+	// Storage: Democracy ReferendumCount (r:1 w:0)
 	fn on_initialize_base(r: u32, ) -> Weight {
-		(7_195_000 as Weight)
+		(7_307_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((5_121_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((5_184_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
 	}
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy VotingOf (r:3 w:3)
 	// Storage: Balances Locks (r:1 w:1)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn delegate(r: u32, ) -> Weight {
-		(55_542_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((7_310_000 as Weight).saturating_mul(r as Weight))
+		(53_925_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((7_411_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(r as Weight)))
 	}
-	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	// Storage: Democracy VotingOf (r:2 w:2)
+	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn undelegate(r: u32, ) -> Weight {
-		(24_376_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((7_301_000 as Weight).saturating_mul(r as Weight))
+		(24_738_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((7_434_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -455,12 +455,12 @@ impl WeightInfo for () {
 	}
 	// Storage: Democracy PublicProps (r:0 w:1)
 	fn clear_public_proposals() -> Weight {
-		(3_214_000 as Weight)
+		(3_119_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Democracy Preimages (r:1 w:1)
 	fn note_preimage(b: u32, ) -> Weight {
-		(45_495_000 as Weight)
+		(45_688_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((3_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
@@ -468,7 +468,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Democracy Preimages (r:1 w:1)
 	fn note_imminent_preimage(b: u32, ) -> Weight {
-		(29_427_000 as Weight)
+		(29_658_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((3_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
@@ -477,47 +477,47 @@ impl WeightInfo for () {
 	// Storage: Democracy Preimages (r:1 w:1)
 	// Storage: System Account (r:1 w:0)
 	fn reap_preimage(b: u32, ) -> Weight {
-		(40_908_000 as Weight)
+		(41_299_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
+	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	// Storage: Democracy VotingOf (r:1 w:1)
 	fn unlock_remove(r: u32, ) -> Weight {
-		(39_745_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((45_000 as Weight).saturating_mul(r as Weight))
+		(40_191_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((98_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
+	// Storage: Democracy VotingOf (r:1 w:1)
 	fn unlock_set(r: u32, ) -> Weight {
-		(37_365_000 as Weight)
+		(38_076_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((166_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((205_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn remove_vote(r: u32, ) -> Weight {
-		(21_066_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((162_000 as Weight).saturating_mul(r as Weight))
+		(21_501_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((208_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Democracy VotingOf (r:1 w:1)
 	// Storage: Democracy ReferendumInfoOf (r:1 w:1)
 	fn remove_other_vote(r: u32, ) -> Weight {
-		(21_045_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((166_000 as Weight).saturating_mul(r as Weight))
+		(21_393_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((207_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
