@@ -78,7 +78,7 @@ pub(crate) mod ext_builder {
 	use super::*;
 
 	/// Default AccountIds and their weights.
-	const GENESIS_IDS: [(AccountId, VoteWeight); 4] = [(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
+	pub const GENESIS_IDS: [(AccountId, VoteWeight); 4] = [(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
 
 	#[derive(Default)]
 	pub(crate) struct ExtBuilder {

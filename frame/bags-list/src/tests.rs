@@ -206,6 +206,17 @@ mod sorted_list_provider {
 	}
 
 	#[test]
+	fn on_insert_errors_with_duplicate_id() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert!(get_list_as_ids().contains(&3));
+
+			// then
+			assert_storage_noop!(assert_eq!(BagsList::on_insert(3, 20), Err(())));
+		});
+	}
+
+	#[test]
 	fn on_update_works() {
 		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
@@ -292,5 +303,16 @@ mod sorted_list_provider {
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 			ensure_left(3, 0);
 		});
+	}
+
+	#[test]
+	fn contains_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(ext_builder::GENESIS_IDS.iter().all(|(id, _)| BagsList::contains(id)));
+
+			let non_existent_ids = vec![&42, &666, &13];
+			assert!(non_existent_ids.iter().all(|id| !BagsList::contains(id)));
+		})
+
 	}
 }

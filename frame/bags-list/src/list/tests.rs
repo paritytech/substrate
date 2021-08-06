@@ -172,6 +172,17 @@ mod voter_list {
 	}
 
 	#[test]
+	fn insert_errors_with_duplicate_id() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert!(get_list_as_ids().contains(&3));
+
+			// then
+			assert_storage_noop!(assert_eq!(List::<Runtime>::insert(3, 20), Err(())));
+		});
+	}
+
+	#[test]
 	fn remove_works() {
 		use crate::{CounterForVoters, VoterBags, VoterNodes};
 		let ensure_left = |id, counter| {
@@ -287,6 +298,17 @@ mod voter_list {
 			assert_eq!(crate::CounterForVoters::<Runtime>::get(), 5);
 			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
 		});
+	}
+
+	#[test]
+	fn contains_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(ext_builder::GENESIS_IDS.iter().all(|(id, _)| List::<Runtime>::contains(id)));
+
+			let non_existent_ids = vec![&42, &666, &13];
+			assert!(non_existent_ids.iter().all(|id| !List::<Runtime>::contains(id)));
+		})
+
 	}
 }
 
@@ -433,7 +455,6 @@ mod bags {
 			assert_eq!(get_list_as_ids(), vec![2, 3, 1]);
 
 			// and the last accessible node has an **incorrect** prev pointer.
-			// TODO: consider doing a check on insert, it is cheap.
 			assert_eq!(
 				Node::<Runtime>::get(&3).unwrap(),
 				node(3, Some(4), None, bag_1000.bag_upper)
