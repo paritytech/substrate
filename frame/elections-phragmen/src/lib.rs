@@ -104,7 +104,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		SortedMembers, WithdrawReasons,
+		SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -121,6 +121,9 @@ pub use weights::WeightInfo;
 
 /// All migrations.
 pub mod migrations;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -239,6 +242,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]

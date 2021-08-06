@@ -5,9 +5,9 @@ error[E0107]: missing generics for trait `Hooks`
     |                     ^^^^^ expected 1 type argument
     |
 note: trait defined here, with 1 type parameter: `BlockNumber`
-   --> $DIR/hooks.rs:212:11
+   --> $DIR/hooks.rs:221:11
     |
-212 | pub trait Hooks<BlockNumber> {
+221 | pub trait Hooks<BlockNumber> {
     |           ^^^^^ -----------
 help: use angle brackets to add missing type argument
     |

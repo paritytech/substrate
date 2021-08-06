@@ -55,9 +55,15 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   tags:
     - kubernetes-parity-build
-  interruptible:                   true
 
 .rust-info-script:                 &rust-info-script
   - rustup show
@@ -97,6 +103,7 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
 
 .test-refs-no-trigger-prs-only:   &test-refs-no-trigger-prs-only
   rules:
@@ -273,7 +280,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -343,6 +350,8 @@ unleash-check:
     - mkdir -p target/unleash
     - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+  # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -578,7 +587,7 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job 
+    # pass artifacts to the trigger-simnet job
     - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
@@ -669,12 +678,14 @@ publish-draft-release:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
-publish-to-crates-io:
+unleash-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
+    # remove allow_failure: true on the check job
+    # - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -713,7 +724,7 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}

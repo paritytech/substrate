@@ -18,10 +18,12 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use frame_election_provider_support::Support;
+use frame_election_provider_support::{ElectionProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, OnInitialize, ReservableCurrency},
+	dispatch::WithPostDispatchInfo,
+	pallet_prelude::*,
+	traits::{Currency, Get, OnInitialize, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
@@ -29,8 +31,13 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
+	Perbill, Percent,
 };
-use sp_staking::offence::OffenceDetails;
+use sp_staking::{
+	offence::{OffenceDetails, OnOffenceHandler},
+	SessionIndex,
+};
+use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -250,7 +257,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
+			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
 		);
 		mock::make_all_reward_payment(0);
 
@@ -288,7 +295,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
+			Event::EraPaid(1, total_payout_1, maximum_payout - total_payout_1)
 		);
 		mock::make_all_reward_payment(1);
 
@@ -3935,7 +3942,7 @@ mod election_data_provider {
 			run_to_block(20);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
 			assert_eq!(staking_events().len(), 1);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElection);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
 			for b in 21..45 {
 				run_to_block(b);
@@ -3946,7 +3953,7 @@ mod election_data_provider {
 			run_to_block(45);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
 			assert_eq!(staking_events().len(), 3);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElection);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
 			Staking::force_no_eras(Origin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
@@ -3969,7 +3976,7 @@ mod election_data_provider {
 			run_to_block(55);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
 			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElection);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})

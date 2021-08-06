@@ -333,7 +333,10 @@ impl<B: BlockT> BlockRequestHandler<B> {
 							target: LOG_TARGET,
 							"Missing indexed block data for block request."
 						);
-						break
+						// If the indexed body is missing we still continue returning headers.
+						// Ideally `None` should distinguish a missing body from the empty body,
+						// but the current protobuf based protocol does not allow it.
+						Vec::new()
 					},
 				}
 			} else {

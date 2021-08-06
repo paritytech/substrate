@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(target_os = "unknown"))]
 use futures_util::{future::Future, FutureExt};
+use prometheus::core::Collector;
 pub use prometheus::{
 	self,
 	core::{
@@ -25,7 +27,8 @@ pub use prometheus::{
 	exponential_buckets, Error as PrometheusError, Histogram, HistogramOpts, HistogramVec, Opts,
 	Registry,
 };
-use prometheus::{core::Collector, Encoder, TextEncoder};
+#[cfg(not(target_os = "unknown"))]
+use prometheus::{Encoder, TextEncoder};
 use std::net::SocketAddr;
 
 #[cfg(not(target_os = "unknown"))]
