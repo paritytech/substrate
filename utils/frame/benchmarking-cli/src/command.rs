@@ -58,7 +58,7 @@ fn combine_batches(
 
 			match all_benchmarks.get_mut(&key) {
 				// We already have this benchmark, so we extend the results.
-				Some(_) => panic!("should only have one copy of each benchmark for db"),
+				Some(x) => x.1.extend(results),
 				// New benchmark, so we add a new entry with the initial results.
 				None => {
 					all_benchmarks.insert(key, (Vec::new(), results));
@@ -75,7 +75,6 @@ fn combine_batches(
 			match all_benchmarks.get_mut(&key) {
 				// We already have this benchmark, so we extend the results.
 				Some(x) => x.0.extend(results),
-				// New benchmark, so we add a new entry with the initial results.
 				None => panic!("all benchmark keys should have been populated by db batches"),
 			}
 		});
