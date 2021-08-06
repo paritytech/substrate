@@ -469,7 +469,7 @@ check-cumulus-companion-build:
   variables:
     COMPANION_ORG: paritytech
     COMPANION_REPO: cumulus
-    COMPANION_BUILD: "cargo check"
+    COMPANION_BUILD: "cargo check --all-targets --workspace"
     COMPANION_DEPENDENCY: paritytech/polkadot
   allow_failure: true
 
@@ -478,7 +478,7 @@ check-beefy-companion-build:
   variables:
     COMPANION_ORG: paritytech
     COMPANION_REPO: grandpa-bridge-gadget
-    COMPANION_BUILD: "cargo check"
+    COMPANION_BUILD: "cargo check --all-targets --workspace"
   allow_failure: true
 
 test-browser-node:

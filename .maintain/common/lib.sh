@@ -126,18 +126,16 @@ get_companion() {
   origin_repo="$1"
   pr_num="$2"
   companion_repo="$3"
-  pr_data_file="$(mktemp)"
   set_github_token
   github_header="Authorization: token ${GITHUB_TOKEN}"
   # get the last reference to a pr in the target repo
-  curl -sSL -H "${github_header}" -o "${pr_data_file}" \
-    "${api_base}/$origin_repo/pulls/$pr_num"
-
-  pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
+  pr_body=$(
+    curl -sSL -H "${github_header}" "${api_base}/$origin_repo/pulls/$pr_num" | \
+      jq -r '.body'
+  )
 
   echo "${pr_body}" | sed -n -r \
       -e "s;^.*[Cc]ompanion.*$companion_repo#([0-9]+).*$;\1;p" \
       -e "s;^.*[Cc]ompanion.*https://github.com/$companion_repo/pull/([0-9]+).*$;\1;p" \
     | tail -n 1
-  rm -f "${pr_data_file}"
 }
