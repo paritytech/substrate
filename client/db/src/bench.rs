@@ -73,8 +73,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 }
 
-const ENABLE_TRACKING: bool = false;
-
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
@@ -189,10 +187,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
 	fn add_read_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
-		if !ENABLE_TRACKING {
-			return
-		}
-
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
@@ -230,10 +224,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
 	fn add_write_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
-		if !ENABLE_TRACKING {
-			return
-		}
-
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
