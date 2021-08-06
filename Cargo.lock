@@ -5579,6 +5579,7 @@ dependencies = [
  "log",
  "num-format",
  "pallet-authorship",
+ "pallet-bags-list",
  "pallet-balances",
  "pallet-session",
  "pallet-staking-reward-curve",

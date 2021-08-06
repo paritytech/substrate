@@ -780,9 +780,11 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
+				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&stash) {
 					T::SortedListProvider::on_update(&stash, Self::weight_of_fn()(&ledger.stash));
 				}
+
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 				Self::update_ledger(&controller, &ledger);
 			}
@@ -844,9 +846,12 @@ pub mod pallet {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
+
+				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&ledger.stash) {
 					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 				}
+
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1339,10 +1344,11 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
+
 			if T::SortedListProvider::contains(&ledger.stash) {
 				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 			}
-			// TODO: fix this in master earlier.
+
 			Ok(Some(T::WeightInfo::rebond(ledger.unlocking.len() as u32)).into())
 		}
 
@@ -1509,8 +1515,6 @@ pub mod pallet {
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
-		// TODO: Maybe we can deprecate `chill` in the future.
-		// https://github.com/paritytech/substrate/issues/9111
 		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.

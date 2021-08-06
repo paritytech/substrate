@@ -51,9 +51,7 @@ sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elect
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/reward-curve" }
-# TODO: all staking tests should work with this AND the staking stub. Similar to balances pallet we
-# can create two different mocks with a macro helper (low priority).
-# pallet-bags-list = { version = "4.0.0-dev",  path = "../bags-list" }
+pallet-bags-list = { version = "4.0.0-dev",  path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }

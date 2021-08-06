@@ -280,4 +280,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		List::<T>::sanity_check()
 	}
+
+	fn clear() {
+		List::<T>::clear()
+	}
 }

@@ -17,8 +17,6 @@
 
 //! Basic implementation of a doubly-linked list.
 
-// TODO: further testings: fuzzer for the outer API, dev chain with a lot of nominators.
-
 use crate::Config;
 use codec::{Decode, Encode};
 use frame_election_provider_support::{VoteWeight, VoteWeightProvider};
@@ -238,15 +236,8 @@ impl<T: Config> List<T> {
 		}
 
 		let bag_weight = notional_bag_for::<T>(weight);
-		crate::log!(
-			debug,
-			"inserting {:?} with weight {} into bag {:?}",
-			voter,
-			weight,
-			bag_weight
-		);
 		let mut bag = Bag::<T>::get_or_make(bag_weight);
-		bag.insert(voter);
+		bag.insert(voter.clone());
 
 		// new inserts are always the tail, so we must write the bag.
 		bag.put();
@@ -254,6 +245,15 @@ impl<T: Config> List<T> {
 		crate::CounterForVoters::<T>::mutate(|prev_count| {
 			*prev_count = prev_count.saturating_add(1)
 		});
+
+		crate::log!(
+			debug,
+			"inserted {:?} with weight {} into bag {:?}, new count is {}",
+			voter,
+			weight,
+			bag_weight,
+			crate::CounterForVoters::<T>::get(),
+		);
 
 		Ok(())
 	}

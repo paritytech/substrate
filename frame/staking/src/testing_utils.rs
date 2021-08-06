@@ -27,6 +27,7 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{pallet_prelude::*, traits::Currency};
 use sp_runtime::{traits::StaticLookup, Perbill};
 use sp_std::prelude::*;
@@ -37,8 +38,11 @@ const SEED: u32 = 0;
 pub fn clear_validators_and_nominators<T: Config>() {
 	Validators::<T>::remove_all(None);
 	CounterForValidators::<T>::kill();
+
+	// whenever we touch nominators counter we should update `T::SortedListProvider` as well.
 	Nominators::<T>::remove_all(None);
 	CounterForNominators::<T>::kill();
+	T::SortedListProvider::clear();
 }
 
 /// Grab a funded user.

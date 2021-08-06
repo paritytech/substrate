@@ -105,6 +105,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -241,6 +242,20 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
+const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
+	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+
+parameter_types! {
+	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+}
+
+impl pallet_bags_list::Config for Test {
+	type Event = Event;
+	type WeightInfo = ();
+	type VoteWeightProvider = Staking;
+	type BagThresholds = BagThresholds;
+}
+
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
@@ -269,6 +284,7 @@ impl crate::pallet::pallet::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
+	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = UseNominatorsMap<Self>;
 }
 
@@ -818,4 +834,16 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+/// ensure that the given staking ledger has `total`, `own`, and is being only backed by `others`.
+pub(crate) fn assert_eq_exposure(
+	exposure: Exposure<AccountId, Balance>,
+	total: Balance,
+	own: Balance,
+	others: Vec<IndividualExposure<AccountId, Balance>>,
+) {
+	assert_eq!(exposure.total, total);
+	assert_eq!(exposure.own, own);
+	substrate_test_utils::assert_eq_uvec!(exposure.others, others);
 }

@@ -544,27 +544,25 @@ fn nominating_and_rewards_should_work() {
 					.count(),
 				2
 			);
-			assert_eq!(
+
+			assert_eq_exposure(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
-				Exposure {
-					total: 1000 + 800,
-					own: 1000,
-					others: vec![
-						IndividualExposure { who: 3, value: 400 },
-						IndividualExposure { who: 1, value: 400 },
-					]
-				},
+				1000 + 800,
+				1000,
+				vec![
+					IndividualExposure { who: 3, value: 400 },
+					IndividualExposure { who: 1, value: 400 },
+				],
 			);
-			assert_eq!(
+
+			assert_eq_exposure(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 21),
-				Exposure {
-					total: 1000 + 1200,
-					own: 1000,
-					others: vec![
-						IndividualExposure { who: 3, value: 600 },
-						IndividualExposure { who: 1, value: 600 },
-					]
-				},
+				1000 + 1200,
+				1000,
+				vec![
+					IndividualExposure { who: 3, value: 600 },
+					IndividualExposure { who: 1, value: 600 },
+				],
 			);
 
 			// the total reward for era 1

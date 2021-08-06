@@ -655,7 +655,6 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		// TODO: weight this function and see how many can fit in a block.
 		let weight_of = Self::weight_of_fn();
 
 		let nominator_count = CounterForNominators::<T>::get() as usize;
@@ -723,16 +722,16 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
+			// maybe update the counter.
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
+
+			// maybe update sorted list. Defensive-only: this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
-				// insertion only fails if the voter is "contained" in `SortedListProvider`.
-				// Since we check if the voter is in the list above getting here is
-				// impossible.
 				log!(
-						warn,
-						"attempt to insert duplicate nominator ({:#?}) despite `List::contain` return false",
-						who
-					);
+					warn,
+					"attempt to insert duplicate nominator ({:#?}) despite `List::contain` return false",
+					who
+				);
 				debug_assert!(
 					false,
 					"attempt to insert duplicate nominator despite `List::contain` return false"
@@ -741,28 +740,6 @@ impl<T: Config> Pallet<T> {
 
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 		}
-		// TODO:
-		// chilled
-		// 		- validate
-		// 		- nominate
-		// 		- chill
-		// 		- bond-extra
-		// 		- unbond
-		// 		- rebond
-		// nominator
-		// 		- validate
-		// 		- nominate
-		// 		- chill
-		// 		- bond-extra
-		// 		- unbond
-		// 		- rebond
-		// validators
-		// 		- validate
-		// 		- nominate
-		// 		- chill
-		// 		- bond-extra
-		// 		- unbond
-		// 		- rebond
 
 		Nominators::<T>::insert(who, nominations);
 	}
@@ -1235,8 +1212,9 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		// also, we play a trick to make sure that a issuance based-`CurrencyToVote` behaves well:
 		// This will make sure that total issuance is zero, thus the currency to vote will be a 1-1
 		// conversion.
-		// TODO
 		let imbalance = T::Currency::burn(T::Currency::total_issuance());
+		// kinda ugly, but gets the job done. The fact that this works here is a HUGE exception.
+		// Don't try this pattern in other places.
 		sp_std::mem::forget(imbalance);
 	}
 }
@@ -1275,5 +1253,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	}
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
+	}
+
+	fn clear() {
+		Nominators::<T>::remove_all(None);
+		CounterForNominators::<T>::kill();
 	}
 }
