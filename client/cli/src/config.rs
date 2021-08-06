@@ -221,9 +221,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		cache_size: usize,
 		database: Database,
 	) -> Result<DatabaseSource> {
+		let rocksdb_path = base_path.join("db");
+		let paritydb_path = base_path.join("paritydb");
 		Ok(match database {
-			Database::RocksDb => DatabaseSource::RocksDb { path: base_path.join("db"), cache_size },
-			Database::ParityDb => DatabaseSource::ParityDb { path: base_path.join("paritydb") },
+			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
+			Database::ParityDb => DatabaseSource::ParityDb { path: rocksdb_path },
+			Database::Auto => DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size },
 		})
 	}
 

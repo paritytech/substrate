@@ -91,8 +91,7 @@ impl TempDatabase {
 		match db_type {
 			DatabaseType::RocksDb => {
 				let db_cfg = DatabaseConfig::with_columns(1);
-				let db = Database::open(&db_cfg, &self.0.path())
-					.expect("Database backend error");
+				let db = Database::open(&db_cfg, &self.0.path()).expect("Database backend error");
 				Arc::new(db)
 			},
 			DatabaseType::ParityDb => Arc::new(ParityDbWrapper({
