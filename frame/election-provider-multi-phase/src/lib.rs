@@ -875,7 +875,7 @@ pub mod pallet {
 			assert!(voters as u32 == witness.voters, "{}", error_message);
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
-			let ready = Self::feasibility_check(raw_solution, ElectionCompute::Unsigned)
+			let ready = Self::feasibility_check(*raw_solution, ElectionCompute::Unsigned)
 				.expect(error_message);
 
 			// Store the newly received solution.
