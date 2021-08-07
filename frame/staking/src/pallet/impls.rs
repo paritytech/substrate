@@ -646,7 +646,7 @@ impl<T: Config> Pallet<T> {
 	/// `voter_count` imposes a cap on the number of voters returned; care should be taken to ensure
 	/// that it is accurate.
 	///
-	/// This will use all on-chain nominators, and all the validators will inject a self vote.
+	/// This will use on-chain nominators, and all the validators will inject a self vote.
 	///
 	/// ### Slashing
 	///
@@ -655,8 +655,6 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		let weight_of = Self::weight_of_fn();
-
 		let nominator_count = CounterForNominators::<T>::get() as usize;
 		let validator_count = CounterForValidators::<T>::get() as usize;
 		let all_voter_count = validator_count.saturating_add(nominator_count);
@@ -669,7 +667,8 @@ impl<T: Config> Pallet<T> {
 		// first, grab all validators, capped by the maximum allowed length.
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
-			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
+			let self_vote =
+				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
 		}
 
@@ -686,7 +685,7 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), weight_of(&nominator), targets))
+					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets))
 				}
 			} else {
 				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
@@ -706,7 +705,8 @@ impl<T: Config> Pallet<T> {
 		all_voters
 	}
 
-	/// This is a very expensive function and result should be cached versus being called multiple times.
+	/// This is a very expensive function and result should be cached versus being called multiple
+	/// times.
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
 		// all current validators to be included
 		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
@@ -717,8 +717,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
-	/// NOTE: you must ALWAYS use this function to add a nominator to the system. Any access to
-	/// `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
+	/// to `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
@@ -727,15 +727,8 @@ impl<T: Config> Pallet<T> {
 
 			// maybe update sorted list. Defensive-only: this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
-				log!(
-					warn,
-					"attempt to insert duplicate nominator ({:#?}) despite `List::contain` return false",
-					who
-				);
-				debug_assert!(
-					false,
-					"attempt to insert duplicate nominator despite `List::contain` return false"
-				);
+				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
+				debug_assert!(false, "attempt to insert duplicate nominator");
 			};
 
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));

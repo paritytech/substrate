@@ -15,8 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Basic implementation of a doubly-linked list. It uses a pattern of composite data structures,
-//! where multiple storage items are masked by one outer API. See [`ListNodes`],
+//! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated by
+//! configurable thresholds that delineate the boundaries of bags. It uses a pattern of composite
+//! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
 //! [`CounterForListNodes`] and [`ListBags`] for more information.
 //!
 //!
@@ -125,12 +126,20 @@ impl<T: Config> List<T> {
 		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
 		let new_set: BTreeSet<_> = T::BagThresholds::get().iter().copied().collect();
 
+		// accounts that need to be rebaged
 		let mut affected_accounts = BTreeSet::new();
+		// track affected old bags to make sure we only iterate them once
 		let mut affected_old_bags = BTreeSet::new();
 
+		let new_bags = new_set.difference(&old_set).copied();
 		// a new bag means that all accounts previously using the old bag's threshold must now
 		// be rebagged
-		for inserted_bag in new_set.difference(&old_set).copied() {
+		for inserted_bag in new_bags {
+			// TODO: why use notional_bag_for here? This affected_bag is a new bag since
+			// new_set.difference(&old_set) is just the new bags; notional_bag_for is using the
+			// T::BagThresholds, which are the new threhsholds .. so plugging in a threhold to
+			// notional_bag_for will just give back that threshold. I think we want to instead
+			// use notional_bag_for logic with old_thresholds?
 			let affected_bag = notional_bag_for::<T>(inserted_bag);
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
@@ -143,8 +152,9 @@ impl<T: Config> List<T> {
 			}
 		}
 
+		let removed_bags = old_set.difference(&new_set).copied();
 		// a removed bag means that all members of that bag must be rebagged
-		for removed_bag in old_set.difference(&new_set).copied() {
+		for removed_bag in removed_bags.clone() {
 			if !affected_old_bags.insert(removed_bag) {
 				continue
 			}
@@ -154,7 +164,7 @@ impl<T: Config> List<T> {
 			}
 		}
 
-		// migrate the
+		// migrate the voters whose bag has changed
 		let weight_of = T::VoteWeightProvider::vote_weight;
 		Self::remove_many(affected_accounts.iter().map(|id| id));
 		let num_affected = affected_accounts.len() as u32;
@@ -166,7 +176,7 @@ impl<T: Config> List<T> {
 		//
 		// it's pretty cheap to iterate this again, because both sets are in-memory and require no
 		// lookups.
-		for removed_bag in old_set.difference(&new_set).copied() {
+		for removed_bag in removed_bags {
 			debug_assert!(
 				!crate::ListNodes::<T>::iter().any(|(_, node)| node.bag_upper == removed_bag),
 				"no id should be present in a removed bag",
@@ -358,13 +368,12 @@ impl<T: Config> List<T> {
 	/// Sanity check the list.
 	///
 	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)
-	/// is being used, after all other staking data (such as counter) has been updated. It checks
-	/// that:
+	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
-	/// * Iterate all ids in list and make sure there are no duplicates.
-	/// * Iterate all ids and ensure their count is in sync with `CounterForListNodes`.
-	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
-	///   checked per *any* update to `List`.
+	/// * there are no duplicate ids,
+	/// * length of this list are in sync with `CounterForListNodes`.
+	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
+	///   are checked per *any* update to `List`.
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
@@ -489,7 +498,7 @@ impl<T: Config> Bag<T> {
 	fn insert_node_unchecked(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
-				// this should never happen, but this check prevents a worst case infinite loop
+				// this should never happen, but this check prevents a worst case infinite loop.
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
 				return
@@ -502,11 +511,12 @@ impl<T: Config> Bag<T> {
 
 		// update this node now, making it the new tail.
 		let id = node.id.clone();
+		// update this node now, treating it as the new tail.
 		node.prev = self.tail.clone();
 		node.next = None;
 		node.put();
 
-		// update the previous tail
+		// update the previous tail.
 		if let Some(mut old_tail) = self.tail() {
 			old_tail.next = Some(id.clone());
 			old_tail.put();
@@ -533,7 +543,7 @@ impl<T: Config> Bag<T> {
 		// reassign neighboring nodes.
 		node.excise();
 
-		// clear the bag head/tail pointers as necessary
+		// clear the bag head/tail pointers as necessary.
 		if self.tail.as_ref() == Some(&node.id) {
 			self.tail = node.prev.clone();
 		}
@@ -582,7 +592,7 @@ impl<T: Config> Bag<T> {
 	}
 }
 
-/// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
+/// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq, Clone))]
@@ -594,7 +604,7 @@ pub(crate) struct Node<T: Config> {
 }
 
 impl<T: Config> Node<T> {
-	/// Get a node by bag idx and account id.
+	/// Get a node by id.
 	pub(crate) fn get(id: &T::AccountId) -> Option<Node<T>> {
 		crate::ListNodes::<T>::try_get(id).ok()
 	}
