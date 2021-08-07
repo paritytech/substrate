@@ -219,7 +219,7 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
-	type VoterBagThresholds = ();
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 }
 
 impl pallet_offences::Config for Test {

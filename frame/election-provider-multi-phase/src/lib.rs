@@ -1991,6 +1991,7 @@ mod tests {
 		})
 	}
 
+	#[test]
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
