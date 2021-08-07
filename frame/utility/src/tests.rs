@@ -26,7 +26,7 @@ use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok, decl_module,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	parameter_types, storage,
-	traits::Filter,
+	traits::Contains,
 	weights::{Pays, Weight},
 };
 use sp_core::H256;
@@ -142,8 +142,8 @@ parameter_types! {
 impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
-impl Filter<Call> for TestBaseCallFilter {
-	fn filter(c: &Call) -> bool {
+impl Contains<Call> for TestBaseCallFilter {
+	fn contains(c: &Call) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
 			Call::Balances(pallet_balances::Call::transfer(..)) => true,
@@ -282,7 +282,7 @@ fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		let k = b"a".to_vec();
 		let call = Call::System(frame_system::Call::set_storage(vec![(k.clone(), k.clone())]));
-		assert!(!TestBaseCallFilter::filter(&call));
+		assert!(!TestBaseCallFilter::contains(&call));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch(

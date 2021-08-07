@@ -21,7 +21,7 @@ use super::*;
 use crate as sudo;
 use frame_support::{
 	parameter_types,
-	traits::{Filter, GenesisBuild},
+	traits::{Contains, GenesisBuild},
 };
 use frame_system::limits;
 use sp_core::H256;
@@ -115,8 +115,8 @@ parameter_types! {
 }
 
 pub struct BlockEverything;
-impl Filter<Call> for BlockEverything {
-	fn filter(_: &Call) -> bool {
+impl Contains<Call> for BlockEverything {
+	fn contains(_: &Call) -> bool {
 		false
 	}
 }
