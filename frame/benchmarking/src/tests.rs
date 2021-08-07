@@ -199,6 +199,24 @@ mod benchmarks {
 		variable_components {
 			let b in ( T::LowerBound::get() ) .. T::UpperBound::get();
 		}: dummy (RawOrigin::None, b.into())
+
+		#[extra]
+		extra_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: set_value(RawOrigin::Signed(caller), b.into())
+		verify {
+			assert_eq!(Value::get(), Some(b));
+		}
+
+		#[skip_meta]
+		skip_meta_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: set_value(RawOrigin::Signed(caller), b.into())
+		verify {
+			assert_eq!(Value::get(), Some(b));
+		}
 	}
 
 	#[test]

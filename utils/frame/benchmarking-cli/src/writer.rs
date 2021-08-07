@@ -29,7 +29,8 @@ use serde::Serialize;
 
 use crate::BenchmarkCmd;
 use frame_benchmarking::{
-	Analysis, AnalysisChoice, BenchmarkBatch, BenchmarkResults, BenchmarkSelector, RegressionModel,
+	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResults, BenchmarkSelector,
+	RegressionModel,
 };
 use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
@@ -114,7 +115,7 @@ fn io_error(s: &str) -> std::io::Error {
 // p2 -> [b1, b2]
 // ```
 fn map_results(
-	batches: &[BenchmarkBatch],
+	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
@@ -129,7 +130,7 @@ fn map_results(
 	let mut batches_iter = batches.iter().peekable();
 	while let Some(batch) = batches_iter.next() {
 		// Skip if there are no results
-		if batch.results.is_empty() {
+		if batch.time_results.is_empty() {
 			continue
 		}
 
@@ -166,7 +167,7 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128>
 
 // Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(
-	batch: &BenchmarkBatch,
+	batch: &BenchmarkBatchSplitResults,
 	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
@@ -180,11 +181,11 @@ fn get_benchmark_data(
 		AnalysisChoice::Max => Analysis::max,
 	};
 
-	let extrinsic_time = analysis_function(&batch.results, BenchmarkSelector::ExtrinsicTime)
+	let extrinsic_time = analysis_function(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 		.expect("analysis function should return an extrinsic time for valid inputs");
-	let reads = analysis_function(&batch.results, BenchmarkSelector::Reads)
+	let reads = analysis_function(&batch.db_results, BenchmarkSelector::Reads)
 		.expect("analysis function should return the number of reads for valid inputs");
-	let writes = analysis_function(&batch.results, BenchmarkSelector::Writes)
+	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
 
 	// Analysis data may include components that are not used, this filters out anything whose value is zero.
@@ -238,7 +239,7 @@ fn get_benchmark_data(
 		});
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
-	let components = batch.results[0]
+	let components = batch.time_results[0]
 		.components
 		.iter()
 		.map(|(name, _)| -> Component {
@@ -249,7 +250,7 @@ fn get_benchmark_data(
 		.collect::<Vec<_>>();
 
 	// We add additional comments showing which storage items were touched.
-	add_storage_comments(&mut comments, &batch.results, storage_info);
+	add_storage_comments(&mut comments, &batch.db_results, storage_info);
 
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
@@ -266,7 +267,7 @@ fn get_benchmark_data(
 
 // Create weight file from benchmark data and Handlebars template.
 pub fn write_results(
-	batches: &[BenchmarkBatch],
+	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	path: &PathBuf,
 	cmd: &BenchmarkCmd,
@@ -360,10 +361,21 @@ fn add_storage_comments(
 	results: &[BenchmarkResults],
 	storage_info: &[StorageInfo],
 ) {
-	let storage_info_map = storage_info
+	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
 		.collect::<HashMap<_, _>>();
+
+	// Special hack to show `Skipped Metadata`
+	let skip_storage_info = StorageInfo {
+		pallet_name: b"Skipped".to_vec(),
+		storage_name: b"Metadata".to_vec(),
+		prefix: b"Skipped Metadata".to_vec(),
+		max_values: None,
+		max_size: None,
+	};
+	storage_info_map.insert(skip_storage_info.prefix.clone(), &skip_storage_info);
+
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
 
@@ -489,7 +501,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use frame_benchmarking::{BenchmarkBatch, BenchmarkParameter, BenchmarkResults};
+	use frame_benchmarking::{BenchmarkBatchSplitResults, BenchmarkParameter, BenchmarkResults};
 
 	fn test_data(
 		pallet: &[u8],
@@ -497,7 +509,7 @@ mod test {
 		param: BenchmarkParameter,
 		base: u32,
 		slope: u32,
-	) -> BenchmarkBatch {
+	) -> BenchmarkBatchSplitResults {
 		let mut results = Vec::new();
 		for i in 0..5 {
 			results.push(BenchmarkResults {
@@ -513,11 +525,12 @@ mod test {
 			})
 		}
 
-		return BenchmarkBatch {
+		return BenchmarkBatchSplitResults {
 			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
 			instance: b"instance".to_vec(),
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
-			results,
+			time_results: results.clone(),
+			db_results: results,
 		}
 	}
 

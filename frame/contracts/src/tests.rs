@@ -1644,7 +1644,7 @@ fn self_destruct_works() {
 
 		// The call triggers rent collection that reduces the amount of balance
 		// that remains for the beneficiary.
-		let balance_after_rent = 93_078;
+		let balance_after_rent = 93_086;
 
 		pretty_assertions::assert_eq!(
 			System::events(),

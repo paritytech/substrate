@@ -18,7 +18,7 @@ log = "0.4.8"
 kvdb = "0.10.0"
 kvdb-rocksdb = { version = "0.12.0", optional = true }
 kvdb-memorydb = "0.10.0"
-linked-hash-map = "0.5.2"
+linked-hash-map = "0.5.4"
 hash-db = "0.15.2"
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
