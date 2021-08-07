@@ -28,7 +28,7 @@ use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, is_score_better,
-	seq_phragmen, ElectionResult, Solution, SolutionBase,
+	seq_phragmen, ElectionResult, NposSolution,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},

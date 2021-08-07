@@ -241,8 +241,8 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, PerThing128, Solution,
-	SolutionBase, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, NposSolution,
+	PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
 	traits::Bounded,
@@ -277,11 +277,11 @@ pub use weights::WeightInfo;
 pub type SolutionOf<T> = <T as Config>::Solution;
 
 /// The voter index. Derived from [`SolutionOf`].
-pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as SolutionBase>::Voter;
+pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as NposSolution>::VoterIndex;
 /// The target index. Derived from [`SolutionOf`].
-pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as SolutionBase>::Target;
+pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex;
 /// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
-pub type SolutionAccuracyOf<T> = <SolutionOf<T> as SolutionBase>::Accuracy;
+pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
@@ -659,7 +659,7 @@ pub mod pallet {
 			+ Clone
 			+ sp_std::fmt::Debug
 			+ Ord
-			+ Solution;
+			+ NposSolution;
 
 		/// Accuracy used for fallback on-chain election.
 		type OnChainAccuracy: PerThing128;
@@ -792,7 +792,7 @@ pub mod pallet {
 
 			// ----------------------------
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
-			let max_vote: usize = <SolutionOf<T> as SolutionBase>::LIMIT;
+			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
 
 			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
 			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
@@ -825,7 +825,7 @@ pub mod pallet {
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
 				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MAXIMUM_VOTES_PER_VOTER,
-				<SolutionOf<T> as SolutionBase>::LIMIT as u32,
+				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}
 	}

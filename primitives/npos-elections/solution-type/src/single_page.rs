@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{syn_err, vote_filed, from_assignment_helpers::*};
+use crate::{from_assignment_helpers::*, syn_err, vote_field};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::Result;
@@ -34,7 +34,7 @@ pub(crate) fn generate(
 	}
 
 	let singles = {
-		let name = vote_filed(1);
+		let name = vote_field(1);
 		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
 			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, #target_type)>,
@@ -42,7 +42,7 @@ pub(crate) fn generate(
 	};
 
 	let doubles = {
-		let name = vote_filed(2);
+		let name = vote_field(2);
 		quote!(
 			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
 		)
@@ -50,7 +50,7 @@ pub(crate) fn generate(
 
 	let rest = (3..=count)
 		.map(|c| {
-			let field_name = vote_filed(c);
+			let field_name = vote_field(c);
 			let array_len = c - 1;
 			quote!(
 				#vis #field_name: _npos::sp_std::prelude::Vec<(
@@ -98,41 +98,13 @@ pub(crate) fn generate(
 		#vis struct #ident { #singles #doubles #rest }
 
 		use _npos::__OrInvalidIndex;
-		impl _npos::SolutionBase for #ident {
+		impl _npos::NposSolution for #ident {
 			const LIMIT: usize = #count;
-			type Voter = #voter_type;
-			type Target = #target_type;
+			type VoterIndex = #voter_type;
+			type TargetIndex = #target_type;
 			type Accuracy = #weight_type;
 
-			fn voter_count(&self) -> usize {
-				let mut all_len = 0usize;
-				#len_impl
-				all_len
-			}
-
-			fn edge_count(&self) -> usize {
-				let mut all_edges = 0usize;
-				#edge_count_impl
-				all_edges
-			}
-
-			fn unique_targets(&self) -> _npos::sp_std::prelude::Vec<Self::Target> {
-				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
-				// se, nor is the API enforcing it.
-				use _npos::sp_std::collections::btree_set::BTreeSet;
-				let mut all_targets: BTreeSet<Self::Target> = BTreeSet::new();
-				let mut maybe_insert_target = |t: Self::Target| {
-					all_targets.insert(t);
-				};
-
-				#unique_targets_impl
-
-				all_targets.into_iter().collect()
-			}
-		}
-
-		impl _npos::Solution for #ident {
-			fn remove_voter(&mut self, to_remove: Self::Voter) -> bool {
+			fn remove_voter(&mut self, to_remove: Self::VoterIndex) -> bool {
 				#remove_voter_impl
 				return false
 			}
@@ -144,8 +116,8 @@ pub(crate) fn generate(
 			) -> Result<Self, _npos::Error>
 				where
 					A: _npos::IdentifierT,
-					for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
-					for<'r> FT: Fn(&'r A) -> Option<Self::Target>,
+					for<'r> FV: Fn(&'r A) -> Option<Self::VoterIndex>,
+					for<'r> FT: Fn(&'r A) -> Option<Self::TargetIndex>,
 			{
 				let mut #struct_name: #ident = Default::default();
 				for _npos::Assignment { who, distribution } in assignments {
@@ -162,19 +134,45 @@ pub(crate) fn generate(
 
 			fn into_assignment<A: _npos::IdentifierT>(
 				self,
-				voter_at: impl Fn(Self::Voter) -> Option<A>,
-				target_at: impl Fn(Self::Target) -> Option<A>,
+				voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
+				target_at: impl Fn(Self::TargetIndex) -> Option<A>,
 			) -> Result<_npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
 				let mut #assignment_name: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(#assignment_name)
 			}
+
+			fn voter_count(&self) -> usize {
+				let mut all_len = 0usize;
+				#len_impl
+				all_len
+			}
+
+			fn edge_count(&self) -> usize {
+				let mut all_edges = 0usize;
+				#edge_count_impl
+				all_edges
+			}
+
+			fn unique_targets(&self) -> _npos::sp_std::prelude::Vec<Self::TargetIndex> {
+				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
+				// se, nor is the API enforcing it.
+				use _npos::sp_std::collections::btree_set::BTreeSet;
+				let mut all_targets: BTreeSet<Self::TargetIndex> = BTreeSet::new();
+				let mut maybe_insert_target = |t: Self::TargetIndex| {
+					all_targets.insert(t);
+				};
+
+				#unique_targets_impl
+
+				all_targets.into_iter().collect()
+			}
 		}
 
 		type __IndexAssignment = _npos::IndexAssignment<
-			<#ident as _npos::SolutionBase>::Voter,
-			<#ident as _npos::SolutionBase>::Target,
-			<#ident as _npos::SolutionBase>::Accuracy,
+			<#ident as _npos::NposSolution>::VoterIndex,
+			<#ident as _npos::NposSolution>::TargetIndex,
+			<#ident as _npos::NposSolution>::Accuracy,
 		>;
 		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
 			type Error = _npos::Error;
@@ -198,7 +196,7 @@ pub(crate) fn generate(
 }
 
 fn remove_voter_impl(count: usize) -> TokenStream2 {
-	let field_name = vote_filed(1);
+	let field_name = vote_field(1);
 	let single = quote! {
 		if let Some(idx) = self.#field_name.iter().position(|(x, _)| *x == to_remove) {
 			self.#field_name.remove(idx);
@@ -206,7 +204,7 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 		}
 	};
 
-	let field_name = vote_filed(2);
+	let field_name = vote_field(2);
 	let double = quote! {
 		if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
 			self.#field_name.remove(idx);
@@ -216,7 +214,7 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 
 	let rest = (3..=count)
 		.map(|c| {
-			let field_name = vote_filed(c);
+			let field_name = vote_field(c);
 			quote! {
 				if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
 					self.#field_name.remove(idx);
@@ -236,7 +234,7 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 fn len_impl(count: usize) -> TokenStream2 {
 	(1..=count)
 		.map(|c| {
-			let field_name = vote_filed(c);
+			let field_name = vote_field(c);
 			quote!(
 				all_len = all_len.saturating_add(self.#field_name.len());
 			)
@@ -247,7 +245,7 @@ fn len_impl(count: usize) -> TokenStream2 {
 fn edge_count_impl(count: usize) -> TokenStream2 {
 	(1..=count)
 		.map(|c| {
-			let field_name = vote_filed(c);
+			let field_name = vote_field(c);
 			quote!(
 				all_edges = all_edges.saturating_add(
 					self.#field_name.len().saturating_mul(#c as usize)
@@ -259,7 +257,7 @@ fn edge_count_impl(count: usize) -> TokenStream2 {
 
 fn unique_targets_impl(count: usize) -> TokenStream2 {
 	let unique_targets_impl_single = {
-		let field_name = vote_filed(1);
+		let field_name = vote_field(1);
 		quote! {
 			self.#field_name.iter().for_each(|(_, t)| {
 				maybe_insert_target(*t);
@@ -268,7 +266,7 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 	};
 
 	let unique_targets_impl_double = {
-		let field_name = vote_filed(2);
+		let field_name = vote_field(2);
 		quote! {
 			self.#field_name.iter().for_each(|(_, (t1, _), t2)| {
 				maybe_insert_target(*t1);
@@ -279,7 +277,7 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 
 	let unique_targets_impl_rest = (3..=count)
 		.map(|c| {
-			let field_name = vote_filed(c);
+			let field_name = vote_field(c);
 			quote! {
 				self.#field_name.iter().for_each(|(_, inners, t_last)| {
 					inners.iter().for_each(|(t, _)| {
@@ -300,20 +298,20 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 
 pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 {
 	let from_impl_single = {
-		let field = vote_filed(1);
+		let field = vote_field(1);
 		let push_code = from_impl_single_push_code();
 		quote!(1 => #struct_name.#field.#push_code,)
 	};
 
 	let from_impl_double = {
-		let field = vote_filed(2);
+		let field = vote_field(2);
 		let push_code = from_impl_double_push_code();
 		quote!(2 => #struct_name.#field.#push_code,)
 	};
 
 	let from_impl_rest = (3..=count)
 		.map(|c| {
-			let field = vote_filed(c);
+			let field = vote_field(c);
 			let push_code = from_impl_rest_push_code(c);
 			quote!(#c => #struct_name.#field.#push_code,)
 		})
@@ -332,7 +330,7 @@ pub(crate) fn into_impl(
 	per_thing: syn::Type,
 ) -> TokenStream2 {
 	let into_impl_single = {
-		let name = vote_filed(1);
+		let name = vote_field(1);
 		quote!(
 			for (voter_index, target_index) in self.#name {
 				#assignments.push(_npos::Assignment {
@@ -346,7 +344,7 @@ pub(crate) fn into_impl(
 	};
 
 	let into_impl_double = {
-		let name = vote_filed(2);
+		let name = vote_field(2);
 		quote!(
 			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
 				if p1 >= #per_thing::one() {
@@ -372,7 +370,7 @@ pub(crate) fn into_impl(
 
 	let into_impl_rest = (3..=count)
 		.map(|c| {
-			let name = vote_filed(c);
+			let name = vote_field(c);
 			quote!(
 				for (voter_index, inners, t_last_idx) in self.#name {
 					let mut sum = #per_thing::zero();

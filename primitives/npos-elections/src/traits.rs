@@ -56,101 +56,16 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 	}
 }
 
-/// The numeric type used to identify a page of voters.
-pub type PageIndex = u8;
-
-/// A variant of [`Solution`] that can have multiple pages of voters. Each voters is
-/// identified by a page index (`PageIndex`) and a `SolutionBase::Voter` index within the
-/// page.
-pub trait MultiPageSolution: SolutionBase {
-	/// The number of pages.
-	const PAGES: PageIndex;
-
-	/// Build self from a list of assignments.
-	fn from_assignment<FV, FT, A>(
-		assignments: &[Assignment<A, Self::Accuracy>],
-		voter_page_and_index: FV,
-		target_index: FT,
-	) -> Result<Self, Error>
-	where
-		A: IdentifierT,
-		for<'r> FV: Fn(&'r A) -> Option<(PageIndex, Self::Voter)>,
-		for<'r> FT: Fn(&'r A) -> Option<Self::Target>,
-		Self: Sized;
-
-	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
-	fn into_assignment<A: IdentifierT>(
-		self,
-		voter_at: impl Fn(PageIndex, Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
-
-	/// Remove the first voter who has the index `to_remove` in `page`.
-	///
-	/// This will only search until the first instance of `to_remove`, and return true. If
-	/// no instance is found (no-op), then it returns false.
-	///
-	/// In other words, if this return true, exactly **one** element must have been removed self.
-	fn remove_voter(&mut self, page: PageIndex, to_remove: Self::Voter) -> bool;
-}
-
-/// A simple solution without any pagination.
-pub trait Solution: SolutionBase
+/// An opaque index-based, NPoS solution type.
+pub trait NposSolution
 where
 	Self: Sized + for<'a> sp_std::convert::TryFrom<&'a [IndexAssignmentOf<Self>], Error = Error>,
 {
-	/// Compute the score of this solution type.
-	fn score<A, FS>(
-		self,
-		winners: &[A],
-		stake_of: FS,
-		voter_at: impl Fn(Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<ElectionScore, Error>
-	where
-		for<'r> FS: Fn(&'r A) -> VoteWeight,
-		A: IdentifierT,
-	{
-		let ratio = self.into_assignment(voter_at, target_at)?;
-		let staked = crate::helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
-		let supports = crate::to_supports(winners, &staked)?;
-		Ok(supports.evaluate())
-	}
-
-	/// Remove a certain voter.
-	///
-	/// This will only search until the first instance of `to_remove`, and return true. If
-	/// no instance is found (no-op), then it returns false.
-	///
-	/// In other words, if this return true, exactly **one** element must have been removed self.
-	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
-
-	/// Build self from a list of assignments.
-	fn from_assignment<FV, FT, A>(
-		assignments: &[Assignment<A, Self::Accuracy>],
-		voter_index: FV,
-		target_index: FT,
-	) -> Result<Self, Error>
-	where
-		A: IdentifierT,
-		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
-		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
-
-	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
-	fn into_assignment<A: IdentifierT>(
-		self,
-		voter_at: impl Fn(Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
-}
-
-/// Base trait for all solutions.
-pub trait SolutionBase {
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;
 
 	/// The voter type. Needs to be an index (convert to usize).
-	type Voter: UniqueSaturatedInto<usize>
+	type VoterIndex: UniqueSaturatedInto<usize>
 		+ TryInto<usize>
 		+ TryFrom<usize>
 		+ Debug
@@ -160,7 +75,7 @@ pub trait SolutionBase {
 		+ Encode;
 
 	/// The target type. Needs to be an index (convert to usize).
-	type Target: UniqueSaturatedInto<usize>
+	type TargetIndex: UniqueSaturatedInto<usize>
 		+ TryInto<usize>
 		+ TryFrom<usize>
 		+ Debug
@@ -187,10 +102,54 @@ pub trait SolutionBase {
 	///
 	/// Once presented with a list of winners, this set and the set of winners must be
 	/// equal.
-	fn unique_targets(&self) -> Vec<Self::Target>;
+	fn unique_targets(&self) -> Vec<Self::TargetIndex>;
 
 	/// Get the average edge count.
 	fn average_edge_count(&self) -> usize {
 		self.edge_count().checked_div(self.voter_count()).unwrap_or(0)
 	}
+
+	/// Compute the score of this solution type.
+	fn score<A, FS>(
+		self,
+		winners: &[A],
+		stake_of: FS,
+		voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
+		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
+	) -> Result<ElectionScore, Error>
+	where
+		for<'r> FS: Fn(&'r A) -> VoteWeight,
+		A: IdentifierT,
+	{
+		let ratio = self.into_assignment(voter_at, target_at)?;
+		let staked = crate::helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
+		let supports = crate::to_supports(winners, &staked)?;
+		Ok(supports.evaluate())
+	}
+
+	/// Remove a certain voter.
+	///
+	/// This will only search until the first instance of `to_remove`, and return true. If
+	/// no instance is found (no-op), then it returns false.
+	///
+	/// In other words, if this return true, exactly **one** element must have been removed self.
+	fn remove_voter(&mut self, to_remove: Self::VoterIndex) -> bool;
+
+	/// Build self from a list of assignments.
+	fn from_assignment<FV, FT, A>(
+		assignments: &[Assignment<A, Self::Accuracy>],
+		voter_index: FV,
+		target_index: FT,
+	) -> Result<Self, Error>
+	where
+		A: IdentifierT,
+		for<'r> FV: Fn(&'r A) -> Option<Self::VoterIndex>,
+		for<'r> FT: Fn(&'r A) -> Option<Self::TargetIndex>;
+
+	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
+	fn into_assignment<A: IdentifierT>(
+		self,
+		voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
+		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
+	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 }

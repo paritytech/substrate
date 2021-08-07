@@ -26,17 +26,11 @@ use syn::parse::{Parse, ParseStream, Result};
 mod codec;
 mod from_assignment_helpers;
 mod index_assignment;
-mod multi_page;
 mod single_page;
 
 /// Get the name of a filed based on voter count.
-pub(crate) fn vote_filed(n: usize) -> Ident {
+pub(crate) fn vote_field(n: usize) -> Ident {
 	quote::format_ident!("votes{}", n)
-}
-
-/// Get the name of a filed based on pae count.
-pub(crate) fn page_field(page: u8) -> Ident {
-	quote::format_ident!("page{}", page)
 }
 
 /// Generate a `syn::Error`.
@@ -82,7 +76,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///     voters4: <stripped>
 /// }
 ///
-/// impl SolutionBase for TestSolution {};
+/// impl NposSolution for TestSolution {};
 /// impl Solution for TestSolution {};
 /// ```
 ///
@@ -107,94 +101,23 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///     pub struct TestSolutionCompact::<VoterIndex = u16, TargetIndex = u8, Accuracy = Perbill>(8)
 /// );
 /// ```
-///
-/// ## Pagination
-///
-/// All of the above examples generate one struct that implements [`sp_npos_elections::Solution`]
-/// and [`sp_npos_elections::SolutionBase`]. These solutions do not have pagination. To support
-/// pagination, the `#[pages(_)]` attribute can be used. For example:
-///
-/// ```
-/// # use sp_npos_elections_solution_type::generate_solution_type;
-/// # use sp_npos_elections::Solution;
-/// # use sp_arithmetic::per_things::Perbill;
-/// generate_solution_type!(
-///     #[compact]
-///     #[pages(3)]
-///     pub struct MultiPageSolution::<VoterIndex = u16, TargetIndex = u8, Accuracy = Perbill>(8)
-/// );
-/// ```
-///
-/// Will generate two structs:
-///
-/// 1. `MultiPageSolutionPage` which implements [`sp_npos_elections::Solution`] and
-///    [`sp_npos_elections::SolutionBase`].
-/// 2. `MultiPageSolution` which implements [`sp_npos_elections::MultiPageSolution`].
-///
-/// and `MultiPageSolution` wraps 3 pages of `MultiPageSolutionPage`, in other words:
-///
-/// ```ignore
-/// struct MultiPageSolutionPage { ... }
-/// struct MultiPageSolution {
-/// 	page0: MultiPageSolutionPage { .. },
-/// 	page1: MultiPageSolutionPage { .. },
-/// 	page2: MultiPageSolutionPage { .. },
-/// }
-/// ````
-/// The page count must always be greater than 2.
 #[proc_macro]
 pub fn generate_solution_type(item: TokenStream) -> TokenStream {
-	let SolutionDef {
-		vis,
-		ident,
-		count,
-		voter_pages,
-		voter_type,
-		target_type,
-		weight_type,
-		compact_encoding,
-	} = syn::parse_macro_input!(item as SolutionDef);
+	let SolutionDef { vis, ident, count, voter_type, target_type, weight_type, compact_encoding } =
+		syn::parse_macro_input!(item as SolutionDef);
 
 	let imports = imports().unwrap_or_else(|e| e.to_compile_error());
 
-	let def = match voter_pages {
-		None => single_page::generate(
-			vis.clone(),
-			ident.clone(),
-			count,
-			voter_type.clone(),
-			target_type.clone(),
-			weight_type.clone(),
-			compact_encoding,
-		)
-		.unwrap_or_else(|e| e.to_compile_error()),
-		Some(p) if p >= 2 => {
-			let single_page_ident = quote::format_ident!("{}Page", ident);
-			let single = single_page::generate(
-				vis.clone(),
-				single_page_ident.clone(),
-				count,
-				voter_type.clone(),
-				target_type.clone(),
-				weight_type.clone(),
-				compact_encoding,
-			)
-			.unwrap_or_else(|e| e.to_compile_error());
-			let multi = multi_page::generate(
-				vis,
-				ident.clone(),
-				single_page_ident,
-				count,
-				p,
-				voter_type.clone(),
-				target_type.clone(),
-				weight_type.clone(),
-			)
-			.unwrap_or_else(|e| e.to_compile_error());
-			quote!(#single #multi)
-		},
-		_ => syn_err("#[pages(_)] can only accept values larger than 2.").to_compile_error(),
-	};
+	let def = single_page::generate(
+		vis.clone(),
+		ident.clone(),
+		count,
+		voter_type.clone(),
+		target_type.clone(),
+		weight_type.clone(),
+		compact_encoding,
+	)
+	.unwrap_or_else(|e| e.to_compile_error());
 
 	quote!(
 		#imports
@@ -206,7 +129,6 @@ pub fn generate_solution_type(item: TokenStream) -> TokenStream {
 struct SolutionDef {
 	vis: syn::Visibility,
 	ident: syn::Ident,
-	voter_pages: Option<u8>,
 	voter_type: syn::Type,
 	target_type: syn::Type,
 	weight_type: syn::Type,
@@ -214,13 +136,13 @@ struct SolutionDef {
 	compact_encoding: bool,
 }
 
-fn check_attributes(input: ParseStream) -> syn::Result<(bool, Option<u8>)> {
+fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	let attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
-	if attrs.len() > 2 {
-		return Err(syn_err("compact solution can accept only #[compact] and #[pages]"))
+	if attrs.len() > 1 {
+		return Err(syn_err("compact solution can accept only #[compact]"))
 	}
 
-	let has_compact = attrs.iter().any(|attr| {
+	Ok(attrs.iter().any(|attr| {
 		if attr.path.segments.len() == 1 {
 			let segment = attr.path.segments.first().expect("Vec with len 1 can be popped.");
 			if segment.ident == Ident::new("compact", Span::call_site()) {
@@ -228,34 +150,13 @@ fn check_attributes(input: ParseStream) -> syn::Result<(bool, Option<u8>)> {
 			}
 		}
 		false
-	});
-
-	let mut pages = None;
-	for attr in attrs.iter() {
-		if attr.path.segments.len() == 1 {
-			let segment = attr.path.segments.first().expect("Vec with len 1 can be popped.");
-			if segment.ident == Ident::new("pages", Span::call_site()) {
-				let tokens = &attr.tokens;
-				if let Ok(parsed) = syn::parse2::<syn::ExprParen>(tokens.clone()) {
-					if let Ok(parsed_pages) = parse_parenthesized_number::<u8>(parsed) {
-						pages = Some(parsed_pages);
-					} else {
-						return Err(syn_err("Failed to parse a number into u8 in `#[pages(_)]`"))
-					}
-				} else {
-					return Err(syn_err("Failed to parse a number into u8 in `#[pages(_)]`"))
-				}
-			}
-		}
-	}
-
-	Ok((has_compact, pages))
+	}))
 }
 
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		// optional #[compact] and #[pages(_)]
-		let (compact_encoding, voter_pages) = check_attributes(input)?;
+		// optional #[compact]
+		let compact_encoding = check_attributes(input)?;
 
 		// <vis> struct <name>
 		let vis: syn::Visibility = input.parse()?;
@@ -304,16 +205,7 @@ impl Parse for SolutionDef {
 		let count_expr: syn::ExprParen = input.parse()?;
 		let count = parse_parenthesized_number::<usize>(count_expr)?;
 
-		Ok(Self {
-			vis,
-			ident,
-			voter_pages,
-			voter_type,
-			target_type,
-			weight_type,
-			count,
-			compact_encoding,
-		})
+		Ok(Self { vis, ident, voter_type, target_type, weight_type, count, compact_encoding })
 	}
 }
 

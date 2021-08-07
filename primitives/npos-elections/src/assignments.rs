@@ -203,7 +203,7 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 
 /// A type alias for [`IndexAssignment`] made from [`crate::Solution`].
 pub type IndexAssignmentOf<C> = IndexAssignment<
-	<C as crate::SolutionBase>::Voter,
-	<C as crate::SolutionBase>::Target,
-	<C as crate::SolutionBase>::Accuracy,
+	<C as crate::NposSolution>::VoterIndex,
+	<C as crate::NposSolution>::TargetIndex,
+	<C as crate::NposSolution>::Accuracy,
 >;

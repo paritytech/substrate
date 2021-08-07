@@ -31,7 +31,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	ElectionResult, EvaluateSupport, Solution,
+	ElectionResult, EvaluateSupport, NposSolution,
 };
 use sp_runtime::{
 	testing::Header,
@@ -396,7 +396,7 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as SolutionBase>::LIMIT as u32;
+	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		let targets = Targets::get();
 

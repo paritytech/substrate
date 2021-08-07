@@ -29,7 +29,7 @@ use frame_support::{
 	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{is_score_better, ElectionScore, SolutionBase};
+use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,

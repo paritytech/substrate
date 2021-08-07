@@ -17,13 +17,13 @@
 
 //! Code generation for getting the solution representation from the `IndexAssignment` type.
 
-use crate::vote_filed;
+use crate::vote_field;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
 pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 {
 	let from_impl_single = {
-		let name = vote_filed(1);
+		let name = vote_field(1);
 		quote!(1 => #struct_name.#name.push(
 			(
 				*who,
@@ -33,7 +33,7 @@ pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 
 	};
 
 	let from_impl_double = {
-		let name = vote_filed(2);
+		let name = vote_field(2);
 		quote!(2 => #struct_name.#name.push(
 			(
 				*who,
@@ -52,7 +52,7 @@ pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 
 				.map(|i| quote!((distribution[#i].0, distribution[#i].1),))
 				.collect::<TokenStream2>();
 
-			let field_name = vote_filed(c);
+			let field_name = vote_field(c);
 			let last_index = c - 1;
 			let last = quote!(distribution[#last_index].0);
 

@@ -17,7 +17,7 @@
 
 //! Code generation for the ratio assignment type' encode/decode impl.
 
-use crate::vote_filed;
+use crate::vote_field;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
@@ -45,7 +45,7 @@ fn decode_impl(
 	count: usize,
 ) -> TokenStream2 {
 	let decode_impl_single = {
-		let name = vote_filed(1);
+		let name = vote_field(1);
 		quote! {
 			let #name =
 			<
@@ -61,7 +61,7 @@ fn decode_impl(
 	};
 
 	let decode_impl_double = {
-		let name = vote_filed(2);
+		let name = vote_field(2);
 		quote! {
 			let #name =
 			<
@@ -82,7 +82,7 @@ fn decode_impl(
 
 	let decode_impl_rest = (3..=count)
 		.map(|c| {
-			let name = vote_filed(c);
+			let name = vote_field(c);
 
 			let inner_impl = (0..c - 1)
 				.map(|i| quote! { ( (inner[#i].0).0, (inner[#i].1).0 ), })
@@ -112,7 +112,7 @@ fn decode_impl(
 
 	let all_field_names = (1..=count)
 		.map(|c| {
-			let name = vote_filed(c);
+			let name = vote_field(c);
 			quote! { #name, }
 		})
 		.collect::<TokenStream2>();
@@ -137,7 +137,7 @@ fn decode_impl(
 // `Encode` implementation.
 fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 	let encode_impl_single = {
-		let name = vote_filed(1);
+		let name = vote_field(1);
 		quote! {
 			let #name = self.#name
 				.iter()
@@ -151,7 +151,7 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 	};
 
 	let encode_impl_double = {
-		let name = vote_filed(2);
+		let name = vote_field(2);
 		quote! {
 			let #name = self.#name
 				.iter()
@@ -170,7 +170,7 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 
 	let encode_impl_rest = (3..=count)
 		.map(|c| {
-			let name = vote_filed(c);
+			let name = vote_field(c);
 
 			// we use the knowledge of the length to avoid copy_from_slice.
 			let inners_solution_array = (0..c - 1)
