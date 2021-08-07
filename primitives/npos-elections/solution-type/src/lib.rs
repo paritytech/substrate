@@ -73,7 +73,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///     voters1: vec![(u16 /* voter */, u8 /* target */)]
 ///     voters2: vec![(u16 /* voter */, (u8 /* first target*/, Perbill /* proportion for first target */ ), u8 /* last target */)]
 ///     voters3: vec![(u16 /* voter */,  [(u8 /* first target*/, Perbill /* proportion for first target */ ), (u8 /* second target */, Perbill /* proportion for second target*/)], u8 /* last target */)],
-///     voters4: <stripped>
+///     voters4: ...,
 /// }
 ///
 /// impl NposSolution for TestSolution {};
