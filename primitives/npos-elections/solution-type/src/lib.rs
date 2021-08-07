@@ -70,13 +70,17 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// ```ignore
 /// struct TestSolution {
-///     voters1: vec![(V: u16, T: u8), ..]
-///     voters2: vec![
-///         (V: u16, P: Perbill, [(T1: u8, P1: Perbill), (T2: u8, P2: Perbill)], T_last: u8),
-///         ...
-///     ]
-///     voters3: <stripped>
-///     voters4: <stripped>
+/// 	voters1: vec![(u16 /* voter */, u8 /* target */)]
+/// 	voters2: vec![
+/// 		(u16 /* voter */, (u8 /* first target*/, Perbill /* proportion for first target */ ), u8 /* last target */)
+/// 	]
+/// 	voters3: vec![
+/// 		(u16 /* voter */,  [
+/// 			(u8 /* first target*/, Perbill /* proportion for first target */ ),
+/// 			(u8 /* second target */, Perbill /* proportion for second target*/)
+/// 		], u8 /* last target */)
+///		],
+/// 	voters4: ...,
 /// }
 ///
 /// impl NposSolution for TestSolution {};
