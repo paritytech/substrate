@@ -50,7 +50,7 @@ fn counter_prefix(prefix: &str) -> String {
 fn check_prefix_duplicates(
 	storage_def: &StorageDef,
 	// A hashmap of all already used prefix and their associated error if duplication
-	set: &mut HashMap<String, syn::Error>,
+	used_prefix: &mut HashMap<String, syn::Error>,
 ) -> syn::Result<()> {
 	let prefix = storage_def.prefix();
 	let dup_err = syn::Error::new(
@@ -58,7 +58,7 @@ fn check_prefix_duplicates(
 		format!("Duplicate storage prefixes found for `{}`", prefix),
 	);
 
-	if let Some(other_dup_err) = set.insert(prefix.clone(), dup_err.clone()) {
+	if let Some(other_dup_err) = used_prefix.insert(prefix.clone(), dup_err.clone()) {
 		let mut err = dup_err;
 		err.combine(other_dup_err);
 		return Err(err)
@@ -75,7 +75,9 @@ fn check_prefix_duplicates(
 			),
 		);
 
-		if let Some(other_dup_err) = set.insert(counter_prefix.clone(), counter_dup_err.clone()) {
+		if let Some(other_dup_err) =
+			used_prefix.insert(counter_prefix.clone(), counter_dup_err.clone())
+		{
 			let mut err = counter_dup_err;
 			err.combine(other_dup_err);
 			return Err(err)

@@ -62,12 +62,12 @@ pub trait CountedStorageMapInstance: StorageInstance {
 	type CounterPrefix: StorageInstance;
 }
 
-// Internal helper trait to access map from counted storage map.
-trait Helper {
+// Private helper trait to access map from counted storage map.
+trait MapWrapper {
 	type Map;
 }
 
-impl<P: CountedStorageMapInstance, H, K, V, Q, O, M> Helper
+impl<P: CountedStorageMapInstance, H, K, V, Q, O, M> MapWrapper
 	for CountedStorageMap<P, H, K, V, Q, O, M>
 {
 	type Map = StorageMap<P, H, K, V, Q, O, M>;
@@ -100,29 +100,29 @@ where
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
-		<Self as Helper>::Map::hashed_key_for(key)
+		<Self as MapWrapper>::Map::hashed_key_for(key)
 	}
 
 	/// Does the value (explicitly) exist in storage?
 	pub fn contains_key<KeyArg: EncodeLike<Key>>(key: KeyArg) -> bool {
-		<Self as Helper>::Map::contains_key(key)
+		<Self as MapWrapper>::Map::contains_key(key)
 	}
 
 	/// Load the value associated with the given key from the map.
 	pub fn get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> QueryKind::Query {
-		<Self as Helper>::Map::get(key)
+		<Self as MapWrapper>::Map::get(key)
 	}
 
 	/// Try to get the value for the given key from the map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
 	pub fn try_get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Result<Value, ()> {
-		<Self as Helper>::Map::try_get(key)
+		<Self as MapWrapper>::Map::try_get(key)
 	}
 
 	/// Swap the values of two keys.
 	pub fn swap<KeyArg1: EncodeLike<Key>, KeyArg2: EncodeLike<Key>>(key1: KeyArg1, key2: KeyArg2) {
-		<Self as Helper>::Map::swap(key1, key2)
+		<Self as MapWrapper>::Map::swap(key1, key2)
 	}
 
 	/// Store a value to be associated with the given key from the map.
@@ -130,18 +130,18 @@ where
 		key: KeyArg,
 		val: ValArg,
 	) {
-		if !<Self as Helper>::Map::contains_key(Ref::from(&key)) {
+		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
-		<Self as Helper>::Map::insert(key, val)
+		<Self as MapWrapper>::Map::insert(key, val)
 	}
 
 	/// Remove the value under a key.
 	pub fn remove<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) {
-		if <Self as Helper>::Map::contains_key(Ref::from(&key)) {
+		if <Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
-		<Self as Helper>::Map::remove(key)
+		<Self as MapWrapper>::Map::remove(key)
 	}
 
 	/// Mutate the value under a key.
@@ -161,9 +161,9 @@ where
 	{
 		Self::try_mutate_exists(key, |option_value_ref| {
 			let option_value = core::mem::replace(option_value_ref, None);
-			let mut query = <Self as Helper>::Map::from_optional_value_to_query(option_value);
+			let mut query = <Self as MapWrapper>::Map::from_optional_value_to_query(option_value);
 			let res = f(&mut query);
-			let option_value = <Self as Helper>::Map::from_query_to_optional_value(query);
+			let option_value = <Self as MapWrapper>::Map::from_query_to_optional_value(query);
 			let _ = core::mem::replace(option_value_ref, option_value);
 			res
 		})
@@ -184,7 +184,7 @@ where
 		KeyArg: EncodeLike<Key> + Clone,
 		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
 	{
-		<Self as Helper>::Map::try_mutate_exists(key, |option_value| {
+		<Self as MapWrapper>::Map::try_mutate_exists(key, |option_value| {
 			let existed = option_value.is_some();
 			let res = f(option_value);
 			let exist = option_value.is_some();
@@ -205,11 +205,11 @@ where
 	/// Take the value under a key.
 	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
 		let removed_value =
-			<Self as Helper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
+			<Self as MapWrapper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
-		<Self as Helper>::Map::from_optional_value_to_query(removed_value)
+		<Self as MapWrapper>::Map::from_optional_value_to_query(removed_value)
 	}
 
 	/// Append the given items to the value in the storage.
@@ -227,10 +227,10 @@ where
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>,
 	{
-		if !<Self as Helper>::Map::contains_key(Ref::from(&key)) {
+		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
-		<Self as Helper>::Map::append(key, item)
+		<Self as MapWrapper>::Map::append(key, item)
 	}
 
 	/// Read the length of the storage value without decoding the entire value under the given
@@ -249,7 +249,7 @@ where
 	where
 		Value: StorageDecodeLength,
 	{
-		<Self as Helper>::Map::decode_len(key)
+		<Self as MapWrapper>::Map::decode_len(key)
 	}
 
 	/// Migrate an item with the given `key` from a defunct `OldHasher` to the current hasher.
@@ -258,20 +258,20 @@ where
 	pub fn migrate_key<OldHasher: crate::hash::StorageHasher, KeyArg: EncodeLike<Key>>(
 		key: KeyArg,
 	) -> Option<Value> {
-		<Self as Helper>::Map::migrate_key::<OldHasher, _>(key)
+		<Self as MapWrapper>::Map::migrate_key::<OldHasher, _>(key)
 	}
 
 	/// Remove all value of the storage.
 	pub fn remove_all() {
 		CounterFor::<Prefix>::set(0u32);
-		<Self as Helper>::Map::remove_all(None);
+		<Self as MapWrapper>::Map::remove_all(None);
 	}
 
 	/// Iter over all value of the storage.
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value, OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as Helper>::Map::iter_values();
+		let map_iterator = <Self as MapWrapper>::Map::iter_values();
 		crate::storage::PrefixIterator {
 			prefix: map_iterator.prefix,
 			previous_key: map_iterator.previous_key,
@@ -296,7 +296,7 @@ where
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
 	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(mut f: F) {
-		<Self as Helper>::Map::translate_values(|old_value| {
+		<Self as MapWrapper>::Map::translate_values(|old_value| {
 			let res = f(old_value);
 			if res.is_none() {
 				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
@@ -316,10 +316,10 @@ where
 		Value: StorageTryAppend<Item>,
 	{
 		let bound = Value::bound();
-		let current = <Self as Helper>::Map::decode_len(Ref::from(&key)).unwrap_or_default();
+		let current = <Self as MapWrapper>::Map::decode_len(Ref::from(&key)).unwrap_or_default();
 		if current < bound {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
-			let key = <Self as Helper>::Map::hashed_key_for(key);
+			let key = <Self as MapWrapper>::Map::hashed_key_for(key);
 			sp_io::storage::append(&key, item.encode());
 			Ok(())
 		} else {
@@ -360,7 +360,7 @@ where
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as Helper>::Map::iter();
+		let map_iterator = <Self as MapWrapper>::Map::iter();
 		crate::storage::PrefixIterator {
 			prefix: map_iterator.prefix,
 			previous_key: map_iterator.previous_key,
@@ -374,7 +374,7 @@ where
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as Helper>::Map::drain();
+		let map_iterator = <Self as MapWrapper>::Map::drain();
 		crate::storage::PrefixIterator {
 			prefix: map_iterator.prefix,
 			previous_key: map_iterator.previous_key,
@@ -390,7 +390,7 @@ where
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	pub fn translate<O: Decode, F: FnMut(Key, O) -> Option<Value>>(mut f: F) {
-		<Self as Helper>::Map::translate(|key, old_value| {
+		<Self as MapWrapper>::Map::translate(|key, old_value| {
 			let res = f(key, old_value);
 			if res.is_none() {
 				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
@@ -424,10 +424,10 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = <Self as Helper>::Map::MODIFIER;
-	const HASHER: frame_metadata::StorageHasher = <Self as Helper>::Map::HASHER;
-	const NAME: &'static str = <Self as Helper>::Map::NAME;
-	const DEFAULT: DefaultByteGetter = <Self as Helper>::Map::DEFAULT;
+	const MODIFIER: StorageEntryModifier = <Self as MapWrapper>::Map::MODIFIER;
+	const HASHER: frame_metadata::StorageHasher = <Self as MapWrapper>::Map::HASHER;
+	const NAME: &'static str = <Self as MapWrapper>::Map::NAME;
+	const DEFAULT: DefaultByteGetter = <Self as MapWrapper>::Map::DEFAULT;
 	const COUNTER_NAME: &'static str = CounterFor::<Prefix>::NAME;
 	const COUNTER_MODIFIER: StorageEntryModifier = CounterFor::<Prefix>::MODIFIER;
 	const COUNTER_TY: &'static str = "u32";
@@ -447,7 +447,7 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
-		[<Self as Helper>::Map::storage_info(), CounterFor::<Prefix>::storage_info()].concat()
+		[<Self as MapWrapper>::Map::storage_info(), CounterFor::<Prefix>::storage_info()].concat()
 	}
 }
 
@@ -465,7 +465,7 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
-		[<Self as Helper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]
+		[<Self as MapWrapper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]
 			.concat()
 	}
 }
