@@ -71,7 +71,7 @@ frame_support::construct_runtime!(
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
 impl Contains<Call> for BaseFilter {
-	fn filter(call: &Call) -> bool {
+	fn contains(call: &Call) -> bool {
 		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
 	}
 }

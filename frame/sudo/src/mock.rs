@@ -116,7 +116,7 @@ parameter_types! {
 
 pub struct BlockEverything;
 impl Contains<Call> for BlockEverything {
-	fn filter(_: &Call) -> bool {
+	fn contains(_: &Call) -> bool {
 		false
 	}
 }

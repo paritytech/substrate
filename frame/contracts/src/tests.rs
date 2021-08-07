@@ -283,7 +283,7 @@ impl TestFilter {
 }
 
 impl Contains<Call> for TestFilter {
-	fn filter(call: &Call) -> bool {
+	fn contains(call: &Call) -> bool {
 		CALL_FILTER.with(|fltr| fltr.borrow()(call))
 	}
 }
