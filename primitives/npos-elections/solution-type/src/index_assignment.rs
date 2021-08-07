@@ -32,21 +32,7 @@ pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 
 		),)
 	};
 
-	let from_impl_double = {
-		let name = vote_field(2);
-		quote!(2 => #struct_name.#name.push(
-			(
-				*who,
-				(
-					distribution[0].0,
-					distribution[0].1,
-				),
-				distribution[1].0,
-			)
-		),)
-	};
-
-	let from_impl_rest = (3..=count)
+	let from_impl_rest = (2..=count)
 		.map(|c| {
 			let inner = (0..c - 1)
 				.map(|i| quote!((distribution[#i].0, distribution[#i].1),))
@@ -70,7 +56,6 @@ pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 
 
 	quote!(
 		#from_impl_single
-		#from_impl_double
 		#from_impl_rest
 	)
 }

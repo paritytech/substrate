@@ -947,7 +947,7 @@ mod solution_type {
 			);
 			let solution = InnerTestSolution {
 				votes1: vec![(2, 20), (4, 40)],
-				votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+				votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
 				..Default::default()
 			};
 
@@ -965,7 +965,7 @@ mod solution_type {
 			);
 			let compact = InnerTestSolutionCompact {
 				votes1: vec![(2, 20), (4, 40)],
-				votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+				votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
 				..Default::default()
 			};
 
@@ -979,7 +979,7 @@ mod solution_type {
 	fn solution_struct_is_codec() {
 		let solution = TestSolution {
 			votes1: vec![(2, 20), (4, 40)],
-			votes2: vec![(1, (10, p(80)), 11), (5, (50, p(85)), 51)],
+			votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
 			..Default::default()
 		};
 
@@ -995,7 +995,7 @@ mod solution_type {
 	fn remove_voter_works() {
 		let mut solution = TestSolution {
 			votes1: vec![(0, 2), (1, 6)],
-			votes2: vec![(2, (0, p(80)), 1), (3, (7, p(85)), 8)],
+			votes2: vec![(2, [(0, p(80))], 1), (3, [(7, p(85))], 8)],
 			votes3: vec![(4, [(3, p(50)), (4, p(25))], 5)],
 			..Default::default()
 		};
@@ -1006,8 +1006,8 @@ mod solution_type {
 			solution,
 			TestSolution {
 				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![(3, (7, p(85)), 8),],
-				votes3: vec![(4, [(3, p(50)), (4, p(25))], 5,),],
+				votes2: vec![(3, [(7, p(85))], 8)],
+				votes3: vec![(4, [(3, p(50)), (4, p(25))], 5,)],
 				..Default::default()
 			},
 		);
@@ -1017,7 +1017,7 @@ mod solution_type {
 			solution,
 			TestSolution {
 				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![(3, (7, p(85)), 8),],
+				votes2: vec![(3, [(7, p(85))], 8)],
 				..Default::default()
 			},
 		);
@@ -1027,7 +1027,7 @@ mod solution_type {
 			solution,
 			TestSolution {
 				votes1: vec![(0, 2)],
-				votes2: vec![(3, (7, p(85)), 8),],
+				votes2: vec![(3, [(7, p(85))], 8),],
 				..Default::default()
 			},
 		);
@@ -1077,8 +1077,8 @@ mod solution_type {
 			solution,
 			TestSolution {
 				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![(2, (0, p(80)), 1), (3, (7, p(85)), 8),],
-				votes3: vec![(4, [(3, p(50)), (4, p(25))], 5,),],
+				votes2: vec![(2, [(0, p(80))], 1), (3, [(7, p(85))], 8)],
+				votes3: vec![(4, [(3, p(50)), (4, p(25))], 5)],
 				..Default::default()
 			}
 		);
@@ -1100,7 +1100,7 @@ mod solution_type {
 		// we don't really care about voters here so all duplicates. This is not invalid per se.
 		let solution = TestSolution {
 			votes1: vec![(99, 1), (99, 2)],
-			votes2: vec![(99, (3, p(10)), 7), (99, (4, p(10)), 8)],
+			votes2: vec![(99, [(3, p(10))], 7), (99, [(4, p(10))], 8)],
 			votes3: vec![(99, [(11, p(10)), (12, p(10))], 13)],
 			// ensure the last one is also counted.
 			votes16: vec![(
@@ -1134,7 +1134,7 @@ mod solution_type {
 		// this one has some duplicates.
 		let solution = TestSolution {
 			votes1: vec![(99, 1), (99, 1)],
-			votes2: vec![(99, (3, p(10)), 7), (99, (4, p(10)), 8)],
+			votes2: vec![(99, [(3, p(10))], 7), (99, [(4, p(10))], 8)],
 			votes3: vec![(99, [(11, p(10)), (11, p(10))], 13)],
 			..Default::default()
 		};
@@ -1149,7 +1149,7 @@ mod solution_type {
 		// in votes2
 		let solution = TestSolution {
 			votes1: Default::default(),
-			votes2: vec![(0, (1, p(100)), 2)],
+			votes2: vec![(0, [(1, p(100))], 2)],
 			..Default::default()
 		};
 
@@ -1213,7 +1213,7 @@ mod solution_type {
 			solution,
 			TestSolution {
 				votes1: Default::default(),
-				votes2: vec![(0, (0, p(50)), 1)],
+				votes2: vec![(0, [(0, p(50))], 1)],
 				..Default::default()
 			}
 		);

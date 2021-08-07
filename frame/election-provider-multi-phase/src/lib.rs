@@ -1628,15 +1628,15 @@ mod feasibility_check {
 			assert_eq!(MultiPhase::snapshot().unwrap().targets.len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
-			// Swap all votes from 3 to 4. This will ensure that the number of unique winners
-			// will still be 4, but one of the indices will be gibberish. Requirement is to make
-			// sure 3 a winner, which we don't do here.
+			// Swap all votes from 3 to 4. This will ensure that the number of unique winners will
+			// still be 4, but one of the indices will be gibberish. Requirement is to make sure 3 a
+			// winner, which we don't do here.
 			raw.solution
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
 				.for_each(|(_, t)| *t += 1);
-			raw.solution.votes2.iter_mut().for_each(|(_, (t0, _), t1)| {
+			raw.solution.votes2.iter_mut().for_each(|(_, [(t0, _)], t1)| {
 				if *t0 == TargetIndex::from(3u16) {
 					*t0 += 1
 				};

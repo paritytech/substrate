@@ -35,7 +35,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		Err(syn_err("cannot build solution struct with capacity less than 3."))?
 	}
 
-	let singles = {
+	let single = {
 		let name = vote_field(1);
 		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
@@ -43,14 +43,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		)
 	};
 
-	let doubles = {
-		let name = vote_field(2);
-		quote!(
-			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
-		)
-	};
-
-	let rest = (3..=count)
+	let rest = (2..=count)
 		.map(|c| {
 			let field_name = vote_field(c);
 			let array_len = c - 1;
@@ -97,7 +90,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 	Ok(quote! (
 		/// A struct to encode a election assignment in a compact way.
 		#derives_and_maybe_compact_encoding
-		#vis struct #ident { #singles #doubles #rest }
+		#vis struct #ident { #single #rest }
 
 		use _npos::__OrInvalidIndex;
 		impl _npos::NposSolution for #ident {
@@ -206,15 +199,7 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 		}
 	};
 
-	let field_name = vote_field(2);
-	let double = quote! {
-		if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
-			self.#field_name.remove(idx);
-			return true
-		}
-	};
-
-	let rest = (3..=count)
+	let rest = (2..=count)
 		.map(|c| {
 			let field_name = vote_field(c);
 			quote! {
@@ -228,7 +213,6 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 
 	quote! {
 		#single
-		#double
 		#rest
 	}
 }
@@ -267,17 +251,7 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 		}
 	};
 
-	let unique_targets_impl_double = {
-		let field_name = vote_field(2);
-		quote! {
-			self.#field_name.iter().for_each(|(_, (t1, _), t2)| {
-				maybe_insert_target(*t1);
-				maybe_insert_target(*t2);
-			});
-		}
-	};
-
-	let unique_targets_impl_rest = (3..=count)
+	let unique_targets_impl_rest = (2..=count)
 		.map(|c| {
 			let field_name = vote_field(c);
 			quote! {
@@ -293,7 +267,6 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 
 	quote! {
 		#unique_targets_impl_single
-		#unique_targets_impl_double
 		#unique_targets_impl_rest
 	}
 }
@@ -305,13 +278,7 @@ pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 
 		quote!(1 => #struct_name.#field.#push_code,)
 	};
 
-	let from_impl_double = {
-		let field = vote_field(2);
-		let push_code = from_impl_double_push_code();
-		quote!(2 => #struct_name.#field.#push_code,)
-	};
-
-	let from_impl_rest = (3..=count)
+	let from_impl_rest = (2..=count)
 		.map(|c| {
 			let field = vote_field(c);
 			let push_code = from_impl_rest_push_code(c);
@@ -321,7 +288,6 @@ pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 
 
 	quote!(
 		#from_impl_single
-		#from_impl_double
 		#from_impl_rest
 	)
 }
@@ -345,32 +311,7 @@ pub(crate) fn into_impl(
 		)
 	};
 
-	let into_impl_double = {
-		let name = vote_field(2);
-		quote!(
-			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
-				if p1 >= #per_thing::one() {
-					return Err(_npos::Error::SolutionWeightOverflow);
-				}
-
-				// defensive only. Since Percent doesn't have `Sub`.
-				let p2 = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					#per_thing::one(),
-					p1,
-				);
-
-				#assignments.push( _npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: vec![
-						(target_at(t1_idx).or_invalid_index()?, p1),
-						(target_at(t2_idx).or_invalid_index()?, p2),
-					]
-				});
-			}
-		)
-	};
-
-	let into_impl_rest = (3..=count)
+	let into_impl_rest = (2..=count)
 		.map(|c| {
 			let name = vote_field(c);
 			quote!(
@@ -408,7 +349,6 @@ pub(crate) fn into_impl(
 
 	quote!(
 		#into_impl_single
-		#into_impl_double
 		#into_impl_rest
 	)
 }

@@ -60,27 +60,7 @@ fn decode_impl(
 		}
 	};
 
-	let decode_impl_double = {
-		let name = vote_field(2);
-		quote! {
-			let #name =
-			<
-				_npos::sp_std::prelude::Vec<(
-					_npos::codec::Compact<#voter_type>,
-					(_npos::codec::Compact<#target_type>, _npos::codec::Compact<#weight_type>),
-					_npos::codec::Compact<#target_type>,
-				)>
-				as
-				_npos::codec::Decode
-			>::decode(value)?;
-			let #name = #name
-				.into_iter()
-				.map(|(v, (t1, w), t2)| (v.0, (t1.0, w.0), t2.0))
-				.collect::<_npos::sp_std::prelude::Vec<_>>();
-		}
-	};
-
-	let decode_impl_rest = (3..=count)
+	let decode_impl_rest = (2..=count)
 		.map(|c| {
 			let name = vote_field(c);
 
@@ -121,7 +101,6 @@ fn decode_impl(
 		impl _npos::codec::Decode for #ident {
 			fn decode<I: _npos::codec::Input>(value: &mut I) -> Result<Self, _npos::codec::Error> {
 				#decode_impl_single
-				#decode_impl_double
 				#decode_impl_rest
 
 				// The above code generates variables with the decoded value with the same name as
@@ -150,25 +129,7 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 		}
 	};
 
-	let encode_impl_double = {
-		let name = vote_field(2);
-		quote! {
-			let #name = self.#name
-				.iter()
-				.map(|(v, (t1, w), t2)| (
-					_npos::codec::Compact(v.clone()),
-					(
-						_npos::codec::Compact(t1.clone()),
-						_npos::codec::Compact(w.clone())
-					),
-					_npos::codec::Compact(t2.clone()),
-				))
-				.collect::<_npos::sp_std::prelude::Vec<_>>();
-			#name.encode_to(&mut r);
-		}
-	};
-
-	let encode_impl_rest = (3..=count)
+	let encode_impl_rest = (2..=count)
 		.map(|c| {
 			let name = vote_field(c);
 
@@ -201,7 +162,6 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 			fn encode(&self) -> _npos::sp_std::prelude::Vec<u8> {
 				let mut r = vec![];
 				#encode_impl_single
-				#encode_impl_double
 				#encode_impl_rest
 				r
 			}

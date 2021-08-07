@@ -72,7 +72,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// struct TestSolution {
 /// 	voters1: vec![(u16 /* voter */, u8 /* target */)]
 /// 	voters2: vec![
-/// 		(u16 /* voter */, (u8 /* first target*/, Perbill /* proportion for first target */ ), u8 /* last target */)
+/// 		(u16 /* voter */, [u8 /* first target*/, Perbill /* proportion for first target */], u8 /* last target */)
 /// 	]
 /// 	voters3: vec![
 /// 		(u16 /* voter */,  [

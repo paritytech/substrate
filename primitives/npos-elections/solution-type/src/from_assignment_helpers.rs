@@ -31,14 +31,6 @@ pub(crate) fn from_impl_single_push_code() -> TokenStream2 {
 	)))
 }
 
-pub(crate) fn from_impl_double_push_code() -> TokenStream2 {
-	quote!(push((
-		voter_index(&who).or_invalid_index()?,
-		(target_index(&distribution[0].0).or_invalid_index()?, distribution[0].1,),
-		target_index(&distribution[1].0).or_invalid_index()?,
-	)))
-}
-
 pub(crate) fn from_impl_rest_push_code(count: usize) -> TokenStream2 {
 	let inner = (0..count - 1).map(|i| {
 		quote!(
