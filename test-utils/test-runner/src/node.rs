@@ -181,7 +181,7 @@ where
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 
-	/// submit some extrinsic to the node, providing the sending account.
+	/// submit some extrinsic to the node. if signer is None, will submit unsigned_extrinsic.
 	pub async fn submit_extrinsic(
 		&self,
 		call: impl Into<<T::Runtime as frame_system::Config>::Call>,
