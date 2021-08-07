@@ -46,7 +46,9 @@ pub type AllowAll = Everything;
 #[deprecated = "Use `Nothing` instead"]
 pub type DenyAll = Nothing;
 #[deprecated = "Use `Contains` instead"]
-pub trait Filter<T> { fn filter(t: &T) -> bool; }
+pub trait Filter<T> {
+	fn filter(t: &T) -> bool;
+}
 #[allow(deprecated)]
 impl<T, C: Contains<T>> Filter<T> for C {
 	fn filter(t: &T) -> bool {

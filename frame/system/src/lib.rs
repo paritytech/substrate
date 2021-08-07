@@ -85,7 +85,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
-		EnsureOrigin, Contains, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
+		Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
 		PalletInfo, SortedMembers, StoredMap,
 	},
 	weights::{

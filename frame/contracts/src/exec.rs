@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	ensure,
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Currency, ExistenceRequirement, Get, Contains, OriginTrait, Randomness, Time},
+	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
 	weights::Weight,
 	DefaultNoBound,
 };
@@ -34,7 +34,10 @@ use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::crypto::UncheckedFrom;
-use sp_runtime::{traits::{Convert, Saturating}, Perbill};
+use sp_runtime::{
+	traits::{Convert, Saturating},
+	Perbill,
+};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;

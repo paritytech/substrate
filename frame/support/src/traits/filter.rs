@@ -17,8 +17,8 @@
 
 //! Traits and associated utilities for dealing with abstract constraint filters.
 
-use sp_std::marker::PhantomData;
 pub use super::members::Contains;
+use sp_std::marker::PhantomData;
 
 /// Trait to add a constraint onto the filter.
 pub trait FilterStack<T>: Contains<T> {

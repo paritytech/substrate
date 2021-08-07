@@ -111,7 +111,7 @@ use crate::{
 };
 use frame_support::{
 	dispatch::Dispatchable,
-	traits::{Currency, Contains, Get, OnUnbalanced, Randomness, StorageVersion, Time},
+	traits::{Contains, Currency, Get, OnUnbalanced, Randomness, StorageVersion, Time},
 	weights::{GetDispatchInfo, PostDispatchInfo, Weight, WithPostDispatchInfo},
 };
 use frame_system::Pallet as System;

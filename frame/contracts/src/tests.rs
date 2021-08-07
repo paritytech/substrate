@@ -33,7 +33,7 @@ use frame_support::{
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
-	traits::{Currency, Contains, OnInitialize, ReservableCurrency},
+	traits::{Contains, Currency, OnInitialize, ReservableCurrency},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
