@@ -488,11 +488,17 @@ fn nominating_and_rewards_should_work() {
 	ExtBuilder::default()
 		.nominate(false)
 		.set_status(41, StakerStatus::Validator)
+		.set_status(11, StakerStatus::Idle)
+		.set_status(31, StakerStatus::Idle)
 		.build_and_execute(|| {
-			// initial validators -- everyone is actually even.
+			// initial validators.
 			assert_eq_uvec!(validator_controllers(), vec![40, 20]);
 
-			// Set payee to controller
+			// re-validate with 11 and 31.
+			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+			assert_ok!(Staking::validate(Origin::signed(30), Default::default()));
+
+			// Set payee to controller.
 			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 			assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
 			assert_ok!(Staking::set_payee(Origin::signed(30), RewardDestination::Controller));
