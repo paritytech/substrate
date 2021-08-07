@@ -38,9 +38,9 @@ pub use members::{
 
 mod validation;
 pub use validation::{
-	EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, KeyOwnerProofSystem, Lateness,
-	OneSessionHandler, ValidatorRegistration, ValidatorSet, ValidatorSetWithIdentification,
-	VerifySeal,
+	DisabledValidators, EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor,
+	KeyOwnerProofSystem, Lateness, OneSessionHandler, ValidatorRegistration, ValidatorSet,
+	ValidatorSetWithIdentification, VerifySeal,
 };
 
 mod filter;
@@ -63,8 +63,8 @@ pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, PalletInfo, PalletInfoAccess,
-	PalletVersion, PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo, PalletInfoAccess,
+	StorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;

@@ -2508,6 +2508,11 @@ mod tests {
 					},
 					EventRecord {
 						phase: Phase::Initialization,
+						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
 						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted(
 							1,
 							BadOrigin.into()

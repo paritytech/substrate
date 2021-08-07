@@ -18,7 +18,7 @@ log = "0.4.8"
 kvdb = "0.10.0"
 kvdb-rocksdb = { version = "0.12.0", optional = true }
 kvdb-memorydb = "0.10.0"
-linked-hash-map = "0.5.2"
+linked-hash-map = "0.5.4"
 hash-db = "0.15.2"
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
@@ -32,7 +32,6 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-mach
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
 parity-db = { version = "0.2.4", optional = true }

@@ -26,7 +26,10 @@ use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
-use sp_std::convert::{TryFrom, TryInto};
+use sp_std::{
+	boxed::Box,
+	convert::{TryFrom, TryInto},
+};
 
 const SEED: u32 = 999;
 
@@ -317,7 +320,7 @@ frame_benchmarking::benchmarks! {
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), solution, c)
+	}: _(RawOrigin::Signed(caller), Box::new(solution), c)
 	verify {
 		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
 	}
@@ -344,9 +347,15 @@ frame_benchmarking::benchmarks! {
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
-		let encoded_call = <Call<T>>::submit_unsigned(raw_solution.clone(), witness).encode();
+		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
 	}: {
-		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
+		assert_ok!(
+			<MultiPhase<T>>::submit_unsigned(
+				RawOrigin::None.into(),
+				Box::new(raw_solution),
+				witness,
+			)
+		);
 		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
 			.unwrap();
 		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();

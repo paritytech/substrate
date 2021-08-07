@@ -857,7 +857,7 @@ pub mod pallet {
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			raw_solution: RawSolution<SolutionOf<T>>,
+			raw_solution: Box<RawSolution<SolutionOf<T>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -947,7 +947,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
-			raw_solution: RawSolution<SolutionOf<T>>,
+			raw_solution: Box<RawSolution<SolutionOf<T>>>,
 			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -982,7 +982,8 @@ pub mod pallet {
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
 
-			let submission = SignedSubmission { who: who.clone(), deposit, raw_solution, reward };
+			let submission =
+				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1630,8 +1631,7 @@ mod feasibility_check {
 			// Swap all votes from 3 to 4. This will ensure that the number of unique winners
 			// will still be 4, but one of the indices will be gibberish. Requirement is to make
 			// sure 3 a winner, which we don't do here.
-			raw
-				.solution
+			raw.solution
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
@@ -1928,7 +1928,7 @@ mod tests {
 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
-					solution,
+					Box::new(solution),
 					MultiPhase::signed_submissions().len() as u32
 				));
 			}

@@ -126,8 +126,10 @@ pub trait Extension: Serialize + DeserializeOwned + Clone {
 
 	/// Get an extension of specific type.
 	fn get<T: 'static>(&self) -> Option<&T>;
-	/// Get an extension of specific type as refernce to `Any`
+	/// Get an extension of specific type as reference to `Any`.
 	fn get_any(&self, t: TypeId) -> &dyn Any;
+	/// Get an extension of specific type as mutable reference to `Any`.
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any;
 
 	/// Get forkable extensions of specific type.
 	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>>
@@ -149,6 +151,9 @@ impl Extension for crate::NoExtension {
 		None
 	}
 	fn get_any(&self, _t: TypeId) -> &dyn Any {
+		self
+	}
+	fn get_any_mut(&mut self, _: TypeId) -> &mut dyn Any {
 		self
 	}
 }
@@ -240,16 +245,26 @@ where
 	type Forks = Self;
 
 	fn get<T: 'static>(&self) -> Option<&T> {
-		match TypeId::of::<T>() {
-			x if x == TypeId::of::<E>() => <dyn Any>::downcast_ref(&self.base),
-			_ => self.base.get(),
+		if TypeId::of::<T>() == TypeId::of::<E>() {
+			<dyn Any>::downcast_ref(&self.base)
+		} else {
+			self.base.get()
 		}
 	}
 
 	fn get_any(&self, t: TypeId) -> &dyn Any {
-		match t {
-			x if x == TypeId::of::<E>() => &self.base,
-			_ => self.base.get_any(t),
+		if t == TypeId::of::<E>() {
+			&self.base
+		} else {
+			self.base.get_any(t)
+		}
+	}
+
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any {
+		if t == TypeId::of::<E>() {
+			&mut self.base
+		} else {
+			self.base.get_any_mut(t)
 		}
 	}
 
@@ -273,18 +288,29 @@ where
 pub trait GetExtension {
 	/// Get an extension of specific type.
 	fn get_any(&self, t: TypeId) -> &dyn Any;
+
+	/// Get an extension of specific type with mutable access.
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any;
 }
 
 impl<E: Extension> GetExtension for E {
 	fn get_any(&self, t: TypeId) -> &dyn Any {
 		Extension::get_any(self, t)
 	}
+
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any {
+		Extension::get_any_mut(self, t)
+	}
 }
 
-/// Helper function that queries an extension by type from `GetExtension`
-/// trait object.
+/// Helper function that queries an extension by type from `GetExtension` trait object.
 pub fn get_extension<T: 'static>(e: &dyn GetExtension) -> Option<&T> {
 	<dyn Any>::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
+}
+
+/// Helper function that queries an extension by type from `GetExtension` trait object.
+pub fn get_extension_mut<T: 'static>(e: &mut dyn GetExtension) -> Option<&mut T> {
+	<dyn Any>::downcast_mut(GetExtension::get_any_mut(e, TypeId::of::<T>()))
 }
 
 #[cfg(test)]
