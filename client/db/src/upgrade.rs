@@ -51,7 +51,7 @@ pub enum UpgradeError {
 	/// Database version comes from future version of the client.
 	FutureDatabaseVersion(u32),
 	/// Invalid justification block.
-	InvalidJustificationBlock,
+	DecodingJustificationBlock,
 	/// Common io error.
 	Io(io::Error),
 }
@@ -74,7 +74,8 @@ impl fmt::Display for UpgradeError {
 				write!(f, "Database version no longer supported: {}", version),
 			UpgradeError::FutureDatabaseVersion(version) =>
 				write!(f, "Database version comes from future version of the client: {}", version),
-			UpgradeError::InvalidJustificationBlock => write!(f, "Invalid justification block"),
+			UpgradeError::DecodingJustificationBlock =>
+				write!(f, "Decodoning justification block failed"),
 			UpgradeError::Io(err) => write!(f, "Io error: {}", err),
 		}
 	}
@@ -124,7 +125,7 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 			// NOTE: when storing justifications the previous API would get a `Vec<u8>` and still
 			// call encode on it.
 			let justification = Vec::<u8>::decode(&mut &justification[..])
-				.map_err(|_| UpgradeError::InvalidJustificationBlock)?;
+				.map_err(|_| UpgradeError::DecodingJustificationBlock)?;
 			let justifications = sp_runtime::Justifications::from((*b"FRNK", justification));
 			transaction.put_vec(columns::JUSTIFICATIONS, &key, justifications.encode());
 		}
