@@ -852,7 +852,7 @@ macro_rules! impl_benchmark {
 					let elapsed_storage_root = finish_storage_root - start_storage_root;
 
 					let skip_meta = [ $( stringify!($name_skip_meta).as_ref() ),* ];
-					let read_and_written_keys = if (&skip_meta).contains(&extrinsic) {
+					let read_and_written_keys = if skip_meta.contains(&extrinsic) {
 						$crate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
 					} else {
 						$crate::benchmarking::get_read_and_written_keys()
