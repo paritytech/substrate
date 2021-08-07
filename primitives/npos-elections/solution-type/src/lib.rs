@@ -70,9 +70,9 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// ```ignore
 /// struct TestSolution {
-///     voters1: vec![(V, T), ..]
-///     voters2: vec![V, P, [(T1, P1), (T2, P2)], T_last]
-///     voters3: <stripped>
+///     voters1: vec![(u16 /* voter */, u8 /* target */)]
+///     voters2: vec![(u16 /* voter */, (u8 /* first target*/, Perbill /* proportion for first target */ ), u8 /* last target */)]
+///     voters3: vec![(u16 /* voter */,  [(u8 /* first target*/, Perbill /* proportion for first target */ ), (u8 /* second target */, Perbill /* proportion for second target*/)], u8 /* last target */)],
 ///     voters4: <stripped>
 /// }
 ///
