@@ -72,5 +72,5 @@ generate-bags = [
 	"git2",
 	"num-format",
 	"std",
-  "pallet-staking"
+	"pallet-staking"
 ]
