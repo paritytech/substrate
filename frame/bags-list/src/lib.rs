@@ -143,7 +143,7 @@ pub mod pallet {
 		/// there exists some constant ratio such that `threshold[k + 1] == (threshold[k] *
 		/// constant_ratio).max(threshold[k] + 1)` for all `k`.
 		///
-		/// The helpers in the `voter_bags::make_bags` module can simplify this calculation. To use
+		/// The helpers in the `crate::make_bags` module can simplify this calculation. To use
 		/// them, the `make-bags` feature must be enabled.
 		///
 		/// # Examples

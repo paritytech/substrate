@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::list::{Bag, List};
-// use frame_benchmarking::{account, whitelisted_caller};
 use frame_benchmarking::{account, whitelisted_caller};
 use frame_election_provider_support::VoteWeightProvider;
 use frame_support::{assert_ok, traits::Get};
@@ -49,7 +48,7 @@ frame_benchmarking::benchmarks! {
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T>::insert(dest_head.clone(), dest_bag_thresh));
 
-		// and the ags are in the expected state after insertions.
+		// and the bags are in the expected state after insertions.
 		assert_eq!(
 			get_bags::<T>(),
 			vec![
