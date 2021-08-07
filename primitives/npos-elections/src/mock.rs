@@ -17,7 +17,7 @@
 
 //! Mock file for npos-elections.
 
-#![cfg(any(test, mocks))]
+#![cfg(test)]
 
 use std::{
 	collections::{HashMap, HashSet},

@@ -349,39 +349,12 @@ pub struct Support<AccountId> {
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
-#[cfg(feature = "mocks")]
-impl<AccountId: Ord + Clone> Support<AccountId> {
-	/// `true` when the support is identical except for the ordering of the voters.
-	pub fn eq_unordered(&self, other: &Self) -> bool {
-		self.total == other.total && {
-			let my_voters: BTreeMap<_, _> = self.voters.iter().cloned().collect();
-			let other_voters: BTreeMap<_, _> = other.voters.iter().cloned().collect();
-			my_voters == other_voters
-		}
-	}
-}
-
 /// A target-major representation of the the election outcome.
 ///
 /// Essentially a flat variant of [`SupportMap`].
 ///
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
-
-#[cfg(feature = "mocks")]
-pub fn supports_eq_unordered<AccountId: Ord + Clone>(
-	a: &Supports<AccountId>,
-	b: &Supports<AccountId>,
-) -> bool {
-	let map: BTreeMap<_, _> = a.iter().cloned().collect();
-	b.iter().all(|(id, b_support)| {
-		let a_support = match map.get(id) {
-			Some(support) => support,
-			None => return false,
-		};
-		a_support.eq_unordered(b_support)
-	})
-}
 
 /// Linkage from a winner to their [`Support`].
 ///

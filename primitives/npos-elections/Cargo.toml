@@ -28,7 +28,6 @@ sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
 [features]
 default = ["std"]
 bench = []
-mocks = []
 std = [
 	"codec/std",
 	"serde",

@@ -20,15 +20,17 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::Result;
 
-pub(crate) fn generate(
-	vis: syn::Visibility,
-	ident: syn::Ident,
-	count: usize,
-	voter_type: syn::Type,
-	target_type: syn::Type,
-	weight_type: syn::Type,
-	compact_encoding: bool,
-) -> Result<TokenStream2> {
+pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
+	let crate::SolutionDef {
+		vis,
+		ident,
+		count,
+		voter_type,
+		target_type,
+		weight_type,
+		compact_encoding,
+	} = def;
+
 	if count <= 2 {
 		Err(syn_err("cannot build solution struct with capacity less than 3."))?
 	}

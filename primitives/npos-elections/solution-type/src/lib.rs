@@ -70,8 +70,11 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// ```ignore
 /// struct TestSolution {
-///     voters1: vec![(V, T), ..]
-///     voters2: vec![V, P, [(T1, P1), (T2, P2)], T_last]
+///     voters1: vec![(V: u16, T: u8), ..]
+///     voters2: vec![
+///         (V: u16, P: Perbill, [(T1: u8, P1: Perbill), (T2: u8, P2: Perbill)], T_last: u8),
+///         ...
+///     ]
 ///     voters3: <stripped>
 ///     voters4: <stripped>
 /// }
@@ -103,21 +106,11 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// ```
 #[proc_macro]
 pub fn generate_solution_type(item: TokenStream) -> TokenStream {
-	let SolutionDef { vis, ident, count, voter_type, target_type, weight_type, compact_encoding } =
-		syn::parse_macro_input!(item as SolutionDef);
+	let solution_def = syn::parse_macro_input!(item as SolutionDef);
 
 	let imports = imports().unwrap_or_else(|e| e.to_compile_error());
 
-	let def = single_page::generate(
-		vis.clone(),
-		ident.clone(),
-		count,
-		voter_type.clone(),
-		target_type.clone(),
-		weight_type.clone(),
-		compact_encoding,
-	)
-	.unwrap_or_else(|e| e.to_compile_error());
+	let def = single_page::generate(solution_def).unwrap_or_else(|e| e.to_compile_error());
 
 	quote!(
 		#imports
