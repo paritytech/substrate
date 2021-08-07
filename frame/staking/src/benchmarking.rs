@@ -110,6 +110,8 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
+	assert_ne!(CounterForValidators::<T>::get(), 0);
+	assert_ne!(CounterForNominators::<T>::get(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -598,9 +600,11 @@ benchmarks! {
 		(0..s).for_each(|index| {
 			add_slashing_spans::<T>(&validators[index as usize], 10);
 		});
+
+		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters();
-		assert_eq!(voters.len() as u32, v + n);
+		let voters = <Staking<T>>::get_npos_voters(None);
+		assert_eq!(voters.len(), num_voters);
 	}
 
 	get_npos_targets {
@@ -658,7 +662,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 
@@ -674,6 +678,9 @@ mod tests {
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
 
+			assert_eq!(count_validators, CounterForValidators::<Test>::get() as usize);
+			assert_eq!(count_nominators, CounterForNominators::<Test>::get() as usize);
+
 			assert_eq!(count_validators, v as usize);
 			assert_eq!(count_nominators, n as usize);
 		});
@@ -681,7 +688,7 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
@@ -706,7 +713,7 @@ mod tests {
 
 	#[test]
 	fn add_slashing_spans_works() {
-		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
@@ -738,7 +745,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 

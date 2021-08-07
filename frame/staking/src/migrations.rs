@@ -18,6 +18,37 @@
 
 use super::*;
 
+// pub mod v8 {
+// 	use super::{voter_bags::VoterList, *};
+// 	use frame_support::ensure;
+
+// 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+// 		ensure!(StorageVersion::<T>::get() == Releases::V7_0_0, "must upgrade linearly");
+// 		ensure!(VoterList::<T>::iter().count() == 0, "voter list already exists");
+// 		Ok(())
+// 	}
+
+// 	pub fn migrate<T: Config>() -> Weight {
+// 		log!(info, "Migrating staking to Releases::V8_0_0");
+
+// 		let migrated = VoterList::<T>::regenerate();
+// 		debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
+
+// 		StorageVersion::<T>::put(Releases::V8_0_0);
+// 		log!(
+// 			info,
+// 			"Completed staking migration to Releases::V8_0_0 with {} voters migrated",
+// 			migrated,
+// 		);
+
+// 		T::WeightInfo::regenerate(
+// 			CounterForValidators::<T>::get(),
+// 			CounterForNominators::<T>::get(),
+// 		)
+// 		.saturating_add(T::DbWeight::get().reads(2))
+// 	}
+// }
+
 pub mod v7 {
 	use super::*;
 

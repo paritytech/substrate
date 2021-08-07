@@ -17,16 +17,14 @@
 
 //! Staking FRAME Pallet.
 
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
 		LockableCurrency, OnUnbalanced, UnixTime,
 	},
-	weights::{
-		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-		Weight,
-	},
+	weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
@@ -41,7 +39,7 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
+	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
 	Releases, RewardDestination, SessionInterface, StakerStatus, StakingLedger, UnappliedSlash,
 	UnlockChunk, ValidatorPrefs,
@@ -141,6 +139,9 @@ pub mod pallet {
 		/// their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
+
+		/// Something that can provide a sorted list of voters is a somewhat sorted way.
+		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -493,28 +494,56 @@ pub mod pallet {
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+				log!(
+					trace,
+					"inserting genesis staker: {:?} => {:?} => {:?}",
+					stash,
+					balance,
+					status
+				);
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
 					"Stash does not have enough balance to bond."
 				);
-				let _ = <Pallet<T>>::bond(
+
+				if let Err(why) = <Pallet<T>>::bond(
 					T::Origin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
-				);
-				let _ = match status {
-					StakerStatus::Validator => <Pallet<T>>::validate(
-						T::Origin::from(Some(controller.clone()).into()),
-						Default::default(),
-					),
-					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::Origin::from(Some(controller.clone()).into()),
-						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
-					),
-					_ => Ok(()),
+				) {
+					// TODO: later on, fix all the tests that trigger these warnings, and
+					// make these assertions. Genesis stakers should all be correct!
+					log!(warn, "failed to bond staker at genesis: {:?}.", why);
+					continue
+				}
+				match status {
+					StakerStatus::Validator => {
+						if let Err(why) = <Pallet<T>>::validate(
+							T::Origin::from(Some(controller.clone()).into()),
+							Default::default(),
+						) {
+							log!(warn, "failed to validate staker at genesis: {:?}.", why);
+						}
+					},
+					StakerStatus::Nominator(votes) => {
+						if let Err(why) = <Pallet<T>>::nominate(
+							T::Origin::from(Some(controller.clone()).into()),
+							votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
+						) {
+							log!(warn, "failed to nominate staker at genesis: {:?}.", why);
+						}
+					},
+					_ => (),
 				};
 			}
+
+			// all voters are reported to the `SortedListProvider`.
+			assert_eq!(
+				T::SortedListProvider::count(),
+				CounterForNominators::<T>::get(),
+				"not all genesis stakers were inserted into sorted list provider, something is wrong."
+			);
 		}
 	}
 
@@ -645,19 +674,6 @@ pub mod pallet {
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
 		}
-
-		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					)
-				);
-			}
-		}
 	}
 
 	#[pallet::call]
@@ -764,7 +780,12 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				// update this staker in the sorted list, if they exist in it.
+				if T::SortedListProvider::contains(&stash) {
+					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
+				}
+
+				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 				Self::update_ledger(&controller, &ledger);
 			}
 			Ok(())
@@ -825,6 +846,12 @@ pub mod pallet {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
+
+				// update this staker in the sorted list, if they exist in it.
+				if T::SortedListProvider::contains(&ledger.stash) {
+					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				}
+
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1317,12 +1344,12 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
-			Ok(Some(
-				35 * WEIGHT_PER_MICROS +
-					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
-					T::DbWeight::get().reads_writes(3, 2),
-			)
-			.into())
+
+			if T::SortedListProvider::contains(&ledger.stash) {
+				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			}
+
+			Ok(Some(T::WeightInfo::rebond(ledger.unlocking.len() as u32)).into())
 		}
 
 		/// Set `HistoryDepth` value. This function will delete any history information
@@ -1488,8 +1515,6 @@ pub mod pallet {
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
-		// TODO: Maybe we can deprecate `chill` in the future.
-		// https://github.com/paritytech/substrate/issues/9111
 		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.

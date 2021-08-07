@@ -129,6 +129,8 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/bags-list",
+	"frame/bags-list/generate-bags",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",

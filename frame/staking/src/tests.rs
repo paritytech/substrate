@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use frame_election_provider_support::{ElectionProvider, Support};
+use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::WithPostDispatchInfo,
@@ -28,6 +28,7 @@ use frame_support::{
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
+use sp_npos_elections::supports_eq_unordered;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
@@ -543,27 +544,25 @@ fn nominating_and_rewards_should_work() {
 					.count(),
 				2
 			);
-			assert_eq!(
+
+			assert_eq_exposure(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
-				Exposure {
-					total: 1000 + 800,
-					own: 1000,
-					others: vec![
-						IndividualExposure { who: 3, value: 400 },
-						IndividualExposure { who: 1, value: 400 },
-					]
-				},
+				1000 + 800,
+				1000,
+				vec![
+					IndividualExposure { who: 3, value: 400 },
+					IndividualExposure { who: 1, value: 400 },
+				],
 			);
-			assert_eq!(
+
+			assert_eq_exposure(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 21),
-				Exposure {
-					total: 1000 + 1200,
-					own: 1000,
-					others: vec![
-						IndividualExposure { who: 3, value: 600 },
-						IndividualExposure { who: 1, value: 600 },
-					]
-				},
+				1000 + 1200,
+				1000,
+				vec![
+					IndividualExposure { who: 3, value: 600 },
+					IndividualExposure { who: 1, value: 600 },
+				],
 			);
 
 			// the total reward for era 1
@@ -1921,13 +1920,13 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
-			assert_eq!(
-				supports,
-				vec![
+			assert!(supports_eq_unordered(
+				&supports,
+				&vec![
 					(21, Support { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
 					(31, Support { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] })
 				],
-			);
+			));
 		});
 }
 
@@ -1967,13 +1966,13 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 
 			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
-			assert_eq!(
-				supports,
-				vec![
+			assert!(supports_eq_unordered(
+				&supports,
+				&vec![
 					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
 					(21, Support { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] })
 				],
-			);
+			));
 		});
 }
 
@@ -3922,9 +3921,25 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn respects_len_limits() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Staking::voters(Some(1)).unwrap_err(), "Voter snapshot too big");
+	fn respects_snapshot_len_limits() {
+		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
+			// sum of all nominators who'd be voters, plus the self votes.
+			assert_eq!(
+				<Test as Config>::SortedListProvider::count() +
+					<Validators<Test>>::iter().count() as u32,
+				5
+			);
+
+			// if limits is less..
+			assert_eq!(Staking::voters(Some(1)).unwrap().0.len(), 1);
+
+			// if limit is equal..
+			assert_eq!(Staking::voters(Some(5)).unwrap().0.len(), 5);
+
+			// if limit is more.
+			assert_eq!(Staking::voters(Some(55)).unwrap().0.len(), 5);
+
+			// if target limit is less, then we return an error.
 			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
 		});
 	}
@@ -3984,12 +3999,22 @@ mod election_data_provider {
 
 	#[test]
 	#[should_panic]
-	fn count_check_works() {
+	fn count_check_prevents_validator_insert() {
 		ExtBuilder::default().build_and_execute(|| {
 			// We should never insert into the validators or nominators map directly as this will
 			// not keep track of the count. This test should panic as we verify the count is accurate
-			// after every test using the `post_checks` in `mock`.
+			// after every test using the `post_conditions` in `mock`.
 			Validators::<Test>::insert(987654321, ValidatorPrefs::default());
+		})
+	}
+
+	#[test]
+	#[should_panic]
+	fn count_check_prevents_nominator_insert() {
+		ExtBuilder::default().build_and_execute(|| {
+			// We should never insert into the validators or nominators map directly as this will
+			// not keep track of the count. This test should panic as we verify the count is accurate
+			// after every test using the `post_conditions` in `mock`.
 			Nominators::<Test>::insert(
 				987654321,
 				Nominations {
@@ -4289,5 +4314,30 @@ mod election_data_provider {
 				ValidatorPrefs::default()
 			));
 		})
+	}
+}
+
+mod sorted_list_provider {
+	use super::*;
+	use frame_election_provider_support::SortedListProvider;
+
+	#[test]
+	fn re_nominate_does_not_change_counters_or_list() {
+		ExtBuilder::default().nominate(true).build_and_execute(|| {
+			// given
+			let pre_insert_nominator_count = Nominators::<Test>::iter().count() as u32;
+			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
+			assert!(Nominators::<Test>::contains_key(101));
+			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+
+			// when account 101 renominates
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
+
+			// then counts don't change
+			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
+			assert_eq!(Nominators::<Test>::iter().count() as u32, pre_insert_nominator_count);
+			// and the list is the same
+			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+		});
 	}
 }

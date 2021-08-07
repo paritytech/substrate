@@ -26,6 +26,11 @@ pallet-session = { version = "4.0.0-dev", default-features = false, features = [
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", optional = true }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp", optional = true }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve", optional = true }
+pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true }
+sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true }
 log = { version = "0.4.14", default-features = false }
 paste = "1.0"
 
@@ -33,16 +38,24 @@ paste = "1.0"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
+# Optional imports for making voter bags lists
+chrono = { version = "0.4.19", optional = true }
+git2 = { version = "0.13.20", default-features = false, optional = true }
+num-format = { version = "0.4.0", optional = true }
+
 [dev-dependencies]
 sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections", features = ["mocks"] }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/reward-curve" }
+pallet-bags-list = { version = "4.0.0-dev",  path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
+rand = "0.8.4"
 rand_chacha = { version = "0.2" }
 parking_lot = "0.11.1"
 hex = "0.4"
@@ -70,3 +83,14 @@ runtime-benchmarks = [
 	"rand_chacha",
 ]
 try-runtime = ["frame-support/try-runtime"]
+generate-bags = [
+	"chrono",
+	"git2",
+	"num-format",
+	"pallet-staking-reward-curve",
+	"pallet-balances",
+	"pallet-timestamp",
+	"sp-core",
+	"sp-tracing",
+	"std",
+]

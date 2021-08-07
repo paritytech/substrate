@@ -292,3 +292,53 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 		Err("<() as ElectionProvider> cannot do anything.")
 	}
 }
+
+/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
+///
+/// This is generic over the `AccountId`'d sole, and it can represent a validator, a nominator, or
+/// any other entity.
+///
+/// On the contrary, to simplify the trait, the `VoteWeight` is hardcoded as the weight of each
+/// entity. The weights are scending, the higher, the better. In the long term, if this trait ends
+/// up having use cases outside of the election context, it is easy enough to make it generic over
+/// the `VoteWeight`.
+///
+/// Something that implements this trait will do a best-effort sort over ids, and thus can be
+/// used on the implementing side of [`ElectionDataProvider`].
+pub trait SortedListProvider<AccountId> {
+	type Error;
+
+	/// Returns iterator over the list, which can have `take` called on it.
+	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
+	/// get the current count of ids in the list.
+	fn count() -> u32;
+	/// Return true if the list already contains `id`.
+	fn contains(id: &AccountId) -> bool;
+	// Hook for inserting a new id.
+	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+	/// Hook for updating a single id.
+	fn on_update(id: &AccountId, weight: VoteWeight);
+	/// Hook for removing am id from the list.
+	fn on_remove(id: &AccountId);
+	/// Regenerate this list from scratch. Returns the count of items inserted.
+	///
+	/// This should typically only be used to enable this flag at a runtime upgrade.
+	fn regenerate(
+		all: impl IntoIterator<Item = AccountId>,
+		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+	) -> u32;
+	/// Remove everything.
+	fn clear();
+	/// Sanity check internal state of list. Only meant for debug compilation.
+	fn sanity_check() -> Result<(), &'static str>;
+}
+
+/// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
+/// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
+/// `SortedListProvider`.
+pub trait VoteWeightProvider<AccountId> {
+	fn vote_weight(who: &AccountId) -> VoteWeight;
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
+}

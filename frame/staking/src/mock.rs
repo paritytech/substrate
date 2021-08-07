@@ -17,9 +17,8 @@
 
 //! Test utilities
 
-use crate as staking;
-use crate::*;
-use frame_election_provider_support::onchain;
+use crate::{self as pallet_staking, *};
+use frame_election_provider_support::{onchain, SortedListProvider};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -104,8 +103,9 @@ frame_support::construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -242,6 +242,20 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
+const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
+	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+
+parameter_types! {
+	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+}
+
+impl pallet_bags_list::Config for Test {
+	type Event = Event;
+	type WeightInfo = ();
+	type VoteWeightProvider = Staking;
+	type BagThresholds = BagThresholds;
+}
+
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
@@ -250,7 +264,7 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 
-impl Config for Test {
+impl crate::pallet::pallet::Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
@@ -270,6 +284,8 @@ impl Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
+	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
+	type SortedListProvider = BagsList;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -383,6 +399,7 @@ impl ExtBuilder {
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
+
 		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if ExistentialDeposit::get() > 1 { 256 } else { 1 };
 
@@ -442,7 +459,7 @@ impl ExtBuilder {
 				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated)),
 			];
 		}
-		let _ = staking::GenesisConfig::<Test> {
+		let _ = pallet_staking::GenesisConfig::<Test> {
 			stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
@@ -501,6 +518,10 @@ fn check_count() {
 	let validator_count = Validators::<Test>::iter().count() as u32;
 	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
 	assert_eq!(validator_count, CounterForValidators::<Test>::get());
+
+	// the voters that the voter list is storing for us.
+	let external_voters = <Test as Config>::SortedListProvider::count();
+	assert_eq!(external_voters, nominator_count);
 }
 
 fn check_ledgers() {
@@ -593,10 +614,14 @@ pub(crate) fn current_era() -> EraIndex {
 	Staking::current_era().unwrap()
 }
 
-pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
+pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
+}
+
+pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
+	bond(stash, ctrl, val);
 	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
 }
 
@@ -606,9 +631,7 @@ pub(crate) fn bond_nominator(
 	val: Balance,
 	target: Vec<AccountId>,
 ) {
-	let _ = Balances::make_free_balance_be(&stash, val);
-	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
+	bond(stash, ctrl, val);
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
 
@@ -801,7 +824,7 @@ macro_rules! assert_session_era {
 	};
 }
 
-pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
+pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -811,4 +834,16 @@ pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+/// ensure that the given staking ledger has `total`, `own`, and is being only backed by `others`.
+pub(crate) fn assert_eq_exposure(
+	exposure: Exposure<AccountId, Balance>,
+	total: Balance,
+	own: Balance,
+	others: Vec<IndividualExposure<AccountId, Balance>>,
+) {
+	assert_eq!(exposure.total, total);
+	assert_eq!(exposure.own, own);
+	substrate_test_utils::assert_eq_uvec!(exposure.others, others);
 }
