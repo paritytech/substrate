@@ -33,7 +33,7 @@ use frame_support::{
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
-	traits::{Currency, Filter, OnInitialize, ReservableCurrency},
+	traits::{Currency, Contains, OnInitialize, ReservableCurrency},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
@@ -197,7 +197,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
@@ -282,7 +282,7 @@ impl TestFilter {
 	}
 }
 
-impl Filter<Call> for TestFilter {
+impl Contains<Call> for TestFilter {
 	fn filter(call: &Call) -> bool {
 		CALL_FILTER.with(|fltr| fltr.borrow()(call))
 	}

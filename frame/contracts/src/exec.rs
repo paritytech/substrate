@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	ensure,
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Currency, ExistenceRequirement, Filter, Get, OriginTrait, Randomness, Time},
+	traits::{Currency, ExistenceRequirement, Get, Contains, OriginTrait, Randomness, Time},
 	weights::Weight,
 	DefaultNoBound,
 };
@@ -34,10 +34,7 @@ use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::crypto::UncheckedFrom;
-use sp_runtime::{
-	traits::{Convert, Saturating},
-	Perbill,
-};
+use sp_runtime::{traits::{Convert, Saturating}, Perbill};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -1255,7 +1252,7 @@ where
 
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
 		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
-		origin.add_filter(T::CallFilter::filter);
+		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
 	}
 }
