@@ -76,7 +76,8 @@ pub struct BenchmarkBatch {
 	pub results: Vec<BenchmarkResults>,
 }
 
-/// The results of a single of benchmark.
+// TODO: could probably make API cleaner here.
+/// The results of a single of benchmark, where time and db results are separated.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatchSplitResults {
 	/// The pallet containing this benchmark.
