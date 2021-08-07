@@ -1,5 +1,5 @@
 [package]
-name = "node-runtime-bag-thresholds"
+name = "node-runtime-generate-bags"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,7 +14,7 @@ node-runtime = { version = "3.0.0-dev", path = "../../../bin/node/runtime" }
 
 # FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
-pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list", features = ["make-bags"] }
+pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list", features = ["generate-bags"] }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
 
 # primitives

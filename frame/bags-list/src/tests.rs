@@ -18,28 +18,28 @@ mod pallet {
 			NextVoteWeight::set(2000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
-			// then a new bag is created and the voter moves into it
+			// then a new bag is created and the id moves into it
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4]), (2000, vec![42])]);
 
 			// when decreasing weight within the range of the current bag
 			NextVoteWeight::set(1001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
-			// then the voter does not move
+			// then the id does not move
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4]), (2000, vec![42])]);
 
 			// when reducing weight to the level of a non-existent bag
 			NextVoteWeight::set(30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
-			// then a new bag is created and the voter moves into it
+			// then a new bag is created and the id moves into it
 			assert_eq!(get_bags(), vec![(10, vec![1]), (30, vec![42]), (1000, vec![2, 3, 4])]);
 
 			// when increasing weight to the level of a pre-existing bag
 			NextVoteWeight::set(500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
-			// then the voter moves into that bag
+			// then the id moves into that bag
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1000, vec![2, 3, 4, 42])]);
 		});
 	}
@@ -128,19 +128,38 @@ mod pallet {
 	}
 
 	#[test]
-	#[should_panic = "Voter bag thresholds must strictly increase, and have no duplicates"]
+	#[should_panic = "thresholds must strictly increase, and have no duplicates"]
 	fn duplicate_in_bags_threshold_panics() {
 		const DUPE_THRESH: &[VoteWeight; 4] = &[10, 20, 30, 30];
-		set_bag_thresholds(DUPE_THRESH);
+		BagThresholds::set(DUPE_THRESH);
 		BagsList::integrity_test();
 	}
 
 	#[test]
-	#[should_panic = "Voter bag thresholds must strictly increase, and have no duplicates"]
+	#[should_panic = "thresholds must strictly increase, and have no duplicates"]
 	fn decreasing_in_bags_threshold_panics() {
 		const DECREASING_THRESH: &[VoteWeight; 4] = &[10, 30, 20, 40];
-		set_bag_thresholds(DECREASING_THRESH);
+		BagThresholds::set(DECREASING_THRESH);
 		BagsList::integrity_test();
+	}
+
+	#[test]
+	fn empty_threshold_works() {
+		BagThresholds::set(Default::default()); // which is the same as passing `()` to `Get<_>`.
+
+		ExtBuilder::default().build_and_execute(|| {
+			// everyone in the same bag.
+			assert_eq!(get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
+
+			// any insertion goes there as well.
+			assert_ok!(List::<Runtime>::insert(5, 999));
+			assert_ok!(List::<Runtime>::insert(6, 0));
+			assert_eq!(get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]);
+
+			// any rebag is noop.
+			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
+			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 10).is_ok()));
+		})
 	}
 }
 
@@ -229,7 +248,7 @@ mod sorted_list_provider {
 			// when increasing weight to the level of non-existent bag
 			BagsList::on_update(&42, 2_000);
 
-			// then the bag is created with the voter in it,
+			// then the bag is created with the id in it,
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
@@ -237,7 +256,7 @@ mod sorted_list_provider {
 			// when decreasing weight within the range of the current bag
 			BagsList::on_update(&42, 1_001);
 
-			// then the voter does not change bags,
+			// then the id does not change bags,
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
 			// or change position in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
@@ -245,7 +264,7 @@ mod sorted_list_provider {
 			// when increasing weight to the level of a non-existent bag with the max threshold
 			BagsList::on_update(&42, VoteWeight::MAX);
 
-			// the the new bag is created with the voter in it,
+			// the the new bag is created with the id in it,
 			assert_eq!(
 				get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (VoteWeight::MAX, vec![42])]
@@ -256,7 +275,7 @@ mod sorted_list_provider {
 			// when decreasing the weight to a pre-existing bag
 			BagsList::on_update(&42, 1_000);
 
-			// then voter is moved to the correct bag (as the last member),
+			// then id is moved to the correct bag (as the last member),
 			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]);
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![2, 3, 4, 42, 1]);
@@ -269,15 +288,15 @@ mod sorted_list_provider {
 	#[test]
 	fn on_remove_works() {
 		let ensure_left = |id, counter| {
-			assert!(!VoterNodes::<Runtime>::contains_key(id));
+			assert!(!ListNodes::<Runtime>::contains_key(id));
 			assert_eq!(BagsList::count(), counter);
-			assert_eq!(CounterForVoters::<Runtime>::get(), counter);
-			assert_eq!(VoterNodes::<Runtime>::iter().count() as u32, counter);
+			assert_eq!(CounterForListNodes::<Runtime>::get(), counter);
+			assert_eq!(ListNodes::<Runtime>::iter().count() as u32, counter);
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
-			// it is a noop removing a non-existent voter
-			assert!(!VoterNodes::<Runtime>::contains_key(42));
+			// it is a noop removing a non-existent id
+			assert!(!ListNodes::<Runtime>::contains_key(42));
 			assert_storage_noop!(BagsList::on_remove(&42));
 
 			// when removing a node from a bag with multiple nodes
@@ -296,7 +315,7 @@ mod sorted_list_provider {
 			assert_eq!(get_bags(), vec![(1_000, vec![3, 4])]);
 			ensure_left(1, 2);
 
-			// when removing all remaining voters
+			// when removing all remaining ids
 			BagsList::on_remove(&4);
 			assert_eq!(get_list_as_ids(), vec![3]);
 			ensure_left(4, 1);
@@ -317,4 +336,9 @@ mod sorted_list_provider {
 			assert!(non_existent_ids.iter().all(|id| !BagsList::contains(id)));
 		})
 	}
+}
+
+#[test]
+fn migrate_works() {
+	todo!()
 }

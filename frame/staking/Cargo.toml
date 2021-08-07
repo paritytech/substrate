@@ -83,8 +83,7 @@ runtime-benchmarks = [
 	"rand_chacha",
 ]
 try-runtime = ["frame-support/try-runtime"]
-# TODO: clean this flag.
-make-bags = [
+generate-bags = [
 	"chrono",
 	"git2",
 	"num-format",

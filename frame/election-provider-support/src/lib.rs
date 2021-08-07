@@ -303,25 +303,23 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 /// up having use cases outside of the election context, it is easy enough to make it generic over
 /// the `VoteWeight`.
 ///
-/// Something that implements this trait will do a best-effort sort over voters, and thus can be
-/// used on the implementing side of `ElectionDataProvider`.
+/// Something that implements this trait will do a best-effort sort over ids, and thus can be
+/// used on the implementing side of [`ElectionDataProvider`].
 pub trait SortedListProvider<AccountId> {
 	type Error;
 
-	/// Returns iterator over voter list, which can have `take` called on it.
+	/// Returns iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
-	/// get the current count of voters.
+	/// get the current count of ids in the list.
 	fn count() -> u32;
-	/// Return true if the insertion can happen.
-	fn contains(voter: &AccountId) -> bool;
-	// Hook for inserting a voter.
-	fn on_insert(voter: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
-	/// Hook for updating a single voter.
-	fn on_update(voter: &AccountId, weight: VoteWeight);
-	/// Hook for removing a voter from the list.
-	fn on_remove(voter: &AccountId);
-	/// Sanity check internal state of list. Only meant for debug compilation.
-	fn sanity_check() -> Result<(), &'static str>;
+	/// Return true if the list already contains `id`.
+	fn contains(id: &AccountId) -> bool;
+	// Hook for inserting a new id.
+	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+	/// Hook for updating a single id.
+	fn on_update(id: &AccountId, weight: VoteWeight);
+	/// Hook for removing am id from the list.
+	fn on_remove(id: &AccountId);
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
 	/// This should typically only be used to enable this flag at a runtime upgrade.
@@ -329,8 +327,10 @@ pub trait SortedListProvider<AccountId> {
 		all: impl IntoIterator<Item = AccountId>,
 		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
 	) -> u32;
-	/// Remove everything
+	/// Remove everything.
 	fn clear();
+	/// Sanity check internal state of list. Only meant for debug compilation.
+	fn sanity_check() -> Result<(), &'static str>;
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and

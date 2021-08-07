@@ -4470,7 +4470,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-runtime-bag-thresholds"
+name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
  "frame-support",

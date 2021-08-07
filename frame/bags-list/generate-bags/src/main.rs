@@ -17,7 +17,7 @@
 
 //! Make the set of bag thresholds to be used in pallet-bags-list.
 
-use pallet_bags_list::make_bags::generate_thresholds_module;
+use pallet_bags_list::generate_bags::generate_thresholds_module;
 use std::path::PathBuf;
 use structopt::StructOpt;
 #[derive(Debug, StructOpt)]

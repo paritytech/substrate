@@ -67,7 +67,7 @@ runtime-benchmarks = [
 	"pallet-balances",
 	"sp-tracing",
 ]
-make-bags = [
+generate-bags = [
 	"chrono",
 	"git2",
 	"num-format",

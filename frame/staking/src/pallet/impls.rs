@@ -1232,17 +1232,17 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn count() -> u32 {
 		CounterForNominators::<T>::get()
 	}
-	fn contains(voter: &T::AccountId) -> bool {
-		Nominators::<T>::contains_key(voter)
+	fn contains(id: &T::AccountId) -> bool {
+		Nominators::<T>::contains_key(id)
 	}
-	fn on_insert(_voter: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn on_update(_voter: &T::AccountId, _weight: VoteWeight) {
+	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.
 	}
-	fn on_remove(_voter: &T::AccountId) {
+	fn on_remove(_: &T::AccountId) {
 		// nothing to do on remove.
 	}
 	fn regenerate(

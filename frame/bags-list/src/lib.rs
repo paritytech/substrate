@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
-//! can be synonym to a `Voter` and `VoteWeight` signifies the chance of each voter being included
-//! in the final [`VoteWeightProvider::iter`].
+//! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
+//! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
 //!
 //! It implements [`sp_election_provider_support::SortedListProvider`] to provide a semi-sorted list
 //! of accounts to another pallet. It needs some other pallet to give it some information about the
@@ -25,13 +25,6 @@
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
 //! the `SortedListProvider` (i.e. `on_insert`) at their genesis.
-//!
-//! # ⚠️ WARNING ⚠️
-//!
-//! Do not insert an id that already exists in the list; doing so can result in catastrophic failure
-//! of your blockchain, including entering into an infinite loop during block execution. This
-//! situation can be avoided by strictly using [`Pallet::<T>::on_insert`] for insertions because
-//! it will exit early and return an error if the id is a duplicate.
 //!
 //! # Goals
 //!
@@ -46,18 +39,13 @@
 //! - items are kept in bags, which are delineated by their range of weight (See [`BagThresholds`]).
 //! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
-//! - items within a bag are iterated in order of insertion. Thus removing an item and
-//!   re-inserting it will worsen its position in list iteration; this reduces incentives for some
-//!   types of spam that involve consistently removing and inserting for better position. Further,
-//!   ordering granularity is thus dictated by range between each bag threshold.
+//! - items within a bag are iterated in order of insertion. Thus removing an item and re-inserting
+//!   it will worsen its position in list iteration; this reduces incentives for some types of spam
+//!   that involve consistently removing and inserting for better position. Further, ordering
+//!   granularity is thus dictated by range between each bag threshold.
 //! - if an items weight changes to a value no longer within the range of its current bag the item's
 //!   position will need to be updated by an external actor with rebag (update), or removal and
 //!   insertion.
-//
-//! ### Further Plans
-//!
-//! *new terminology*: fully decouple this pallet from voting names, use account id instead of
-//! voter and priority instead of weight.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -67,9 +55,10 @@ use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
+
+#[cfg(feature = "generate-bags")]
+pub mod generate_bags;
 mod list;
-#[cfg(feature = "make-bags")]
-pub mod make_bags;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -113,19 +102,18 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
-		/// Something that provides the weights of voters.
+		/// Something that provides the weights of ids.
 		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
 
-		/// The list of thresholds separating the various voter bags.
+		/// The list of thresholds separating the various bags.
 		///
-		/// Voters are separated into unsorted bags according to their vote weight. This specifies
-		/// the thresholds separating the bags. A voter's bag is the largest bag for which the
-		/// voter's weight is less than or equal to its upper threshold.
+		/// Ids are separated into unsorted bags according to their vote weight. This specifies the
+		/// thresholds separating the bags. An id's bag is the largest bag for which the id's weight
+		/// is less than or equal to its upper threshold.
 		///
-		/// When voters are iterated, higher bags are iterated completely before lower bags. This
-		/// means that iteration is _semi-sorted_: voters of higher weight tend to come before
-		/// voters of lower weight, but peer voters within a particular bag are sorted in insertion
-		/// order.
+		/// When ids are iterated, higher bags are iterated completely before lower bags. This means
+		/// that iteration is _semi-sorted_: ids of higher weight tend to come before ids of lower
+		/// weight, but peer ids within a particular bag are sorted in insertion order.
 		///
 		/// # Expressing the constant
 		///
@@ -143,47 +131,40 @@ pub mod pallet {
 		/// there exists some constant ratio such that `threshold[k + 1] == (threshold[k] *
 		/// constant_ratio).max(threshold[k] + 1)` for all `k`.
 		///
-		/// The helpers in the `voter_bags::make_bags` module can simplify this calculation. To use
-		/// them, the `make-bags` feature must be enabled.
+		/// The helpers in the `generate-bags` module can simplify this calculation. To use them,
+		/// the `generate-bags` feature must be enabled.
 		///
 		/// # Examples
 		///
-		/// - If `BagThresholds::get().is_empty()`, then all voters are put into the same bag,
-		///   and iteration is strictly in insertion order.
-		/// - If `BagThresholds::get().len() == 64`, and the thresholds are determined
-		///   according to the procedure given above, then the constant ratio is equal to 2.
-		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined
-		///   according to the procedure given above, then the constant ratio is approximately equal
-		///   to 1.248.
-		/// - If the threshold list begins `[1, 2, 3, ...]`, then a voter with weight 0 or 1 will
-		///   fall into bag 0, a voter with weight 2 will fall into bag 1, etc.
+		/// - If `BagThresholds::get().is_empty()`, then all ids are put into the same bag, and
+		///   iteration is strictly in insertion order.
+		/// - If `BagThresholds::get().len() == 64`, and the thresholds are determined according to
+		///   the procedure given above, then the constant ratio is equal to 2.
+		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined according to
+		///   the procedure given above, then the constant ratio is approximately equal to 1.248.
+		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will
+		///   fall into bag 0, an id with weight 2 will fall into bag 1, etc.
 		///
 		/// # Migration
 		///
 		/// In the event that this list ever changes, a copy of the old bags list must be retained.
-		/// With that `List::migrate` can be called, which will perform the appropriate
-		/// migration.
+		/// With that `List::migrate` can be called, which will perform the appropriate migration.
 		#[pallet::constant]
 		type BagThresholds: Get<&'static [VoteWeight]>;
 	}
 
-	/// How many voters are registered.
+	/// How many ids are registered.
 	#[pallet::storage]
-	pub(crate) type CounterForVoters<T> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Voter nodes store links forward and back within their respective bags, the stash id, and
-	/// whether the voter is a validator or nominator.
-	///
-	/// There is nothing in this map directly identifying to which bag a particular node belongs.
-	/// However, the `Node` data structure has helpers which can provide that information.
+	/// Nodes store links forward and back within their respective bags, id.
 	#[pallet::storage]
-	pub(crate) type VoterNodes<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
+	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
 	#[pallet::storage]
-	pub(crate) type VoterBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -195,19 +176,19 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Declare that some `reposition` account has, through rewards or penalties, sufficiently
+		/// Declare that some `dislocated` account has, through rewards or penalties, sufficiently
 		/// changed its weight that it should properly fall into a different bag than its current
 		/// one.
 		///
-		/// Anyone can call this function about any target account.
+		/// Anyone can call this function about any potentially dislocated account.
 		///
-		/// Will never return an error; if `reposition` does not exist or doesn't need a rebag, then
+		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
 		/// it is a noop and only fees are collected from `origin`.
 		#[pallet::weight(T::WeightInfo::rebag())]
-		pub fn rebag(origin: OriginFor<T>, reposition: T::AccountId) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let current_weight = T::VoteWeightProvider::vote_weight(&reposition);
-			let _ = Pallet::<T>::do_rebag(&reposition, current_weight);
+			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
+			let _ = Pallet::<T>::do_rebag(&dislocated, current_weight);
 			Ok(())
 		}
 	}
@@ -218,7 +199,7 @@ pub mod pallet {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
 			assert!(
 				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-				"Voter bag thresholds must strictly increase, and have no duplicates",
+				"thresholds must strictly increase, and have no duplicates",
 			);
 		}
 	}
@@ -251,23 +232,23 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	fn count() -> u32 {
-		CounterForVoters::<T>::get()
+		CounterForListNodes::<T>::get()
 	}
 
-	fn contains(voter: &T::AccountId) -> bool {
-		List::<T>::contains(voter)
+	fn contains(id: &T::AccountId) -> bool {
+		List::<T>::contains(id)
 	}
 
-	fn on_insert(voter: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
-		List::<T>::insert(voter, weight)
+	fn on_insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
+		List::<T>::insert(id, weight)
 	}
 
-	fn on_update(voter: &T::AccountId, new_weight: VoteWeight) {
-		Pallet::<T>::do_rebag(voter, new_weight);
+	fn on_update(id: &T::AccountId, new_weight: VoteWeight) {
+		Pallet::<T>::do_rebag(id, new_weight);
 	}
 
-	fn on_remove(voter: &T::AccountId) {
-		List::<T>::remove(voter)
+	fn on_remove(id: &T::AccountId) {
+		List::<T>::remove(id)
 	}
 
 	fn regenerate(
