@@ -74,21 +74,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_arithmetic::{
-	traits::{Bounded, UniqueSaturatedInto, Zero},
-	Normalizable, PerThing, Rational128, ThresholdOrd,
-};
+use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
 use sp_core::RuntimeDebug;
-use sp_std::{
-	cell::RefCell,
-	cmp::Ordering,
-	collections::btree_map::BTreeMap,
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	ops::Mul,
-	prelude::*,
-	rc::Rc,
-};
+use sp_std::{cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc};
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
@@ -107,6 +95,7 @@ pub mod phragmen;
 pub mod phragmms;
 pub mod pjr;
 pub mod reduce;
+pub mod traits;
 
 pub use assignments::{Assignment, IndexAssignment, IndexAssignmentOf, StakedAssignment};
 pub use balancing::*;
@@ -115,8 +104,9 @@ pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;
 pub use reduce::reduce;
+pub use traits::{IdentifierT, NposSolution, PerThing128, __OrInvalidIndex};
 
-// re-export the compact macro, with the dependencies of the macro.
+// re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
@@ -124,143 +114,21 @@ pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
 
-/// Simple Extension trait to easily convert `None` from index closures to `Err`.
-///
-/// This is only generated and re-exported for the compact solution code to use.
-#[doc(hidden)]
-pub trait __OrInvalidIndex<T> {
-	fn or_invalid_index(self) -> Result<T, Error>;
-}
+// re-export the solution type macro.
+pub use sp_npos_elections_solution_type::generate_solution_type;
 
-impl<T> __OrInvalidIndex<T> for Option<T> {
-	fn or_invalid_index(self) -> Result<T, Error> {
-		self.ok_or(Error::CompactInvalidIndex)
-	}
-}
-
-/// A common interface for all compact solutions.
-///
-/// See [`sp-npos-elections-compact`] for more info.
-pub trait CompactSolution
-where
-	Self: Sized + for<'a> sp_std::convert::TryFrom<&'a [IndexAssignmentOf<Self>], Error = Error>,
-{
-	/// The maximum number of votes that are allowed.
-	const LIMIT: usize;
-
-	/// The voter type. Needs to be an index (convert to usize).
-	type Voter: UniqueSaturatedInto<usize>
-		+ TryInto<usize>
-		+ TryFrom<usize>
-		+ Debug
-		+ Copy
-		+ Clone
-		+ Bounded
-		+ Encode;
-
-	/// The target type. Needs to be an index (convert to usize).
-	type Target: UniqueSaturatedInto<usize>
-		+ TryInto<usize>
-		+ TryFrom<usize>
-		+ Debug
-		+ Copy
-		+ Clone
-		+ Bounded
-		+ Encode;
-
-	/// The weight/accuracy type of each vote.
-	type Accuracy: PerThing128;
-
-	/// Build self from a list of assignments.
-	fn from_assignment<FV, FT, A>(
-		assignments: &[Assignment<A, Self::Accuracy>],
-		voter_index: FV,
-		target_index: FT,
-	) -> Result<Self, Error>
-	where
-		A: IdentifierT,
-		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
-		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
-
-	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
-	fn into_assignment<A: IdentifierT>(
-		self,
-		voter_at: impl Fn(Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
-
-	/// Get the length of all the voters that this type is encoding.
-	///
-	/// This is basically the same as the number of assignments, or number of active voters.
-	fn voter_count(&self) -> usize;
-
-	/// Get the total count of edges.
-	///
-	/// This is effectively in the range of {[`Self::voter_count`], [`Self::voter_count`] *
-	/// [`Self::LIMIT`]}.
-	fn edge_count(&self) -> usize;
-
-	/// Get the number of unique targets in the whole struct.
-	///
-	/// Once presented with a list of winners, this set and the set of winners must be
-	/// equal.
-	fn unique_targets(&self) -> Vec<Self::Target>;
-
-	/// Get the average edge count.
-	fn average_edge_count(&self) -> usize {
-		self.edge_count().checked_div(self.voter_count()).unwrap_or(0)
-	}
-
-	/// Remove a certain voter.
-	///
-	/// This will only search until the first instance of `to_remove`, and return true. If
-	/// no instance is found (no-op), then it returns false.
-	///
-	/// In other words, if this return true, exactly **one** element must have been removed from
-	/// `self.len()`.
-	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
-
-	/// Compute the score of this compact solution type.
-	fn score<A, FS>(
-		self,
-		winners: &[A],
-		stake_of: FS,
-		voter_at: impl Fn(Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<ElectionScore, Error>
-	where
-		for<'r> FS: Fn(&'r A) -> VoteWeight,
-		A: IdentifierT,
-	{
-		let ratio = self.into_assignment(voter_at, target_at)?;
-		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
-		let supports = to_supports(winners, &staked)?;
-		Ok(supports.evaluate())
-	}
-}
-
-// re-export the compact solution type.
-pub use sp_npos_elections_compact::generate_solution_type;
-
-/// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
-/// substrate's account id.
-pub trait IdentifierT: Clone + Eq + Default + Ord + Debug + codec::Codec {}
-impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
-
-/// Aggregator trait for a PerThing that can be multiplied by u128 (ExtendedBalance).
-pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance> {}
-impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 for T {}
-
-/// The errors that might occur in the this crate and compact.
+/// The errors that might occur in the this crate and solution-type.
 #[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
-	/// While going from compact to staked, the stake of all the edges has gone above the total and
-	/// the last stake cannot be assigned.
-	CompactStakeOverflow,
-	/// The compact type has a voter who's number of targets is out of bound.
-	CompactTargetOverflow,
+	/// While going from solution indices to ratio, the weight of all the edges has gone above the
+	/// total.
+	SolutionWeightOverflow,
+	/// The solution type has a voter who's number of targets is out of bound.
+	SolutionTargetOverflow,
 	/// One of the index functions returned none.
-	CompactInvalidIndex,
+	SolutionInvalidIndex,
+	/// One of the page indices was invalid
+	SolutionInvalidPageIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
@@ -481,39 +349,12 @@ pub struct Support<AccountId> {
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
-#[cfg(feature = "mocks")]
-impl<AccountId: Ord + Clone> Support<AccountId> {
-	/// `true` when the support is identical except for the ordering of the voters.
-	pub fn eq_unordered(&self, other: &Self) -> bool {
-		self.total == other.total && {
-			let my_voters: BTreeMap<_, _> = self.voters.iter().cloned().collect();
-			let other_voters: BTreeMap<_, _> = other.voters.iter().cloned().collect();
-			my_voters == other_voters
-		}
-	}
-}
-
 /// A target-major representation of the the election outcome.
 ///
 /// Essentially a flat variant of [`SupportMap`].
 ///
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
-
-#[cfg(feature = "mocks")]
-pub fn supports_eq_unordered<AccountId: Ord + Clone>(
-	a: &Supports<AccountId>,
-	b: &Supports<AccountId>,
-) -> bool {
-	let map: BTreeMap<_, _> = a.iter().cloned().collect();
-	b.iter().all(|(id, b_support)| {
-		let a_support = match map.get(id) {
-			Some(support) => support,
-			None => return false,
-		};
-		a_support.eq_unordered(b_support)
-	})
-}
 
 /// Linkage from a winner to their [`Support`].
 ///
