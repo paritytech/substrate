@@ -69,7 +69,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking ForceEra (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:1 w:0)
 	fn on_initialize_nothing() -> Weight {
-		(25_456_000 as Weight)
+		(22_589_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(8 as Weight))
 	}
 	// Storage: Staking CounterForValidators (r:1 w:0)
@@ -86,7 +86,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:0 w:1)
 	fn on_initialize_open_signed() -> Weight {
-		(107_334_000 as Weight)
+		(107_551_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(10 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -104,27 +104,27 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:0 w:1)
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-		(106_182_000 as Weight)
+		(96_899_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(10 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: ElectionProviderMultiPhase Round (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:0 w:1)
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
-		(20_922_000 as Weight)
+		(18_549_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	// Storage: ElectionProviderMultiPhase QueuedSolution (r:0 w:1)
 	fn finalize_signed_phase_accept_solution() -> Weight {
-		(51_961_000 as Weight)
+		(48_349_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn finalize_signed_phase_reject_solution() -> Weight {
-		(34_555_000 as Weight)
+		(32_014_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -140,13 +140,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn elect_queued(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((61_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((43_000 as Weight).saturating_mul(v as Weight))
 			// Standard Error: 6_000
-			.saturating_add((119_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add((189_000 as Weight).saturating_mul(t as Weight))
 			// Standard Error: 2_000
-			.saturating_add((1_690_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 17_000
-			.saturating_add((108_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add((1_667_000 as Weight).saturating_mul(a as Weight))
+			// Standard Error: 15_000
+			.saturating_add((129_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(8 as Weight))
 	}
@@ -156,8 +156,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionNextIndex (r:1 w:1)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionsMap (r:0 w:1)
-	fn submit(_c: u32, ) -> Weight {
-		(81_001_000 as Weight)
+	fn submit(c: u32, ) -> Weight {
+		(72_163_000 as Weight)
+			// Standard Error: 30_000
+			.saturating_add((254_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -171,13 +173,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((3_609_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((3_512_000 as Weight).saturating_mul(v as Weight))
 			// Standard Error: 23_000
-			.saturating_add((11_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add((49_000 as Weight).saturating_mul(t as Weight))
 			// Standard Error: 7_000
-			.saturating_add((11_249_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 57_000
-			.saturating_add((5_874_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add((10_295_000 as Weight).saturating_mul(a as Weight))
+			// Standard Error: 59_000
+			.saturating_add((6_008_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -185,14 +187,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ElectionProviderMultiPhase DesiredTargets (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase MinimumUntrustedScore (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase Snapshot (r:1 w:0)
-	fn feasibility_check(v: u32, _t: u32, a: u32, d: u32, ) -> Weight {
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((3_530_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 7_000
-			.saturating_add((9_509_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 56_000
-			.saturating_add((5_139_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 8_000
+			.saturating_add((3_508_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 40_000
+			.saturating_add((302_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 13_000
+			.saturating_add((8_658_000 as Weight).saturating_mul(a as Weight))
+			// Standard Error: 100_000
+			.saturating_add((4_816_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 	}
 }
@@ -208,7 +212,7 @@ impl WeightInfo for () {
 	// Storage: Staking ForceEra (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:1 w:0)
 	fn on_initialize_nothing() -> Weight {
-		(25_456_000 as Weight)
+		(22_589_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 	}
 	// Storage: Staking CounterForValidators (r:1 w:0)
@@ -225,7 +229,7 @@ impl WeightInfo for () {
 	// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:0 w:1)
 	fn on_initialize_open_signed() -> Weight {
-		(107_334_000 as Weight)
+		(107_551_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
@@ -243,27 +247,27 @@ impl WeightInfo for () {
 	// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:0 w:1)
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-		(106_182_000 as Weight)
+		(96_899_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: ElectionProviderMultiPhase Round (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:0 w:1)
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
-		(20_922_000 as Weight)
+		(18_549_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	// Storage: ElectionProviderMultiPhase QueuedSolution (r:0 w:1)
 	fn finalize_signed_phase_accept_solution() -> Weight {
-		(51_961_000 as Weight)
+		(48_349_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn finalize_signed_phase_reject_solution() -> Weight {
-		(34_555_000 as Weight)
+		(32_014_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -279,13 +283,13 @@ impl WeightInfo for () {
 	fn elect_queued(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((61_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((43_000 as Weight).saturating_mul(v as Weight))
 			// Standard Error: 6_000
-			.saturating_add((119_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add((189_000 as Weight).saturating_mul(t as Weight))
 			// Standard Error: 2_000
-			.saturating_add((1_690_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 17_000
-			.saturating_add((108_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add((1_667_000 as Weight).saturating_mul(a as Weight))
+			// Standard Error: 15_000
+			.saturating_add((129_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
 	}
@@ -295,8 +299,10 @@ impl WeightInfo for () {
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionNextIndex (r:1 w:1)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionsMap (r:0 w:1)
-	fn submit(_c: u32, ) -> Weight {
-		(81_001_000 as Weight)
+	fn submit(c: u32, ) -> Weight {
+		(72_163_000 as Weight)
+			// Standard Error: 30_000
+			.saturating_add((254_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -310,13 +316,13 @@ impl WeightInfo for () {
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((3_609_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((3_512_000 as Weight).saturating_mul(v as Weight))
 			// Standard Error: 23_000
-			.saturating_add((11_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add((49_000 as Weight).saturating_mul(t as Weight))
 			// Standard Error: 7_000
-			.saturating_add((11_249_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 57_000
-			.saturating_add((5_874_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add((10_295_000 as Weight).saturating_mul(a as Weight))
+			// Standard Error: 59_000
+			.saturating_add((6_008_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -324,14 +330,16 @@ impl WeightInfo for () {
 	// Storage: ElectionProviderMultiPhase DesiredTargets (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase MinimumUntrustedScore (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase Snapshot (r:1 w:0)
-	fn feasibility_check(v: u32, _t: u32, a: u32, d: u32, ) -> Weight {
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((3_530_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 7_000
-			.saturating_add((9_509_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 56_000
-			.saturating_add((5_139_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 8_000
+			.saturating_add((3_508_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 40_000
+			.saturating_add((302_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 13_000
+			.saturating_add((8_658_000 as Weight).saturating_mul(a as Weight))
+			// Standard Error: 100_000
+			.saturating_add((4_816_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 	}
 }
