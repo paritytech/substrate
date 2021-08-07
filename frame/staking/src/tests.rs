@@ -1936,7 +1936,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			);
 
 			// no nominators shall exist.
-			assert!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
+			assert!(<Nominators<Test>>::iter().collect::<Vec<_>>().is_empty());
 
 			// give the man some money.
 			let initial_balance = 1000;
@@ -1945,18 +1945,18 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			}
 
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31]));
+			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21]));
 
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
+			assert_ok!(Staking::nominate(Origin::signed(4), vec![21]));
 
 			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
 			assert_eq!(
 				supports,
 				vec![
-					(21, Support { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
-					(31, Support { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] })
+					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
+					(21, Support { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] })
 				],
 			);
 		});
