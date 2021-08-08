@@ -16,58 +16,100 @@
 // limitations under the License.
 
 use frame_support::{
-	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
-	traits::{
-		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
-		MaxEncodedLen,
-	},
-	dispatch::{UnfilteredDispatchable, Parameter},
+	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
+	traits::{
+		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
+		PalletInfoAccess, StorageVersion,
+	},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
+};
+use sp_io::{
+	hashing::{blake2_128, twox_128, twox_64},
+	TestExternalities,
 };
 use sp_runtime::DispatchError;
-use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 pub struct SomeType1;
-impl From<SomeType1> for u64 { fn from(_t: SomeType1) -> Self { 0u64 } }
+impl From<SomeType1> for u64 {
+	fn from(_t: SomeType1) -> Self {
+		0u64
+	}
+}
 
 pub struct SomeType2;
-impl From<SomeType2> for u64 { fn from(_t: SomeType2) -> Self { 100u64 } }
+impl From<SomeType2> for u64 {
+	fn from(_t: SomeType2) -> Self {
+		100u64
+	}
+}
 
 pub struct SomeType3;
-impl From<SomeType3> for u64 { fn from(_t: SomeType3) -> Self { 0u64 } }
+impl From<SomeType3> for u64 {
+	fn from(_t: SomeType3) -> Self {
+		0u64
+	}
+}
 
 pub struct SomeType4;
-impl From<SomeType4> for u64 { fn from(_t: SomeType4) -> Self { 0u64 } }
+impl From<SomeType4> for u64 {
+	fn from(_t: SomeType4) -> Self {
+		0u64
+	}
+}
 
 pub struct SomeType5;
-impl From<SomeType5> for u64 { fn from(_t: SomeType5) -> Self { 0u64 } }
+impl From<SomeType5> for u64 {
+	fn from(_t: SomeType5) -> Self {
+		0u64
+	}
+}
 
 pub struct SomeType6;
-impl From<SomeType6> for u64 { fn from(_t: SomeType6) -> Self { 0u64 } }
+impl From<SomeType6> for u64 {
+	fn from(_t: SomeType6) -> Self {
+		0u64
+	}
+}
 
 pub struct SomeType7;
-impl From<SomeType7> for u64 { fn from(_t: SomeType7) -> Self { 0u64 } }
+impl From<SomeType7> for u64 {
+	fn from(_t: SomeType7) -> Self {
+		0u64
+	}
+}
 
-pub trait SomeAssociation1 { type _1: Parameter + MaxEncodedLen; }
-impl SomeAssociation1 for u64 { type _1 = u64; }
+pub trait SomeAssociation1 {
+	type _1: Parameter + codec::MaxEncodedLen;
+}
+impl SomeAssociation1 for u64 {
+	type _1 = u64;
+}
 
-pub trait SomeAssociation2 { type _2: Parameter + MaxEncodedLen; }
-impl SomeAssociation2 for u64 { type _2 = u64; }
+pub trait SomeAssociation2 {
+	type _2: Parameter + codec::MaxEncodedLen;
+}
+impl SomeAssociation2 for u64 {
+	type _2 = u64;
+}
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::{
-		SomeType1, SomeType2, SomeType3, SomeType4, SomeType5, SomeType6, SomeType7,
-		SomeAssociation1, SomeAssociation2,
+		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
+		SomeType6, SomeType7, StorageVersion,
 	};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(10);
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config
-	where <Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	where
+		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		/// Some comment
 		/// Some comment
@@ -89,24 +131,31 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType2>,
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType2>,
 	{
 		/// Some doc
 		/// Some doc
-		fn some_extra() -> T::AccountId { SomeType2.into() }
+		fn some_extra() -> T::AccountId {
+			SomeType2.into()
+		}
 
 		/// Some doc
-		fn some_extra_extra() -> T::AccountId { SomeType1.into() }
+		fn some_extra_extra() -> T::AccountId {
+			SomeType1.into()
+		}
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::generate_storage_info]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
+	where
+		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			T::AccountId::from(SomeType1); // Test for where clause
@@ -133,7 +182,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
-		where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
+	where
+		T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1,
 	{
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
@@ -166,9 +216,7 @@ pub mod pallet {
 
 		// Test for DispatchResult return type
 		#[pallet::weight(1)]
-		pub fn foo_no_post_info(
-			_origin: OriginFor<T>,
-		) -> DispatchResult {
+		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 	}
@@ -182,7 +230,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum Event<T: Config> where T::AccountId: SomeAssociation1 + From<SomeType1>{
+	pub enum Event<T: Config>
+	where
+		T::AccountId: SomeAssociation1 + From<SomeType1>,
+	{
 		/// doc comment put in metadata
 		Proposed(<T as frame_system::Config>::AccountId),
 		/// doc
@@ -192,8 +243,10 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	pub type ValueWhereClause<T: Config> where T::AccountId: SomeAssociation2 =
-		StorageValue<_, <T::AccountId as SomeAssociation2>::_2>;
+	pub type ValueWhereClause<T: Config>
+	where
+		T::AccountId: SomeAssociation2,
+	= StorageValue<_, <T::AccountId as SomeAssociation2>::_2>;
 
 	#[pallet::storage]
 	pub type Value<T> = StorageValue<Value = u32>;
@@ -204,28 +257,32 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
-	where T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1
+	where
+		T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1,
 	{
 		T::AccountId::from(SomeType7); // Test where clause works
 		4u16
 	}
 
 	#[pallet::storage]
-	pub type Map<T: Config> where T::AccountId: From<SomeType7> =
-		StorageMap<_, Blake2_128Concat, u8, u16, ValueQuery, MyDefault<T>>;
+	pub type Map<T: Config>
+	where
+		T::AccountId: From<SomeType7>,
+	= StorageMap<_, Blake2_128Concat, u8, u16, ValueQuery, MyDefault<T>>;
 
 	#[pallet::storage]
-	pub type Map2<T> = StorageMap<
-		Hasher = Twox64Concat, Key = u16, Value = u32, MaxValues = ConstU32<3>
-	>;
+	pub type Map2<T> =
+		StorageMap<Hasher = Twox64Concat, Key = u16, Value = u32, MaxValues = ConstU32<3>>;
 
 	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
 	#[pallet::storage]
 	pub type DoubleMap2<T> = StorageDoubleMap<
-		Hasher1 = Twox64Concat, Key1 = u16,
-		Hasher2 = Blake2_128Concat, Key2 = u32,
+		Hasher1 = Twox64Concat,
+		Key1 = u16,
+		Hasher2 = Blake2_128Concat,
+		Key2 = u32,
 		Value = u64,
 		MaxValues = ConstU32<5>,
 	>;
@@ -256,26 +313,14 @@ pub mod pallet {
 	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_double_map)]
-	pub type ConditionalDoubleMap<T> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		u8,
-		Twox64Concat,
-		u16,
-		u32,
-	>;
+	pub type ConditionalDoubleMap<T> =
+		StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
 	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_nmap)]
-	pub type ConditionalNMap<T> = StorageNMap<
-		_,
-		(
-			storage::Key<Blake2_128Concat, u8>,
-			storage::Key<Twox64Concat, u16>,
-		),
-		u32,
-	>;
+	pub type ConditionalNMap<T> =
+		StorageNMap<_, (storage::Key<Blake2_128Concat, u8>, storage::Key<Twox64Concat, u16>), u32>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -285,7 +330,8 @@ pub mod pallet {
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig
-	where T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
 	{
 		fn build(&self) {
 			T::AccountId::from(SomeType1); // Test for where clause
@@ -299,17 +345,15 @@ pub mod pallet {
 
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType5> + From<SomeType3>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType5> + From<SomeType3>,
 	{
 		type Call = Call<T>;
-		fn validate_unsigned(
-			_source: TransactionSource,
-			call: &Self::Call
-		) -> TransactionValidity {
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_transactional(_)) {
-				return Ok(ValidTransaction::default());
+				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
@@ -317,7 +361,8 @@ pub mod pallet {
 
 	#[pallet::inherent]
 	impl<T: Config> ProvideInherent for Pallet<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType6> + From<SomeType3>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType6> + From<SomeType3>,
 	{
 		type Call = Call<T>;
 		type Error = InherentError;
@@ -370,13 +415,14 @@ pub mod pallet {
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
 #[frame_support::pallet]
 pub mod pallet2 {
-	use super::{SomeType1, SomeAssociation1};
+	use super::{SomeAssociation1, SomeType1};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
-	where <Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	where
+		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 	}
@@ -386,16 +432,16 @@ pub mod pallet2 {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
+		T::AccountId: From<SomeType1> + SomeAssociation1
 	{
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1,
-	{
-	}
+	impl<T: Config> Pallet<T> where T::AccountId: From<SomeType1> + SomeAssociation1 {}
+
+	#[pallet::storage]
+	pub type SomeValue<T: Config> = StorageValue<_, Vec<u32>>;
 
 	#[pallet::event]
 	pub enum Event {
@@ -405,24 +451,25 @@ pub mod pallet2 {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config>
-	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		phantom: PhantomData<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn default() -> Self {
-			GenesisConfig {
-				phantom: Default::default(),
-			}
+			GenesisConfig { phantom: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
-	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn build(&self) {}
 	}
@@ -439,14 +486,14 @@ pub mod pallet3 {
 }
 
 frame_support::parameter_types!(
-	pub const MyGetParam: u32= 10;
-	pub const MyGetParam2: u32= 11;
-	pub const MyGetParam3: u32= 12;
+	pub const MyGetParam: u32 = 10;
+	pub const MyGetParam2: u32 = 11;
+	pub const MyGetParam3: u32 = 12;
 	pub const BlockHashCount: u32 = 250;
 );
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
@@ -503,13 +550,20 @@ fn transactional_works() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		pallet::Call::<Runtime>::foo_transactional(0).dispatch_bypass_filter(None.into())
-			.err().unwrap();
+		pallet::Call::<Runtime>::foo_transactional(0)
+			.dispatch_bypass_filter(None.into())
+			.err()
+			.unwrap();
 		assert!(frame_system::Pallet::<Runtime>::events().is_empty());
 
-		pallet::Call::<Runtime>::foo_transactional(1).dispatch_bypass_filter(None.into()).unwrap();
+		pallet::Call::<Runtime>::foo_transactional(1)
+			.dispatch_bypass_filter(None.into())
+			.unwrap();
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events().iter().map(|e| &e.event).collect::<Vec<_>>(),
+			frame_system::Pallet::<Runtime>::events()
+				.iter()
+				.map(|e| &e.event)
+				.collect::<Vec<_>>(),
 			vec![&Event::Example(pallet::Event::Something(0))],
 		);
 	})
@@ -520,11 +574,7 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo(3, 0);
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo {
-			weight: 3,
-			class: DispatchClass::Normal,
-			pays_fee: Pays::Yes,
-		}
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -545,11 +595,7 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module {
-			index: 1,
-			error: 0,
-			message: Some("InsufficientProposersBalance"),
-		},
+		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
 	);
 }
 
@@ -566,13 +612,17 @@ fn inherent_expand() {
 		traits::EnsureInherentsAreFirst,
 	};
 	use sp_core::Hasher;
-	use sp_runtime::{traits::{BlakeTwo256, Header}, Digest};
+	use sp_runtime::{
+		traits::{BlakeTwo256, Header},
+		Digest,
+	};
 
 	let inherents = InherentData::new().create_extrinsics();
 
-	let expected = vec![
-		UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
-	];
+	let expected = vec![UncheckedExtrinsic {
+		function: Call::Example(pallet::Call::foo_no_post_info()),
+		signature: None,
+	}];
 	assert_eq!(expected, inherents);
 
 	let block = Block::new(
@@ -584,8 +634,14 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 0)), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_no_post_info()),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 0)),
+				signature: None,
+			},
 		],
 	);
 
@@ -600,8 +656,14 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(0, 0)), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_no_post_info()),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(0, 0)),
+				signature: None,
+			},
 		],
 	);
 
@@ -615,9 +677,28 @@ fn inherent_expand() {
 			BlakeTwo256::hash(b"test"),
 			Digest::default(),
 		),
-		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
-		],
+		vec![UncheckedExtrinsic {
+			function: Call::Example(pallet::Call::foo_transactional(0)),
+			signature: None,
+		}],
+	);
+
+	let mut inherent = InherentData::new();
+	inherent.put_data(*b"required", &true).unwrap();
+	assert!(inherent.check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![UncheckedExtrinsic {
+			function: Call::Example(pallet::Call::foo_no_post_info()),
+			signature: Some((1, (), ())),
+		}],
 	);
 
 	let mut inherent = InherentData::new();
@@ -633,25 +714,14 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: Some((1, (), ())) },
-		],
-	);
-
-	let mut inherent = InherentData::new();
-	inherent.put_data(*b"required", &true).unwrap();
-	assert!(inherent.check_extrinsics(&block).fatal_error());
-
-	let block = Block::new(
-		Header::new(
-			1,
-			BlakeTwo256::hash(b"test"),
-			BlakeTwo256::hash(b"test"),
-			BlakeTwo256::hash(b"test"),
-			Digest::default(),
-		),
-		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: None,
+			},
 		],
 	);
 
@@ -666,9 +736,18 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_no_post_info()),
+				signature: None,
+			},
 		],
 	);
 
@@ -683,9 +762,18 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 0)), signature: Some((1, (), ())) },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 0)),
+				signature: Some((1, (), ())),
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_no_post_info()),
+				signature: None,
+			},
 		],
 	);
 
@@ -695,7 +783,8 @@ fn inherent_expand() {
 #[test]
 fn validate_unsigned_expand() {
 	use frame_support::pallet_prelude::{
-		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction, ValidateUnsigned,
+		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction,
+		ValidateUnsigned,
 	};
 	let call = pallet::Call::<Runtime>::foo_no_post_info();
 
@@ -731,8 +820,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn storage_expand() {
-	use frame_support::pallet_prelude::*;
-	use frame_support::storage::StoragePrefixedMap;
+	use frame_support::{pallet_prelude::*, storage::StoragePrefixedMap};
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
@@ -812,12 +900,7 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPallets::on_initialize(1), 10);
 		AllPallets::on_finalize(1);
 
-		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
 		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
-		assert_eq!(
-			pallet::Pallet::<Runtime>::storage_version(),
-			Some(pallet::Pallet::<Runtime>::current_version()),
-		);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -837,19 +920,64 @@ fn pallet_hooks_expand() {
 #[test]
 fn pallet_on_genesis() {
 	TestExternalities::default().execute_with(|| {
-		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
+		assert_eq!(pallet::Pallet::<Runtime>::on_chain_storage_version(), StorageVersion::new(0));
 		pallet::Pallet::<Runtime>::on_genesis();
 		assert_eq!(
-			pallet::Pallet::<Runtime>::storage_version(),
-			Some(pallet::Pallet::<Runtime>::current_version()),
+			pallet::Pallet::<Runtime>::current_storage_version(),
+			pallet::Pallet::<Runtime>::on_chain_storage_version(),
 		);
 	})
 }
 
 #[test]
+fn migrate_from_pallet_version_to_storage_version() {
+	const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
+
+	fn pallet_version_key(name: &str) -> [u8; 32] {
+		let pallet_name = sp_io::hashing::twox_128(name.as_bytes());
+		let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&pallet_name);
+		final_key[16..].copy_from_slice(&postfix);
+
+		final_key
+	}
+
+	TestExternalities::default().execute_with(|| {
+		// Insert some fake pallet versions
+		sp_io::storage::set(&pallet_version_key(Example::name()), &[1, 2, 3]);
+		sp_io::storage::set(&pallet_version_key(Example2::name()), &[1, 2, 3]);
+		sp_io::storage::set(&pallet_version_key(System::name()), &[1, 2, 3]);
+
+		// Check that everyone currently is at version 0
+		assert_eq!(Example::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
+
+		let db_weight = RuntimeDbWeight { read: 0, write: 5 };
+		let weight = frame_support::migrations::migrate_from_pallet_version_to_storage_version::<
+			AllPalletsWithSystem,
+		>(&db_weight);
+
+		// 3 pallets, 2 writes and every write costs 5 weight.
+		assert_eq!(3 * 2 * 5, weight);
+
+		// All pallet versions should be removed
+		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
+		assert!(sp_io::storage::get(&pallet_version_key(Example2::name())).is_none());
+		assert!(sp_io::storage::get(&pallet_version_key(System::name())).is_none());
+
+		assert_eq!(Example::on_chain_storage_version(), pallet::STORAGE_VERSION);
+		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
+	});
+}
+
+#[test]
 fn metadata() {
-	use frame_metadata::*;
 	use codec::{Decode, Encode};
+	use frame_metadata::*;
 
 	let expected_pallet_metadata = ModuleMetadata {
 		index: 1,
@@ -860,11 +988,9 @@ fn metadata() {
 				StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ValueWhereClause".to_string()),
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(
-						DecodeDifferent::Decoded(
-							"<T::AccountId as SomeAssociation2>::_2".to_string()
-						),
-					),
+					ty: StorageEntryType::Plain(DecodeDifferent::Decoded(
+						"<T::AccountId as SomeAssociation2>::_2".to_string(),
+					)),
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
@@ -937,9 +1063,7 @@ fn metadata() {
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::NMap {
 						keys: DecodeDifferent::Decoded(vec!["u8".to_string()]),
-						hashers: DecodeDifferent::Decoded(vec![
-							StorageHasher::Blake2_128Concat,
-						]),
+						hashers: DecodeDifferent::Decoded(vec![StorageHasher::Blake2_128Concat]),
 						value: DecodeDifferent::Decoded("u32".to_string()),
 					},
 					default: DecodeDifferent::Decoded(vec![0]),
@@ -949,10 +1073,7 @@ fn metadata() {
 					name: DecodeDifferent::Decoded("NMap2".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::NMap {
-						keys: DecodeDifferent::Decoded(vec![
-							"u16".to_string(),
-							"u32".to_string(),
-						]),
+						keys: DecodeDifferent::Decoded(vec!["u16".to_string(), "u32".to_string()]),
 						hashers: DecodeDifferent::Decoded(vec![
 							StorageHasher::Twox64Concat,
 							StorageHasher::Blake2_128Concat,
@@ -962,14 +1083,16 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+				#[cfg(feature = "conditional-storage")]
+				StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+				#[cfg(feature = "conditional-storage")]
+				StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ConditionalMap".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
@@ -981,7 +1104,8 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+				#[cfg(feature = "conditional-storage")]
+				StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ConditionalDoubleMap".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::DoubleMap {
@@ -994,7 +1118,8 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+				#[cfg(feature = "conditional-storage")]
+				StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ConditionalNMap".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::NMap {
@@ -1021,22 +1146,20 @@ fn metadata() {
 					FunctionArgumentMetadata {
 						name: DecodeDifferent::Decoded("_bar".to_string()),
 						ty: DecodeDifferent::Decoded("u32".to_string()),
-					}
+					},
 				]),
 				documentation: DecodeDifferent::Decoded(vec![
-					" Doc comment put in metadata".to_string(),
+					" Doc comment put in metadata".to_string()
 				]),
 			},
 			FunctionMetadata {
 				name: DecodeDifferent::Decoded("foo_transactional".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![
-					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("foo".to_string()),
-						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
-					}
-				]),
+				arguments: DecodeDifferent::Decoded(vec![FunctionArgumentMetadata {
+					name: DecodeDifferent::Decoded("foo".to_string()),
+					ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
+				}]),
 				documentation: DecodeDifferent::Decoded(vec![
-					" Doc comment put in metadata".to_string(),
+					" Doc comment put in metadata".to_string()
 				]),
 			},
 			FunctionMetadata {
@@ -1048,7 +1171,9 @@ fn metadata() {
 		event: Some(DecodeDifferent::Decoded(vec![
 			EventMetadata {
 				name: DecodeDifferent::Decoded("Proposed".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["<T as frame_system::Config>::AccountId".to_string()]),
+				arguments: DecodeDifferent::Decoded(vec![
+					"<T as frame_system::Config>::AccountId".to_string()
+				]),
 				documentation: DecodeDifferent::Decoded(vec![
 					" doc comment put in metadata".to_string()
 				]),
@@ -1056,9 +1181,7 @@ fn metadata() {
 			EventMetadata {
 				name: DecodeDifferent::Decoded("Spending".to_string()),
 				arguments: DecodeDifferent::Decoded(vec!["Balance".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" doc".to_string()
-				]),
+				documentation: DecodeDifferent::Decoded(vec![" doc".to_string()]),
 			},
 			EventMetadata {
 				name: DecodeDifferent::Decoded("Something".to_string()),
@@ -1067,7 +1190,9 @@ fn metadata() {
 			},
 			EventMetadata {
 				name: DecodeDifferent::Decoded("SomethingElse".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["<T::AccountId as SomeAssociation1>::_1".to_string()]),
+				arguments: DecodeDifferent::Decoded(vec![
+					"<T::AccountId as SomeAssociation1>::_1".to_string()
+				]),
 				documentation: DecodeDifferent::Decoded(vec![]),
 			},
 		])),
@@ -1109,19 +1234,15 @@ fn metadata() {
 				name: DecodeDifferent::Decoded("some_extra_extra".to_string()),
 				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
 				value: DecodeDifferent::Decoded(vec![0, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some doc".to_string(),
-				]),
+				documentation: DecodeDifferent::Decoded(vec![" Some doc".to_string()]),
 			},
 		]),
-		errors: DecodeDifferent::Decoded(vec![
-			ErrorMetadata {
-				name: DecodeDifferent::Decoded("InsufficientProposersBalance".to_string()),
-				documentation: DecodeDifferent::Decoded(vec![
-					" doc comment put into metadata".to_string(),
-				]),
-			},
-		]),
+		errors: DecodeDifferent::Decoded(vec![ErrorMetadata {
+			name: DecodeDifferent::Decoded("InsufficientProposersBalance".to_string()),
+			documentation: DecodeDifferent::Decoded(vec![
+				" doc comment put into metadata".to_string()
+			]),
+		}]),
 	};
 
 	let metadata = match Runtime::metadata().1 {
@@ -1153,9 +1274,9 @@ fn test_pallet_info_access() {
 #[test]
 fn test_storage_info() {
 	use frame_support::{
-		StorageHasher,
-		traits::{StorageInfoTrait, StorageInfo},
 		pallet_prelude::*,
+		traits::{StorageInfo, StorageInfoTrait},
+		StorageHasher,
 	};
 
 	let prefix = |pallet_name, storage_name| {
@@ -1169,54 +1290,74 @@ fn test_storage_info() {
 		Example::storage_info(),
 		vec![
 			StorageInfo {
-				prefix: prefix(b"Example", b"ValueWhereClause"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"ValueWhereClause".to_vec(),
+				prefix: prefix(b"Example", b"ValueWhereClause").to_vec(),
 				max_values: Some(1),
 				max_size: Some(8),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"Value"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Value".to_vec(),
+				prefix: prefix(b"Example", b"Value").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"Value2"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Value2".to_vec(),
+				prefix: prefix(b"Example", b"Value2").to_vec(),
 				max_values: Some(1),
 				max_size: Some(8),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"Map"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map".to_vec(),
+				prefix: prefix(b"Example", b"Map").to_vec(),
 				max_values: None,
 				max_size: Some(3 + 16),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"Map2"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map2".to_vec(),
+				prefix: prefix(b"Example", b"Map2").to_vec(),
 				max_values: Some(3),
 				max_size: Some(6 + 8),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"DoubleMap"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap".to_vec(),
+				prefix: prefix(b"Example", b"DoubleMap").to_vec(),
 				max_values: None,
 				max_size: Some(7 + 16 + 8),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"DoubleMap2"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap2".to_vec(),
+				prefix: prefix(b"Example", b"DoubleMap2").to_vec(),
 				max_values: Some(5),
 				max_size: Some(14 + 8 + 16),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"NMap"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap".to_vec(),
+				prefix: prefix(b"Example", b"NMap").to_vec(),
 				max_values: None,
 				max_size: Some(5 + 16),
 			},
 			StorageInfo {
-				prefix: prefix(b"Example", b"NMap2"),
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap2".to_vec(),
+				prefix: prefix(b"Example", b"NMap2").to_vec(),
 				max_values: Some(11),
 				max_size: Some(14 + 8 + 16),
 			},
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
-					prefix: prefix(b"Example", b"ConditionalValue"),
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalValue".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalValue").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
 				}
@@ -1224,7 +1365,9 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
-					prefix: prefix(b"Example", b"ConditionalMap"),
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalMap").to_vec(),
 					max_values: Some(12),
 					max_size: Some(6 + 8),
 				}
@@ -1232,7 +1375,9 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
-					prefix: prefix(b"Example", b"ConditionalDoubleMap"),
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalDoubleMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalDoubleMap").to_vec(),
 					max_values: None,
 					max_size: Some(7 + 16 + 8),
 				}
@@ -1240,11 +1385,24 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
-					prefix: prefix(b"Example", b"ConditionalNMap"),
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalNMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalNMap").to_vec(),
 					max_values: None,
 					max_size: Some(7 + 16 + 8),
 				}
 			},
 		],
+	);
+
+	assert_eq!(
+		Example2::storage_info(),
+		vec![StorageInfo {
+			pallet_name: b"Example2".to_vec(),
+			storage_name: b"SomeValue".to_vec(),
+			prefix: prefix(b"Example2", b"SomeValue").to_vec(),
+			max_values: Some(1),
+			max_size: None,
+		},],
 	);
 }

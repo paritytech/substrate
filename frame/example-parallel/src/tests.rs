@@ -20,8 +20,9 @@ use crate::{self as pallet_example_parallel, *};
 use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
-	Perbill, testing::Header,
+	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -44,7 +45,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Call = Call;
 	type PalletInfo = PalletInfo;
@@ -108,7 +109,6 @@ fn it_can_enlist() {
 
 		assert_eq!(Example::participants().len(), 2);
 	});
-
 }
 
 #[test]
@@ -146,5 +146,4 @@ fn one_wrong_will_not_enlist_anyone() {
 
 		assert_eq!(Example::participants().len(), 0);
 	});
-
 }

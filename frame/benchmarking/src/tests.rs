@@ -20,9 +20,13 @@
 #![cfg(test)]
 
 use super::*;
-use sp_std::prelude::*;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}, BuildStorage};
 use frame_support::parameter_types;
+use sp_runtime::{
+	testing::{Header, H256},
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
+use sp_std::prelude::*;
 
 mod pallet_test {
 	use frame_support::pallet_prelude::Get;
@@ -59,7 +63,8 @@ mod pallet_test {
 	}
 
 	pub trait Config: frame_system::Config + OtherConfig
-		where Self::OtherEvent: Into<<Self as Config>::Event>
+	where
+		Self::OtherEvent: Into<<Self as Config>::Event>,
 	{
 		type Event;
 		type LowerBound: Get<u32>;
@@ -82,7 +87,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -107,7 +112,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-parameter_types!{
+parameter_types! {
 	pub const LowerBound: u32 = 1;
 	pub const UpperBound: u32 = 100;
 }
@@ -127,16 +132,20 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 mod benchmarks {
-	use sp_std::prelude::*;
+	use super::{
+		new_test_ext,
+		pallet_test::{self, Value},
+		Test,
+	};
+	use crate::{account, BenchmarkParameter, BenchmarkingSetup};
+	use frame_support::{assert_err, assert_ok, ensure, traits::Get, StorageValue};
 	use frame_system::RawOrigin;
-	use super::{Test, pallet_test::{self, Value}, new_test_ext};
-	use frame_support::{assert_ok, assert_err, ensure, traits::Get, StorageValue};
-	use crate::{BenchmarkingSetup, BenchmarkParameter, account};
+	use sp_std::prelude::*;
 
 	// Additional used internally by the benchmark macro.
 	use super::pallet_test::{Call, Config, Pallet};
 
-	crate::benchmarks!{
+	crate::benchmarks! {
 		where_clause {
 			where
 				<T as pallet_test::OtherConfig>::OtherEvent: Into<<T as pallet_test::Config>::Event> + Clone,
@@ -190,6 +199,24 @@ mod benchmarks {
 		variable_components {
 			let b in ( T::LowerBound::get() ) .. T::UpperBound::get();
 		}: dummy (RawOrigin::None, b.into())
+
+		#[extra]
+		extra_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: set_value(RawOrigin::Signed(caller), b.into())
+		verify {
+			assert_eq!(Value::get(), Some(b));
+		}
+
+		#[skip_meta]
+		skip_meta_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: set_value(RawOrigin::Signed(caller), b.into())
+		verify {
+			assert_eq!(Value::get(), Some(b));
+		}
 	}
 
 	#[test]
@@ -204,7 +231,8 @@ mod benchmarks {
 			&selected,
 			&[(BenchmarkParameter::b, 1)],
 			true,
-		).expect("failed to create closure");
+		)
+		.expect("failed to create closure");
 
 		new_test_ext().execute_with(|| {
 			assert_ok!(closure());
@@ -222,7 +250,8 @@ mod benchmarks {
 			&selected,
 			&[(BenchmarkParameter::b, 1)],
 			true,
-		).expect("failed to create closure");
+		)
+		.expect("failed to create closure");
 
 		new_test_ext().execute_with(|| {
 			assert_ok!(closure());
@@ -240,7 +269,8 @@ mod benchmarks {
 			&selected,
 			&[(BenchmarkParameter::x, 1)],
 			true,
-		).expect("failed to create closure");
+		)
+		.expect("failed to create closure");
 
 		assert_ok!(closure());
 	}
@@ -254,7 +284,8 @@ mod benchmarks {
 			&selected,
 			&[(BenchmarkParameter::b, 1)],
 			true,
-		).expect("failed to create closure");
+		)
+		.expect("failed to create closure");
 
 		new_test_ext().execute_with(|| {
 			assert_ok!(closure());
@@ -267,7 +298,8 @@ mod benchmarks {
 			&selected,
 			&[(BenchmarkParameter::x, 10000)],
 			true,
-		).expect("failed to create closure");
+		)
+		.expect("failed to create closure");
 
 		new_test_ext().execute_with(|| {
 			assert_err!(closure(), "You forgot to sort!");
@@ -277,13 +309,13 @@ mod benchmarks {
 	#[test]
 	fn benchmarks_generate_unit_tests() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_value::<Test>());
-			assert_ok!(test_benchmark_other_name::<Test>());
-			assert_ok!(test_benchmark_sort_vector::<Test>());
-			assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
-			assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
-			assert_ok!(test_benchmark_no_components::<Test>());
-			assert_ok!(test_benchmark_variable_components::<Test>());
+			assert_ok!(Pallet::<Test>::test_benchmark_set_value());
+			assert_ok!(Pallet::<Test>::test_benchmark_other_name());
+			assert_ok!(Pallet::<Test>::test_benchmark_sort_vector());
+			assert_err!(Pallet::<Test>::test_benchmark_bad_origin(), "Bad origin");
+			assert_err!(Pallet::<Test>::test_benchmark_bad_verify(), "You forgot to sort!");
+			assert_ok!(Pallet::<Test>::test_benchmark_no_components());
+			assert_ok!(Pallet::<Test>::test_benchmark_variable_components());
 		});
 	}
 }

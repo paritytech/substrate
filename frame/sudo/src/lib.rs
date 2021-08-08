@@ -93,13 +93,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_runtime::{traits::StaticLookup, DispatchResult};
 use sp_std::prelude::*;
-use sp_runtime::{DispatchResult, traits::StaticLookup};
 
-use frame_support::{
-	weights::GetDispatchInfo,
-	traits::UnfilteredDispatchable,
-};
+use frame_support::{traits::UnfilteredDispatchable, weights::GetDispatchInfo};
 
 #[cfg(test)]
 mod mock;
@@ -110,9 +107,9 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::{DispatchResult, *};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::{*, DispatchResult};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -120,7 +117,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A sudo-able call.
-		type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
+		type Call: Parameter + UnfilteredDispatchable<Origin = Self::Origin> + GetDispatchInfo;
 	}
 
 	#[pallet::pallet]
@@ -233,7 +230,7 @@ pub mod pallet {
 		pub fn sudo_as(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
-			call: Box<<T as Config>::Call>
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -282,9 +279,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				key: Default::default(),
-			}
+			Self { key: Default::default() }
 		}
 	}
 

@@ -37,7 +37,7 @@ use crate::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 			ReversibleKeyGenerator, TupleToEncodedIter,
 		},
-		unhashed, PrefixIterator, StorageAppend,
+		unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend,
 	},
 	Never,
 };
@@ -228,7 +228,7 @@ where
 	fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
-		F: FnOnce(&mut Self::Query) -> Result<R, E>
+		F: FnOnce(&mut Self::Query) -> Result<R, E>,
 	{
 		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
@@ -310,6 +310,7 @@ where
 impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	storage::IterableStorageNMap<K, V> for G
 {
+	type KeyIterator = KeyPrefixIterator<K::Key>;
 	type Iterator = PrefixIterator<(K::Key, V)>;
 
 	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
@@ -328,6 +329,43 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		}
 	}
 
+	fn iter_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where
+		K: HasReversibleKeyPrefix<KP>,
+	{
+		let mut iter = Self::iter_prefix(kp);
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
+	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where
+		K: HasReversibleKeyPrefix<KP>,
+	{
+		let prefix = G::storage_n_map_partial_key(kp);
+		KeyPrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: K::decode_partial_key,
+		}
+	}
+
+	fn iter_key_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where
+		K: HasReversibleKeyPrefix<KP>,
+	{
+		let mut iter = Self::iter_key_prefix(kp);
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where
 		K: HasReversibleKeyPrefix<KP>,
@@ -338,14 +376,35 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	}
 
 	fn iter() -> Self::Iterator {
+		Self::iter_from(G::prefix_hash())
+	}
+
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		Self::Iterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
+			prefix,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix, mut raw_value| {
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
 				Ok((final_key, V::decode(&mut raw_value)?))
+			},
+		}
+	}
+
+	fn iter_keys() -> Self::KeyIterator {
+		Self::iter_keys_from(G::prefix_hash())
+	}
+
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
+		let prefix = G::prefix_hash();
+		Self::KeyIterator {
+			prefix,
+			previous_key: starting_raw_key,
+			drain: false,
+			closure: |raw_key_without_prefix| {
+				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
+				Ok(final_key)
 			},
 		}
 	}
@@ -367,16 +426,16 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				Some(value) => value,
 				None => {
 					log::error!("Invalid translate: fail to decode old value");
-					continue;
-				}
+					continue
+				},
 			};
 
 			let final_key = match K::decode_final_key(&previous_key[prefix.len()..]) {
 				Ok((final_key, _)) => final_key,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key");
-					continue;
-				}
+					continue
+				},
 			};
 
 			match f(final_key, value) {
@@ -425,12 +484,49 @@ mod test_iterators {
 
 	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
 		let last = prefix.iter_mut().last().unwrap();
-		assert!(
-			*last != 255,
-			"mock function not implemented for this prefix"
-		);
+		assert!(*last != 255, "mock function not implemented for this prefix");
 		*last += 1;
 		prefix
+	}
+
+	#[test]
+	fn n_map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::{hash::Identity, storage::Key as NMapKey};
+			crate::generate_storage_alias!(
+				MyModule,
+				MyNMap => NMap<Key<(u64, Identity), (u64, Identity), (u64, Identity)>, u64>
+			);
+
+			MyNMap::insert((1, 1, 1), 11);
+			MyNMap::insert((1, 1, 2), 21);
+			MyNMap::insert((1, 1, 3), 31);
+			MyNMap::insert((1, 2, 1), 12);
+			MyNMap::insert((1, 2, 2), 22);
+			MyNMap::insert((1, 2, 3), 32);
+			MyNMap::insert((1, 3, 1), 13);
+			MyNMap::insert((1, 3, 2), 23);
+			MyNMap::insert((1, 3, 3), 33);
+			MyNMap::insert((2, 0, 0), 200);
+
+			type Key = (NMapKey<Identity, u64>, NMapKey<Identity, u64>, NMapKey<Identity, u64>);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 2, 2));
+			let iter = MyNMap::iter_key_prefix_from((1,), starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(2, 3), (3, 1), (3, 2), (3, 3)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 1));
+			let iter = MyNMap::iter_prefix_from((1, 3), starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(2, 23), (3, 33)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 2));
+			let iter = MyNMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(1, 3, 3), (2, 0, 0)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 3));
+			let iter = MyNMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![((2, 0, 0), 200)]);
+		});
 	}
 
 	#[test]
@@ -471,7 +567,9 @@ mod test_iterators {
 				vec![((3, 3), 3), ((0, 0), 0), ((2, 2), 2), ((1, 1), 1)],
 			);
 
-			assert_eq!(NMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1],);
+			assert_eq!(NMap::iter_keys().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(NMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
 			assert_eq!(
 				NMap::drain().collect::<Vec<_>>(),
@@ -479,10 +577,7 @@ mod test_iterators {
 			);
 
 			assert_eq!(NMap::iter().collect::<Vec<_>>(), vec![]);
-			assert_eq!(
-				unhashed::get(&key_before_prefix(prefix.clone())),
-				Some(1u64)
-			);
+			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
 			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
 
 			// Prefix iterator
@@ -501,10 +596,9 @@ mod test_iterators {
 				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
 			);
 
-			assert_eq!(
-				NMap::iter_prefix_values((k1,)).collect::<Vec<_>>(),
-				vec![1, 2, 0, 3],
-			);
+			assert_eq!(NMap::iter_key_prefix((k1,)).collect::<Vec<_>>(), vec![1, 2, 0, 3]);
+
+			assert_eq!(NMap::iter_prefix_values((k1,)).collect::<Vec<_>>(), vec![1, 2, 0, 3]);
 
 			assert_eq!(
 				NMap::drain_prefix((k1,)).collect::<Vec<_>>(),
@@ -512,10 +606,7 @@ mod test_iterators {
 			);
 
 			assert_eq!(NMap::iter_prefix((k1,)).collect::<Vec<_>>(), vec![]);
-			assert_eq!(
-				unhashed::get(&key_before_prefix(prefix.clone())),
-				Some(1u64)
-			);
+			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
 			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
 
 			// Translate
@@ -532,11 +623,7 @@ mod test_iterators {
 
 			// Wrong key2
 			unhashed::put(
-				&[
-					prefix.clone(),
-					crate::Blake2_128Concat::hash(&1u16.encode()),
-				]
-				.concat(),
+				&[prefix.clone(), crate::Blake2_128Concat::hash(&1u16.encode())].concat(),
 				&3u64.encode(),
 			);
 

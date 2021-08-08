@@ -31,16 +31,16 @@ fn parse_pallet_name(pallet: &str) -> String {
 #[derive(Debug, structopt::StructOpt)]
 pub struct BenchmarkCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[structopt(short, long, parse(from_str = parse_pallet_name))]
-	pub pallet: String,
+	#[structopt(short, long, parse(from_str = parse_pallet_name), required_unless = "list")]
+	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[structopt(short, long)]
-	pub extrinsic: String,
+	#[structopt(short, long, required_unless = "list")]
+	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, use_delimiter = true)]
-	pub steps: Vec<u32>,
+	#[structopt(short, long, default_value = "1")]
+	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
 	#[structopt(long = "low", use_delimiter = true)]
@@ -50,9 +50,15 @@ pub struct BenchmarkCmd {
 	#[structopt(long = "high", use_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
-	/// Select how many repetitions of this benchmark should run.
+	/// Select how many repetitions of this benchmark should run from within the wasm.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
+
+	/// Select how many repetitions of this benchmark should run from the client.
+	///
+	/// NOTE: Using this alone may give slower results, but will afford you maximum Wasm memory.
+	#[structopt(long, default_value = "1")]
+	pub external_repeat: u32,
 
 	/// Print the raw results.
 	#[structopt(long = "raw")]
@@ -85,7 +91,8 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub output_analysis: Option<String>,
 
-	/// Set the heap pages while running benchmarks.
+	/// Set the heap pages while running benchmarks. If not set, the default value from the client
+	/// is used.
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
 
@@ -93,7 +100,8 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub no_verify: bool,
 
-	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
+	/// Display and run extra benchmarks that would otherwise not be needed for weight
+	/// construction.
 	#[structopt(long)]
 	pub extra: bool,
 
@@ -120,11 +128,17 @@ pub struct BenchmarkCmd {
 		value_name = "METHOD",
 		possible_values = &WasmExecutionMethod::variants(),
 		case_insensitive = true,
-		default_value = "Interpreted"
+		default_value = "compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
+
+	/// List the benchmarks that match your query rather than running them.
+	///
+	/// When nothing is provided, we list all benchmarks.
+	#[structopt(long)]
+	pub list: bool,
 }
