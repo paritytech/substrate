@@ -137,7 +137,7 @@ mod benchmarks {
 		pallet_test::{self, Value},
 		Test,
 	};
-	use crate::{account, BenchmarkParameter, BenchmarkingSetup};
+	use crate::{account, BenchmarkError, BenchmarkParameter, BenchmarkResult, BenchmarkingSetup};
 	use frame_support::{assert_err, assert_ok, ensure, traits::Get, StorageValue};
 	use frame_system::RawOrigin;
 	use sp_std::prelude::*;
@@ -216,6 +216,20 @@ mod benchmarks {
 		}: set_value(RawOrigin::Signed(caller), b.into())
 		verify {
 			assert_eq!(Value::get(), Some(b));
+		}
+
+		override_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: {
+			Err(BenchmarkError::Override(
+				BenchmarkResult {
+					extrinsic_time: 1_234_567_890,
+					reads: 1337,
+					writes: 420,
+					..Default::default()
+				}
+			))?;
 		}
 	}
 
@@ -303,6 +317,23 @@ mod benchmarks {
 
 		new_test_ext().execute_with(|| {
 			assert_err!(closure(), "You forgot to sort!");
+		});
+	}
+
+	#[test]
+	fn benchmark_override_works() {
+		let selected = SelectedBenchmark::override_benchmark;
+
+		let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+			&selected,
+			&[(BenchmarkParameter::b, 1)],
+			true,
+		)
+		.expect("failed to create closure");
+
+		new_test_ext().execute_with(|| {
+			let result = closure();
+			assert!(matches!(result, Err(BenchmarkError::Override(_))));
 		});
 	}
 
