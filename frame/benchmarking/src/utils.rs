@@ -18,7 +18,10 @@
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::StorageInfo};
+use frame_support::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo},
+	traits::StorageInfo,
+};
 use sp_io::hashing::blake2_256;
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
@@ -137,6 +140,12 @@ impl From<&'static str> for BenchmarkError {
 
 impl From<DispatchErrorWithPostInfo> for BenchmarkError {
 	fn from(e: DispatchErrorWithPostInfo) -> Self {
+		Self::Stop(e.into())
+	}
+}
+
+impl From<DispatchError> for BenchmarkError {
+	fn from(e: DispatchError) -> Self {
 		Self::Stop(e.into())
 	}
 }

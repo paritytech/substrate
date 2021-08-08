@@ -1336,7 +1336,13 @@ macro_rules! add_benchmark {
 
 			let final_results = match benchmark_result {
 				Ok(results) => results,
-				Err($crate::BenchmarkError::Override(result)) => $crate::vec![result],
+				Err($crate::BenchmarkError::Override(mut result)) => {
+					// Insert override warning as the first storage key.
+					result.keys.insert(0,
+						(b"Benchmark Override".to_vec(), 0, 0, false)
+					);
+					$crate::vec![result]
+				},
 				Err($crate::BenchmarkError::Stop(e)) => {
 					$crate::show_benchmark_debug_info(
 						instance_string,
