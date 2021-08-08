@@ -334,12 +334,11 @@ benchmarks! {
 		}
 	}
 
+	// We use the max block weight for this extrinsic for now. See below.
 	remove_member_without_replacement {}: {
 		Err(BenchmarkError::Override(
 			BenchmarkResult {
-				extrinsic_time: 1_234_567_890,
-				reads: 1337,
-				writes: 420,
+				extrinsic_time: (T::BlockWeights::get().max_block as u128).saturating_mul(1_000),
 				..Default::default()
 			}
 		))?;
