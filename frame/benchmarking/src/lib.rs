@@ -1207,13 +1207,13 @@ macro_rules! impl_benchmark_test_suite {
 							$bench_module::<$test>::test_bench_by_name(benchmark_name)
 						}) {
 							Err(err) => {
-								println!("{:?}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
 								anything_failed = true;
 							},
 							Ok(Err(err)) => {
 								match err {
-									$crate::BenchmarkError::Stop(e) => {
-										println!("{:?}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+									$crate::BenchmarkError::Stop(err) => {
+										println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
 										anything_failed = true;
 									},
 									$crate::BenchmarkError::Override(_) => {
