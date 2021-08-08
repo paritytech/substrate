@@ -20,6 +20,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo},
+	pallet_prelude::*,
 	traits::StorageInfo,
 };
 use sp_io::hashing::blake2_256;
@@ -109,6 +110,12 @@ pub struct BenchmarkResult {
 	pub repeat_writes: u32,
 	pub proof_size: u32,
 	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
+}
+
+impl BenchmarkResult {
+	pub fn from_weight(w: Weight) -> Self {
+		Self { extrinsic_time: (w as u128).saturating_mul(1_000), ..Default::default() }
+	}
 }
 
 /// Possible errors returned from the benchmarking pipeline.
