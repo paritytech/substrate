@@ -893,9 +893,9 @@ macro_rules! impl_benchmark {
 			/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
 			/// author chooses not to implement benchmarks.
 			#[allow(unused)]
-			fn test_bench_by_name(name: &[u8]) -> Result<(), BenchmarkError> {
+			fn test_bench_by_name(name: &[u8]) -> Result<(), $crate::BenchmarkError> {
 				let name = $crate::sp_std::str::from_utf8(name)
-					.map_err(|_| -> BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
+					.map_err(|_| -> $crate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
 				match name {
 					$( stringify!($name) => {
 						$crate::paste::paste! { Self::[< test_benchmark_ $name >]() }
@@ -925,7 +925,7 @@ macro_rules! impl_benchmark_test {
 			where T: frame_system::Config, $( $where_clause )*
 			{
 				#[allow(unused)]
-				fn [<test_benchmark_ $name>] () -> Result<(), BenchmarkError> {
+				fn [<test_benchmark_ $name>] () -> Result<(), $crate::BenchmarkError> {
 					let selected_benchmark = SelectedBenchmark::$name;
 					let components = <
 						SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
@@ -933,7 +933,7 @@ macro_rules! impl_benchmark_test {
 
 					let execute_benchmark = |
 						c: $crate::Vec<($crate::BenchmarkParameter, u32)>
-					| -> Result<(), BenchmarkError> {
+					| -> Result<(), $crate::BenchmarkError> {
 						// Set up the benchmark, return execution + verification function.
 						let closure_to_verify = <
 							SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
