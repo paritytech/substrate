@@ -19,7 +19,7 @@
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
 use codec::{Decode, Encode};
 use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
-use sc_executor::{NativeRuntimeInfo, RuntimeVersion, RuntimeVersionOf};
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
 use sp_core::{
 	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
@@ -349,7 +349,7 @@ where
 impl<Block, B, E> sp_version::GetNativeVersion for LocalCallExecutor<Block, B, E>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + NativeRuntimeInfo + Clone + 'static,
+	E: CodeExecutor + sp_version::GetNativeVersion + Clone + 'static,
 	Block: BlockT,
 {
 	fn native_version(&self) -> &sp_version::NativeVersion {

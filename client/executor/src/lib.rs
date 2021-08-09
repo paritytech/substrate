@@ -61,12 +61,6 @@ pub trait RuntimeVersionOf {
 	) -> error::Result<RuntimeVersion>;
 }
 
-/// Provides native runtime information.
-pub trait NativeRuntimeInfo {
-	/// Native runtime information.
-	fn native_version(&self) -> &NativeVersion;
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;

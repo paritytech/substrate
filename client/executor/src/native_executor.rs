@@ -19,7 +19,7 @@
 use crate::{
 	error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
-	NativeRuntimeInfo, RuntimeVersionOf,
+	RuntimeVersionOf,
 };
 
 use std::{
@@ -45,7 +45,7 @@ use sp_core::{
 };
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
-use sp_version::{NativeVersion, RuntimeVersion};
+use sp_version::{NativeVersion, RuntimeVersion, GetNativeVersion};
 use sp_wasm_interface::{Function, HostFunctions};
 
 /// Default num of pages for the heap
@@ -379,7 +379,7 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> NativeRuntimeInfo for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> GetNativeVersion for NativeExecutor<D> {
 	fn native_version(&self) -> &NativeVersion {
 		&self.native_version
 	}
