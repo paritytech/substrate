@@ -86,7 +86,7 @@
 //! 	type BlockImport = BlockImport<
 //! 		Self::Block,
 //! 		TFullBackend<Self::Block>,
-//! 		TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+//! 		TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
 //! 		Self::SelectChain,
 //!     >;
 //!     /// and a dash of SignedExtensions
@@ -112,7 +112,7 @@
 //!     /// The function signature tells you all you need to know. ;)
 //! 	fn create_client_parts(config: &Configuration) -> Result<
 //! 		(
-//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>,
+//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>>,
 //! 			Arc<TFullBackend<Self::Block>>,
 //! 			KeyStorePtr,
 //! 			TaskManager,
@@ -121,7 +121,7 @@
 //! 				dyn ConsensusDataProvider<
 //! 					Self::Block,
 //! 					Transaction = TransactionFor<
-//! 						TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+//! 						TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
 //! 						Self::Block
 //! 					>,
 //! 				>
@@ -136,7 +136,7 @@
 //! 			backend,
 //! 			keystore,
 //! 			task_manager,
-//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config)?;
+//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>(config)?;
 //! 		let client = Arc::new(client);
 //!
 //! 		let inherent_providers = InherentDataProviders::new();
@@ -228,7 +228,7 @@
 //! ```
 
 use sc_consensus::BlockImport;
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{NativeExecutionDispatch, NativeExecutor};
 use sc_service::TFullClient;
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::SelectChain;
@@ -260,7 +260,10 @@ pub trait ChainInfo: Sized {
 	type RuntimeApi: Send
 		+ Sync
 		+ 'static
-		+ ConstructRuntimeApi<Self::Block, TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>;
+		+ ConstructRuntimeApi<
+			Self::Block,
+			TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
+		>;
 
 	/// select chain type.
 	type SelectChain: SelectChain<Self::Block> + 'static;
@@ -273,7 +276,7 @@ pub trait ChainInfo: Sized {
 			Self::Block,
 			Error = sp_consensus::Error,
 			Transaction = TransactionFor<
-				TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+				TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
 				Self::Block,
 			>,
 		> + 'static;

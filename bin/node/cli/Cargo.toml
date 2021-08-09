@@ -76,6 +76,7 @@ sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-au
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 sc-tracing = { version = "4.0.0-dev", path = "../../../client/tracing" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
 
 # frame dependencies
