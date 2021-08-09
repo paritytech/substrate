@@ -176,6 +176,7 @@ build-rust-doc:
 publish-docs:
   stage:                           publish
   <<:                              *kubernetes-env
+  image:                           paritytech/tools:latest
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
