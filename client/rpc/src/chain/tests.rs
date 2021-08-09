@@ -65,7 +65,7 @@ fn should_return_a_block() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).unwrap();
 
@@ -132,7 +132,7 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(None))
 	);
 
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
@@ -166,7 +166,7 @@ fn should_return_finalized_hash() {
 	);
 
 	// import new block
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block).unwrap();
 	// no finalization yet
 	assert_matches!(
@@ -198,7 +198,7 @@ fn should_notify_about_latest_block() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
@@ -228,7 +228,7 @@ fn should_notify_about_best_block() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
@@ -258,7 +258,7 @@ fn should_notify_about_finalized_block() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}

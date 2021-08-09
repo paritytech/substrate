@@ -298,12 +298,12 @@ where
 			.api
 			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
-		debug_assert_eq!(
-			header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(
-				self.extrinsics.iter().map(Encode::encode).collect(),
-			),
-		);
+		// debug_assert_eq!(
+		// 	header.extrinsics_root().clone(),
+		// 	HashFor::<Block>::ordered_trie_root(
+		// 		self.extrinsics.iter().map(Encode::encode).collect(),
+		// 	),
+		// );
 
 		let proof = self.api.extract_proof();
 

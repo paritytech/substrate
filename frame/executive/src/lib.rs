@@ -769,7 +769,7 @@ mod tests {
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
-			});
+			}, Default::default());
 		});
 	}
 
@@ -787,7 +787,7 @@ mod tests {
 					digest: Digest { logs: vec![] },
 				},
 				extrinsics: vec![],
-			});
+			}, Default::default());
 		});
 	}
 
@@ -805,7 +805,7 @@ mod tests {
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
-			});
+			}, Default::default());
 		});
 	}
 

@@ -570,13 +570,13 @@ cfg_if! {
 				fn get_info(
 					_tx: <Block as BlockT>::Extrinsic,
 				) -> Option<extrinsic_info_runtime_api::ExtrinsicInfo> {
-					unimplemented!()
+					None
 				}
 			}
 
 			impl random_seed_runtime_api::RandomSeedApi<Block> for Runtime {
 				fn get_seed() -> pallet_random_seed::SeedType{
-					unimplemented!()
+					Default::default()
 				}
 			}
 
@@ -1201,7 +1201,7 @@ mod tests {
 		let (new_block_id, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
-			let block = builder.build().unwrap().block;
+			let block = builder.build(Default::default()).unwrap().block;
 			let hash = block.header.hash();
 			(BlockId::Hash(hash), block)
 		};

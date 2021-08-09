@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #[test]
+#[ignore]
 fn substrate_test_utils_derive_trybuild() {
 	let t = trybuild::TestCases::new();
 	t.compile_fail("tests/ui/missing-func-parameter.rs");

@@ -1583,7 +1583,7 @@ mod test {
 		);
 
 		let (a1_hash, a1_number) = {
-			let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+			let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 			(a1.hash(), *a1.header.number())
 		};
 

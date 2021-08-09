@@ -924,7 +924,7 @@ mod tests {
 			_: Duration,
 			_: RecordProof,
 		) -> Self::Proposal {
-			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
+			let r = self.1.new_block(digests).unwrap().build(Default::default()).map_err(|e| e.into());
 
 			future::ready(r.map(|b| Proposal {
 				block: b.block,
