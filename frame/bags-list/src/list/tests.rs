@@ -105,7 +105,7 @@ fn remove_last_node_in_bags_cleans_bag() {
 
 #[test]
 fn migrate_works() {
-	ExtBuilder::default().add_ids(vec![(710, 15), (711, 16), (712, 2_000)]).build_and_execute_no_post_check(|| {
+	ExtBuilder::default().add_ids(vec![(710, 15), (711, 16), (712, 2_000)]).build_and_execute(|| {
 		// given
 		assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![710, 711]), (1000, vec![2, 3, 4]), (2_000, vec![712])]);
 		let old_thresholds = <Runtime as Config>::BagThresholds::get();
