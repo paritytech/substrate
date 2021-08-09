@@ -8907,7 +8907,6 @@ dependencies = [
  "sp-trie",
  "sp-utils",
  "sp-version",
- "substrate-prometheus-endpoint",
  "thiserror",
  "wasm-timer",
 ]
