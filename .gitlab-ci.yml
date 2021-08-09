@@ -151,10 +151,9 @@ build-rust-doc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  # FIXME: remove me
-  # needs:
-  #   - job:                         test-linux-stable
-  #     artifacts:                   false
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   false
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
@@ -182,16 +181,13 @@ publish-docs:
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
-    # FIXME: remove me
-    # - job:                         build-linux-substrate
-    #   artifacts:                   false
+    - job:                         build-linux-substrate
+      artifacts:                   false
   variables:
     GIT_DEPTH:                     100
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
-    # FIXME: remove me
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
   before_script:
@@ -209,8 +205,6 @@ publish-docs:
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
     - git checkout gh-pages
-    # FIXME: remove me
-    # - mv _config.yml /tmp/doc/
     # remove everything and restore generated docs, README and Jekyll config
     - rm -rf ./*
     - mv /tmp/doc/* .
