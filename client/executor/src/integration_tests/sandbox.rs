@@ -51,7 +51,7 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	.unwrap()
 	.encode();
 
-	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext,).unwrap(), true.encode(),);
+	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext).unwrap(), true.encode());
 }
 
 test_wasm_execution!(sandbox_trap);
@@ -72,7 +72,7 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	)
 	.unwrap();
 
-	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext,).unwrap(), vec![0],);
+	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext).unwrap(), vec![0]);
 }
 
 test_wasm_execution!(start_called);
@@ -111,7 +111,7 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 	.unwrap()
 	.encode();
 
-	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext,).unwrap(), true.encode(),);
+	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext).unwrap(), true.encode());
 }
 
 test_wasm_execution!(invoke_args);

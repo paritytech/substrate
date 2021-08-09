@@ -203,7 +203,7 @@ fn print_seeds(
 	println!("{}", header.paint("Authority seeds"));
 
 	for (n, seed) in authority_seeds.iter().enumerate() {
-		println!("{} //{}", entry.paint(format!("auth-{}:", n)), seed,);
+		println!("{} //{}", entry.paint(format!("auth-{}:", n)), seed);
 	}
 
 	println!("{}", header.paint("Nominator seeds"));
@@ -217,7 +217,7 @@ fn print_seeds(
 	if !endowed_seeds.is_empty() {
 		println!("{}", header.paint("Endowed seeds"));
 		for (n, seed) in endowed_seeds.iter().enumerate() {
-			println!("{} //{}", entry.paint(format!("endowed-{}:", n)), seed,);
+			println!("{} //{}", entry.paint(format!("endowed-{}:", n)), seed);
 		}
 
 		println!();

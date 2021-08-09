@@ -25,11 +25,34 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
-/// A `Contains` implementation which always returns `true`.
-pub struct All<T>(PhantomData<T>);
-impl<T> Contains<T> for All<T> {
+/// A [`Contains`] implementation that contains every value.
+pub enum Everything {}
+impl<T> Contains<T> for Everything {
 	fn contains(_: &T) -> bool {
 		true
+	}
+}
+
+/// A [`Contains`] implementation that contains no value.
+pub enum Nothing {}
+impl<T> Contains<T> for Nothing {
+	fn contains(_: &T) -> bool {
+		false
+	}
+}
+
+#[deprecated = "Use `Everything` instead"]
+pub type AllowAll = Everything;
+#[deprecated = "Use `Nothing` instead"]
+pub type DenyAll = Nothing;
+#[deprecated = "Use `Contains` instead"]
+pub trait Filter<T> {
+	fn filter(t: &T) -> bool;
+}
+#[allow(deprecated)]
+impl<T, C: Contains<T>> Filter<T> for C {
+	fn filter(t: &T) -> bool {
+		Self::contains(t)
 	}
 }
 

@@ -29,15 +29,13 @@ use rand::RngCore;
 use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents};
+use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
 use sc_network::config::ProtocolConfig;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
-use sp_consensus::{
-	import_queue::{BoxBlockImport, BoxJustificationImport},
-	AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
-};
+use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
@@ -230,7 +228,6 @@ pub struct BabeTestNet {
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
-type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 type TestSelectChain =
 	substrate_test_runtime_client::LongestChain<substrate_test_runtime_client::Backend, TestBlock>;
@@ -259,14 +256,11 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// presented to the User in the logs.
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		mut header: TestHeader,
-		justifications: Option<Justifications>,
-		body: Option<Vec<TestExtrinsic>>,
+		mut block: BlockImportParams<TestBlock, ()>,
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
-		(self.mutator)(&mut header, Stage::PostSeal);
-		self.inner.verify(origin, header, justifications, body).await
+		(self.mutator)(&mut block.header, Stage::PostSeal);
+		self.inner.verify(block).await
 	}
 }
 
@@ -780,10 +774,10 @@ fn importing_epoch_change_block_prunes_tree() {
 	let fork_3 = propose_and_import_blocks(BlockId::Hash(canon_hashes[18]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
-	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9,);
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
 
 	// And only one root
-	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1,);
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).

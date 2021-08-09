@@ -369,6 +369,15 @@ where
 		}
 	}
 
+	fn iter_prefix_from(
+		k1: impl EncodeLike<K1>,
+		starting_raw_key: Vec<u8>,
+	) -> Self::PrefixIterator {
+		let mut iter = Self::iter_prefix(k1);
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator {
 		let prefix = G::storage_double_map_final_key1(k1);
 		Self::PartialKeyIterator {
@@ -380,6 +389,15 @@ where
 				K2::decode(&mut key_material)
 			},
 		}
+	}
+
+	fn iter_key_prefix_from(
+		k1: impl EncodeLike<K1>,
+		starting_raw_key: Vec<u8>,
+	) -> Self::PartialKeyIterator {
+		let mut iter = Self::iter_key_prefix(k1);
+		iter.set_last_raw_key(starting_raw_key);
+		iter
 	}
 
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator {
@@ -404,6 +422,12 @@ where
 		}
 	}
 
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
+		let mut iter = Self::iter();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	fn iter_keys() -> Self::FullKeyIterator {
 		let prefix = G::prefix_hash();
 		Self::FullKeyIterator {
@@ -418,6 +442,12 @@ where
 				Ok((k1, k2))
 			},
 		}
+	}
+
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::FullKeyIterator {
+		let mut iter = Self::iter_keys();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
 	}
 
 	fn drain() -> Self::Iterator {
@@ -510,6 +540,42 @@ mod test_iterators {
 	}
 
 	#[test]
+	fn double_map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			crate::generate_storage_alias!(
+				MyModule,
+				MyDoubleMap => DoubleMap<(u64, Identity), (u64, Identity), u64>
+			);
+
+			MyDoubleMap::insert(1, 10, 100);
+			MyDoubleMap::insert(1, 21, 201);
+			MyDoubleMap::insert(1, 31, 301);
+			MyDoubleMap::insert(1, 41, 401);
+			MyDoubleMap::insert(2, 20, 200);
+			MyDoubleMap::insert(3, 30, 300);
+			MyDoubleMap::insert(4, 40, 400);
+			MyDoubleMap::insert(5, 50, 500);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(1, 21);
+			let iter = MyDoubleMap::iter_key_prefix_from(1, starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![31, 41]);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(1, 31);
+			let iter = MyDoubleMap::iter_prefix_from(1, starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(41, 401)]);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(2, 20);
+			let iter = MyDoubleMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(3, 30), (4, 40), (5, 50)]);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(3, 30);
+			let iter = MyDoubleMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(4, 40, 400), (5, 50, 500)]);
+		});
+	}
+
+	#[test]
 	fn double_map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			// All map iterator
@@ -532,7 +598,7 @@ mod test_iterators {
 				vec![(3, 3), (0, 0), (2, 2), (1, 1)],
 			);
 
-			assert_eq!(DoubleMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1],);
+			assert_eq!(DoubleMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
 			assert_eq!(
 				DoubleMap::drain().collect::<Vec<_>>(),
@@ -559,9 +625,9 @@ mod test_iterators {
 				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
 			);
 
-			assert_eq!(DoubleMap::iter_key_prefix(k1).collect::<Vec<_>>(), vec![1, 2, 0, 3],);
+			assert_eq!(DoubleMap::iter_key_prefix(k1).collect::<Vec<_>>(), vec![1, 2, 0, 3]);
 
-			assert_eq!(DoubleMap::iter_prefix_values(k1).collect::<Vec<_>>(), vec![1, 2, 0, 3],);
+			assert_eq!(DoubleMap::iter_prefix_values(k1).collect::<Vec<_>>(), vec![1, 2, 0, 3]);
 
 			assert_eq!(
 				DoubleMap::drain_prefix(k1).collect::<Vec<_>>(),

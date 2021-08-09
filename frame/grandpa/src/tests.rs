@@ -234,7 +234,7 @@ fn schedule_pause_only_when_live() {
 		Grandpa::schedule_pause(1).unwrap();
 
 		// we've switched to the pending pause state
-		assert_eq!(Grandpa::state(), StoredState::PendingPause { scheduled_at: 1u64, delay: 1 },);
+		assert_eq!(Grandpa::state(), StoredState::PendingPause { scheduled_at: 1u64, delay: 1 });
 
 		Grandpa::on_finalize(1);
 		let _ = System::finalize();
@@ -248,7 +248,7 @@ fn schedule_pause_only_when_live() {
 		let _ = System::finalize();
 
 		// after finalizing block 2 the set should have switched to paused state
-		assert_eq!(Grandpa::state(), StoredState::Paused,);
+		assert_eq!(Grandpa::state(), StoredState::Paused);
 	});
 }
 
@@ -260,14 +260,14 @@ fn schedule_resume_only_when_paused() {
 		// the set is currently live, resuming it is an error
 		assert_noop!(Grandpa::schedule_resume(1), Error::<Test>::ResumeFailed);
 
-		assert_eq!(Grandpa::state(), StoredState::Live,);
+		assert_eq!(Grandpa::state(), StoredState::Live);
 
 		// we schedule a pause to be applied instantly
 		Grandpa::schedule_pause(0).unwrap();
 		Grandpa::on_finalize(1);
 		let _ = System::finalize();
 
-		assert_eq!(Grandpa::state(), StoredState::Paused,);
+		assert_eq!(Grandpa::state(), StoredState::Paused);
 
 		// we schedule the set to go back live in 2 blocks
 		initialize_block(2, Default::default());
@@ -284,7 +284,7 @@ fn schedule_resume_only_when_paused() {
 		let _ = System::finalize();
 
 		// it should be live at block 4
-		assert_eq!(Grandpa::state(), StoredState::Live,);
+		assert_eq!(Grandpa::state(), StoredState::Live);
 	});
 }
 
@@ -354,7 +354,7 @@ fn report_equivocation_current_set_works() {
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
 			Origin::none(),
-			equivocation_proof,
+			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
 
@@ -432,7 +432,7 @@ fn report_equivocation_old_set_works() {
 		// the old set, the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
 			Origin::none(),
-			equivocation_proof,
+			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
 
@@ -495,7 +495,7 @@ fn report_equivocation_invalid_set_id() {
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
 				Origin::none(),
-				equivocation_proof,
+				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
 			Error::<Test>::InvalidEquivocationProof,
@@ -536,7 +536,7 @@ fn report_equivocation_invalid_session() {
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
 				Origin::none(),
-				equivocation_proof,
+				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
 			Error::<Test>::InvalidEquivocationProof,
@@ -581,7 +581,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
 				Origin::none(),
-				equivocation_proof,
+				Box::new(equivocation_proof),
 				invalid_key_owner_proof,
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -612,7 +612,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 			assert_err!(
 				Grandpa::report_equivocation_unsigned(
 					Origin::none(),
-					equivocation_proof,
+					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
 				Error::<Test>::InvalidEquivocationProof,
@@ -681,8 +681,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key_owner_proof =
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
-		let call =
-			Call::report_equivocation_unsigned(equivocation_proof.clone(), key_owner_proof.clone());
+		let call = Call::report_equivocation_unsigned(
+			Box::new(equivocation_proof.clone()),
+			key_owner_proof.clone(),
+		);
 
 		// only local/inblock reports are allowed
 		assert_eq!(
@@ -714,8 +716,12 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		assert_ok!(<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
 
 		// we submit the report
-		Grandpa::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Grandpa::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid
 		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
@@ -838,7 +844,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned(
-			equivocation_proof.clone(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.get_dispatch_info();
@@ -850,7 +856,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation.
 		let post_info = Grandpa::report_equivocation_unsigned(
 			Origin::none(),
-			equivocation_proof.clone(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.unwrap();
@@ -864,7 +870,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// duplicate.
 		let post_info = Grandpa::report_equivocation_unsigned(
 			Origin::none(),
-			equivocation_proof,
+			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
 		.err()

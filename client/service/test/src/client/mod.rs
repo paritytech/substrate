@@ -24,13 +24,13 @@ use sc_client_api::{in_mem, BlockBackend, BlockchainEvents, StorageProvider};
 use sc_client_db::{
 	Backend, DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, PruningMode, TransactionStorageMode,
 };
+use sc_consensus::{
+	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
+};
 use sc_executor::native_executor_instance;
 use sc_service::client::{self, new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, BlockStatus,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, SelectChain,
-};
+use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -1209,6 +1209,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -1220,13 +1221,13 @@ fn import_with_justification() {
 		.block;
 	block_on(client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone())).unwrap();
 
-	assert_eq!(client.chain_info().finalized_hash, a3.hash(),);
+	assert_eq!(client.chain_info().finalized_hash, a3.hash());
 
-	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification),);
+	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification));
 
-	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None,);
+	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None);
 
-	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None,);
+	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
 }
 
 #[test]
@@ -1265,15 +1266,15 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	let b1 = b1.build().unwrap().block;
 
 	// A2 is the current best since it's the longest chain
-	assert_eq!(client.chain_info().best_hash, a2.hash(),);
+	assert_eq!(client.chain_info().best_hash, a2.hash());
 
 	// importing B1 as finalized should trigger a re-org and set it as new best
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
 	block_on(client.import_justified(BlockOrigin::Own, b1.clone(), justification)).unwrap();
 
-	assert_eq!(client.chain_info().best_hash, b1.hash(),);
+	assert_eq!(client.chain_info().best_hash, b1.hash());
 
-	assert_eq!(client.chain_info().finalized_hash, b1.hash(),);
+	assert_eq!(client.chain_info().finalized_hash, b1.hash());
 }
 
 #[test]
@@ -1320,21 +1321,21 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
 	// A2 is the current best since it's the longest chain
-	assert_eq!(client.chain_info().best_hash, a2.hash(),);
+	assert_eq!(client.chain_info().best_hash, a2.hash());
 
 	// we finalize block B1 which is on a different branch from current best
 	// which should trigger a re-org.
 	ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
 
 	// B1 should now be the latest finalized
-	assert_eq!(client.chain_info().finalized_hash, b1.hash(),);
+	assert_eq!(client.chain_info().finalized_hash, b1.hash());
 
 	// and B1 should be the new best block (`finalize_block` as no way of
 	// knowing about B2)
-	assert_eq!(client.chain_info().best_hash, b1.hash(),);
+	assert_eq!(client.chain_info().best_hash, b1.hash());
 
 	// `SelectChain` should report B2 as best block though
-	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b2.hash(),);
+	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b2.hash());
 
 	// after we build B3 on top of B2 and import it
 	// it should be the new best block,
@@ -1346,7 +1347,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 		.block;
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
 
-	assert_eq!(client.chain_info().best_hash, b3.hash(),);
+	assert_eq!(client.chain_info().best_hash, b3.hash());
 }
 
 #[test]
@@ -1505,7 +1506,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		.to_string(),
 	);
 
-	assert_eq!(import_err.to_string(), expected_err.to_string(),);
+	assert_eq!(import_err.to_string(), expected_err.to_string());
 
 	// adding a C1 block which is lower than the last finalized should also
 	// fail (with a cheaper check that doesn't require checking ancestry).
@@ -1525,7 +1526,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	let expected_err =
 		ConsensusError::ClientImport(sp_blockchain::Error::NotInFinalizedChain.to_string());
 
-	assert_eq!(import_err.to_string(), expected_err.to_string(),);
+	assert_eq!(import_err.to_string(), expected_err.to_string());
 }
 
 #[test]
@@ -1555,6 +1556,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
@@ -1570,6 +1572,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1592,6 +1595,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1610,6 +1614,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 
@@ -1676,6 +1681,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1712,6 +1718,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 1,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1745,6 +1752,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 2,
 		parent_hash: a2.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1779,6 +1787,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: b1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 	assert_eq!(

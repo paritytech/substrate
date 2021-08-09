@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	ensure,
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Currency, ExistenceRequirement, Filter, Get, OriginTrait, Randomness, Time},
+	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
 	weights::Weight,
 	DefaultNoBound,
 };
@@ -1255,7 +1255,7 @@ where
 
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
 		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
-		origin.add_filter(T::CallFilter::filter);
+		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
 	}
 }
@@ -2468,7 +2468,7 @@ mod tests {
 			let forbidden_call = Call::Balances(BalanceCall::transfer(CHARLIE, 22));
 
 			// simple cases: direct call
-			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin,);
+			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
 			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch(vec![
@@ -2504,6 +2504,11 @@ mod tests {
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted),
 						topics: vec![],
 					},
 					EventRecord {

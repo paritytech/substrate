@@ -36,12 +36,11 @@ use codec::{Decode, Encode};
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
 use log::{debug, error, info, warn};
+use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{
-	BlockImport, CanAuthorWith, JustificationSyncLink, Proposer, SelectChain, SlotData, SyncOracle,
-};
+use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
 use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
@@ -160,7 +159,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				Self::Claim,
 				Self::EpochData,
 			) -> Result<
-				sp_consensus::BlockImportParams<
+				sc_consensus::BlockImportParams<
 					B,
 					<Self::BlockImport as BlockImport<B>>::Transaction,
 				>,
@@ -318,7 +317,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {:?}", err,);
+				warn!(target: logging_target, "Proposing failed: {:?}", err);
 
 				return None
 			},
@@ -363,7 +362,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		) {
 			Ok(bi) => bi,
 			Err(err) => {
-				warn!(target: logging_target, "Failed to create block import params: {:?}", err,);
+				warn!(target: logging_target, "Failed to create block import params: {:?}", err);
 
 				return None
 			},
@@ -922,7 +921,7 @@ mod test {
 		}
 
 		// but we cap it to a maximum of 20 slots
-		assert_eq!(super::slot_lenience_linear(1u64.into(), &slot(23)), Some(SLOT_DURATION * 20),);
+		assert_eq!(super::slot_lenience_linear(1u64.into(), &slot(23)), Some(SLOT_DURATION * 20));
 	}
 
 	#[test]

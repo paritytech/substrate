@@ -56,7 +56,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -314,7 +314,7 @@ fn slash_tip_works() {
 		assert_eq!(last_event(), RawEvent::NewTip(h));
 
 		// can't remove from any origin
-		assert_noop!(TipsModTestInst::slash_tip(Origin::signed(0), h.clone()), BadOrigin,);
+		assert_noop!(TipsModTestInst::slash_tip(Origin::signed(0), h.clone()), BadOrigin);
 
 		// can remove from root.
 		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));

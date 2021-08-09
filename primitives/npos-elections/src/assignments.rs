@@ -18,6 +18,7 @@
 //! Structs and helpers for distributing a voter's stake among various winners.
 
 use crate::{Error, ExtendedBalance, IdentifierT, PerThing128, __OrInvalidIndex};
+#[cfg(feature = "std")]
 use codec::{Decode, Encode};
 use sp_arithmetic::{
 	traits::{Bounded, Zero},

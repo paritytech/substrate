@@ -293,7 +293,7 @@ fn periodic_session_works() {
 	// 1/10 of progress.
 	assert!(P::should_end_session(3u64));
 	assert_eq!(P::estimate_next_session_rotation(3u64).0.unwrap(), 3);
-	assert_eq!(P::estimate_current_session_progress(3u64).0.unwrap(), Permill::from_percent(10),);
+	assert_eq!(P::estimate_current_session_progress(3u64).0.unwrap(), Permill::from_percent(10));
 
 	for i in (1u64..10).map(|i| 3 + i) {
 		assert!(!P::should_end_session(i));

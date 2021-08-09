@@ -18,11 +18,12 @@
 
 use crate::{
 	chain::Client,
-	config::{self, ProtocolId},
+	config::{self, ProtocolId, WarpSyncProvider},
 	error,
 	request_responses::RequestFailure,
 	schema::v1::StateResponse,
 	utils::{interval, LruHashSet},
+	warp_request_handler::EncodedProof,
 };
 
 use bytes::Bytes;
@@ -48,12 +49,9 @@ use message::{
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use prost::Message as _;
+use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_consensus::{
-	block_validation::BlockAnnounceValidator,
-	import_queue::{BlockImportError, BlockImportResult, IncomingBlock, Origin},
-	BlockOrigin,
-};
+use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
@@ -199,6 +197,7 @@ pub struct Protocol<B: BlockT> {
 enum PeerRequest<B: BlockT> {
 	Block(message::BlockRequest<B>),
 	State,
+	WarpProof,
 }
 
 /// Peer information
@@ -242,6 +241,7 @@ impl ProtocolConfig {
 				config::SyncMode::Full => sync::SyncMode::Full,
 				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 					sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
+				config::SyncMode::Warp => sync::SyncMode::Warp,
 			}
 		}
 	}
@@ -296,6 +296,7 @@ impl<B: BlockT> Protocol<B> {
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
+		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
 	) -> error::Result<(Protocol<B>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -303,6 +304,7 @@ impl<B: BlockT> Protocol<B> {
 			chain.clone(),
 			block_announce_validator,
 			config.max_parallel_downloads,
+			warp_sync_provider,
 		)
 		.map_err(Box::new)?;
 
@@ -727,6 +729,26 @@ impl<B: BlockT> Protocol<B> {
 		}
 	}
 
+	/// Must be called in response to a [`CustomMessageOutcome::WarpSyncRequest`] being emitted.
+	/// Must contain the same `PeerId` and request that have been emitted.
+	pub fn on_warp_sync_response(
+		&mut self,
+		peer_id: PeerId,
+		response: crate::warp_request_handler::EncodedProof,
+	) -> CustomMessageOutcome<B> {
+		match self.sync.on_warp_sync_data(&peer_id, response) {
+			Ok(sync::OnWarpSyncData::WarpProofRequest(peer, req)) =>
+				prepare_warp_sync_request::<B>(&mut self.peers, peer, req),
+			Ok(sync::OnWarpSyncData::StateRequest(peer, req)) =>
+				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Err(sync::BadPeer(id, repu)) => {
+				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
+				self.peerset_handle.report_peer(id, repu);
+				CustomMessageOutcome::None
+			},
+		}
+	}
+
 	/// Perform time based maintenance.
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
@@ -1048,7 +1070,7 @@ impl<B: BlockT> Protocol<B> {
 		&mut self,
 		imported: usize,
 		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) {
 		let results = self.sync.on_blocks_processed(imported, count, results);
 		for result in results {
@@ -1251,6 +1273,19 @@ fn prepare_state_request<B: BlockT>(
 	CustomMessageOutcome::StateRequest { target: who, request, pending_response: tx }
 }
 
+fn prepare_warp_sync_request<B: BlockT>(
+	peers: &mut HashMap<PeerId, Peer<B>>,
+	who: PeerId,
+	request: crate::warp_request_handler::Request<B>,
+) -> CustomMessageOutcome<B> {
+	let (tx, rx) = oneshot::channel();
+
+	if let Some(ref mut peer) = peers.get_mut(&who) {
+		peer.request = Some((PeerRequest::WarpProof, rx));
+	}
+	CustomMessageOutcome::WarpSyncRequest { target: who, request, pending_response: tx }
+}
+
 /// Outcome of an incoming custom message.
 #[derive(Debug)]
 #[must_use]
@@ -1292,6 +1327,12 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	StateRequest {
 		target: PeerId,
 		request: crate::schema::v1::StateRequest,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+	},
+	/// A new warp sync request must be emitted.
+	WarpSyncRequest {
+		target: PeerId,
+		request: crate::warp_request_handler::Request<B>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// Peer has a reported a new head of chain.
@@ -1367,6 +1408,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		// Check for finished outgoing requests.
 		let mut finished_block_requests = Vec::new();
 		let mut finished_state_requests = Vec::new();
+		let mut finished_warp_sync_requests = Vec::new();
 		for (id, peer) in self.peers.iter_mut() {
 			if let Peer { request: Some((_, pending_response)), .. } = peer {
 				match pending_response.poll_unpin(cx) {
@@ -1414,6 +1456,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 									};
 
 								finished_state_requests.push((id.clone(), protobuf_response));
+							},
+							PeerRequest::WarpProof => {
+								finished_warp_sync_requests.push((id.clone(), resp));
 							},
 						}
 					},
@@ -1477,6 +1522,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			let ev = self.on_state_response(id, protobuf_response);
 			self.pending_messages.push_back(ev);
 		}
+		for (id, response) in finished_warp_sync_requests {
+			let ev = self.on_warp_sync_response(id, EncodedProof(response));
+			self.pending_messages.push_back(ev);
+		}
 
 		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
 			self.tick();
@@ -1492,6 +1541,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		}
 		for (id, request) in self.sync.justification_requests() {
 			let event = prepare_block_request(&mut self.peers, id, request);
+			self.pending_messages.push_back(event);
+		}
+		if let Some((id, request)) = self.sync.warp_sync_request() {
+			let event = prepare_warp_sync_request(&mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 

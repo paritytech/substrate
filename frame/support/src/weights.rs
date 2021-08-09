@@ -329,6 +329,12 @@ pub trait GetDispatchInfo {
 	fn get_dispatch_info(&self) -> DispatchInfo;
 }
 
+impl GetDispatchInfo for () {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		DispatchInfo::default()
+	}
+}
+
 /// Weight information that is only available post dispatch.
 /// NOTE: This can only be used to reduce the weight or fee, not increase it.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]

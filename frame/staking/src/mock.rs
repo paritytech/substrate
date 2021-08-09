@@ -22,7 +22,10 @@ use crate::*;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
+	traits::{
+		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnInitialize, OnUnbalanced,
+		OneSessionHandler,
+	},
 	weights::constants::RocksDbWeight,
 };
 use sp_core::H256;
@@ -132,7 +135,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
@@ -593,7 +596,7 @@ pub(crate) fn current_era() -> EraIndex {
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller,));
+	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
 	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
 }
 
@@ -605,7 +608,7 @@ pub(crate) fn bond_nominator(
 ) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller,));
+	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
 

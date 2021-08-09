@@ -427,7 +427,7 @@ fn full_native_block_import_works() {
 			Balances::total_balance(&alice()),
 			alice_last_known_balance - 10 * DOLLARS - fees,
 		);
-		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - fees,);
+		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - fees);
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
@@ -529,7 +529,7 @@ fn full_wasm_block_import_works() {
 			Balances::total_balance(&alice()),
 			alice_last_known_balance - 10 * DOLLARS - fees,
 		);
-		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * fees,);
+		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * fees);
 	});
 }
 

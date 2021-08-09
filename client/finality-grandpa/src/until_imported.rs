@@ -759,7 +759,7 @@ mod tests {
 			chain_state.import_header(h3);
 		});
 
-		assert_eq!(unapply_commit(res), unapply_commit(unknown_commit()),);
+		assert_eq!(unapply_commit(res), unapply_commit(unknown_commit()));
 	}
 
 	#[test]
@@ -787,7 +787,7 @@ mod tests {
 			chain_state.import_header(h3);
 		});
 
-		assert_eq!(unapply_commit(res), unapply_commit(known_commit()),);
+		assert_eq!(unapply_commit(res), unapply_commit(known_commit()));
 	}
 
 	#[test]
@@ -835,7 +835,7 @@ mod tests {
 			chain_state.import_header(h3);
 		});
 
-		assert_eq!(unapply_catch_up(res), unapply_catch_up(unknown_catch_up()),);
+		assert_eq!(unapply_catch_up(res), unapply_catch_up(unknown_catch_up()));
 	}
 
 	#[test]
@@ -883,7 +883,7 @@ mod tests {
 			chain_state.import_header(h3);
 		});
 
-		assert_eq!(unapply_catch_up(res), unapply_catch_up(unknown_catch_up()),);
+		assert_eq!(unapply_catch_up(res), unapply_catch_up(unknown_catch_up()));
 	}
 
 	#[test]

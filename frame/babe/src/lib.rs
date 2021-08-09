@@ -24,7 +24,9 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet, OneSessionHandler},
+	traits::{
+		DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet, OneSessionHandler,
+	},
 	weights::{Pays, Weight},
 };
 use sp_application_crypto::Public;
@@ -136,6 +138,11 @@ pub mod pallet {
 		/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
 		/// when no other module is responsible for changing authority set.
 		type EpochChangeTrigger: EpochChangeTrigger;
+
+		/// A way to check whether a given validator is disabled and should not be authoring blocks.
+		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
+		/// initialization.
+		type DisabledValidators: DisabledValidators;
 
 		/// The proof of key ownership, used for validating equivocation reports.
 		/// The proof must include the session index and validator count of the
@@ -342,12 +349,12 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Header>,
+			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			Self::do_report_equivocation(Some(reporter), equivocation_proof, key_owner_proof)
+			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
 		}
 
 		/// Report authority equivocation/misbehavior. This method will verify
@@ -363,14 +370,14 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Header>,
+			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)
 		}
@@ -677,6 +684,13 @@ impl<T: Config> Pallet<T> {
 			CurrentSlot::<T>::put(current_slot);
 
 			let authority_index = digest.authority_index();
+
+			if T::DisabledValidators::is_disabled(authority_index) {
+				panic!(
+					"Validator with index {:?} is disabled and should not be attempting to author blocks.",
+					authority_index,
+				);
+			}
 
 			// Extract out the VRF output if we have it
 			digest.vrf_output().and_then(|vrf_output| {

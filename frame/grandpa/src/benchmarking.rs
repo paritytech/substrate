@@ -76,15 +76,12 @@ benchmarks! {
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-			assert_ok!(test_benchmark_note_stalled::<Test>());
-		})
-	}
+	frame_benchmarking::impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(vec![(1, 1), (2, 1), (3, 1)]),
+		crate::mock::Test,
+	);
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {

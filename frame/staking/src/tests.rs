@@ -18,10 +18,12 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use frame_election_provider_support::Support;
+use frame_election_provider_support::{ElectionProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, OnInitialize, ReservableCurrency},
+	dispatch::WithPostDispatchInfo,
+	pallet_prelude::*,
+	traits::{Currency, Get, OnInitialize, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
@@ -29,8 +31,13 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
+	Perbill, Percent,
 };
-use sp_staking::offence::OffenceDetails;
+use sp_staking::{
+	offence::{OffenceDetails, OnOffenceHandler},
+	SessionIndex,
+};
+use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -250,7 +257,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
+			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
 		);
 		mock::make_all_reward_payment(0);
 
@@ -259,13 +266,13 @@ fn rewards_should_work() {
 			init_balance_10 + part_for_10 * total_payout_0 * 2 / 3,
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2,);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&20),
 			init_balance_20 + part_for_20 * total_payout_0 * 1 / 3,
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2,);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
 			init_balance_100 +
@@ -288,7 +295,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
+			Event::EraPaid(1, total_payout_1, maximum_payout - total_payout_1)
 		);
 		mock::make_all_reward_payment(1);
 
@@ -297,13 +304,13 @@ fn rewards_should_work() {
 			init_balance_10 + part_for_10 * (total_payout_0 * 2 / 3 + total_payout_1),
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2,);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&20),
 			init_balance_20 + part_for_20 * total_payout_0 * 1 / 3,
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2,);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
 			init_balance_100 +
@@ -468,7 +475,7 @@ fn no_candidate_emergency_condition() {
 
 			// try trigger new era
 			mock::run_to_block(20);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElectionFailed,);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakingElectionFailed);
 			// No new era is created
 			assert_eq!(current_era, CurrentEra::<Test>::get());
 
@@ -607,7 +614,7 @@ fn nominators_also_get_slashed_pro_rata() {
 		let slash_percent = Perbill::from_percent(5);
 		let initial_exposure = Staking::eras_stakers(active_era(), 11);
 		// 101 is a nominator for 11
-		assert_eq!(initial_exposure.others.first().unwrap().who, 101,);
+		assert_eq!(initial_exposure.others.first().unwrap().who, 101);
 
 		// staked values;
 		let nominator_stake = Staking::ledger(100).unwrap().active;
@@ -639,8 +646,8 @@ fn nominators_also_get_slashed_pro_rata() {
 		assert!(nominator_share > 0);
 
 		// both stakes must have been decreased pro-rata.
-		assert_eq!(Staking::ledger(100).unwrap().active, nominator_stake - nominator_share,);
-		assert_eq!(Staking::ledger(10).unwrap().active, validator_stake - validator_share,);
+		assert_eq!(Staking::ledger(100).unwrap().active, nominator_stake - nominator_share);
+		assert_eq!(Staking::ledger(10).unwrap().active, validator_stake - validator_share);
 		assert_eq!(
 			balances(&101).0, // free balance
 			nominator_balance - nominator_share,
@@ -905,7 +912,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).own, 1000);
 		// Confirm account 11 cannot reserve as a result
-		assert_noop!(Balances::reserve(&11, 1), BalancesError::<Test, _>::LiquidityRestrictions,);
+		assert_noop!(Balances::reserve(&11, 1), BalancesError::<Test, _>::LiquidityRestrictions);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
@@ -1312,7 +1319,7 @@ fn rebond_works() {
 		assert_eq!(Staking::active_era().unwrap().index, 2);
 
 		// Try to rebond some funds. We get an error since no fund is unbonded.
-		assert_noop!(Staking::rebond(Origin::signed(10), 500), Error::<Test>::NoUnlockChunk,);
+		assert_noop!(Staking::rebond(Origin::signed(10), 500), Error::<Test>::NoUnlockChunk);
 
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 900).unwrap();
@@ -2606,9 +2613,9 @@ fn slashing_nominators_by_span_max() {
 
 		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
 
-		assert_eq!(get_span(11).iter().collect::<Vec<_>>(), expected_spans,);
+		assert_eq!(get_span(11).iter().collect::<Vec<_>>(), expected_spans);
 
-		assert_eq!(get_span(101).iter().collect::<Vec<_>>(), expected_spans,);
+		assert_eq!(get_span(101).iter().collect::<Vec<_>>(), expected_spans);
 
 		// second slash: higher era, higher value, same span.
 		on_offence_in_era(
@@ -3724,7 +3731,7 @@ fn cannot_rebond_to_lower_than_ed() {
 			);
 
 			// now bond a wee bit more
-			assert_noop!(Staking::rebond(Origin::signed(20), 5), Error::<Test>::InsufficientBond,);
+			assert_noop!(Staking::rebond(Origin::signed(20), 5), Error::<Test>::InsufficientBond);
 		})
 }
 
@@ -3935,7 +3942,7 @@ mod election_data_provider {
 			run_to_block(20);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
 			assert_eq!(staking_events().len(), 1);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElection);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
 			for b in 21..45 {
 				run_to_block(b);
@@ -3946,7 +3953,7 @@ mod election_data_provider {
 			run_to_block(45);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
 			assert_eq!(staking_events().len(), 3);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElection);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
 			Staking::force_no_eras(Origin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
@@ -3969,7 +3976,7 @@ mod election_data_provider {
 			run_to_block(55);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
 			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElection);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})

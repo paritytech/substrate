@@ -111,7 +111,7 @@ use crate::{
 };
 use frame_support::{
 	dispatch::Dispatchable,
-	traits::{Currency, Filter, Get, OnUnbalanced, Randomness, Time},
+	traits::{Contains, Currency, Get, OnUnbalanced, Randomness, StorageVersion, Time},
 	weights::{GetDispatchInfo, PostDispatchInfo, Weight, WithPostDispatchInfo},
 };
 use frame_system::Pallet as System;
@@ -133,6 +133,9 @@ type BalanceOf<T> =
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -186,7 +189,7 @@ pub mod pallet {
 		/// Therefore please make sure to be restrictive about which dispatchables are allowed
 		/// in order to not introduce a new DoS vector like memory allocation patterns that can
 		/// be exploited to drive the runtime into a panic.
-		type CallFilter: Filter<<Self as frame_system::Config>::Call>;
+		type CallFilter: Contains<<Self as frame_system::Config>::Call>;
 
 		/// Handler for rent payments.
 		type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -273,6 +276,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
