@@ -169,8 +169,6 @@ build-rust-doc:
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
-    # FIXME: remove me
-    - groups
     # FIXME: remove me after CI image gets nonroot
     - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
@@ -199,8 +197,6 @@ publish-docs:
   before_script:
     - unset CARGO_TARGET_DIR
   script:
-    # FIXME: remove me
-    - groups
     - rm -rf /tmp/*
     # Set git config
     - rm -rf .git/config
@@ -220,7 +216,6 @@ publish-docs:
     - mv /tmp/doc/* .
     # Upload files
     - git add --all --force
-    - git status
     # `git commit` has an exit code of > 0 if there is nothing to commit.
     # This unfortunately causes GitLab to exit immediately and mark this
     # job as failed subsequently.
@@ -230,6 +225,4 @@ publish-docs:
         echo "___Nothing to commit___"
     - git push origin gh-pages --force
   after_script:
-    # FIXME: remove me
-    - groups
     - rm -rf .git/ ./*
