@@ -1,0 +1,38 @@
+on:
+  pull_request:
+    branches:
+      - mangata-dev
+  push:
+    branches: [ mangata-dev ]
+
+name: build
+
+jobs:
+  check:
+    name: Rust project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install newset Cargo
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          default: true
+      - name: Install nightly-2020-10-01 with wasm
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2020-10-01
+          target: wasm32-unknown-unknown
+      - name: Check Cargo version
+        run: |
+          cargo --version
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: nightly-x86_64-unknown-linux-gnu
+          command: check
+      - name: Test cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: nightly-x86_64-unknown-linux-gnu
+          command: test
