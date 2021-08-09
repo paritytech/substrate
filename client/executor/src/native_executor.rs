@@ -45,7 +45,7 @@ use sp_core::{
 };
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
-use sp_version::{NativeVersion, RuntimeVersion, GetNativeVersion};
+use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{Function, HostFunctions};
 
 /// Default num of pages for the heap
