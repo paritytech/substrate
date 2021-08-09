@@ -310,9 +310,10 @@ pub fn create_wasm_runtime_with_code(
 
 			sc_executor_wasmi::create_runtime(
 				blob,
-				heap_pages,
+				heap_pages as u32,
 				host_functions,
 				allow_missing_func_imports,
+				None,
 			)
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
