@@ -554,7 +554,6 @@ build-rust-doc:
     - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
-  allow_failure:                   true
 
 #### stage:                        publish
 
