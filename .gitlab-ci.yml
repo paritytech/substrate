@@ -642,33 +642,6 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-publish-s3-doc:
-  stage:                           publish
-  image:                           paritytech/awscli:latest
-  allow_failure:                   true
-  needs:
-    - job:                         build-rust-doc
-      artifacts:                   true
-    - job:                         build-linux-substrate
-      artifacts:                   false
-  <<:                              *build-refs
-  <<:                              *kubernetes-env
-  variables:
-    GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io"
-    PREFIX:                        "substrate-rustdoc"
-  script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - ls -lah crate-docs
-    - aws s3 sync --delete --size-only --only-show-errors
-        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
-  after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
-        --human-readable --summarize
-
 publish-docs:
   stage:                           publish
   <<:                              *kubernetes-env
