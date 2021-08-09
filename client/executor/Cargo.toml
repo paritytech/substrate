@@ -54,7 +54,7 @@ paste = "1.0"
 regex = "1"
 
 [features]
-default = [ "std" ]
+default = [ "std", "wasmer-sandbox" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = []
 wasm-extern-trace = []
