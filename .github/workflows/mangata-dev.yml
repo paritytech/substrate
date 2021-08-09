@@ -29,10 +29,10 @@ jobs:
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-x86_64-unknown-linux-gnu
+          toolchain: nightly-2020-10-01
           command: check
       - name: Test cargo check
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-x86_64-unknown-linux-gnu
+          toolchain: nightly-2020-10-01
           command: test
