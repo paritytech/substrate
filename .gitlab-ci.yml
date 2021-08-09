@@ -668,6 +668,57 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
+publish-docs:
+  stage:                           publish
+  <<:                              *kubernetes-env
+  needs:
+    - job:                         build-rust-doc
+      artifacts:                   true
+    - job:                         build-linux-substrate
+      artifacts:                   false
+  variables:
+    GIT_DEPTH:                     100
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "master"
+  before_script:
+    - unset CARGO_TARGET_DIR
+  script:
+    - rm -rf /tmp/*
+    # Set git config
+    - rm -rf .git/config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # saving README and docs
+    - cp -r ./crate-docs/ /tmp/doc/
+    - cp README.md /tmp/doc/
+    - cp -r .images/ /tmp/doc/
+    - git checkout gh-pages
+    - mv _config.yml /tmp/doc/
+    # remove everything and restore generated docs, README and Jekyll config
+    - rm -rf ./*
+    - rm -rf ./.images
+    - mv /tmp/doc/* .
+    - mv /tmp/doc/.images .
+    # Upload files
+    - git add --all --force
+    - git status
+    # `git commit` has an exit code of > 0 if there is nothing to commit.
+    # This unfortunately causes GitLab to exit immediately and mark this
+    # job as failed subsequently.
+    # We don't want to mark the entire job as failed if there's nothing to
+    # publish though, hence the `|| true`.
+    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
+        echo "___Nothing to commit___"
+    - git push origin gh-pages --force
+  after_script:
+    - rm -rf .git/ ./*
+
 publish-draft-release:
   stage:                           publish
   image:                           paritytech/tools:latest
