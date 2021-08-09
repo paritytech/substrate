@@ -297,7 +297,7 @@ pub struct DatabaseSettings {
 	/// State pruning mode.
 	pub state_pruning: PruningMode,
 	/// Where to find the database.
-	pub source: DatabaseSettingsSrc,
+	pub source: DatabaseSource,
 	/// Block pruning mode.
 	pub keep_blocks: KeepBlocks,
 	/// Block body/Transaction storage scheme.
@@ -325,7 +325,17 @@ pub enum TransactionStorageMode {
 
 /// Where to find the database..
 #[derive(Debug, Clone)]
-pub enum DatabaseSettingsSrc {
+pub enum DatabaseSource {
+	/// Check given path, and see if there is an existing database there. If it's either `RocksDb`
+	/// or `ParityDb`, use it. If there is none, create a new instance of `ParityDb`.
+	Auto {
+		/// Path to the paritydb database.
+		paritydb_path: PathBuf,
+		/// Path to the rocksdb database.
+		rocksdb_path: PathBuf,
+		/// Cache size in MiB. Used only by `RocksDb` variant of `DatabaseSource`.
+		cache_size: usize,
+	},
 	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {
 		/// Path to the database.
@@ -344,27 +354,28 @@ pub enum DatabaseSettingsSrc {
 	Custom(Arc<dyn Database<DbHash>>),
 }
 
-impl DatabaseSettingsSrc {
+impl DatabaseSource {
 	/// Return dabase path for databases that are on the disk.
 	pub fn path(&self) -> Option<&Path> {
 		match self {
-			DatabaseSettingsSrc::RocksDb { path, .. } => Some(path.as_path()),
-			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
-			DatabaseSettingsSrc::Custom(_) => None,
+			// as per https://github.com/paritytech/substrate/pull/9500#discussion_r684312550
+			//
+			// IIUC this is needed for polkadot to create its own dbs, so until it can use parity db
+			// I would think rocksdb, but later parity-db.
+			DatabaseSource::Auto { paritydb_path, .. } => Some(&paritydb_path),
+			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(&path),
+			DatabaseSource::Custom(..) => None,
 		}
-	}
-	/// Check if database supports internal ref counting for state data.
-	pub fn supports_ref_counting(&self) -> bool {
-		matches!(self, DatabaseSettingsSrc::ParityDb { .. })
 	}
 }
 
-impl std::fmt::Display for DatabaseSettingsSrc {
+impl std::fmt::Display for DatabaseSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let name = match self {
-			DatabaseSettingsSrc::RocksDb { .. } => "RocksDb",
-			DatabaseSettingsSrc::ParityDb { .. } => "ParityDb",
-			DatabaseSettingsSrc::Custom(_) => "Custom",
+			DatabaseSource::Auto { .. } => "Auto",
+			DatabaseSource::RocksDb { .. } => "RocksDb",
+			DatabaseSource::ParityDb { .. } => "ParityDb",
+			DatabaseSource::Custom(_) => "Custom",
 		};
 		write!(f, "{}", name)
 	}
@@ -1106,7 +1117,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
 			state_pruning: PruningMode::keep_blocks(keep_blocks),
-			source: DatabaseSettingsSrc::Custom(db),
+			source: DatabaseSource::Custom(db),
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 			transaction_storage,
 		};
@@ -1125,15 +1136,12 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.state_pruning.clone(),
-			!config.source.supports_ref_counting(),
+			!db.supports_ref_counting(),
 			&StateMetaDb(&*db),
 		)
 		.map_err(map_e)?;
-		let storage_db = StorageDb {
-			db: db.clone(),
-			state_db,
-			prefix_keys: !config.source.supports_ref_counting(),
-		};
+		let storage_db =
+			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
 			db,
@@ -2516,7 +2524,7 @@ pub(crate) mod tests {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
 				state_pruning: PruningMode::keep_blocks(1),
-				source: DatabaseSettingsSrc::Custom(backing),
+				source: DatabaseSource::Custom(backing),
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},
