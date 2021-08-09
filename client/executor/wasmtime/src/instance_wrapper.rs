@@ -29,6 +29,7 @@ use sc_executor_common::{
 use sp_wasm_interface::{Pointer, Value, WordSize};
 use std::{marker, slice};
 use wasmtime::{Extern, Func, Global, Instance, Memory, Module, Store, Table, Val};
+use sc_allocator::{Memory as MemoryT, FreeingBumpHeapAllocator};
 
 /// Invoked entrypoint format.
 pub enum EntryPointType {
@@ -90,6 +91,41 @@ impl EntryPoint {
 	}
 }
 
+/// Wrapper around [`Memor`] that implements [`MemoryT`].
+struct MemoryWrapper<'a>(&'a Memory);
+
+impl MemoryT for MemoryWrapper<'_> {
+	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R {
+		unsafe {
+			run(self.0.data_unchecked_mut())
+		}
+	}
+
+	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R {
+		unsafe {
+			run(self.0.data_unchecked())
+		}
+	}
+
+	fn pages(&self) -> u32 {
+		self.0.size()
+	}
+
+	fn grow(&mut self, additional: u32) -> std::result::Result<(), ()> {
+		self.0
+			.grow(additional)
+			.map_err(|e| {
+				log::error!(
+					target: "wasm-executor",
+					"Failed to grow memory by {} pages: {:?}",
+					additional,
+					e,
+				)
+			})
+			.map(drop)
+	}
+}
+
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
 /// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
@@ -99,7 +135,6 @@ pub struct InstanceWrapper {
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
-	// See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
 	table: Option<Table>,
 	// Make this struct explicitly !Send & !Sync.
@@ -298,7 +333,7 @@ impl InstanceWrapper {
 		unsafe {
 			// This should be safe since we don't grow up memory while caching this reference and
 			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice();
+			let memory = self.memory.data_unchecked();
 
 			let range = util::checked_range(address.into(), dest.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
@@ -314,7 +349,7 @@ impl InstanceWrapper {
 		unsafe {
 			// This should be safe since we don't grow up memory while caching this reference and
 			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice_mut();
+			let memory = self.memory.data_unchecked_mut();
 
 			let range = util::checked_range(address.into(), data.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
@@ -329,16 +364,11 @@ impl InstanceWrapper {
 	/// to get more details.
 	pub fn allocate(
 		&self,
-		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
+		allocator: &mut FreeingBumpHeapAllocator,
 		size: WordSize,
 	) -> Result<Pointer<u8>> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice_mut();
-
-			allocator.allocate(memory, size).map_err(Into::into)
-		}
+		let mut memory = MemoryWrapper(&self.memory);
+		allocator.allocate(&mut memory, size).map_err(Into::into)
 	}
 
 	/// Deallocate the memory pointed by the given pointer.
@@ -346,52 +376,11 @@ impl InstanceWrapper {
 	/// Returns `Err` in case the given memory region cannot be deallocated.
 	pub fn deallocate(
 		&self,
-		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
+		allocator: &mut FreeingBumpHeapAllocator,
 		ptr: Pointer<u8>,
 	) -> Result<()> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice_mut();
-
-			allocator.deallocate(memory, ptr).map_err(Into::into)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// Wasmtime doesn't provide comprehensive documentation about the exact behavior of the data
-	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
-	/// growing, we cannot guarantee the lifetime of the returned slice reference.
-	unsafe fn memory_as_slice(&self) -> &[u8] {
-		let ptr = self.memory.data_ptr() as *const _;
-		let len = self.memory.data_size();
-
-		if len == 0 {
-			&[]
-		} else {
-			slice::from_raw_parts(ptr, len)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
-	/// returned it must be ensured that only one mutable and no shared references to memory exists
-	/// at the same time.
-	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
-		let ptr = self.memory.data_ptr();
-		let len = self.memory.data_size();
-
-		if len == 0 {
-			&mut []
-		} else {
-			slice::from_raw_parts_mut(ptr, len)
-		}
+		let mut memory = MemoryWrapper(&self.memory);
+		allocator.deallocate(&mut memory, ptr).map_err(Into::into)
 	}
 
 	/// Returns the pointer to the first byte of the linear memory for this instance.
