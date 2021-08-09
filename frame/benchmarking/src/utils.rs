@@ -123,9 +123,9 @@ impl BenchmarkResult {
 /// * Stop: The benchmarking pipeline should stop and return the inner string.
 /// * WeightOverride: The benchmarking pipeline is allowed to fail here, and we should use the
 ///   included weight instead.
-#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum BenchmarkError {
-	Stop(#[codec(skip)] &'static str),
+	Stop(&'static str),
 	Override(BenchmarkResult),
 }
 
