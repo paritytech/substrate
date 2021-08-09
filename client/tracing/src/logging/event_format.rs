@@ -43,6 +43,8 @@ pub struct EventFormat<T = SystemTime> {
 	pub display_thread_name: bool,
 	/// Enable ANSI terminal colors for formatted output.
 	pub enable_color: bool,
+	/// Duplicate INFO, WARN and ERROR messages to stdout.
+	pub dup_to_stdout: bool,
 }
 
 impl<T> EventFormat<T>
@@ -62,10 +64,6 @@ where
 		S: Subscriber + for<'a> LookupSpan<'a>,
 		N: for<'a> FormatFields<'a> + 'static,
 	{
-		if event.metadata().target() == sc_telemetry::TELEMETRY_LOG_SPAN {
-			return Ok(());
-		}
-
 		let writer = &mut MaybeColorWriter::new(self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
@@ -81,11 +79,11 @@ where
 			match current_thread.name() {
 				Some(name) => {
 					write!(writer, "{} ", FmtThreadName::new(name))?;
-				}
+				},
 				// fall-back to thread id when name is absent and ids are not enabled
 				None => {
 					write!(writer, "{:0>2?} ", current_thread.id())?;
-				}
+				},
 			}
 		}
 
@@ -100,7 +98,7 @@ where
 				let exts = span.extensions();
 				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
 					write!(writer, "{}", prefix.as_str())?;
-					break;
+					break
 				}
 			}
 		}
@@ -127,7 +125,19 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
-		self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
+		if self.dup_to_stdout &&
+			(event.metadata().level() == &Level::INFO ||
+				event.metadata().level() == &Level::WARN ||
+				event.metadata().level() == &Level::ERROR)
+		{
+			let mut out = String::new();
+			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut out, event)?;
+			writer.write_str(&out)?;
+			print!("{}", out);
+			Ok(())
+		} else {
+			self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
+		}
 	}
 }
 
@@ -261,9 +271,8 @@ where
 	) -> fmt::Result {
 		match self {
 			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
-			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) => {
-				fmt_fields.format_fields(writer, fields)
-			}
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) =>
+				fmt_fields.format_fields(writer, fields),
 		}
 	}
 }
@@ -311,11 +320,7 @@ impl<'a> fmt::Write for MaybeColorWriter<'a> {
 impl<'a> MaybeColorWriter<'a> {
 	/// Creates a new instance.
 	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
-		Self {
-			enable_color,
-			inner_writer,
-			buffer: String::new(),
-		}
+		Self { enable_color, inner_writer, buffer: String::new() }
 	}
 
 	/// Write the buffered content to the `inner_writer`.

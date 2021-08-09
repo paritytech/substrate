@@ -21,33 +21,37 @@
 
 use super::*;
 
+use crate as utility;
 use frame_support::{
-	assert_ok, assert_noop, parameter_types, assert_err_ignore_postinfo,
-	weights::{Weight, Pays},
+	assert_err_ignore_postinfo, assert_noop, assert_ok, decl_module,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
-	traits::Filter,
-	storage,
+	parameter_types, storage,
+	traits::Contains,
+	weights::{Pays, Weight},
 };
 use sp_core::H256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use crate as utility;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 // example module to test behaviors.
 pub mod example {
 	use super::*;
-	use frame_support::dispatch::WithPostDispatchInfo;
-	pub trait Config: frame_system::Config { }
+	use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+	use frame_system::ensure_signed;
+	pub trait Config: frame_system::Config {}
 
 	decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
-			#[weight = *weight]
-			fn noop(_origin, weight: Weight) { }
+			#[weight = *_weight]
+			fn noop(_origin, _weight: Weight) { }
 
-			#[weight = *start_weight]
+			#[weight = *_start_weight]
 			fn foobar(
 				origin,
 				err: bool,
-				start_weight: Weight,
+				_start_weight: Weight,
 				end_weight: Option<Weight>,
 			) -> DispatchResultWithPostInfo {
 				let _ = ensure_signed(origin)?;
@@ -62,6 +66,9 @@ pub mod example {
 					Ok(end_weight.into())
 				}
 			}
+
+			#[weight = 0]
+			fn big_variant(_origin, _arg: [u8; 400]) {}
 		}
 	}
 }
@@ -75,10 +82,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Utility: utility::{Module, Call, Event},
-		Example: example::{Module, Call},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Utility: utility::{Pallet, Call, Event},
+		Example: example::{Pallet, Call},
 	}
 );
 
@@ -110,12 +117,15 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
@@ -132,8 +142,8 @@ parameter_types! {
 impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
-impl Filter<Call> for TestBaseCallFilter {
-	fn filter(c: &Call) -> bool {
+impl Contains<Call> for TestBaseCallFilter {
+	fn contains(c: &Call) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
 			Call::Balances(pallet_balances::Call::transfer(..)) => true,
@@ -156,25 +166,18 @@ type ExampleCall = example::Call<Test>;
 type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
-use pallet_balances::Call as BalancesCall;
-use pallet_balances::Error as BalancesError;
+use pallet_balances::{Call as BalancesCall, Error as BalancesError};
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
-}
-
-fn last_event() -> Event {
-	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<Event>>(e: E) {
-	assert_eq!(last_event(), e.into());
 }
 
 #[test]
@@ -182,11 +185,14 @@ fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::derivative_account_id(1, 0);
 		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
-		assert_err_ignore_postinfo!(Utility::as_derivative(
-			Origin::signed(1),
-			1,
-			Box::new(Call::Balances(BalancesCall::transfer(6, 3))),
-		), BalancesError::<Test, _>::InsufficientBalance);
+		assert_err_ignore_postinfo!(
+			Utility::as_derivative(
+				Origin::signed(1),
+				1,
+				Box::new(Call::Balances(BalancesCall::transfer(6, 3))),
+			),
+			BalancesError::<Test, _>::InsufficientBalance
+		);
 		assert_ok!(Utility::as_derivative(
 			Origin::signed(1),
 			0,
@@ -260,11 +266,14 @@ fn as_derivative_handles_weight_refund() {
 #[test]
 fn as_derivative_filters() {
 	new_test_ext().execute_with(|| {
-		assert_err_ignore_postinfo!(Utility::as_derivative(
-			Origin::signed(1),
-			1,
-			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
-		), DispatchError::BadOrigin);
+		assert_err_ignore_postinfo!(
+			Utility::as_derivative(
+				Origin::signed(1),
+				1,
+				Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
+			),
+			DispatchError::BadOrigin
+		);
 	});
 }
 
@@ -273,14 +282,17 @@ fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		let k = b"a".to_vec();
 		let call = Call::System(frame_system::Call::set_storage(vec![(k.clone(), k.clone())]));
-		assert!(!TestBaseCallFilter::filter(&call));
+		assert!(!TestBaseCallFilter::contains(&call));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
-		assert_ok!(Utility::batch(Origin::root(), vec![
-			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
-			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
-			call, // Check filters are correctly bypassed
-		]));
+		assert_ok!(Utility::batch(
+			Origin::root(),
+			vec![
+				Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
+				Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
+				call, // Check filters are correctly bypassed
+			]
+		));
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
 		assert_eq!(storage::unhashed::get_raw(&k), Some(k));
@@ -292,12 +304,13 @@ fn batch_with_signed_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
-		assert_ok!(
-			Utility::batch(Origin::signed(1), vec![
+		assert_ok!(Utility::batch(
+			Origin::signed(1),
+			vec![
 				Call::Balances(BalancesCall::transfer(2, 5)),
 				Call::Balances(BalancesCall::transfer(2, 5))
-			]),
-		);
+			]
+		),);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
 	});
@@ -306,12 +319,13 @@ fn batch_with_signed_works() {
 #[test]
 fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(
-			Utility::batch(Origin::signed(1), vec![
-				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
-			]),
+		assert_ok!(Utility::batch(
+			Origin::signed(1),
+			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))]
+		),);
+		System::assert_last_event(
+			utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into(),
 		);
-		expect_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin));
 	});
 }
 
@@ -320,13 +334,14 @@ fn batch_early_exit_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
-		assert_ok!(
-			Utility::batch(Origin::signed(1), vec![
+		assert_ok!(Utility::batch(
+			Origin::signed(1),
+			vec![
 				Call::Balances(BalancesCall::transfer(2, 5)),
 				Call::Balances(BalancesCall::transfer(2, 10)),
 				Call::Balances(BalancesCall::transfer(2, 5)),
-			]),
-		);
+			]
+		),);
 		assert_eq!(Balances::free_balance(1), 5);
 		assert_eq!(Balances::free_balance(2), 15);
 	});
@@ -385,7 +400,9 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(
+			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+		);
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
 
@@ -398,7 +415,9 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(
+			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+		);
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
 		// Partial batch completion
@@ -409,7 +428,9 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(
+			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+		);
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
@@ -423,12 +444,13 @@ fn batch_all_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
-		assert_ok!(
-			Utility::batch_all(Origin::signed(1), vec![
+		assert_ok!(Utility::batch_all(
+			Origin::signed(1),
+			vec![
 				Call::Balances(BalancesCall::transfer(2, 5)),
 				Call::Balances(BalancesCall::transfer(2, 5))
-			]),
-		);
+			]
+		),);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
 	});
@@ -443,14 +465,19 @@ fn batch_all_revert() {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_noop!(
-			Utility::batch_all(Origin::signed(1), vec![
-				Call::Balances(BalancesCall::transfer(2, 5)),
-				Call::Balances(BalancesCall::transfer(2, 10)),
-				Call::Balances(BalancesCall::transfer(2, 5)),
-			]),
+			Utility::batch_all(
+				Origin::signed(1),
+				vec![
+					Call::Balances(BalancesCall::transfer(2, 5)),
+					Call::Balances(BalancesCall::transfer(2, 10)),
+					Call::Balances(BalancesCall::transfer(2, 5)),
+				]
+			),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(2) + info.weight * 2),
+					actual_weight: Some(
+						<Test as Config>::WeightInfo::batch_all(2) + info.weight * 2
+					),
 					pays_fee: Pays::Yes
 				},
 				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
@@ -523,5 +550,53 @@ fn batch_all_handles_weight_refund() {
 			// Real weight is 2 calls at end_weight
 			<Test as Config>::WeightInfo::batch_all(2) + end_weight * 2,
 		);
+	});
+}
+
+#[test]
+fn batch_all_does_not_nest() {
+	new_test_ext().execute_with(|| {
+		let batch_all = Call::Utility(UtilityCall::batch_all(vec![
+			Call::Balances(BalancesCall::transfer(2, 1)),
+			Call::Balances(BalancesCall::transfer(2, 1)),
+			Call::Balances(BalancesCall::transfer(2, 1)),
+		]));
+
+		let info = batch_all.get_dispatch_info();
+
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		// A nested batch_all call will not pass the filter, and fail with `BadOrigin`.
+		assert_noop!(
+			Utility::batch_all(Origin::signed(1), vec![batch_all.clone()]),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
+					pays_fee: Pays::Yes
+				},
+				error: DispatchError::BadOrigin,
+			}
+		);
+
+		// And for those who want to get a little fancy, we check that the filter persists across
+		// other kinds of dispatch wrapping functions... in this case `batch_all(batch(batch_all(..)))`
+		let batch_nested = Call::Utility(UtilityCall::batch(vec![batch_all]));
+		// Batch will end with `Ok`, but does not actually execute as we can see from the event
+		// and balances.
+		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
+		System::assert_has_event(
+			utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into(),
+		);
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+	});
+}
+
+#[test]
+fn batch_limit() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::System(SystemCall::remark(vec![])); 40_000];
+		assert_noop!(Utility::batch(Origin::signed(1), calls.clone()), Error::<Test>::TooManyCalls);
+		assert_noop!(Utility::batch_all(Origin::signed(1), calls), Error::<Test>::TooManyCalls);
 	});
 }

@@ -7,19 +7,19 @@ The pallet assumes that the amount of members stays at or below `MaxMembers` for
 calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 
 A "prime" member may be set to help determine the default vote behavior based on chain
-config. If `PreimDefaultVote` is used, the prime vote acts as the default vote in case of any
+config. If `PrimeDefaultVote` is used, the prime vote acts as the default vote in case of any
 abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
 abstentations will first follow the majority of the collective voting, and then the prime
 member.
 
-Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
+Voting happens through motions comprising a proposal (i.e. a dispatchable) plus a
 number of approvals required for it to pass and be called. Motions are open for members to
-vote on for a minimum period given by `MotionDuration`. As soon as the needed number of
+vote on for a minimum period given by `MotionDuration`. As soon as the required number of
 approvals is given, the motion is closed and executed. If the number of approvals is not reached
 during the voting period, then `close` may be called by any account in order to force the end
-the motion explicitly. If a prime member is defined then their vote is used in place of any
+the motion explicitly. If a prime member is defined, then their vote is used instead of any
 abstentions and the proposal is executed if there are enough approvals counting the new votes.
 
-If there are not, or if no prime is set, then the motion is dropped without being executed.
+If there are not, or if no prime member is set, then the motion is dropped without being executed.
 
 License: Apache-2.0

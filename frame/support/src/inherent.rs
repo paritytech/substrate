@@ -16,280 +16,69 @@
 // limitations under the License.
 
 #[doc(hidden)]
-pub use crate::sp_std::vec::Vec;
-#[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+pub use crate::sp_std::vec::Vec;
 
+pub use sp_inherents::{
+	CheckInherentsResult, InherentData, InherentIdentifier, IsFatalError, MakeFatalError,
+};
 
-/// Implement the outer inherent.
-/// All given modules need to implement `ProvideInherent`.
+/// A pallet that provides or verifies an inherent extrinsic.
 ///
-/// # Example
-///
-/// ```nocompile
-/// impl_outer_inherent! {
-///     impl Inherents where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
-///         timestamp,
-///         consensus,
-///         aura,
-///     }
-/// }
-/// ```
-#[macro_export]
-macro_rules! impl_outer_inherent {
-	(
-		impl Inherents where
-			Block = $block:ident,
-			UncheckedExtrinsic = $uncheckedextrinsic:ident
-		{
-			$( $module:ident, )*
-		}
-	) => {
-		trait InherentDataExt {
-			fn create_extrinsics(&self) ->
-				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic>;
-			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult;
-		}
+/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
+pub trait ProvideInherent {
+	/// The call type of the pallet.
+	type Call;
+	/// The error returned by `check_inherent`.
+	type Error: codec::Encode + IsFatalError;
+	/// The inherent identifier used by this inherent.
+	const INHERENT_IDENTIFIER: self::InherentIdentifier;
 
-		impl InherentDataExt for $crate::inherent::InherentData {
-			fn create_extrinsics(&self) ->
-				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic> {
-				use $crate::inherent::{ProvideInherent, Extrinsic};
+	/// Create an inherent out of the given `InherentData`.
+	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
-				let mut inherents = Vec::new();
-
-				$(
-					if let Some(inherent) = $module::create_inherent(self) {
-						inherents.push($uncheckedextrinsic::new(
-							inherent.into(),
-							None,
-						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return `Some`; qed"));
-					}
-				)*
-
-				inherents
-			}
-
-			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
-				use $crate::inherent::{ProvideInherent, IsFatalError};
-				use $crate::traits::IsSubType;
-				use $crate::sp_runtime::traits::Block as _;
-
-				let mut result = $crate::inherent::CheckInherentsResult::new();
-				for xt in block.extrinsics() {
-					if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-						break
-					}
-
-					$({
-						if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
-							if let Err(e) = $module::check_inherent(call, self) {
-								result.put_error(
-									$module::INHERENT_IDENTIFIER, &e
-								).expect("There is only one fatal error; qed");
-								if e.is_fatal_error() {
-									return result
-								}
-							}
-						}
-					})*
-				}
-
-				$(
-					match $module::is_inherent_required(self) {
-						Ok(Some(e)) => {
-							let found = block.extrinsics().iter().any(|xt| {
-								if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-									return false
-								}
-
-								let call: Option<&<$module as ProvideInherent>::Call> =
-									xt.function.is_sub_type();
-
-								call.is_some()
-							});
-
-							if !found {
-								result.put_error(
-									$module::INHERENT_IDENTIFIER, &e
-								).expect("There is only one fatal error; qed");
-								if e.is_fatal_error() {
-									return result
-								}
-							}
-						},
-						Ok(None) => (),
-						Err(e) => {
-							result.put_error(
-								$module::INHERENT_IDENTIFIER, &e
-							).expect("There is only one fatal error; qed");
-							if e.is_fatal_error() {
-								return result
-							}
-						},
-					}
-				)*
-
-				result
-			}
-		}
-	};
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_runtime::{traits, testing::{Header, self}};
-	use crate::traits::IsSubType;
-
-	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
-	enum Call {
-		Test(CallTest),
-		Test2(CallTest2),
+	/// Determines whether this inherent is required in this block.
+	///
+	/// - `Ok(None)` indicates that this inherent is not required in this block. The default
+	/// implementation returns this.
+	///
+	/// - `Ok(Some(e))` indicates that this inherent is required in this block. `construct_runtime!`
+	/// will call this function from in its implementation of `fn check_extrinsics`.
+	/// If the inherent is not present, it will return `e`.
+	///
+	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
+	///
+	/// NOTE: If inherent is required then the runtime asserts that the block contains at least
+	/// one inherent for which:
+	/// * type is [`Self::Call`],
+	/// * [`Self::is_inherent`] returns true.
+	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
+		Ok(None)
 	}
 
-	impl From<CallTest> for Call {
-		fn from(call: CallTest) -> Self {
-			Self::Test(call)
-		}
+	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
+	/// omitted by using the default implementation.
+	///
+	/// When checking an inherent, the first parameter represents the inherent that is actually
+	/// included in the block by its author. Whereas the second parameter represents the inherent
+	/// data that the verifying node calculates.
+	///
+	/// NOTE: A block can contains multiple inherent.
+	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
+		Ok(())
 	}
 
-	impl From<CallTest2> for Call {
-		fn from(call: CallTest2) -> Self {
-			Self::Test2(call)
-		}
-	}
-
-	impl IsSubType<CallTest> for Call {
-		fn is_sub_type(&self) -> Option<&CallTest> {
-			match self {
-				Self::Test(test) => Some(test),
-				_ => None,
-			}
-		}
-	}
-
-	impl IsSubType<CallTest2> for Call {
-		fn is_sub_type(&self) -> Option<&CallTest2> {
-			match self {
-				Self::Test2(test) => Some(test),
-				_ => None,
-			}
-		}
-	}
-
-	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
-	enum CallTest {
-		Something,
-		SomethingElse,
-	}
-
-	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
-	enum CallTest2 {
-		Something,
-	}
-
-	struct ModuleTest;
-	impl ProvideInherent for ModuleTest {
-		type Call = CallTest;
-		type Error = sp_inherents::MakeFatalError<()>;
-		const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"test1235";
-
-		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-			Some(CallTest::Something)
-		}
-
-		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
-			match call {
-				CallTest::Something => Ok(()),
-				CallTest::SomethingElse => Err(().into()),
-			}
-		}
-	}
-
-	struct ModuleTest2;
-	impl ProvideInherent for ModuleTest2 {
-		type Call = CallTest2;
-		type Error = sp_inherents::MakeFatalError<()>;
-		const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"test1234";
-
-		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-			Some(CallTest2::Something)
-		}
-
-		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { 
-			Ok(Some(().into()))
-		}
-	}
-
-	type Block = testing::Block<Extrinsic>;
-
-	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
-	struct Extrinsic {
-		function: Call,
-	}
-
-	impl traits::Extrinsic for Extrinsic {
-		type Call = Call;
-		type SignaturePayload = ();
-
-		fn new(function: Call, _: Option<()>) -> Option<Self> {
-			Some(Self { function })
-		}
-	}
-
-	parity_util_mem::malloc_size_of_is_0!(Extrinsic);
-
-	impl_outer_inherent! {
-		impl Inherents where Block = Block, UncheckedExtrinsic = Extrinsic {
-			ModuleTest,
-			ModuleTest2,
-		}
-	}
-
-	#[test]
-	fn create_inherents_works() {
-		let inherents = InherentData::new().create_extrinsics();
-
-		let expected = vec![
-			Extrinsic { function: Call::Test(CallTest::Something) },
-			Extrinsic { function: Call::Test2(CallTest2::Something) },
-		];
-		assert_eq!(expected, inherents);
-	}
-
-	#[test]
-	fn check_inherents_works() {
-		let block = Block::new(
-			Header::new_from_number(1),
-			vec![
-				Extrinsic { function: Call::Test2(CallTest2::Something) },
-				Extrinsic { function: Call::Test(CallTest::Something) },
-			],
-		);
-
-		assert!(InherentData::new().check_extrinsics(&block).ok());
-
-		let block = Block::new(
-			Header::new_from_number(1),
-			vec![
-				Extrinsic { function: Call::Test2(CallTest2::Something) },
-				Extrinsic { function: Call::Test(CallTest::SomethingElse) },
-			],
-		);
-
-		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
-	}
-
-	#[test]
-	fn required_inherents_enforced() {
-		let block = Block::new(
-			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
-		);
-
-		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
-	}
+	/// Return whether the call is an inherent call.
+	///
+	/// NOTE: Signed extrinsics are not inherent, but signed extrinsic with the given call variant
+	/// can be dispatched.
+	///
+	/// # Warning
+	///
+	/// In FRAME, inherent are enforced to be before other extrinsics, for this reason,
+	/// pallets with unsigned transactions **must ensure** that no unsigned transaction call
+	/// is an inherent call, when implementing `ValidateUnsigned::validate_unsigned`.
+	/// Otherwise block producer can produce invalid blocks by including them after non inherent.
+	fn is_inherent(call: &Self::Call) -> bool;
 }

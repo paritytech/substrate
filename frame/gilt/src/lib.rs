@@ -67,28 +67,33 @@
 
 pub use pallet::*;
 
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
-mod benchmarking;
 pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use sp_std::prelude::*;
-	use sp_arithmetic::{Perquintill, PerThing};
-	use sp_runtime::traits::{Zero, Saturating, SaturatedConversion};
-	use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 	pub use crate::weights::WeightInfo;
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{Currency, OnUnbalanced, ReservableCurrency},
+	};
+	use frame_system::pallet_prelude::*;
+	use sp_arithmetic::{PerThing, Perquintill};
+	use sp_runtime::traits::{Saturating, Zero};
+	use sp_std::prelude::*;
 
-	type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-	type PositiveImbalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
-	type NegativeImbalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+	type BalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::PositiveImbalance;
+	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::NegativeImbalance;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -96,7 +101,17 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Currency type that this works on.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+
+		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
+		/// `From<u64>`.
+		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>;
 
 		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
@@ -108,6 +123,11 @@ pub mod pallet {
 		/// Unbalanced handler to account for funds destroyed (in case of a lower total issuance
 		/// over freezing period).
 		type Surplus: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
+		/// the issuance by which we inflate or deflate the gilt.
+		#[pallet::constant]
+		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
 		/// this value multiplied by `Period`.
@@ -191,7 +211,9 @@ pub mod pallet {
 	/// The way of determining the net issuance (i.e. after factoring in all maturing frozen funds)
 	/// is:
 	///
-	/// `total_issuance - frozen + proportion * total_issuance`
+	/// `issuance - frozen + proportion * issuance`
+	///
+	/// where `issuance = total_issuance - IgnoredIssuance`
 	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
 	pub struct ActiveGiltsTotal<Balance> {
 		/// The total amount of funds held in reserve for all active gilts.
@@ -214,13 +236,8 @@ pub mod pallet {
 
 	/// The queues of bids ready to become gilts. Indexed by duration (in `Period`s).
 	#[pallet::storage]
-	pub type Queues<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		Vec<GiltBid<BalanceOf<T>, T::AccountId>>,
-		ValueQuery,
-	>;
+	pub type Queues<T: Config> =
+		StorageMap<_, Blake2_128Concat, u32, Vec<GiltBid<BalanceOf<T>, T::AccountId>>, ValueQuery>;
 
 	/// Information relating to the gilts currently active.
 	#[pallet::storage]
@@ -232,7 +249,11 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		ActiveIndex,
-		ActiveGilt<BalanceOf<T>, <T as frame_system::Config>::AccountId, <T as frame_system::Config>::BlockNumber>,
+		ActiveGilt<
+			BalanceOf<T>,
+			<T as frame_system::Config>::AccountId,
+			<T as frame_system::Config>::BlockNumber,
+		>,
 		OptionQuery,
 	>;
 
@@ -242,7 +263,7 @@ pub mod pallet {
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-	 	fn build(&self) {
+		fn build(&self) {
 			QueueTotals::<T>::put(vec![(0, BalanceOf::<T>::zero()); T::QueueCount::get() as usize]);
 		}
 	}
@@ -298,7 +319,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T:Config> Pallet<T> {
+	impl<T: Config> Pallet<T> {
 		/// Place a bid for a gilt to be issued.
 		///
 		/// Origin must be Signed, and account must have at least `amount` in free balance.
@@ -322,35 +343,35 @@ pub mod pallet {
 
 			ensure!(amount >= T::MinFreeze::get(), Error::<T>::AmountTooSmall);
 			let queue_count = T::QueueCount::get() as usize;
-			let queue_index = duration.checked_sub(1)
-				.ok_or(Error::<T>::DurationTooSmall)? as usize;
+			let queue_index = duration.checked_sub(1).ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
-			let net = Queues::<T>::try_mutate(duration, |q|
-				-> Result<(u32, BalanceOf::<T>), DispatchError>
-			{
-				let queue_full = q.len() == T::MaxQueueLen::get() as usize;
-				ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
-				T::Currency::reserve(&who, amount)?;
+			let net = Queues::<T>::try_mutate(
+				duration,
+				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
+					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
+					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
+					T::Currency::reserve(&who, amount)?;
 
-				// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
-				let mut bid = GiltBid { amount, who: who.clone() };
-				let net = if queue_full {
-					sp_std::mem::swap(&mut q[0], &mut bid);
-					T::Currency::unreserve(&bid.who, bid.amount);
-					(0, amount - bid.amount)
-				} else {
-					q.insert(0, bid);
-					(1, amount)
-				};
+					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
+					let mut bid = GiltBid { amount, who: who.clone() };
+					let net = if queue_full {
+						sp_std::mem::swap(&mut q[0], &mut bid);
+						T::Currency::unreserve(&bid.who, bid.amount);
+						(0, amount - bid.amount)
+					} else {
+						q.insert(0, bid);
+						(1, amount)
+					};
 
-				let sorted_item_count = q.len().saturating_sub(T::FifoQueueLen::get() as usize);
-				if sorted_item_count > 1 {
-					q[0..sorted_item_count].sort_by_key(|x| x.amount);
-				}
+					let sorted_item_count = q.len().saturating_sub(T::FifoQueueLen::get() as usize);
+					if sorted_item_count > 1 {
+						q[0..sorted_item_count].sort_by_key(|x| x.amount);
+					}
 
-				Ok(net)
-			})?;
+					Ok(net)
+				},
+			)?;
 			QueueTotals::<T>::mutate(|qs| {
 				qs.resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 += net.0;
@@ -377,8 +398,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			let queue_count = T::QueueCount::get() as usize;
-			let queue_index = duration.checked_sub(1)
-				.ok_or(Error::<T>::DurationTooSmall)? as usize;
+			let queue_index = duration.checked_sub(1).ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
 			let bid = GiltBid { amount, who };
@@ -434,19 +454,19 @@ pub mod pallet {
 			let gilt = Active::<T>::get(index).ok_or(Error::<T>::Unknown)?;
 			// If found, check the owner is `who`.
 			ensure!(gilt.who == who, Error::<T>::NotOwner);
-			let now = frame_system::Module::<T>::block_number();
+			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= gilt.expiry, Error::<T>::NotExpired);
 			// Remove it
 			Active::<T>::remove(index);
 
 			// Multiply the proportion it is by the total issued.
-			let total_issuance = T::Currency::total_issuance();
+			let total_issuance =
+				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 			ActiveTotal::<T>::mutate(|totals| {
-				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-					.saturated_into();
-				let effective_issuance = totals.proportion.left_from_one()
-					.saturating_reciprocal_mul(nongilt_issuance);
-				let gilt_value: BalanceOf<T> = (gilt.proportion * effective_issuance).saturated_into();
+				let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
+				let effective_issuance =
+					totals.proportion.left_from_one().saturating_reciprocal_mul(nongilt_issuance);
+				let gilt_value = gilt.proportion * effective_issuance;
 
 				totals.frozen = totals.frozen.saturating_sub(gilt.amount);
 				totals.proportion = totals.proportion.saturating_sub(gilt.proportion);
@@ -482,7 +502,35 @@ pub mod pallet {
 		}
 	}
 
+	/// Issuance information returned by `issuance()`.
+	pub struct IssuanceInfo<Balance> {
+		/// The balance held in reserve over all active gilts.
+		pub reserved: Balance,
+		/// The issuance not held in reserve for active gilts. Together with `reserved` this sums to
+		/// `Currency::total_issuance`.
+		pub non_gilt: Balance,
+		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
+		/// and could be less than `reserved` (though in most cases should be greater).
+		pub effective: Balance,
+	}
+
 	impl<T: Config> Pallet<T> {
+		/// Get the target amount of Gilts that we're aiming for.
+		pub fn target() -> Perquintill {
+			ActiveTotal::<T>::get().target
+		}
+
+		/// Returns information on the issuance of gilts.
+		pub fn issuance() -> IssuanceInfo<BalanceOf<T>> {
+			let totals = ActiveTotal::<T>::get();
+
+			let total_issuance = T::Currency::total_issuance();
+			let non_gilt = total_issuance.saturating_sub(totals.frozen);
+			let effective = totals.proportion.left_from_one().saturating_reciprocal_mul(non_gilt);
+
+			IssuanceInfo { reserved: totals.frozen, non_gilt, effective }
+		}
+
 		/// Attempt to enlarge our gilt-set from bids in order to satisfy our desired target amount
 		/// of funds frozen into gilts.
 		pub fn pursue_target(max_bids: u32) -> Weight {
@@ -490,17 +538,17 @@ pub mod pallet {
 			if totals.proportion < totals.target {
 				let missing = totals.target.saturating_sub(totals.proportion);
 
-				let total_issuance = T::Currency::total_issuance();
-				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-					.saturated_into();
-				let effective_issuance = totals.proportion.left_from_one()
-					.saturating_reciprocal_mul(nongilt_issuance);
-				let intake: BalanceOf<T> = (missing * effective_issuance).saturated_into();
+				let total_issuance =
+					T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
+				let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
+				let effective_issuance =
+					totals.proportion.left_from_one().saturating_reciprocal_mul(nongilt_issuance);
+				let intake = missing * effective_issuance;
 
 				let (bids_taken, queues_hit) = Self::enlarge(intake, max_bids);
 				let first_from_each_queue = T::WeightInfo::pursue_target_per_queue(queues_hit);
 				let rest_from_each_queue = T::WeightInfo::pursue_target_per_item(bids_taken)
-						.saturating_sub(T::WeightInfo::pursue_target_per_item(queues_hit));
+					.saturating_sub(T::WeightInfo::pursue_target_per_item(queues_hit));
 				first_from_each_queue + rest_from_each_queue
 			} else {
 				T::WeightInfo::pursue_target_noop()
@@ -511,15 +559,13 @@ pub mod pallet {
 		/// from the queue.
 		///
 		/// Return the number of bids taken and the number of distinct queues taken from.
-		pub fn enlarge(
-			amount: BalanceOf<T>,
-			max_bids: u32,
-		) -> (u32, u32) {
-			let total_issuance = T::Currency::total_issuance();
+		pub fn enlarge(amount: BalanceOf<T>, max_bids: u32) -> (u32, u32) {
+			let total_issuance =
+				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 			let mut remaining = amount;
 			let mut bids_taken = 0;
 			let mut queues_hit = 0;
-			let now = frame_system::Module::<T>::block_number();
+			let now = frame_system::Pallet::<T>::block_number();
 
 			ActiveTotal::<T>::mutate(|totals| {
 				QueueTotals::<T>::mutate(|qs| {
@@ -528,7 +574,8 @@ pub mod pallet {
 							continue
 						}
 						let queue_index = duration as usize - 1;
-						let expiry = now.saturating_add(T::Period::get().saturating_mul(duration.into()));
+						let expiry =
+							now.saturating_add(T::Period::get().saturating_mul(duration.into()));
 						Queues::<T>::mutate(duration, |q| {
 							while let Some(mut bid) = q.pop() {
 								if remaining < bid.amount {
@@ -544,13 +591,14 @@ pub mod pallet {
 								qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
 
 								// Now to activate the bid...
-								let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-									.saturated_into();
-								let effective_issuance = totals.proportion.left_from_one()
+								let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
+								let effective_issuance = totals
+									.proportion
+									.left_from_one()
 									.saturating_reciprocal_mul(nongilt_issuance);
-								let n: u128 = amount.saturated_into();
+								let n = amount;
 								let d = effective_issuance;
-								let proportion = Perquintill::from_rational_approximation(n, d);
+								let proportion = Perquintill::from_rational(n, d);
 								let who = bid.who;
 								let index = totals.index;
 								totals.frozen += bid.amount;
@@ -564,7 +612,7 @@ pub mod pallet {
 								bids_taken += 1;
 
 								if remaining.is_zero() || bids_taken == max_bids {
-									break;
+									break
 								}
 							}
 							queues_hit += 1;

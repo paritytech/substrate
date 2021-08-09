@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 #shellcheck source=../common/lib.sh
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../common/lib.sh"
@@ -24,10 +25,18 @@ releasenotes_labels=(
 )
 
 criticality_labels=(
-  'C1-low'
-  'C3-medium'
-  'C7-high'
-  'C9-critical'
+  'C1-low 📌'
+  'C3-medium 📣'
+  'C7-high ❗️'
+  'C9-critical ‼️'
+)
+
+audit_labels=(
+  'D1-audited 👍'
+  'D2-notlive 💤'
+  'D3-trivial 🧸'
+  'D5-nicetohaveaudit ⚠️'
+  'D9-needsaudit 👮'
 )
 
 echo "[+] Checking release notes (B) labels"
@@ -44,6 +53,16 @@ if ensure_labels "${criticality_labels[@]}";  then
 else
   echo "[!] Release criticality label not detected. Please add one of: ${criticality_labels[*]}"
   exit 1
+fi
+
+if has_runtime_changes origin/master "${HEAD_SHA}"; then
+  echo "[+] Runtime changes detected. Checking audit (D) labels"
+  if ensure_labels "${audit_labels[@]}";  then
+    echo "[+] Release audit label detected. All is well."
+  else
+    echo "[!] Release audit label not detected. Please add one of: ${audit_labels[*]}"
+    exit 1
+  fi
 fi
 
 exit 0

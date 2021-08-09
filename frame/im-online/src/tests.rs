@@ -21,22 +21,23 @@
 
 use super::*;
 use crate::mock::*;
-use sp_core::OpaquePeerId;
-use sp_core::offchain::{
-	OffchainExt,
-	TransactionPoolExt,
-	testing::{TestOffchainExt, TestTransactionPoolExt},
+use frame_support::{assert_noop, dispatch};
+use sp_core::{
+	offchain::{
+		testing::{TestOffchainExt, TestTransactionPoolExt},
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+	},
+	OpaquePeerId,
 };
-use frame_support::{dispatch, assert_noop};
-use sp_runtime::{testing::UintAuthorityId, transaction_validity::TransactionValidityError};
+use sp_runtime::{
+	testing::UintAuthorityId,
+	transaction_validity::{InvalidTransaction, TransactionValidityError},
+};
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
 	// A single case of unresponsiveness is not slashed.
-	assert_eq!(
-		UnresponsivenessOffence::<()>::slash_fraction(1, 50),
-		Perbill::zero(),
-	);
+	assert_eq!(UnresponsivenessOffence::<()>::slash_fraction(1, 50), Perbill::zero());
 
 	assert_eq!(
 		UnresponsivenessOffence::<()>::slash_fraction(5, 50),
@@ -74,17 +75,17 @@ fn should_report_offline_validators() {
 
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
-		assert_eq!(offences, vec![
-			(vec![], UnresponsivenessOffence {
-				session_index: 2,
-				validator_set_count: 3,
-				offenders: vec![
-					(1, 1),
-					(2, 2),
-					(3, 3),
-				],
-			})
-		]);
+		assert_eq!(
+			offences,
+			vec![(
+				vec![],
+				UnresponsivenessOffence {
+					session_index: 2,
+					validator_set_count: 3,
+					offenders: vec![(1, 1), (2, 2), (3, 3),],
+				}
+			)]
+		);
 
 		// should not report when heartbeat is sent
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
@@ -94,16 +95,17 @@ fn should_report_offline_validators() {
 
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
-		assert_eq!(offences, vec![
-			(vec![], UnresponsivenessOffence {
-				session_index: 3,
-				validator_set_count: 6,
-				offenders: vec![
-					(5, 5),
-					(6, 6),
-				],
-			})
-		]);
+		assert_eq!(
+			offences,
+			vec![(
+				vec![],
+				UnresponsivenessOffence {
+					session_index: 3,
+					validator_set_count: 6,
+					offenders: vec![(5, 5), (6, 6),],
+				}
+			)]
+		);
 	});
 }
 
@@ -128,17 +130,15 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
-		.map_err(|e| match e {
-			TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>
-				"invalid validators len",
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone())).map_err(
+		|e| match e {
+			TransactionValidityError::Invalid(InvalidTransaction::Custom(
+				INVALID_VALIDATORS_LEN,
+			)) => "invalid validators len",
 			e @ _ => <&'static str>::from(e),
-		})?;
-	ImOnline::heartbeat(
-		Origin::none(),
-		heartbeat,
-		signature,
-	)
+		},
+	)?;
+	ImOnline::heartbeat(Origin::none(), heartbeat, signature)
 }
 
 #[test]
@@ -190,8 +190,14 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// when
-		assert_noop!(heartbeat(1, 3, 0, 1.into(), Session::validators()), "Transaction is outdated");
-		assert_noop!(heartbeat(1, 1, 0, 1.into(), Session::validators()), "Transaction is outdated");
+		assert_noop!(
+			heartbeat(1, 3, 0, 1.into(), Session::validators()),
+			"Transaction is outdated"
+		);
+		assert_noop!(
+			heartbeat(1, 1, 0, 1.into(), Session::validators()),
+			"Transaction is outdated"
+		);
 
 		// invalid validators_len
 		assert_noop!(heartbeat(1, 2, 0, 1.into(), vec![]), "invalid validators len");
@@ -205,7 +211,8 @@ fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	ext.execute_with(|| {
@@ -234,13 +241,16 @@ fn should_generate_heartbeats() {
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
-		assert_eq!(heartbeat, Heartbeat {
-			block_number: block,
-			network_state: sp_io::offchain::network_state().unwrap(),
-			session_index: 2,
-			authority_index: 2,
-			validators_len: 3,
-		});
+		assert_eq!(
+			heartbeat,
+			Heartbeat {
+				block_number: block,
+				network_state: sp_io::offchain::network_state().unwrap(),
+				session_index: 2,
+				authority_index: 2,
+				validators_len: 3,
+			}
+		);
 	});
 }
 
@@ -310,7 +320,8 @@ fn should_not_send_a_report_if_already_online() {
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, pool_state) = TestTransactionPoolExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	ext.execute_with(|| {
@@ -345,12 +356,172 @@ fn should_not_send_a_report_if_already_online() {
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
-		assert_eq!(heartbeat, Heartbeat {
-			block_number: 4,
-			network_state: sp_io::offchain::network_state().unwrap(),
-			session_index: 2,
-			authority_index: 0,
-			validators_len: 3,
-		});
+		assert_eq!(
+			heartbeat,
+			Heartbeat {
+				block_number: 4,
+				network_state: sp_io::offchain::network_state().unwrap(),
+				session_index: 2,
+				authority_index: 0,
+				validators_len: 3,
+			}
+		);
+	});
+}
+
+#[test]
+fn should_handle_missing_progress_estimates() {
+	use frame_support::traits::OffchainWorker;
+
+	let mut ext = new_test_ext();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, state) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
+
+	ext.execute_with(|| {
+		let block = 1;
+
+		System::set_block_number(block);
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
+
+		// buffer new validators
+		Session::rotate_session();
+
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
+		Session::rotate_session();
+
+		// we will return `None` on the next call to `estimate_current_session_progress`
+		// and the offchain worker should fallback to checking `HeartbeatAfter`
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
+		ImOnline::offchain_worker(block);
+
+		assert_eq!(state.read().transactions.len(), 3);
+	});
+}
+
+#[test]
+fn should_handle_non_linear_session_progress() {
+	// NOTE: this is the reason why we started using `EstimateNextSessionRotation` to figure out if
+	// we should send a heartbeat, it's possible that between successive blocks we progress through
+	// the session more than just one block increment (in BABE session length is defined in slots,
+	// not block numbers).
+
+	let mut ext = new_test_ext();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, _) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
+
+	ext.execute_with(|| {
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
+
+		// buffer new validator
+		Session::rotate_session();
+
+		// mock the session length as being 10 blocks long,
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
+
+		// mock the session length has being 10 which should make us assume the fallback for half
+		// session will be reached by block 5.
+		MOCK_AVERAGE_SESSION_LENGTH.with(|p| *p.borrow_mut() = Some(10));
+
+		Session::rotate_session();
+
+		// if we don't have valid results for the current session progres then
+		// we'll fallback to `HeartbeatAfter` and only heartbeat on block 5.
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
+		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
+
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
+		assert!(ImOnline::send_heartbeats(5).ok().is_some());
+
+		// if we have a valid current session progress then we'll heartbeat as soon
+		// as we're past 80% of the session regardless of the block number
+		MOCK_CURRENT_SESSION_PROGRESS
+			.with(|p| *p.borrow_mut() = Some(Some(Permill::from_percent(81))));
+
+		assert!(ImOnline::send_heartbeats(2).ok().is_some());
+	});
+}
+
+#[test]
+fn test_does_not_heartbeat_early_in_the_session() {
+	let mut ext = new_test_ext();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, _) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
+
+	ext.execute_with(|| {
+		// mock current session progress as being 5%. we only randomly start
+		// heartbeating after 10% of the session has elapsed.
+		MOCK_CURRENT_SESSION_PROGRESS
+			.with(|p| *p.borrow_mut() = Some(Some(Permill::from_float(0.05))));
+		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
+	});
+}
+
+#[test]
+fn test_probability_of_heartbeating_increases_with_session_progress() {
+	let mut ext = new_test_ext();
+	let (offchain, state) = TestOffchainExt::new();
+	let (pool, _) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
+
+	ext.execute_with(|| {
+		let set_test = |progress, random: f64| {
+			// the average session length is 100 blocks, therefore the residual
+			// probability of sending a heartbeat is 1%
+			MOCK_AVERAGE_SESSION_LENGTH.with(|p| *p.borrow_mut() = Some(100));
+			MOCK_CURRENT_SESSION_PROGRESS
+				.with(|p| *p.borrow_mut() = Some(Some(Permill::from_float(progress))));
+
+			let mut seed = [0u8; 32];
+			let encoded = ((random * Permill::ACCURACY as f64) as u32).encode();
+			seed[0..4].copy_from_slice(&encoded);
+			state.write().seed = seed;
+		};
+
+		let assert_too_early = |progress, random| {
+			set_test(progress, random);
+			assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
+		};
+
+		let assert_heartbeat_ok = |progress, random| {
+			set_test(progress, random);
+			assert!(ImOnline::send_heartbeats(2).ok().is_some());
+		};
+
+		assert_too_early(0.05, 1.0);
+
+		assert_too_early(0.1, 0.1);
+		assert_too_early(0.1, 0.011);
+		assert_heartbeat_ok(0.1, 0.010);
+
+		assert_too_early(0.4, 0.015);
+		assert_heartbeat_ok(0.4, 0.014);
+
+		assert_too_early(0.5, 0.026);
+		assert_heartbeat_ok(0.5, 0.025);
+
+		assert_too_early(0.6, 0.057);
+		assert_heartbeat_ok(0.6, 0.056);
+
+		assert_too_early(0.65, 0.086);
+		assert_heartbeat_ok(0.65, 0.085);
+
+		assert_too_early(0.7, 0.13);
+		assert_heartbeat_ok(0.7, 0.12);
+
+		assert_too_early(0.75, 0.19);
+		assert_heartbeat_ok(0.75, 0.18);
 	});
 }

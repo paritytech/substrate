@@ -35,12 +35,21 @@ A PR needs to be reviewed and approved by project maintainers unless:
 
 *Process:*
 
-. Please tag each PR with exactly one `A`, `B` and `C` label at the minimum.
+. Please tag each PR with exactly one `A`, `B`, `C` and `D` label at the minimum.
 . Once a PR is ready for review please add the https://github.com/paritytech/substrate/pulls?q=is%3Apr+is%3Aopen+label%3AA0-pleasereview[`A0-pleasereview`] label. Generally PRs should sit with this label for 48 hours in order to garner feedback. It may be merged before if all relevant parties had a look at it.
 . If the first review is not an approval, swap `A0-pleasereview` to any label `[A3, A7]` to indicate that the PR has received some feedback, but needs further work. For example. https://github.com/paritytech/substrate/labels/A3-inprogress[`A3-inprogress`] is a general indicator that the PR is work in progress and https://github.com/paritytech/substrate/labels/A4-gotissues[`A4-gotissues`] means that it has significant problems that need fixing. Once the work is done, change the label back to `A0-pleasereview`. You might end up swapping a few times back and forth to climb up the A label group. Once a PR is https://github.com/paritytech/substrate/labels/A8-mergeoncegreen[`A8-mergeoncegreen`], it is ready to merge.
-. PRs must be tagged with respect to _release notes_ with https://github.com/paritytech/substrate/labels/B0-silent[`B0-silent`] and `B1-..`. The former indicates that no changes should be mentioned in any release notes. The latter indicates that the changes should be reported in the corresponding release note
-. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/D2-breaksapi[`D2-breaksapi`], when it changes the FRAME or consensus of running system with https://github.com/paritytech/substrate/labels/B3-breaksconsensus[`B3-breaksconsensus`].
-. PRs should be labeled with their release importance via the `C1-C9`.
+. PRs must be tagged with their release notes requirements via the `B1-B9` labels.
+. PRs must be tagged with their release importance via the `C1-C9` labels.
+. PRs must be tagged with their audit requirements via the `D1-D9` labels.
+. PRs that must be backported to a stable branch must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E0-patchthis`].
+. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`].
+. PRs that introduce irreversible database migrations must be tagged with https://github.com/paritytech/substrate/labels/E2-databasemigration[`E2-databasemigration`].
+. PRs that add host functions must be tagged with with https://github.com/paritytech/substrate/labels/E4-newhostfunctions[`E4-newhostfunctions`].
+. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/E5-breaksapi[`E5-breaksapi`].
+. PRs that materially change the FRAME/runtime semantics must be tagged with https://github.com/paritytech/substrate/labels/E6-transactionversion[`E6-transactionversion`].
+. PRs that change the mechanism for block authoring in a backwards-incompatible way must be tagged with https://github.com/paritytech/substrate/labels/E7-breaksauthoring[`E7-breaksauthoring`].
+. PRs that "break everything" must be tagged with https://github.com/paritytech/substrate/labels/E8-breakseverything[`E8-breakseverything`].
+. PRs that block a new release must be tagged with https://github.com/paritytech/substrate/labels/E9-blocker%20%E2%9B%94%EF%B8%8F[`E9-blocker`].
 . PRs should be categorized into projects.
 . No PR should be merged until all reviews' comments are addressed and CI is successful.
 

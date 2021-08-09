@@ -15,21 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::*;
 use crate as pallet_mmr;
+use crate::*;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use frame_support::parameter_types;
-use pallet_mmr_primitives::{LeafDataProvider, Compact};
+use pallet_mmr_primitives::{Compact, LeafDataProvider};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{
-		BlakeTwo256, Keccak256, IdentityLookup,
-	},
+	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 };
-use sp_std::cell::RefCell;
-use sp_std::prelude::*;
+use sp_std::{cell::RefCell, prelude::*};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -40,8 +37,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		MMR: pallet_mmr::{Module, Call, Storage},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		MMR: pallet_mmr::{Pallet, Storage},
 	}
 );
 
@@ -49,7 +46,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -71,6 +68,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl Config for Test {
@@ -78,7 +76,7 @@ impl Config for Test {
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
+	type LeafData = Compact<Keccak256, (frame_system::Pallet<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
@@ -91,10 +89,7 @@ pub struct LeafData {
 
 impl LeafData {
 	pub fn new(a: u64) -> Self {
-		Self {
-			a,
-			b: Default::default(),
-		}
+		Self { a, b: Default::default() }
 	}
 }
 

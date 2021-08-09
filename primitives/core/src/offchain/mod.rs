@@ -17,10 +17,13 @@
 
 //! Offchain workers types
 
-use codec::{Encode, Decode};
-use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::{OpaquePeerId, RuntimeDebug};
-use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
+use codec::{Decode, Encode};
+use sp_runtime_interface::pass_by::{PassByCodec, PassByEnum, PassByInner};
+use sp_std::{
+	convert::TryFrom,
+	prelude::{Box, Vec},
+};
 
 pub use crate::crypto::KeyTypeId;
 
@@ -29,10 +32,10 @@ pub mod storage;
 #[cfg(feature = "std")]
 pub mod testing;
 
-/// Local storage prefix used by the Offchain Worker API to
-pub const STORAGE_PREFIX : &'static [u8] = b"storage";
+/// Persistent storage prefix used by the Offchain Worker API when creating a DB key.
+pub const STORAGE_PREFIX: &[u8] = b"storage";
 
-/// Offchain workers local storage.
+/// Offchain DB persistent (non-fork-aware) storage.
 pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
@@ -66,12 +69,12 @@ pub enum StorageKind {
 	/// that is re-run at block `N(hash2)`.
 	/// This storage can be used by offchain workers to handle forks
 	/// and coordinate offchain workers running on different forks.
-	PERSISTENT = 1,
+	PERSISTENT = 1_isize,
 	/// Local storage is revertible and fork-aware. It means that any value
 	/// set by the offchain worker triggered at block `N(hash1)` is reverted
 	/// if that block is reverted as non-canonical and is NOT available for the worker
 	/// that is re-run at block `N(hash2)`.
-	LOCAL = 2,
+	LOCAL = 2_isize,
 }
 
 impl TryFrom<u32> for StorageKind {
@@ -93,7 +96,9 @@ impl From<StorageKind> for u32 {
 }
 
 /// Opaque type for offchain http requests.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner,
+)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct HttpRequestId(pub u16);
 
@@ -108,11 +113,11 @@ impl From<HttpRequestId> for u32 {
 #[repr(C)]
 pub enum HttpError {
 	/// The requested action couldn't been completed within a deadline.
-	DeadlineReached = 1,
+	DeadlineReached = 1_isize,
 	/// There was an IO Error while processing the request.
-	IoError = 2,
+	IoError = 2_isize,
 	/// The ID of the request is invalid in this context.
-	Invalid = 3,
+	Invalid = 3_isize,
 }
 
 impl TryFrom<u32> for HttpError {
@@ -123,7 +128,7 @@ impl TryFrom<u32> for HttpError {
 			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
 			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
 			e if e == HttpError::Invalid as u8 as u32 => Ok(HttpError::Invalid),
-			_ => Err(())
+			_ => Err(()),
 		}
 	}
 }
@@ -202,11 +207,15 @@ impl OpaqueMultiaddr {
 }
 
 /// Opaque timestamp type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
+)]
 pub struct Timestamp(u64);
 
 /// Duration type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
+)]
 pub struct Duration(u64);
 
 impl Duration {
@@ -263,9 +272,9 @@ pub enum Capability {
 	/// Access to opaque network state.
 	NetworkState = 16,
 	/// Access to offchain worker DB (read only).
-	OffchainWorkerDbRead = 32,
+	OffchainDbRead = 32,
 	/// Access to offchain worker DB (writes).
-	OffchainWorkerDbWrite = 64,
+	OffchainDbWrite = 64,
 	/// Manage the authorized nodes
 	NodeAuthorization = 128,
 }
@@ -282,7 +291,7 @@ impl Capabilities {
 
 	/// Return an object representing all capabilities enabled.
 	pub fn all() -> Self {
-		Self(u8::max_value())
+		Self(u8::MAX)
 	}
 
 	/// Return capabilities for rich offchain calls.
@@ -290,11 +299,7 @@ impl Capabilities {
 	/// Those calls should be allowed to sign and submit transactions
 	/// and access offchain workers database (but read only!).
 	pub fn rich_offchain_call() -> Self {
-		[
-			Capability::TransactionPool,
-			Capability::Keystore,
-			Capability::OffchainWorkerDbRead,
-		][..].into()
+		[Capability::TransactionPool, Capability::Keystore, Capability::OffchainDbRead][..].into()
 	}
 
 	/// Check if particular capability is enabled.
@@ -337,42 +342,6 @@ pub trait Externalities: Send {
 	/// Obviously fine in the off-chain worker context.
 	fn random_seed(&mut self) -> [u8; 32];
 
-	/// Sets a value in the local storage.
-	///
-	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
-	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
-
-	/// Removes a value in the local storage.
-	///
-	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
-	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]);
-
-	/// Sets a value in the local storage if it matches current value.
-	///
-	/// Since multiple offchain workers may be running concurrently, to prevent
-	/// data races use CAS to coordinate between them.
-	///
-	/// Returns `true` if the value has been set, `false` otherwise.
-	///
-	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
-	fn local_storage_compare_and_set(
-		&mut self,
-		kind: StorageKind,
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool;
-
-	/// Gets a value from the local storage.
-	///
-	/// If the value does not exist in the storage `None` will be returned.
-	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
-	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
-
 	/// Initiates a http request given HTTP verb and the URL.
 	///
 	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
@@ -381,12 +350,11 @@ pub trait Externalities: Send {
 	/// Returns an error if:
 	/// - No new request identifier could be allocated.
 	/// - The method or URI contain invalid characters.
-	///
 	fn http_request_start(
 		&mut self,
 		method: &str,
 		uri: &str,
-		meta: &[u8]
+		meta: &[u8],
 	) -> Result<HttpRequestId, ()>;
 
 	/// Append header to the request.
@@ -401,12 +369,11 @@ pub trait Externalities: Send {
 	///
 	/// An error doesn't poison the request, and you can continue as if the call had never been
 	/// made.
-	///
 	fn http_request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
 		name: &str,
-		value: &str
+		value: &str,
 	) -> Result<(), ()>;
 
 	/// Write a chunk of request body.
@@ -423,12 +390,11 @@ pub trait Externalities: Send {
 	/// - The deadline is reached.
 	/// - An I/O error has happened, for example the remote has closed our
 	///   request. The request is then considered invalid.
-	///
 	fn http_request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError>;
 
 	/// Block and wait for the responses for given requests.
@@ -444,7 +410,7 @@ pub trait Externalities: Send {
 	fn http_response_wait(
 		&mut self,
 		ids: &[HttpRequestId],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus>;
 
 	/// Read all response headers.
@@ -456,10 +422,7 @@ pub trait Externalities: Send {
 	///
 	/// Returns an empty list if the identifier is unknown/invalid, hasn't
 	/// received a response, or has finished.
-	fn http_response_headers(
-		&mut self,
-		request_id: HttpRequestId
-	) -> Vec<(Vec<u8>, Vec<u8>)>;
+	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Read a chunk of body response to given buffer.
 	///
@@ -479,12 +442,11 @@ pub trait Externalities: Send {
 	/// - The deadline is reached.
 	/// - An I/O error has happened, for example the remote has closed our
 	///   request. The request is then considered invalid.
-	///
 	fn http_response_read_body(
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError>;
 
 	/// Set the authorized nodes from runtime.
@@ -502,11 +464,11 @@ pub trait Externalities: Send {
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	fn is_validator(&self) -> bool {
-		(& **self).is_validator()
+		(&**self).is_validator()
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		(& **self).network_state()
+		(&**self).network_state()
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -521,33 +483,21 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).random_seed()
 	}
 
-	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		(&mut **self).local_storage_set(kind, key, value)
-	}
-
-	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		(&mut **self).local_storage_clear(kind, key)
-	}
-
-	fn local_storage_compare_and_set(
+	fn http_request_start(
 		&mut self,
-		kind: StorageKind,
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)
-	}
-
-	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		(&mut **self).local_storage_get(kind, key)
-	}
-
-	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
+		method: &str,
+		uri: &str,
+		meta: &[u8],
+	) -> Result<HttpRequestId, ()> {
 		(&mut **self).http_request_start(method, uri, meta)
 	}
 
-	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+	fn http_request_add_header(
+		&mut self,
+		request_id: HttpRequestId,
+		name: &str,
+		value: &str,
+	) -> Result<(), ()> {
 		(&mut **self).http_request_add_header(request_id, name, value)
 	}
 
@@ -555,12 +505,16 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		(&mut **self).http_request_write_body(request_id, chunk, deadline)
 	}
 
-	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
+	fn http_response_wait(
+		&mut self,
+		ids: &[HttpRequestId],
+		deadline: Option<Timestamp>,
+	) -> Vec<HttpRequestStatus> {
 		(&mut **self).http_response_wait(ids, deadline)
 	}
 
@@ -572,7 +526,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
@@ -582,7 +536,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	}
 }
 
-/// An `OffchainExternalities` implementation with limited capabilities.
+/// An `*Externalities` implementation with limited capabilities.
 pub struct LimitedExternalities<T> {
 	capabilities: Capabilities,
 	externalities: T,
@@ -591,10 +545,7 @@ pub struct LimitedExternalities<T> {
 impl<T> LimitedExternalities<T> {
 	/// Create new externalities limited to given `capabilities`.
 	pub fn new(capabilities: Capabilities, externalities: T) -> Self {
-		Self {
-			capabilities,
-			externalities,
-		}
+		Self { capabilities, externalities }
 	}
 
 	/// Check if given capability is allowed.
@@ -633,38 +584,22 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.random_seed()
 	}
 
-	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		self.check(Capability::OffchainWorkerDbWrite, "local_storage_set");
-		self.externalities.local_storage_set(kind, key, value)
-	}
-
-	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		self.check(Capability::OffchainWorkerDbWrite, "local_storage_clear");
-		self.externalities.local_storage_clear(kind, key)
-	}
-
-	fn local_storage_compare_and_set(
+	fn http_request_start(
 		&mut self,
-		kind: StorageKind,
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		self.check(Capability::OffchainWorkerDbWrite, "local_storage_compare_and_set");
-		self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
-	}
-
-	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		self.check(Capability::OffchainWorkerDbRead, "local_storage_get");
-		self.externalities.local_storage_get(kind, key)
-	}
-
-	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
+		method: &str,
+		uri: &str,
+		meta: &[u8],
+	) -> Result<HttpRequestId, ()> {
 		self.check(Capability::Http, "http_request_start");
 		self.externalities.http_request_start(method, uri, meta)
 	}
 
-	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+	fn http_request_add_header(
+		&mut self,
+		request_id: HttpRequestId,
+		name: &str,
+		value: &str,
+	) -> Result<(), ()> {
 		self.check(Capability::Http, "http_request_add_header");
 		self.externalities.http_request_add_header(request_id, name, value)
 	}
@@ -673,13 +608,17 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		self.check(Capability::Http, "http_request_write_body");
 		self.externalities.http_request_write_body(request_id, chunk, deadline)
 	}
 
-	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
+	fn http_response_wait(
+		&mut self,
+		ids: &[HttpRequestId],
+		deadline: Option<Timestamp>,
+	) -> Vec<HttpRequestStatus> {
 		self.check(Capability::Http, "http_response_wait");
 		self.externalities.http_response_wait(ids, deadline)
 	}
@@ -693,7 +632,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
@@ -707,14 +646,120 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// The offchain extension that will be registered at the Substrate externalities.
-	pub struct OffchainExt(Box<dyn Externalities>);
+	/// The offchain worker extension that will be registered at the Substrate externalities.
+	pub struct OffchainWorkerExt(Box<dyn Externalities>);
 }
 
 #[cfg(feature = "std")]
-impl OffchainExt {
+impl OffchainWorkerExt {
 	/// Create a new instance of `Self`.
 	pub fn new<O: Externalities + 'static>(offchain: O) -> Self {
+		Self(Box::new(offchain))
+	}
+}
+
+/// A externalities extension for accessing the Offchain DB.
+pub trait DbExternalities: Send {
+	/// Sets a value in the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
+
+	/// Removes a value in the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]);
+
+	/// Sets a value in the local storage if it matches current value.
+	///
+	/// Since multiple offchain workers may be running concurrently, to prevent
+	/// data races use CAS to coordinate between them.
+	///
+	/// Returns `true` if the value has been set, `false` otherwise.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool;
+
+	/// Gets a value from the local storage.
+	///
+	/// If the value does not exist in the storage `None` will be returned.
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
+}
+
+impl<T: DbExternalities + ?Sized> DbExternalities for Box<T> {
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		(&mut **self).local_storage_set(kind, key, value)
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		(&mut **self).local_storage_clear(kind, key)
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		(&mut **self).local_storage_get(kind, key)
+	}
+}
+
+impl<T: DbExternalities> DbExternalities for LimitedExternalities<T> {
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		self.check(Capability::OffchainDbWrite, "local_storage_set");
+		self.externalities.local_storage_set(kind, key, value)
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		self.check(Capability::OffchainDbWrite, "local_storage_clear");
+		self.externalities.local_storage_clear(kind, key)
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		self.check(Capability::OffchainDbWrite, "local_storage_compare_and_set");
+		self.externalities
+			.local_storage_compare_and_set(kind, key, old_value, new_value)
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		self.check(Capability::OffchainDbRead, "local_storage_get");
+		self.externalities.local_storage_get(kind, key)
+	}
+}
+
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// The offchain database extension that will be registered at the Substrate externalities.
+	pub struct OffchainDbExt(Box<dyn DbExternalities>);
+}
+
+#[cfg(feature = "std")]
+impl OffchainDbExt {
+	/// Create a new instance of `OffchainDbExt`.
+	pub fn new<O: DbExternalities + 'static>(offchain: O) -> Self {
 		Self(Box::new(offchain))
 	}
 }

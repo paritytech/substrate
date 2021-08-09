@@ -17,59 +17,61 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	RuntimeInfo, error::{Error, Result},
+	error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
+	RuntimeInfo,
 };
 
 use std::{
 	collections::HashMap,
-	panic::{UnwindSafe, AssertUnwindSafe},
-	result,
-	sync::{Arc, atomic::{AtomicU64, Ordering}, mpsc},
+	panic::{AssertUnwindSafe, UnwindSafe},
 	path::PathBuf,
-};
-
-use sp_version::{NativeVersion, RuntimeVersion};
-use codec::{Decode, Encode};
-use sp_core::{
-	NativeOrEncoded,
-	traits::{
-		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
-		RuntimeSpawnExt, RuntimeSpawn,
+	result,
+	sync::{
+		atomic::{AtomicU64, Ordering},
+		mpsc, Arc,
 	},
 };
+
+use codec::{Decode, Encode};
 use log::trace;
-use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
+use sc_executor_common::{
+	runtime_blob::RuntimeBlob,
+	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+};
+use sp_core::{
+	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt},
+	NativeOrEncoded,
+};
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
+use sp_version::{NativeVersion, RuntimeVersion};
+use sp_wasm_interface::{Function, HostFunctions};
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 1024;
+const DEFAULT_HEAP_PAGES: u64 = 2048;
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
 /// If the inner closure panics, it will be caught and return an error.
 pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
-	where F: UnwindSafe + FnOnce() -> U
+where
+	F: UnwindSafe + FnOnce() -> U,
 {
-	sp_externalities::set_and_run_with_externalities(
-		ext,
-		move || {
-			// Substrate uses custom panic hook that terminates process on panic. Disable
-			// termination for the native call.
-			let _guard = sp_panic_handler::AbortGuard::force_unwind();
-			std::panic::catch_unwind(f).map_err(|e| {
-				if let Some(err) = e.downcast_ref::<String>() {
-					Error::RuntimePanicked(err.clone())
-				} else if let Some(err) = e.downcast_ref::<&'static str>() {
-					Error::RuntimePanicked(err.to_string())
-				} else {
-					Error::RuntimePanicked("Unknown panic".into())
-				}
-			})
-		},
-	)
+	sp_externalities::set_and_run_with_externalities(ext, move || {
+		// Substrate uses custom panic hook that terminates process on panic. Disable
+		// termination for the native call.
+		let _guard = sp_panic_handler::AbortGuard::force_unwind();
+		std::panic::catch_unwind(f).map_err(|e| {
+			if let Some(err) = e.downcast_ref::<String>() {
+				Error::RuntimePanicked(err.clone())
+			} else if let Some(err) = e.downcast_ref::<&'static str>() {
+				Error::RuntimePanicked(err.to_string())
+			} else {
+				Error::RuntimePanicked("Unknown panic".into())
+			}
+		})
+	})
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -163,7 +165,8 @@ impl WasmExecutor {
 		allow_missing_host_functions: bool,
 		f: F,
 	) -> Result<R>
-		where F: FnOnce(
+	where
+		F: FnOnce(
 			AssertUnwindSafe<&Arc<dyn WasmModule>>,
 			AssertUnwindSafe<&dyn WasmInstance>,
 			Option<&RuntimeVersion>,
@@ -182,70 +185,87 @@ impl WasmExecutor {
 				let instance = AssertUnwindSafe(instance);
 				let ext = AssertUnwindSafe(ext);
 				f(module, instance, version, ext)
-			}
+			},
 		)? {
 			Ok(r) => r,
 			Err(e) => Err(e),
 		}
 	}
+
+	/// Perform a call into the given runtime.
+	///
+	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
+	/// parameters this `WasmExecutor` was initialized with.
+	///
+	/// In case of problems with during creation of the runtime or instantation, a `Err` is returned.
+	/// that describes the message.
+	#[doc(hidden)] // We use this function for tests across multiple crates.
+	pub fn uncached_call(
+		&self,
+		runtime_blob: RuntimeBlob,
+		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
+		export_name: &str,
+		call_data: &[u8],
+	) -> std::result::Result<Vec<u8>, String> {
+		let module = crate::wasm_runtime::create_wasm_runtime_with_code(
+			self.method,
+			self.default_heap_pages,
+			runtime_blob,
+			self.host_functions.to_vec(),
+			allow_missing_host_functions,
+			self.cache_path.as_deref(),
+		)
+		.map_err(|e| format!("Failed to create module: {:?}", e))?;
+
+		let instance = module
+			.new_instance()
+			.map_err(|e| format!("Failed to create instance: {:?}", e))?;
+
+		let instance = AssertUnwindSafe(instance);
+		let mut ext = AssertUnwindSafe(ext);
+		let module = AssertUnwindSafe(module);
+
+		with_externalities_safe(&mut **ext, move || {
+			preregister_builtin_ext(module.clone());
+			instance.call_export(export_name, call_data)
+		})
+		.and_then(|r| r)
+		.map_err(|e| e.to_string())
+	}
 }
 
-impl sp_core::traits::CallInWasm for WasmExecutor {
-	fn call_in_wasm(
+impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
+	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
-		code_hash: Option<Vec<u8>>,
-		method: &str,
-		call_data: &[u8],
 		ext: &mut dyn Externalities,
-		missing_host_functions: MissingHostFunctions,
 	) -> std::result::Result<Vec<u8>, String> {
-		let allow_missing_host_functions = missing_host_functions.allowed();
+		let runtime_blob = RuntimeBlob::uncompress_if_needed(&wasm_code)
+			.map_err(|e| format!("Failed to create runtime blob: {:?}", e))?;
 
-		if let Some(hash) = code_hash {
-			let code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_code.into()),
-				hash,
-				heap_pages: None,
-			};
-
-			self.with_instance(&code, ext, allow_missing_host_functions, |module, instance, _, mut ext| {
-				with_externalities_safe(
-					&mut **ext,
-					move || {
-						RuntimeInstanceSpawn::register_on_externalities(module.clone());
-						instance.call_export(method, call_data)
-					}
-				)
-			}).map_err(|e| e.to_string())
-		} else {
-			let module = crate::wasm_runtime::create_wasm_runtime_with_code(
-				self.method,
-				self.default_heap_pages,
-				&wasm_code,
-				self.host_functions.to_vec(),
-				allow_missing_host_functions,
-				self.cache_path.as_deref(),
-			)
-				.map_err(|e| format!("Failed to create module: {:?}", e))?;
-
-			let instance = module.new_instance()
-				.map_err(|e| format!("Failed to create instance: {:?}", e))?;
-
-			let instance = AssertUnwindSafe(instance);
-			let mut ext = AssertUnwindSafe(ext);
-			let module = AssertUnwindSafe(module);
-
-			with_externalities_safe(
-				&mut **ext,
-				move || {
-					RuntimeInstanceSpawn::register_on_externalities(module.clone());
-					instance.call_export(method, call_data)
-				}
-			)
-			.and_then(|r| r)
-			.map_err(|e| e.to_string())
+		if let Some(version) = crate::wasm_runtime::read_embedded_version(&runtime_blob)
+			.map_err(|e| format!("Failed to read the static section: {:?}", e))
+			.map(|v| v.map(|v| v.encode()))?
+		{
+			return Ok(version)
 		}
+
+		// If the blob didn't have embedded runtime version section, we fallback to the legacy
+		// way of fetching the verison: i.e. instantiating the given instance and calling
+		// `Core_version` on it.
+
+		self.uncached_call(
+			runtime_blob,
+			ext,
+			// If a runtime upgrade introduces new host functions that are not provided by
+			// the node, we should not fail at instantiation. Otherwise nodes that are
+			// updated could run this successfully and it could lead to a storage root
+			// mismatch when importing this block.
+			true,
+			"Core_version",
+			&[],
+		)
 	}
 }
 
@@ -274,10 +294,20 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
-		let mut host_functions = D::ExtendHostFunctions::host_functions();
+		let extended = D::ExtendHostFunctions::host_functions();
+		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
+			.into_iter()
+			// filter out any host function overrides provided.
+			.filter(|host_fn| {
+				extended
+					.iter()
+					.find(|ext_host_fn| host_fn.name() == ext_host_fn.name())
+					.is_none()
+			})
+			.collect::<Vec<_>>();
 
 		// Add the custom host functions provided by the user.
-		host_functions.extend(sp_io::SubstrateHostFunctions::host_functions());
+		host_functions.extend(extended);
 		let wasm_executor = WasmExecutor::new(
 			fallback_method,
 			default_heap_pages,
@@ -304,13 +334,10 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(
-			runtime_code,
-			ext,
-			false,
-			|_module, _instance, version, _ext|
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into()))),
-		)
+		self.wasm
+			.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
+				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+			})
 	}
 }
 
@@ -331,70 +358,67 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
-		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
-			let module = AssertUnwindSafe(module);
+		self.scheduler.spawn(
+			"executor-extra-runtime-instance",
+			Box::pin(async move {
+				let module = AssertUnwindSafe(module);
 
-			let async_ext = match new_async_externalities(scheduler.clone()) {
-				Ok(val) => val,
-				Err(e) => {
-					log::error!(
-						target: "executor",
-						"Failed to setup externalities for async context: {}",
-						e,
-					);
+				let async_ext = match new_async_externalities(scheduler.clone()) {
+					Ok(val) => val,
+					Err(e) => {
+						log::error!(
+							target: "executor",
+							"Failed to setup externalities for async context: {}",
+							e,
+						);
 
-					// This will drop sender and receiver end will panic
-					return;
-				}
-			};
+						// This will drop sender and receiver end will panic
+						return
+					},
+				};
 
-			let mut async_ext = match async_ext.with_runtime_spawn(
-				Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler))
-			) {
-				Ok(val) => val,
-				Err(e) => {
-					log::error!(
-						target: "executor",
-						"Failed to setup runtime extension for async externalities: {}",
-						e,
-					);
+				let mut async_ext = match async_ext.with_runtime_spawn(Box::new(
+					RuntimeInstanceSpawn::new(module.clone(), scheduler),
+				)) {
+					Ok(val) => val,
+					Err(e) => {
+						log::error!(
+							target: "executor",
+							"Failed to setup runtime extension for async externalities: {}",
+							e,
+						);
 
-					// This will drop sender and receiver end will panic
-					return;
-				}
-			};
+						// This will drop sender and receiver end will panic
+						return
+					},
+				};
 
-			let result = with_externalities_safe(
-				&mut async_ext,
-				move || {
-
+				let result = with_externalities_safe(&mut async_ext, move || {
 					// FIXME: Should be refactored to shared "instance factory".
 					// Instantiating wasm here every time is suboptimal at the moment, shared
 					// pool of instances should be used.
 					//
 					// https://github.com/paritytech/substrate/issues/7354
-					let instance = module.new_instance()
-						.expect("Failed to create new instance from module");
+					let instance =
+						module.new_instance().expect("Failed to create new instance from module");
 
-					instance.call(
-						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-						&data[..],
-					).expect("Failed to invoke instance.")
+					instance
+						.call(InvokeMethod::TableWithWrapper { dispatcher_ref, func }, &data[..])
+						.expect("Failed to invoke instance.")
+				});
+
+				match result {
+					Ok(output) => {
+						let _ = sender.send(output);
+					},
+					Err(error) => {
+						// If execution is panicked, the `join` in the original runtime code will panic as well,
+						// since the sender is dropped without sending anything.
+						log::error!("Call error in spawned task: {:?}", error);
+					},
 				}
-			);
-
-			match result {
-				Ok(output) => {
-					let _ = sender.send(output);
-				},
-				Err(error) => {
-					// If execution is panicked, the `join` in the original runtime code will panic as well,
-					// since the sender is dropped without sending anything.
-					log::error!("Call error in spawned task: {:?}", error);
-				},
-			}
-		}));
-
+			}),
+		);
 
 		new_handle
 	}
@@ -411,12 +435,7 @@ impl RuntimeInstanceSpawn {
 		module: Arc<dyn WasmModule>,
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
-		Self {
-			module,
-			scheduler,
-			counter: 0.into(),
-			tasks: HashMap::new().into(),
-		}
+		Self { module, scheduler, counter: 0.into(), tasks: HashMap::new().into() }
 	}
 
 	fn with_externalities_and_module(
@@ -426,29 +445,25 @@ impl RuntimeInstanceSpawn {
 		ext.extension::<sp_core::traits::TaskExecutorExt>()
 			.map(move |task_ext| Self::new(module, task_ext.clone()))
 	}
+}
 
-	/// Register new `RuntimeSpawnExt` on current externalities.
-	///
-	/// This extensions will spawn instances from provided `module`.
-	pub fn register_on_externalities(module: Arc<dyn WasmModule>) {
-		sp_externalities::with_externalities(
-			move |mut ext| {
-				if let Some(runtime_spawn) =
-					Self::with_externalities_and_module(module.clone(), ext)
-				{
-					if let Err(e) = ext.register_extension(
-						RuntimeSpawnExt(Box::new(runtime_spawn))
-					) {
-						trace!(
-							target: "executor",
-							"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
-							e,
-						)
-					}
-				}
+/// Pre-registers the built-in extensions to the currently effective externalities.
+///
+/// Meant to be called each time before calling into the runtime.
+fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
+	sp_externalities::with_externalities(move |mut ext| {
+		if let Some(runtime_spawn) =
+			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
+		{
+			if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
+				trace!(
+					target: "executor",
+					"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
+					e,
+				)
 			}
-		);
-	}
+		}
+	});
 }
 
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
@@ -472,17 +487,13 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 			ext,
 			false,
 			|module, instance, onchain_version, mut ext| {
-				let onchain_version = onchain_version.ok_or_else(
-					|| Error::ApiError("Unknown version".into())
-				)?;
+				let onchain_version =
+					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
 
-				let can_call_with = onchain_version.can_call_with(&self.native_version.runtime_version);
+				let can_call_with =
+					onchain_version.can_call_with(&self.native_version.runtime_version);
 
-				match (
-					use_native,
-					can_call_with,
-					native_call,
-				) {
+				match (use_native, can_call_with, native_call) {
 					(_, false, _) | (false, _, _) => {
 						if !can_call_with {
 							trace!(
@@ -493,13 +504,10 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 							);
 						}
 
-						with_externalities_safe(
-							&mut **ext,
-							move || {
-								RuntimeInstanceSpawn::register_on_externalities(module.clone());
-								instance.call_export(method, data).map(NativeOrEncoded::Encoded)
-							}
-						)
+						with_externalities_safe(&mut **ext, move || {
+							preregister_builtin_ext(module.clone());
+							instance.call_export(method, data).map(NativeOrEncoded::Encoded)
+						})
 					},
 					(true, true, Some(call)) => {
 						trace!(
@@ -512,13 +520,10 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 
 						used_native = true;
 						let res = with_externalities_safe(&mut **ext, move || (call)())
-							.and_then(|r| r
-								.map(NativeOrEncoded::Native)
-								.map_err(Error::ApiError)
-							);
+							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Error::ApiError));
 
 						Ok(res)
-					}
+					},
 					_ => {
 						trace!(
 							target: "executor",
@@ -529,9 +534,9 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 
 						used_native = true;
 						Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
-					}
+					},
 				}
-			}
+			},
 		);
 		(result, used_native)
 	}
@@ -547,17 +552,13 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<D> {
-	fn call_in_wasm(
+impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeExecutor<D> {
+	fn read_runtime_version(
 		&self,
-		wasm_blob: &[u8],
-		code_hash: Option<Vec<u8>>,
-		method: &str,
-		call_data: &[u8],
+		wasm_code: &[u8],
 		ext: &mut dyn Externalities,
-		missing_host_functions: MissingHostFunctions,
 	) -> std::result::Result<Vec<u8>, String> {
-		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext, missing_host_functions)
+		self.wasm.read_runtime_version(wasm_code, ext)
 	}
 }
 
@@ -598,7 +599,6 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 ///
 /// When you have multiple interfaces, you can give the host functions as a tuple e.g.:
 /// `(my_interface::HostFunctions, my_interface2::HostFunctions)`
-///
 #[macro_export]
 macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
@@ -656,16 +656,9 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(
-			WasmExecutionMethod::Interpreted,
-			None,
-			8,
-		);
+		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
-			assert_eq!(
-				executor.wasm.host_functions.iter().filter(|f| f == &function).count(),
-				2,
-			);
+			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);
 		});
 
 		my_interface::say_hello_world("hey");

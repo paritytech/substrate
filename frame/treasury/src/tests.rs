@@ -19,20 +19,21 @@
 
 #![cfg(test)]
 
-use crate as treasury;
-use super::*;
 use std::cell::RefCell;
-use frame_support::{
-	assert_noop, assert_ok, parameter_types,
-	traits::OnInitialize,
-};
 
 use sp_core::H256;
 use sp_runtime::{
-	ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+
+use frame_support::{
+	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::OnInitialize,
+	PalletId,
+};
+
+use super::*;
+use crate as treasury;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -43,9 +44,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Treasury: treasury::{Module, Call, Storage, Config, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury: treasury::{Pallet, Call, Storage, Config, Event<T>},
 	}
 );
 
@@ -55,7 +56,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -77,12 +78,15 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -98,14 +102,15 @@ parameter_types! {
 	pub const ProposalBondMinimum: u64 = 1;
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
+	pub const MaxApprovals: u32 = 100;
 }
 impl Config for Test {
-	type ModuleId = TreasuryModuleId;
-	type Currency = pallet_balances::Module<Test>;
+	type PalletId = TreasuryPalletId;
+	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type Event = Event;
@@ -114,18 +119,21 @@ impl Config for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type BurnDestination = ();  // Just gets burned.
+	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
+	type MaxApprovals = MaxApprovals;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
-	}.assimilate_storage(&mut t).unwrap();
-	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	t.into()
 }
 
@@ -314,9 +322,9 @@ fn treasury_account_doesnt_get_deleted() {
 #[test]
 fn inexistent_account_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
-		balances: vec![(0, 100), (1, 99), (2, 1)],
-	}.assimilate_storage(&mut t).unwrap();
+	pallet_balances::GenesisConfig::<Test> { balances: vec![(0, 100), (1, 99), (2, 1)] }
+		.assimilate_storage(&mut t)
+		.unwrap();
 	// Treasury genesis config is not build thus treasury account does not exist
 	let mut t: sp_io::TestExternalities = t.into();
 
@@ -347,15 +355,37 @@ fn inexistent_account_works() {
 fn genesis_funding_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let initial_funding = 100;
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
-	}.assimilate_storage(&mut t).unwrap();
-	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+	});
+}
+
+#[test]
+fn max_approvals_limited() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&Treasury::account_id(), u64::MAX);
+		Balances::make_free_balance_be(&0, u64::MAX);
+
+		for _ in 0..MaxApprovals::get() {
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
+		}
+
+		// One too many will fail
+		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+		assert_noop!(
+			Treasury::approve_proposal(Origin::root(), 0),
+			Error::<Test, _>::TooManyApprovals
+		);
 	});
 }

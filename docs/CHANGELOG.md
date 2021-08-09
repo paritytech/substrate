@@ -8,14 +8,14 @@ The format is based on [Keep a Changelog].
 
 ## 2.0.1-> 3.0.0 - Apollo 14
 
-Most notably, this is the first release of the new FRAME (2.0) with its new macro-syntax and some changes in types, and pallet versioning. This release also incorporates the faster and improve version 2.0 of the parity-scale-codec and upgraded dependencies all-around. While the `FinalityTracker` pallet has been dropped, this release marks the first public appereance of a few new pallets, too;Bounties, Lottery, Tips (extracted from the `Treasury`-pallet, see #7536) and Merkle-Mountain-Ranges (MMR).
+Most notably, this is the first release of the new FRAME (2.0) with its new macro-syntax and some changes in types, and pallet versioning. This release also incorporates the faster and improve version 2.0 of the parity-scale-codec and upgraded dependencies all-around. While the `FinalityTracker` pallet has been dropped, this release marks the first public appearance of a few new pallets, too;Bounties, Lottery, Tips (extracted from the `Treasury`-pallet, see #7536) and Merkle-Mountain-Ranges (MMR).
 
 On the client side, the most notable changes are around the keystore, making it async and switching to a different signing model allowing for remote-signing to be implemented; and various changes to improve networking and light-client support, like adding the Grandpa warp sync request-response protocol (#7711).
 
 _Contracts_: Please note that the contracts pallet _is not part_ of this release. The pallet is not yet ready and will be released separately in the coming weeks. The currently released contracts pallet _is not compatible_ with the new FRAME, thus if you need the contracts pallet, we recommend you wait with the upgrade until it has been released, too.
 ### Upgrade instructions
 
-Not too much has changed on the top and API level for developing Substrate betweeen 2.0 and 3.0. The easiest and quickest path for upgading is just to take the latest node-template and try applying your changes to it:
+Not too much has changed on the top and API level for developing Substrate between 2.0 and 3.0. The easiest and quickest path for upgrading is just to take the latest node-template and try applying your changes to it:
 1. take a diff between 2.0 and your changes
 2. store that diff
 3. remove everything, copy over the 3.0 node-template
@@ -31,7 +31,7 @@ Runtime
 * contracts: Emit event on contract termination (#8014)
 * Fix elections-phragmen and proxy issue (#7040)
 * Allow validators to block and kick their nominator set. (#7930)
-* Decouple Stkaing and Election - Part1: Support traits (#7908)
+* Decouple Staking and Election - Part1: Support traits (#7908)
 * Introduces account existence providers reference counting (#7363)
 * contracts: Cap the surcharge reward by the amount of rent that way payed by a contract (#7870)
 * Use checked math when calculating storage size (#7885)
@@ -215,7 +215,7 @@ Runtime Migrations
 Runtime
 -------
 
-* Custom Codec Implenetation for NPoS Election (#6720)
+* Custom Codec Implementation for NPoS Election (#6720)
 * Successful `note_imminent_preimage` is free (#6793)
 * pallet-democracy use of weightinfo (#6783)
 * Update Balances Pallet to use `WeightInfo` (#6610)
@@ -276,7 +276,7 @@ Runtime
 Client
 ------
 
-* Update wasmtime to (almost) lastest master (#6662)
+* Update wasmtime to (almost) latest master (#6662)
 * Update to latest sysinfo prevents leaking fd-handlers (#6708)
 * Tracing values (#6679)
 * Graceful shutdown for the task manager (#6654)
@@ -309,7 +309,7 @@ Runtime
 * `pallet-scheduler`: Check that `when` is not in the past (#6480)
 * Fix `sp-api` handling of multiple arguments (#6484)
 * Fix issues with `Operational` transactions validity and prioritization. (#6435)
-* pallet-atomic-swap: generialized swap action (#6421)
+* pallet-atomic-swap: generalized swap action (#6421)
 * Avoid multisig reentrancy (#6445)
 * Root origin use no filter by default. Scheduler and Democracy dispatch without asserting BaseCallFilter (#6408)
 * Scale and increase validator count (#6417)
@@ -334,7 +334,7 @@ Client
 * Remove penalty on duplicate Status message (#6377)
 * Fix the broken weight multiplier update function (#6334)
 * client/authority-discovery: Don't add own address to priority group (#6370)
-* Split the service initialisation up into seperate functions (#6332)
+* Split the service initialisation up into separate functions (#6332)
 * Fix transaction pool event sending (#6341)
 * Add a [prefix]_process_start_time_seconds metric (#6315)
 * new crate sc-light (#6235)

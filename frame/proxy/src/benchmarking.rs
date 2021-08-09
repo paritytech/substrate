@@ -20,19 +20,15 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
+use crate::Pallet as Proxy;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
-use crate::Module as Proxy;
 
 const SEED: u32 = 0;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
@@ -52,7 +48,7 @@ fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(),
 fn add_announcements<T: Config>(
 	n: u32,
 	maybe_who: Option<T::AccountId>,
-	maybe_real: Option<T::AccountId>
+	maybe_real: Option<T::AccountId>,
 ) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -90,7 +86,7 @@ benchmarks! {
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
-		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
+		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
 	}
 
 	proxy_announced {
@@ -111,7 +107,7 @@ benchmarks! {
 		add_announcements::<T>(a, Some(delegate.clone()), None)?;
 	}: _(RawOrigin::Signed(caller), delegate, real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
-		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
+		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
 	}
 
 	remove_announcement {
@@ -169,7 +165,7 @@ benchmarks! {
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
 	verify {
-		assert_last_event::<T>(RawEvent::Announced(real, caller, call_hash).into());
+		assert_last_event::<T>(Event::Announced(real, caller, call_hash).into());
 	}
 
 	add_proxy {
@@ -219,8 +215,8 @@ benchmarks! {
 		0
 	)
 	verify {
-		let anon_account = Module::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
-		assert_last_event::<T>(RawEvent::AnonymousCreated(
+		let anon_account = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
+		assert_last_event::<T>(Event::AnonymousCreated(
 			anon_account,
 			caller,
 			T::ProxyType::default(),
@@ -233,15 +229,15 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Module::<T>::anonymous(
+		Pallet::<T>::anonymous(
 			RawOrigin::Signed(whitelisted_caller()).into(),
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),
 			0
 		)?;
-		let height = system::Module::<T>::block_number();
-		let ext_index = system::Module::<T>::extrinsic_index().unwrap_or(0);
-		let anon = Module::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
+		let height = system::Pallet::<T>::block_number();
+		let ext_index = system::Pallet::<T>::extrinsic_index().unwrap_or(0);
+		let anon = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
 
 		add_proxies::<T>(p, Some(anon.clone()))?;
 		ensure!(Proxies::<T>::contains_key(&anon), "anon proxy not created");
@@ -251,8 +247,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Proxy,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);

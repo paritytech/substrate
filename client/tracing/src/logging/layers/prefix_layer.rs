@@ -23,7 +23,7 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 
 /// A `Layer` that captures the prefix span ([`PREFIX_LOG_SPAN`]) which is then used by
-/// [`EventFormat`] to prefix the log lines by customizable string.
+/// [`crate::logging::EventFormat`] to prefix the log lines by customizable string.
 ///
 /// See the macro `sc_cli::prefix_logs_with!` for more details.
 pub struct PrefixLayer;
@@ -42,12 +42,12 @@ where
 					"newly created span with ID {:?} did not exist in the registry; this is a bug!",
 					id
 				);
-				return;
-			}
+				return
+			},
 		};
 
 		if span.name() != PREFIX_LOG_SPAN {
-			return;
+			return
 		}
 
 		let mut extensions = span.extensions_mut();

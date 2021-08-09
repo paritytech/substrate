@@ -24,92 +24,86 @@
 //! `cargo hfuzz run-debug per_thing_rational hfuzz_workspace/per_thing_rational/*.fuzz`.
 
 use honggfuzz::fuzz;
-use sp_arithmetic::{
-	PerThing, PerU16, Percent, Perbill, Perquintill, traits::SaturatedConversion,
-};
+use sp_arithmetic::{traits::SaturatedConversion, PerThing, PerU16, Perbill, Percent, Perquintill};
 
 fn main() {
 	loop {
-		fuzz!(|
-			data: ((u16, u16), (u32, u32), (u64, u64))
-		| {
-
+		fuzz!(|data: ((u16, u16), (u32, u32), (u64, u64))| {
 			let (u16_pair, u32_pair, u64_pair) = data;
 
 			// peru16
 			let (smaller, bigger) = (u16_pair.0.min(u16_pair.1), u16_pair.0.max(u16_pair.1));
-			let ratio = PerU16::from_rational_approximation(smaller, bigger);
+			let ratio = PerU16::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				PerU16::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				PerU16::from_float(smaller as f64 / bigger.max(1) as f64),
 				1,
 			);
 			let (smaller, bigger) = (u32_pair.0.min(u32_pair.1), u32_pair.0.max(u32_pair.1));
-			let ratio = PerU16::from_rational_approximation(smaller, bigger);
+			let ratio = PerU16::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				PerU16::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				PerU16::from_float(smaller as f64 / bigger.max(1) as f64),
 				1,
 			);
 			let (smaller, bigger) = (u64_pair.0.min(u64_pair.1), u64_pair.0.max(u64_pair.1));
-			let ratio = PerU16::from_rational_approximation(smaller, bigger);
+			let ratio = PerU16::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				PerU16::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				PerU16::from_float(smaller as f64 / bigger.max(1) as f64),
 				1,
 			);
 
 			// percent
 			let (smaller, bigger) = (u16_pair.0.min(u16_pair.1), u16_pair.0.max(u16_pair.1));
-			let ratio = Percent::from_rational_approximation(smaller, bigger);
+			let ratio = Percent::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				Percent::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				Percent::from_float(smaller as f64 / bigger.max(1) as f64),
 				1,
 			);
 
 			let (smaller, bigger) = (u32_pair.0.min(u32_pair.1), u32_pair.0.max(u32_pair.1));
-			let ratio = Percent::from_rational_approximation(smaller, bigger);
+			let ratio = Percent::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				Percent::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				Percent::from_float(smaller as f64 / bigger.max(1) as f64),
 				1,
 			);
 
 			let (smaller, bigger) = (u64_pair.0.min(u64_pair.1), u64_pair.0.max(u64_pair.1));
-			let ratio = Percent::from_rational_approximation(smaller, bigger);
+			let ratio = Percent::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				Percent::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				Percent::from_float(smaller as f64 / bigger.max(1) as f64),
 				1,
 			);
 
 			// perbill
 			let (smaller, bigger) = (u32_pair.0.min(u32_pair.1), u32_pair.0.max(u32_pair.1));
-			let ratio = Perbill::from_rational_approximation(smaller, bigger);
+			let ratio = Perbill::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				Perbill::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				Perbill::from_float(smaller as f64 / bigger.max(1) as f64),
 				100,
 			);
 
 			let (smaller, bigger) = (u64_pair.0.min(u64_pair.1), u64_pair.0.max(u64_pair.1));
-			let ratio = Perbill::from_rational_approximation(smaller, bigger);
+			let ratio = Perbill::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				Perbill::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				Perbill::from_float(smaller as f64 / bigger.max(1) as f64),
 				100,
 			);
 
 			// perquintillion
 			let (smaller, bigger) = (u64_pair.0.min(u64_pair.1), u64_pair.0.max(u64_pair.1));
-			let ratio = Perquintill::from_rational_approximation(smaller, bigger);
+			let ratio = Perquintill::from_rational(smaller, bigger);
 			assert_per_thing_equal_error(
 				ratio,
-				Perquintill::from_fraction(smaller as f64 / bigger.max(1) as f64),
+				Perquintill::from_float(smaller as f64 / bigger.max(1) as f64),
 				1000,
 			);
-
 		})
 	}
 }

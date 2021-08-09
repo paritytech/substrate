@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//!
 //! An opt-in utility module for reporting equivocations.
 //!
 //! This module defines an offence type for BABE equivocations
@@ -33,22 +32,23 @@
 //! When using this module for enabling equivocation reporting it is required
 //! that the `ValidateUnsigned` for the BABE pallet is used in the runtime
 //! definition.
-//!
 
 use frame_support::traits::{Get, KeyOwnerProofSystem};
 use sp_consensus_babe::{EquivocationProof, Slot};
-use sp_runtime::transaction_validity::{
-	InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
-	TransactionValidityError, ValidTransaction,
+use sp_runtime::{
+	transaction_validity::{
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		TransactionValidityError, ValidTransaction,
+	},
+	DispatchResult, Perbill,
 };
-use sp_runtime::{DispatchResult, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
 
-use crate::{Call, Module, Config};
+use crate::{Call, Config, Pallet};
 
 /// A trait with utility methods for handling equivocation reports in BABE.
 /// The trait provides methods for reporting an offence triggered by a valid
@@ -115,9 +115,7 @@ pub struct EquivocationHandler<I, R, L> {
 
 impl<I, R, L> Default for EquivocationHandler<I, R, L> {
 	fn default() -> Self {
-		Self {
-			_phantom: Default::default(),
-		}
+		Self { _phantom: Default::default() }
 	}
 }
 
@@ -157,7 +155,8 @@ where
 	) -> DispatchResult {
 		use frame_system::offchain::SubmitTransaction;
 
-		let call = Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof);
+		let call =
+			Call::report_equivocation_unsigned(Box::new(equivocation_proof), key_owner_proof);
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(()) => log::info!(
@@ -175,43 +174,41 @@ where
 	}
 
 	fn block_author() -> Option<T::AccountId> {
-		Some(<pallet_authorship::Module<T>>::author())
+		Some(<pallet_authorship::Pallet<T>>::author())
 	}
 }
 
-/// A `ValidateUnsigned` implementation that restricts calls to `report_equivocation_unsigned`
-/// to local calls (i.e. extrinsics generated on this node) or that already in a block. This
-/// guarantees that only block authors can include unsigned equivocation reports.
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
-	type Call = Call<T>;
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+/// Methods for the `ValidateUnsigned` implementation:
+/// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
+/// on this node) or that already in a block. This guarantees that only block authors can include
+/// unsigned equivocation reports.
+impl<T: Config> Pallet<T> {
+	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 				_ => {
 					log::warn!(
 						target: "runtime::babe",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block.",
 					);
 
-					return InvalidTransaction::Call.into();
-				}
+					return InvalidTransaction::Call.into()
+				},
 			}
 
 			// check report staleness
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
 
-			let longevity = <T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
+			let longevity =
+				<T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
 
 			ValidTransaction::with_tag_prefix("BabeEquivocation")
 				// We assign the maximum priority for any equivocation report.
 				.priority(TransactionPriority::max_value())
 				// Only one equivocation report for the same offender at the same slot.
-				.and_provides((
-					equivocation_proof.offender.clone(),
-					*equivocation_proof.slot,
-				))
+				.and_provides((equivocation_proof.offender.clone(), *equivocation_proof.slot))
 				.longevity(longevity)
 				// We don't propagate this. This can never be included on a remote node.
 				.propagate(false)
@@ -221,7 +218,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {
@@ -235,10 +232,7 @@ fn is_known_offence<T: Config>(
 	key_owner_proof: &T::KeyOwnerProof,
 ) -> Result<(), TransactionValidityError> {
 	// check the membership proof to extract the offender's id
-	let key = (
-		sp_consensus_babe::KEY_TYPE,
-		equivocation_proof.offender.clone(),
-	);
+	let key = (sp_consensus_babe::KEY_TYPE, equivocation_proof.offender.clone());
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;
@@ -290,7 +284,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 
 	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
+		let x = Perbill::from_rational(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()
 	}

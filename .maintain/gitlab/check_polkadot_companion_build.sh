@@ -86,11 +86,14 @@ else
 fi
 
 # Patch all Substrate crates in Polkadot
-diener patch --crates-to-patch ../ --substrate
+diener patch --crates-to-patch ../ --substrate --path Cargo.toml
+
+# We need to update specifically our patched Substrate crates so that other
+# crates that depend on them (e.g. Polkadot, BEEFY) use this unified version
+# NOTE: There's no way to only update patched crates, so we use a heuristic
+# of updating a crucial Substrate crate (`sp-core`) to minimize the impact of
+# updating unrelated dependencies
+cargo update -p sp-core
 
 # Test Polkadot pr or master branch with this Substrate commit.
-cargo update -p sp-io
-time cargo test --all --release --verbose --features=real-overseer
-
-cd parachain/test-parachains/adder/collator/
-time cargo test --release --verbose --locked --features=real-overseer
+time cargo test --workspace --release --verbose --features=runtime-benchmarks

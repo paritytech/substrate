@@ -1,10 +1,13 @@
 use honggfuzz::fuzz;
-use sp_npos_elections::generate_solution_type;
-use sp_npos_elections::sp_arithmetic::Percent;
+use sp_npos_elections::{generate_solution_type, sp_arithmetic::Percent};
 use sp_runtime::codec::{Encode, Error};
 
 fn main() {
-	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<u32, u32, Percent>(16));
+	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
+		VoterIndex = u32,
+		TargetIndex = u32,
+		Accuracy = Percent,
+	>(16));
 	loop {
 		fuzz!(|fuzzer_data: &[u8]| {
 			let result_decoded: Result<InnerTestSolutionCompact, Error> =
@@ -22,9 +25,8 @@ fn main() {
 				// The reencoded value should definitely be decodable (if unwrap() fails that is a valid
 				// panic/finding for the fuzzer):
 				let decoded2: InnerTestSolutionCompact =
-					<InnerTestSolutionCompact as codec::Decode>::decode(
-						&mut reencoded.as_slice(),
-					).unwrap();
+					<InnerTestSolutionCompact as codec::Decode>::decode(&mut reencoded.as_slice())
+						.unwrap();
 				// And it should be equal to the original decoded object (resulting from directly
 				// decoding fuzzer_data):
 				assert_eq!(decoded, decoded2);

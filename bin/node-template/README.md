@@ -1,97 +1,71 @@
 # Substrate Node Template
 
-A new FRAME-based Substrate node, ready for hacking :rocket:
+A fresh FRAME-based [Substrate](https://www.substrate.io/) node, ready for hacking :rocket:
 
-## Local Development
+## Getting Started
 
-Follow these steps to prepare a local Substrate development environment :hammer_and_wrench:
+Follow these steps to get started with the Node Template :hammer_and_wrench:
 
-### Simple Setup
+### Rust Setup
 
-Install all the required dependencies with a single command (be patient, this can take up to 30
-minutes).
+First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
 
-```bash
-curl https://getsubstrate.io -sSf | bash -s -- --fast
+### Run
+
+Use Rust's native `cargo` command to build and launch the template node:
+
+```sh
+cargo run --release -- --dev --tmp
 ```
-
-### Manual Setup
-
-Find manual setup instructions at the
-[Substrate Developer Hub](https://substrate.dev/docs/en/knowledgebase/getting-started/#manual-installation).
 
 ### Build
 
-Once the development environment is set up, build the node template. This command will build the
-[Wasm](https://substrate.dev/docs/en/knowledgebase/advanced/executor#wasm-execution) and
-[native](https://substrate.dev/docs/en/knowledgebase/advanced/executor#native-execution) code:
+The `cargo run` command will perform an initial build. Use the following command to build the node
+without launching it:
 
-```bash
+```sh
 cargo build --release
+```
+
+### Embedded Docs
+
+Once the project has been built, the following command can be used to explore all parameters and
+subcommands:
+
+```sh
+./target/release/node-template -h
 ```
 
 ## Run
 
-### Single Node Development Chain
+The provided `cargo run` command will launch a temporary node and its state will be discarded after
+you terminate the process. After the project has been built, there are other ways to launch the
+node.
 
-Purge any existing dev chain state:
+### Single-Node Development Chain
 
-```bash
-./target/release/node-template purge-chain --dev
-```
-
-Start a dev chain:
+This command will start the single-node development chain with persistent state:
 
 ```bash
 ./target/release/node-template --dev
 ```
 
-Or, start a dev chain with detailed logging:
+Purge the development chain's state:
 
 ```bash
-RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug --dev
+./target/release/node-template purge-chain --dev
+```
+
+Start the development chain with detailed logging:
+
+```bash
+RUST_BACKTRACE=1 ./target/release/node-template -ldebug --dev
 ```
 
 ### Multi-Node Local Testnet
 
-To see the multi-node consensus algorithm in action, run a local testnet with two validator nodes,
-Alice and Bob, that have been [configured](./node/src/chain_spec.rs) as the initial
-authorities of the `local` testnet chain and endowed with testnet units.
-
-Note: this will require two terminal sessions (one for each node).
-
-Start Alice's node first. The command below uses the default TCP port (30333) and specifies
-`/tmp/alice` as the chain database location. Alice's node ID will be
-`12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp` (legacy representation:
-`QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`); this is determined by the `node-key`.
-
-```bash
-cargo run -- \
-  --base-path /tmp/alice \
-  --chain=local \
-  --alice \
-  --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
-  --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
-  --validator
-```
-
-In another terminal, use the following command to start Bob's node on a different TCP port (30334)
-and with a chain database location of `/tmp/bob`. The `--bootnodes` option will connect his node to
-Alice's on TCP port 30333:
-
-```bash
-cargo run -- \
-  --base-path /tmp/bob \
-  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp \
-  --chain=local \
-  --bob \
-  --port 30334 \
-  --ws-port 9945 \
-  --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
-  --validator
-```
-
-Execute `cargo run -- --help` to learn more about the template node's CLI options.
+If you want to see the multi-node consensus algorithm in action, refer to
+[our Start a Private Network tutorial](https://substrate.dev/docs/en/tutorials/start-a-private-network/).
 
 ## Template Structure
 
@@ -184,24 +158,28 @@ A FRAME pallet is compromised of a number of blockchain primitives:
 -   Config: The `Config` configuration interface is used to define the types and parameters upon
     which a FRAME pallet depends.
 
-## Generate a Custom Node Template
+### Run in Docker
 
-Generate a Substrate node template based on a particular commit by running the following commands:
+First, install [Docker](https://docs.docker.com/get-docker/) and
+[Docker Compose](https://docs.docker.com/compose/install/).
+
+Then run the following command to start a single node development chain.
 
 ```bash
-# Clone from the main Substrate repo
-git clone https://github.com/paritytech/substrate.git
-cd substrate
-
-# Switch to the branch or commit to base the template on
-git checkout <branch/tag/sha1>
-
-# Run the helper script to generate a node template. This script compiles Substrate, so it will take
-# a while to complete. It expects a single parameter: the location for the script's output expressed
-# as a relative path.
-.maintain/node-template-release.sh ../node-template.tar.gz
+./scripts/docker_run.sh
 ```
 
-Custom node templates are not supported. Please use a recently tagged version of the
-[Substrate Developer Node Template](https://github.com/substrate-developer-hub/substrate-node-template)
-in order to receive support.
+This command will firstly compile your code, and then start a local development network. You can
+also replace the default command (`cargo build --release && ./target/release/node-template --dev --ws-external`)
+by appending your own. A few useful ones are as follow.
+
+```bash
+# Run Substrate node without re-compiling
+./scripts/docker_run.sh ./target/release/node-template --dev --ws-external
+
+# Purge the local dev chain
+./scripts/docker_run.sh ./target/release/node-template purge-chain --dev
+
+# Check whether the code is compilable
+./scripts/docker_run.sh cargo check
+```

@@ -17,11 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::Database;
-use structopt::StructOpt;
 use sc_service::TransactionStorageMode;
+use structopt::StructOpt;
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
 	#[structopt(

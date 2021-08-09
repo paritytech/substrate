@@ -18,59 +18,80 @@
 //! Test utilities
 
 use super::*;
-use frame_support::{parameter_types, weights::Weight};
-use sp_core::H256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use sp_io;
 use crate as sudo;
-use frame_support::traits::Filter;
+use frame_support::{
+	parameter_types,
+	traits::{Contains, GenesisBuild},
+};
 use frame_system::limits;
+use sp_core::H256;
+use sp_io;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 // Logger module to track execution.
+#[frame_support::pallet]
 pub mod logger {
 	use super::*;
-	use frame_system::ensure_root;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
+	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
-	decl_storage! {
-		trait Store for Module<T: Config> as Logger {
-			AccountLog get(fn account_log): Vec<T::AccountId>;
-			I32Log get(fn i32_log): Vec<i32>;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(*weight)]
+		pub fn privileged_i32_log(
+			origin: OriginFor<T>,
+			i: i32,
+			weight: Weight,
+		) -> DispatchResultWithPostInfo {
+			// Ensure that the `origin` is `Root`.
+			ensure_root(origin)?;
+			<I32Log<T>>::append(i);
+			Self::deposit_event(Event::AppendI32(i, weight));
+			Ok(().into())
+		}
+
+		#[pallet::weight(*weight)]
+		pub fn non_privileged_log(
+			origin: OriginFor<T>,
+			i: i32,
+			weight: Weight,
+		) -> DispatchResultWithPostInfo {
+			// Ensure that the `origin` is some signed account.
+			let sender = ensure_signed(origin)?;
+			<I32Log<T>>::append(i);
+			<AccountLog<T>>::append(sender.clone());
+			Self::deposit_event(Event::AppendI32AndAccount(sender, i, weight));
+			Ok(().into())
 		}
 	}
 
-	decl_event! {
-		pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
-			AppendI32(i32, Weight),
-			AppendI32AndAccount(AccountId, i32, Weight),
-		}
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId")]
+	pub enum Event<T: Config> {
+		AppendI32(i32, Weight),
+		AppendI32AndAccount(T::AccountId, i32, Weight),
 	}
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
-			fn deposit_event() = default;
+	#[pallet::storage]
+	#[pallet::getter(fn account_log)]
+	pub(super) type AccountLog<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
-			#[weight = *weight]
-			fn privileged_i32_log(origin, i: i32, weight: Weight){
-				// Ensure that the `origin` is `Root`.
-				ensure_root(origin)?;
-				<I32Log>::append(i);
-				Self::deposit_event(RawEvent::AppendI32(i, weight));
-			}
-
-			#[weight = *weight]
-			fn non_privileged_log(origin, i: i32, weight: Weight){
-				// Ensure that the `origin` is some signed account.
-				let sender = ensure_signed(origin)?;
-				<I32Log>::append(i);
-				<AccountLog<T>>::append(sender.clone());
-				Self::deposit_event(RawEvent::AppendI32AndAccount(sender, i, weight));
-			}
-		}
-	}
+	#[pallet::storage]
+	#[pallet::getter(fn i32_log)]
+	pub(super) type I32Log<T> = StorageValue<_, Vec<i32>, ValueQuery>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -82,9 +103,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
-		Logger: logger::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Sudo: sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Logger: logger::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -94,8 +115,8 @@ parameter_types! {
 }
 
 pub struct BlockEverything;
-impl Filter<Call> for BlockEverything {
-	fn filter(_: &Call) -> bool {
+impl Contains<Call> for BlockEverything {
+	fn contains(_: &Call) -> bool {
 		false
 	}
 }
@@ -123,6 +144,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 // Implement the logger module's `Config` on the Test runtime.
@@ -143,8 +165,8 @@ pub type LoggerCall = logger::Call<Test>;
 // Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	sudo::GenesisConfig::<Test>{
-		key: root_key,
-	}.assimilate_storage(&mut t).unwrap();
+	sudo::GenesisConfig::<Test> { key: root_key }
+		.assimilate_storage(&mut t)
+		.unwrap();
 	t.into()
 }

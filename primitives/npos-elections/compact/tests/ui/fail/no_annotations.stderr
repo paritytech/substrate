@@ -1,0 +1,5 @@
+error: Expected binding: `VoterIndex = ...`
+ --> $DIR/no_annotations.rs:4:2
+  |
+4 |     u16,
+  |     ^^^

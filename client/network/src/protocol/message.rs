@@ -18,16 +18,17 @@
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
-use bitflags::bitflags;
-use sp_runtime::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
-	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
-	RemoteHeaderRequest, RemoteHeaderResponse,
-	RemoteChangesRequest, RemoteChangesResponse,
-	FromBlock, RemoteReadChildRequest, Roles,
+	BlockAnnounce, FromBlock, RemoteCallRequest, RemoteChangesRequest, RemoteChangesResponse,
+	RemoteHeaderRequest, RemoteHeaderResponse, RemoteReadChildRequest, RemoteReadRequest, Roles,
 };
+use bitflags::bitflags;
+use codec::{Decode, Encode, Error, Input, Output};
 use sc_client_api::StorageProof;
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT},
+	ConsensusEngineId,
+};
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -41,24 +42,16 @@ pub type Message<B> = generic::Message<
 >;
 
 /// Type alias for using the block request type using block type parameters.
-pub type BlockRequest<B> = generic::BlockRequest<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
+pub type BlockRequest<B> =
+	generic::BlockRequest<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
 /// Type alias for using the BlockData type using block type parameters.
-pub type BlockData<B> = generic::BlockData<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockData<B> =
+	generic::BlockData<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// Type alias for using the BlockResponse type using block type parameters.
-pub type BlockResponse<B> = generic::BlockResponse<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockResponse<B> =
+	generic::BlockResponse<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
@@ -77,6 +70,8 @@ bitflags! {
 		const MESSAGE_QUEUE = 0b00001000;
 		/// Include a justification for the block.
 		const JUSTIFICATION = 0b00010000;
+		/// Include indexed transactions for a block.
+		const INDEXED_BODY = 0b00100000;
 	}
 }
 
@@ -144,16 +139,35 @@ pub struct RemoteReadResponse {
 	pub proof: StorageProof,
 }
 
+/// Announcement summary used for debug logging.
+#[derive(Debug)]
+pub struct AnnouncementSummary<H: HeaderT> {
+	block_hash: H::Hash,
+	number: H::Number,
+	parent_hash: H::Hash,
+	state: Option<BlockState>,
+}
+
+impl<H: HeaderT> generic::BlockAnnounce<H> {
+	pub fn summary(&self) -> AnnouncementSummary<H> {
+		AnnouncementSummary {
+			block_hash: self.header.hash(),
+			number: *self.header.number(),
+			parent_hash: self.header.parent_hash().clone(),
+			state: self.state,
+		}
+	}
+}
+
 /// Generic types.
 pub mod generic {
-	use bitflags::bitflags;
-	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::Justification;
 	use super::{
-		RemoteReadResponse, Transactions, Direction,
-		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
-		BlockState, StorageProof,
+		BlockAttributes, BlockState, ConsensusEngineId, Direction, RemoteCallResponse,
+		RemoteReadResponse, RequestId, StorageProof, Transactions,
 	};
+	use bitflags::bitflags;
+	use codec::{Decode, Encode, Input, Output};
+	use sp_runtime::{EncodedJustification, Justifications};
 
 	bitflags! {
 		/// Bitmask of the roles that a node fulfills.
@@ -228,12 +242,16 @@ pub mod generic {
 		pub header: Option<Header>,
 		/// Block body if requested.
 		pub body: Option<Vec<Extrinsic>>,
+		/// Block body indexed transactions if requested.
+		pub indexed_body: Option<Vec<Vec<u8>>>,
 		/// Block receipt if requested.
 		pub receipt: Option<Vec<u8>>,
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification>,
+		pub justification: Option<EncodedJustification>,
+		/// Justifications if requested.
+		pub justifications: Option<Justifications>,
 	}
 
 	/// Identifies starting point of a block sequence.
@@ -332,11 +350,12 @@ pub mod generic {
 			let compact = CompactStatus::decode(value)?;
 			let chain_status = match <Vec<u8>>::decode(value) {
 				Ok(v) => v,
-				Err(e) => if compact.version <= LAST_CHAIN_STATUS_VERSION {
-					return Err(e)
-				} else {
-					Vec::new()
-				}
+				Err(e) =>
+					if compact.version <= LAST_CHAIN_STATUS_VERSION {
+						return Err(e)
+					} else {
+						Vec::new()
+					},
 			};
 
 			let CompactStatus {
@@ -417,11 +436,7 @@ pub mod generic {
 			let header = H::decode(input)?;
 			let state = BlockState::decode(input).ok();
 			let data = Vec::decode(input).ok();
-			Ok(BlockAnnounce {
-				header,
-				state,
-				data,
-			})
+			Ok(BlockAnnounce { header, state, data })
 		}
 	}
 

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts-primitives"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,16 +13,21 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-# This crate should not rely on any of the frame primitives.
 bitflags = "1.0"
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
+codec = { package = "parity-scale-codec", version = "2", default-features = false, features = ["derive"] }
+serde = { version = "1", features = ["derive"], optional = true }
+
+# Substrate Dependencies (This crate should not rely on frame)
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core", default-features = false }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"serde",
 ]

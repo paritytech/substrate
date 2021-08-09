@@ -17,9 +17,9 @@
 
 //! Overlayed changes for offchain indexing.
 
+use super::changeset::OverlayedMap;
 use sp_core::offchain::OffchainOverlayedChange;
 use sp_std::prelude::Vec;
-use super::changeset::OverlayedMap;
 
 /// In-memory storage for offchain workers recoding changes for the actual offchain storage implementation.
 #[derive(Debug, Clone, Default)]
@@ -52,11 +52,9 @@ impl OffchainOverlayedChanges {
 
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let _ = self.0.set(
-			(prefix.to_vec(), key.to_vec()),
-			OffchainOverlayedChange::Remove,
-			None,
-		);
+		let _ = self
+			.0
+			.set((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove, None);
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
@@ -80,7 +78,9 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Mutable reference to inner change set.
-	pub fn overlay_mut(&mut self) -> &mut OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange> {
+	pub fn overlay_mut(
+		&mut self,
+	) -> &mut OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange> {
 		&mut self.0
 	}
 }
@@ -120,10 +120,10 @@ mod test {
 		let mut iter = ooc.into_iter();
 		assert_eq!(
 			iter.next(),
-			Some(
-				((STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
-				OffchainOverlayedChange::SetValue(b"rrr".to_vec()))
-			)
+			Some((
+				(STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
+				OffchainOverlayedChange::SetValue(b"rrr".to_vec())
+			))
 		);
 		assert_eq!(iter.next(), None);
 	}

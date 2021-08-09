@@ -24,7 +24,7 @@
 
 use sp_runtime::RuntimeDebug;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_std::vec::Vec;
 
 #[cfg(test)]
@@ -34,9 +34,9 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -47,9 +47,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	/// A public part of the pallet.
 	#[pallet::call]
@@ -68,9 +65,10 @@ pub mod pallet {
 		/// The example utilizes parallel execution by checking half of the
 		/// signatures in spawned task.
 		#[pallet::weight(0)]
-		pub fn enlist_participants(origin: OriginFor<T>, participants: Vec<EnlistedParticipant>)
-			-> DispatchResultWithPostInfo
-		{
+		pub fn enlist_participants(
+			origin: OriginFor<T>,
+			participants: Vec<EnlistedParticipant>,
+		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 
 			if validate_participants_parallel(&<CurrentEventId<T>>::get(), &participants[..]) {
@@ -106,21 +104,20 @@ pub struct EnlistedParticipant {
 impl EnlistedParticipant {
 	fn verify(&self, event_id: &[u8]) -> bool {
 		use sp_core::Public;
-		use std::convert::TryFrom;
 		use sp_runtime::traits::Verify;
+		use std::convert::TryFrom;
 
 		match sp_core::sr25519::Signature::try_from(&self.signature[..]) {
 			Ok(signature) => {
 				let public = sp_core::sr25519::Public::from_slice(self.account.as_ref());
 				signature.verify(event_id, &public)
-			}
-			_ => false
+			},
+			_ => false,
 		}
 	}
 }
 
 fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParticipant]) -> bool {
-
 	fn spawn_verify(data: Vec<u8>) -> Vec<u8> {
 		let stream = &mut &data[..];
 		let event_id = Vec::<u8>::decode(stream).expect("Failed to decode");
@@ -141,10 +138,10 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	let handle = sp_tasks::spawn(spawn_verify, async_payload);
 	let mut result = true;
 
-	for participant in &participants[participants.len()/2+1..] {
+	for participant in &participants[participants.len() / 2 + 1..] {
 		if !participant.verify(event_id) {
 			result = false;
-			break;
+			break
 		}
 	}
 

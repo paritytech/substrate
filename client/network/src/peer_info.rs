@@ -16,24 +16,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::utils::interval;
 use fnv::FnvHashMap;
 use futures::prelude::*;
-use libp2p::Multiaddr;
-use libp2p::core::connection::{ConnectionId, ListenerId};
-use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
-use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
-use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
-use log::{debug, trace, error};
+use libp2p::{
+	core::{
+		connection::{ConnectionId, ListenerId},
+		either::EitherOutput,
+		ConnectedPoint, PeerId, PublicKey,
+	},
+	identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo},
+	ping::{Ping, PingConfig, PingEvent, PingSuccess},
+	swarm::{
+		IntoProtocolsHandler, IntoProtocolsHandlerSelect, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters, ProtocolsHandler,
+	},
+	Multiaddr,
+};
+use log::{debug, error, trace};
 use smallvec::SmallVec;
-use std::{error, io};
-use std::collections::hash_map::Entry;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+	collections::hash_map::Entry,
+	error, io,
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 use wasm_timer::Instant;
-use crate::utils::interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -70,24 +79,17 @@ impl NodeInfo {
 	fn new(endpoint: ConnectedPoint) -> Self {
 		let mut endpoints = SmallVec::new();
 		endpoints.push(endpoint);
-		NodeInfo {
-			info_expire: None,
-			endpoints,
-			client_version: None,
-			latest_ping: None,
-		}
+		NodeInfo { info_expire: None, endpoints, client_version: None, latest_ping: None }
 	}
 }
 
 impl PeerInfoBehaviour {
 	/// Builds a new `PeerInfoBehaviour`.
-	pub fn new(
-		user_agent: String,
-		local_public_key: PublicKey,
-	) -> Self {
+	pub fn new(user_agent: String, local_public_key: PublicKey) -> Self {
 		let identify = {
-			let proto_version = "/substrate/1.0".to_string();
-			Identify::new(proto_version, user_agent, local_public_key)
+			let cfg = IdentifyConfig::new("/substrate/1.0".to_string(), local_public_key)
+				.with_agent_version(user_agent);
+			Identify::new(cfg)
 		};
 
 		PeerInfoBehaviour {
@@ -137,13 +139,15 @@ pub struct Node<'a>(&'a NodeInfo);
 
 impl<'a> Node<'a> {
 	/// Returns the endpoint of an established connection to the peer.
-	pub fn endpoint(&self) -> &'a ConnectedPoint {
-		&self.0.endpoints[0] // `endpoints` are non-empty by definition
+	///
+	/// Returns `None` if we are disconnected from the node.
+	pub fn endpoint(&self) -> Option<&'a ConnectedPoint> {
+		self.0.endpoints.get(0)
 	}
 
 	/// Returns the latest version information we know of.
 	pub fn client_version(&self) -> Option<&'a str> {
-		self.0.client_version.as_ref().map(|s| &s[..])
+		self.0.client_version.as_deref()
 	}
 
 	/// Returns the latest ping time we know of for this node. `None` if we never successfully
@@ -169,7 +173,7 @@ pub enum PeerInfoEvent {
 impl NetworkBehaviour for PeerInfoBehaviour {
 	type ProtocolsHandler = IntoProtocolsHandlerSelect<
 		<Ping as NetworkBehaviour>::ProtocolsHandler,
-		<Identify as NetworkBehaviour>::ProtocolsHandler
+		<Identify as NetworkBehaviour>::ProtocolsHandler,
 	>;
 	type OutEvent = PeerInfoEvent;
 
@@ -188,13 +192,18 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		self.identify.inject_connected(peer_id);
 	}
 
-	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+	fn inject_connection_established(
+		&mut self,
+		peer_id: &PeerId,
+		conn: &ConnectionId,
+		endpoint: &ConnectedPoint,
+	) {
 		self.ping.inject_connection_established(peer_id, conn, endpoint);
 		self.identify.inject_connection_established(peer_id, conn, endpoint);
 		match self.nodes_info.entry(peer_id.clone()) {
 			Entry::Vacant(e) => {
 				e.insert(NodeInfo::new(endpoint.clone()));
-			}
+			},
 			Entry::Occupied(e) => {
 				let e = e.into_mut();
 				if e.info_expire.as_ref().map(|exp| *exp < Instant::now()).unwrap_or(false) {
@@ -203,11 +212,16 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 				}
 				e.info_expire = None;
 				e.endpoints.push(endpoint.clone());
-			}
+			},
 		}
 	}
 
-	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+	fn inject_connection_closed(
+		&mut self,
+		peer_id: &PeerId,
+		conn: &ConnectionId,
+		endpoint: &ConnectedPoint,
+	) {
 		self.ping.inject_connection_closed(peer_id, conn, endpoint);
 		self.identify.inject_connection_closed(peer_id, conn, endpoint);
 
@@ -235,7 +249,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
+		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
 		match event {
 			EitherOutput::First(event) => self.ping.inject_event(peer_id, connection, event),
@@ -243,7 +257,12 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		}
 	}
 
-	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn std::error::Error) {
+	fn inject_addr_reach_failure(
+		&mut self,
+		peer_id: Option<&PeerId>,
+		addr: &Multiaddr,
+		error: &dyn std::error::Error,
+	) {
 		self.ping.inject_addr_reach_failure(peer_id, addr, error);
 		self.identify.inject_addr_reach_failure(peer_id, addr, error);
 	}
@@ -253,19 +272,29 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		self.identify.inject_dial_failure(peer_id);
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.ping.inject_new_listen_addr(addr);
-		self.identify.inject_new_listen_addr(addr);
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.ping.inject_new_listener(id);
+		self.identify.inject_new_listener(id);
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.ping.inject_expired_listen_addr(addr);
-		self.identify.inject_expired_listen_addr(addr);
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.ping.inject_new_listen_addr(id, addr);
+		self.identify.inject_new_listen_addr(id, addr);
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.ping.inject_expired_listen_addr(id, addr);
+		self.identify.inject_expired_listen_addr(id, addr);
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.ping.inject_new_external_addr(addr);
 		self.identify.inject_new_external_addr(addr);
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.ping.inject_expired_external_addr(addr);
+		self.identify.inject_expired_external_addr(addr);
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {
@@ -287,7 +316,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent
 		>
-	> {
+	>{
 		loop {
 			match self.ping.poll(cx, params) {
 				Poll::Pending => break,
@@ -304,27 +333,29 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
 						handler,
-						event: EitherOutput::First(event)
+						event: EitherOutput::First(event),
 					}),
 				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+						address,
+						score,
+					}),
 			}
 		}
 
 		loop {
 			match self.identify.poll(cx, params) {
 				Poll::Pending => break,
-				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
-					match event {
-						IdentifyEvent::Received { peer_id, info, .. } => {
-							self.handle_identify_report(&peer_id, &info);
-							let event = PeerInfoEvent::Identified { peer_id, info };
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
-						}
-						IdentifyEvent::Error { peer_id, error } =>
-							debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
-						IdentifyEvent::Sent { .. } => {}
-					}
+				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => match event {
+					IdentifyEvent::Received { peer_id, info, .. } => {
+						self.handle_identify_report(&peer_id, &info);
+						let event = PeerInfoEvent::Identified { peer_id, info };
+						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+					},
+					IdentifyEvent::Error { peer_id, error } =>
+						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
+					IdentifyEvent::Pushed { .. } => {},
+					IdentifyEvent::Sent { .. } => {},
 				},
 				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
@@ -334,10 +365,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
 						handler,
-						event: EitherOutput::Second(event)
+						event: EitherOutput::Second(event),
 					}),
 				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+						address,
+						score,
+					}),
 			}
 		}
 

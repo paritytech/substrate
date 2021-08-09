@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::block_request_handler::BlockRequestHandler;
+use crate::state_request_handler::StateRequestHandler;
 use crate::light_client_requests::handler::LightClientRequestHandler;
 use crate::gossip::QueuedSender;
 use crate::{config,  Event, NetworkService, NetworkWorker};
@@ -47,21 +48,20 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 
 	#[derive(Clone)]
 	struct PassThroughVerifier(bool);
-	impl<B: BlockT> sp_consensus::import_queue::Verifier<B> for PassThroughVerifier {
-		fn verify(
+
+	#[async_trait::async_trait]
+	impl<B: BlockT> sc_consensus::Verifier<B> for PassThroughVerifier {
+		async fn verify(
 			&mut self,
-			origin: sp_consensus::BlockOrigin,
-			header: B::Header,
-			justification: Option<sp_runtime::Justification>,
-			body: Option<Vec<B::Extrinsic>>,
+			mut block: sp_consensus::BlockImportParams<B, ()>,
 		) -> Result<
 			(
-				sp_consensus::BlockImportParams<B, ()>,
+				sc_consensus::BlockImportParams<B, ()>,
 				Option<Vec<(sp_blockchain::well_known_cache_keys::Id, Vec<u8>)>>,
 			),
 			String,
 		> {
-			let maybe_keys = header
+			let maybe_keys = block.header
 				.digest()
 				.log(|l| {
 					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
@@ -76,16 +76,13 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 					)]
 				});
 
-			let mut import = sp_consensus::BlockImportParams::new(origin, header);
-			import.body = body;
-			import.finalized = self.0;
-			import.justification = justification;
-			import.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
-			Ok((import, maybe_keys))
+			block.finalized = self.0;
+			block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
+			Ok((block, maybe_keys))
 		}
 	}
 
-	let import_queue = Box::new(sp_consensus::import_queue::BasicQueue::new(
+	let import_queue = Box::new(sc_consensus::BasicQueue::new(
 		PassThroughVerifier(false),
 		Box::new(client.clone()),
 		None,
@@ -99,6 +96,17 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
 			client.clone(),
+			50,
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
+	let state_request_protocol_config = {
+		let (handler, protocol_config) = StateRequestHandler::new(
+			&protocol_id,
+			client.clone(),
+			50,
 		);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
@@ -128,7 +136,9 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 		),
 		metrics_registry: None,
 		block_request_protocol_config,
+		state_request_protocol_config,
 		light_client_request_protocol_config,
+		warp_sync: None,
 	})
 	.unwrap();
 
@@ -156,6 +166,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: Default::default()
 			}
@@ -170,6 +181,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
 					reserved_nodes: vec![config::MultiaddrWithPeerId {

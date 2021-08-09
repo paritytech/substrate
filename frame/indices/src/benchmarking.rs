@@ -20,11 +20,11 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
-use crate::Module as Indices;
+use crate::Pallet as Indices;
 
 const SEED: u32 = 0;
 
@@ -93,9 +93,4 @@ benchmarks! {
 	// TODO in another PR: lookup and unlookup trait weights (not critical)
 }
 
-
-impl_benchmark_test_suite!(
-	Indices,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
-);
+impl_benchmark_test_suite!(Indices, crate::mock::new_test_ext(), crate::mock::Test);

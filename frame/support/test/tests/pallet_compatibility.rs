@@ -23,15 +23,19 @@ impl SomeAssociation for u64 {
 }
 
 mod pallet_old {
+	use super::SomeAssociation;
 	use frame_support::{
-		decl_storage, decl_error, decl_event, decl_module, weights::Weight, traits::Get, Parameter
+		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
 	};
 	use frame_system::ensure_root;
-	use super::SomeAssociation;
 
 	pub trait Config: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
-		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default
+		type Balance: Parameter
+			+ codec::HasCompact
+			+ From<u32>
+			+ Into<Weight>
+			+ Default
 			+ SomeAssociation;
 		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	}
@@ -50,7 +54,10 @@ mod pallet_old {
 	}
 
 	decl_event!(
-		pub enum Event<T> where Balance = <T as Config>::Balance {
+		pub enum Event<T>
+		where
+			Balance = <T as Config>::Balance,
+		{
 			/// Dummy event, just here so there's a generic type that's used.
 			Dummy(Balance),
 		}
@@ -93,13 +100,17 @@ mod pallet_old {
 pub mod pallet {
 	use super::SomeAssociation;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-	use frame_system::ensure_root;
+	use frame_system::{ensure_root, pallet_prelude::*};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default
-			+ MaybeSerializeDeserialize + SomeAssociation;
+		type Balance: Parameter
+			+ codec::HasCompact
+			+ From<u32>
+			+ Into<Weight>
+			+ Default
+			+ MaybeSerializeDeserialize
+			+ SomeAssociation;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -123,9 +134,9 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(<T::Balance as Into<Weight>>::into(new_value.clone()))]
-		fn set_dummy(
+		pub fn set_dummy(
 			origin: OriginFor<T>,
-			#[pallet::compact] new_value: T::Balance
+			#[pallet::compact] new_value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
@@ -157,13 +168,22 @@ pub mod pallet {
 	#[pallet::storage]
 	type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance, ValueQuery>;
 
-	#[pallet::type_value] pub fn OnFooEmpty<T: Config>() -> T::Balance { 3.into() }
+	#[pallet::type_value]
+	pub fn OnFooEmpty<T: Config>() -> T::Balance {
+		3.into()
+	}
 	#[pallet::storage]
 	type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery, OnFooEmpty<T>>;
 
 	#[pallet::storage]
 	type Double<T: Config> = StorageDoubleMap<
-		_, Blake2_128Concat, u32, Twox64Concat, u64, <T::Balance as SomeAssociation>::A, ValueQuery
+		_,
+		Blake2_128Concat,
+		u32,
+		Twox64Concat,
+		u64,
+		<T::Balance as SomeAssociation>::A,
+		ValueQuery,
 	>;
 
 	#[pallet::genesis_config]
@@ -203,7 +223,7 @@ frame_support::parameter_types!(
 );
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
@@ -225,6 +245,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
@@ -247,25 +268,23 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>},
 		// NOTE: name Example here is needed in order to have same module prefix
-		Example: pallet::{Module, Call, Event<T>, Config<T>, Storage},
-		PalletOld: pallet_old::{Module, Call, Event<T>, Config<T>, Storage},
+		Example: pallet::{Pallet, Call, Event<T>, Config<T>, Storage},
+		PalletOld: pallet_old::{Pallet, Call, Event<T>, Config<T>, Storage},
 	}
 );
 
 #[cfg(test)]
 mod test {
-	use super::Runtime;
-	use super::pallet;
-	use super::pallet_old;
+	use super::{pallet, pallet_old, Runtime};
 	use codec::{Decode, Encode};
 
 	#[test]
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let modules = match metadata.1 {
-			frame_metadata::RuntimeMetadata::V12(frame_metadata::RuntimeMetadataV12 {
+			frame_metadata::RuntimeMetadata::V13(frame_metadata::RuntimeMetadataV13 {
 				modules: frame_metadata::DecodeDifferent::Encode(m),
 				..
 			}) => m,
@@ -283,14 +302,16 @@ mod test {
 		assert_eq!(
 			pallet_old::Event::<Runtime>::decode(
 				&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]
-			).unwrap(),
+			)
+			.unwrap(),
 			pallet_old::Event::<Runtime>::Dummy(10),
 		);
 
 		assert_eq!(
 			pallet_old::Call::<Runtime>::decode(
 				&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]
-			).unwrap(),
+			)
+			.unwrap(),
 			pallet_old::Call::<Runtime>::set_dummy(10),
 		);
 	}

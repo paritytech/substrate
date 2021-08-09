@@ -37,7 +37,6 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 use sc_service::{Configuration, TaskExecutor};
-use sc_telemetry::TelemetryHandle;
 pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
@@ -140,6 +139,7 @@ pub trait SubstrateCli: Sized {
 				AppSettings::GlobalVersion,
 				AppSettings::ArgsNegateSubcommands,
 				AppSettings::SubcommandsNegateReqs,
+				AppSettings::ColoredHelp,
 			]);
 
 		let matches = match app.get_matches_from_safe(iter) {
@@ -159,7 +159,7 @@ pub trait SubstrateCli: Sized {
 					let _ = std::io::stdout().write_all(e.message.as_bytes());
 					std::process::exit(0);
 				}
-			}
+			},
 		};
 
 		<Self as StructOpt>::from_clap(&matches)
@@ -214,16 +214,15 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
-		telemetry_handle: Option<TelemetryHandle>,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor, telemetry_handle)
+		command.create_configuration(self, task_executor)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		let telemetry_worker = command.init::<Self>()?;
-		Runner::new(self, command, telemetry_worker)
+		command.init::<Self>()?;
+		Runner::new(self, command)
 	}
 
 	/// Native runtime version.

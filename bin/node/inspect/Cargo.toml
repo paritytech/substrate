@@ -1,6 +1,6 @@
 [package]
 name = "node-inspect"
-version = "0.8.0"
+version = "0.9.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -14,10 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 derive_more = "0.99"
 log = "0.4.8"
-sc-cli = { version = "0.9.0", path = "../../../client/cli" }
-sc-client-api = { version = "3.0.0", path = "../../../client/api" }
-sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 structopt = "0.3.8"
