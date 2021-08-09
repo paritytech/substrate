@@ -369,9 +369,9 @@ pub struct Config {
 	/// The total number of wasm pages an instance can request.
 	///
 	/// If specified, the runtime will be able to allocate only that much of wasm memory pages. This
-	/// is the total number and therefore the [`heap_pages`] is accounted for.
+	/// is the total number and therefore the [`Config::heap_pages`] is accounted for.
 	///
-	/// That means that the initial number of pages of a linear memory plus the [`heap_pages`] should
+	/// That means that the initial number of pages of a linear memory plus the [`Config::heap_pages`] should
 	/// be less or equal to `max_memory_pages`, otherwise the instance won't be created.
 	///
 	/// Moreover, `memory.grow` will fail (return -1) if the sum of the number of currently mounted
