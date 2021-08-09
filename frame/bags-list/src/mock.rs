@@ -28,8 +28,13 @@ parameter_types! {
 
 pub struct StakingMock;
 impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
-	fn vote_weight(_: &AccountId) -> VoteWeight {
-		NextVoteWeight::get()
+	fn vote_weight(id: &AccountId) -> VoteWeight {
+		match id {
+			710 => 15,
+			711 => 16,
+			712 => 2_000, // special cases used for migrate test
+			_ => NextVoteWeight::get()
+		}
 	}
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn set_vote_weight_of(_: &AccountId, weight: VoteWeight) {
@@ -151,10 +156,12 @@ pub(crate) mod test_utils {
 			.collect::<Vec<_>>()
 	}
 
+	/// Returns the ordered ids within the given bag.
 	pub(crate) fn bag_as_ids(bag: &Bag<Runtime>) -> Vec<AccountId> {
 		bag.iter().map(|n| *n.id()).collect::<Vec<_>>()
 	}
 
+	/// Returns the ordered ids from the list.
 	pub(crate) fn get_list_as_ids() -> Vec<AccountId> {
 		List::<Runtime>::iter().map(|n| *n.id()).collect::<Vec<_>>()
 	}

@@ -135,12 +135,11 @@ impl<T: Config> List<T> {
 		// a new bag means that all accounts previously using the old bag's threshold must now
 		// be rebagged
 		for inserted_bag in new_bags {
-			// TODO: why use notional_bag_for here? This affected_bag is a new bag since
-			// new_set.difference(&old_set) is just the new bags; notional_bag_for is using the
-			// T::BagThresholds, which are the new threhsholds .. so plugging in a threhold to
-			// notional_bag_for will just give back that threshold. I think we want to instead
-			// use notional_bag_for logic with old_thresholds?
-			let affected_bag = notional_bag_for::<T>(inserted_bag);
+			let affected_bag = {
+				// this recreates `notional_bag_for` logic, but with the old thresholds.
+				let idx = old_thresholds.partition_point(|&threshold| inserted_bag > threshold);
+				old_thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
+			};
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
@@ -426,10 +425,10 @@ impl<T: Config> Bag<T> {
 
 	/// Get a bag by its upper vote weight.
 	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
-		debug_assert!(
-			T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
-			"it is a logic error to attempt to get a bag which is not in the thresholds list"
-		);
+		// debug_assert!( TODO this breaks when we attempt to migrate because thresholds change
+		// 	T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+		// 	"it is a logic error to attempt to get a bag which is not in the thresholds list"
+		// );
 		crate::ListBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
 			bag.bag_upper = bag_upper;
 			bag
@@ -438,10 +437,6 @@ impl<T: Config> Bag<T> {
 
 	/// Get a bag by its upper vote weight or make it, appropriately initialized.
 	fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
-		debug_assert!(
-			T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
-			"it is a logic error to attempt to get a bag which is not in the thresholds list"
-		);
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
 
