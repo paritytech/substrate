@@ -139,7 +139,7 @@ impl ImportResolver for Imports {
 		})?;
 
 		// Here we use inner memory reference only to resolve
-		// the imports wthout accessing the memory contents.
+		// the imports without accessing the memory contents.
 		let mem = unsafe { wrapper.clone_inner() };
 
 		Ok(mem)
