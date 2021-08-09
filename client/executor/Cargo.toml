@@ -64,3 +64,6 @@ wasmtime = [
 wasmi-errno = [
 	"wasmi/errno"
 ]
+wasmer-sandbox = [
+	"sc-executor-common/wasmer-sandbox",
+]

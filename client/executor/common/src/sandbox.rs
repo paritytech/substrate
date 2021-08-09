@@ -611,6 +611,9 @@ pub enum SandboxBackend {
 	/// Wasmer environment
 	#[cfg(feature = "wasmer-sandbox")]
 	Wasmer,
+
+	/// Use wasmer backend if available. Fall back to wasmi otherwise.
+	TryWasmer,
 }
 
 /// Memory reference in terms of a selected backend
@@ -695,8 +698,11 @@ impl BackendContext {
 		match backend {
 			SandboxBackend::Wasmi => BackendContext::Wasmi,
 
+			#[cfg(not(feature = "wasmer-sandbox"))]
+			SandboxBackend::TryWasmer => BackendContext::Wasmi,
+
 			#[cfg(feature = "wasmer-sandbox")]
-			SandboxBackend::Wasmer => {
+			SandboxBackend::Wasmer | SandboxBackend::TryWasmer => {
 				let compiler = wasmer_compiler_singlepass::Singlepass::default();
 
 				BackendContext::Wasmer(WasmerBackend {

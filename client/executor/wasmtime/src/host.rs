@@ -22,11 +22,10 @@
 use crate::instance_wrapper::InstanceWrapper;
 use codec::{Decode, Encode};
 use log::trace;
-use sandbox::SandboxCapabilitiesHolder;
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::Result,
-	sandbox::{self, SandboxCapabilities, SupervisorFuncIndex},
+	sandbox::{self, SandboxCapabilities, SandboxCapabilitiesHolder, SupervisorFuncIndex},
 	util::MemoryTransfer,
 };
 use sp_core::sandbox as sandbox_primitives;
@@ -67,15 +66,11 @@ struct Inner {
 impl HostState {
 	/// Constructs a new `HostState`.
 	pub fn new(allocator: FreeingBumpHeapAllocator, instance: Rc<InstanceWrapper>) -> Self {
-		#[cfg(feature = "wasmer-sandbox")]
-		let backend = sandbox::SandboxBackend::Wasmer;
-
-		#[cfg(not(feature = "wasmer-sandbox"))]
-		let backend = sandbox::SandboxBackend::Wasmi;
-
 		HostState {
 			inner: Rc::new(Inner {
-				sandbox_store: RefCell::new(sandbox::Store::new(backend)),
+				sandbox_store: RefCell::new(sandbox::Store::new(
+					sandbox::SandboxBackend::TryWasmer,
+				)),
 				allocator: RefCell::new(allocator),
 				instance,
 			}),
