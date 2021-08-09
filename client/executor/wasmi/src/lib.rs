@@ -309,7 +309,9 @@ struct Resolver<'a> {
 	/// All the names of functions for that we did not provide a host function.
 	missing_functions: RefCell<Vec<String>>,
 	/// Will be used as initial and maximum size of the imported memory.
-	heap_pages: usize,
+	heap_pages: u32,
+	/// Optional maximum allowed heap pages.
+	max_heap_pages: Option<u32>,
 	/// By default, runtimes should import memory and this is `Some(_)` after
 	/// resolving. However, to be backwards compatible, we also support memory
 	/// exported by the WASM blob (this will be `None` after resolving).
@@ -320,13 +322,15 @@ impl<'a> Resolver<'a> {
 	fn new(
 		host_functions: &'a [&'static dyn Function],
 		allow_missing_func_imports: bool,
-		heap_pages: usize,
+		heap_pages: u32,
+		max_heap_pages: Option<u32>,
 	) -> Resolver<'a> {
 		Resolver {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions: RefCell::new(Vec::new()),
 			heap_pages,
+			max_heap_pages,
 			import_memory: Default::default(),
 		}
 	}
@@ -372,35 +376,19 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_memory(
 		&self,
 		field_name: &str,
-		memory_type: &wasmi::MemoryDescriptor,
+		_: &wasmi::MemoryDescriptor,
 	) -> Result<MemoryRef, wasmi::Error> {
 		if field_name == "memory" {
 			match &mut *self.import_memory.borrow_mut() {
 				Some(_) =>
 					Err(wasmi::Error::Instantiation("Memory can not be imported twice!".into())),
 				memory_ref @ None => {
-					if memory_type
-						.maximum()
-						.map(|m| m.saturating_sub(memory_type.initial()))
-						.map(|m| self.heap_pages > m as usize)
-						.unwrap_or(false)
-					{
-						Err(wasmi::Error::Instantiation(format!(
-							"Heap pages ({}) is greater than imported memory maximum ({}).",
-							self.heap_pages,
-							memory_type
-								.maximum()
-								.map(|m| m.saturating_sub(memory_type.initial()))
-								.expect("Maximum is set, checked above; qed"),
-						)))
-					} else {
-						let memory = MemoryInstance::alloc(
-							Pages(memory_type.initial() as usize + self.heap_pages),
-							None,
-						)?;
-						*memory_ref = Some(memory.clone());
-						Ok(memory)
-					}
+					let memory = MemoryInstance::alloc(
+						Pages(self.heap_pages as usize),
+						self.max_heap_pages.map(|v| Pages(v as usize)),
+					)?;
+					*memory_ref = Some(memory.clone());
+					Ok(memory)
 				},
 			}
 		} else {
@@ -547,12 +535,14 @@ fn call_in_wasm_module(
 
 /// Prepare module instance
 fn instantiate_module(
-	heap_pages: usize,
+	heap_pages: u32,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
+	max_heap_pages: Option<u32>,
 ) -> Result<(ModuleRef, Vec<String>, MemoryRef), Error> {
-	let resolver = Resolver::new(host_functions, allow_missing_func_imports, heap_pages);
+	let resolver =
+		Resolver::new(host_functions, allow_missing_func_imports, heap_pages, max_heap_pages);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance =
 		ModuleInstance::new(module, &ImportsBuilder::new().with_resolver("env", &resolver))?;
@@ -571,7 +561,23 @@ fn instantiate_module(
 			);
 
 			let memory = get_mem_instance(intermediate_instance.not_started_instance())?;
-			memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
+			memory.grow(Pages(heap_pages as usize)).map_err(|_| Error::Runtime)?;
+
+			match (memory.maximum(), max_heap_pages) {
+				(Some(max), Some(requested_max)) =>
+					if max.0 as u32 > requested_max {
+						return Err(Error::Other(format!(
+							"Request maximum pages {} is smaller than exported memory maximum {}",
+							requested_max, max.0,
+						)))
+					},
+				(None, Some(max)) =>
+					return Err(Error::Other(format!(
+					"Requested maximum pages {} while exported memory doesn't provide any maximum",
+					max,
+				))),
+				(_, None) => {},
+			}
 
 			memory
 		},
@@ -641,7 +647,9 @@ pub struct WasmiRuntime {
 	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_func_imports: bool,
 	/// Numer of heap pages this runtime uses.
-	heap_pages: u64,
+	heap_pages: u32,
+	/// Optional maximum heap pages.
+	max_heap_pages: Option<u32>,
 
 	global_vals_snapshot: GlobalValsSnapshot,
 	data_segments_snapshot: DataSegmentsSnapshot,
@@ -651,10 +659,11 @@ impl WasmModule for WasmiRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error> {
 		// Instantiate this module.
 		let (instance, missing_functions, memory) = instantiate_module(
-			self.heap_pages as usize,
+			self.heap_pages,
 			&self.module,
 			&self.host_functions,
 			self.allow_missing_func_imports,
+			self.max_heap_pages,
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
@@ -674,9 +683,10 @@ impl WasmModule for WasmiRuntime {
 /// stores it in the instance.
 pub fn create_runtime(
 	blob: RuntimeBlob,
-	heap_pages: u64,
+	heap_pages: u32,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
+	max_heap_pages: Option<u32>,
 ) -> Result<WasmiRuntime, WasmError> {
 	let data_segments_snapshot =
 		DataSegmentsSnapshot::take(&blob).map_err(|e| WasmError::Other(e.to_string()))?;
@@ -686,10 +696,11 @@ pub fn create_runtime(
 
 	let global_vals_snapshot = {
 		let (instance, _, _) = instantiate_module(
-			heap_pages as usize,
+			heap_pages,
 			&module,
 			&host_functions,
 			allow_missing_func_imports,
+			max_heap_pages,
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 		GlobalValsSnapshot::take(&instance)
@@ -702,6 +713,7 @@ pub fn create_runtime(
 		host_functions: Arc::new(host_functions),
 		allow_missing_func_imports,
 		heap_pages,
+		max_heap_pages,
 	})
 }
 
@@ -758,10 +770,10 @@ impl WasmInstance for WasmiInstance {
 			self.missing_functions.as_ref(),
 		);
 
-		/// Erase the memory to let the OS reclaim it.
-		///
-		/// We are not interested in the result here, if this failed, we will retry it in the next
-		/// call to the runtime again.
+		// Erase the memory to let the OS reclaim it.
+		//
+		// We are not interested in the result here, if this failed, we will retry it in the next
+		// call to the runtime again.
 		let _ = self.memory.erase();
 
 		res
