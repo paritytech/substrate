@@ -169,6 +169,10 @@ build-rust-doc:
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
+    # FIXME: remove me
+    - groups
+    # FIXME: remove me after CI image gets nonroot
+    - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
   allow_failure:                   true
@@ -195,6 +199,8 @@ publish-docs:
   before_script:
     - unset CARGO_TARGET_DIR
   script:
+    # FIXME: remove me
+    - groups
     - rm -rf /tmp/*
     # Set git config
     - rm -rf .git/config
@@ -207,7 +213,8 @@ publish-docs:
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
     - git checkout gh-pages
-    - mv _config.yml /tmp/doc/
+    # FIXME: remove me
+    # - mv _config.yml /tmp/doc/
     # remove everything and restore generated docs, README and Jekyll config
     - rm -rf ./*
     - rm -rf ./.images
@@ -225,4 +232,6 @@ publish-docs:
         echo "___Nothing to commit___"
     - git push origin gh-pages --force
   after_script:
+    # FIXME: remove me
+    - groups
     - rm -rf .git/ ./*
