@@ -281,9 +281,13 @@ impl CodeExecutor for WasmExecutor {
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
-		_use_native: bool,
+		use_native: bool,
 		_native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
+		if use_native {
+			log::warn!("`use_native` is set to `true` when calling the `WasmExecutor`. Ignoring.");
+		}
+
 		let result = self.with_instance(
 			runtime_code,
 			ext,
