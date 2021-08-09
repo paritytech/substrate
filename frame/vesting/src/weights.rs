@@ -57,7 +57,7 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Vesting Vesting (r:1 w:0)
 	// Storage: Balances Locks (r:1 w:1)
-	fn vest_locked(l: u32, s: u32, ) -> Weight {
+	fn vest_locked(l: u32, _s: u32, ) -> Weight {
 		(42_983_000 as Weight)
 			// Standard Error: 9_000
 			.saturating_add((190_000 as Weight).saturating_mul(l as Weight))
@@ -66,7 +66,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
-	fn vest_unlocked(l: u32, s: u32,) -> Weight {
+	fn vest_unlocked(l: u32, _s: u32,) -> Weight {
 		(46_213_000 as Weight)
 			// Standard Error: 5_000
 			.saturating_add((158_000 as Weight).saturating_mul(l as Weight))
@@ -76,7 +76,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Vesting Vesting (r:1 w:0)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	fn vest_other_locked(l: u32, s: u32,) -> Weight {
+	fn vest_other_locked(l: u32, _s: u32,) -> Weight {
 		(42_644_000 as Weight)
 			// Standard Error: 11_000
 			.saturating_add((202_000 as Weight).saturating_mul(l as Weight))
@@ -86,7 +86,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	fn vest_other_unlocked(l: u32, s: u32,) -> Weight {
+	fn vest_other_unlocked(l: u32, _s: u32,) -> Weight {
 		(45_765_000 as Weight)
 			// Standard Error: 5_000
 			.saturating_add((159_000 as Weight).saturating_mul(l as Weight))
@@ -96,7 +96,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
-	fn vested_transfer(l: u32, s: u32,) -> Weight {
+	fn vested_transfer(l: u32, _s: u32,) -> Weight {
 		(97_417_000 as Weight)
 			// Standard Error: 11_000
 			.saturating_add((235_000 as Weight).saturating_mul(l as Weight))
@@ -106,7 +106,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:2 w:2)
 	// Storage: Balances Locks (r:1 w:1)
-	fn force_vested_transfer(l: u32, s: u32,) -> Weight {
+	fn force_vested_transfer(l: u32, _s: u32,) -> Weight {
 		(97_661_000 as Weight)
 			// Standard Error: 16_000
 			.saturating_add((239_000 as Weight).saturating_mul(l as Weight))
@@ -137,7 +137,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: Vesting Vesting (r:1 w:0)
 	// Storage: Balances Locks (r:1 w:1)
-	fn vest_locked(l: u32, s: u32,) -> Weight {
+	fn vest_locked(l: u32, _s: u32,) -> Weight {
 		(42_983_000 as Weight)
 			// Standard Error: 9_000
 			.saturating_add((190_000 as Weight).saturating_mul(l as Weight))
@@ -146,7 +146,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
-	fn vest_unlocked(l: u32, s: u32,) -> Weight {
+	fn vest_unlocked(l: u32, _s: u32,) -> Weight {
 		(46_213_000 as Weight)
 			// Standard Error: 5_000
 			.saturating_add((158_000 as Weight).saturating_mul(l as Weight))
@@ -156,7 +156,7 @@ impl WeightInfo for () {
 	// Storage: Vesting Vesting (r:1 w:0)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	fn vest_other_locked(l: u32, s: u32,) -> Weight {
+	fn vest_other_locked(l: u32, _s: u32,) -> Weight {
 		(42_644_000 as Weight)
 			// Standard Error: 11_000
 			.saturating_add((202_000 as Weight).saturating_mul(l as Weight))
@@ -166,7 +166,7 @@ impl WeightInfo for () {
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	fn vest_other_unlocked(l: u32, s: u32,) -> Weight {
+	fn vest_other_unlocked(l: u32, _s: u32,) -> Weight {
 		(45_765_000 as Weight)
 			// Standard Error: 5_000
 			.saturating_add((159_000 as Weight).saturating_mul(l as Weight))
@@ -176,7 +176,7 @@ impl WeightInfo for () {
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
-	fn vested_transfer(l: u32, s: u32,) -> Weight {
+	fn vested_transfer(l: u32, _s: u32,) -> Weight {
 		(97_417_000 as Weight)
 			// Standard Error: 11_000
 			.saturating_add((235_000 as Weight).saturating_mul(l as Weight))
@@ -186,7 +186,7 @@ impl WeightInfo for () {
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:2 w:2)
 	// Storage: Balances Locks (r:1 w:1)
-	fn force_vested_transfer(l: u32, s: u32,) -> Weight {
+	fn force_vested_transfer(l: u32, _s: u32,) -> Weight {
 		(97_661_000 as Weight)
 			// Standard Error: 16_000
 			.saturating_add((239_000 as Weight).saturating_mul(l as Weight))
