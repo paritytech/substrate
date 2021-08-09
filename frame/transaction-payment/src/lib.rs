@@ -52,7 +52,7 @@ use codec::{Decode, Encode};
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SaturatedConversion, Saturating,
-		SignedExtension,
+		SignedExtension, Zero,
 	},
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
@@ -63,7 +63,7 @@ use sp_std::prelude::*;
 
 use frame_support::{
 	dispatch::DispatchResult,
-	traits::Get,
+	traits::{EstimateCallFee, Get},
 	weights::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight,
 		WeightToFeeCoefficient, WeightToFeePolynomial,
@@ -656,6 +656,19 @@ where
 	}
 }
 
+impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, BalanceOf<T>>
+	for Pallet<T>
+where
+	BalanceOf<T>: FixedPointOperand,
+	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+{
+	fn estimate_call_fee(call: &AnyCall, post_info: PostDispatchInfo) -> BalanceOf<T> {
+		let len = call.encoded_size() as u32;
+		let info = call.get_dispatch_info();
+		Self::compute_actual_fee(len, &info, &post_info, Zero::zero())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -729,7 +742,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Runtime {
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();

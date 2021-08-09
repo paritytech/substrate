@@ -129,8 +129,8 @@ pub fn expand_outer_origin(
 			fn reset_filter(&mut self) {
 				let filter = <
 					<#runtime as #system_path::Config>::BaseCallFilter
-					as #scrate::traits::Filter<<#runtime as #system_path::Config>::Call>
-				>::filter;
+					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
+				>::contains;
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));
 			}

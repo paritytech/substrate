@@ -30,7 +30,7 @@ mod policy;
 pub use helpers::Receiver;
 pub use jsonrpc_core::IoHandlerExtension as RpcExtension;
 pub use metadata::Metadata;
-pub use policy::DenyUnsafe;
+pub use policy::{DenyUnsafe, UnsafeRpcError};
 
 pub mod author;
 pub mod chain;

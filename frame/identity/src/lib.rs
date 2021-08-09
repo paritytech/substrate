@@ -335,7 +335,7 @@ pub mod pallet {
 		))]
 		pub fn set_identity(
 			origin: OriginFor<T>,
-			info: IdentityInfo<T::MaxAdditionalFields>,
+			info: Box<IdentityInfo<T::MaxAdditionalFields>>,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
@@ -346,11 +346,14 @@ pub mod pallet {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
 					id.judgements.retain(|j| j.1.is_sticky());
-					id.info = info;
+					id.info = *info;
 					id
 				},
-				None =>
-					Registration { info, judgements: BoundedVec::default(), deposit: Zero::zero() },
+				None => Registration {
+					info: *info,
+					judgements: BoundedVec::default(),
+					deposit: Zero::zero(),
+				},
 			};
 
 			let old_deposit = id.deposit;

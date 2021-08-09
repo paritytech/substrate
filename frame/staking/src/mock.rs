@@ -22,7 +22,10 @@ use crate::*;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
+	traits::{
+		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnInitialize, OnUnbalanced,
+		OneSessionHandler,
+	},
 	weights::constants::RocksDbWeight,
 };
 use sp_core::H256;
@@ -132,7 +135,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
