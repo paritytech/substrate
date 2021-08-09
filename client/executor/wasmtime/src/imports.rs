@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{state_holder, util};
+use crate::{runtime::Store, state_holder, util};
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, ValueType};
 use std::any::Any;
 use wasmtime::{
-	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module, Store,
-	Trap, Val,
+	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
+	StoreLimits, Trap, Val, Caller,
 };
 
 pub struct Imports {
@@ -35,7 +35,7 @@ pub struct Imports {
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
 pub fn resolve_imports(
-	store: &Store,
+	store: &mut Store,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	heap_pages: u32,
@@ -78,7 +78,7 @@ fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmEr
 }
 
 fn resolve_memory_import(
-	store: &Store,
+	store: &mut Store,
 	import_ty: &ImportType,
 	heap_pages: u32,
 ) -> Result<Extern, WasmError> {
@@ -117,7 +117,7 @@ fn resolve_memory_import(
 }
 
 fn resolve_func_import(
-	store: &Store,
+	store: &mut Store,
 	import_ty: &ImportType,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -162,30 +162,34 @@ struct HostFuncHandler {
 	host_func: &'static dyn Function,
 }
 
-fn call_static(
+fn call_static<'a>(
 	static_func: &'static dyn Function,
 	wasmtime_params: &[Val],
 	wasmtime_results: &mut [Val],
+	mut caller: Caller<'a, StoreLimits>,
 ) -> Result<(), wasmtime::Trap> {
-	let unwind_result = state_holder::with_context(|host_ctx| {
-		let mut host_ctx = host_ctx.expect(
-			"host functions can be called only from wasm instance;
+	let unwind_result = state_holder::with_context(
+		|host_ctx| {
+			let mut host_ctx = host_ctx.expect(
+				"host functions can be called only from wasm instance;
 			wasm instance is always called initializing context;
 			therefore host_ctx cannot be None;
 			qed
 			",
-		);
-		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
-		// available in substrate.
-		//
-		// This, however, cannot happen since the signature of this function is created from
-		// a `dyn Function` signature of which cannot have a non substrate value by definition.
-		let mut params = wasmtime_params.iter().cloned().map(util::from_wasmtime_val);
+			);
+			// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
+			// available in substrate.
+			//
+			// This, however, cannot happen since the signature of this function is created from
+			// a `dyn Function` signature of which cannot have a non substrate value by definition.
+			let mut params = wasmtime_params.iter().cloned().map(util::from_wasmtime_val);
 
-		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			static_func.execute(&mut host_ctx, &mut params)
-		}))
-	});
+			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+				static_func.execute(&mut host_ctx, &mut params)
+			}))
+		},
+		&mut caller,
+	);
 
 	let execution_result = match unwind_result {
 		Ok(execution_result) => execution_result,
@@ -219,11 +223,11 @@ impl HostFuncHandler {
 		Self { host_func }
 	}
 
-	fn into_extern(self, store: &Store) -> Extern {
+	fn into_extern(self, store: &mut Store) -> Extern {
 		let host_func = self.host_func;
 		let func_ty = wasmtime_func_sig(self.host_func);
-		let func = Func::new(store, func_ty, move |_, params, result| {
-			call_static(host_func, params, result)
+		let func = Func::new(store, func_ty, move |caller, params, result| {
+			call_static(host_func, params, result, caller)
 		});
 		Extern::Func(func)
 	}
@@ -243,7 +247,7 @@ impl MissingHostFuncHandler {
 		})
 	}
 
-	fn into_extern(self, store: &Store, func_ty: &FuncType) -> Extern {
+	fn into_extern(self, store: &mut Store, func_ty: &FuncType) -> Extern {
 		let Self { module, name } = self;
 		let func = Func::new(store, func_ty.clone(), move |_, _, _| {
 			Err(Trap::new(format!("call to a missing function {}:{}", module, name)))

@@ -30,7 +30,7 @@ use sc_executor_common::{
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use std::{cell::RefCell, rc::Rc};
-use wasmtime::{Func, Val};
+use wasmtime::{Caller, Func, StoreLimits, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -68,24 +68,27 @@ impl HostState {
 	}
 
 	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
-	pub fn materialize<'a>(&'a self) -> HostContext<'a> {
-		HostContext(self)
+	pub fn materialize<'a, 'b, 'c>(
+		&'a self,
+		caller: &'b mut Caller<'c, StoreLimits>,
+	) -> HostContext<'a, 'b, 'c> {
+		HostContext(self, caller)
 	}
 }
 
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub struct HostContext<'a>(&'a HostState);
+pub struct HostContext<'a, 'b, 'c>(&'a HostState, &'b mut Caller<'c, StoreLimits>);
 
-impl<'a> std::ops::Deref for HostContext<'a> {
+impl<'a, 'b, 'c> std::ops::Deref for HostContext<'a, 'b, 'c> {
 	type Target = HostState;
 	fn deref(&self) -> &HostState {
 		self.0
 	}
 }
 
-impl<'a> SandboxCapabilities for HostContext<'a> {
+impl<'a, 'b, 'c> SandboxCapabilities for HostContext<'a, 'b, 'c> {
 	type SupervisorFuncRef = SupervisorFuncRef;
 
 	fn invoke(
@@ -96,12 +99,16 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 		state: u32,
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
-		let result = dispatch_thunk.0.call(&[
-			Val::I32(u32::from(invoke_args_ptr) as i32),
-			Val::I32(invoke_args_len as i32),
-			Val::I32(state as i32),
-			Val::I32(usize::from(func_idx) as i32),
-		]);
+		eprintln!("HEY");
+		let result = dispatch_thunk.0.call(
+			&mut self.1,
+			&[
+				Val::I32(u32::from(invoke_args_ptr) as i32),
+				Val::I32(invoke_args_len as i32),
+				Val::I32(state as i32),
+				Val::I32(usize::from(func_idx) as i32),
+			],
+		);
 		match result {
 			Ok(ret_vals) => {
 				let ret_val = if ret_vals.len() != 1 {
@@ -125,7 +132,7 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 	}
 }
 
-impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
+impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> {
 	fn read_memory_into(
 		&self,
 		address: Pointer<u8>,
@@ -135,18 +142,27 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		self.instance.write_memory_from(address, data).map_err(|e| e.to_string())
+		let ctx = &mut self.1;
+		self.0.instance.write_memory_from(address, data, ctx).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
-		self.instance
-			.allocate(&mut *self.allocator.borrow_mut(), size)
+		let ctx = &mut self.1;
+		let allocator = &self.0.allocator;
+
+		self.0
+			.instance
+			.allocate(&mut *allocator.borrow_mut(), size, ctx)
 			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
-		self.instance
-			.deallocate(&mut *self.allocator.borrow_mut(), ptr)
+		let ctx = &mut self.1;
+		let allocator = &self.0.allocator;
+
+		self.0
+			.instance
+			.deallocate(&mut *allocator.borrow_mut(), ptr, ctx)
 			.map_err(|e| e.to_string())
 	}
 
@@ -155,7 +171,7 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	}
 }
 
-impl<'a> Sandbox for HostContext<'a> {
+impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -177,10 +193,12 @@ impl<'a> Sandbox for HostContext<'a> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			self.instance
+			self.0
+				.instance
 				.write_memory_from(
 					Pointer::new(dst_range.start as u32),
 					&sandboxed_memory[src_range],
+					&mut self.1,
 				)
 				.expect("ranges are checked above; write can't fail; qed");
 			Ok(sandbox_primitives::ERR_OK)
@@ -292,7 +310,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				.table()
 				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?
-				.get(dispatch_thunk_id);
+				.get(&mut *self.instance.store().borrow_mut(), dispatch_thunk_id);
 
 			let func_ref = table_item
 				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?

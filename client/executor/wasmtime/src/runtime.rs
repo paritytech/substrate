@@ -34,11 +34,14 @@ use sc_executor_common::{
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, Value, WordSize};
 use std::{
+	cell::RefCell,
 	path::{Path, PathBuf},
 	rc::Rc,
 	sync::Arc,
 };
-use wasmtime::{Engine, Store};
+use wasmtime::{AsContextMut, Engine, StoreLimits};
+
+pub(crate) type Store = wasmtime::Store<StoreLimits>;
 
 enum Strategy {
 	FastInstanceReuse {
@@ -46,20 +49,27 @@ enum Strategy {
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
+		store: Rc<RefCell<Store>>,
 	},
 	RecreateInstance(InstanceCreator),
 }
 
 struct InstanceCreator {
-	store: Store,
+	store: Rc<RefCell<Store>>,
 	module: Arc<wasmtime::Module>,
 	imports: Arc<Imports>,
 	heap_pages: u32,
 }
 
 impl InstanceCreator {
-	fn instantiate(&self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&self.store, &*self.module, &*self.imports, self.heap_pages)
+	fn instantiate(&self, ctx: impl AsContextMut) -> Result<InstanceWrapper> {
+		InstanceWrapper::new(
+			self.store.clone(),
+			&*self.module,
+			&*self.imports,
+			self.heap_pages,
+			ctx,
+		)
 	}
 }
 
@@ -82,19 +92,25 @@ pub struct WasmtimeRuntime {
 impl WasmtimeRuntime {
 	/// Creates the store respecting the set limits.
 	fn new_store(&self) -> Store {
-		match self.config.max_memory_pages {
-			Some(max_memory_pages) => Store::new_with_limits(
-				&self.engine,
-				wasmtime::StoreLimitsBuilder::new().memory_pages(max_memory_pages).build(),
-			),
-			None => Store::new(&self.engine),
+		let limits = if let Some(max_memory_pages) = self.config.max_memory_pages {
+			wasmtime::StoreLimitsBuilder::new().memory_pages(max_memory_pages).build()
+		} else {
+			Default::default()
+		};
+
+		let mut store = Store::new(&self.engine, limits);
+
+		if self.config.max_memory_pages.is_some() {
+			store.limiter(|s| s);
 		}
+
+		store
 	}
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
-		let store = self.new_store();
+		let mut store = self.new_store();
 
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
@@ -103,17 +119,24 @@ impl WasmModule for WasmtimeRuntime {
 		//       However, I am not sure if that's a good idea since it would be pushing our luck further
 		//       by assuming that `Store` not only `Send` but also `Sync`.
 		let imports = resolve_imports(
-			&store,
+			&mut store,
 			&self.module,
 			&self.host_functions,
 			self.config.heap_pages,
 			self.config.allow_missing_func_imports,
 		)?;
 
+		let store = Rc::new(RefCell::new(store));
+
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
-			let instance_wrapper =
-				InstanceWrapper::new(&store, &self.module, &imports, self.config.heap_pages)?;
-			let heap_base = instance_wrapper.extract_heap_base()?;
+			let instance_wrapper = InstanceWrapper::new(
+				store.clone(),
+				&self.module,
+				&imports,
+				self.config.heap_pages,
+				&mut *store.borrow_mut(),
+			)?;
+			let heap_base = instance_wrapper.extract_heap_base(&mut *store.borrow_mut())?;
 
 			// This function panics if the instance was created from a runtime blob different from which
 			// the mutable globals were collected. Here, it is easy to see that there is only a single
@@ -127,6 +150,7 @@ impl WasmModule for WasmtimeRuntime {
 				globals_snapshot,
 				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
+				store,
 			}
 		} else {
 			Strategy::RecreateInstance(InstanceCreator {
@@ -159,17 +183,22 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot,
 				data_segments_snapshot,
 				heap_base,
+				store,
 			} => {
-				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
+				let store = &mut *store.borrow_mut();
+				let entrypoint = instance_wrapper.resolve_entrypoint(method, store)?;
 
 				data_segments_snapshot.apply(|offset, contents| {
-					instance_wrapper.write_memory_from(Pointer::new(offset), contents)
+					instance_wrapper.write_memory_from(
+						Pointer::new(offset),
+						contents,
+						&mut *instance_wrapper.store().borrow_mut(),
+					)
 				})?;
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result =
-					perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+				let result = perform_call(data, instance_wrapper.clone(), entrypoint, allocator);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
@@ -178,9 +207,10 @@ impl WasmInstance for WasmtimeInstance {
 				result
 			},
 			Strategy::RecreateInstance(instance_creator) => {
-				let instance_wrapper = instance_creator.instantiate()?;
-				let heap_base = instance_wrapper.extract_heap_base()?;
-				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
+				let mut store = &mut *instance_creator.store.borrow_mut();
+				let instance_wrapper = instance_creator.instantiate(&mut store)?;
+				let heap_base = instance_wrapper.extract_heap_base(&mut store)?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method, store)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
 				perform_call(data, Rc::new(instance_wrapper), entrypoint, allocator)
@@ -190,10 +220,12 @@ impl WasmInstance for WasmtimeInstance {
 
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
 		match &self.strategy {
-			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
-				instance_wrapper.get_global_val(name),
-			Strategy::RecreateInstance(instance_creator) =>
-				instance_creator.instantiate()?.get_global_val(name),
+			Strategy::FastInstanceReuse { instance_wrapper, store, .. } =>
+				instance_wrapper.get_global_val(&mut *store.borrow_mut(), name),
+			Strategy::RecreateInstance(instance_creator) => {
+				let mut ctx = &mut *instance_creator.store.borrow_mut();
+				instance_creator.instantiate(&mut ctx)?.get_global_val(ctx, name)
+			},
 		}
 	}
 
@@ -543,7 +575,11 @@ fn perform_call(
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
 	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
+		Ok(unpack_ptr_and_len(entrypoint.call(
+			data_ptr,
+			data_len,
+			&mut *instance_wrapper.store().borrow_mut(),
+		)?))
 	});
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
@@ -557,8 +593,8 @@ fn inject_input_data(
 	data: &[u8],
 ) -> Result<(Pointer<u8>, WordSize)> {
 	let data_len = data.len() as WordSize;
-	let data_ptr = instance.allocate(allocator, data_len)?;
-	instance.write_memory_from(data_ptr, data)?;
+	let data_ptr = instance.allocate(allocator, data_len, &mut *instance.store().borrow_mut())?;
+	instance.write_memory_from(data_ptr, data, &mut *instance.store().borrow_mut())?;
 	Ok((data_ptr, data_len))
 }
 

@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::host::{HostContext, HostState};
+use wasmtime::StoreLimits;
 
 scoped_tls::scoped_thread_local!(static HOST_STATE: HostState);
 
@@ -34,12 +35,12 @@ where
 ///
 /// This function is only callable within closure passed to `init_state`. Otherwise, the passed
 /// context will be `None`.
-pub fn with_context<R, F>(f: F) -> R
+pub fn with_context<'a, 'b, R, F>(f: F, caller: &'a mut wasmtime::Caller<'b, StoreLimits>) -> R
 where
 	F: FnOnce(Option<HostContext>) -> R,
 {
 	if !HOST_STATE.is_set() {
 		return f(None)
 	}
-	HOST_STATE.with(|state| f(Some(state.materialize())))
+	HOST_STATE.with(|state| f(Some(state.materialize(caller))))
 }
