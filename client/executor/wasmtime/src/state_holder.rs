@@ -39,7 +39,7 @@ where
 	F: FnOnce(Option<HostState>) -> R,
 {
 	if !HOST_STATE.is_set() {
-		return f(None);
+		return f(None)
 	}
 	HOST_STATE.with(|state| f(Some(state.clone())))
 }

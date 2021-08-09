@@ -22,6 +22,7 @@
 use crate::instance_wrapper::InstanceWrapper;
 use codec::{Decode, Encode};
 use log::trace;
+use sandbox::SandboxCapabilitiesHolder;
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::Result,
@@ -32,7 +33,6 @@ use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use std::{cell::RefCell, rc::Rc};
 use wasmtime::{Func, Val};
-use sandbox::SandboxCapabilitiesHolder;
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -78,7 +78,7 @@ impl HostState {
 				sandbox_store: RefCell::new(sandbox::Store::new(backend)),
 				allocator: RefCell::new(allocator),
 				instance,
-			})
+			}),
 		}
 	}
 }
@@ -129,17 +129,11 @@ impl sp_wasm_interface::FunctionContext for HostState {
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		self.inner
-			.instance
-			.read_memory_into(address, dest)
-			.map_err(|e| e.to_string())
+		self.inner.instance.read_memory_into(address, dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		self.inner
-			.instance
-			.write_memory_from(address, data)
-			.map_err(|e| e.to_string())
+		self.inner.instance.write_memory_from(address, data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
@@ -169,12 +163,8 @@ impl Sandbox for HostState {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
-		let sandboxed_memory = self
-			.inner
-			.sandbox_store
-			.borrow()
-			.memory(memory_id)
-			.map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = buf_len as usize;
 
@@ -197,11 +187,8 @@ impl Sandbox for HostState {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
-		let sandboxed_memory = self.inner
-			.sandbox_store
-			.borrow()
-			.memory(memory_id)
-			.map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = val_len as usize;
 
@@ -321,11 +308,8 @@ impl Sandbox for HostState {
 
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
 		let result = DISPATCH_THUNK.set(&dispatch_thunk, || {
-			store.instantiate::<_, CapsHolder, ThunkHolder>(
-				wasm,
-				guest_env,
-				state
-			)
+			store
+				.instantiate::<_, CapsHolder, ThunkHolder>(wasm, guest_env, state)
 				.map(|i| i.register(store))
 		});
 
@@ -343,7 +327,8 @@ impl Sandbox for HostState {
 		instance_idx: u32,
 		name: &str,
 	) -> sp_wasm_interface::Result<Option<sp_wasm_interface::Value>> {
-		self.inner.sandbox_store
+		self.inner
+			.sandbox_store
 			.borrow()
 			.instance(instance_idx)
 			.map(|i| i.get_global_val(name))
@@ -362,9 +347,7 @@ impl SandboxCapabilitiesHolder for CapsHolder {
 	type SC = HostState;
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
-		crate::state_holder::with_context(|ctx| {
-			f(&mut ctx.expect("wasmtime executor is not set"))
-		})
+		crate::state_holder::with_context(|ctx| f(&mut ctx.expect("wasmtime executor is not set")))
 	}
 }
 
@@ -384,7 +367,10 @@ impl sandbox::DispatchThunkHolder for ThunkHolder {
 		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
 	}
 
-	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R where F: FnOnce() -> R {
+	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R
+	where
+		F: FnOnce() -> R,
+	{
 		DISPATCH_THUNK.set(s, f)
 	}
 }

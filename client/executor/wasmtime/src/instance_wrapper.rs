@@ -19,14 +19,16 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::util::{from_wasmtime_val, into_wasmtime_val};
-use crate::imports::Imports;
+use crate::{
+	imports::Imports,
+	util::{from_wasmtime_val, into_wasmtime_val},
+};
 
 use sc_executor_common::{
 	error::{Error, Result},
 	runtime_blob,
-	wasm_runtime::InvokeMethod,
 	util::checked_range,
+	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, Value, WordSize};
 use std::{marker, slice};

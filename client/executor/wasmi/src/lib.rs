@@ -18,15 +18,14 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-
 use codec::{Decode, Encode};
 use log::{debug, error, trace};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
 	sandbox,
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 	util::MemoryTransfer,
+	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_core::sandbox as sandbox_primitives;
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -74,7 +73,7 @@ impl FunctionExecutor {
 				host_functions,
 				allow_missing_func_imports,
 				missing_functions,
-			})
+			}),
 		})
 	}
 }
@@ -119,16 +118,16 @@ impl FunctionContext for FunctionExecutor {
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
 		let heap = &mut self.inner.heap.borrow_mut();
-		self.inner.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, size).map_err(|e| e.to_string())
-		})
+		self.inner
+			.memory
+			.with_direct_access_mut(|mem| heap.allocate(mem, size).map_err(|e| e.to_string()))
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
 		let heap = &mut self.inner.heap.borrow_mut();
-		self.inner.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(|e| e.to_string())
-		})
+		self.inner
+			.memory
+			.with_direct_access_mut(|mem| heap.deallocate(mem, ptr).map_err(|e| e.to_string()))
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
@@ -144,11 +143,8 @@ impl Sandbox for FunctionExecutor {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self
-			.inner
-			.sandbox_store
-			.borrow()
-			.memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = buf_len as usize;
 
@@ -171,11 +167,8 @@ impl Sandbox for FunctionExecutor {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self
-			.inner
-			.sandbox_store
-			.borrow()
-			.memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = val_len as usize;
 
@@ -192,23 +185,19 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
-		self
-			.inner
+		self.inner
 			.sandbox_store
 			.borrow_mut()
-			.memory_teardown(memory_id).map_err(|e| e.to_string())
+			.memory_teardown(memory_id)
+			.map_err(|e| e.to_string())
 	}
 
-	fn memory_new(
-		&mut self,
-		initial: u32,
-		maximum: u32,
-	) -> WResult<MemoryId> {
-		self
-			.inner
+	fn memory_new(&mut self, initial: u32, maximum: u32) -> WResult<MemoryId> {
+		self.inner
 			.sandbox_store
 			.borrow_mut()
-			.new_memory(initial, maximum).map_err(|e| e.to_string())
+			.new_memory(initial, maximum)
+			.map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -233,11 +222,11 @@ impl Sandbox for FunctionExecutor {
 			.inner
 			.sandbox_store
 			.borrow()
-			.instance(instance_id).map_err(|e| e.to_string())?;
+			.instance(instance_id)
+			.map_err(|e| e.to_string())?;
 
-		let result = EXECUTOR.set(self, || {
-			instance.invoke::<_, CapsHolder, ThunkHolder>(export_name, &args, state)
-		});
+		let result = EXECUTOR
+			.set(self, || instance.invoke::<_, CapsHolder, ThunkHolder>(export_name, &args, state));
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -256,11 +245,11 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self
-			.inner
+		self.inner
 			.sandbox_store
 			.borrow_mut()
-			.instance_teardown(instance_id).map_err(|e| e.to_string())
+			.instance_teardown(instance_id)
+			.map_err(|e| e.to_string())
 	}
 
 	fn instance_new(
@@ -272,7 +261,10 @@ impl Sandbox for FunctionExecutor {
 	) -> WResult<u32> {
 		// Extract a dispatch thunk from instance's table by the specified index.
 		let dispatch_thunk = {
-			let table = self.inner.table.as_ref()
+			let table = self
+				.inner
+				.table
+				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
 			table
 				.get(dispatch_thunk_id)
@@ -281,30 +273,25 @@ impl Sandbox for FunctionExecutor {
 		};
 
 		let guest_env = match sandbox::GuestEnvironment::decode(
-				&*self.inner.sandbox_store.borrow(),
-				raw_env_def
+			&*self.inner.sandbox_store.borrow(),
+			raw_env_def,
 		) {
 			Ok(guest_env) => guest_env,
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
-		let result = EXECUTOR.set(self, || DISPATCH_THUNK.set(&dispatch_thunk, || {
-				store.instantiate::<_, CapsHolder, ThunkHolder>(
-				wasm,
-				guest_env,
-				state,
-			)}
-		));
+		let result = EXECUTOR.set(self, || {
+			DISPATCH_THUNK.set(&dispatch_thunk, || {
+				store.instantiate::<_, CapsHolder, ThunkHolder>(wasm, guest_env, state)
+			})
+		});
 
-		let instance_idx_or_err_code: u32 =
-			match result
-				.map(|i| i.register(store))
-			{
-				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
-			};
+		let instance_idx_or_err_code: u32 = match result.map(|i| i.register(store)) {
+			Ok(instance_idx) => instance_idx,
+			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+			Err(_) => sandbox_primitives::ERR_MODULE,
+		};
 
 		Ok(instance_idx_or_err_code as u32)
 	}
@@ -314,8 +301,7 @@ impl Sandbox for FunctionExecutor {
 		instance_idx: u32,
 		name: &str,
 	) -> WResult<Option<sp_wasm_interface::Value>> {
-		self
-			.inner
+		self.inner
 			.sandbox_store
 			.borrow()
 			.instance(instance_idx)
@@ -358,9 +344,12 @@ impl sandbox::DispatchThunkHolder for ThunkHolder {
 		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
 	}
 
-	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R where F: FnOnce() -> R {
+	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R
+	where
+		F: FnOnce() -> R,
+	{
 		DISPATCH_THUNK.set(s, f)
-    }
+	}
 }
 
 /// Will be used on initialization of a module to resolve function and memory imports.
@@ -482,18 +471,20 @@ impl wasmi::Externals for FunctionExecutor {
 		let mut args = args.as_ref().iter().copied().map(Into::into);
 
 		if let Some(function) = self.inner.host_functions.clone().get(index) {
-			function.execute(self, &mut args)
+			function
+				.execute(self, &mut args)
 				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
-		} else if self.inner.allow_missing_func_imports
-			&& index >= self.inner.host_functions.len()
-			&& index < self.inner.host_functions.len() + self.inner.missing_functions.len()
+		} else if self.inner.allow_missing_func_imports &&
+			index >= self.inner.host_functions.len() &&
+			index < self.inner.host_functions.len() + self.inner.missing_functions.len()
 		{
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",
 				self.inner.missing_functions[index - self.inner.host_functions.len()],
-			)).into())
+			))
+			.into())
 		} else {
 			Err(Error::from(format!("Could not find host function with index: {}", index)).into())
 		}

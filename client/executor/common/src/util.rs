@@ -18,9 +18,9 @@
 
 //! Utilities used by all backends
 
-use std::ops::Range;
+use crate::error::{Error, Result};
 use sp_wasm_interface::Pointer;
-use crate::error::{Result, Error};
+use std::ops::Range;
 
 /// Construct a range from an offset to a data length after the offset.
 /// Returns None if the end of the range would exceed some maximum offset.
@@ -118,11 +118,10 @@ pub mod wasmi {
 /// backends right from the start.
 #[cfg(feature = "wasmer-sandbox")]
 pub mod wasmer {
-	use sp_wasm_interface::Pointer;
-	use crate::error::{Result, Error};
 	use super::checked_range;
-	use std::{cell::RefCell, rc::Rc};
-	use std::convert::TryInto;
+	use crate::error::{Error, Result};
+	use sp_wasm_interface::Pointer;
+	use std::{cell::RefCell, convert::TryInto, rc::Rc};
 
 	/// In order to enforce memory access protocol to the backend memory
 	/// we wrap it with `RefCell` and encapsulate all memory operations.
@@ -134,9 +133,7 @@ pub mod wasmer {
 	impl MemoryWrapper {
 		/// Take ownership of the memory region and return a wrapper object
 		pub fn new(memory: wasmer::Memory) -> Self {
-			Self {
-				buffer: Rc::new(RefCell::new(memory))
-			}
+			Self { buffer: Rc::new(RefCell::new(memory)) }
 		}
 
 		/// Returns linear memory of the wasm instance as a slice.
@@ -148,10 +145,8 @@ pub mod wasmer {
 		/// growing, we cannot guarantee the lifetime of the returned slice reference.
 		unsafe fn memory_as_slice(memory: &wasmer::Memory) -> &[u8] {
 			let ptr = memory.data_ptr() as *const _;
-			let len: usize = memory
-				.data_size()
-				.try_into()
-				.expect("data size should fit into usize");
+			let len: usize =
+				memory.data_size().try_into().expect("data size should fit into usize");
 
 			if len == 0 {
 				&[]
@@ -169,10 +164,8 @@ pub mod wasmer {
 		/// at the same time.
 		unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
 			let ptr = memory.data_ptr();
-			let len: usize = memory
-				.data_size()
-				.try_into()
-				.expect("data size should fit into usize");
+			let len: usize =
+				memory.data_size().try_into().expect("data size should fit into usize");
 
 			if len == 0 {
 				&mut []
@@ -203,10 +196,7 @@ pub mod wasmer {
 		fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
 			let memory = self.buffer.borrow();
 
-			let data_size = memory
-				.data_size()
-				.try_into()
-				.expect("data size does not fit");
+			let data_size = memory.data_size().try_into().expect("data size does not fit");
 
 			let range = checked_range(source_addr.into(), size, data_size)
 				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
