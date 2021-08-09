@@ -275,7 +275,7 @@ pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 ///
 /// ## Using tokio
 ///
-/// ```
+/// ```ignore
 /// # use sc_service::TaskExecutor;
 /// use futures::future::FutureExt;
 /// use tokio::runtime::Runtime;
@@ -289,7 +289,7 @@ pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 ///
 /// ## Using async-std
 ///
-/// ```
+/// ```ignore
 /// # use sc_service::TaskExecutor;
 /// let task_executor: TaskExecutor = (|future, _task_type| {
 ///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
