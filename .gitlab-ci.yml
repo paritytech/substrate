@@ -180,7 +180,7 @@ build-rust-doc:
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html -Dwarnings"
-        time cargo +nightly doc --no-deps --workspace --all-features --verbose
+        time cargo +nightly doc --no-deps --workspace --all-features --verbose --document-private-items
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
