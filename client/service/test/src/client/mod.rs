@@ -22,7 +22,7 @@ use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{in_mem, BlockBackend, BlockchainEvents, StorageProvider};
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, PruningMode, TransactionStorageMode,
+	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
@@ -1433,7 +1433,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				state_pruning: PruningMode::ArchiveAll,
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
-				source: DatabaseSettingsSrc::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
 		)
@@ -1648,7 +1648,7 @@ fn returns_status_for_pruned_blocks() {
 				state_pruning: PruningMode::keep_blocks(1),
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
-				source: DatabaseSettingsSrc::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
 		)

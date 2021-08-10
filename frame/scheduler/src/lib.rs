@@ -833,7 +833,7 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Filter, OnFinalize, OnInitialize},
+		traits::{Contains, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
@@ -925,8 +925,8 @@ mod tests {
 
 	// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 	pub struct BaseFilter;
-	impl Filter<Call> for BaseFilter {
-		fn filter(call: &Call) -> bool {
+	impl Contains<Call> for BaseFilter {
+		fn contains(call: &Call) -> bool {
 			!matches!(call, Call::Logger(LoggerCall::log(_, _)))
 		}
 	}
@@ -1006,7 +1006,7 @@ mod tests {
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -1022,7 +1022,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
@@ -1039,7 +1039,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call));
 			// Will trigger on the next block.
 			run_to_block(3);
@@ -1081,7 +1081,7 @@ mod tests {
 	fn reschedule_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(),
 				(4, 0)
@@ -1112,7 +1112,7 @@ mod tests {
 	fn reschedule_named_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule_named(
 					1u32.encode(),
@@ -1154,7 +1154,7 @@ mod tests {
 	fn reschedule_named_perodic_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule_named(
 					1u32.encode(),

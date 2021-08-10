@@ -130,6 +130,23 @@ where
 		self.client.clone()
 	}
 
+	/// Return a reference to the pool.
+	pub fn pool(
+		&self,
+	) -> Arc<
+		dyn TransactionPool<
+			Block = <T as ChainInfo>::Block,
+			Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
+			Error = sc_transaction_pool::error::Error,
+			InPoolTransaction = sc_transaction_pool::Transaction<
+				<<T as ChainInfo>::Block as BlockT>::Hash,
+				<<T as ChainInfo>::Block as BlockT>::Extrinsic,
+			>,
+		>,
+	> {
+		self.pool.clone()
+	}
+
 	/// Executes closure in an externalities provided environment.
 	pub fn with_state<R>(&self, closure: impl FnOnce() -> R) -> R
 	where
@@ -164,11 +181,11 @@ where
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 
-	/// submit some extrinsic to the node, providing the sending account.
+	/// submit some extrinsic to the node. if signer is None, will submit unsigned_extrinsic.
 	pub async fn submit_extrinsic(
 		&self,
 		call: impl Into<<T::Runtime as frame_system::Config>::Call>,
-		from: <T::Runtime as frame_system::Config>::AccountId,
+		signer: Option<<T::Runtime as frame_system::Config>::AccountId>,
 	) -> Result<<T::Block as BlockT>::Hash, sc_transaction_pool::error::Error>
 	where
 		<T::Block as BlockT>::Extrinsic: From<
@@ -183,8 +200,12 @@ where
 			>,
 		>,
 	{
-		let extra = self.with_state(|| T::signed_extras(from.clone()));
-		let signed_data = Some((from.into(), MultiSignature::Sr25519(Default::default()), extra));
+		let signed_data = if let Some(signer) = signer {
+			let extra = self.with_state(|| T::signed_extras(signer.clone()));
+			Some((signer.into(), MultiSignature::Sr25519(Default::default()), extra))
+		} else {
+			None
+		};
 		let ext = UncheckedExtrinsic::<
 			MultiAddress<
 				<T::Runtime as frame_system::Config>::AccountId,

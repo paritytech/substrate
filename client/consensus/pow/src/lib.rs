@@ -61,6 +61,7 @@ use sp_consensus::{
 	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
+use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, Digest, DigestItem},
@@ -272,6 +273,7 @@ where
 		block: B,
 		block_id: BlockId<B>,
 		inherent_data_providers: CIDP::InherentDataProviders,
+		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>> {
 		if *block.header().number() < self.check_inherents_after {
 			return Ok(())
@@ -294,7 +296,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents(&block_id, block, inherent_data)
+			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -360,6 +362,7 @@ where
 				self.create_inherent_data_providers
 					.create_inherent_data_providers(parent_hash, ())
 					.await?,
+				block.origin.into(),
 			)
 			.await?;
 
