@@ -21,17 +21,17 @@ use asynchronous_codec::Framed;
 ///
 /// The Substrate notifications protocol consists in the following:
 ///
-/// - Node A opens a substream to node B and sends a message which contains some protocol-specific
-///   higher-level logic. This message is prefixed with a variable-length integer message length.
-///   This message can be empty, in which case `0` is sent.
+/// - Node A opens a substream to node B and sends a message which contains some
+///   protocol-specific higher-level logic. This message is prefixed with a variable-length
+///   integer message length. This message can be empty, in which case `0` is sent.
 /// - If node B accepts the substream, it sends back a message with the same properties.
 /// - If instead B refuses the connection (which typically happens because no empty slot is
 ///   available), then it immediately closes the substream without sending back anything.
-/// - Node A can then send notifications to B, prefixed with a variable-length integer indicating
-///   the length of the message.
-/// - Either node A or node B can signal that it doesn't want this notifications substream anymore
-///   by closing its writing side. The other party should respond by also closing their own
-///   writing side soon after.
+/// - Node A can then send notifications to B, prefixed with a variable-length integer
+///   indicating the length of the message.
+/// - Either node A or node B can signal that it doesn't want this notifications substream
+///   anymore by closing its writing side. The other party should respond by also closing their
+///   own writing side soon after.
 ///
 /// Notification substreams are unidirectional. If A opens a substream with B, then B is
 /// encouraged but not required to open a substream to A as well.

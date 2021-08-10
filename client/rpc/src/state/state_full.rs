@@ -208,7 +208,8 @@ where
 		Ok(())
 	}
 
-	/// Iterates through all blocks that are changing keys within range.filtered_range and collects these changes.
+	/// Iterates through all blocks that are changing keys within range.filtered_range and collects
+	/// these changes.
 	fn query_storage_filtered(
 		&self,
 		range: &QueryStorageRange<Block>,

@@ -114,7 +114,8 @@ where
 			Endow::CollectRent => {
 				// storage_size cannot be zero because otherwise a contract that is just above
 				// the subsistence threshold does not pay rent given a large enough subsistence
-				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
+				// threshold. But we need rent payments to occur in order to benchmark for worst
+				// cases.
 				let storage_size = u32::MAX / 10;
 
 				// Endowment should be large but not as large to inhibit rent payments.

@@ -277,7 +277,8 @@ pub trait IsSubType<T> {
 pub trait ExecuteBlock<Block: BlockT> {
 	/// Execute the given `block`.
 	///
-	/// This will execute all extrinsics in the block and check that the resulting header is correct.
+	/// This will execute all extrinsics in the block and check that the resulting header is
+	/// correct.
 	///
 	/// # Panic
 	///

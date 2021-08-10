@@ -197,8 +197,8 @@ impl WasmExecutor {
 	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantation, a `Err` is returned.
-	/// that describes the message.
+	/// In case of problems with during creation of the runtime or instantation, a `Err` is
+	/// returned. that describes the message.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
 		&self,
@@ -456,8 +456,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						let _ = sender.send(output);
 					},
 					Err(error) => {
-						// If execution is panicked, the `join` in the original runtime code will panic as well,
-						// since the sender is dropped without sending anything.
+						// If execution is panicked, the `join` in the original runtime code will
+						// panic as well, since the sender is dropped without sending anything.
 						log::error!("Call error in spawned task: {:?}", error);
 					},
 				}

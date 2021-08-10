@@ -86,8 +86,8 @@ impl<T> StatusSinks<T> {
 		let inner = &mut *inner;
 
 		loop {
-			// Future that produces the next ready entry in `entries`, or doesn't produce anything if
-			// the list is empty.
+			// Future that produces the next ready entry in `entries`, or doesn't produce anything
+			// if the list is empty.
 			let next_ready_entry = {
 				let entries = &mut inner.entries;
 				async move {

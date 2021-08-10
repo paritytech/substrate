@@ -406,7 +406,8 @@ pub(crate) fn build_support_map_float(
 	supports
 }
 
-/// Generate voter and assignment lists. Makes no attempt to be realistic about winner or assignment fairness.
+/// Generate voter and assignment lists. Makes no attempt to be realistic about winner or assignment
+/// fairness.
 ///
 /// Maintains these invariants:
 ///
