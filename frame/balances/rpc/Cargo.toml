@@ -25,3 +25,11 @@ pallet-balances-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api
 
 [dev-dependencies]
 serde_json = "1"
+frame-support = { version = "4.0.0-dev", path = "../../support" }
+frame-system = { version = "4.0.0-dev", path = "../../system" }
+sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+pallet-balances = { version = "4.0.0-dev", path = "../" }
+substrate-test-runtime-client = { version = "2.0.0",  path = "../../../test-utils/runtime/client" }

@@ -1221,21 +1221,5 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(&3), 25);
 			});
 		}
-
-		#[test]
-		fn free_balance_rpc_should_work() {
-			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				let req = r#"{
-					"jsonrpc": "2.0",
-					"method": "free_balance",
-					"params":[],
-					"id":1
-				}"#;
-
-				assert_eq!(Balances::free_balance(1), 10);
-
-				unimplemented!("Test Unimplemented");
-			});
-		}
 	}
 }

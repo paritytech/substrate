@@ -48,12 +48,12 @@ where
 }
 
 /// A struct that implements the ['BalancesApi'].
-pub struct Balances<C, P> {
+pub struct BalancesRpcHandler<C, P> {
     client: Arc<C>,
     _marker: std::marker::PhantomData<P>,
 }
 
-impl<C, P> Balances<C, P> {
+impl<C, P> BalancesRpcHandler<C, P> {
     /// Create new `Balances` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
@@ -79,7 +79,7 @@ impl<C, Block, AccountId, Balance>
 		<Block as BlockT>::Hash,
 		AccountId,
 		Balance,
-    > for Balances<C, Block>
+    > for BalancesRpcHandler<C, Block>
 where
     Block: BlockT,
     C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
