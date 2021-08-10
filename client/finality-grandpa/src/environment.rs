@@ -1177,7 +1177,8 @@ where
 			let best_header = match client.header(BlockId::Hash(best_hash))? {
 				Some(header) => header,
 				None => {
-					debug!(target: "afg", "Couldn't find target block from `finality_target`: {:?}", best_hash);
+					debug!(target: "afg",
+						   "Couldn't find target block from `finality_target`: {:?}", best_hash);
 					return Ok(None);
 				},
 			};
