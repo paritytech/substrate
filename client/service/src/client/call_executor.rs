@@ -19,7 +19,7 @@
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
 use codec::{Decode, Encode};
 use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
-use sc_executor::{NativeVersion, RuntimeInfo, RuntimeVersion};
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
 use sp_core::{
 	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
@@ -49,7 +49,7 @@ pub struct LocalCallExecutor<Block: BlockT, B, E> {
 
 impl<Block: BlockT, B, E> LocalCallExecutor<Block, B, E>
 where
-	E: CodeExecutor + RuntimeInfo + Clone + 'static,
+	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	B: backend::Backend<Block>,
 {
 	/// Creates new instance of local call executor.
@@ -137,7 +137,7 @@ where
 impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<Block, B, E>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + RuntimeInfo + Clone + 'static,
+	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	Block: BlockT,
 {
 	type Error = E::Error;
@@ -333,24 +333,27 @@ where
 		)
 		.map_err(Into::into)
 	}
+}
 
-	fn native_runtime_version(&self) -> Option<&NativeVersion> {
-		Some(self.executor.native_version())
+impl<Block, B, E> sp_version::GetRuntimeVersionAt<Block> for LocalCallExecutor<Block, B, E>
+where
+	B: backend::Backend<Block>,
+	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
+	Block: BlockT,
+{
+	fn runtime_version(&self, at: &BlockId<Block>) -> Result<sp_version::RuntimeVersion, String> {
+		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }
 
-impl<Block, B, E> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<Block, B, E>
+impl<Block, B, E> sp_version::GetNativeVersion for LocalCallExecutor<Block, B, E>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + RuntimeInfo + Clone + 'static,
+	E: CodeExecutor + sp_version::GetNativeVersion + Clone + 'static,
 	Block: BlockT,
 {
 	fn native_version(&self) -> &sp_version::NativeVersion {
 		self.executor.native_version()
-	}
-
-	fn runtime_version(&self, at: &BlockId<Block>) -> Result<sp_version::RuntimeVersion, String> {
-		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }
 

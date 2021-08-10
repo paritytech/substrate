@@ -251,24 +251,33 @@ impl NativeVersion {
 	}
 }
 
-/// Something that can provide the runtime version at a given block and the native runtime version.
 #[cfg(feature = "std")]
-pub trait GetRuntimeVersion<Block: BlockT> {
+/// Returns the version of the native runtime.
+pub trait GetNativeVersion {
 	/// Returns the version of the native runtime.
 	fn native_version(&self) -> &NativeVersion;
+}
 
+/// Something that can provide the runtime version at a given block.
+#[cfg(feature = "std")]
+pub trait GetRuntimeVersionAt<Block: BlockT> {
 	/// Returns the version of runtime at the given block.
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String>;
 }
 
 #[cfg(feature = "std")]
-impl<T: GetRuntimeVersion<Block>, Block: BlockT> GetRuntimeVersion<Block> for std::sync::Arc<T> {
-	fn native_version(&self) -> &NativeVersion {
-		(&**self).native_version()
-	}
-
+impl<T: GetRuntimeVersionAt<Block>, Block: BlockT> GetRuntimeVersionAt<Block>
+	for std::sync::Arc<T>
+{
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String> {
 		(&**self).runtime_version(at)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: GetNativeVersion> GetNativeVersion for std::sync::Arc<T> {
+	fn native_version(&self) -> &NativeVersion {
+		(&**self).native_version()
 	}
 }
 

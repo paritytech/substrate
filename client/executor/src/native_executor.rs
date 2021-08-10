@@ -19,7 +19,7 @@
 use crate::{
 	error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
-	RuntimeInfo,
+	RuntimeVersionOf,
 };
 
 use std::{
@@ -45,7 +45,7 @@ use sp_core::{
 };
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
-use sp_version::{NativeVersion, RuntimeVersion};
+use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{Function, HostFunctions};
 
 /// Default num of pages for the heap
@@ -269,6 +269,48 @@ impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
 	}
 }
 
+impl CodeExecutor for WasmExecutor {
+	type Error = Error;
+
+	fn call<
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
+	>(
+		&self,
+		ext: &mut dyn Externalities,
+		runtime_code: &RuntimeCode,
+		method: &str,
+		data: &[u8],
+		_use_native: bool,
+		_native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>>, bool) {
+		let result = self.with_instance(
+			runtime_code,
+			ext,
+			false,
+			|module, instance, _onchain_version, mut ext| {
+				with_externalities_safe(&mut **ext, move || {
+					preregister_builtin_ext(module.clone());
+					instance.call_export(method, data).map(NativeOrEncoded::Encoded)
+				})
+			},
+		);
+		(result, false)
+	}
+}
+
+impl RuntimeVersionOf for WasmExecutor {
+	fn runtime_version(
+		&self,
+		ext: &mut dyn Externalities,
+		runtime_code: &RuntimeCode,
+	) -> Result<RuntimeVersion> {
+		self.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
+			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+		})
+	}
+}
+
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 pub struct NativeExecutor<D> {
@@ -324,11 +366,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
-	fn native_version(&self) -> &NativeVersion {
-		&self.native_version
-	}
-
+impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeExecutor<D> {
 	fn runtime_version(
 		&self,
 		ext: &mut dyn Externalities,
@@ -338,6 +376,12 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 			.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
 				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 			})
+	}
+}
+
+impl<D: NativeExecutionDispatch> GetNativeVersion for NativeExecutor<D> {
+	fn native_version(&self) -> &NativeVersion {
+		&self.native_version
 	}
 }
 
