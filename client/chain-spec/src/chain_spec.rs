@@ -28,10 +28,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::{
-	traits::{Block as BlockT, NumberFor},
-	BuildStorage,
-};
+use sp_runtime::BuildStorage;
 use std::{borrow::Cow, collections::HashMap, fs::File, path::PathBuf, sync::Arc};
 
 enum GenesisSource<G> {
@@ -167,7 +164,6 @@ struct ClientSpec<E> {
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
-	light_sync_state: Option<SerializableLightSyncState>,
 	/// Mapping from `block_hash` to `wasm_code`.
 	///
 	/// The given `wasm_code` will be used to substitute the on-chain wasm code from the given
@@ -231,9 +227,14 @@ impl<G, E> ChainSpec<G, E> {
 		self.client_spec.boot_nodes.push(addr)
 	}
 
-	/// Returns a reference to defined chain spec extensions.
+	/// Returns a reference to the defined chain spec extensions.
 	pub fn extensions(&self) -> &E {
 		&self.client_spec.extensions
+	}
+
+	/// Returns a mutable reference to the defined chain spec extensions.
+	pub fn extensions_mut(&mut self) -> &mut E {
+		&mut self.client_spec.extensions
 	}
 
 	/// Create hardcoded spec.
@@ -259,7 +260,6 @@ impl<G, E> ChainSpec<G, E> {
 			extensions,
 			consensus_engine: (),
 			genesis: Default::default(),
-			light_sync_state: None,
 			code_substitutes: HashMap::new(),
 		};
 
@@ -269,11 +269,6 @@ impl<G, E> ChainSpec<G, E> {
 	/// Type of the chain.
 	fn chain_type(&self) -> ChainType {
 		self.client_spec.chain_type.clone()
-	}
-
-	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
-	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
-		self.client_spec.light_sync_state = Some(light_sync_state);
 	}
 }
 
@@ -379,6 +374,10 @@ where
 		ChainSpec::extensions(self) as &dyn GetExtension
 	}
 
+	fn extensions_mut(&mut self) -> &mut dyn GetExtension {
+		ChainSpec::extensions_mut(self) as &mut dyn GetExtension
+	}
+
 	fn as_json(&self, raw: bool) -> Result<String, String> {
 		ChainSpec::as_json(self, raw)
 	}
@@ -395,10 +394,6 @@ where
 		self.genesis = GenesisSource::Storage(storage);
 	}
 
-	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
-		ChainSpec::set_light_sync_state(self, light_sync_state)
-	}
-
 	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>> {
 		self.client_spec
 			.code_substitutes
@@ -406,60 +401,6 @@ where
 			.map(|(h, c)| (h.clone(), c.0.clone()))
 			.collect()
 	}
-}
-
-/// Hardcoded infomation that allows light clients to sync quickly.
-pub struct LightSyncState<Block: BlockT> {
-	/// The header of the best finalized block.
-	pub finalized_block_header: <Block as BlockT>::Header,
-	/// The epoch changes tree for babe.
-	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,
-	/// The babe weight of the finalized block.
-	pub babe_finalized_block_weight: sp_consensus_babe::BabeBlockWeight,
-	/// The authority set for grandpa.
-	pub grandpa_authority_set:
-		sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
-}
-
-impl<Block: BlockT> LightSyncState<Block> {
-	/// Convert into a `SerializableLightSyncState`.
-	pub fn to_serializable(&self) -> SerializableLightSyncState {
-		use codec::Encode;
-
-		SerializableLightSyncState {
-			finalized_block_header: StorageData(self.finalized_block_header.encode()),
-			babe_epoch_changes: StorageData(self.babe_epoch_changes.encode()),
-			babe_finalized_block_weight: self.babe_finalized_block_weight,
-			grandpa_authority_set: StorageData(self.grandpa_authority_set.encode()),
-		}
-	}
-
-	/// Convert from a `SerializableLightSyncState`.
-	pub fn from_serializable(
-		serialized: &SerializableLightSyncState,
-	) -> Result<Self, codec::Error> {
-		Ok(Self {
-			finalized_block_header: codec::Decode::decode(
-				&mut &serialized.finalized_block_header.0[..],
-			)?,
-			babe_epoch_changes: codec::Decode::decode(&mut &serialized.babe_epoch_changes.0[..])?,
-			babe_finalized_block_weight: serialized.babe_finalized_block_weight,
-			grandpa_authority_set: codec::Decode::decode(
-				&mut &serialized.grandpa_authority_set.0[..],
-			)?,
-		})
-	}
-}
-
-/// The serializable form of `LightSyncState`. Created using `LightSyncState::serialize`.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct SerializableLightSyncState {
-	finalized_block_header: StorageData,
-	babe_epoch_changes: StorageData,
-	babe_finalized_block_weight: sp_consensus_babe::BabeBlockWeight,
-	grandpa_authority_set: StorageData,
 }
 
 #[cfg(test)]

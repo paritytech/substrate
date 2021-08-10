@@ -19,10 +19,7 @@
 //! Service configuration.
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
-pub use sc_client_db::{
-	Database, DatabaseSettingsSrc as DatabaseConfig, KeepBlocks, PruningMode,
-	TransactionStorageMode,
-};
+pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_network::{
 	config::{
@@ -69,7 +66,7 @@ pub struct Configuration {
 	/// Remote URI to connect to for async keystore support
 	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
-	pub database: DatabaseConfig,
+	pub database: DatabaseSource,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries

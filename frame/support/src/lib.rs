@@ -359,7 +359,6 @@ macro_rules! parameter_types {
 	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the value of this parameter type.
-			#[allow(unused)]
 			pub const fn get() -> $type {
 				$value
 			}
@@ -367,14 +366,13 @@ macro_rules! parameter_types {
 
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
-				I::from($value)
+				I::from(Self::get())
 			}
 		}
 	};
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the value of this parameter type.
-			#[allow(unused)]
 			pub fn get() -> $type {
 				$value
 			}
@@ -382,7 +380,7 @@ macro_rules! parameter_types {
 
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
-				I::from($value)
+				I::from(Self::get())
 			}
 		}
 	};

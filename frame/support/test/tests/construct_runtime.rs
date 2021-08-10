@@ -229,7 +229,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
@@ -268,14 +268,14 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 
 mod origin_test {
 	use super::{module3, nested, system, Block, UncheckedExtrinsic};
-	use frame_support::traits::{Filter, OriginTrait};
+	use frame_support::traits::{Contains, OriginTrait};
 
 	impl nested::module3::Config for RuntimeOriginTest {}
 	impl module3::Config for RuntimeOriginTest {}
 
 	pub struct BaseCallFilter;
-	impl Filter<Call> for BaseCallFilter {
-		fn filter(c: &Call) -> bool {
+	impl Contains<Call> for BaseCallFilter {
+		fn contains(c: &Call) -> bool {
 			match c {
 				Call::NestedModule3(_) => true,
 				_ => false,

@@ -39,7 +39,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	traits::{FindAuthor, Get, OnTimestampSet, OneSessionHandler},
+	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	ConsensusEngineId, Parameter,
 };
 use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
@@ -70,6 +70,11 @@ pub mod pallet {
 			+ RuntimeAppPublic
 			+ Default
 			+ MaybeSerializeDeserialize;
+
+		/// A way to check whether a given validator is disabled and should not be authoring blocks.
+		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
+		/// initialization.
+		type DisabledValidators: DisabledValidators;
 	}
 
 	#[pallet::pallet]
@@ -83,6 +88,16 @@ pub mod pallet {
 
 				assert!(current_slot < new_slot, "Slot must increase");
 				CurrentSlot::<T>::put(new_slot);
+
+				if let Some(n_authorities) = <Authorities<T>>::decode_len() {
+					let authority_index = *new_slot % n_authorities as u64;
+					if T::DisabledValidators::is_disabled(authority_index as u32) {
+						panic!(
+							"Validator with index {:?} is disabled and should not be attempting to author blocks.",
+							authority_index,
+						);
+					}
+				}
 
 				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
 
