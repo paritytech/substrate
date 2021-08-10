@@ -189,7 +189,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			let supervisor_mem_size = self.instance.memory_size() as usize;
+			let supervisor_mem_size = self.instance.memory_size(&self.1) as usize;
 			let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
@@ -217,7 +217,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
 			let len = val_len as usize;
-			let supervisor_mem_size = self.instance.memory_size() as usize;
+			let supervisor_mem_size = self.instance.memory_size(&self.1) as usize;
 			let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
@@ -308,12 +308,13 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	) -> sp_wasm_interface::Result<u32> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
-			let table_item = self
+			let ctx = &mut self.1;
+			let table_item = self.0
 				.instance
 				.table()
 				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?
-				.get(&mut *self.instance.store().borrow_mut(), dispatch_thunk_id);
+				.get(ctx, dispatch_thunk_id);
 
 			let func_ref = table_item
 				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?

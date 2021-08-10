@@ -19,15 +19,14 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::{imports::Imports, runtime::Store, util};
+use crate::{imports::Imports, util};
 
 use sc_executor_common::{
 	error::{Error, Result},
-	runtime_blob,
 	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, Value, WordSize};
-use std::{cell::RefCell, marker, rc::Rc, slice};
+use std::marker;
 use wasmtime::{
 	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
 };
@@ -246,8 +245,8 @@ impl InstanceWrapper {
 	}
 
 	/// Returns the byte size of the linear memory instance attached to this instance.
-	pub fn memory_size(&self) -> u32 {
-		self.memory.data_size(&*self.store.borrow()) as u32
+	pub fn memory_size(&self, ctx: impl AsContext) -> u32 {
+		self.memory.data_size(ctx) as u32
 	}
 
 	/// Reads `__heap_base: i32` global variable and returns it.
@@ -288,9 +287,9 @@ impl InstanceWrapper {
 		}
 	}
 
-	/// Returns the [`Store`] being used by this instance.
-	pub fn store(&self) -> &Rc<RefCell<Store>> {
-		&self.store
+	/// Get a global with the given `name`.
+	pub fn get_global(&self, ctx: impl AsContextMut, name: &str) -> Option<wasmtime::Global> {
+		self.instance.get_global(ctx, name)
 	}
 }
 
@@ -416,25 +415,5 @@ impl InstanceWrapper {
 				}
 			}
 		}
-	}
-}
-
-impl runtime_blob::InstanceGlobals for InstanceWrapper {
-	type Global = wasmtime::Global;
-
-	fn get_global(&self, export_name: &str) -> Self::Global {
-		self.instance
-			.get_global(&mut *self.store.borrow_mut(), export_name)
-			.expect("get_global is guaranteed to be called with an export name of a global; qed")
-	}
-
-	fn get_global_value(&self, global: &Self::Global) -> Value {
-		util::from_wasmtime_val(global.get(&mut *self.store.borrow_mut()))
-	}
-
-	fn set_global_value(&self, global: &Self::Global, value: Value) {
-		global.set(&mut *self.store.borrow_mut(), util::into_wasmtime_val(value)).expect(
-			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
-		);
 	}
 }

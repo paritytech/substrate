@@ -22,13 +22,15 @@ use crate::{
 	host::HostState,
 	imports::{resolve_imports, Imports},
 	instance_wrapper::{EntryPoint, InstanceWrapper},
-	state_holder,
+	state_holder, util,
 };
 
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::{Result, WasmError},
-	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
+	runtime_blob::{
+		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
+	},
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -63,12 +65,32 @@ struct InstanceCreator {
 
 impl InstanceCreator {
 	fn instantiate(&self, ctx: impl AsContextMut) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(
-			&*self.module,
-			&*self.imports,
-			self.heap_pages,
-			ctx,
-		)
+		InstanceWrapper::new(&*self.module, &*self.imports, self.heap_pages, ctx)
+	}
+}
+
+struct InstanceGlobals<'a, C> {
+	ctx: &'a mut C,
+	instance: &'a InstanceWrapper,
+}
+
+impl<'a, C: AsContextMut> runtime_blob::InstanceGlobals for InstanceGlobals<'a, C> {
+	type Global = wasmtime::Global;
+
+	fn get_global(&mut self, export_name: &str) -> Self::Global {
+		self.instance
+			.get_global(&mut self.ctx, export_name)
+			.expect("get_global is guaranteed to be called with an export name of a global; qed")
+	}
+
+	fn get_global_value(&mut self, global: &Self::Global) -> Value {
+		util::from_wasmtime_val(global.get(&mut self.ctx))
+	}
+
+	fn set_global_value(&mut self, global: &Self::Global, value: Value) {
+		global.set(&mut self.ctx, util::into_wasmtime_val(value)).expect(
+			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
+		);
 	}
 }
 
@@ -140,8 +162,10 @@ impl WasmModule for WasmtimeRuntime {
 			// the mutable globals were collected. Here, it is easy to see that there is only a single
 			// runtime blob and thus it's the same that was used for both creating the instance and
 			// collecting the mutable globals.
-			let globals_snapshot =
-				GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
+			let globals_snapshot = GlobalsSnapshot::take(
+				&snapshot_data.mutable_globals,
+				&mut InstanceGlobals { ctx: &mut *store.borrow_mut(), instance: &instance_wrapper },
+			);
 
 			Strategy::FastInstanceReuse {
 				instance_wrapper: Rc::new(instance_wrapper),
@@ -189,7 +213,8 @@ impl WasmInstance for WasmtimeInstance {
 				data_segments_snapshot.apply(|offset, contents| {
 					instance_wrapper.write_memory_from(&mut store, Pointer::new(offset), contents)
 				})?;
-				globals_snapshot.apply(&**instance_wrapper);
+				globals_snapshot
+					.apply(&mut InstanceGlobals { ctx: &mut store, instance: &**instance_wrapper });
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
 				let result =
