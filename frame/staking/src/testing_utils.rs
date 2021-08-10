@@ -51,7 +51,6 @@ pub fn create_funded_user<T: Config>(
 	n: u32,
 	balance_factor: u32,
 ) -> T::AccountId {
-	// REFACTOR TODO
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
 	T::Currency::make_free_balance_be(&user, balance);
