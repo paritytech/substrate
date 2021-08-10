@@ -36,28 +36,3 @@ pub use self::{
 	header::Header,
 	unchecked_extrinsic::{SignedPayload, UncheckedExtrinsic},
 };
-
-use crate::codec::Encode;
-use sp_std::prelude::*;
-
-fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8> {
-	let size = ::sp_std::mem::size_of::<T>();
-	let reserve = match size {
-		0..=0b00111111 => 1,
-		0b01000000..=0b00111111_11111111 => 2,
-		_ => 4,
-	};
-	let mut v = Vec::with_capacity(reserve + size);
-	v.resize(reserve, 0);
-	encoder(&mut v);
-
-	// need to prefix with the total length to ensure it's binary compatible with
-	// Vec<u8>.
-	let mut length: Vec<()> = Vec::new();
-	length.resize(v.len() - reserve, ());
-	length.using_encoded(|s| {
-		v.splice(0..reserve, s.iter().cloned());
-	});
-
-	v
-}
