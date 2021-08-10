@@ -42,7 +42,7 @@
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
 //!     TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, BasePath,
-//!     DatabaseConfig, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
+//!     DatabaseSource, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
 //!     config::{NetworkConfiguration, KeystoreConfig},
 //! };
 //! use std::sync::Arc;

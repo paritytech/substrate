@@ -64,7 +64,7 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 use sp_core::{
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
-	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
+	ChangesTrieConfiguration, NativeOrEncoded,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -958,11 +958,7 @@ where
 			// block.
 			(true, None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
-				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
-					ExecutionContext::Syncing
-				} else {
-					ExecutionContext::Importing
-				};
+				let execution_context = import_block.origin.into();
 
 				runtime_api.execute_block_with_context(
 					&at,

@@ -19,11 +19,11 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, fmt, io, path::Path, sync::Arc};
 
 use log::debug;
 
-use crate::{Database, DatabaseSettings, DatabaseSettingsSrc, DbHash};
+use crate::{Database, DatabaseSettings, DatabaseSource, DbHash};
 use codec::Decode;
 use sp_database::Transaction;
 use sp_runtime::{
@@ -204,86 +204,168 @@ where
 	})
 }
 
+fn backend_err(feat: &'static str) -> sp_blockchain::Error {
+	sp_blockchain::Error::Backend(feat.to_string())
+}
+
 /// Opens the configured database.
 pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	#[allow(unused)]
-	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
-		sp_blockchain::Error::Backend(format!(
-			"`{}` feature not enabled, database can not be opened",
-			feat
-		))
-	}
-
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
-		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
-		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
-			// first upgrade database to required version
-			crate::upgrade::upgrade_db::<Block>(&path, db_type)?;
-
-			// and now open database assuming that it has the latest version
-			let mut db_config = kvdb_rocksdb::DatabaseConfig::with_columns(NUM_COLUMNS);
-			let path = path
-				.to_str()
-				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
-
-			let mut memory_budget = std::collections::HashMap::new();
-			match db_type {
-				DatabaseType::Full => {
-					let state_col_budget = (*cache_size as f64 * 0.9) as usize;
-					let other_col_budget =
-						(cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
-
-					for i in 0..NUM_COLUMNS {
-						if i == crate::columns::STATE {
-							memory_budget.insert(i, state_col_budget);
-						} else {
-							memory_budget.insert(i, other_col_budget);
-						}
-					}
-					log::trace!(
-						target: "db",
-						"Open RocksDB database at {}, state column budget: {} MiB, others({}) column cache: {} MiB",
-						path,
-						state_col_budget,
-						NUM_COLUMNS,
-						other_col_budget,
-					);
-				},
-				DatabaseType::Light => {
-					let col_budget = cache_size / (NUM_COLUMNS as usize);
-					for i in 0..NUM_COLUMNS {
-						memory_budget.insert(i, col_budget);
-					}
-					log::trace!(
-						target: "db",
-						"Open RocksDB light database at {}, column cache: {} MiB",
-						path,
-						col_budget,
-					);
-				},
+		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true)?,
+		DatabaseSource::RocksDb { path, cache_size } =>
+			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
+		DatabaseSource::Custom(db) => db.clone(),
+		DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size } => {
+			// check if rocksdb exists first, if not, open paritydb
+			match open_kvdb_rocksdb::<Block>(&rocksdb_path, db_type, false, *cache_size) {
+				Ok(db) => db,
+				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
+					open_parity_db::<Block>(&paritydb_path, db_type, true)?,
+				Err(_) => return Err(backend_err("cannot open rocksdb. corrupted database")),
 			}
-			db_config.memory_budget = memory_budget;
-
-			let db = kvdb_rocksdb::Database::open(&db_config, &path)
-				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
-			sp_database::as_database(db)
 		},
-		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
-		DatabaseSettingsSrc::RocksDb { .. } => return Err(db_open_error("with-kvdb-rocksdb")),
-		#[cfg(feature = "with-parity-db")]
-		DatabaseSettingsSrc::ParityDb { path } => crate::parity_db::open(&path, db_type)
-			.map_err(|e| sp_blockchain::Error::Backend(format!("{}", e)))?,
-		#[cfg(not(feature = "with-parity-db"))]
-		DatabaseSettingsSrc::ParityDb { .. } => return Err(db_open_error("with-parity-db")),
-		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
 	check_database_type(&*db, db_type)?;
-
 	Ok(db)
+}
+
+#[derive(Debug)]
+enum OpenDbError {
+	// constructed only when rocksdb and paritydb are disabled
+	#[allow(dead_code)]
+	NotEnabled(&'static str),
+	DoesNotExist,
+	Internal(String),
+}
+
+type OpenDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError>;
+
+impl fmt::Display for OpenDbError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			OpenDbError::Internal(e) => write!(f, "{}", e.to_string()),
+			OpenDbError::DoesNotExist => write!(f, "Database does not exist at given location"),
+			OpenDbError::NotEnabled(feat) =>
+				write!(f, "`{}` feature not enabled, database can not be opened", feat),
+		}
+	}
+}
+
+impl From<OpenDbError> for sp_blockchain::Error {
+	fn from(err: OpenDbError) -> Self {
+		sp_blockchain::Error::Backend(err.to_string())
+	}
+}
+
+#[cfg(feature = "with-parity-db")]
+impl From<parity_db::Error> for OpenDbError {
+	fn from(err: parity_db::Error) -> Self {
+		if err.to_string().contains("use open_or_create") {
+			OpenDbError::DoesNotExist
+		} else {
+			OpenDbError::Internal(err.to_string())
+		}
+	}
+}
+
+impl From<io::Error> for OpenDbError {
+	fn from(err: io::Error) -> Self {
+		if err.to_string().contains("create_if_missing is false") {
+			OpenDbError::DoesNotExist
+		} else {
+			OpenDbError::Internal(err.to_string())
+		}
+	}
+}
+
+#[cfg(feature = "with-parity-db")]
+fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool) -> OpenDbResult {
+	let db = crate::parity_db::open(path, db_type, create)?;
+	Ok(db)
+}
+
+#[cfg(not(feature = "with-parity-db"))]
+fn open_parity_db<Block: BlockT>(
+	_path: &Path,
+	_db_type: DatabaseType,
+	_create: bool,
+) -> OpenDbResult {
+	Err(OpenDbError::NotEnabled("with-parity-db"))
+}
+
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+fn open_kvdb_rocksdb<Block: BlockT>(
+	path: &Path,
+	db_type: DatabaseType,
+	create: bool,
+	cache_size: usize,
+) -> OpenDbResult {
+	// first upgrade database to required version
+	match crate::upgrade::upgrade_db::<Block>(&path, db_type) {
+		// in case of missing version file, assume that database simply does not exist at given location
+		Ok(_) | Err(crate::upgrade::UpgradeError::MissingDatabaseVersionFile) => (),
+		Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
+	}
+
+	// and now open database assuming that it has the latest version
+	let mut db_config = kvdb_rocksdb::DatabaseConfig::with_columns(NUM_COLUMNS);
+	db_config.create_if_missing = create;
+
+	let mut memory_budget = std::collections::HashMap::new();
+	match db_type {
+		DatabaseType::Full => {
+			let state_col_budget = (cache_size as f64 * 0.9) as usize;
+			let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
+
+			for i in 0..NUM_COLUMNS {
+				if i == crate::columns::STATE {
+					memory_budget.insert(i, state_col_budget);
+				} else {
+					memory_budget.insert(i, other_col_budget);
+				}
+			}
+			log::trace!(
+				target: "db",
+				"Open RocksDB database at {:?}, state column budget: {} MiB, others({}) column cache: {} MiB",
+				path,
+				state_col_budget,
+				NUM_COLUMNS,
+				other_col_budget,
+			);
+		},
+		DatabaseType::Light => {
+			let col_budget = cache_size / (NUM_COLUMNS as usize);
+			for i in 0..NUM_COLUMNS {
+				memory_budget.insert(i, col_budget);
+			}
+			log::trace!(
+				target: "db",
+				"Open RocksDB light database at {:?}, column cache: {} MiB",
+				path,
+				col_budget,
+			);
+		},
+	}
+	db_config.memory_budget = memory_budget;
+
+	let db = kvdb_rocksdb::Database::open(&db_config, path)?;
+	// write database version only after the database is succesfully opened
+	crate::upgrade::update_version(path)?;
+	Ok(sp_database::as_database(db))
+}
+
+#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
+fn open_kvdb_rocksdb<Block: BlockT>(
+	_path: &Path,
+	_db_type: DatabaseType,
+	_create: bool,
+	_cache_size: usize,
+) -> OpenDbResult {
+	Err(OpenDbError::NotEnabled("with-kvdb-rocksdb"))
 }
 
 /// Check database type.
@@ -482,7 +564,9 @@ impl<'a, 'b> codec::Input for JoinInput<'a, 'b> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{KeepBlocks, TransactionStorageMode};
 	use codec::Input;
+	use sc_state_db::PruningMode;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
@@ -520,5 +604,142 @@ mod tests {
 		joined.read(&mut test[0..2]).unwrap();
 		assert_eq!(test, [7, 8, 6]);
 		assert_eq!(joined.remaining_len().unwrap(), Some(0));
+	}
+
+	fn db_settings(source: DatabaseSource) -> DatabaseSettings {
+		DatabaseSettings {
+			state_cache_size: 0,
+			state_cache_child_ratio: None,
+			state_pruning: PruningMode::ArchiveAll,
+			source,
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
+		}
+	}
+
+	#[cfg(feature = "with-parity-db")]
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[test]
+	fn test_open_database_auto_new() {
+		let db_dir = tempfile::TempDir::new().unwrap();
+		let db_path = db_dir.path().to_owned();
+		let paritydb_path = db_path.join("paritydb");
+		let rocksdb_path = db_path.join("rocksdb_path");
+		let source = DatabaseSource::Auto {
+			paritydb_path: paritydb_path.clone(),
+			rocksdb_path: rocksdb_path.clone(),
+			cache_size: 128,
+		};
+		let mut settings = db_settings(source);
+
+		// it should create new auto (paritydb) database
+		{
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "New database should be created.");
+		}
+
+		// it should reopen existing auto (pairtydb) database
+		{
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "Existing parity database should be reopened");
+		}
+
+		// it should fail to open existing auto (pairtydb) database
+		{
+			settings.source = DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 };
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "New database should be opened.");
+		}
+
+		// it should reopen existing auto (pairtydb) database
+		{
+			settings.source = DatabaseSource::ParityDb { path: paritydb_path };
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "Existing parity database should be reopened");
+		}
+	}
+
+	#[cfg(feature = "with-parity-db")]
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[test]
+	fn test_open_database_rocksdb_new() {
+		let db_dir = tempfile::TempDir::new().unwrap();
+		let db_path = db_dir.path().to_owned();
+		let paritydb_path = db_path.join("paritydb");
+		let rocksdb_path = db_path.join("rocksdb_path");
+
+		let source = DatabaseSource::RocksDb { path: rocksdb_path.clone(), cache_size: 128 };
+		let mut settings = db_settings(source);
+
+		// it should create new rocksdb database
+		{
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "New rocksdb database should be created");
+		}
+
+		// it should reopen existing auto (rocksdb) database
+		{
+			settings.source = DatabaseSource::Auto {
+				paritydb_path: paritydb_path.clone(),
+				rocksdb_path: rocksdb_path.clone(),
+				cache_size: 128,
+			};
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "Existing rocksdb database should be reopened");
+		}
+
+		// it should fail to open existing auto (rocksdb) database
+		{
+			settings.source = DatabaseSource::ParityDb { path: paritydb_path };
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "New paritydb database should be created");
+		}
+
+		// it should reopen existing auto (pairtydb) database
+		{
+			settings.source = DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 };
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "Existing rocksdb database should be reopened");
+		}
+	}
+
+	#[cfg(feature = "with-parity-db")]
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[test]
+	fn test_open_database_paritydb_new() {
+		let db_dir = tempfile::TempDir::new().unwrap();
+		let db_path = db_dir.path().to_owned();
+		let paritydb_path = db_path.join("paritydb");
+		let rocksdb_path = db_path.join("rocksdb_path");
+
+		let source = DatabaseSource::ParityDb { path: paritydb_path.clone() };
+		let mut settings = db_settings(source);
+
+		// it should create new paritydb database
+		{
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "New database should be created.");
+		}
+
+		// it should reopen existing pairtydb database
+		{
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "Existing parity database should be reopened");
+		}
+
+		// it should fail to open existing pairtydb database
+		{
+			settings.source =
+				DatabaseSource::RocksDb { path: rocksdb_path.clone(), cache_size: 128 };
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "New rocksdb database should be created");
+		}
+
+		// it should reopen existing auto (pairtydb) database
+		{
+			settings.source = DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size: 128 };
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_ok(), "Existing parity database should be reopened");
+		}
 	}
 }

@@ -857,7 +857,7 @@ pub mod pallet {
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			solution: Box<RawSolution<CompactOf<T>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -876,7 +876,7 @@ pub mod pallet {
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
 			let ready =
-				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
+				Self::feasibility_check(*solution, ElectionCompute::Unsigned).expect(error_message);
 
 			// Store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
@@ -947,7 +947,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			solution: Box<RawSolution<CompactOf<T>>>,
 			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -982,7 +982,8 @@ pub mod pallet {
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
 
-			let submission = SignedSubmission { who: who.clone(), deposit, solution, reward };
+			let submission =
+				SignedSubmission { who: who.clone(), deposit, solution: *solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1927,7 +1928,7 @@ mod tests {
 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
-					solution,
+					Box::new(solution),
 					MultiPhase::signed_submissions().len() as u32
 				));
 			}
