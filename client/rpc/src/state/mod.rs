@@ -39,25 +39,24 @@ use sp_core::{Bytes, storage::{PrefixedStorageKey, StorageChangeSet, StorageData
 use sp_version::RuntimeVersion;
 use sp_runtime::{traits::Block as BlockT};
 
-use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
+use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 
 use self::error::Error;
 
-pub use sc_rpc_api::state::*;
-pub use sc_rpc_api::child_state::*;
 use sc_client_api::{
-	ExecutorProvider, StorageProvider, BlockchainEvents, Backend, BlockBackend, ProofProvider
+	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, ProofProvider, StorageProvider,
 };
-use sp_blockchain::{HeaderMetadata, HeaderBackend};
+pub use sc_rpc_api::{child_state::*, state::*};
+use sp_blockchain::{HeaderBackend, HeaderMetadata};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
 #[async_trait::async_trait]
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
-	where
-		Block: BlockT + 'static,
-		Client: Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	Client: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
 	async fn call(
@@ -174,21 +173,30 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	deny_unsafe: DenyUnsafe,
 	rpc_max_payload: Option<usize>,
 ) -> (StateApi<Block, Client>, ChildState<Block, Client>)
-	where
-		Block: BlockT + 'static,
-		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block>
-			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-			+ CallApiAt<Block> + HeaderBackend<Block>
-			+ BlockBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
-		Client::Api: Metadata<Block>,
+where
+	Block: BlockT + 'static,
+	BE: Backend<Block> + 'static,
+	Client: ExecutorProvider<Block>
+		+ StorageProvider<Block, BE>
+		+ ProofProvider<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ BlockchainEvents<Block>
+		+ CallApiAt<Block>
+		+ HeaderBackend<Block>
+		+ BlockBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	Client::Api: Metadata<Block>,
 {
-	let child_backend = Box::new(
-		self::state_full::FullState::new(client.clone(), executor.clone(), rpc_max_payload)
-	);
-	let backend = Box::new(
-		self::state_full::FullState::new(client.clone(), executor, rpc_max_payload)
-	);
+	let child_backend = Box::new(self::state_full::FullState::new(
+		client.clone(),
+		executor.clone(),
+		rpc_max_payload,
+	));
+	let backend =
+		Box::new(self::state_full::FullState::new(client, executor, rpc_max_payload));
 	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -200,27 +208,32 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	fetcher: Arc<F>,
 	deny_unsafe: DenyUnsafe,
 ) -> (StateApi<Block, Client>, ChildState<Block, Client>)
-	where
-		Block: BlockT + 'static,
-		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
-			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-			+ ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockchainEvents<Block>
-			+ Send + Sync + 'static,
-		F: Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	BE: Backend<Block> + 'static,
+	Client: ExecutorProvider<Block>
+		+ StorageProvider<Block, BE>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ ProvideRuntimeApi<Block>
+		+ HeaderBackend<Block>
+		+ BlockchainEvents<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	F: Send + Sync + 'static,
 {
 	let child_backend = Box::new(self::state_light::LightState::new(
-			client.clone(),
-			executor.clone(),
-			remote_blockchain.clone(),
-			fetcher.clone(),
+		client.clone(),
+		executor.clone(),
+		remote_blockchain.clone(),
+		fetcher.clone(),
 	));
 
 	let backend = Box::new(self::state_light::LightState::new(
-			client.clone(),
-			executor.clone(),
-			remote_blockchain,
-			fetcher,
+		client,
+		executor,
+		remote_blockchain,
+		fetcher,
 	));
 	(
 		StateApi { backend, deny_unsafe },
@@ -439,10 +452,10 @@ impl<Block, Client> StateApi<Block, Client>
 
 /// Child state backend API.
 #[async_trait::async_trait]
-pub trait ChildStateBackend<Block, Client>: Send + Sync + 'static
-	where
-		Block: BlockT + 'static,
-		Client: Send + Sync + 'static,
+pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
+where
+	Block: BlockT + 'static,
+	Client: Send + Sync + 'static,
 {
 	/// Returns proof of storage for a child key entries at a specific block's state.
 	async fn read_child_proof(
@@ -616,7 +629,6 @@ impl<Block, Client> ChildState<Block, Client>
 
 		Ok(module)
 	}
-
 }
 
 fn client_err(err: sp_blockchain::Error) -> Error {

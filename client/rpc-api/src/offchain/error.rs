@@ -27,7 +27,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Unavailable storage kind error.
-	#[display(fmt="This storage kind is not available yet.")]
+	#[display(fmt = "This storage kind is not available yet.")]
 	UnavailableStorageKind,
 	/// Call to an unsafe RPC was denied.
 	UnsafeRpcCalled(crate::policy::UnsafeRpcError),

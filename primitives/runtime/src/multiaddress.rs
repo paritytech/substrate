@@ -17,7 +17,7 @@
 
 //! MultiAddress type is a wrapper for multiple downstream account formats.
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_std::vec::Vec;
 
 /// A multi-format address wrapper for on-chain accounts.
@@ -46,8 +46,10 @@ where
 		use sp_core::hexdisplay::HexDisplay;
 		match self {
 			Self::Raw(inner) => write!(f, "MultiAddress::Raw({})", HexDisplay::from(inner)),
-			Self::Address32(inner) => write!(f, "MultiAddress::Address32({})", HexDisplay::from(inner)),
-			Self::Address20(inner) => write!(f, "MultiAddress::Address20({})", HexDisplay::from(inner)),
+			Self::Address32(inner) =>
+				write!(f, "MultiAddress::Address32({})", HexDisplay::from(inner)),
+			Self::Address20(inner) =>
+				write!(f, "MultiAddress::Address20({})", HexDisplay::from(inner)),
 			_ => write!(f, "{:?}", self),
 		}
 	}

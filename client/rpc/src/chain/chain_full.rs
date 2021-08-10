@@ -41,16 +41,13 @@ pub struct FullChain<Block: BlockT, Client> {
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
 	pub fn new(client: Arc<Client>, executor: Arc<SubscriptionTaskExecutor>) -> Self {
-		Self {
-			client,
-			_phantom: PhantomData,
-			executor,
-		}
+		Self { client, executor, _phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> where
+impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
+where
 	Block: BlockT + 'static,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {

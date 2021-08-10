@@ -19,29 +19,30 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	BalanceOf, CodeHash, ContractInfoOf, Config, TrieId, DeletionQueue, Error,
 	weights::WeightInfo,
+	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
 };
-use codec::{Codec, Encode, Decode};
-use sp_std::prelude::*;
-use sp_std::{marker::PhantomData, fmt::Debug};
-use sp_io::hashing::blake2_256;
-use sp_runtime::{
-	RuntimeDebug,
-	traits::{Bounded, Saturating, Zero, Hash, Member, MaybeSerializeDeserialize},
-};
-use sp_core::crypto::UncheckedFrom;
+use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
-	storage::child::{self, KillStorageResult, ChildInfo},
+	storage::child::{self, ChildInfo, KillStorageResult},
 	traits::Get,
 	weights::Weight,
 };
+use sp_core::crypto::UncheckedFrom;
+use sp_io::hashing::blake2_256;
+use sp_runtime::{
+	traits::{Bounded, Hash, MaybeSerializeDeserialize, Member, Saturating, Zero},
+	RuntimeDebug,
+};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub type AliveContractInfo<T> =
 	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
-pub type TombstoneContractInfo<T> =
-	RawTombstoneContractInfo<<T as frame_system::Config>::Hash, <T as frame_system::Config>::Hashing>;
+pub type TombstoneContractInfo<T> = RawTombstoneContractInfo<
+	<T as frame_system::Config>::Hash,
+	<T as frame_system::Config>::Hashing,
+>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account
@@ -126,10 +127,16 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDeserialize+ Debug
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
-		+ sp_std::hash::Hash + Codec,
-	Hasher: Hash<Output=H>,
+	H: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Default
+		+ sp_std::hash::Hash
+		+ Codec,
+	Hasher: Hash<Output = H>,
 {
 	pub fn new(storage_root: &[u8], code_hash: H) -> Self {
 		let mut buf = Vec::new();
@@ -156,7 +163,7 @@ pub struct Storage<T>(PhantomData<T>);
 impl<T> Storage<T>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Reads a storage kv pair of a contract.
 	///
@@ -187,11 +194,15 @@ where
 		// Update the total number of KV pairs and the number of empty pairs.
 		match (&opt_prev_len, &opt_new_value) {
 			(Some(_), None) => {
-				new_info.pair_count = new_info.pair_count.checked_sub(1)
+				new_info.pair_count = new_info
+					.pair_count
+					.checked_sub(1)
 					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(None, Some(_)) => {
-				new_info.pair_count = new_info.pair_count.checked_add(1)
+				new_info.pair_count = new_info
+					.pair_count
+					.checked_add(1)
 					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(Some(_), Some(_)) => {},
@@ -200,10 +211,8 @@ where
 
 		// Update the total storage size.
 		let prev_value_len = opt_prev_len.unwrap_or(0);
-		let new_value_len = opt_new_value
-			.as_ref()
-			.map(|new_value| new_value.len() as u32)
-			.unwrap_or(0);
+		let new_value_len =
+			opt_new_value.as_ref().map(|new_value| new_value.len() as u32).unwrap_or(0);
 		new_info.storage_size = new_info
 			.storage_size
 			.checked_sub(prev_value_len)
@@ -230,7 +239,7 @@ where
 		ch: CodeHash<T>,
 	) -> Result<AliveContractInfo<T>, DispatchError> {
 		if <ContractInfoOf<T>>::contains_key(account) {
-			return Err(Error::<T>::DuplicateContract.into());
+			return Err(Error::<T>::DuplicateContract.into())
 		}
 
 		let contract = AliveContractInfo::<T> {
@@ -297,19 +306,17 @@ where
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
-			return weight_limit;
+			return weight_limit
 		}
 
-		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(
-			queue_len,
-			weight_limit,
-		);
+		let (weight_per_key, mut remaining_key_budget) =
+			Self::deletion_budget(queue_len, weight_limit);
 
 		// We want to check whether we have enough weight to decode the queue before
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
 		// which consume the whole block before the other `on_initialize` blocks are called.
 		if remaining_key_budget == 0 {
-			return weight_limit;
+			return weight_limit
 		}
 
 		let mut queue = <DeletionQueue<T>>::get();
@@ -318,10 +325,8 @@ where
 			// Cannot panic due to loop condition
 			let trie = &mut queue[0];
 			let pair_count = trie.pair_count;
-			let outcome = child::kill_storage(
-				&child_trie_info(&trie.trie_id),
-				Some(remaining_key_budget),
-			);
+			let outcome =
+				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			if pair_count > remaining_key_budget {
 				// Cannot underflow because of the if condition
 				trie.pair_count -= remaining_key_budget;
@@ -341,8 +346,8 @@ where
 					KillStorageResult::AllRemoved(_) => (),
 				}
 			}
-			remaining_key_budget = remaining_key_budget
-				.saturating_sub(remaining_key_budget.min(pair_count));
+			remaining_key_budget =
+				remaining_key_budget.saturating_sub(remaining_key_budget.min(pair_count));
 		}
 
 		<DeletionQueue<T>>::put(queue);
@@ -352,29 +357,22 @@ where
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
 	/// accountid_counter`.
 	pub fn generate_trie_id(account_id: &AccountIdOf<T>, seed: u64) -> TrieId {
-		let buf: Vec<_> = account_id.as_ref().iter()
-			.chain(&seed.to_le_bytes())
-			.cloned()
-			.collect();
+		let buf: Vec<_> = account_id.as_ref().iter().chain(&seed.to_le_bytes()).cloned().collect();
 		T::Hashing::hash(&buf).as_ref().into()
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
 	#[cfg(test)]
-	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>>
-	{
-		<ContractInfoOf<T>>::get(account)
-			.and_then(|i| i.as_alive().map(|i| i.code_hash))
+	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
+		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
 	}
 
 	/// Fill up the queue in order to exercise the limits during testing.
 	#[cfg(test)]
 	pub fn fill_queue_with_dummies() {
-		let queue: Vec<_> = (0..T::DeletionQueueDepth::get()).map(|_| DeletedContract {
-			pair_count: 0,
-			trie_id: vec![],
-		})
-		.collect();
+		let queue: Vec<_> = (0..T::DeletionQueueDepth::get())
+			.map(|_| DeletedContract { pair_count: 0, trie_id: vec![] })
+			.collect();
 		<DeletionQueue<T>>::put(queue);
 	}
 }

@@ -30,21 +30,25 @@ use futures::{future, StreamExt, FutureExt};
 use jsonrpsee::ws_server::SubscriptionSink;
 use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{
-	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata,
-	HeaderBackend
+	CachedHeaderMetadata, Error as ClientError, HeaderBackend, HeaderMetadata,
+	Result as ClientResult,
 };
 use sp_core::{
-	Bytes, storage::{StorageKey, StorageData, StorageChangeSet,
-	ChildInfo, ChildType, PrefixedStorageKey, well_known_keys},
+	storage::{
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData,
+		StorageKey,
+	},
+	Bytes,
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
+	generic::BlockId,
+	traits::{Block as BlockT, CheckedSub, NumberFor, SaturatedConversion},
 };
-use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
+use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, CallExecutor, StorageProvider, ExecutorProvider,
-	ProofProvider
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
+	StorageProvider,
 };
 
 /// Ranges to query in state_queryStorage.
@@ -70,11 +74,13 @@ pub struct FullState<BE, Block: BlockT, Client> {
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
-	where
-		BE: Backend<Block>,
-		Client: StorageProvider<Block, BE> + HeaderBackend<Block> + BlockBackend<Block>
-			+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
-		Block: BlockT + 'static,
+where
+	BE: Backend<Block>,
+	Client: StorageProvider<Block, BE>
+		+ HeaderBackend<Block>
+		+ BlockBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
 	pub fn new(
@@ -96,16 +102,23 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 	fn split_query_storage_range(
 		&self,
 		from: Block::Hash,
-		to: Option<Block::Hash>
+		to: Option<Block::Hash>,
 	) -> Result<QueryStorageRange<Block>> {
-		let to = self.block_or_best(to).map_err(|e| invalid_block::<Block>(from, to, e.to_string()))?;
+		let to = self
+			.block_or_best(to)
+			.map_err(|e| invalid_block::<Block>(from, to, e.to_string()))?;
 
-		let invalid_block_err = |e: ClientError| invalid_block::<Block>(from, Some(to), e.to_string());
+		let invalid_block_err =
+			|e: ClientError| invalid_block::<Block>(from, Some(to), e.to_string());
 		let from_meta = self.client.header_metadata(from).map_err(invalid_block_err)?;
 		let to_meta = self.client.header_metadata(to).map_err(invalid_block_err)?;
 
 		if from_meta.number > to_meta.number {
-			return Err(invalid_block_range(&from_meta, &to_meta, "from number > to number".to_owned()))
+			return Err(invalid_block_range(
+				&from_meta,
+				&to_meta,
+				"from number > to number".to_owned(),
+			))
 		}
 
 		// check if we can get from `to` to `from` by going through parent_hashes.
@@ -114,28 +127,33 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 			let mut hashes = vec![to_meta.hash];
 			let mut last = to_meta.clone();
 			while last.number > from_number {
-				let header_metadata = self.client
+				let header_metadata = self
+					.client
 					.header_metadata(last.parent)
 					.map_err(|e| invalid_block_range::<Block>(&last, &to_meta, e.to_string()))?;
 				hashes.push(header_metadata.hash);
 				last = header_metadata;
 			}
 			if last.hash != from_meta.hash {
-				return Err(invalid_block_range(&from_meta, &to_meta, "from and to are on different forks".to_owned()))
+				return Err(invalid_block_range(
+					&from_meta,
+					&to_meta,
+					"from and to are on different forks".to_owned(),
+				))
 			}
 			hashes.reverse();
 			hashes
 		};
 
 		// check if we can filter blocks-with-changes from some (sub)range using changes tries
-		let changes_trie_range = self.client
+		let changes_trie_range = self
+			.client
 			.max_key_changes_range(from_number, BlockId::Hash(to_meta.hash))
 			.map_err(client_err)?;
-		let filtered_range_begin = changes_trie_range
-			.and_then(|(begin, _)| {
-				// avoids a corner case where begin < from_number (happens when querying genesis)
-				begin.checked_sub(&from_number).map(|x| x.saturated_into::<usize>())
-			});
+		let filtered_range_begin = changes_trie_range.and_then(|(begin, _)| {
+			// avoids a corner case where begin < from_number (happens when querying genesis)
+			begin.checked_sub(&from_number).map(|x| x.saturated_into::<usize>())
+		});
 		let (unfiltered_range, filtered_range) = split_range(hashes.len(), filtered_range_begin);
 
 		Ok(QueryStorageRange {
@@ -156,7 +174,8 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 	) -> Result<()> {
 		for block in range.unfiltered_range.start..range.unfiltered_range.end {
 			let block_hash = range.hashes[block].clone();
-			let mut block_changes = StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
+			let mut block_changes =
+				StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
 			let id = BlockId::hash(block_hash);
 			for key in keys {
 				let (has_changed, data) = {
@@ -189,30 +208,34 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		let (begin, end) = match range.filtered_range {
 			Some(ref filtered_range) => (
 				range.first_number + filtered_range.start.saturated_into(),
-				BlockId::Hash(range.hashes[filtered_range.end - 1].clone())
+				BlockId::Hash(range.hashes[filtered_range.end - 1].clone()),
 			),
 			None => return Ok(()),
 		};
-		let mut changes_map: BTreeMap<NumberFor<Block>, StorageChangeSet<Block::Hash>> = BTreeMap::new();
+		let mut changes_map: BTreeMap<NumberFor<Block>, StorageChangeSet<Block::Hash>> =
+			BTreeMap::new();
 		for key in keys {
 			let mut last_block = None;
 			let mut last_value = last_values.get(key).cloned().unwrap_or_default();
 			let key_changes = self.client.key_changes(begin, end, None, key).map_err(client_err)?;
 			for (block, _) in key_changes.into_iter().rev() {
 				if last_block == Some(block) {
-					continue;
+					continue
 				}
 
-				let block_hash = range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
+				let block_hash =
+					range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
 				let id = BlockId::Hash(block_hash);
 				let value_at_block = self.client.storage(&id, key).map_err(client_err)?;
 				if last_value == value_at_block {
-					continue;
+					continue
 				}
 
-				changes_map.entry(block)
+				changes_map
+					.entry(block)
 					.or_insert_with(|| StorageChangeSet { block: block_hash, changes: Vec::new() })
-					.changes.push((key.clone(), value_at_block.clone()));
+					.changes
+					.push((key.clone(), value_at_block.clone()));
 				last_block = Some(block);
 				last_value = value_at_block;
 			}
@@ -226,15 +249,22 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 }
 
 #[async_trait::async_trait]
-impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
+impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
+where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
-		+ ProofProvider<Block> + HeaderBackend<Block>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
+	Client: ExecutorProvider<Block>
+		+ StorageProvider<Block, BE>
+		+ ProofProvider<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ BlockchainEvents<Block>
+		+ CallApiAt<Block>
+		+ ProvideRuntimeApi<Block>
 		+ BlockBackend<Block>
-		+ Send + Sync + 'static,
+		+ Send
+		+ Sync
+		+ 'static,
 	Client::Api: Metadata<Block>,
 {
 	async fn call(
@@ -550,12 +580,18 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+	Client: ExecutorProvider<Block>
+		+ StorageProvider<Block, BE>
 		+ ProofProvider<Block>
-		+ HeaderBackend<Block> + BlockBackend<Block>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
-		+ Send + Sync + 'static,
+		+ HeaderBackend<Block>
+		+ BlockBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ BlockchainEvents<Block>
+		+ CallApiAt<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
 	Client::Api: Metadata<Block>,
 {
 
@@ -672,7 +708,10 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 /// Splits passed range into two subranges where:
 /// - first range has at least one element in it;
 /// - second range (optionally) starts at given `middle` element.
-pub(crate) fn split_range(size: usize, middle: Option<usize>) -> (Range<usize>, Option<Range<usize>>) {
+pub(crate) fn split_range(
+	size: usize,
+	middle: Option<usize>,
+) -> (Range<usize>, Option<Range<usize>>) {
 	// check if we can filter blocks-with-changes from some (sub)range using changes tries
 	let range2_begin = match middle {
 		// some of required changes tries are pruned => use available tries
@@ -697,21 +736,9 @@ fn invalid_block_range<B: BlockT>(
 ) -> Error {
 	let to_string = |h: &CachedHeaderMetadata<B>| format!("{} ({:?})", h.number, h.hash);
 
-	Error::InvalidBlockRange {
-		from: to_string(from),
-		to: to_string(to),
-		details,
-	}
+	Error::InvalidBlockRange { from: to_string(from), to: to_string(to), details }
 }
 
-fn invalid_block<B: BlockT>(
-	from: B::Hash,
-	to: Option<B::Hash>,
-	details: String,
-) -> Error {
-	Error::InvalidBlockRange {
-		from: format!("{:?}", from),
-		to: format!("{:?}", to),
-		details,
-	}
+fn invalid_block<B: BlockT>(from: B::Hash, to: Option<B::Hash>, details: String) -> Error {
+	Error::InvalidBlockRange { from: format!("{:?}", from), to: format!("{:?}", to), details }
 }

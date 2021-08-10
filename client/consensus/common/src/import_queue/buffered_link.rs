@@ -22,8 +22,8 @@
 //! # Example
 //!
 //! ```
-//! use sp_consensus::import_queue::Link;
-//! # use sp_consensus::import_queue::buffered_link::buffered_link;
+//! use sc_consensus::import_queue::Link;
+//! # use sc_consensus::import_queue::buffered_link::buffered_link;
 //! # use sp_test_primitives::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
@@ -36,13 +36,17 @@
 //! 	std::task::Poll::Pending::<()>
 //! });
 //! ```
-//!
 
+use crate::import_queue::{Link, Origin};
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
-use std::{pin::Pin, task::Context, task::Poll};
-use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+};
+
+use super::BlockImportResult;
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
@@ -70,15 +74,13 @@ impl<B: BlockT> BufferedLinkSender<B> {
 
 impl<B: BlockT> Clone for BufferedLinkSender<B> {
 	fn clone(&self) -> Self {
-		BufferedLinkSender {
-			tx: self.tx.clone(),
-		}
+		BufferedLinkSender { tx: self.tx.clone() }
 	}
 }
 
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
-	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
+	BlocksProcessed(usize, usize, Vec<(BlockImportResult<B>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
 	RequestJustification(B::Hash, NumberFor<B>),
 }
@@ -88,9 +90,11 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		&mut self,
 		imported: usize,
 		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+		results: Vec<(BlockImportResult<B>, B::Hash)>,
 	) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
+		let _ = self
+			.tx
+			.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -98,14 +102,16 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		who: Origin,
 		hash: &B::Hash,
 		number: NumberFor<B>,
-		success: bool
+		success: bool,
 	) {
 		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
 		let _ = self.tx.unbounded_send(msg);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
+		let _ = self
+			.tx
+			.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
 	}
 }
 

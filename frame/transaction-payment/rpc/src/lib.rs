@@ -17,8 +17,8 @@
 
 //! RPC interface for the transaction payment pallet.
 
-use std::sync::Arc;
-use std::convert::TryInto;
+use std::{sync::Arc, convert::TryInto};
+
 use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};

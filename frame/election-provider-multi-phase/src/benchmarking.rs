@@ -18,7 +18,7 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::{Pallet as MultiPhase, unsigned::IndexAssignmentOf};
+use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::{account, impl_benchmark_test_suite};
 use frame_support::{assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
@@ -26,7 +26,10 @@ use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
-use sp_std::convert::{TryFrom, TryInto};
+use sp_std::{
+	boxed::Box,
+	convert::{TryFrom, TryInto},
+};
 
 const SEED: u32 = 999;
 
@@ -53,8 +56,9 @@ fn solution_with_size<T: Config>(
 	let stake: VoteWeight = ed.max(One::one()).saturating_mul(100);
 
 	// first generates random targets.
-	let targets: Vec<T::AccountId> =
-		(0..size.targets).map(|i| frame_benchmarking::account("Targets", i, SEED)).collect();
+	let targets: Vec<T::AccountId> = (0..size.targets)
+		.map(|i| frame_benchmarking::account("Targets", i, SEED))
+		.collect();
 
 	let mut rng = SmallRng::seed_from_u64(SEED.into());
 
@@ -80,8 +84,11 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<_>>();
 
 	// rest of the voters. They can only vote for non-winners.
-	let non_winners =
-		targets.iter().filter(|t| !winners.contains(t)).cloned().collect::<Vec<T::AccountId>>();
+	let non_winners = targets
+		.iter()
+		.filter(|t| !winners.contains(t))
+		.cloned()
+		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
 			let votes = (&non_winners)
@@ -147,14 +154,22 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 	// number of votes in snapshot.
 
 	T::DataProvider::clear();
-	log!(info, "setting up with voters = {} [degree = {}], targets = {}", v, T::DataProvider::MAXIMUM_VOTES_PER_VOTER, t);
+	log!(
+		info,
+		"setting up with voters = {} [degree = {}], targets = {}",
+		v,
+		T::DataProvider::MAXIMUM_VOTES_PER_VOTER,
+		t
+	);
 
 	// fill targets.
-	let mut targets = (0..t).map(|i| {
-		let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
-		T::DataProvider::add_target(target.clone());
-		target
-	}).collect::<Vec<_>>();
+	let mut targets = (0..t)
+		.map(|i| {
+			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+			T::DataProvider::add_target(target.clone());
+			target
+		})
+		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
 	assert!(targets.len() > T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
 	targets.truncate(T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
@@ -305,7 +320,7 @@ frame_benchmarking::benchmarks! {
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), solution, c)
+	}: _(RawOrigin::Signed(caller), Box::new(solution), c)
 	verify {
 		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
 	}
@@ -332,9 +347,15 @@ frame_benchmarking::benchmarks! {
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
-		let encoded_call = <Call<T>>::submit_unsigned(raw_solution.clone(), witness).encode();
+		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
 	}: {
-		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
+		assert_ok!(
+			<MultiPhase<T>>::submit_unsigned(
+				RawOrigin::None.into(),
+				Box::new(raw_solution),
+				witness,
+			)
+		);
 		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
 			.unwrap();
 		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();

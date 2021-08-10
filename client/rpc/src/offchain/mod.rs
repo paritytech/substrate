@@ -21,6 +21,7 @@
 #[cfg(test)]
 mod tests;
 
+use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
 use jsonrpsee::RpcModule;
@@ -28,10 +29,9 @@ use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCal
 use sc_rpc_api::DenyUnsafe;
 use self::error::Error;
 use sp_core::{
-	Bytes,
 	offchain::{OffchainStorage, StorageKind},
+	Bytes,
 };
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Offchain API
@@ -45,10 +45,7 @@ pub struct Offchain<T: OffchainStorage> {
 impl<T: OffchainStorage + 'static> Offchain<T> {
 	/// Create new instance of Offchain API.
 	pub fn new(storage: T, deny_unsafe: DenyUnsafe) -> Self {
-		Offchain {
-			storage: Arc::new(RwLock::new(storage)),
-			deny_unsafe,
-		}
+		Offchain { storage: Arc::new(RwLock::new(storage)), deny_unsafe }
 	}
 
 	/// Convert this to a RPC module.

@@ -23,13 +23,13 @@ use crate::{SubscriptionTaskExecutor, chain::helpers};
 use super::{ChainBackend, client_err, Error};
 
 use jsonrpsee::ws_server::SubscriptionSink;
+use sp_blockchain::HeaderBackend;
 use sc_client_api::light::{Fetcher, RemoteBodyRequest, RemoteBlockchain};
 use sc_client_api::BlockchainEvents;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT},
+	traits::Block as BlockT,
 };
-use sp_blockchain::HeaderBackend;
 
 /// Blockchain API backend for light nodes. Reads all the data from local
 /// database, if available, or fetches it from remote node otherwise.
@@ -52,17 +52,13 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 		fetcher: Arc<F>,
 		executor: Arc<SubscriptionTaskExecutor>,
 	) -> Self {
-		Self {
-			client,
-			remote_blockchain,
-			fetcher,
-			executor,
-		}
+		Self { client, executor, remote_blockchain, fetcher }
 	}
 }
 
 #[async_trait::async_trait]
-impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client, F> where
+impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client, F>
+where
 	Block: BlockT + 'static,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,

@@ -38,10 +38,10 @@ use node_primitives::{Block, BlockNumber, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
-	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
+	FinalityProofProvider, GrandpaJustificationStream, SharedAuthoritySet, SharedVoterState,
 };
-pub use sc_rpc_api::DenyUnsafe;
 use sc_rpc::SubscriptionTaskExecutor;
+pub use sc_rpc_api::DenyUnsafe;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -88,3 +88,15 @@ pub fn create_full() -> jsonrpc_core::IoHandler<()>
 {
 	jsonrpc_core::IoHandler::default()
 }
+
+// TODO(niklasad1): we probably need this too.
+// pub fn create_light<C, P, M, F>(deps: LightDeps<C, F, P>) -> jsonrpc_core::IoHandler<M>
+// where
+//     C: sp_blockchain::HeaderBackend<Block>,
+//     C: Send + Sync + 'static,
+//     F: sc_client_api::light::Fetcher<Block> + 'static,
+//     P: TransactionPool + 'static,
+//     M: jsonrpc_core::Metadata + Default,
+// {
+//     todo!();
+// }

@@ -30,33 +30,17 @@ struct Named {
 enum EnumLongName<A> {
 	A,
 	B(A, String),
-	VariantLongName {
-		a: A,
-		b: String,
-	},
+	VariantLongName { a: A, b: String },
 }
-
 
 #[test]
 fn should_display_proper_debug() {
 	use self::EnumLongName as Enum;
 
-	assert_eq!(
-		format!("{:?}", Unnamed(1, "abc".into())),
-		"Unnamed(1, \"abc\")"
-	);
-	assert_eq!(
-		format!("{:?}", Named { a: 1, b: "abc".into() }),
-		"Named { a: 1, b: \"abc\" }"
-	);
-	assert_eq!(
-		format!("{:?}", Enum::<u64>::A),
-		"EnumLongName::A"
-	);
-	assert_eq!(
-		format!("{:?}", Enum::B(1, "abc".into())),
-		"EnumLongName::B(1, \"abc\")"
-	);
+	assert_eq!(format!("{:?}", Unnamed(1, "abc".into())), "Unnamed(1, \"abc\")");
+	assert_eq!(format!("{:?}", Named { a: 1, b: "abc".into() }), "Named { a: 1, b: \"abc\" }");
+	assert_eq!(format!("{:?}", Enum::<u64>::A), "EnumLongName::A");
+	assert_eq!(format!("{:?}", Enum::B(1, "abc".into())), "EnumLongName::B(1, \"abc\")");
 	assert_eq!(
 		format!("{:?}", Enum::VariantLongName { a: 1, b: "abc".into() }),
 		"EnumLongName::VariantLongName { a: 1, b: \"abc\" }"

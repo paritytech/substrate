@@ -24,8 +24,8 @@ mod tests;
 use futures::{FutureExt, channel::oneshot};
 use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
-use sp_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
+use sp_utils::mpsc::TracingUnboundedSender;
 use jsonrpsee::RpcModule;
 use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 
@@ -33,6 +33,7 @@ use self::error::Result;
 
 pub use sc_rpc_api::system::*;
 pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
+
 
 /// System API implementation
 pub struct System<B: traits::Block> {
@@ -76,11 +77,7 @@ impl<B: traits::Block> System<B> {
 		send_back: TracingUnboundedSender<Request<B>>,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		System {
-			info,
-			send_back,
-			deny_unsafe,
-		}
+		System { info, send_back, deny_unsafe }
 	}
 
 	/// Convert to a RPC Module.

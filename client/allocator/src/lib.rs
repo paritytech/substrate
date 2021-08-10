@@ -25,5 +25,5 @@
 mod error;
 mod freeing_bump;
 
-pub use freeing_bump::FreeingBumpHeapAllocator;
 pub use error::Error;
+pub use freeing_bump::FreeingBumpHeapAllocator;

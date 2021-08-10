@@ -15,20 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
+use futures::channel::{mpsc, oneshot};
+use libp2p_wasm_ext::{ffi, ExtTransport};
 use log::info;
+use sc_chain_spec::Extension;
 use sc_network::config::TransportConfig;
 use sc_service::{
-	Role, Configuration, TaskManager,
-	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	GenericChainSpec, RuntimeGenesis,
-	KeepBlocks, TransactionStorageMode,
+	config::{DatabaseSource, KeystoreConfig, NetworkConfiguration},
+	Configuration, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
+	TaskManager, TransactionStorageMode,
 };
 use sc_tracing::logging::LoggerBuilder;
-use wasm_bindgen::prelude::*;
-use futures::channel::{oneshot, mpsc};
 use std::pin::Pin;
-use sc_chain_spec::Extension;
-use libp2p_wasm_ext::{ExtTransport, ffi};
+use wasm_bindgen::prelude::*;
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
@@ -70,14 +70,15 @@ where
 		task_executor: (|fut, _| {
 			wasm_bindgen_futures::spawn_local(fut);
 			async {}
-		}).into(),
+		})
+		.into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);
 			let db = kvdb_memorydb::create(10);
 
-			DatabaseConfig::Custom(sp_database::as_database(db))
+			DatabaseSource::Custom(sp_database::as_database(db))
 		},
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
@@ -111,9 +112,7 @@ where
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: None,
-		informant_output_format: sc_informant::OutputFormat {
-			enable_color: false,
-		},
+		informant_output_format: sc_informant::OutputFormat { enable_color: false },
 		disable_log_reloading: false,
 	};
 

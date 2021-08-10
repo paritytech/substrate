@@ -28,6 +28,7 @@ use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
 use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
+
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
@@ -57,11 +58,7 @@ impl<BlockHash> LeafProof<BlockHash> {
 		Leaf: Encode,
 		MmrHash: Encode,
 	{
-		Self {
-			block_hash,
-			leaf: Bytes(leaf.encode()),
-			proof: Bytes(proof.encode()),
-		}
+		Self { block_hash, leaf: Bytes(leaf.encode()), proof: Bytes(proof.encode()) }
 	}
 }
 
@@ -182,11 +179,14 @@ mod tests {
 		let expected = LeafProof {
 			block_hash: H256::repeat_byte(0),
 			leaf: Bytes(vec![1_u8, 2, 3, 4].encode()),
-			proof: Bytes(Proof {
-				leaf_index: 1,
-				leaf_count: 9,
-				items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
-			}.encode()),
+			proof: Bytes(
+				Proof {
+					leaf_index: 1,
+					leaf_count: 9,
+					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
+				}
+				.encode(),
+			),
 		};
 
 		// when
@@ -198,6 +198,5 @@ mod tests {
 
 		// then
 		assert_eq!(actual, expected);
-
 	}
 }

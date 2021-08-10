@@ -41,16 +41,16 @@ use sp_runtime::{
 
 use self::error::Error;
 
+use sc_client_api::BlockBackend;
 pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
-use sc_client_api::BlockBackend;
 
 /// Blockchain backend API
 #[async_trait::async_trait]
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
-	where
-		Block: BlockT + 'static,
-		Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+where
+	Block: BlockT + 'static,
+	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	/// Get client reference.
 	fn client(&self) -> &Arc<Client>;
@@ -92,7 +92,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 					.header(BlockId::number(block_num))
 					.map_err(client_err)?
 					.map(|h| h.hash()))
-			}
+			},
 		}
 	}
 
@@ -116,9 +116,9 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	client: Arc<Client>,
 	executor: Arc<SubscriptionTaskExecutor>,
 ) -> Chain<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+where
+	Block: BlockT + 'static,
+	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain {
 		backend: Box::new(self::chain_full::FullChain::new(client, executor)),
@@ -132,10 +132,10 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 ) -> Chain<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
-		F: Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+	F: Send + Sync + 'static,
 {
 	Chain {
 		backend: Box::new(self::chain_light::LightChain::new(
@@ -155,6 +155,7 @@ pub struct Chain<Block: BlockT, Client> {
 impl<Block: BlockT, Client> Chain<Block, Client>
 where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+	Block: BlockT + 'static,
 {
 	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {

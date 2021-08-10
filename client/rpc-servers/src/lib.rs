@@ -49,7 +49,7 @@ mod inner {
 	/// Type alias for http server
 	pub type HttpServer = HttpStopHandle;
 	/// Type alias for ws server
-	pub type WsServer = HttpStopHandle;
+	pub type WsServer = WsStopHandle;
 
 	/// Start HTTP server listening on given address.
 	///

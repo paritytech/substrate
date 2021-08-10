@@ -16,28 +16,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Client parts
-use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_consensus_babe::BabeApi;
-use crate::{ChainInfo, default_config};
-use manual_seal::consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider};
-use sp_keyring::sr25519::Keyring::Alice;
-use std::str::FromStr;
-use sp_runtime::traits::Header;
+use crate::{default_config, ChainInfo};
 use futures::channel::mpsc;
-use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams, import_queue};
+use manual_seal::{
+	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
+	import_queue,
+	run_manual_seal, EngineCommand, ManualSealParams,
+};
 use sc_client_api::backend::Backend;
 use sc_service::{
-    build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams, TFullBackend,
-    TFullClient, TaskManager, new_full_parts, Configuration, ChainSpec, TaskExecutor,
+	build_network, new_full_parts, spawn_tasks, BuildNetworkParams, ChainSpec, Configuration,
+	SpawnTasksParams, TFullBackend, TFullClient, TaskExecutor, TaskManager,
 };
 use sc_transaction_pool::BasicPool;
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata};
 use sp_block_builder::BlockBuilder;
-use sp_runtime::traits::Block as BlockT;
-use sp_session::SessionKeys;
+use sp_consensus_babe::BabeApi;
+use sp_finality_grandpa::GrandpaApi;
+use sp_keyring::sr25519::Keyring::Alice;
 use sp_offchain::OffchainWorkerApi;
-use std::sync::Arc;
+use sp_runtime::traits::{Block as BlockT, Header};
+use sp_session::SessionKeys;
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use std::{str::FromStr, sync::Arc};
 
 type ClientParts<T> = (
     TaskManager,
@@ -57,22 +59,33 @@ type ClientParts<T> = (
 
 /// Provide the config or chain spec for a given chain
 pub enum ConfigOrChainSpec {
-    /// Configuration object
-    Config(Configuration),
-    /// Chain spec object
-    ChainSpec(Box<dyn ChainSpec>, TaskExecutor)
+	/// Configuration object
+	Config(Configuration),
+	/// Chain spec object
+	ChainSpec(Box<dyn ChainSpec>, TaskExecutor),
 }
-/// Creates all the client parts you need for [`Node`]
-pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<ClientParts<T>, sc_service::Error>
-    where
-        T: ChainInfo + 'static,
-        <T::RuntimeApi as ConstructRuntimeApi<T::Block, TFullClient<T::Block, T::RuntimeApi, T::Executor>>>::RuntimeApi:
-        Core<T::Block> + Metadata<T::Block> + OffchainWorkerApi<T::Block> + SessionKeys<T::Block>
-        + TaggedTransactionQueue<T::Block> + BlockBuilder<T::Block> + BabeApi<T::Block>
-        + ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
-        <T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
-        <<T as ChainInfo>::Block as BlockT>::Hash: FromStr,
-        <<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number: num_traits::cast::AsPrimitive<usize>,
+/// Creates all the client parts you need for [`Node`](crate::node::Node)
+pub fn client_parts<T>(
+	config_or_chain_spec: ConfigOrChainSpec,
+) -> Result<ClientParts<T>, sc_service::Error>
+where
+	T: ChainInfo + 'static,
+	<T::RuntimeApi as ConstructRuntimeApi<
+		T::Block,
+		TFullClient<T::Block, T::RuntimeApi, T::Executor>,
+	>>::RuntimeApi: Core<T::Block>
+		+ Metadata<T::Block>
+		+ OffchainWorkerApi<T::Block>
+		+ SessionKeys<T::Block>
+		+ TaggedTransactionQueue<T::Block>
+		+ BlockBuilder<T::Block>
+		+ BabeApi<T::Block>
+		+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>
+		+ GrandpaApi<T::Block>,
+	<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
+	<<T as ChainInfo>::Block as BlockT>::Hash: FromStr,
+	<<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number:
+		num_traits::cast::AsPrimitive<usize>,
 {
     use sp_consensus_babe::AuthorityId;
     let config = match config_or_chain_spec {
@@ -126,6 +139,7 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
             import_queue,
             on_demand: None,
             block_announce_validator_builder: None,
+			warp_sync: None,
         };
         build_network(params)?
     };

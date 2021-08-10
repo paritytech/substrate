@@ -39,18 +39,21 @@ use parking_lot::Mutex;
 use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client_api::{
-	BlockchainEvents,
 	light::{
-		RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest,
-		RemoteBlockchain, Fetcher, future_header,
+		future_header, Fetcher, RemoteBlockchain, RemoteCallRequest, RemoteReadChildRequest,
+		RemoteReadRequest,
 	},
+	BlockchainEvents,
 };
 use sp_core::{
+	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
 	Bytes, OpaqueMetadata,
-	storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet},
+};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor},
 };
 use sp_version::RuntimeVersion;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
 /// Storage data map of storage keys => (optional) storage value.
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
@@ -71,11 +74,7 @@ trait SharedRequests<Hash, V>: Clone + Send + Sync {
 	/// Tries to listen for already issued request, or issues request.
 	///
 	/// Returns true if requests has been issued.
-	fn listen_request(
-		&self,
-		block: Hash,
-		sender: Sender<Result<V, ()>>,
-	) -> bool;
+	fn listen_request(&self, block: Hash, sender: Sender<Result<V, ()>>) -> bool;
 
 	/// Returns (and forgets) all listeners for given request.
 	fn on_response_received(&self, block: Hash) -> Vec<Sender<Result<V, ()>>>;
@@ -91,12 +90,10 @@ struct StorageSubscriptions<Block: BlockT> {
 	subscriptions_by_key: HashMap<StorageKey, HashSet<u64>>,
 }
 
-impl<Block: BlockT> SharedRequests<Block::Hash, StorageMap> for Arc<Mutex<StorageSubscriptions<Block>>> {
-	fn listen_request(
-		&self,
-		block: Block::Hash,
-		sender: Sender<Result<StorageMap, ()>>,
-	) -> bool {
+impl<Block: BlockT> SharedRequests<Block::Hash, StorageMap>
+	for Arc<Mutex<StorageSubscriptions<Block>>>
+{
+	fn listen_request(&self, block: Block::Hash, sender: Sender<Result<StorageMap, ()>>) -> bool {
 		let mut subscriptions = self.lock();
 		let active_requests_at = subscriptions.active_requests.entry(block).or_default();
 		active_requests_at.push(sender);
@@ -111,15 +108,12 @@ impl<Block: BlockT> SharedRequests<Block::Hash, StorageMap> for Arc<Mutex<Storag
 /// Simple, maybe shared, subscription data that shares per block requests.
 type SimpleSubscriptions<Hash, V> = Arc<Mutex<HashMap<Hash, Vec<Sender<Result<V, ()>>>>>>;
 
-impl<Hash, V> SharedRequests<Hash, V> for SimpleSubscriptions<Hash, V> where
+impl<Hash, V> SharedRequests<Hash, V> for SimpleSubscriptions<Hash, V>
+where
 	Hash: Send + Eq + std::hash::Hash,
 	V: Send,
 {
-	fn listen_request(
-		&self,
-		block: Hash,
-		sender: Sender<Result<V, ()>>,
-	) -> bool {
+	fn listen_request(&self, block: Hash, sender: Sender<Result<V, ()>>) -> bool {
 		let mut subscriptions = self.lock();
 		let active_requests_at = subscriptions.entry(block).or_default();
 		active_requests_at.push(sender);
@@ -168,7 +162,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 where
 	Block: BlockT,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-	F: Fetcher<Block> + 'static
+	F: Fetcher<Block> + 'static,
 {
 	async fn call(
 		&self,
@@ -477,7 +471,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 where
 	Block: BlockT,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-	F: Fetcher<Block> + 'static
+	F: Fetcher<Block> + 'static,
 {
 	async fn read_child_proof(
 		&self,
@@ -557,17 +551,17 @@ fn resolve_header<Block: BlockT, F: Fetcher<Block>>(
 	fetcher: &F,
 	block: Block::Hash,
 ) -> impl std::future::Future<Output = Result<Block::Header, Error>> {
-	let maybe_header = future_header(
-		remote_blockchain,
-		fetcher,
-		BlockId::Hash(block),
-	);
+	let maybe_header = future_header(remote_blockchain, fetcher, BlockId::Hash(block));
 
-	maybe_header.then(move |result|
-		ready(result.and_then(|maybe_header|
-			maybe_header.ok_or_else(|| ClientError::UnknownBlock(format!("{}", block)))
-		).map_err(client_err)),
-	)
+	maybe_header.then(move |result| {
+		ready(
+			result
+				.and_then(|maybe_header| {
+					maybe_header.ok_or_else(|| ClientError::UnknownBlock(format!("{}", block)))
+				})
+				.map_err(client_err),
+		)
+	})
 }
 
 /// Call runtime method at given block
@@ -578,17 +572,20 @@ fn call<Block: BlockT, F: Fetcher<Block>>(
 	method: String,
 	call_data: Bytes,
 ) -> impl std::future::Future<Output = Result<Bytes, Error>> {
-	resolve_header(remote_blockchain, &*fetcher, block)
-		.then(move |result| match result {
-			Ok(header) => Either::Left(fetcher.remote_call(RemoteCallRequest {
-				block,
-				header,
-				method,
-				call_data: call_data.0,
-				retry_count: Default::default(),
-			}).then(|result| ready(result.map(Bytes).map_err(client_err)))),
-			Err(error) => Either::Right(ready(Err(error))),
-		})
+	resolve_header(remote_blockchain, &*fetcher, block).then(move |result| match result {
+		Ok(header) => Either::Left(
+			fetcher
+				.remote_call(RemoteCallRequest {
+					block,
+					header,
+					method,
+					call_data: call_data.0,
+					retry_count: Default::default(),
+				})
+				.then(|result| ready(result.map(Bytes).map_err(client_err))),
+		),
+		Err(error) => Either::Right(ready(Err(error))),
+	})
 }
 
 /// Get runtime version at given block.
@@ -617,22 +614,30 @@ fn storage<Block: BlockT, F: Fetcher<Block>>(
 	block: Block::Hash,
 	keys: Vec<Vec<u8>>,
 ) -> impl std::future::Future<Output = Result<HashMap<StorageKey, Option<StorageData>>, Error>> {
-	resolve_header(remote_blockchain, &*fetcher, block)
-		.then(move |result| match result {
-			Ok(header) => Either::Left(fetcher.remote_read(RemoteReadRequest {
-				block,
-				header,
-				keys,
-				retry_count: Default::default(),
-			}).then(|result| ready(result
-				.map(|result| result
-					.into_iter()
-					.map(|(key, value)| (StorageKey(key), value.map(StorageData)))
-					.collect()
-				).map_err(client_err)
-			))),
-			Err(error) => Either::Right(ready(Err(error))),
-		})
+	resolve_header(remote_blockchain, &*fetcher, block).then(move |result| match result {
+		Ok(header) => Either::Left(
+			fetcher
+				.remote_read(RemoteReadRequest {
+					block,
+					header,
+					keys,
+					retry_count: Default::default(),
+				})
+				.then(|result| {
+					ready(
+						result
+							.map(|result| {
+								result
+									.into_iter()
+									.map(|(key, value)| (StorageKey(key), value.map(StorageData)))
+									.collect()
+							})
+							.map_err(client_err),
+					)
+				}),
+		),
+		Err(error) => Either::Right(ready(Err(error))),
+	})
 }
 
 /// Request some data from remote node, probably reusing response from already
@@ -652,7 +657,7 @@ where
 
 	// if that isn't the first request - just listen for existing request' response
 	if !need_issue_request {
-		return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))));
+		return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))))
 	}
 
 	// that is the first request - issue remote request + notify all listeners on
@@ -682,10 +687,10 @@ where
 
 #[cfg(test)]
 mod tests {
-	use rpc::futures::stream::futures_ordered;
-	use substrate_test_runtime_client::runtime::Block;
-	use sp_core::H256;
 	use super::*;
+	use rpc::futures::stream::futures_ordered;
+	use sp_core::H256;
+	use substrate_test_runtime_client::runtime::Block;
 
 	#[test]
 	fn subscription_stream_works() {
@@ -701,13 +706,10 @@ mod tests {
 			|_, old_value, new_value| match old_value == Some(new_value) {
 				true => None,
 				false => Some(new_value.clone()),
-			}
+			},
 		);
 
-		assert_eq!(
-			stream.collect().wait(),
-			Ok(vec![100, 200])
-		);
+		assert_eq!(stream.collect().wait(), Ok(vec![100, 200]));
 	}
 
 	#[test]
@@ -724,13 +726,10 @@ mod tests {
 			|_, old_value, new_value| match old_value == Some(new_value) {
 				true => None,
 				false => Some(new_value.clone()),
-			}
+			},
 		);
 
-		assert_eq!(
-			stream.collect().wait(),
-			Ok(vec![100, 200])
-		);
+		assert_eq!(stream.collect().wait(), Ok(vec![100, 200]));
 	}
 
 	#[test]
@@ -740,10 +739,7 @@ mod tests {
 		let shared_requests = SimpleSubscriptions::default();
 
 		// let's 'issue' requests for B1
-		shared_requests.lock().insert(
-			H256::from([1; 32]),
-			vec![channel().0],
-		);
+		shared_requests.lock().insert(H256::from([1; 32]), vec![channel().0]);
 
 		// make sure that no additional requests are issued when we're asking for B1
 		let _ = maybe_share_remote_request::<Block, _, _, _, UnreachableFuture>(

@@ -20,22 +20,16 @@
 use std::{marker::PhantomData, sync::Arc, fmt::Display};
 
 use codec::{self, Codec, Decode, Encode};
-use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use futures::{future, FutureExt};
 use jsonrpsee::RpcModule;
 use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
-use sp_blockchain::{
-	HeaderBackend,
-	Error as ClientError
-};
-use sp_runtime::{
-	generic::BlockId,
-	traits,
-};
-use sp_core::{hexdisplay::HexDisplay, Bytes};
+use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
+use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{TransactionPool, InPoolTransaction};
 use sp_block_builder::BlockBuilder;
-use sc_rpc_api::DenyUnsafe;
+use sp_blockchain::{Error as ClientError, HeaderBackend};
+use sp_core::{hexdisplay::HexDisplay, Bytes};
+use sp_runtime::{generic::BlockId, traits};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
@@ -307,9 +301,12 @@ mod tests {
 	use super::*;
 
 	use futures::executor::block_on;
-	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
 	use sc_transaction_pool::BasicPool;
-	use sp_runtime::{ApplyExtrinsicResult, transaction_validity::{TransactionValidityError, InvalidTransaction}};
+	use sp_runtime::{
+		transaction_validity::{InvalidTransaction, TransactionValidityError},
+		ApplyExtrinsicResult,
+	};
+	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
@@ -318,13 +315,8 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		);
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let new_transaction = |nonce: u64| {
@@ -358,13 +350,8 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		);
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
 		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
 
@@ -382,13 +369,8 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		);
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
 		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
 
@@ -397,7 +379,8 @@ mod tests {
 			to: AccountKeyring::Bob.into(),
 			amount: 5,
 			nonce: 0,
-		}.into_signed_tx();
+		}
+		.into_signed_tx();
 
 		// when
 		let res = accounts.dry_run(tx.encode().into(), None);
@@ -415,13 +398,8 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		);
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
 		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
 
@@ -430,7 +408,8 @@ mod tests {
 			to: AccountKeyring::Bob.into(),
 			amount: 5,
 			nonce: 100,
-		}.into_signed_tx();
+		}
+		.into_signed_tx();
 
 		// when
 		let res = accounts.dry_run(tx.encode().into(), None);

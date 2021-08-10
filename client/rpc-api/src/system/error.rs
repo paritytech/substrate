@@ -52,7 +52,7 @@ impl From<Error> for CallError {
 				code: BASE_ERROR + 2,
 				message: e,
 				data: None,
-			}
+			},
 		}
 	}
 }

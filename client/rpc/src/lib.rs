@@ -23,9 +23,10 @@
 #![warn(missing_docs)]
 
 use futures::{compat::Future01CompatExt, FutureExt};
-use rpc::futures::future::{Executor, ExecuteError, Future};
+use rpc::futures::future::{ExecuteError, Executor, Future};
 use sp_core::traits::SpawnNamed;
 use std::sync::Arc;
+
 pub use sc_rpc_api::DenyUnsafe;
 
 pub mod author;
