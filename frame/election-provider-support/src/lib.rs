@@ -331,6 +331,14 @@ pub trait SortedListProvider<AccountId> {
 	fn clear();
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
+
+	// Benchmark helpers
+	// #[cfg(feature = "runtime-benchmarks")]
+	fn prepare_on_update_benchmark(
+		origin_thresh: VoteWeight,
+		dest_thresh: VoteWeight,
+		to_update: AccountId,
+	);
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and

@@ -2229,6 +2229,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
 
 [[package]]
+name = "generate-bags"
+version = "3.0.0"
+dependencies = [
+ "chrono",
+ "frame-election-provider-support",
+ "frame-support",
+ "frame-system",
+ "git2",
+ "node-runtime",
+ "num-format",
+ "pallet-staking",
+ "sp-io",
+ "structopt",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4508,9 +4524,8 @@ name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
  "frame-support",
+ "generate-bags",
  "node-runtime",
- "pallet-bags-list",
- "pallet-staking",
  "sp-io",
  "structopt",
 ]
@@ -4920,16 +4935,12 @@ dependencies = [
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 dependencies = [
- "chrono",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
- "git2",
  "log",
- "num-format",
  "pallet-balances",
- "pallet-staking",
  "parity-scale-codec",
  "sp-core",
  "sp-io",

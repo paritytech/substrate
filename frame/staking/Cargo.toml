@@ -37,6 +37,7 @@ paste = "1.0"
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 rand_chacha = { version = "0.2", default-features = false, optional = true }
+pallet-bags-list = { version = "4.0.0-dev",  path = "../bags-list", optional = true }
 
 # Optional imports for making voter bags lists
 chrono = { version = "0.4.19", optional = true }
@@ -51,7 +52,6 @@ sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elect
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/reward-curve" }
-pallet-bags-list = { version = "4.0.0-dev",  path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
@@ -81,6 +81,7 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-election-provider-support/runtime-benchmarks",
 	"rand_chacha",
+  "pallet-bags-list/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
 generate-bags = [

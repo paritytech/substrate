@@ -1253,4 +1253,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		Nominators::<T>::remove_all(None);
 		CounterForNominators::<T>::kill();
 	}
+
+	// Benchmark helpers
+	// #[cfg(feature = "runtime-benchmarks")]
+	fn prepare_on_update_benchmark(
+		origin_thresh: VoteWeight,
+		dest_thresh: VoteWeight,
+		to_update: T::AccountId,
+	) {
+		todo!()
+	}
 }

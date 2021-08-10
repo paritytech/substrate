@@ -14,8 +14,7 @@ node-runtime = { version = "3.0.0-dev", path = "../../../bin/node/runtime" }
 
 # FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
-pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list", features = ["generate-bags"] }
-pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
+generate-bags = { version = "3.0.0", path = "../" }
 
 # primitives
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }

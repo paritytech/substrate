@@ -56,8 +56,6 @@ use sp_std::prelude::*;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
-#[cfg(feature = "generate-bags")]
-pub mod generate_bags;
 mod list;
 #[cfg(test)]
 mod mock;
@@ -264,5 +262,15 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	fn clear() {
 		List::<T>::clear()
+	}
+
+	// Benchmark helpers
+	// #[cfg(feature = "runtime-benchmarks")]
+	fn prepare_on_update_benchmark(
+		origin_thresh: VoteWeight,
+		dest_thresh: VoteWeight,
+		to_update: T::AccountId,
+	) {
+		todo!()
 	}
 }
