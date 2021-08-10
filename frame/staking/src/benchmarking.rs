@@ -172,7 +172,7 @@ impl<T: Config> RebagScenario<T> {
 
 		// create an account in the destination bag
 		let (dest_stash1, dest_controller1) =
-			create_stash_controller_b::<T>(USER_SEED + 1, dest_factor, Default::default())?;
+			create_stash_controller_with_max_free::<T>(USER_SEED + 1, dest_factor, Default::default())?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(dest_controller1).into(),
 			vec![validator.clone()],
@@ -180,14 +180,14 @@ impl<T: Config> RebagScenario<T> {
 
 		// create accounts in origin bag
 		let (origin_stash1, origin_controller1) =
-			create_stash_controller_b::<T>(USER_SEED + 2, origin_factor, Default::default())?;
+			create_stash_controller_with_max_free::<T>(USER_SEED + 2, origin_factor, Default::default())?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
 			vec![validator.clone()],
 		)?;
 
 		let (origin_stash2, origin_controller2) =
-			create_stash_controller_b::<T>(USER_SEED + 3, origin_factor, Default::default())?;
+			create_stash_controller_with_max_free::<T>(USER_SEED + 3, origin_factor, Default::default())?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller2.clone()).into(),
 			vec![validator.clone()],
