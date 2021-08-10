@@ -51,11 +51,28 @@ pub fn create_funded_user<T: Config>(
 	n: u32,
 	balance_factor: u32,
 ) -> T::AccountId {
+	// REFACTOR TODO
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
 	T::Currency::make_free_balance_be(&user, balance);
 	// ensure T::CurrencyToVote will work correctly.
 	T::Currency::issue(balance);
+	user
+}
+
+/// Grab a funded user.
+pub fn create_funded_user_b<T: Config>(
+	string: &'static str,
+	n: u32,
+	balance_factor: crate::BalanceOf<T>,
+) -> T::AccountId {
+	use sp_runtime::traits::Bounded;
+	let user = account(string, n, SEED);
+	let balance =
+		(T::Currency::minimum_balance() * balance_factor).max(BalanceOf::<T>::max_value());
+	T::Currency::make_free_balance_be(&user, balance);
+	// ensure T::CurrencyToVote will work correctly.
+	T::Currency::issue(balance); // TODO I don't get this .. will drop NegativeImbalance which cancels itself out
 	user
 }
 
@@ -77,6 +94,26 @@ pub fn create_stash_controller<T: Config>(
 		destination,
 	)?;
 	return Ok((stash, controller))
+}
+
+/// Create a stash and controller pair.
+pub fn create_stash_controller_b<T: Config>(
+	n: u32,
+	balance_factor: crate::BalanceOf<T>,
+	destination: RewardDestination<T::AccountId>,
+) -> Result<(T::AccountId, T::AccountId), &'static str> {
+	let stash = create_funded_user_b::<T>("stash", n, balance_factor);
+	let controller = create_funded_user_b::<T>("controller", n, balance_factor);
+	let controller_lookup: <T::Lookup as StaticLookup>::Source =
+		T::Lookup::unlookup(controller.clone());
+	let amount = T::Currency::minimum_balance() * (balance_factor / 10u32.into()).max(1u32.into());
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		controller_lookup,
+		amount,
+		destination,
+	)?;
+	Ok((stash, controller))
 }
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.

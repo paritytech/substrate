@@ -33,7 +33,7 @@ impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingM
 			710 => 15,
 			711 => 16,
 			712 => 2_000, // special cases used for migrate test
-			_ => NextVoteWeight::get()
+			_ => NextVoteWeight::get(),
 		}
 	}
 	#[cfg(any(feature = "runtime-benchmarks", test))]

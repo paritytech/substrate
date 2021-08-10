@@ -21,9 +21,10 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	pallet_prelude::*,
-	traits::{Currency, Get, Imbalance},
+	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
 	traits::{StaticLookup, Zero},
@@ -131,6 +132,78 @@ pub fn create_validator_with_nominators<T: Config>(
 	Ok((v_stash, nominators))
 }
 
+struct RebagScenario<T: Config> {
+	dest_stash1: T::AccountId,
+	/// Stash that is expected to be rebagged.
+	origin_stash1: T::AccountId,
+	/// Controller of the Stash that is expected to be rebagged.
+	origin_controller1: T::AccountId,
+	origin_stash2: T::AccountId,
+	dest_bag_thresh: BalanceOf<T>,
+	origin_bag_thresh: BalanceOf<T>,
+}
+
+impl<T: Config> RebagScenario<T> {
+	/// An expensive rebag scenario:
+	///
+	/// - the node to be rebagged (r) is the head of a bag that has at least one other node. The bag
+	///   itself will need to be read and written to update the head. The node pointed to by
+	///   r.next will need to be read and written as it will need to have its prev pointer updated.
+	///
+	/// - the destination bag has at least one node, which will need its next pointer updated.
+	fn new(
+		origin_bag_thresh: BalanceOf<T>,
+		dest_bag_thresh: BalanceOf<T>,
+	) -> Result<Self, &'static str> {
+		let total_issuance = T::Currency::total_issuance();
+		ensure!(
+			!origin_bag_thresh.is_zero() && !dest_bag_thresh.is_zero(),
+			"both thresholds must be greater than 0"
+		);
+
+		// create_stash_controller takes a factor, so we compute it.
+		let origin_factor: BalanceOf<T> =
+			(origin_bag_thresh * 10u32.into() / T::Currency::minimum_balance());
+		let dest_factor: BalanceOf<T> =
+			(dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance());
+
+		// create a validator to nominate
+		let validator = create_validators::<T>(1, 100).unwrap().first().unwrap().clone();
+
+		// create an account in the destination bag
+		let (dest_stash1, dest_controller1) =
+			create_stash_controller_b::<T>(USER_SEED + 1, dest_factor, Default::default())?;
+		Staking::<T>::nominate(
+			RawOrigin::Signed(dest_controller1).into(),
+			vec![validator.clone()],
+		)?;
+
+		// create accounts in origin bag
+		let (origin_stash1, origin_controller1) =
+			create_stash_controller_b::<T>(USER_SEED + 2, origin_factor, Default::default())?;
+		Staking::<T>::nominate(
+			RawOrigin::Signed(origin_controller1.clone()).into(),
+			vec![validator.clone()],
+		)?;
+
+		let (origin_stash2, origin_controller2) =
+			create_stash_controller_b::<T>(USER_SEED + 3, origin_factor, Default::default())?;
+		Staking::<T>::nominate(
+			RawOrigin::Signed(origin_controller2.clone()).into(),
+			vec![validator.clone()],
+		)?;
+
+		Ok(RebagScenario {
+			dest_stash1,
+			origin_stash1,
+			origin_controller1,
+			origin_stash2,
+			dest_bag_thresh,
+			origin_bag_thresh,
+		})
+	}
+}
+
 const USER_SEED: u32 = 999666;
 
 benchmarks! {
@@ -148,12 +221,31 @@ benchmarks! {
 	}
 
 	bond_extra {
-		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let max_additional = T::Currency::minimum_balance() * 10u32.into();
-		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// The worst case scenario includes the voter changing bags.
+
+		let total_issuance = T::Currency::total_issuance();
+		// the bag the voter will start at
+		let origin_bag_thresh =
+			T::CurrencyToVote::to_currency(1u128, total_issuance);
+		// the bag we will move the voter to
+		let dest_bag_thresh =
+			T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
+
+		let scenario
+			= RebagScenario::<T>::new(origin_bag_thresh, dest_bag_thresh)?;
+
+		let max_additional = dest_bag_thresh - origin_bag_thresh;
+
+		let stash = scenario.origin_stash1.clone();
+		let controller = scenario.origin_controller1.clone();
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash), max_additional)
+
+	}: _(RawOrigin::Signed(stash.clone()), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
@@ -161,8 +253,24 @@ benchmarks! {
 	}
 
 	unbond {
-		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let amount = T::Currency::minimum_balance() * 10u32.into();
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// The worst case scenario includes the voter changing bags.
+
+		let total_issuance = T::Currency::total_issuance();
+		// the bag the voter will start at
+		let origin_bag_thresh =
+			T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
+		// the bag we will move the voter to
+		let dest_bag_thresh =
+			T::CurrencyToVote::to_currency(1u128, total_issuance);
+		let scenario
+			= RebagScenario::<T>::new(origin_bag_thresh, dest_bag_thresh)?;
+
+		let stash = scenario.origin_stash1.clone();
+		let controller = scenario.origin_controller1.clone();
+		let amount = origin_bag_thresh - dest_bag_thresh;
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(controller);
@@ -440,23 +548,61 @@ benchmarks! {
 
 	rebond {
 		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
-		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
+
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// The worst case scenario includes the voter changing bags.
+
+		let total_issuance = T::Currency::total_issuance();
+		// the bag the voter will start at
+		let origin_bag_thresh =
+			T::CurrencyToVote::to_currency(1u128, total_issuance);
+		// the bag we will move the voter to
+		let dest_bag_thresh =
+			T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
+		let scenario
+			= RebagScenario::<T>::new(origin_bag_thresh, dest_bag_thresh)?;
+
+		// rebond an amount that will put the user into the destination bag
+		let rebond_amount = dest_bag_thresh - origin_bag_thresh;
+
+		// spread that amount to rebond across `l` unlocking chunks,
+		let value = rebond_amount / l.into();
+		// so the sum of unlocking chunks puts voter into the dest bag
+		assert!(value * l.into() + origin_bag_thresh > origin_bag_thresh);
+		assert!(value * l.into() + origin_bag_thresh <= dest_bag_thresh);
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
-			value: 1u32.into(),
+			value,
 			era: EraIndex::zero(),
 		};
+
+		let stash = scenario.origin_stash1.clone();
+		let controller = scenario.origin_controller1.clone();
+		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
+
 		for _ in 0 .. l {
 			staking_ledger.unlocking.push(unlock_chunk.clone())
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller.clone()), (l + 100).into())
+
+		assert_eq!(
+			T::SortedListProvider::iter().collect::<Vec<_>>(),
+			vec![scenario.dest_stash1.clone(), stash.clone(), scenario.origin_stash2.clone()]
+		);
+	}: _(RawOrigin::Signed(controller.clone()), rebond_amount)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
+
+		// the ordering in the list doesn't change
+		assert_eq!(
+			T::SortedListProvider::iter().collect::<Vec<_>>(),
+			vec![scenario.dest_stash1.clone(), stash.clone(), scenario.origin_stash2.clone()]
+		);
 	}
 
 	set_history_depth {
