@@ -139,8 +139,6 @@ struct RebagScenario<T: Config> {
 	/// Controller of the Stash that is expected to be rebagged.
 	origin_controller1: T::AccountId,
 	origin_stash2: T::AccountId,
-	dest_bag_thresh: BalanceOf<T>,
-	origin_bag_thresh: BalanceOf<T>,
 }
 
 impl<T: Config> RebagScenario<T> {
@@ -155,7 +153,6 @@ impl<T: Config> RebagScenario<T> {
 		origin_bag_thresh: BalanceOf<T>,
 		dest_bag_thresh: BalanceOf<T>,
 	) -> Result<Self, &'static str> {
-		let total_issuance = T::Currency::total_issuance();
 		ensure!(
 			!origin_bag_thresh.is_zero() && !dest_bag_thresh.is_zero(),
 			"both thresholds must be greater than 0"
@@ -163,15 +160,15 @@ impl<T: Config> RebagScenario<T> {
 
 		// create_stash_controller takes a factor, so we compute it.
 		let origin_factor: BalanceOf<T> =
-			(origin_bag_thresh * 10u32.into() / T::Currency::minimum_balance());
+			origin_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
 		let dest_factor: BalanceOf<T> =
-			(dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance());
+			dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
 
 		// create a validator to nominate
 		let validator = create_validators::<T>(1, 100).unwrap().first().unwrap().clone();
 
 		// create an account in the destination bag
-		let (dest_stash1, dest_controller1cargo) = create_stash_controller_with_max_free::<T>(
+		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
 			USER_SEED + 1,
 			dest_factor,
 			Default::default(),
@@ -202,14 +199,7 @@ impl<T: Config> RebagScenario<T> {
 			vec![validator.clone()],
 		)?;
 
-		Ok(RebagScenario {
-			dest_stash1,
-			origin_stash1,
-			origin_controller1,
-			origin_stash2,
-			dest_bag_thresh,
-			origin_bag_thresh,
-		})
+		Ok(RebagScenario { dest_stash1, origin_stash1, origin_controller1, origin_stash2 })
 	}
 }
 
