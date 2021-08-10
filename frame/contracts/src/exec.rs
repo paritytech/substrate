@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	ensure,
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Currency, ExistenceRequirement, Filter, Get, OriginTrait, Randomness, Time},
+	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
 	weights::Weight,
 	DefaultNoBound,
 };
@@ -1255,7 +1255,7 @@ where
 
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
 		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
-		origin.add_filter(T::CallFilter::filter);
+		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
 	}
 }

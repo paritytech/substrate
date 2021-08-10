@@ -17,34 +17,11 @@
 
 //! Traits and associated utilities for dealing with abstract constraint filters.
 
+pub use super::members::Contains;
 use sp_std::marker::PhantomData;
 
-/// Simple trait for providing a filter over a reference to some type.
-pub trait Filter<T> {
-	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
-	fn filter(_: &T) -> bool;
-}
-
-/// A [`Filter`] that allows any value.
-pub enum AllowAll {}
-
-/// A [`Filter`] that denies any value.
-pub enum DenyAll {}
-
-impl<T> Filter<T> for AllowAll {
-	fn filter(_: &T) -> bool {
-		true
-	}
-}
-
-impl<T> Filter<T> for DenyAll {
-	fn filter(_: &T) -> bool {
-		false
-	}
-}
-
 /// Trait to add a constraint onto the filter.
-pub trait FilterStack<T>: Filter<T> {
+pub trait FilterStack<T>: Contains<T> {
 	/// The type used to archive the stack.
 	type Stack;
 
@@ -135,15 +112,15 @@ macro_rules! impl_filter_stack {
 		mod $module {
 			#[allow(unused_imports)]
 			use super::*;
-			use $crate::traits::filter::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
+			use $crate::traits::filter::{swap, take, RefCell, Vec, Box, Contains, FilterStack};
 
 			thread_local! {
 				static FILTER: RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>> = RefCell::new(Vec::new());
 			}
 
-			impl Filter<$call> for $target {
-				fn filter(call: &$call) -> bool {
-					<$base>::filter(call) &&
+			impl Contains<$call> for $target {
+				fn contains(call: &$call) -> bool {
+					<$base>::contains(call) &&
 						FILTER.with(|filter| filter.borrow().iter().all(|f| f(call)))
 				}
 			}
@@ -169,7 +146,7 @@ macro_rules! impl_filter_stack {
 		mod $module {
 			#[allow(unused_imports)]
 			use super::*;
-			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Contains, FilterStack};
 
 			struct ThisFilter(RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>>);
 			// NOTE: Safe only in wasm (guarded above) because there's only one thread.
@@ -178,9 +155,9 @@ macro_rules! impl_filter_stack {
 
 			static FILTER: ThisFilter = ThisFilter(RefCell::new(Vec::new()));
 
-			impl Filter<$call> for $target {
-				fn filter(call: &$call) -> bool {
-					<$base>::filter(call) && FILTER.0.borrow().iter().all(|f| f(call))
+			impl Contains<$call> for $target {
+				fn contains(call: &$call) -> bool {
+					<$base>::contains(call) && FILTER.0.borrow().iter().all(|f| f(call))
 				}
 			}
 
@@ -220,8 +197,8 @@ pub mod test_impl_filter_stack {
 
 	pub struct IsCallable;
 	pub struct BaseFilter;
-	impl Filter<u32> for BaseFilter {
-		fn filter(x: &u32) -> bool {
+	impl Contains<u32> for BaseFilter {
+		fn contains(x: &u32) -> bool {
 			x % 2 == 0
 		}
 	}
@@ -234,76 +211,76 @@ pub mod test_impl_filter_stack {
 
 	#[test]
 	fn impl_filter_stack_should_work() {
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(IsCallable::filter(&42));
-		assert!(!IsCallable::filter(&43));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(IsCallable::contains(&42));
+		assert!(!IsCallable::contains(&43));
 
 		IsCallable::push(|x| *x < 42);
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(!IsCallable::filter(&42));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(!IsCallable::contains(&42));
 
 		IsCallable::push(|x| *x % 3 == 0);
-		assert!(IsCallable::filter(&36));
-		assert!(!IsCallable::filter(&40));
+		assert!(IsCallable::contains(&36));
+		assert!(!IsCallable::contains(&40));
 
 		IsCallable::pop();
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(!IsCallable::filter(&42));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(!IsCallable::contains(&42));
 
 		let saved = IsCallable::take();
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(IsCallable::filter(&42));
-		assert!(!IsCallable::filter(&43));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(IsCallable::contains(&42));
+		assert!(!IsCallable::contains(&43));
 
 		IsCallable::restore(saved);
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(!IsCallable::filter(&42));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(!IsCallable::contains(&42));
 
 		IsCallable::pop();
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(IsCallable::filter(&42));
-		assert!(!IsCallable::filter(&43));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(IsCallable::contains(&42));
+		assert!(!IsCallable::contains(&43));
 	}
 
 	#[test]
 	fn guards_should_work() {
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(IsCallable::filter(&42));
-		assert!(!IsCallable::filter(&43));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(IsCallable::contains(&42));
+		assert!(!IsCallable::contains(&43));
 		{
 			let _guard_1 = FilterStackGuard::<IsCallable, u32>::new(|x| *x < 42);
-			assert!(IsCallable::filter(&36));
-			assert!(IsCallable::filter(&40));
-			assert!(!IsCallable::filter(&42));
+			assert!(IsCallable::contains(&36));
+			assert!(IsCallable::contains(&40));
+			assert!(!IsCallable::contains(&42));
 			{
 				let _guard_2 = FilterStackGuard::<IsCallable, u32>::new(|x| *x % 3 == 0);
-				assert!(IsCallable::filter(&36));
-				assert!(!IsCallable::filter(&40));
+				assert!(IsCallable::contains(&36));
+				assert!(!IsCallable::contains(&40));
 			}
-			assert!(IsCallable::filter(&36));
-			assert!(IsCallable::filter(&40));
-			assert!(!IsCallable::filter(&42));
+			assert!(IsCallable::contains(&36));
+			assert!(IsCallable::contains(&40));
+			assert!(!IsCallable::contains(&42));
 			{
 				let _guard_2 = ClearFilterGuard::<IsCallable, u32>::new();
-				assert!(IsCallable::filter(&36));
-				assert!(IsCallable::filter(&40));
-				assert!(IsCallable::filter(&42));
-				assert!(!IsCallable::filter(&43));
+				assert!(IsCallable::contains(&36));
+				assert!(IsCallable::contains(&40));
+				assert!(IsCallable::contains(&42));
+				assert!(!IsCallable::contains(&43));
 			}
-			assert!(IsCallable::filter(&36));
-			assert!(IsCallable::filter(&40));
-			assert!(!IsCallable::filter(&42));
+			assert!(IsCallable::contains(&36));
+			assert!(IsCallable::contains(&40));
+			assert!(!IsCallable::contains(&42));
 		}
-		assert!(IsCallable::filter(&36));
-		assert!(IsCallable::filter(&40));
-		assert!(IsCallable::filter(&42));
-		assert!(!IsCallable::filter(&43));
+		assert!(IsCallable::contains(&36));
+		assert!(IsCallable::contains(&40));
+		assert!(IsCallable::contains(&42));
+		assert!(!IsCallable::contains(&43));
 	}
 }
