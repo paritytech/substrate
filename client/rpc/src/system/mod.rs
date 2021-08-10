@@ -21,19 +21,20 @@
 #[cfg(test)]
 mod tests;
 
-use futures::{FutureExt, channel::oneshot};
+use futures::{channel::oneshot, FutureExt};
+use jsonrpsee::{
+	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
+	RpcModule,
+};
 use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
 use sp_runtime::traits::{self, Header as HeaderT};
 use sp_utils::mpsc::TracingUnboundedSender;
-use jsonrpsee::RpcModule;
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 
 use self::error::Result;
 
+pub use self::helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo};
 pub use sc_rpc_api::system::*;
-pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
-
 
 /// System API implementation
 pub struct System<B: traits::Block> {
@@ -85,30 +86,23 @@ impl<B: traits::Block> System<B> {
 		let mut rpc_module = RpcModule::new(self);
 
 		// Get the node's implementation name. Plain old string.
-		rpc_module.register_method("system_name", |_, system| {
-			Ok(system.info.impl_name.clone())
-		})?;
+		rpc_module.register_method("system_name", |_, system| Ok(system.info.impl_name.clone()))?;
 
 		// Get the node implementation's version. Should be a semver string.
-		rpc_module.register_method("system_version", |_, system| {
-			Ok(system.info.impl_version.clone())
-		})?;
+		rpc_module
+			.register_method("system_version", |_, system| Ok(system.info.impl_version.clone()))?;
 
 		// Get the chain's name. Given as a string identifier.
-		rpc_module.register_method("system_chain", |_, system| {
-			Ok(system.info.chain_name.clone())
-		})?;
+		rpc_module
+			.register_method("system_chain", |_, system| Ok(system.info.chain_name.clone()))?;
 
 		// Get the chain's type.
-		rpc_module.register_method("system_ChainType", |_, system| {
-			Ok(system.info.chain_type.clone())
-		})?;
+		rpc_module
+			.register_method("system_ChainType", |_, system| Ok(system.info.chain_type.clone()))?;
 
 		// Get a custom set of properties as a JSON object, defined in the chain spec.
-		rpc_module.register_method("system_properties", |_, system| {
-			Ok(system.info.properties.clone())
-		})?;
-
+		rpc_module
+			.register_method("system_properties", |_, system| Ok(system.info.properties.clone()))?;
 
 		// Return health status of the node.
 		//
@@ -120,7 +114,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::Health(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns the base58-encoded PeerId of the node.
@@ -129,7 +124,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::LocalPeerId(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns the multiaddresses that the local node is listening on
@@ -141,7 +137,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::LocalListenAddresses(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns currently connected peers
@@ -151,7 +148,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::Peers(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns current state of the network.
@@ -166,7 +164,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkState(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Adds a reserved peer. Returns the empty string or an error. The string
@@ -184,7 +183,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Remove a reserved peer. Returns the empty string or an error. The string
@@ -195,7 +195,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns the list of reserved peers
@@ -204,7 +205,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns the roles the node is running as.
@@ -214,7 +216,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NodeRoles(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Returns the state of the syncing of the node: starting block, current best block, highest
@@ -225,7 +228,8 @@ impl<B: traits::Block> System<B> {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::SyncState(tx));
 				rx.await.map_err(oneshot_canceled_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		// Adds the supplied directives to the current log filter
@@ -238,19 +242,20 @@ impl<B: traits::Block> System<B> {
 
 			let directives = param.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
 			logging::add_directives(directives);
-			logging::reload_filter().map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
+			logging::reload_filter()
+				.map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
 		})?;
 
 		// Resets the log filter to Substrate defaults
 		rpc_module.register_method("system_resetLogFilter", |_, system| {
 			system.deny_unsafe.check_if_safe()?;
-			logging::reset_log_filter().map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
+			logging::reset_log_filter()
+				.map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
 		})?;
 
 		Ok(rpc_module)
 	}
 }
-
 
 fn oneshot_canceled_err(canc: oneshot::Canceled) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(canc))

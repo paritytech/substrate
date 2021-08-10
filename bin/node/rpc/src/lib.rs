@@ -33,7 +33,6 @@
 
 use std::sync::Arc;
 
-use sp_keystore::SyncCryptoStorePtr;
 use node_primitives::{Block, BlockNumber, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_epochs::SharedEpochChanges;
@@ -42,6 +41,7 @@ use sc_finality_grandpa::{
 };
 use sc_rpc::SubscriptionTaskExecutor;
 pub use sc_rpc_api::DenyUnsafe;
+use sp_keystore::SyncCryptoStorePtr;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -84,8 +84,7 @@ pub type IoHandler = jsonrpc_core::IoHandler<()>;
 
 /// Instantiate all Full RPC extensions.
 // TODO(niklasad1): replace these.
-pub fn create_full() -> jsonrpc_core::IoHandler<()>
-{
+pub fn create_full() -> jsonrpc_core::IoHandler<()> {
 	jsonrpc_core::IoHandler::default()
 }
 

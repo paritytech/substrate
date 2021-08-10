@@ -17,15 +17,17 @@
 
 //! System FRAME specific RPC methods.
 
-use std::{marker::PhantomData, sync::Arc, fmt::Display};
+use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
 use codec::{self, Codec, Decode, Encode};
 use futures::{future, FutureExt};
-use jsonrpsee::RpcModule;
-use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
+use jsonrpsee::{
+	types::{error::CallError, Error as JsonRpseeError},
+	RpcModule,
+};
 use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;
-use sc_transaction_pool_api::{TransactionPool, InPoolTransaction};
+use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_core::{hexdisplay::HexDisplay, Bytes};
@@ -42,7 +44,14 @@ impl<BlockHash, AccountId, Index> SystemRpc<BlockHash, AccountId, Index>
 where
 	AccountId: Clone + Display + Codec + traits::MaybeSerializeDeserialize + Send + 'static,
 	BlockHash: Send + traits::MaybeSerializeDeserialize + 'static,
-	Index: Clone + Display + Codec + Send + Sync + traits::AtLeast32Bit + traits::MaybeSerialize + 'static,
+	Index: Clone
+		+ Display
+		+ Codec
+		+ Send
+		+ Sync
+		+ traits::AtLeast32Bit
+		+ traits::MaybeSerialize
+		+ 'static,
 {
 	pub fn new(backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>) -> Self {
 		Self { backend }
@@ -105,12 +114,7 @@ pub struct SystemRpcBackendFull<Client, Pool, Block> {
 impl<Pool: TransactionPool, Client, Block> SystemRpcBackendFull<Client, Pool, Block> {
 	/// Create new [`SystemRpcBackend`] for full clients. Implements [`SystemRpcBackend`].
 	pub fn new(client: Arc<Client>, pool: Arc<Pool>, deny_unsafe: DenyUnsafe) -> Self {
-		SystemRpcBackendFull {
-			client,
-			pool,
-			deny_unsafe,
-			_marker: Default::default(),
-		}
+		SystemRpcBackendFull { client, pool, deny_unsafe, _marker: Default::default() }
 	}
 }
 
@@ -130,12 +134,7 @@ impl<Client, Pool, Fetcher, Block> SystemRpcBackendLight<Client, Pool, Fetcher, 
 		fetcher: Arc<Fetcher>,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	) -> Self {
-		SystemRpcBackendLight {
-			client,
-			pool,
-			fetcher,
-			remote_blockchain,
-		}
+		SystemRpcBackendLight { client, pool, fetcher, remote_blockchain }
 	}
 }
 
@@ -178,13 +177,11 @@ where
 				message: "Unable to dry run extrinsic.".into(),
 				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
 			})?;
-		let result = api
-			.apply_extrinsic(&at, uxt)
-			.map_err(|e| CallError::Custom {
-				code: Error::RuntimeError.into(),
-				message: "Unable to dry run extrinsic".into(),
-				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
-			})?;
+		let result = api.apply_extrinsic(&at, uxt).map_err(|e| CallError::Custom {
+			code: Error::RuntimeError.into(),
+			message: "Unable to dry run extrinsic".into(),
+			data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+		})?;
 		Ok(Encode::encode(&result).into())
 	}
 }
@@ -229,7 +226,11 @@ where
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
 
-	async fn dry_run(&self, _extrinsic: Bytes, _at: Option<<Block as traits::Block>::Hash>) -> Result<Bytes, CallError> {
+	async fn dry_run(
+		&self,
+		_extrinsic: Bytes,
+		_at: Option<<Block as traits::Block>::Hash>,
+	) -> Result<Bytes, CallError> {
 		Err(CallError::Custom {
 			code: -32601, // TODO: (dp) We have this in jsonrpsee too somewhere. This is jsonrpsee::ErrorCode::MethodNotFound
 			message: "Not implemented for light clients".into(),

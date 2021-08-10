@@ -19,7 +19,7 @@
 //! System RPC module errors.
 
 use crate::system::helpers::Health;
-use jsonrpsee::types::{to_json_raw_value, error::CallError};
+use jsonrpsee::types::{error::CallError, to_json_raw_value};
 use serde::Serialize;
 
 /// System RPC Result type.
@@ -48,11 +48,8 @@ impl From<Error> for CallError {
 				message: e.to_string(),
 				data: to_json_raw_value(&h).ok(),
 			},
-			Error::MalformattedPeerArg(e) => Self::Custom {
-				code: BASE_ERROR + 2,
-				message: e,
-				data: None,
-			},
+			Error::MalformattedPeerArg(e) =>
+				Self::Custom { code: BASE_ERROR + 2, message: e, data: None },
 		}
 	}
 }

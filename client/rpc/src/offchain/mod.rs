@@ -21,13 +21,15 @@
 #[cfg(test)]
 mod tests;
 
+use self::error::Error;
+use jsonrpsee::{
+	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
+	RpcModule,
+};
 use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
-use jsonrpsee::RpcModule;
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sc_rpc_api::DenyUnsafe;
-use self::error::Error;
 use sp_core::{
 	offchain::{OffchainStorage, StorageKind},
 	Bytes,
@@ -54,9 +56,8 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 
 		ctx.register_method("offchain_localStorageSet", |params, offchain| {
 			offchain.deny_unsafe.check_if_safe()?;
-			let (kind, key, value): (StorageKind, Bytes, Bytes) = params
-				.parse()
-				.map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			let (kind, key, value): (StorageKind, Bytes, Bytes) =
+				params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
 			let prefix = match kind {
 				StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 				StorageKind::LOCAL => return Err(to_jsonrpsee_error(Error::UnavailableStorageKind)),
@@ -67,9 +68,8 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 
 		ctx.register_method("offchain_localStorageGet", |params, offchain| {
 			offchain.deny_unsafe.check_if_safe()?;
-			let (kind, key): (StorageKind, Bytes) = params
-				.parse()
-				.map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			let (kind, key): (StorageKind, Bytes) =
+				params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
 
 			let prefix = match kind {
 				StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,

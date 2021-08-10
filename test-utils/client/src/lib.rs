@@ -21,6 +21,7 @@
 
 pub mod client_ext;
 
+pub use self::client_ext::{ClientBlockImportExt, ClientExt};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	BadBlocks, ForkBlocks,
@@ -35,16 +36,17 @@ pub use sp_keyring::{
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
-pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
-use std::pin::Pin;
-use std::sync::Arc;
-use std::collections::{HashSet, HashMap};
 use futures::{future::Future, stream::StreamExt};
-use sp_core::storage::ChildInfo;
-use sp_runtime::{traits::{Block as BlockT, BlakeTwo256}};
-use sc_service::client::{LocalCallExecutor, ClientConfig};
 use sc_client_api::BlockchainEvents;
+use sc_service::client::{ClientConfig, LocalCallExecutor};
+use sp_core::storage::ChildInfo;
+use sp_runtime::traits::{BlakeTwo256, Block as BlockT};
+use std::{
+	collections::{HashMap, HashSet},
+	pin::Pin,
+	sync::Arc,
+};
 
 /// Test client light database backend.
 pub type LightBackend<Block> =

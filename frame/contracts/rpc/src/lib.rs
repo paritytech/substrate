@@ -22,8 +22,10 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
-use jsonrpsee::RpcModule;
-use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
+use jsonrpsee::{
+	types::error::{CallError, Error as JsonRpseeError},
+	RpcModule,
+};
 use pallet_contracts_primitives::{
 	Code, ContractExecResult, ContractInstantiateResult, RentProjection,
 };
@@ -153,17 +155,12 @@ where
 		module.register_method(
 			"contracts_call",
 			|params, contracts| -> Result<ContractExecResult, CallError> {
-				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) = params.parse()?;
+				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) =
+					params.parse()?;
 				let api = contracts.client.runtime_api();
 				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
 
-				let CallRequest {
-					origin,
-					dest,
-					value,
-					gas_limit,
-					input_data,
-				} = call_request;
+				let CallRequest { origin, dest, value, gas_limit, input_data } = call_request;
 
 				let value: Balance = decode_hex(value, "balance")?;
 				let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
@@ -185,7 +182,9 @@ where
 		// This method is useful for UIs to dry-run contract instantiations.
 		module.register_method(
 			"contracts_instantiate",
-			|params, contracts| -> Result<
+			|params,
+			 contracts|
+			 -> Result<
 				ContractInstantiateResult<
 					AccountId,
 					<<Block as BlockT>::Header as HeaderT>::Number,
@@ -199,14 +198,8 @@ where
 
 				let api = contracts.client.runtime_api();
 				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
-				let InstantiateRequest {
-					origin,
-					endowment,
-					gas_limit,
-					code,
-					data,
-					salt,
-				} = instantiate_request;
+				let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
+					instantiate_request;
 
 				let endowment: Balance = decode_hex(endowment, "balance")?;
 				let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
@@ -256,23 +249,25 @@ where
 		// Returns `None` if the contract is exempted from rent.
 		module.register_method(
 			"contracts_rentProjection",
-			|params, contracts| -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>, CallError>
-		{
-			let (address, at): (AccountId, Option<<Block as BlockT>::Hash>) = params.parse()?;
+			|params,
+			 contracts|
+			 -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>, CallError> {
+				let (address, at): (AccountId, Option<<Block as BlockT>::Hash>) = params.parse()?;
 
-			let api = contracts.client.runtime_api();
-			let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
+				let api = contracts.client.runtime_api();
+				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
 
-			let result = api
-				.rent_projection(&at, address)
-				.map_err(runtime_error_into_rpc_err)?
-				.map_err(ContractAccessError)?;
+				let result = api
+					.rent_projection(&at, address)
+					.map_err(runtime_error_into_rpc_err)?
+					.map_err(ContractAccessError)?;
 
-			Ok(match result {
-				RentProjection::NoEviction => None,
-				RentProjection::EvictionAt(block_num) => Some(block_num),
-			})
-		})?;
+				Ok(match result {
+					RentProjection::NoEviction => None,
+					RentProjection::EvictionAt(block_num) => Some(block_num),
+				})
+			},
+		)?;
 
 		Ok(module)
 	}
@@ -316,8 +311,8 @@ fn limit_gas(gas_limit: Weight) -> Result<(), CallError> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::U256;
 	use pallet_contracts_primitives::{ContractExecResult, ContractInstantiateResult};
+	use sp_core::U256;
 
 	fn trim(json: &str) -> String {
 		json.chars().filter(|c| !c.is_whitespace()).collect()

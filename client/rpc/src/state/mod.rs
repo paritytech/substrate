@@ -26,18 +26,23 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::{SubscriptionTaskExecutor, unwrap_or_fut_err};
+use crate::{unwrap_or_fut_err, SubscriptionTaskExecutor};
 
-use futures::future;
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee::{RpcModule, ws_server::SubscriptionSink};
-use futures::FutureExt;
+use futures::{future, FutureExt};
+use jsonrpsee::{
+	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
+	ws_server::SubscriptionSink,
+	RpcModule,
+};
 
-use sc_rpc_api::{DenyUnsafe, state::ReadProof};
-use sc_client_api::light::{RemoteBlockchain, Fetcher};
-use sp_core::{Bytes, storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey}};
+use sc_client_api::light::{Fetcher, RemoteBlockchain};
+use sc_rpc_api::{state::ReadProof, DenyUnsafe};
+use sp_core::{
+	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
+	Bytes,
+};
+use sp_runtime::traits::Block as BlockT;
 use sp_version::RuntimeVersion;
-use sp_runtime::{traits::Block as BlockT};
 
 use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 
@@ -134,7 +139,7 @@ where
 	async fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
-		at: Option<Block::Hash>
+		at: Option<Block::Hash>,
 	) -> Result<Vec<StorageChangeSet<Block::Hash>>, Error>;
 
 	/// Returns proof of storage entries at a specific block's state.
@@ -153,10 +158,7 @@ where
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
 
 	/// New runtime version subscription
-	fn subscribe_runtime_version(
-		&self,
-		sink: SubscriptionSink,
-	) -> Result<(), Error>;
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> Result<(), Error>;
 
 	/// New storage subscription
 	fn subscribe_storage(
@@ -195,8 +197,7 @@ where
 		executor.clone(),
 		rpc_max_payload,
 	));
-	let backend =
-		Box::new(self::state_full::FullState::new(client, executor, rpc_max_payload));
+	let backend = Box::new(self::state_full::FullState::new(client, executor, rpc_max_payload));
 	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -229,16 +230,9 @@ where
 		fetcher.clone(),
 	));
 
-	let backend = Box::new(self::state_light::LightState::new(
-		client,
-		executor,
-		remote_blockchain,
-		fetcher,
-	));
-	(
-		StateApi { backend, deny_unsafe },
-		ChildState { backend: child_backend }
-	)
+	let backend =
+		Box::new(self::state_light::LightState::new(client, executor, remote_blockchain, fetcher));
+	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
@@ -249,10 +243,10 @@ pub struct StateApi<Block, Client> {
 }
 
 impl<Block, Client> StateApi<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block>
-			 + Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	Client:
+		BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 {
 	/// Convert this to a RPC module.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
@@ -265,9 +259,7 @@ impl<Block, Client> StateApi<Block, Client>
 			let data = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move {
-				state.backend.call(block, method, data).await.map_err(call_err)
-			}.boxed()
+			async move { state.backend.call(block, method, data).await.map_err(call_err) }.boxed()
 		})?;
 
 		module.register_alias("state_callAt", "state_call")?;
@@ -278,9 +270,8 @@ impl<Block, Client> StateApi<Block, Client>
 			let key_prefix = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move {
-				state.backend.storage_keys(block, key_prefix).await.map_err(call_err)
-			}.boxed()
+			async move { state.backend.storage_keys(block, key_prefix).await.map_err(call_err) }
+				.boxed()
 		})?;
 
 		module.register_async_method("state_getPairs", |params, state| {
@@ -292,7 +283,8 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.storage_pairs(block, key).await.map_err(call_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		module.register_async_method("state_getKeysPaged", |params, state| {
@@ -306,15 +298,17 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
 					return Err(JsonRpseeCallError::Failed(Box::new(Error::InvalidCount {
-							value: count,
-							max: STORAGE_KEYS_PAGED_MAX_COUNT,
-						})
-					));
+						value: count,
+						max: STORAGE_KEYS_PAGED_MAX_COUNT,
+					})))
 				}
-				state.backend.storage_keys_paged(block, prefix, count,start_key)
+				state
+					.backend
+					.storage_keys_paged(block, prefix, count, start_key)
 					.await
 					.map_err(call_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("state_getKeysPagedAt", "state_getKeysPaged")?;
@@ -325,9 +319,7 @@ impl<Block, Client> StateApi<Block, Client>
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move {
-				state.backend.storage(block, key).await.map_err(call_err)
-			}.boxed()
+			async move { state.backend.storage(block, key).await.map_err(call_err) }.boxed()
 		})?;
 
 		module.register_alias("state_getStorageAt", "state_getStorage")?;
@@ -338,9 +330,7 @@ impl<Block, Client> StateApi<Block, Client>
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move {
-				state.backend.storage(block, key).await.map_err(call_err)
-			}.boxed()
+			async move { state.backend.storage(block, key).await.map_err(call_err) }.boxed()
 		})?;
 
 		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
@@ -351,18 +341,14 @@ impl<Block, Client> StateApi<Block, Client>
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move {
-				state.backend.storage_size(block, key).await.map_err(call_err)
-			}.boxed()
+			async move { state.backend.storage_size(block, key).await.map_err(call_err) }.boxed()
 		})?;
 
 		module.register_alias("state_getStorageSizeAt", "state_getStorageSize")?;
 
 		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
-			async move {
-				state.backend.metadata(maybe_block).await.map_err(call_err)
-			}.boxed()
+			async move { state.backend.metadata(maybe_block).await.map_err(call_err) }.boxed()
 		})?;
 
 		module.register_async_method("state_getRuntimeVersion", |params, state| {
@@ -370,7 +356,8 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.runtime_version(at).await.map_err(call_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("chain_getRuntimeVersion", "state_getRuntimeVersion")?;
@@ -384,9 +371,9 @@ impl<Block, Client> StateApi<Block, Client>
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.query_storage(from, to, keys).await
-					.map_err(call_err)
-			}.boxed()
+				state.backend.query_storage(from, to, keys).await.map_err(call_err)
+			}
+			.boxed()
 		})?;
 
 		module.register_async_method("state_queryStorageAt", |params, state| {
@@ -397,9 +384,9 @@ impl<Block, Client> StateApi<Block, Client>
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.query_storage_at(keys, at).await
-					.map_err(call_err)
-			}.boxed()
+				state.backend.query_storage_at(keys, at).await.map_err(call_err)
+			}
+			.boxed()
 		})?;
 
 		module.register_async_method("state_getReadProof", |params, state| {
@@ -411,7 +398,8 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.read_proof(block, keys).await.map_err(call_err)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		module.register_async_method("state_traceBlock", |params, state| {
@@ -423,20 +411,20 @@ impl<Block, Client> StateApi<Block, Client>
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.trace_block(block, targets, storage_keys).await
-					.map_err(call_err)
-			}.boxed()
+				state.backend.trace_block(block, targets, storage_keys).await.map_err(call_err)
+			}
+			.boxed()
 		})?;
 
 		module.register_subscription(
 			"state_subscribeRuntimeVersion",
 			"state_unsubscribeRuntimeVersion",
-			|_params, sink, ctx| {
-				ctx.backend.subscribe_runtime_version(sink).map_err(Into::into)
-		})?;
+			|_params, sink, ctx| ctx.backend.subscribe_runtime_version(sink).map_err(Into::into),
+		)?;
 
 		module.register_alias("chain_subscribeRuntimeVersion", "state_subscribeRuntimeVersion")?;
-		module.register_alias("chain_unsubscribeRuntimeVersion", "state_unsubscribeRuntimeVersion")?;
+		module
+			.register_alias("chain_unsubscribeRuntimeVersion", "state_unsubscribeRuntimeVersion")?;
 
 		module.register_subscription(
 			"state_subscribeStorage",
@@ -444,7 +432,8 @@ impl<Block, Client> StateApi<Block, Client>
 			|params, sink, ctx| {
 				let keys = params.one::<Vec<StorageKey>>().ok();
 				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
-		})?;
+			},
+		)?;
 
 		Ok(module)
 	}
@@ -507,9 +496,7 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> Result<Option<u64>, Error> {
-		self.storage(block, storage_key, key)
-			.await
-			.map(|x| x.map(|x| x.0.len() as u64))
+		self.storage(block, storage_key, key).await.map(|x| x.map(|x| x.0.len() as u64))
 	}
 }
 
@@ -519,9 +506,9 @@ pub struct ChildState<Block, Client> {
 }
 
 impl<Block, Client> ChildState<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	Client: Send + Sync + 'static,
 {
 	/// Convert this to a RPC module.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
@@ -557,10 +544,13 @@ impl<Block, Client> ChildState<Block, Client>
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
-				state.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
-        			.await
-        			.map_err(call_err)
-			}.boxed()
+				state
+					.backend
+					.storage_keys_paged(block, storage_key, prefix, count, start_key)
+					.await
+					.map_err(call_err)
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("childstate_getKeysPagedAt", "childstate_getKeysPaged")?;
@@ -573,11 +563,8 @@ impl<Block, Client> ChildState<Block, Client>
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move {
-				state.backend.storage(block, storage_key, key)
-					.await
-					.map_err(call_err)
-			}.boxed()
+			async move { state.backend.storage(block, storage_key, key).await.map_err(call_err) }
+				.boxed()
 		})?;
 
 		// Returns the hash of a child storage entry at a block's state.
@@ -619,10 +606,9 @@ impl<Block, Client> ChildState<Block, Client>
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
-				state.backend.read_child_proof(block, storage_key, keys)
-        			.await
-        			.map_err(call_err)
-			}.boxed()
+				state.backend.read_child_proof(block, storage_key, keys).await.map_err(call_err)
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("state_getChildReadProof", "childstate_getChildReadProof")?;

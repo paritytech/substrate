@@ -19,7 +19,10 @@
 use std::sync::Arc;
 
 use crate::ChainInfo;
-use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
+use futures::{
+	channel::{mpsc, oneshot},
+	FutureExt, SinkExt,
+};
 use manual_seal::EngineCommand;
 use sc_client_api::{
 	backend::{self, Backend},

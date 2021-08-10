@@ -41,6 +41,10 @@
 
 #![deny(unused_crate_dependencies)]
 
+use jsonrpsee::{
+	types::error::{CallError, Error as JsonRpseeError},
+	RpcModule,
+};
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -48,8 +52,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 };
 use std::sync::Arc;
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
-use jsonrpsee::RpcModule;
 
 type SharedAuthoritySet<TBl> =
 	sc_finality_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
@@ -147,20 +149,26 @@ where
 			sync_state.deny_unsafe.check_if_safe()?;
 
 			let raw = params.one()?;
-			let current_sync_state = sync_state.build_sync_state().map_err(|e| CallError::Failed(Box::new(e)))?;
+			let current_sync_state =
+				sync_state.build_sync_state().map_err(|e| CallError::Failed(Box::new(e)))?;
 			let mut chain_spec = sync_state.chain_spec.cloned_box();
 
 			let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(
 				chain_spec.extensions_mut(),
 			)
 			.ok_or_else(|| {
-				CallError::Failed(anyhow::anyhow!("Could not find `LightSyncState` chain-spec extension!").into())
+				CallError::Failed(
+					anyhow::anyhow!("Could not find `LightSyncState` chain-spec extension!").into(),
+				)
 			})?;
 
-			let val = serde_json::to_value(&current_sync_state).map_err(|e| CallError::Failed(Box::new(e)))?;
+			let val = serde_json::to_value(&current_sync_state)
+				.map_err(|e| CallError::Failed(Box::new(e)))?;
 			*extension = Some(val);
 
-			chain_spec.as_json(raw).map_err(|e| CallError::Failed(anyhow::anyhow!(e).into()))
+			chain_spec
+				.as_json(raw)
+				.map_err(|e| CallError::Failed(anyhow::anyhow!(e).into()))
 		})?;
 		Ok(module)
 	}
@@ -184,5 +192,3 @@ where
 		})
 	}
 }
-
-

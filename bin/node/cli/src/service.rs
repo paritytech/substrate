@@ -33,13 +33,13 @@ use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
-use sc_finality_grandpa_rpc::GrandpaRpc;
-use sc_consensus_babe_rpc::BabeRpc;
-use sc_sync_state_rpc::SyncStateRpc;
-use pallet_transaction_payment_rpc::TransactionPaymentRpc;
-use substrate_frame_rpc_system::{SystemRpc, SystemRpcBackendFull};
-use pallet_mmr_rpc::MmrRpc;
 use pallet_contracts_rpc::ContractsRpc;
+use pallet_mmr_rpc::MmrRpc;
+use pallet_transaction_payment_rpc::TransactionPaymentRpc;
+use sc_consensus_babe_rpc::BabeRpc;
+use sc_finality_grandpa_rpc::GrandpaRpc;
+use sc_sync_state_rpc::SyncStateRpc;
+use substrate_frame_rpc_system::{SystemRpc, SystemRpcBackendFull};
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -160,56 +160,62 @@ pub fn new_partial(
 	// System
 	let transaction_pool2 = transaction_pool.clone();
 	let rpc_builder = Box::new(move |deny_unsafe, executor| -> RpcModule<()> {
-			let grandpa_rpc = GrandpaRpc::new(
-				executor,
-				shared_authority_set.clone(),
-				grandpa::SharedVoterState::empty(),
-				justification_stream,
-				grandpa::FinalityProofProvider::new_for_service(
-					backend2,
-					Some(shared_authority_set.clone()),
-				),
-			).into_rpc_module().expect("TODO: error handling");
+		let grandpa_rpc = GrandpaRpc::new(
+			executor,
+			shared_authority_set.clone(),
+			grandpa::SharedVoterState::empty(),
+			justification_stream,
+			grandpa::FinalityProofProvider::new_for_service(
+				backend2,
+				Some(shared_authority_set.clone()),
+			),
+		)
+		.into_rpc_module()
+		.expect("TODO: error handling");
 
-			let babe_rpc = BabeRpc::new(
-				client2.clone(),
-				babe_link.epoch_changes().clone(),
-				sync_keystore,
-				babe_link.config().clone(),
-				select_chain2,
-				deny_unsafe,
-			).into_rpc_module().expect("TODO: error handling");
-			let sync_state_rpc = SyncStateRpc::new(
-				chain_spec,
-				client2.clone(),
-				shared_authority_set.clone(),
-				shared_epoch_changes,
-				deny_unsafe,
-			).expect("TODO: error handling").into_rpc_module().expect("TODO: error handling");
-			let transaction_payment_rpc = TransactionPaymentRpc::new(
-				client2.clone()
-			).into_rpc_module().expect("TODO: error handling");
-			let system_rpc_backend = SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
-			let system_rpc = SystemRpc::new(
-				Box::new(system_rpc_backend)
-			).into_rpc_module().expect("TODO: error handling");
-			let mmr_rpc = MmrRpc::new(
-				client2.clone()
-			).into_rpc_module().expect("TODO: error handling");
-			let contracts_rpc = ContractsRpc::new(
-				client2.clone()
-			).into_rpc_module().expect("TODO: error handling");
+		let babe_rpc = BabeRpc::new(
+			client2.clone(),
+			babe_link.epoch_changes().clone(),
+			sync_keystore,
+			babe_link.config().clone(),
+			select_chain2,
+			deny_unsafe,
+		)
+		.into_rpc_module()
+		.expect("TODO: error handling");
+		let sync_state_rpc = SyncStateRpc::new(
+			chain_spec,
+			client2.clone(),
+			shared_authority_set.clone(),
+			shared_epoch_changes,
+			deny_unsafe,
+		)
+		.expect("TODO: error handling")
+		.into_rpc_module()
+		.expect("TODO: error handling");
+		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone())
+			.into_rpc_module()
+			.expect("TODO: error handling");
+		let system_rpc_backend =
+			SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
+		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend))
+			.into_rpc_module()
+			.expect("TODO: error handling");
+		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
+		let contracts_rpc = ContractsRpc::new(client2.clone())
+			.into_rpc_module()
+			.expect("TODO: error handling");
 
-			let mut module = RpcModule::new(());
-			module.merge(grandpa_rpc).expect("TODO: error handling");
-			module.merge(babe_rpc).expect("TODO: error handling");
-			module.merge(sync_state_rpc).expect("TODO: error handling");
-			module.merge(transaction_payment_rpc).expect("TODO: error handling");
-			module.merge(system_rpc).expect("TODO: error handling");
-			module.merge(mmr_rpc).expect("TODO: error handling");
-			module.merge(contracts_rpc).expect("TODO: error handling");
-			module
-		});
+		let mut module = RpcModule::new(());
+		module.merge(grandpa_rpc).expect("TODO: error handling");
+		module.merge(babe_rpc).expect("TODO: error handling");
+		module.merge(sync_state_rpc).expect("TODO: error handling");
+		module.merge(transaction_payment_rpc).expect("TODO: error handling");
+		module.merge(system_rpc).expect("TODO: error handling");
+		module.merge(mmr_rpc).expect("TODO: error handling");
+		module.merge(contracts_rpc).expect("TODO: error handling");
+		module
+	});
 
 	let import_setup = (block_import, grandpa_link, babe_link2);
 
@@ -250,10 +256,7 @@ pub fn new_full_base(
 		select_chain,
 		transaction_pool,
 		rpc_builder,
-		other: (
-			import_setup,
-			mut telemetry
-		),
+		other: (import_setup, mut telemetry),
 	} = new_partial(&config)?;
 
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
@@ -293,22 +296,20 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let _rpc_handlers = sc_service::spawn_tasks(
-		sc_service::SpawnTasksParams {
-			config,
-			backend: backend.clone(),
-			client: client.clone(),
-			keystore: keystore_container.sync_keystore(),
-			network: network.clone(),
-			rpc_builder: Box::new(rpc_builder),
-			transaction_pool: transaction_pool.clone(),
-			task_manager: &mut task_manager,
-			on_demand: None,
-			remote_blockchain: None,
-			system_rpc_tx,
-			telemetry: telemetry.as_mut(),
-		},
-	)?;
+	let _rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+		config,
+		backend: backend.clone(),
+		client: client.clone(),
+		keystore: keystore_container.sync_keystore(),
+		network: network.clone(),
+		rpc_builder: Box::new(rpc_builder),
+		transaction_pool: transaction_pool.clone(),
+		task_manager: &mut task_manager,
+		on_demand: None,
+		remote_blockchain: None,
+		system_rpc_tx,
+		telemetry: telemetry.as_mut(),
+	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
 
@@ -600,7 +601,9 @@ pub fn new_light_base(
 		client: client.clone(),
 		transaction_pool: transaction_pool.clone(),
 		keystore: keystore_container.sync_keystore(),
-		config, backend, system_rpc_tx,
+		config,
+		backend,
+		system_rpc_tx,
 		network: network.clone(),
 		task_manager: &mut task_manager,
 		telemetry: telemetry.as_mut(),
@@ -612,7 +615,7 @@ pub fn new_light_base(
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_light_base(config).map(|(task_manager, _, _, _, )| task_manager)
+	new_light_base(config).map(|(task_manager, _, _, _)| task_manager)
 }
 
 #[cfg(test)]

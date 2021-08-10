@@ -34,29 +34,29 @@ mod client;
 mod metrics;
 mod task_manager;
 
-use std::pin::Pin;
-use std::collections::HashMap;
-use std::task::Poll;
+use std::{collections::HashMap, pin::Pin, task::Poll};
 
-use futures::{FutureExt, Stream, StreamExt, stream};
-use log::{warn, debug, error};
-use codec::{Encode, Decode};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use codec::{Decode, Encode};
+use futures::{stream, FutureExt, Stream, StreamExt};
+use jsonrpsee::RpcModule;
+use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 use sc_network::PeerId;
-use sp_utils::mpsc::TracingUnboundedReceiver;
-use jsonrpsee::RpcModule;
 use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 pub use self::{
 	builder::{
 		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
 		new_full_parts, new_light_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer,
-		NetworkStarter, SpawnTasksParams,
-		TFullBackend, TFullCallExecutor, TFullClient, TLightBackend, TLightBackendWithHash,
-		TLightCallExecutor, TLightClient, TLightClientWithBackend,
+		NetworkStarter, SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
+		TLightBackend, TLightBackendWithHash, TLightCallExecutor, TLightClient,
+		TLightClientWithBackend,
 	},
 	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
@@ -323,7 +323,8 @@ where
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module.clone(),
-	).await?;
+	)
+	.await?;
 
 	let ws = sc_rpc_server::start_ws(
 		ws_addr,
@@ -332,16 +333,15 @@ where
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module,
-	).await?;
+	)
+	.await?;
 
 	Ok(Box::new((http, ws)))
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>
->(
+fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>>(
 	_: &Configuration,
 	_: H,
 	_: sc_rpc_server::RpcMetrics,

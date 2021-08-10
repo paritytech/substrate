@@ -17,19 +17,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, MallocSizeOfWasm,
-	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
-	metrics::MetricsService,
+	build_network_future,
 	client::{light, Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
+	error::Error,
+	metrics::MetricsService,
+	start_rpc_servers, MallocSizeOfWasm, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
-use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
-use futures::{
-	FutureExt, StreamExt,
-	future::ready,
-	channel::oneshot,
-};
-use sc_keystore::LocalKeystore;
+use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
+use jsonrpsee::RpcModule;
 use log::info;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
@@ -40,9 +36,8 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use std::{sync::Arc, str::FromStr};
-use wasm_timer::SystemTime;
 use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
+use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
 	config::{OnDemand, Role, SyncMode},
@@ -51,6 +46,7 @@ use sc_network::{
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -66,7 +62,8 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use jsonrpsee::RpcModule;
+use std::{str::FromStr, sync::Arc};
+use wasm_timer::SystemTime;
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExecDisp> =
@@ -478,21 +475,31 @@ where
 pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TBackend>,
 ) -> Result<(), Error>
-	where
-		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
-		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + ExecutorProvider<TBl> + UsageProvider<TBl> +
-		StorageProvider<TBl, TBackend> + CallApiAt<TBl> + Send + 'static,
-		<TCl as ProvideRuntimeApi<TBl>>::Api:
-			sp_api::Metadata<TBl> +
-			sc_offchain::OffchainWorkerApi<TBl> +
-			sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
-			sp_session::SessionKeys<TBl> +
-			sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
-		TBl: BlockT,
-		TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> +
-			MallocSizeOfWasm + 'static,
+where
+	TCl: ProvideRuntimeApi<TBl>
+		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
+		+ Chain<TBl>
+		+ BlockBackend<TBl>
+		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
+		+ ProofProvider<TBl>
+		+ HeaderBackend<TBl>
+		+ BlockchainEvents<TBl>
+		+ ExecutorProvider<TBl>
+		+ UsageProvider<TBl>
+		+ StorageProvider<TBl, TBackend>
+		+ CallApiAt<TBl>
+		+ Send
+		+ 'static,
+	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
+		+ sc_offchain::OffchainWorkerApi<TBl>
+		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
+		+ sp_session::SessionKeys<TBl>
+		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+	TBl: BlockT,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
+		+ MallocSizeOfWasm
+		+ 'static,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -666,17 +673,23 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 ) -> RpcModule<()>
-	where
-		TBl: BlockT,
-		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
-		HeaderMetadata<TBl, Error=sp_blockchain::Error> + ExecutorProvider<TBl> +
-		CallApiAt<TBl> + ProofProvider<TBl> +
-		StorageProvider<TBl, TBackend> + BlockBackend<TBl> + Send + Sync + 'static,
-		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
-		<TCl as ProvideRuntimeApi<TBl>>::Api:
-			sp_session::SessionKeys<TBl> +
-			sp_api::Metadata<TBl>,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+where
+	TBl: BlockT,
+	TCl: ProvideRuntimeApi<TBl>
+		+ BlockchainEvents<TBl>
+		+ HeaderBackend<TBl>
+		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
+		+ ExecutorProvider<TBl>
+		+ CallApiAt<TBl>
+		+ ProofProvider<TBl>
+		+ StorageProvider<TBl, TBackend>
+		+ BlockBackend<TBl>
+		+ Send
+		+ Sync
+		+ 'static,
+	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
+	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
 
@@ -694,52 +707,56 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 
 	let mut rpc_api = RpcModule::new(());
 
-	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
-		(remote_blockchain, on_demand) {
-		// Light clients
-		let chain = sc_rpc::chain::new_light(
-			client.clone(),
-			task_executor.clone(),
-			remote_blockchain.clone(),
-			on_demand.clone(),
-		).into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
-		let (state, child_state) = sc_rpc::state::new_light(
-			client.clone(),
-			task_executor.clone(),
-			remote_blockchain.clone(),
-			on_demand,
-			deny_unsafe,
-		);
-		(
-			chain,
-			state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
-			child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF)
-		)
-	} else {
-		// Full nodes
-		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
+	let (chain, state, child_state) =
+		if let (Some(remote_blockchain), Some(on_demand)) = (remote_blockchain, on_demand) {
+			// Light clients
+			let chain = sc_rpc::chain::new_light(
+				client.clone(),
+				task_executor.clone(),
+				remote_blockchain.clone(),
+				on_demand.clone(),
+			)
 			.into_rpc_module()
 			.expect(UNIQUE_METHOD_NAMES_PROOF);
+			let (state, child_state) = sc_rpc::state::new_light(
+				client.clone(),
+				task_executor.clone(),
+				remote_blockchain.clone(),
+				on_demand,
+				deny_unsafe,
+			);
+			(
+				chain,
+				state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
+				child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
+			)
+		} else {
+			// Full nodes
+			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
+				.into_rpc_module()
+				.expect(UNIQUE_METHOD_NAMES_PROOF);
 
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			task_executor.clone(),
-			deny_unsafe,
-			config.rpc_max_payload
-		);
-		let state = state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
-		let child_state = child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
+			let (state, child_state) = sc_rpc::state::new_full(
+				client.clone(),
+				task_executor.clone(),
+				deny_unsafe,
+				config.rpc_max_payload,
+			);
+			let state = state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
+			let child_state = child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
 
-		(chain, state, child_state)
-	};
+			(chain, state, child_state)
+		};
 
 	let author = sc_rpc::author::Author::new(
 		client.clone(),
 		transaction_pool,
 		keystore,
 		deny_unsafe,
-		task_executor.clone()
-	).into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
+		task_executor.clone(),
+	)
+	.into_rpc_module()
+	.expect(UNIQUE_METHOD_NAMES_PROOF);
 
 	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
 		.into_rpc_module()

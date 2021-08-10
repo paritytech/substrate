@@ -77,4 +77,4 @@ impl From<std::num::TryFromIntError> for Error {
 	}
 }
 
-impl std::error::Error for Error { }
+impl std::error::Error for Error {}

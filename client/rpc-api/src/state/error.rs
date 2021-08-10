@@ -18,7 +18,7 @@
 
 //! State RPC errors.
 
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
+use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
 
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -27,7 +27,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
+	#[display(fmt = "Client error: {}", _0)]
 	Client(Box<dyn std::error::Error + Send + Sync>),
 	/// Provided block range couldn't be resolved to a list of blocks.
 	#[display(fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details)]
@@ -66,16 +66,10 @@ const BASE_ERROR: i32 = 4000;
 impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } => Self::Custom {
-				code: BASE_ERROR + 1,
-				message: e.to_string(),
-				data: None,
-			},
-			Error::InvalidCount { .. } => Self::Custom {
-				code: BASE_ERROR + 2,
-				message: e.to_string(),
-				data: None,
-			},
+			Error::InvalidBlockRange { .. } =>
+				Self::Custom { code: BASE_ERROR + 1, message: e.to_string(), data: None },
+			Error::InvalidCount { .. } =>
+				Self::Custom { code: BASE_ERROR + 2, message: e.to_string(), data: None },
 			e => Self::Failed(Box::new(e)),
 		}
 	}

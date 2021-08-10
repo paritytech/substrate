@@ -18,26 +18,24 @@
 
 //! State API backend for light nodes.
 
-use std::{
-	sync::Arc,
-	collections::{HashSet, HashMap, hash_map::Entry},
-};
+use super::{client_err, error::Error, ChildStateBackend, StateBackend};
 use crate::SubscriptionTaskExecutor;
-use super::{StateBackend, ChildStateBackend, error::Error, client_err};
+use std::{
+	collections::{hash_map::Entry, HashMap, HashSet},
+	sync::Arc,
+};
 
 use anyhow::anyhow;
 use codec::Decode;
 use futures::{
-	future::{self, ready, Either},
 	channel::oneshot::{channel, Sender},
+	future::{self, ready, Either},
 	FutureExt, StreamExt, TryStreamExt,
 };
 use hash_db::Hasher;
 use jsonrpsee::ws_server::SubscriptionSink;
 use log::warn;
 use parking_lot::Mutex;
-use sc_rpc_api::state::ReadProof;
-use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client_api::{
 	light::{
 		future_header, Fetcher, RemoteBlockchain, RemoteCallRequest, RemoteReadChildRequest,
@@ -45,6 +43,8 @@ use sc_client_api::{
 	},
 	BlockchainEvents,
 };
+use sc_rpc_api::state::ReadProof;
+use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
 	Bytes, OpaqueMetadata,
@@ -176,7 +176,8 @@ where
 			self.block_or_best(block),
 			method,
 			call_data,
-		).await
+		)
+		.await
 	}
 
 	async fn storage_keys(
@@ -237,30 +238,29 @@ where
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> Result<Option<Block::Hash>, Error> {
-		StateBackend::storage(self, block, key)
-			.await
-			.and_then(|maybe_storage|
-				Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0)))
-			)
+		StateBackend::storage(self, block, key).await.and_then(|maybe_storage| {
+			Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0)))
+		})
 	}
 
 	async fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes, Error> {
 		self.call(block, "Metadata_metadata".into(), Bytes(Vec::new()))
 			.await
-			.and_then(|metadata| OpaqueMetadata::decode(&mut &metadata.0[..])
-				.map(Into::into)
-				.map_err(|decode_err| client_err(ClientError::CallResultDecode(
-					"Unable to decode metadata",
-					decode_err,
-				))))
+			.and_then(|metadata| {
+				OpaqueMetadata::decode(&mut &metadata.0[..])
+					.map(Into::into)
+					.map_err(|decode_err| {
+						client_err(ClientError::CallResultDecode(
+							"Unable to decode metadata",
+							decode_err,
+						))
+					})
+			})
 	}
 
 	async fn runtime_version(&self, block: Option<Block::Hash>) -> Result<RuntimeVersion, Error> {
-		runtime_version(
-			&*self.remote_blockchain,
-			self.fetcher.clone(),
-			self.block_or_best(block),
-		).await
+		runtime_version(&*self.remote_blockchain, self.fetcher.clone(), self.block_or_best(block))
+			.await
 	}
 
 	async fn query_storage(
@@ -275,7 +275,7 @@ where
 	async fn query_storage_at(
 		&self,
 		_keys: Vec<StorageKey>,
-		_at: Option<Block::Hash>
+		_at: Option<Block::Hash>,
 	) -> Result<Vec<StorageChangeSet<Block::Hash>>, Error> {
 		Err(client_err(ClientError::NotAvailableOnLightClient))
 	}
@@ -297,10 +297,7 @@ where
 		Err(client_err(ClientError::NotAvailableOnLightClient))
 	}
 
-	fn subscribe_runtime_version(
-		&self,
-		mut sink: SubscriptionSink,
-	) -> Result<(), Error> {
+	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) -> Result<(), Error> {
 		let executor = self.executor.clone();
 		let fetcher = self.fetcher.clone();
 		let remote_blockchain = self.remote_blockchain.clone();
@@ -310,7 +307,9 @@ where
 		let stream = self.client.import_notification_stream().map(|notif| Ok::<_, ()>(notif.hash));
 
 		let fut = async move {
-			let mut old_version: Result<RuntimeVersion, ()> = display_error(runtime_version(&*remote_blockchain, fetcher.clone(), initial_block)).await;
+			let mut old_version: Result<RuntimeVersion, ()> =
+				display_error(runtime_version(&*remote_blockchain, fetcher.clone(), initial_block))
+					.await;
 
 			stream
 				.and_then(|block| {
@@ -326,16 +325,18 @@ where
 					future::ready(is_new_version)
 				})
 				.take_while(|version| {
-					future::ready(
-						sink.send(&version).map_or_else(|e| {
+					future::ready(sink.send(&version).map_or_else(
+						|e| {
 							log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
 							false
-						}, |_| true)
-					)
+						},
+						|_| true,
+					))
 				})
 				.for_each(|_| future::ready(()))
 				.await
-		}.boxed();
+		}
+		.boxed();
 
 		executor.execute_new(fut);
 		Ok(())
@@ -367,7 +368,13 @@ where
 		let stream = self.client.import_notification_stream().map(|notif| Ok::<_, ()>(notif.hash));
 
 		let fut = async move {
-			let mut old_storage = display_error(storage(&*remote_blockchain, fetcher.clone(), initial_block, initial_keys)).await;
+			let mut old_storage = display_error(storage(
+				&*remote_blockchain,
+				fetcher.clone(),
+				initial_block,
+				initial_keys,
+			))
+			.await;
 
 			let id: u64 = rand::random();
 
@@ -384,20 +391,17 @@ where
 
 			stream
 				.and_then(move |block| {
-					let keys = subs
-						.lock()
-						.subscriptions_by_key
-						.keys()
-						.map(|k| k.0.clone())
-						.collect();
+					let keys =
+						subs.lock().subscriptions_by_key.keys().map(|k| k.0.clone()).collect();
 
-					 // TODO(niklasad1): use shared requests here but require some major
-					 // refactoring because the actual block where fed into a closure.
-					 storage(&*remote_blockchain, fetcher.clone(), block, keys).then(move |s|
+					// TODO(niklasad1): use shared requests here but require some major
+					// refactoring because the actual block where fed into a closure.
+					storage(&*remote_blockchain, fetcher.clone(), block, keys).then(move |s| {
 						ready(match s {
 							Ok(s) => Ok((s, block)),
 							Err(_) => Err(()),
-					}))
+						})
+					})
 				})
 				.filter_map(|res| {
 					let res = match res {
@@ -417,27 +421,29 @@ where
 								true => {
 									let res = Some(StorageChangeSet {
 										block,
-										changes: new_value.iter()
+										changes: new_value
+											.iter()
 											.map(|(k, v)| (k.clone(), v.clone()))
 											.collect(),
 									});
 									old_storage = Ok(new_value);
 									res
-								}
+								},
 								false => None,
 							}
-						}
+						},
 						_ => None,
 					};
 					ready(res)
 				})
 				.take_while(|change_set| {
-					future::ready(
-						sink.send(&change_set).map_or_else(|e| {
+					future::ready(sink.send(&change_set).map_or_else(
+						|e| {
 							log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
 							false
-						}, |_| true)
-					)
+						},
+						|_| true,
+					))
 				})
 				.for_each(|_| future::ready(()))
 				.await;
@@ -448,18 +454,21 @@ where
 				let keys = storage_subscriptions.keys_by_subscription.remove(&id);
 				for key in keys.into_iter().flat_map(|keys| keys.into_iter()) {
 					match storage_subscriptions.subscriptions_by_key.entry(key) {
-						Entry::Vacant(_) => unreachable!("every key from keys_by_subscription has\
-							corresponding entry in subscriptions_by_key; qed"),
+						Entry::Vacant(_) => unreachable!(
+							"every key from keys_by_subscription has\
+							corresponding entry in subscriptions_by_key; qed"
+						),
 						Entry::Occupied(mut entry) => {
 							entry.get_mut().remove(&id);
 							if entry.get().is_empty() {
 								entry.remove();
 							}
-						}
+						},
 					}
 				}
 			}
-		}.boxed();
+		}
+		.boxed();
 		executor.execute_new(fut);
 
 		Ok(())
@@ -511,22 +520,21 @@ where
 		let block = self.block_or_best(block);
 		let fetcher = self.fetcher.clone();
 		match resolve_header(&*self.remote_blockchain, &*self.fetcher, block).await {
-			Ok(header) => {
-				fetcher.remote_read_child(RemoteReadChildRequest {
+			Ok(header) => fetcher
+				.remote_read_child(RemoteReadChildRequest {
 					block,
 					header,
 					storage_key,
 					keys: vec![key.0.clone()],
-					retry_count: Default::default()
+					retry_count: Default::default(),
 				})
 				.await
-				.map(|mut data| data
-					.remove(&key.0)
-					.expect("successful result has entry for all keys; qed")
-					.map(StorageData)
-				)
-				.map_err(client_err)
-			}
+				.map(|mut data| {
+					data.remove(&key.0)
+						.expect("successful result has entry for all keys; qed")
+						.map(StorageData)
+				})
+				.map_err(client_err),
 			Err(err) => Err(err),
 		}
 	}
@@ -539,9 +547,9 @@ where
 	) -> Result<Option<Block::Hash>, Error> {
 		ChildStateBackend::storage(self, block, storage_key, key)
 			.await
-			.and_then(|maybe_storage|
+			.and_then(|maybe_storage| {
 				Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0)))
-			)
+			})
 	}
 }
 
@@ -594,17 +602,14 @@ fn runtime_version<Block: BlockT, F: Fetcher<Block>>(
 	fetcher: Arc<F>,
 	block: Block::Hash,
 ) -> impl std::future::Future<Output = Result<RuntimeVersion, Error>> {
-	call(
-		remote_blockchain,
-		fetcher,
-		block,
-		"Core_version".into(),
-			Bytes(Vec::new()),
+	call(remote_blockchain, fetcher, block, "Core_version".into(), Bytes(Vec::new())).then(
+		|version| {
+			ready(version.and_then(|version| {
+				Decode::decode(&mut &version.0[..])
+					.map_err(|e| client_err(ClientError::VersionInvalid(e.to_string())))
+			}))
+		},
 	)
-	.then(|version| ready(version.and_then(|version|
-		Decode::decode(&mut &version.0[..])
-			.map_err(|e| client_err(ClientError::VersionInvalid(e.to_string())))
-	)))
 }
 
 /// Get storage value at given key at given block.
@@ -645,7 +650,7 @@ fn storage<Block: BlockT, F: Fetcher<Block>>(
 fn maybe_share_remote_request<Block: BlockT, Requests, V, RequestFuture>(
 	shared_requests: Requests,
 	block: Block::Hash,
-	fut: RequestFuture
+	fut: RequestFuture,
 ) -> impl std::future::Future<Output = Result<V, ()>>
 where
 	V: Clone,
@@ -675,14 +680,16 @@ where
 
 /// Convert successful future result into Ok(result) and error into Err(()),
 /// displaying warning.
-fn display_error<F, T>(future: F) -> impl std::future::Future<Output = Result <T, ()>>
+fn display_error<F, T>(future: F) -> impl std::future::Future<Output = Result<T, ()>>
 where
-	F: std::future::Future<Output=Result<T, Error>>
+	F: std::future::Future<Output = Result<T, Error>>,
 {
-	future.then(|result| ready(result.or_else(|err| {
-		warn!("Remote request for subscription data has failed with: {:?}", err);
-		Err(())
-	})))
+	future.then(|result| {
+		ready(result.or_else(|err| {
+			warn!("Remote request for subscription data has failed with: {:?}", err);
+			Err(())
+		}))
+	})
 }
 
 #[cfg(test)]

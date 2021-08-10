@@ -21,29 +21,31 @@
 #[cfg(test)]
 mod tests;
 
-use std::{sync::Arc, convert::TryInto};
+use std::{convert::TryInto, sync::Arc};
 
 use crate::SubscriptionTaskExecutor;
 
-use futures::{StreamExt, FutureExt};
-use sp_blockchain::HeaderBackend;
-use sc_rpc_api::DenyUnsafe;
-use jsonrpsee::RpcModule;
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as RpseeCallError};
-use codec::{Encode, Decode};
-use sp_core::Bytes;
-use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_api::ProvideRuntimeApi;
-use sp_runtime::generic;
-use sc_transaction_pool_api::{
-	TransactionPool, InPoolTransaction, TransactionSource,
-	TxHash, TransactionFor, error::IntoPoolError,
+use codec::{Decode, Encode};
+use futures::{FutureExt, StreamExt};
+use jsonrpsee::{
+	types::error::{CallError as RpseeCallError, Error as JsonRpseeError},
+	RpcModule,
 };
+use sc_rpc_api::DenyUnsafe;
+use sc_transaction_pool_api::{
+	error::IntoPoolError, InPoolTransaction, TransactionFor, TransactionPool, TransactionSource,
+	TxHash,
+};
+use sp_api::ProvideRuntimeApi;
+use sp_blockchain::HeaderBackend;
+use sp_core::Bytes;
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::generic;
 use sp_session::SessionKeys;
 
+use self::error::{Error, Result};
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::author::*;
-use self::error::{Error, Result};
 
 /// Authoring API
 pub struct Author<P, Client> {
@@ -59,7 +61,6 @@ pub struct Author<P, Client> {
 	executor: Arc<SubscriptionTaskExecutor>,
 }
 
-
 impl<P, Client> Author<P, Client> {
 	/// Create new instance of Authoring API.
 	pub fn new(
@@ -69,21 +70,15 @@ impl<P, Client> Author<P, Client> {
 		deny_unsafe: DenyUnsafe,
 		executor: Arc<SubscriptionTaskExecutor>,
 	) -> Self {
-		Author {
-			client,
-			pool,
-			keystore,
-			deny_unsafe,
-			executor,
-		}
+		Author { client, pool, keystore, deny_unsafe, executor }
 	}
 }
 
 impl<P, Client> Author<P, Client>
-	where
-		P: TransactionPool + Sync + Send + 'static,
-		Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
-		Client::Api: SessionKeys<P::Block>,
+where
+	P: TransactionPool + Sync + Send + 'static,
+	Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
+	Client::Api: SessionKeys<P::Block>,
 {
 	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {
@@ -93,12 +88,8 @@ impl<P, Client> Author<P, Client>
 			author.deny_unsafe.check_if_safe()?;
 			let (key_type, suri, public): (String, String, Bytes) = params.parse()?;
 			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-			SyncCryptoStore::insert_unknown(
-				&*author.keystore,
-				key_type, &suri,
-				&public[..]
-			)
-			.map_err(|_| Error::KeyStoreUnavailable)?;
+			SyncCryptoStore::insert_unknown(&*author.keystore, key_type, &suri, &public[..])
+				.map_err(|_| Error::KeyStoreUnavailable)?;
 			Ok(())
 		})?;
 
@@ -106,12 +97,12 @@ impl<P, Client> Author<P, Client>
 			author.deny_unsafe.check_if_safe()?;
 
 			let best_block_hash = author.client.info().best_hash;
-			author.client.runtime_api().generate_session_keys(
-				&generic::BlockId::Hash(best_block_hash),
-				None,
-			)
-			.map(Into::into)
-			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
+			author
+				.client
+				.runtime_api()
+				.generate_session_keys(&generic::BlockId::Hash(best_block_hash), None)
+				.map(Into::into)
+				.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 		})?;
 
 		module.register_method("author_hasSessionKeys", |params, author| {
@@ -119,11 +110,15 @@ impl<P, Client> Author<P, Client>
 
 			let session_keys: Bytes = params.one()?;
 			let best_block_hash = author.client.info().best_hash;
-			let keys = author.client.runtime_api().decode_session_keys(
-				&generic::BlockId::Hash(best_block_hash),
-				session_keys.to_vec(),
-			).map_err(|e| RpseeCallError::Failed(Box::new(e)))?
-			.ok_or_else(|| Error::InvalidSessionKeys)?;
+			let keys = author
+				.client
+				.runtime_api()
+				.decode_session_keys(
+					&generic::BlockId::Hash(best_block_hash),
+					session_keys.to_vec(),
+				)
+				.map_err(|e| RpseeCallError::Failed(Box::new(e)))?
+				.ok_or_else(|| Error::InvalidSessionKeys)?;
 
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
 		})?;
@@ -131,88 +126,106 @@ impl<P, Client> Author<P, Client>
 		module.register_method("author_hasKey", |params, author| {
 			author.deny_unsafe.check_if_safe()?;
 
-			let (public_key, key_type)  = params.parse::<(Vec<u8>, String)>()?;
+			let (public_key, key_type) = params.parse::<(Vec<u8>, String)>()?;
 			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &[(public_key, key_type)]))
 		})?;
 
-		module.register_async_method::<TxHash<P>, _>("author_submitExtrinsic", |params, author| {
-			let ext: Bytes = match params.one() {
-				Ok(ext) => ext,
-				Err(e) => return Box::pin(futures::future::err(e)),
-			};
-			async move {
-				let xt = match Decode::decode(&mut &ext[..]) {
-					Ok(xt) => xt,
-					Err(err) => return Err(RpseeCallError::Failed(err.into())),
+		module.register_async_method::<TxHash<P>, _>(
+			"author_submitExtrinsic",
+			|params, author| {
+				let ext: Bytes = match params.one() {
+					Ok(ext) => ext,
+					Err(e) => return Box::pin(futures::future::err(e)),
 				};
-				let best_block_hash = author.client.info().best_hash;
-				author.pool.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt)
-					.await
-					.map_err(|e| e.into_pool_error()
-						.map(|e| RpseeCallError::Failed(Box::new(e)))
-						.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e))))
-			}.boxed()
-		})?;
+				async move {
+					let xt = match Decode::decode(&mut &ext[..]) {
+						Ok(xt) => xt,
+						Err(err) => return Err(RpseeCallError::Failed(err.into())),
+					};
+					let best_block_hash = author.client.info().best_hash;
+					author
+						.pool
+						.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt)
+						.await
+						.map_err(|e| {
+							e.into_pool_error()
+								.map(|e| RpseeCallError::Failed(Box::new(e)))
+								.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e)))
+						})
+				}
+				.boxed()
+			},
+		)?;
 
 		module.register_method::<Vec<Bytes>, _>("author_pendingExtrinsics", |_, author| {
 			Ok(author.pool.ready().map(|tx| tx.data().encode().into()).collect())
 		})?;
 
-		module.register_method::<Vec<TxHash<P>>, _>("author_removeExtrinsic", |params, author| {
-			author.deny_unsafe.check_if_safe()?;
+		module.register_method::<Vec<TxHash<P>>, _>(
+			"author_removeExtrinsic",
+			|params, author| {
+				author.deny_unsafe.check_if_safe()?;
 
-			let bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>> = params.parse()?;
-			let hashes = bytes_or_hash.into_iter()
-				.map(|x| match x {
-					hash::ExtrinsicOrHash::Hash(h) => Ok(h),
-					hash::ExtrinsicOrHash::Extrinsic(bytes) => {
-						let xt = Decode::decode(&mut &bytes[..])?;
-						Ok(author.pool.hash_of(&xt))
-					}
-				})
-				.collect::<Result<Vec<_>>>()?;
+				let bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>> = params.parse()?;
+				let hashes = bytes_or_hash
+					.into_iter()
+					.map(|x| match x {
+						hash::ExtrinsicOrHash::Hash(h) => Ok(h),
+						hash::ExtrinsicOrHash::Extrinsic(bytes) => {
+							let xt = Decode::decode(&mut &bytes[..])?;
+							Ok(author.pool.hash_of(&xt))
+						},
+					})
+					.collect::<Result<Vec<_>>>()?;
 
-			Ok(
-				author.pool
+				Ok(author
+					.pool
 					.remove_invalid(&hashes)
 					.into_iter()
 					.map(|tx| tx.hash().clone())
-					.collect()
-			)
-		})?;
+					.collect())
+			},
+		)?;
 
 		module.register_subscription(
 			"author_submitAndWatchExtrinsic",
 			"author_unwatchExtrinsic",
-			|params, mut sink, ctx|
-		{
-			let xt: Bytes = params.one()?;
-			let best_block_hash = ctx.client.info().best_hash;
-			let dxt = TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| JsonRpseeError::Custom(e.to_string()))?;
+			|params, mut sink, ctx| {
+				let xt: Bytes = params.one()?;
+				let best_block_hash = ctx.client.info().best_hash;
+				let dxt = TransactionFor::<P>::decode(&mut &xt[..])
+					.map_err(|e| JsonRpseeError::Custom(e.to_string()))?;
 
-			let executor = ctx.executor.clone();
-			let fut = async move {
-				let stream = match ctx.pool
-					.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
-					.await
-				{
-					Ok(stream) => stream,
-					Err(e) => {
-						let _ = sink.send(&format!("txpool subscription failed: {:?}; subscription useless", e));
-						return;
-					}
+				let executor = ctx.executor.clone();
+				let fut = async move {
+					let stream = match ctx
+						.pool
+						.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
+						.await
+					{
+						Ok(stream) => stream,
+						Err(e) => {
+							let _ = sink.send(&format!(
+								"txpool subscription failed: {:?}; subscription useless",
+								e
+							));
+							return
+						},
+					};
+
+					stream
+						.for_each(|item| {
+							let _ = sink.send(&item);
+							futures::future::ready(())
+						})
+						.await;
 				};
 
-				stream.for_each(|item| {
-					let _ = sink.send(&item);
-					futures::future::ready(())
-				}).await;
-			};
-
-			executor.execute_new(Box::pin(fut));
-			Ok(())
-		})?;
+				executor.execute_new(Box::pin(fut));
+				Ok(())
+			},
+		)?;
 
 		Ok(module)
 	}

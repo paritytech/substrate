@@ -50,7 +50,7 @@ impl From<Error> for CallError {
 		match e {
 			Error::UnavailableStorageKind => Self::Custom {
 				code: BASE_ERROR + 1,
-				message: "This storage kind is not available yet" .into(),
+				message: "This storage kind is not available yet".into(),
 				data: None,
 			},
 			Error::UnsafeRpcCalled(e) => e.into(),

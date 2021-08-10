@@ -10,9 +10,8 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 pub async fn subscribe_headers<Client, Block>(
 	client: Arc<Client>,
 	mut sink: SubscriptionSink,
-	method: &str
-)
-where
+	method: &str,
+) where
 	Block: BlockT + 'static,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
@@ -21,27 +20,29 @@ where
 		Ok(head) => head,
 		Err(e) => {
 			log_err(method, e);
-			return;
-		}
+			return
+		},
 	};
 
 	// NOTE(niklasad1): this will only fail when the subscriber is offline or serialize fails.
 	if let Err(e) = sink.send(&best_head) {
 		log_err(method, e);
-		return;
+		return
 	};
 
 	let stream = client.import_notification_stream();
-	stream.take_while(|import| {
-		future::ready(
-			sink.send(&import.header).map_or_else(|e| {
-				log_err(method, e);
-				false
-			}, |_| true)
-		)
-	})
-	.for_each(|_| future::ready(()))
-	.await;
+	stream
+		.take_while(|import| {
+			future::ready(sink.send(&import.header).map_or_else(
+				|e| {
+					log_err(method, e);
+					false
+				},
+				|_| true,
+			))
+		})
+		.for_each(|_| future::ready(()))
+		.await;
 }
 
 /// Helper to create suscriptions for `finalizedHeads`.
@@ -51,9 +52,8 @@ where
 pub async fn subscribe_finalized_headers<Client, Block>(
 	client: Arc<Client>,
 	mut sink: SubscriptionSink,
-	method: &str
-)
-where
+	method: &str,
+) where
 	Block: BlockT + 'static,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
@@ -62,29 +62,30 @@ where
 		Ok(head) => head,
 		Err(err) => {
 			log_err(method, err);
-			return;
-		}
+			return
+		},
 	};
 
 	// NOTE(niklasad1): this will only fail when the subscriber is offline or serialize fails.
 	if let Err(err) = sink.send(&best_head) {
 		log_err(method, err);
-		return;
+		return
 	};
 
 	let stream = client.finality_notification_stream();
-	stream.take_while(|import| {
-		future::ready(
-			sink.send(&import.header).map_or_else(|e| {
-				log_err(method, e);
-				false
-			}, |_| true)
-		)
-	})
-	.for_each(|_| future::ready(()))
-	.await;
+	stream
+		.take_while(|import| {
+			future::ready(sink.send(&import.header).map_or_else(
+				|e| {
+					log_err(method, e);
+					false
+				},
+				|_| true,
+			))
+		})
+		.for_each(|_| future::ready(()))
+		.await;
 }
-
 
 fn log_err<E: std::fmt::Debug>(method: &str, err: E) {
 	log::error!("Could not send data to subscription: {} error: {:?}", method, err);

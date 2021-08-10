@@ -19,12 +19,14 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use std::sync::Arc;
 use futures::{future, FutureExt, StreamExt};
 use log::warn;
+use std::sync::Arc;
 
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
-use jsonrpsee::{RpcModule, SubscriptionSink};
+use jsonrpsee::{
+	types::error::{CallError, Error as JsonRpseeError},
+	RpcModule, SubscriptionSink,
+};
 
 mod error;
 mod finality;
@@ -36,8 +38,8 @@ use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use finality::RpcFinalityProofProvider;
-use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 use notification::JustificationNotification;
+use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
 /// Provides RPC methods for interacting with GRANDPA.
 pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
@@ -48,7 +50,8 @@ pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	finality_proof_provider: Arc<ProofProvider>,
 }
 
-impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
+impl<AuthoritySet, VoterState, Block, ProofProvider>
+	GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -63,13 +66,7 @@ where
 		justification_stream: GrandpaJustificationStream<Block>,
 		finality_proof_provider: Arc<ProofProvider>,
 	) -> Self {
-		Self {
-			executor,
-			authority_set,
-			voter_state,
-			justification_stream,
-			finality_proof_provider,
-		}
+		Self { executor, authority_set, voter_state, justification_stream, finality_proof_provider }
 	}
 
 	/// Convert this [`GrandpaApi`] to an [`RpcModule`].
@@ -99,28 +96,32 @@ where
 			"grandpa_subscribeJustifications",
 			"grandpa_unsubscribeJustifications",
 			|_params, mut sink: SubscriptionSink, ctx: Arc<GrandpaRpc<_, _, _, _>>| {
-				let stream = ctx
-					.justification_stream
-					.subscribe()
-					.map(|x: sc_finality_grandpa::GrandpaJustification<Block>| JustificationNotification::from(x));
+				let stream = ctx.justification_stream.subscribe().map(
+					|x: sc_finality_grandpa::GrandpaJustification<Block>| {
+						JustificationNotification::from(x)
+					},
+				);
 
 				fn log_err(err: JsonRpseeError) -> bool {
-					log::error!("Could not send data to grandpa_justifications subscription. Error: {:?}", err);
+					log::error!(
+						"Could not send data to grandpa_justifications subscription. Error: {:?}",
+						err
+					);
 					false
 				}
 
 				let fut = async move {
-					stream.take_while(|justification| {
-						future::ready(
-							sink.send(justification).map_or_else( log_err , |_| true )
-						)
-					})
-					.for_each(|_| future::ready(()))
-					.await;
-				}.boxed();
+					stream
+						.take_while(|justification| {
+							future::ready(sink.send(justification).map_or_else(log_err, |_| true))
+						})
+						.for_each(|_| future::ready(()))
+						.await;
+				}
+				.boxed();
 				ctx.executor.execute_new(fut);
 				Ok(())
-			}
+			},
 		)?;
 
 		Ok(module)

@@ -18,17 +18,28 @@
 
 //! State API backend for full nodes.
 
-use std::collections::{BTreeMap, HashMap};
-use std::marker::PhantomData;
-use std::ops::Range;
-use std::sync::Arc;
+use std::{
+	collections::{BTreeMap, HashMap},
+	marker::PhantomData,
+	ops::Range,
+	sync::Arc,
+};
 
+use super::{
+	client_err,
+	error::{Error, Result},
+	ChildStateBackend, StateBackend,
+};
 use crate::SubscriptionTaskExecutor;
-use super::{StateBackend, ChildStateBackend, error::{Error, Result}, client_err};
 
-use futures::{future, StreamExt, FutureExt};
+use futures::{future, FutureExt, StreamExt};
 use jsonrpsee::ws_server::SubscriptionSink;
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
+	StorageProvider,
+};
 use sc_rpc_api::state::ReadProof;
+use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 use sp_blockchain::{
 	CachedHeaderMetadata, Error as ClientError, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
@@ -40,16 +51,11 @@ use sp_core::{
 	},
 	Bytes,
 };
-use sp_version::RuntimeVersion;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, NumberFor, SaturatedConversion},
 };
-use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
-use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
-	StorageProvider,
-};
+use sp_version::RuntimeVersion;
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -274,18 +280,19 @@ where
 		call_data: Bytes,
 	) -> std::result::Result<Bytes, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self
-				.client
-				.executor()
-				.call(
-					&BlockId::Hash(block),
-					&method,
-					&*call_data,
-					self.client.execution_extensions().strategies().other,
-					None,
-				)
-				.map(Into::into)
-			).map_err(client_err)
+			.and_then(|block| {
+				self.client
+					.executor()
+					.call(
+						&BlockId::Hash(block),
+						&method,
+						&*call_data,
+						self.client.execution_extensions().strategies().other,
+						None,
+					)
+					.map(Into::into)
+			})
+			.map_err(client_err)
 	}
 
 	async fn storage_keys(
@@ -316,11 +323,13 @@ where
 		start_key: Option<StorageKey>,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
 		self.block_or_best(block)
-			.and_then(|block|
+			.and_then(|block| {
 				self.client.storage_keys_iter(
-					&BlockId::Hash(block), prefix.as_ref(), start_key.as_ref()
+					&BlockId::Hash(block),
+					prefix.as_ref(),
+					start_key.as_ref(),
 				)
-			)
+			})
 			.map(|iter| iter.take(count as usize).collect())
 			.map_err(client_err)
 	}
@@ -351,7 +360,8 @@ where
 			Ok(None) => {},
 		}
 
-		self.client.storage_pairs(&BlockId::Hash(block), &key)
+		self.client
+			.storage_pairs(&BlockId::Hash(block), &key)
 			.map(|kv| {
 				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
 				if item_sum > 0 {
@@ -373,28 +383,25 @@ where
 			.map_err(client_err)
 	}
 
-	async fn metadata(
-		&self,
-		block: Option<Block::Hash>
-	) -> std::result::Result<Bytes, Error> {
-		self.block_or_best(block)
-			.map_err(client_err)
-			.and_then(|block|
-				self.client.runtime_api().metadata(&BlockId::Hash(block))
-					.map(Into::into)
-					.map_err(|e| Error::Client(Box::new(e))))
+	async fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
+		self.block_or_best(block).map_err(client_err).and_then(|block| {
+			self.client
+				.runtime_api()
+				.metadata(&BlockId::Hash(block))
+				.map(Into::into)
+				.map_err(|e| Error::Client(Box::new(e)))
+		})
 	}
 
 	async fn runtime_version(
 		&self,
-		block: Option<Block::Hash>
+		block: Option<Block::Hash>,
 	) -> std::result::Result<RuntimeVersion, Error> {
-		self.block_or_best(block)
-			.map_err(client_err)
-			.and_then(|block|
-				self.client.runtime_version_at(&BlockId::Hash(block))
-					.map_err(|e| Error::Client(Box::new(e)))
-			)
+		self.block_or_best(block).map_err(client_err).and_then(|block| {
+			self.client
+				.runtime_version_at(&BlockId::Hash(block))
+				.map_err(|e| Error::Client(Box::new(e)))
+		})
 	}
 
 	async fn query_storage(
@@ -417,7 +424,7 @@ where
 	async fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
-		at: Option<Block::Hash>
+		at: Option<Block::Hash>,
 	) -> std::result::Result<Vec<StorageChangeSet<Block::Hash>>, Error> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 		self.query_storage(at, Some(at), keys).await
@@ -431,10 +438,7 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				self.client
-					.read_proof(
-						&BlockId::Hash(block),
-						&mut keys.iter().map(|key| key.0.as_ref()),
-					)
+					.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
 					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
@@ -465,43 +469,49 @@ where
 		let executor = self.executor.clone();
 		let client = self.client.clone();
 
-		let mut previous_version = client.runtime_version_at(&BlockId::hash(client.info().best_hash))
+		let mut previous_version = client
+			.runtime_version_at(&BlockId::hash(client.info().best_hash))
 			.expect("best hash is valid; qed");
 		let _ = sink.send(&previous_version);
-		let rt_version_stream = client.storage_changes_notification_stream(Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, )
+		let rt_version_stream = client
+			.storage_changes_notification_stream(
+				Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
+				None,
+			)
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
 		let fut = async move {
 			rt_version_stream
 				.filter_map(|_| {
 					let info = client.info();
-					let version = client
-						.runtime_version_at(&BlockId::hash(info.best_hash));
-						match version {
-							Ok(v) => if previous_version != v {
-									previous_version = v.clone();
-									future::ready(Some(v))
-								} else {
-									future::ready(None)
-								},
-							Err(e) => {
-								log::error!("Could not fetch current runtime version. Error={:?}", e);
+					let version = client.runtime_version_at(&BlockId::hash(info.best_hash));
+					match version {
+						Ok(v) =>
+							if previous_version != v {
+								previous_version = v.clone();
+								future::ready(Some(v))
+							} else {
 								future::ready(None)
-							}
-						}
+							},
+						Err(e) => {
+							log::error!("Could not fetch current runtime version. Error={:?}", e);
+							future::ready(None)
+						},
+					}
 				})
 				.take_while(|version| {
-					future::ready(
-						sink.send(&version).map_or_else(|e| {
+					future::ready(sink.send(&version).map_or_else(
+						|e| {
 							log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
 							false
-						}, |_| true)
-					)
-
+						},
+						|_| true,
+					))
 				})
 				.for_each(|_| future::ready(()))
 				.await;
-		}.boxed();
+		}
+		.boxed();
 		executor.execute_new(fut);
 
 		Ok(())
@@ -517,58 +527,67 @@ where
 
 		let initial = {
 			let block = client.info().best_hash;
-			let changes: Vec<(StorageKey, Option<StorageData>)> = keys.as_ref().map(|keys| {
-				keys
-					.iter()
-					.map(|storage_key| {
-						futures::executor::block_on(
-							StateBackend::storage(self, Some(block.clone()).into(), storage_key.clone())
-								.map(|val| (storage_key.clone(), val.unwrap_or(None)))
-						)
-					})
-					.collect()
-			}).unwrap_or_default();
+			let changes: Vec<(StorageKey, Option<StorageData>)> = keys
+				.as_ref()
+				.map(|keys| {
+					keys.iter()
+						.map(|storage_key| {
+							futures::executor::block_on(
+								StateBackend::storage(
+									self,
+									Some(block.clone()).into(),
+									storage_key.clone(),
+								)
+								.map(|val| (storage_key.clone(), val.unwrap_or(None))),
+							)
+						})
+						.collect()
+				})
+				.unwrap_or_default();
 			vec![StorageChangeSet { block, changes }]
 		};
 
 		if let Err(e) = sink.send(&initial) {
-			return Err(e.into());
+			return Err(e.into())
 		}
 
-		let stream = client.storage_changes_notification_stream(
-			keys.as_ref().map(|keys| &**keys),
-			None
-		).map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
+		let stream = client
+			.storage_changes_notification_stream(keys.as_ref().map(|keys| &**keys), None)
+			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
 		let fut = async move {
-			stream.map(|(block, changes)| {
-				StorageChangeSet {
-					block,
-					changes: changes
-						.iter()
-						.filter_map(|(o_sk, k, v)| {
-							// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
-							// for storage events stemming from child storage, `None` otherwise. This RPC only
-							// returns non-child storage.
-							if o_sk.is_none() {
-								Some((k.clone(), v.cloned()))
-							} else {
-								None
-							}
-						}).collect(),
-				}
-			})
-			.take_while(|changes| {
-				future::ready(
-					sink.send(&changes).map_or_else(|e| {
-						log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
-						false
-					}, |_| true)
-				)
-			})
-			.for_each(|_| future::ready(()))
-			.await;
-		}.boxed();
+			stream
+				.map(|(block, changes)| {
+					StorageChangeSet {
+						block,
+						changes: changes
+							.iter()
+							.filter_map(|(o_sk, k, v)| {
+								// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
+								// for storage events stemming from child storage, `None` otherwise. This RPC only
+								// returns non-child storage.
+								if o_sk.is_none() {
+									Some((k.clone(), v.cloned()))
+								} else {
+									None
+								}
+							})
+							.collect(),
+					}
+				})
+				.take_while(|changes| {
+					future::ready(sink.send(&changes).map_or_else(
+						|e| {
+							log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
+							false
+						},
+						|_| true,
+					))
+				})
+				.for_each(|_| future::ready(()))
+				.await;
+		}
+		.boxed();
 
 		executor.execute_new(fut);
 
@@ -577,7 +596,8 @@ where
 }
 
 #[async_trait::async_trait]
-impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client> where
+impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client>
+where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
@@ -594,7 +614,6 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-
 	async fn read_child_proof(
 		&self,
 		block: Option<Block::Hash>,
@@ -604,7 +623,8 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) =>
+						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client
@@ -628,14 +648,11 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) =>
+						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_keys(
-					&BlockId::Hash(block),
-					&child_info,
-					&prefix,
-				)
+				self.client.child_storage_keys(&BlockId::Hash(block), &child_info, &prefix)
 			})
 			.map_err(client_err)
 	}
@@ -651,11 +668,15 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) =>
+						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_keys_iter(
-					&BlockId::Hash(block), child_info, prefix.as_ref(), start_key.as_ref(),
+					&BlockId::Hash(block),
+					child_info,
+					prefix.as_ref(),
+					start_key.as_ref(),
 				)
 			})
 			.map(|iter| iter.take(count as usize).collect())
@@ -671,14 +692,11 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) =>
+						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage(
-					&BlockId::Hash(block),
-					&child_info,
-					&key,
-				)
+				self.client.child_storage(&BlockId::Hash(block), &child_info, &key)
 			})
 			.map_err(client_err)
 	}
@@ -692,14 +710,11 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) =>
+						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_hash(
-					&BlockId::Hash(block),
-					&child_info,
-					&key,
-				)
+				self.client.child_storage_hash(&BlockId::Hash(block), &child_info, &key)
 			})
 			.map_err(client_err)
 	}

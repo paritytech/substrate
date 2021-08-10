@@ -30,10 +30,16 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use futures::FutureExt;
-use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
-use jsonrpsee::{RpcModule, ws_server::SubscriptionSink};
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use sp_rpc::{number::NumberOrHex, list::ListOrValue};
+use jsonrpsee::{
+	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
+	ws_server::SubscriptionSink,
+	RpcModule,
+};
+use sc_client_api::{
+	light::{Fetcher, RemoteBlockchain},
+	BlockchainEvents,
+};
+use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
@@ -67,8 +73,7 @@ where
 	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get header and body of a relay chain block.
-	async fn block(&self, hash: Option<Block::Hash>)
-		-> Result<Option<SignedBlock<Block>>, Error>;
+	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
@@ -112,7 +117,7 @@ where
 }
 
 /// Create new state API that works on full node.
- pub fn new_full<Block: BlockT, Client>(
+pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
 	executor: Arc<SubscriptionTaskExecutor>,
 ) -> Chain<Block, Client>
@@ -120,9 +125,7 @@ where
 	Block: BlockT + 'static,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	Chain {
-		backend: Box::new(self::chain_full::FullChain::new(client, executor)),
-	}
+	Chain { backend: Box::new(self::chain_full::FullChain::new(client, executor)) }
 }
 
 /// Create new state API that works on light node.
@@ -184,22 +187,30 @@ where
 
 		rpc_module.register_alias("chain_getFinalisedHead", "chain_getFinalizedHead")?;
 
-		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, sink, ctx| {
-			ctx.backend.subscribe_all_heads(sink).map_err(Into::into)
-		})?;
+		rpc_module.register_subscription(
+			"chain_subscribeAllHeads",
+			"chain_unsubscribeAllHeads",
+			|_params, sink, ctx| ctx.backend.subscribe_all_heads(sink).map_err(Into::into),
+		)?;
 
-		rpc_module.register_subscription("chain_subscribeNewHead", "chain_unsubscribeNewHead", |_params, sink, ctx| {
-			ctx.backend.subscribe_new_heads(sink).map_err(Into::into)
-		})?;
+		rpc_module.register_subscription(
+			"chain_subscribeNewHead",
+			"chain_unsubscribeNewHead",
+			|_params, sink, ctx| ctx.backend.subscribe_new_heads(sink).map_err(Into::into),
+		)?;
 
-		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, sink, ctx| {
-			ctx.backend.subscribe_finalized_heads(sink).map_err(Into::into)
-		})?;
+		rpc_module.register_subscription(
+			"chain_subscribeFinalizedHeads",
+			"chain_unsubscribeFinalizedHeads",
+			|_params, sink, ctx| ctx.backend.subscribe_finalized_heads(sink).map_err(Into::into),
+		)?;
 
 		rpc_module.register_alias("chain_subscribeNewHeads", "chain_subscribeNewHead")?;
 		rpc_module.register_alias("chain_unsubscribeNewHeads", "chain_unsubscribeNewHead")?;
-		rpc_module.register_alias("chain_subscribeFinalisedHeads", "chain_subscribeFinalizedHeads")?;
-		rpc_module.register_alias("chain_unsubscribeFinalisedHeads", "chain_unsubscribeFinalizedHeads")?;
+		rpc_module
+			.register_alias("chain_subscribeFinalisedHeads", "chain_subscribeFinalizedHeads")?;
+		rpc_module
+			.register_alias("chain_unsubscribeFinalisedHeads", "chain_unsubscribeFinalizedHeads")?;
 
 		Ok(rpc_module)
 	}
@@ -221,12 +232,13 @@ where
 	) -> Result<ListOrValue<Option<Block::Hash>>, Error> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value),
-			Some(ListOrValue::Value(number)) => self.backend.block_hash(Some(number)).map(ListOrValue::Value),
-			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(list
-				.into_iter()
-				.map(|number| self.backend.block_hash(Some(number)))
-				.collect::<Result<_, _>>()?
-			))
+			Some(ListOrValue::Value(number)) =>
+				self.backend.block_hash(Some(number)).map(ListOrValue::Value),
+			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(
+				list.into_iter()
+					.map(|number| self.backend.block_hash(Some(number)))
+					.collect::<Result<_, _>>()?,
+			)),
 		}
 	}
 

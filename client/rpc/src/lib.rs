@@ -70,10 +70,10 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SubscriptionTas
 /// Because `Try` is not implemented for it.
 #[macro_export]
 macro_rules! unwrap_or_fut_err {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Box::pin(future::err(e)),
-        }
-    }
+	( $e:expr ) => {
+		match $e {
+			Ok(x) => x,
+			Err(e) => return Box::pin(future::err(e)),
+		}
+	};
 }

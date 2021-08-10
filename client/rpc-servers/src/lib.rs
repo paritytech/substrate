@@ -41,9 +41,9 @@ mod inner {
 	use super::*;
 	use futures_channel::oneshot;
 	use jsonrpsee::{
-		ws_server::{WsServerBuilder, WsStopHandle},
 		http_server::{HttpServerBuilder, HttpStopHandle},
-		RpcModule
+		ws_server::{WsServerBuilder, WsStopHandle},
+		RpcModule,
 	};
 
 	/// Type alias for http server
@@ -60,10 +60,10 @@ mod inner {
 		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
 		mut module: RpcModule<M>,
-	) -> Result<HttpStopHandle, String>  {
-
+	) -> Result<HttpStopHandle, String> {
 		let (tx, rx) = oneshot::channel::<Result<HttpStopHandle, String>>();
-		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+		let max_request_body_size = maybe_max_payload_mb
+			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 
 		std::thread::spawn(move || {
@@ -76,8 +76,8 @@ mod inner {
 				Ok(rt) => rt,
 				Err(e) => {
 					let _ = tx.send(Err(e.to_string()));
-					return;
-				}
+					return
+				},
 			};
 
 			rt.block_on(async move {
@@ -88,8 +88,8 @@ mod inner {
 					Ok(server) => server,
 					Err(e) => {
 						let _ = tx.send(Err(e.to_string()));
-						return;
-					}
+						return
+					},
 				};
 				// TODO: (dp) DRY this up; it's the same as the WS code
 				let handle = server.stop_handle();
@@ -98,12 +98,14 @@ mod inner {
 				available_methods.sort_unstable();
 
 				// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
-				methods_api.register_method("rpc_methods", move |_, _| {
-					Ok(serde_json::json!({
-						"version": 1,
-						"methods": available_methods,
-					}))
-				}).expect("infallible all other methods have their own address space; qed");
+				methods_api
+					.register_method("rpc_methods", move |_, _| {
+						Ok(serde_json::json!({
+							"version": 1,
+							"methods": available_methods,
+						}))
+					})
+					.expect("infallible all other methods have their own address space; qed");
 
 				module.merge(methods_api).expect("infallible already checked; qed");
 				let _ = tx.send(Ok(handle));
@@ -126,7 +128,8 @@ mod inner {
 		mut module: RpcModule<M>,
 	) -> Result<WsStopHandle, String> {
 		let (tx, rx) = oneshot::channel::<Result<WsStopHandle, String>>();
-		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+		let max_request_body_size = maybe_max_payload_mb
+			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
@@ -140,8 +143,8 @@ mod inner {
 				Ok(rt) => rt,
 				Err(e) => {
 					let _ = tx.send(Err(e.to_string()));
-					return;
-				}
+					return
+				},
 			};
 
 			rt.block_on(async move {
@@ -154,8 +157,8 @@ mod inner {
 					Ok(server) => server,
 					Err(e) => {
 						let _ = tx.send(Err(e.to_string()));
-						return;
-					}
+						return
+					},
 				};
 				// TODO: (dp) DRY this up; it's the same as the HTTP code
 				let handle = server.stop_handle();
@@ -164,12 +167,14 @@ mod inner {
 				available_methods.sort();
 
 				// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
-				methods_api.register_method("rpc_methods", move |_, _| {
-					Ok(serde_json::json!({
-						"version": 1,
-						"methods": available_methods,
-					}))
-				}).expect("infallible all other methods have their own address space; qed");
+				methods_api
+					.register_method("rpc_methods", move |_, _| {
+						Ok(serde_json::json!({
+							"version": 1,
+							"methods": available_methods,
+						}))
+					})
+					.expect("infallible all other methods have their own address space; qed");
 
 				module.merge(methods_api).expect("infallible already checked; qed");
 				let _ = tx.send(Ok(handle));

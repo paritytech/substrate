@@ -23,8 +23,10 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Encode};
-use jsonrpsee::RpcModule;
-use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
+use jsonrpsee::{
+	types::{error::CallError, Error as JsonRpseeError},
+	RpcModule,
+};
 use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
@@ -77,10 +79,7 @@ where
 {
 	/// Create a new [`MmrRpc`].
 	pub fn new(client: Arc<Client>) -> Self {
-		MmrRpc {
-			client,
-			_marker: Default::default(),
-		}
+		MmrRpc { client, _marker: Default::default() }
 	}
 
 	/// Convert this [`MmrRpc`] to an [`RpcModule`].

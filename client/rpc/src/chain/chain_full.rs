@@ -18,15 +18,17 @@
 
 //! Blockchain API backend for full nodes.
 
-use std::sync::Arc;
-use std::marker::PhantomData;
-use crate::{SubscriptionTaskExecutor, chain::helpers};
-use super::{ChainBackend, client_err, Error};
+use super::{client_err, ChainBackend, Error};
+use crate::{chain::helpers, SubscriptionTaskExecutor};
+use std::{marker::PhantomData, sync::Arc};
 
 use jsonrpsee::ws_server::SubscriptionSink;
+use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
-use sc_client_api::{BlockchainEvents, BlockBackend};
-use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
+use sp_runtime::{
+	generic::{BlockId, SignedBlock},
+	traits::Block as BlockT,
+};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -56,15 +58,11 @@ where
 	}
 
 	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
-		self.client
-			.header(BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(client_err)
+		self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
 	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
-		self.client
-			.block(&BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(client_err)
+		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
 	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
@@ -89,7 +87,8 @@ where
 		let client = self.client.clone();
 		let executor = self.executor.clone();
 
-		let fut = helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
+		let fut =
+			helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
 		executor.execute_new(Box::pin(fut));
 		Ok(())
 	}

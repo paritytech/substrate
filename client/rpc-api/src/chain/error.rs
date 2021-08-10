@@ -27,7 +27,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
+	#[display(fmt = "Client error: {}", _0)]
 	Client(Box<dyn std::error::Error + Send + Sync>),
 	/// Other error type.
 	Other(String),
@@ -48,11 +48,7 @@ const BASE_ERROR: i32 = 3000;
 impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::Other(message) => Self::Custom {
-				code: BASE_ERROR + 1,
-				message,
-				data: None,
-			},
+			Error::Other(message) => Self::Custom { code: BASE_ERROR + 1, message, data: None },
 			e => Self::Failed(Box::new(e)),
 		}
 	}

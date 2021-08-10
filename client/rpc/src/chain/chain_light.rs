@@ -18,14 +18,16 @@
 
 //! Blockchain API backend for light nodes.
 
+use super::{client_err, ChainBackend, Error};
+use crate::{chain::helpers, SubscriptionTaskExecutor};
 use std::sync::Arc;
-use crate::{SubscriptionTaskExecutor, chain::helpers};
-use super::{ChainBackend, client_err, Error};
 
 use jsonrpsee::ws_server::SubscriptionSink;
+use sc_client_api::{
+	light::{Fetcher, RemoteBlockchain, RemoteBodyRequest},
+	BlockchainEvents,
+};
 use sp_blockchain::HeaderBackend;
-use sc_client_api::light::{Fetcher, RemoteBodyRequest, RemoteBlockchain};
-use sc_client_api::BlockchainEvents;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::Block as BlockT,
@@ -80,27 +82,18 @@ where
 		maybe_header.await.map_err(client_err)
 	}
 
-	async fn block(
-		&self,
-		hash: Option<Block::Hash>
-	) -> Result<Option<SignedBlock<Block>>, Error>
-	{
+	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
 		let fetcher = self.fetcher.clone();
 		let header = self.header(hash).await?;
 
 		match header {
 			Some(header) => {
-				let req_body = RemoteBodyRequest {
-					header: header.clone(),
-					retry_count: Default::default()
-				};
+				let req_body =
+					RemoteBodyRequest { header: header.clone(), retry_count: Default::default() };
 				let body = fetcher.remote_body(req_body).await.map_err(client_err)?;
 
-				Ok(Some(SignedBlock {
-					block: Block::new(header, body),
-					justifications: None,
-				}))
-			}
+				Ok(Some(SignedBlock { block: Block::new(header, body), justifications: None }))
+			},
 			None => Ok(None),
 		}
 	}
@@ -127,7 +120,8 @@ where
 		let client = self.client.clone();
 		let executor = self.executor.clone();
 
-		let fut = helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
+		let fut =
+			helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
 		executor.execute_new(Box::pin(fut));
 		Ok(())
 	}

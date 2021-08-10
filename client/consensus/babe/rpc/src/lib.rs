@@ -19,8 +19,10 @@
 //! RPC api for babe.
 
 use futures::{FutureExt as _, TryFutureExt as _};
-use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
-use jsonrpsee::RpcModule;
+use jsonrpsee::{
+	types::error::{CallError, Error as JsonRpseeError},
+	RpcModule,
+};
 
 use sc_consensus_babe::{authorship, Config, Epoch};
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
@@ -55,7 +57,10 @@ pub struct BabeRpc<B: BlockT, C, SC> {
 impl<B: BlockT, C, SC> BabeRpc<B, C, SC>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + 'static,
+	C: ProvideRuntimeApi<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = BlockChainError>
+		+ 'static,
 	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
@@ -80,7 +85,8 @@ where
 			async move {
 				babe.deny_unsafe.check_if_safe()?;
 				let header = babe.select_chain.best_chain().map_err(Error::Consensus).await?;
-				let epoch_start = babe.client
+				let epoch_start = babe
+					.client
 					.runtime_api()
 					.current_epoch_start(&BlockId::Hash(header.hash()))
 					.map_err(|err| Error::StringError(format!("{:?}", err)))?;
@@ -115,16 +121,19 @@ where
 				};
 
 				for slot in *epoch_start..*epoch_end {
-					if let Some((claim, key)) =
-						authorship::claim_slot_using_keys(slot.into(), &epoch, &babe.keystore, &keys)
-					{
+					if let Some((claim, key)) = authorship::claim_slot_using_keys(
+						slot.into(),
+						&epoch,
+						&babe.keystore,
+						&keys,
+					) {
 						match claim {
 							PreDigest::Primary { .. } => {
 								claims.entry(key).or_default().primary.push(slot);
-							}
+							},
 							PreDigest::SecondaryPlain { .. } => {
 								claims.entry(key).or_default().secondary.push(slot);
-							}
+							},
 							PreDigest::SecondaryVRF { .. } => {
 								claims.entry(key).or_default().secondary_vrf.push(slot.into());
 							},
@@ -133,7 +142,8 @@ where
 				}
 
 				Ok(claims)
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		Ok(module)

@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use futures::channel::{mpsc, oneshot};
 use libp2p_wasm_ext::{ffi, ExtTransport};
 use log::info;
@@ -23,8 +22,8 @@ use sc_chain_spec::Extension;
 use sc_network::config::TransportConfig;
 use sc_service::{
 	config::{DatabaseSource, KeystoreConfig, NetworkConfiguration},
-	Configuration, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
-	TaskManager, TransactionStorageMode,
+	Configuration, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis, TaskManager,
+	TransactionStorageMode,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::pin::Pin;

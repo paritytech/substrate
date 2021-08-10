@@ -20,8 +20,7 @@ use crate::{default_config, ChainInfo};
 use futures::channel::mpsc;
 use manual_seal::{
 	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
-	import_queue,
-	run_manual_seal, EngineCommand, ManualSealParams,
+	import_queue, run_manual_seal, EngineCommand, ManualSealParams,
 };
 use sc_client_api::backend::Backend;
 use sc_service::{
@@ -42,19 +41,27 @@ use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use std::{str::FromStr, sync::Arc};
 
 type ClientParts<T> = (
-    TaskManager,
-    Arc<TFullClient<<T as ChainInfo>::Block, <T as ChainInfo>::RuntimeApi, <T as ChainInfo>::Executor>>,
-    Arc<dyn TransactionPool<
-        Block = <T as ChainInfo>::Block,
-        Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
-        Error = sc_transaction_pool::error::Error,
-        InPoolTransaction = sc_transaction_pool::Transaction<
-            <<T as ChainInfo>::Block as BlockT>::Hash,
-            <<T as ChainInfo>::Block as BlockT>::Extrinsic,
-        >,
-    >>,
-    mpsc::Sender<EngineCommand<<<T as ChainInfo>::Block as BlockT>::Hash>>,
-    Arc<TFullBackend<<T as ChainInfo>::Block>>,
+	TaskManager,
+	Arc<
+		TFullClient<
+			<T as ChainInfo>::Block,
+			<T as ChainInfo>::RuntimeApi,
+			<T as ChainInfo>::Executor,
+		>,
+	>,
+	Arc<
+		dyn TransactionPool<
+			Block = <T as ChainInfo>::Block,
+			Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
+			Error = sc_transaction_pool::error::Error,
+			InPoolTransaction = sc_transaction_pool::Transaction<
+				<<T as ChainInfo>::Block as BlockT>::Hash,
+				<<T as ChainInfo>::Block as BlockT>::Extrinsic,
+			>,
+		>,
+	>,
+	mpsc::Sender<EngineCommand<<<T as ChainInfo>::Block as BlockT>::Hash>>,
+	Arc<TFullBackend<<T as ChainInfo>::Block>>,
 );
 
 /// Provide the config or chain spec for a given chain
@@ -87,143 +94,140 @@ where
 	<<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number:
 		num_traits::cast::AsPrimitive<usize>,
 {
-    use sp_consensus_babe::AuthorityId;
-    let config = match config_or_chain_spec {
-        ConfigOrChainSpec::Config(config) => config,
-        ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) => {
-            default_config(task_executor, chain_spec)
-        },
-    };
+	use sp_consensus_babe::AuthorityId;
+	let config = match config_or_chain_spec {
+		ConfigOrChainSpec::Config(config) => config,
+		ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) =>
+			default_config(task_executor, chain_spec),
+	};
 
-    let (client, backend, keystore, mut task_manager) =
-        new_full_parts::<T::Block, T::RuntimeApi, T::Executor>(&config, None)?;
-    let client = Arc::new(client);
+	let (client, backend, keystore, mut task_manager) =
+		new_full_parts::<T::Block, T::RuntimeApi, T::Executor>(&config, None)?;
+	let client = Arc::new(client);
 
-    let select_chain = sc_consensus::LongestChain::new(backend.clone());
+	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-    let (grandpa_block_import, ..) =
-        grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain.clone(), None)?;
+	let (grandpa_block_import, ..) = grandpa::block_import(
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
+		None,
+	)?;
 
-    let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
-    let (block_import, babe_link) = sc_consensus_babe::block_import(
-        slot_duration.clone(),
-        grandpa_block_import,
-        client.clone(),
-    )?;
+	let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
+	let (block_import, babe_link) = sc_consensus_babe::block_import(
+		slot_duration.clone(),
+		grandpa_block_import,
+		client.clone(),
+	)?;
 
-    let consensus_data_provider = BabeConsensusDataProvider::new(
-        client.clone(),
-        keystore.sync_keystore(),
-        babe_link.epoch_changes().clone(),
-        vec![(AuthorityId::from(Alice.public()), 1000)],
-    )
-        .expect("failed to create ConsensusDataProvider");
+	let consensus_data_provider = BabeConsensusDataProvider::new(
+		client.clone(),
+		keystore.sync_keystore(),
+		babe_link.epoch_changes().clone(),
+		vec![(AuthorityId::from(Alice.public()), 1000)],
+	)
+	.expect("failed to create ConsensusDataProvider");
 
-    let import_queue =
-        import_queue(Box::new(block_import.clone()), &task_manager.spawn_essential_handle(), None);
+	let import_queue =
+		import_queue(Box::new(block_import.clone()), &task_manager.spawn_essential_handle(), None);
 
-    let transaction_pool = BasicPool::new_full(
-        config.transaction_pool.clone(),
-        true.into(),
-        config.prometheus_registry(),
-        task_manager.spawn_essential_handle(),
-        client.clone(),
-    );
+	let transaction_pool = BasicPool::new_full(
+		config.transaction_pool.clone(),
+		true.into(),
+		config.prometheus_registry(),
+		task_manager.spawn_essential_handle(),
+		client.clone(),
+	);
 
-    let (network, system_rpc_tx, network_starter) = {
-        let params = BuildNetworkParams {
-            config: &config,
-            client: client.clone(),
-            transaction_pool: transaction_pool.clone(),
-            spawn_handle: task_manager.spawn_handle(),
-            import_queue,
-            on_demand: None,
-            block_announce_validator_builder: None,
+	let (network, system_rpc_tx, network_starter) = {
+		let params = BuildNetworkParams {
+			config: &config,
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			spawn_handle: task_manager.spawn_handle(),
+			import_queue,
+			on_demand: None,
+			block_announce_validator_builder: None,
 			warp_sync: None,
-        };
-        build_network(params)?
-    };
+		};
+		build_network(params)?
+	};
 
-    // offchain workers
-    sc_service::build_offchain_workers(
-        &config,
-        task_manager.spawn_handle(),
-        client.clone(),
-        network.clone(),
-    );
+	// offchain workers
+	sc_service::build_offchain_workers(
+		&config,
+		task_manager.spawn_handle(),
+		client.clone(),
+		network.clone(),
+	);
 
-    // Proposer object for block authorship.
-    let env = sc_basic_authorship::ProposerFactory::new(
-        task_manager.spawn_handle(),
-        client.clone(),
-        transaction_pool.clone(),
-        config.prometheus_registry(),
-        None
-    );
+	// Proposer object for block authorship.
+	let env = sc_basic_authorship::ProposerFactory::new(
+		task_manager.spawn_handle(),
+		client.clone(),
+		transaction_pool.clone(),
+		config.prometheus_registry(),
+		None,
+	);
 
-    // Channel for the rpc handler to communicate with the authorship task.
-    let (command_sink, commands_stream) = mpsc::channel(10);
+	// Channel for the rpc handler to communicate with the authorship task.
+	let (command_sink, commands_stream) = mpsc::channel(10);
 
-    let _rpc_handlers = {
-        let params = SpawnTasksParams {
-            config,
-            client: client.clone(),
-            backend: backend.clone(),
-            task_manager: &mut task_manager,
-            keystore: keystore.sync_keystore(),
-            on_demand: None,
-            transaction_pool: transaction_pool.clone(),
+	let _rpc_handlers = {
+		let params = SpawnTasksParams {
+			config,
+			client: client.clone(),
+			backend: backend.clone(),
+			task_manager: &mut task_manager,
+			keystore: keystore.sync_keystore(),
+			on_demand: None,
+			transaction_pool: transaction_pool.clone(),
 			// TODO: (dp) implement with ManualSeal
 			rpc_builder: Box::new(|_, _| jsonrpsee::RpcModule::new(())),
-            // rpc_extensions_builder: Box::new(move |_, _| {
-            //     let mut io = jsonrpc_core::IoHandler::default();
-            //     io.extend_with(
-            //         ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone()))
-            //     );
-            //     io
-            // }),
-            remote_blockchain: None,
-            network,
-            system_rpc_tx,
-            telemetry: None
-        };
-        spawn_tasks(params)?
-    };
+			// rpc_extensions_builder: Box::new(move |_, _| {
+			//     let mut io = jsonrpc_core::IoHandler::default();
+			//     io.extend_with(
+			//         ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone()))
+			//     );
+			//     io
+			// }),
+			remote_blockchain: None,
+			network,
+			system_rpc_tx,
+			telemetry: None,
+		};
+		spawn_tasks(params)?
+	};
 
-    let cloned_client = client.clone();
-    let create_inherent_data_providers = Box::new(move |_, _| {
-        let client = cloned_client.clone();
-        async move {
-            let timestamp = SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
-            let babe = sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
-            Ok((timestamp, babe))
-        }
-    });
+	let cloned_client = client.clone();
+	let create_inherent_data_providers = Box::new(move |_, _| {
+		let client = cloned_client.clone();
+		async move {
+			let timestamp =
+				SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
+			let babe =
+				sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
+			Ok((timestamp, babe))
+		}
+	});
 
-    // Background authorship future.
-    let authorship_future = run_manual_seal(ManualSealParams {
-        block_import,
-        env,
-        client: client.clone(),
-        pool: transaction_pool.clone(),
-        commands_stream,
-        select_chain,
-        consensus_data_provider: Some(Box::new(consensus_data_provider)),
-        create_inherent_data_providers,
-    });
+	// Background authorship future.
+	let authorship_future = run_manual_seal(ManualSealParams {
+		block_import,
+		env,
+		client: client.clone(),
+		pool: transaction_pool.clone(),
+		commands_stream,
+		select_chain,
+		consensus_data_provider: Some(Box::new(consensus_data_provider)),
+		create_inherent_data_providers,
+	});
 
-    // spawn the authorship task as an essential task.
-    task_manager
-        .spawn_essential_handle()
-        .spawn("manual-seal", authorship_future);
+	// spawn the authorship task as an essential task.
+	task_manager.spawn_essential_handle().spawn("manual-seal", authorship_future);
 
-    network_starter.start_network();
+	network_starter.start_network();
 
-    Ok((
-        task_manager,
-        client,
-        transaction_pool,
-        command_sink,
-        backend,
-    ))
+	Ok((task_manager, client, transaction_pool, command_sink, backend))
 }
