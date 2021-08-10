@@ -29,24 +29,32 @@
 //! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs
 //! addressing issues with --> <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
-//!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
-//!         accompany pallet functions and be restricted to the pallet interface,
-//!         not the internals of the pallet implementation. Only state inputs,
-//!         outputs, and a brief description that mentions whether calling it
-//!         requires root, but without repeating the source code details.
-//!         Capitalize the first word of each documentation comment and end it with
-//!         a full stop. See
-//!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank"> Generic example of annotating source code with documentation
-//! comments</a></li>     <li>Self-documenting code - Try to refactor code to be
-//! self-documenting.</li>     <li>Code comments - Supplement complex code with a brief explanation,
-//! not every line of code.</li>     <li>Identifiers - surround by backticks (i.e.
-//! <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,         <code>u64</code>)</li>
-//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay
-//! valid.</li>     <li>Extended tutorials - should be moved to external files and refer to.</li>
-//!     <!-- Original author of paragraph: @AmarRSingh -->
-//!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
-//!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
+//! <li>Documentation comments (i.e. <code>/// comment</code>) - should
+//! accompany pallet functions and be restricted to the pallet interface,
+//! not the internals of the pallet implementation. Only state inputs,
+//! outputs, and a brief description that mentions whether calling it
+//! requires root, but without repeating the source code details.
+//! Capitalize the first word of each documentation comment and end it with
+//! a full stop. See
+//! <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
+//! target="_blank"> Generic example of annotating source code with documentation comments</a></li>
+//!
+//! <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
+//!
+//! <li>Code comments - Supplement complex code with a brief explanation, not every line of
+//! code.</li>
+//!
+//! <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>,
+//! <code>InherentType</code>, <code>u64</code>)</li>
+//!
+//! <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay
+//! valid.</li>
+//!
+//! <li>Extended tutorials - should be moved to external files and refer to.</li>
+//!
+//! <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
+//!
+//! <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
 //! </ul>
 //!
 //! ### Documentation Template:<br>

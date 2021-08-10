@@ -2314,8 +2314,9 @@ pub mod pallet_prelude {
 /// 	}
 /// 	#[pallet::genesis_build]
 /// 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-/// 	// impl<T: Config, I: 'static> GenesisBuild<T, I> for GenesisConfig { for instantiable
-/// pallet 		fn build() {
+/// 	// for instantiable pallet:
+/// 	// `impl<T: Config, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+/// 		fn build() {
 /// 			// The add_extra_genesis build logic
 /// 		}
 /// 	}

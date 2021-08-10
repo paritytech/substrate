@@ -1128,7 +1128,7 @@ fn bond_extra_works() {
 
 #[test]
 fn bond_extra_and_withdraw_unbonded_works() {
-	// 
+	//
 	// * Should test
 	// * Given an account being bonded [and chosen as a validator](not mandatory)
 	// * It can add extra funds to the bonded account.
@@ -1295,7 +1295,7 @@ fn too_many_unbond_calls_should_not_work() {
 
 #[test]
 fn rebond_works() {
-	// 
+	//
 	// * Should test
 	// * Given an account being bonded [and chosen as a validator](not mandatory)
 	// * it can unbond a portion of its funds from the stash account.

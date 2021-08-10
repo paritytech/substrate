@@ -1827,7 +1827,8 @@ fn imports_blocks_with_changes_tries_config_change() {
 	// block 26 is empty
 	// block 27 changes the key
 	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to
-	// 3^1 ===================================================================
+	// `3^1`
+	// ===================================================================
 	// block 29 is empty
 	// block 30 changes the key
 	// block 31 is L1 digest that covers this change

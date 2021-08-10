@@ -307,7 +307,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// 
+	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
 	/// * update `BondedEras` and apply slashes.
