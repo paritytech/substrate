@@ -16,13 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{runtime::Store, state_holder, util};
+use crate::{
+	runtime::{Store, StoreData},
+	state_holder, util,
+};
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, ValueType};
-use std::any::Any;
+use std::{any::Any, borrow::BorrowMut};
 use wasmtime::{
-	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
-	StoreLimits, Trap, Val, Caller,
+	Caller, Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
+	StoreLimits, Trap, Val,
 };
 
 pub struct Imports {
@@ -166,30 +169,27 @@ fn call_static<'a>(
 	static_func: &'static dyn Function,
 	wasmtime_params: &[Val],
 	wasmtime_results: &mut [Val],
-	mut caller: Caller<'a, StoreLimits>,
+	mut caller: Caller<'a, StoreData>,
 ) -> Result<(), wasmtime::Trap> {
-	let unwind_result = state_holder::with_context(
-		|host_ctx| {
-			let mut host_ctx = host_ctx.expect(
-				"host functions can be called only from wasm instance;
+	let unwind_result = {
+		let mut host_ctx = caller.data().host_state.as_ref().expect(
+			"host functions can be called only from wasm instance;
 			wasm instance is always called initializing context;
 			therefore host_ctx cannot be None;
 			qed
 			",
-			);
-			// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
-			// available in substrate.
-			//
-			// This, however, cannot happen since the signature of this function is created from
-			// a `dyn Function` signature of which cannot have a non substrate value by definition.
-			let mut params = wasmtime_params.iter().cloned().map(util::from_wasmtime_val);
+		).borrow_mut();
+		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
+		// available in substrate.
+		//
+		// This, however, cannot happen since the signature of this function is created from
+		// a `dyn Function` signature of which cannot have a non substrate value by definition.
+		let mut params = wasmtime_params.iter().cloned().map(util::from_wasmtime_val);
 
-			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-				static_func.execute(&mut host_ctx, &mut params)
-			}))
-		},
-		&mut caller,
-	);
+		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			static_func.execute(&mut host_ctx, &mut params)
+		}))
+	};
 
 	let execution_result = match unwind_result {
 		Ok(execution_result) => execution_result,

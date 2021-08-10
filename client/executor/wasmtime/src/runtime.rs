@@ -43,7 +43,12 @@ use std::{
 };
 use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
 
-pub(crate) type Store = wasmtime::Store<StoreLimits>;
+pub(crate) struct StoreData {
+	limits: StoreLimits,
+	host_state: Option<Rc<RefCell<HostState>>>,
+}
+
+pub(crate) type Store = wasmtime::Store<StoreData>;
 
 enum Strategy {
 	FastInstanceReuse {
@@ -119,7 +124,7 @@ impl WasmtimeRuntime {
 			Default::default()
 		};
 
-		let mut store = Store::new(&self.engine, limits);
+		let mut store = Store::new(&self.engine, StoreData { limits, host_state: None });
 
 		if self.config.max_memory_pages.is_some() {
 			store.limiter(|s| s);
@@ -596,9 +601,15 @@ fn perform_call(
 		inject_input_data(&mut ctx, &instance_wrapper, &mut allocator, data)?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(&mut ctx, data_ptr, data_len)?))
-	});
+
+	// Set the host state before calling into wasm.
+	ctx.data_mut().host_state = Some(host_state);
+
+	let ret = entrypoint.call(&mut ctx, data_ptr, data_len).and_then(|r| Ok(unpack_ptr_and_len(r)));
+
+	// Take the host state
+	ctx.data_mut().host_state.take();
+
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(ctx, &instance_wrapper, output_ptr, output_len)?;
 
