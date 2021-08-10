@@ -454,19 +454,19 @@ impl ExtBuilder {
 			}
 			// replace any of the status if needed.
 			self.status.into_iter().for_each(|(stash, status)| {
-				if let Some((_, _, _, ref mut prev_status)) =
-					stakers.iter_mut().find(|s| s.0 == stash)
-				{
-					*prev_status = status
-				}
+				let (_, _, _, ref mut prev_status) = stakers
+					.iter_mut()
+					.find(|s| s.0 == stash)
+					.expect("set_status staker should exist; qed");
+				*prev_status = status;
 			});
 			// replaced any of the stakes if needed.
 			self.stakes.into_iter().for_each(|(stash, stake)| {
-				if let Some((_, _, ref mut prev_stake, _)) =
-					stakers.iter_mut().find(|s| s.0 == stash)
-				{
-					*prev_stake = stake
-				}
+				let (_, _, ref mut prev_stake, _) = stakers
+					.iter_mut()
+					.find(|s| s.0 == stash)
+					.expect("set_stake staker should exits; qed.");
+				*prev_stake = stake;
 			});
 			// extend stakers if needed.
 			stakers.extend(self.stakers)

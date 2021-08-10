@@ -145,7 +145,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
 		assert_eq!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Staking::eras_stakers(active_era(), 11),
 			Exposure {
 				total: 1125,
 				own: 1000,
@@ -153,7 +153,7 @@ fn basic_setup_works() {
 			},
 		);
 		assert_eq!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 21),
+			Staking::eras_stakers(active_era(), 21),
 			Exposure {
 				total: 1375,
 				own: 1000,
@@ -162,13 +162,13 @@ fn basic_setup_works() {
 		);
 
 		// initial total stake = 1125 + 1375
-		assert_eq!(Staking::eras_total_stake(Staking::active_era().unwrap().index), 2500);
+		assert_eq!(Staking::eras_total_stake(active_era()), 2500);
 
 		// The number of validators required.
 		assert_eq!(Staking::validator_count(), 2);
 
 		// Initial Era and session
-		assert_eq!(Staking::active_era().unwrap().index, 0);
+		assert_eq!(active_era(), 0);
 
 		// Account 10 has `balance_factor` free balance
 		assert_eq!(Balances::free_balance(10), 1);
@@ -236,7 +236,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 		assert_eq!(
-			Staking::eras_reward_points(Staking::active_era().unwrap().index),
+			Staking::eras_reward_points(active_era()),
 			EraRewardPoints {
 				total: 50 * 3,
 				individual: vec![(11, 100), (21, 50)].into_iter().collect(),
@@ -250,7 +250,7 @@ fn rewards_should_work() {
 		start_session(2);
 		start_session(3);
 
-		assert_eq!(Staking::active_era().unwrap().index, 1);
+		assert_eq!(active_era(), 1);
 		assert_eq!(
 			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
 			maximum_payout - total_payout_0,
@@ -350,7 +350,7 @@ fn staking_should_work() {
 
 		// --- Block 4: the validators will now be queued.
 		start_session(4);
-		assert_eq!(Staking::active_era().unwrap().index, 1);
+		assert_eq!(active_era(), 1);
 
 		// --- Block 5: the validators are still in queue.
 		start_session(5);
@@ -437,7 +437,7 @@ fn less_than_needed_candidates_works() {
 
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
-			assert!(ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index)
+			assert!(ErasStakers::<Test>::iter_prefix_values(active_era())
 				.all(|exposure| exposure.others.is_empty()));
 		});
 }
@@ -535,14 +535,9 @@ fn nominating_and_rewards_should_work() {
 			assert_eq!(Balances::total_balance(&20), initial_balance_20 + total_payout_0 / 2);
 			initial_balance_20 = Balances::total_balance(&20);
 
-			// 30 and 40 are not chosen anymore
+			assert_eq!(ErasStakers::<Test>::iter_prefix_values(active_era()).count(), 2);
 			assert_eq!(
-				ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index)
-					.count(),
-				2
-			);
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+				Staking::eras_stakers(active_era(), 11),
 				Exposure {
 					total: 1000 + 800,
 					own: 1000,
@@ -553,7 +548,7 @@ fn nominating_and_rewards_should_work() {
 				},
 			);
 			assert_eq!(
-				Staking::eras_stakers(Staking::active_era().unwrap().index, 21),
+				Staking::eras_stakers(active_era(), 21),
 				Exposure {
 					total: 1000 + 1200,
 					own: 1000,
@@ -889,7 +884,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 has some free balance
 		assert_eq!(Balances::free_balance(21), 2000);
 		// Confirm account 21 (via controller 20) is totally staked
-		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 21).total, 1000);
+		assert_eq!(Staking::eras_stakers(active_era(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
@@ -908,7 +903,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).own, 1000);
+		assert_eq!(Staking::eras_stakers(active_era(), 11).own, 1000);
 		// Confirm account 11 cannot reserve as a result
 		assert_noop!(Balances::reserve(&11, 1), BalancesError::<Test, _>::LiquidityRestrictions);
 
@@ -1049,7 +1044,7 @@ fn validator_payment_prefs_work() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-		let exposure_1 = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure_1 = Staking::eras_stakers(active_era(), 11);
 		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
@@ -1134,7 +1129,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Initial config should be correct
-		assert_eq!(Staking::active_era().unwrap().index, 0);
+		assert_eq!(active_era(), 0);
 
 		// check the balance of a validator accounts.
 		assert_eq!(Balances::total_balance(&10), 1);
@@ -1154,7 +1149,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			})
 		);
 		assert_eq!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Staking::eras_stakers(active_era(), 11),
 			Exposure { total: 1000, own: 1000, others: vec![] }
 		);
 
@@ -1173,13 +1168,13 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Staking::eras_stakers(active_era(), 11),
 			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
 		);
 
 		// trigger next era.
 		mock::start_active_era(2);
-		assert_eq!(Staking::active_era().unwrap().index, 2);
+		assert_eq!(active_era(), 2);
 
 		// ledger should be the same.
 		assert_eq!(
@@ -1194,7 +1189,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 		// Exposure is now updated.
 		assert_eq!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Staking::eras_stakers(active_era(), 11),
 			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
 		);
 
@@ -1314,7 +1309,7 @@ fn rebond_works() {
 		);
 
 		mock::start_active_era(2);
-		assert_eq!(Staking::active_era().unwrap().index, 2);
+		assert_eq!(active_era(), 2);
 
 		// Try to rebond some funds. We get an error since no fund is unbonded.
 		assert_noop!(Staking::rebond(Origin::signed(10), 500), Error::<Test>::NoUnlockChunk);
@@ -1528,8 +1523,8 @@ fn reward_to_stake_works() {
 			// Confirm account 10 and 20 are validators
 			assert!(<Validators<Test>>::contains_key(&11) && <Validators<Test>>::contains_key(&21));
 
-			assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).total, 1000);
-			assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 21).total, 2000);
+			assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
+			assert_eq!(Staking::eras_stakers(active_era(), 21).total, 2000);
 
 			// Give the man some money.
 			let _ = Balances::make_free_balance_be(&10, 1000);
@@ -1557,8 +1552,8 @@ fn reward_to_stake_works() {
 			mock::start_active_era(1);
 			mock::make_all_reward_payment(0);
 
-			assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).total, 1000);
-			assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 21).total, 69);
+			assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
+			assert_eq!(Staking::eras_stakers(active_era(), 21).total, 69);
 
 			let _11_balance = Balances::free_balance(&11);
 			assert_eq!(_11_balance, 1000 + total_payout_0 / 2);
@@ -1567,14 +1562,8 @@ fn reward_to_stake_works() {
 			mock::start_active_era(2);
 
 			// -- new infos
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era().unwrap().index, 11).total,
-				1000 + total_payout_0 / 2
-			);
-			assert_eq!(
-				Staking::eras_stakers(Staking::active_era().unwrap().index, 21).total,
-				69 + total_payout_0 / 2
-			);
+			assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000 + total_payout_0 / 2);
+			assert_eq!(Staking::eras_stakers(active_era(), 21).total, 69 + total_payout_0 / 2);
 		});
 }
 
@@ -1759,14 +1748,8 @@ fn wrong_vote_is_moot() {
 			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
 			// our new voter is taken into account
-			assert!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11)
-				.others
-				.iter()
-				.any(|i| i.who == 61));
-			assert!(Staking::eras_stakers(Staking::active_era().unwrap().index, 21)
-				.others
-				.iter()
-				.any(|i| i.who == 61));
+			assert!(Staking::eras_stakers(active_era(), 11).others.iter().any(|i| i.who == 61));
+			assert!(Staking::eras_stakers(active_era(), 21).others.iter().any(|i| i.who == 61));
 		});
 }
 
@@ -2052,7 +2035,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Check slashing
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(100)],
@@ -2081,7 +2064,7 @@ fn reward_from_authorship_event_handler_works() {
 		// 21 is rewarded as an uncle producer
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
 		assert_eq!(
-			ErasRewardPoints::<Test>::get(Staking::active_era().unwrap().index),
+			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints {
 				individual: vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect(),
 				total: 26,
@@ -2101,7 +2084,7 @@ fn add_reward_points_fns_works() {
 		<Pallet<Test>>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
 
 		assert_eq!(
-			ErasRewardPoints::<Test>::get(Staking::active_era().unwrap().index),
+			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints { individual: vec![(11, 4), (21, 2)].into_iter().collect(), total: 6 },
 		);
 	})
@@ -2156,7 +2139,7 @@ fn offence_forces_new_era() {
 	ExtBuilder::default().build_and_execute(|| {
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(5)],
@@ -2174,7 +2157,7 @@ fn offence_ensures_new_era_without_clobbering() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(5)],
@@ -2192,7 +2175,7 @@ fn offence_deselects_validator_even_when_slash_is_zero() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(0)],
@@ -2213,7 +2196,7 @@ fn slashing_performed_according_exposure() {
 	// This test checks that slashing is performed according the exposure (or more precisely,
 	// historical exposure), not the current balance.
 	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).own, 1000);
+		assert_eq!(Staking::eras_stakers(active_era(), 11).own, 1000);
 
 		// Handle an offence with a historical exposure.
 		on_offence_now(
@@ -2239,7 +2222,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(0)],
@@ -2262,7 +2245,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		on_offence_in_era(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(0)],
@@ -2276,7 +2259,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		on_offence_in_era(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			// NOTE: A 100% slash here would clean up the account, causing de-registration.
@@ -2299,14 +2282,11 @@ fn reporters_receive_their_slice() {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
 
-		assert_eq!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 11).total,
-			initial_balance
-		);
+		assert_eq!(Staking::eras_stakers(active_era(), 11).total, initial_balance);
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![1, 2],
 			}],
 			&[Perbill::from_percent(50)],
@@ -2329,14 +2309,11 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		// The reporters' reward is calculated from the total exposure.
 		let initial_balance = 1125;
 
-		assert_eq!(
-			Staking::eras_stakers(Staking::active_era().unwrap().index, 11).total,
-			initial_balance
-		);
+		assert_eq!(Staking::eras_stakers(active_era(), 11).total, initial_balance);
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![1],
 			}],
 			&[Perbill::from_percent(20)],
@@ -2349,7 +2326,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![1],
 			}],
 			&[Perbill::from_percent(50)],
@@ -2371,7 +2348,7 @@ fn invulnerables_are_not_slashed() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(21), 2000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 21);
+		let exposure = Staking::eras_stakers(active_era(), 21);
 		let initial_balance = Staking::slashable_balance_of(&21);
 
 		let nominator_balances: Vec<_> =
@@ -2380,11 +2357,11 @@ fn invulnerables_are_not_slashed() {
 		on_offence_now(
 			&[
 				OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+					offender: (11, Staking::eras_stakers(active_era(), 11)),
 					reporters: vec![],
 				},
 				OffenceDetails {
-					offender: (21, Staking::eras_stakers(Staking::active_era().unwrap().index, 21)),
+					offender: (21, Staking::eras_stakers(active_era(), 21)),
 					reporters: vec![],
 				},
 			],
@@ -2414,7 +2391,7 @@ fn dont_slash_if_fraction_is_zero() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(0)],
@@ -2435,7 +2412,7 @@ fn only_slash_for_max_in_era() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(50)],
@@ -2447,7 +2424,7 @@ fn only_slash_for_max_in_era() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(25)],
@@ -2458,7 +2435,7 @@ fn only_slash_for_max_in_era() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(60)],
@@ -2480,7 +2457,7 @@ fn garbage_collection_after_slashing() {
 
 			on_offence_now(
 				&[OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+					offender: (11, Staking::eras_stakers(active_era(), 11)),
 					reporters: vec![],
 				}],
 				&[Perbill::from_percent(10)],
@@ -2492,7 +2469,7 @@ fn garbage_collection_after_slashing() {
 
 			on_offence_now(
 				&[OffenceDetails {
-					offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+					offender: (11, Staking::eras_stakers(active_era(), 11)),
 					reporters: vec![],
 				}],
 				&[Perbill::from_percent(100)],
@@ -2527,7 +2504,7 @@ fn garbage_collection_on_window_pruning() {
 		mock::start_active_era(1);
 
 		assert_eq!(Balances::free_balance(11), 1000);
-		let now = Staking::active_era().unwrap().index;
+		let now = active_era();
 
 		let exposure = Staking::eras_stakers(now, 11);
 		assert_eq!(Balances::free_balance(101), 2000);
@@ -2569,14 +2546,14 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Balances::free_balance(101), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
-		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
-		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, 21);
+		let exposure_11 = Staking::eras_stakers(active_era(), 11);
+		let exposure_21 = Staking::eras_stakers(active_era(), 21);
 		let nominated_value_11 = exposure_11.others.iter().find(|o| o.who == 101).unwrap().value;
 		let nominated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_in_era(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(10)],
@@ -2602,7 +2579,7 @@ fn slashing_nominators_by_span_max() {
 		// second slash: higher era, higher value, same span.
 		on_offence_in_era(
 			&[OffenceDetails {
-				offender: (21, Staking::eras_stakers(Staking::active_era().unwrap().index, 21)),
+				offender: (21, Staking::eras_stakers(active_era(), 21)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(30)],
@@ -2623,7 +2600,7 @@ fn slashing_nominators_by_span_max() {
 		// in-era value, but lower slash value than slash 2.
 		on_offence_in_era(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(20)],
@@ -2657,7 +2634,7 @@ fn slashes_are_summed_across_spans() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (21, Staking::eras_stakers(Staking::active_era().unwrap().index, 21)),
+				offender: (21, Staking::eras_stakers(active_era(), 21)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(10)],
@@ -2680,7 +2657,7 @@ fn slashes_are_summed_across_spans() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (21, Staking::eras_stakers(Staking::active_era().unwrap().index, 21)),
+				offender: (21, Staking::eras_stakers(active_era(), 21)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(10)],
@@ -2704,13 +2681,13 @@ fn deferred_slashes_are_deferred() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure = Staking::eras_stakers(active_era(), 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(10)],
@@ -2745,7 +2722,7 @@ fn remove_deferred() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure = Staking::eras_stakers(active_era(), 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
@@ -2811,7 +2788,7 @@ fn remove_multi_deferred() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure = Staking::eras_stakers(active_era(), 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
@@ -2821,7 +2798,7 @@ fn remove_multi_deferred() {
 
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (21, Staking::eras_stakers(Staking::active_era().unwrap().index, 21)),
+				offender: (21, Staking::eras_stakers(active_era(), 21)),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(10)],
@@ -2880,8 +2857,8 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		// 11 and 21 both have the support of 100
-		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
-		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+		let exposure_11 = Staking::eras_stakers(active_era(), &11);
+		let exposure_21 = Staking::eras_stakers(active_era(), &21);
 
 		assert_eq!(exposure_11.total, 1000 + 125);
 		assert_eq!(exposure_21.total, 1000 + 375);
@@ -2913,8 +2890,8 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
 
 		mock::start_active_era(2);
-		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
-		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+		let exposure_11 = Staking::eras_stakers(active_era(), &11);
+		let exposure_21 = Staking::eras_stakers(active_era(), &21);
 
 		// 10 is re-elected, but without the support of 100
 		assert_eq!(exposure_11.total, 900);
@@ -2969,7 +2946,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 		mock::start_active_era(Staking::history_depth() + 1);
 
-		let active_era = Staking::active_era().unwrap().index;
+		let active_era = active_era();
 
 		// This is the latest planned era in staking, not the active era
 		let current_era = Staking::current_era().unwrap();
@@ -3015,7 +2992,7 @@ fn zero_slash_keeps_nominators() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
+		let exposure = Staking::eras_stakers(active_era(), 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
@@ -3048,7 +3025,7 @@ fn six_session_delay() {
 
 		let val_set = Session::validators();
 		let init_session = Session::current_index();
-		let init_active_era = Staking::active_era().unwrap().index;
+		let init_active_era = active_era();
 
 		// pallet-session is delaying session by one, thus the next session to plan is +2.
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
@@ -3491,7 +3468,7 @@ fn offences_weight_calculated_correctly() {
 		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
 			= (1..10).map(|i|
 				OffenceDetails {
-					offender: (i, Staking::eras_stakers(Staking::active_era().unwrap().index, i)),
+					offender: (i, Staking::eras_stakers(active_era(), i)),
 					reporters: vec![],
 				}
 			).collect();
@@ -3500,7 +3477,7 @@ fn offences_weight_calculated_correctly() {
 		// On Offence with one offenders, Applied
 		let one_offender = [
 			OffenceDetails {
-				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
 				reporters: vec![1],
 			},
 		];
