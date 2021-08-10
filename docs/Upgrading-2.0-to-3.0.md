@@ -143,7 +143,7 @@ And update the overall definition for weights on frame and a few related types a
 +const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 +
 +impl frame_system::Config for Runtime {
- 	type BaseCallFilter = ();
+ 	type BaseCallFilter = frame_support::traits::AllowAll;
 +	type BlockWeights = RuntimeBlockWeights;
 +	type BlockLength = RuntimeBlockLength;
 +	type DbWeight = RocksDbWeight;

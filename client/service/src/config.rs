@@ -18,25 +18,31 @@
 
 //! Service configuration.
 
-pub use sc_client_db::{
-	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
-	KeepBlocks, TransactionStorageMode
-};
-pub use sc_network::Multiaddr;
-pub use sc_network::config::{
-	ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig,
-	SetConfig, NonDefaultSetConfig, TransportConfig,
-	RequestResponseConfig, IncomingRequest, OutgoingResponse,
-};
-pub use sc_executor::WasmExecutionMethod;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
+pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
+pub use sc_executor::WasmExecutionMethod;
+pub use sc_network::{
+	config::{
+		ExtTransport, IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
+		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
+		TransportConfig,
+	},
+	Multiaddr,
+};
 
-use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::ChainSpec;
-use sp_core::crypto::SecretString;
-pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
+use sc_chain_spec::ChainSpec;
+pub use sc_telemetry::TelemetryEndpoints;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
+use sp_core::crypto::SecretString;
+use std::{
+	future::Future,
+	io,
+	net::SocketAddr,
+	path::{Path, PathBuf},
+	pin::Pin,
+	sync::Arc,
+};
 #[cfg(not(target_os = "unknown"))]
 use tempfile::TempDir;
 
@@ -60,7 +66,7 @@ pub struct Configuration {
 	/// Remote URI to connect to for async keystore support
 	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
-	pub database: DatabaseConfig,
+	pub database: DatabaseSource,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -153,7 +159,7 @@ pub enum KeystoreConfig {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<SecretString>
+		password: Option<SecretString>,
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
@@ -194,7 +200,7 @@ impl PrometheusConfig {
 		Self {
 			port,
 			registry: Registry::new_custom(Some("substrate".into()), None)
-				.expect("this can only fail if the prefix is empty")
+				.expect("this can only fail if the prefix is empty"),
 		}
 	}
 }
@@ -215,11 +221,13 @@ impl Configuration {
 		let protocol_id_full = match self.chain_spec.protocol_id() {
 			Some(pid) => pid,
 			None => {
-				log::warn!("Using default protocol ID {:?} because none is configured in the \
-					chain specs", crate::DEFAULT_PROTOCOL_ID
+				log::warn!(
+					"Using default protocol ID {:?} because none is configured in the \
+					chain specs",
+					crate::DEFAULT_PROTOCOL_ID
 				);
 				crate::DEFAULT_PROTOCOL_ID
-			}
+			},
 		};
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	}
@@ -261,9 +269,7 @@ impl BasePath {
 	/// instance is dropped.
 	#[cfg(not(target_os = "unknown"))]
 	pub fn new_temp_dir() -> io::Result<BasePath> {
-		Ok(BasePath::Temporary(
-			tempfile::Builder::new().prefix("substrate").tempdir()?,
-		))
+		Ok(BasePath::Temporary(tempfile::Builder::new().prefix("substrate").tempdir()?))
 	}
 
 	/// Create a `BasePath` instance based on an existing path on disk.

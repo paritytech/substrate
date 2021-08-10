@@ -21,23 +21,17 @@ mod common;
 
 use common::*;
 use honggfuzz::fuzz;
+use rand::{self, SeedableRng};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, seq_phragmen, to_supports,
 	to_without_backing, EvaluateSupport, VoteWeight,
 };
 use sp_runtime::Perbill;
-use rand::{self, SeedableRng};
 
 fn main() {
 	loop {
 		fuzz!(|data: (usize, usize, usize, usize, u64)| {
-			let (
-				mut target_count,
-				mut voter_count,
-				mut iterations,
-				mut to_elect,
-				seed,
-			) = data;
+			let (mut target_count, mut voter_count, mut iterations, mut to_elect, seed) = data;
 			let rng = rand::rngs::SmallRng::seed_from_u64(seed);
 			target_count = to_range(target_count, 100, 200);
 			voter_count = to_range(voter_count, 100, 200);
@@ -48,12 +42,7 @@ fn main() {
 				"++ [voter_count: {} / target_count:{} / to_elect:{} / iterations:{}]",
 				voter_count, target_count, to_elect, iterations,
 			);
-			let (
-				unbalanced,
-				candidates,
-				voters,
-				stake_of_tree,
-			) = generate_random_npos_result(
+			let (unbalanced, candidates, voters, stake_of_tree) = generate_random_npos_result(
 				voter_count as u64,
 				target_count as u64,
 				to_elect,
@@ -61,9 +50,7 @@ fn main() {
 				ElectionType::Phragmen(None),
 			);
 
-			let stake_of = |who: &AccountId| -> VoteWeight {
-				*stake_of_tree.get(who).unwrap()
-			};
+			let stake_of = |who: &AccountId| -> VoteWeight { *stake_of_tree.get(who).unwrap() };
 
 			let unbalanced_score = {
 				let staked = assignment_ratio_to_staked_normalized(
@@ -76,7 +63,7 @@ fn main() {
 
 				if score[0] == 0 {
 					// such cases cannot be improved by balancing.
-					return;
+					return
 				}
 				score
 			};
@@ -87,34 +74,32 @@ fn main() {
 					candidates,
 					voters,
 					Some((iterations, 0)),
-				).unwrap();
+				)
+				.unwrap();
 
 				let balanced_score = {
 					let staked = assignment_ratio_to_staked_normalized(
 						balanced.assignments.clone(),
 						&stake_of,
-					).unwrap();
+					)
+					.unwrap();
 					let winners = to_without_backing(balanced.winners);
 					to_supports(winners.as_ref(), staked.as_ref()).unwrap().evaluate()
-
 				};
 
 				let enhance = is_score_better(balanced_score, unbalanced_score, Perbill::zero());
 
 				println!(
 					"iter = {} // {:?} -> {:?} [{}]",
-					iterations,
-					unbalanced_score,
-					balanced_score,
-					enhance,
+					iterations, unbalanced_score, balanced_score, enhance,
 				);
 
 				// The only guarantee of balancing is such that the first and third element of the score
 				// cannot decrease.
 				assert!(
 					balanced_score[0] >= unbalanced_score[0] &&
-					balanced_score[1] == unbalanced_score[1] &&
-					balanced_score[2] <= unbalanced_score[2]
+						balanced_score[1] == unbalanced_score[1] &&
+						balanced_score[2] <= unbalanced_score[2]
 				);
 			}
 		});

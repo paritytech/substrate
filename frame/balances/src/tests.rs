@@ -26,7 +26,7 @@ macro_rules! decl_tests {
 		use crate::*;
 		use sp_runtime::{ArithmeticError, FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
-			assert_noop, assert_storage_noop, assert_ok, assert_err, StorageValue,
+			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
@@ -77,6 +77,30 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn reap_failed_due_to_provider_and_consumer() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				// SCENARIO: only one provider and there are remaining consumers.
+				assert_ok!(System::inc_consumers(&1));
+				assert!(!System::can_dec_provider(&1));
+				assert_noop!(
+					<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath),
+					Error::<$test, _>::KeepAlive
+				);
+				assert!(System::account_exists(&1));
+				assert_eq!(Balances::free_balance(1), 10);
+
+				// SCENARIO: more than one provider, but will not kill account due to other provider.
+				assert_eq!(System::inc_providers(&1), frame_system::IncRefStatus::Existed);
+				assert_eq!(System::providers(&1), 2);
+				assert!(System::can_dec_provider(&1));
+				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
+				assert_eq!(System::providers(&1), 1);
+				assert!(System::account_exists(&1));
+				assert_eq!(Balances::free_balance(1), 0);
+			});
+		}
+
+		#[test]
 		fn partial_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
@@ -87,7 +111,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn lock_removal_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::all());
+				Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
 				Balances::remove_lock(ID_1, &1);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -96,7 +120,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn lock_replacement_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::all());
+				Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
 				Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -114,7 +138,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn combination_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::empty());
+				Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::empty());
 				Balances::set_lock(ID_2, &1, 0, WithdrawReasons::all());
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -148,7 +172,9 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
+					pallet_transaction_payment::NextFeeMultiplier::<$test>::put(
+						Multiplier::saturating_from_integer(1)
+					);
 					Balances::set_lock(ID_1, &1, 10, WithdrawReasons::RESERVE);
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
@@ -513,15 +539,15 @@ macro_rules! decl_tests {
 		#[test]
 		fn transferring_too_high_value_should_not_panic() {
 			<$ext_builder>::default().build().execute_with(|| {
-				Balances::make_free_balance_be(&1, u64::max_value());
+				Balances::make_free_balance_be(&1, u64::MAX);
 				Balances::make_free_balance_be(&2, 1);
 
 				assert_err!(
-					Balances::transfer(Some(1).into(), 2, u64::max_value()),
+					Balances::transfer(Some(1).into(), 2, u64::MAX),
 					ArithmeticError::Overflow,
 				);
 
-				assert_eq!(Balances::free_balance(1), u64::max_value());
+				assert_eq!(Balances::free_balance(1), u64::MAX);
 				assert_eq!(Balances::free_balance(2), 1);
 			});
 		}

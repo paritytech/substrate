@@ -65,7 +65,7 @@ pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 					)
 				),
 			)
-	})
+		})
 		.collect::<TokenStream2>();
 
 	quote!(

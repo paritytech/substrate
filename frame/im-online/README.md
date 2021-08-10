@@ -13,7 +13,7 @@ and includes the recent best block number of the local validators chain as well
 as the `NetworkState`.
 It is submitted as an Unsigned Transaction via off-chain workers.
 
-- [`im_online::Trait`](https://docs.rs/pallet-im-online/latest/pallet_im_online/trait.Trait.html)
+- [`im_online::Config`](https://docs.rs/pallet-im-online/latest/pallet_im_online/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-im-online/latest/pallet_im_online/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-im-online/latest/pallet_im_online/struct.Module.html)
 

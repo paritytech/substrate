@@ -18,9 +18,9 @@
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
 use crate::{ElectionDataProvider, ElectionProvider};
+use frame_support::{traits::Get, weights::Weight};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
-use frame_support::{traits::Get, weights::Weight};
 
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
@@ -83,9 +83,8 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 			stake_map.insert(v.clone(), *s);
 		});
 
-		let stake_of = |w: &T::AccountId| -> VoteWeight {
-			stake_map.get(w).cloned().unwrap_or_default()
-		};
+		let stake_of =
+			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
 		let ElectionResult { winners, assignments } =
 			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
@@ -94,16 +93,18 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 		let winners = to_without_backing(winners);
 
-		to_supports(&winners, &staked).map_err(Error::from).map(|s| (s, T::BlockWeights::get().max_block))
+		to_supports(&winners, &staked)
+			.map_err(Error::from)
+			.map(|s| (s, T::BlockWeights::get().max_block))
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_support::weights::Weight;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
-	use frame_support::weights::Weight;
 
 	type AccountId = u64;
 	type BlockNumber = u32;
@@ -151,20 +152,8 @@ mod tests {
 		assert_eq!(
 			OnChainPhragmen::elect().unwrap().0,
 			vec![
-				(
-					10,
-					Support {
-						total: 25,
-						voters: vec![(1, 10), (3, 15)]
-					}
-				),
-				(
-					30,
-					Support {
-						total: 35,
-						voters: vec![(2, 20), (3, 15)]
-					}
-				)
+				(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
+				(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
 			]
 		);
 	}
