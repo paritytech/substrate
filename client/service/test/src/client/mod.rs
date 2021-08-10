@@ -455,27 +455,6 @@ fn best_containing_with_genesis_block() {
 }
 
 #[test]
-fn best_containing_with_hash_not_found() {
-	// block tree:
-	// G
-
-	let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
-
-	let uninserted_block = client
-		.new_block(Default::default())
-		.unwrap()
-		.build()
-		.unwrap()
-		.block;
-
-	assert_eq!(
-		uninserted_block.hash(),
-		block_on(longest_chain_select.finality_target(uninserted_block.hash().clone(), None))
-			.unwrap(),
-	);
-}
-
-#[test]
 fn uncles_with_only_ancestors() {
 	// block tree:
 	// G -> A1 -> A2

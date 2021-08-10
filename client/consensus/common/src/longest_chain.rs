@@ -46,9 +46,9 @@ impl<B, Block> Clone for LongestChain<B, Block> {
 }
 
 impl<B, Block> LongestChain<B, Block>
-	where
-		B: backend::Backend<Block>,
-		Block: BlockT,
+where
+  B: backend::Backend<Block>,
+  Block: BlockT,
 {
 	/// Instantiate a new LongestChain for Backend B
 	pub fn new(backend: Arc<B>) -> Self {
@@ -77,9 +77,9 @@ impl<B, Block> LongestChain<B, Block>
 
 #[async_trait::async_trait]
 impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
-	where
-		B: backend::Backend<Block>,
-		Block: BlockT,
+where
+  B: backend::Backend<Block>,
+  Block: BlockT,
 {
 	async fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
 		LongestChain::leaves(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
@@ -99,7 +99,7 @@ impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
 		self.backend
 			.blockchain()
 			.best_containing(target_hash, maybe_max_number, import_lock)
-			.map(|maybe_hash| { maybe_hash.unwrap_or(target_hash) })
+			.map(|maybe_hash| maybe_hash.unwrap_or(target_hash))
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }

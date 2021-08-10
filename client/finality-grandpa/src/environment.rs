@@ -1174,9 +1174,13 @@ where
 
 	let result = match select_chain.finality_target(block, None).await {
 		Ok(best_hash) => {
-			let best_header = client
-				.header(BlockId::Hash(best_hash))?
-				.expect("Header known to exist after `finality_target` call; qed");
+			let best_header = match client.header(BlockId::Hash(best_hash))? {
+				Some(header) => header,
+				None => {
+					debug!(target: "afg", "Couldn't find target block from `finality_target`: {:?}", best_hash);
+					return Ok(None);
+				},
+			};
 
 			// check if our vote is currently being limited due to a pending change
 			let limit = limit.filter(|limit| limit < best_header.number());
