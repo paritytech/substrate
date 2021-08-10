@@ -2814,7 +2814,7 @@ mod tests {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = ();
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockNumber = u32;
 		type PalletInfo = Self;
 		type DbWeight = ();

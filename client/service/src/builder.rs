@@ -37,7 +37,7 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
+use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeVersionOf};
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
@@ -454,7 +454,7 @@ pub fn new_client<E, Block, RA>(
 >
 where
 	Block: BlockT,
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),

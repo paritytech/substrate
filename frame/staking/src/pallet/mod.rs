@@ -23,10 +23,7 @@ use frame_support::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
 		LockableCurrency, OnUnbalanced, UnixTime,
 	},
-	weights::{
-		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-		Weight,
-	},
+	weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
@@ -1311,18 +1308,18 @@ pub mod pallet {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
+			let initial_unlocking = ledger.unlocking.len() as u32;
 			let ledger = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
-			Ok(Some(
-				35 * WEIGHT_PER_MICROS +
-					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
-					T::DbWeight::get().reads_writes(3, 2),
-			)
-			.into())
+
+			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
+				.saturating_add(initial_unlocking)
+				.saturating_sub(ledger.unlocking.len() as u32);
+			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
 		}
 
 		/// Set `HistoryDepth` value. This function will delete any history information

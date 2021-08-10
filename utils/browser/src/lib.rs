@@ -27,7 +27,7 @@ use log::{debug, info};
 use sc_chain_spec::Extension;
 use sc_network::config::TransportConfig;
 use sc_service::{
-	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
+	config::{DatabaseSource, KeystoreConfig, NetworkConfiguration},
 	Configuration, GenericChainSpec, KeepBlocks, Role, RpcHandlers, RpcSession, RuntimeGenesis,
 	TaskManager, TransactionStorageMode,
 };
@@ -83,7 +83,7 @@ where
 			info!("Opening Indexed DB database '{}'...", name);
 			let db = kvdb_memorydb::create(10);
 
-			DatabaseConfig::Custom(sp_database::as_database(db))
+			DatabaseSource::Custom(sp_database::as_database(db))
 		},
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
