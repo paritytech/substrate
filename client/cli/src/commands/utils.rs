@@ -79,9 +79,9 @@ pub fn print_from_uri<Pair>(
 					"secretPhrase": uri,
 					"secretSeed": format_seed::<Pair>(seed),
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
-					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
+					"ss58PublicKey": public_key.to_ss58check_with_version(network_override).as_str(),
 					"accountId": format_account_id::<Pair>(public_key),
-					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override),
+					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override).as_str(),
 				});
 				println!(
 					"{}",
@@ -99,9 +99,13 @@ pub fn print_from_uri<Pair>(
 					uri,
 					format_seed::<Pair>(seed),
 					format_public_key::<Pair>(public_key.clone()),
-					public_key.to_ss58check_with_version(network_override),
+					public_key.to_ss58check_with_version(network_override).as_str(),
 					format_account_id::<Pair>(public_key),
-					pair.public().into().into_account().to_ss58check_with_version(network_override),
+					pair.public()
+						.into()
+						.into_account()
+						.to_ss58check_with_version(network_override)
+						.as_str(),
 				);
 			},
 		}
@@ -115,9 +119,9 @@ pub fn print_from_uri<Pair>(
 					"secretKeyUri": uri,
 					"secretSeed": if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
-					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
+					"ss58PublicKey": public_key.to_ss58check_with_version(network_override).as_str(),
 					"accountId": format_account_id::<Pair>(public_key),
-					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override),
+					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override).as_str(),
 				});
 				println!(
 					"{}",
@@ -135,9 +139,13 @@ pub fn print_from_uri<Pair>(
 					uri,
 					if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
 					format_public_key::<Pair>(public_key.clone()),
-					public_key.to_ss58check_with_version(network_override),
+					public_key.to_ss58check_with_version(network_override).as_str(),
 					format_account_id::<Pair>(public_key),
-					pair.public().into().into_account().to_ss58check_with_version(network_override),
+					pair.public()
+						.into()
+						.into_account()
+						.to_ss58check_with_version(network_override)
+						.as_str(),
 				);
 			},
 		}
@@ -148,11 +156,11 @@ pub fn print_from_uri<Pair>(
 			OutputType::Json => {
 				let json = json!({
 					"publicKeyUri": uri,
-					"networkId": String::from(network_override),
+					"networkId": network_override.to_string(),
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
-					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
+					"ss58PublicKey": public_key.to_ss58check_with_version(network_override).as_str(),
 					"accountId": format_account_id::<Pair>(public_key.clone()),
-					"ss58Address": public_key.to_ss58check_with_version(network_override),
+					"ss58Address": public_key.to_ss58check_with_version(network_override).as_str(),
 				});
 
 				println!(
@@ -169,11 +177,11 @@ pub fn print_from_uri<Pair>(
 					 Account ID:         {}\n  \
 					 SS58 Address:       {}",
 					uri,
-					String::from(network_override),
+					network_override.to_string(),
 					format_public_key::<Pair>(public_key.clone()),
-					public_key.to_ss58check_with_version(network_override),
+					public_key.to_ss58check_with_version(network_override).as_str(),
 					format_account_id::<Pair>(public_key.clone()),
-					public_key.to_ss58check_with_version(network_override),
+					public_key.to_ss58check_with_version(network_override).as_str(),
 				);
 			},
 		}
@@ -202,11 +210,11 @@ where
 	match output {
 		OutputType::Json => {
 			let json = json!({
-				"networkId": String::from(network_override),
+				"networkId": network_override.to_string(),
 				"publicKey": format_public_key::<Pair>(public_key.clone()),
-				"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
+				"ss58PublicKey": public_key.to_ss58check_with_version(network_override).as_str(),
 				"accountId": format_account_id::<Pair>(public_key.clone()),
-				"ss58Address": public_key.to_ss58check_with_version(network_override),
+				"ss58Address": public_key.to_ss58check_with_version(network_override).as_str(),
 			});
 
 			println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
@@ -218,11 +226,11 @@ where
 				 Public key (SS58):  {}\n  \
 				 Account ID:         {}\n  \
 				 SS58 Address:       {}",
-				String::from(network_override),
+				network_override.to_string(),
 				format_public_key::<Pair>(public_key.clone()),
-				public_key.to_ss58check_with_version(network_override),
+				public_key.to_ss58check_with_version(network_override).as_str(),
 				format_account_id::<Pair>(public_key.clone()),
-				public_key.to_ss58check_with_version(network_override),
+				public_key.to_ss58check_with_version(network_override).as_str(),
 			);
 		},
 	}

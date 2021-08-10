@@ -1,0 +1,35 @@
+[dependencies]
+# Mandatory
+
+arrayvec = { default-features = false, version = "0.7" }
+blake2-rfc = { default-features = false, version = "0.2" }
+bs58 = { default-features = false, version = "0.4" }
+
+# Optional
+
+hex = { default-features = false, optional = true, version = "0.4" }
+lazy_static = { default-features = false, optional = true, version = "1.0" }
+parity-scale-codec = { default-features = false, features = ["derive"], optional = true, version = "2.0" }
+parking_lot = { default-features = false, optional = true, version = "0.11" }
+regex = { default-features = false, features = ["std"], optional = true, version = "1.0" }
+sp-debug-derive = { default-features = false, optional = true, path = "../debug-derive", version = "3.0" }
+
+[features]
+default = []
+full = ["hex", "lazy_static", "parking_lot", "regex"]
+with-parity-scale-codec = ["parity-scale-codec"]
+with-sp-debug-derive = ["sp-debug-derive"]
+
+[package]
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Groups all common Substrate's Base58 logic"
+edition = "2018"
+homepage = "https://substrate.dev"
+license = "Apache-2.0"
+name = "sp-ss58"
+readme = "README.md"
+repository = "https://github.com/paritytech/substrate/"
+version = "4.0.0-dev"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

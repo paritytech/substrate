@@ -612,7 +612,7 @@ mod tests {
 			.unwrap();
 		assert_eq!(
 			"5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HJCA",
-			pair.public().to_ss58check()
+			pair.public().to_ss58check().as_str()
 		);
 
 		drop(store);

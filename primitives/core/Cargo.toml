@@ -23,7 +23,6 @@ impl-serde = { version = "0.3.0", optional = true }
 wasmi = { version = "0.9.0", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
-base58 = { version = "0.1.0", optional = true }
 rand = { version = "0.7.3", optional = true, features = ["small_rng"] }
 substrate-bip39 = { version = "0.4.2", optional = true }
 tiny-bip39 = { version = "0.8", optional = true }
@@ -40,6 +39,7 @@ parity-util-mem = { version = "0.10.0", default-features = false, features = ["p
 futures = { version = "0.3.1", optional = true }
 dyn-clonable = { version = "0.9.0", optional = true }
 thiserror = { version = "1.0.21", optional = true }
+sp-ss58 = { features = ["with-parity-scale-codec", "with-sp-debug-derive"], path = "../ss58",  version = "4.0.0-dev" }
 
 # full crypto
 ed25519-dalek = { version = "1.0.1", default-features = false, features = ["u64_backend", "alloc"], optional = true }
@@ -93,7 +93,7 @@ std = [
 	"blake2-rfc/std",
 	"ed25519-dalek/std",
 	"hex/std",
-	"base58",
+	"sp-ss58/full",
 	"substrate-bip39",
 	"tiny-bip39",
 	"byteorder/std",

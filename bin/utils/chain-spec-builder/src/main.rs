@@ -257,19 +257,24 @@ fn main() -> Result<(), String> {
 			let nominator_accounts = nominator_seeds
 				.into_iter()
 				.map(|seed| {
-					chain_spec::get_account_id_from_seed::<sr25519::Public>(&seed).to_ss58check()
+					chain_spec::get_account_id_from_seed::<sr25519::Public>(&seed)
+						.to_ss58check()
+						.to_string()
 				})
 				.collect();
 
 			let endowed_accounts = endowed_seeds
 				.into_iter()
 				.map(|seed| {
-					chain_spec::get_account_id_from_seed::<sr25519::Public>(&seed).to_ss58check()
+					chain_spec::get_account_id_from_seed::<sr25519::Public>(&seed)
+						.to_ss58check()
+						.to_string()
 				})
 				.collect();
 
-			let sudo_account =
-				chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed).to_ss58check();
+			let sudo_account = chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed)
+				.to_ss58check()
+				.to_string();
 
 			(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)
 		},
