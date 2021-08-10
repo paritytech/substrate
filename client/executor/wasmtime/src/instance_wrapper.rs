@@ -58,9 +58,9 @@ impl EntryPoint {
 	/// Call this entry point.
 	pub fn call(
 		&self,
+		ctx: impl AsContextMut,
 		data_ptr: Pointer<u8>,
 		data_len: WordSize,
-		store: &mut Store,
 	) -> Result<u64> {
 		let data_ptr = u32::from(data_ptr);
 		let data_len = u32::from(data_len);
@@ -71,9 +71,9 @@ impl EntryPoint {
 
 		match self.call_type {
 			EntryPointType::Direct { ref entrypoint } =>
-				entrypoint.call(store, (data_ptr, data_len)).map_err(handle_trap),
+				entrypoint.call(ctx, (data_ptr, data_len)).map_err(handle_trap),
 			EntryPointType::Wrapped { func, ref dispatcher } =>
-				dispatcher.call(store, (func, data_ptr, data_len)).map_err(handle_trap),
+				dispatcher.call(ctx, (func, data_ptr, data_len)).map_err(handle_trap),
 		}
 	}
 
@@ -113,7 +113,6 @@ pub struct InstanceWrapper {
 	// See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
 	table: Option<Table>,
-	store: Rc<RefCell<Store>>,
 	// Make this struct explicitly !Send & !Sync.
 	_not_send_nor_sync: marker::PhantomData<*const ()>,
 }
@@ -149,7 +148,6 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
 	pub fn new(
-		store: Rc<RefCell<Store>>,
 		module: &Module,
 		imports: &Imports,
 		heap_pages: u32,
@@ -173,7 +171,7 @@ impl InstanceWrapper {
 
 		let table = get_table(&instance, ctx);
 
-		Ok(Self { table, instance, memory, store, _not_send_nor_sync: marker::PhantomData })
+		Ok(Self { table, instance, memory, _not_send_nor_sync: marker::PhantomData })
 	}
 
 	/// Resolves a substrate entrypoint by the given name.
@@ -323,9 +321,13 @@ impl InstanceWrapper {
 	/// Read data from a slice of memory into a destination buffer.
 	///
 	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
-		let store = &mut *self.store.borrow_mut();
-		let memory = self.memory.data(store);
+	pub fn read_memory_into(
+		&self,
+		ctx: impl AsContext,
+		address: Pointer<u8>,
+		dest: &mut [u8],
+	) -> Result<()> {
+		let memory = self.memory.data(ctx.as_context());
 
 		let range = util::checked_range(address.into(), dest.len(), memory.len())
 			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
@@ -338,9 +340,9 @@ impl InstanceWrapper {
 	/// Returns an error if the write would go out of the memory bounds.
 	pub fn write_memory_from(
 		&self,
+		mut ctx: impl AsContextMut,
 		address: Pointer<u8>,
 		data: &[u8],
-		mut ctx: impl AsContextMut,
 	) -> Result<()> {
 		let memory = self.memory.data_mut(ctx.as_context_mut());
 
@@ -356,9 +358,9 @@ impl InstanceWrapper {
 	/// to get more details.
 	pub fn allocate(
 		&self,
+		mut ctx: impl AsContextMut,
 		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
 		size: WordSize,
-		mut ctx: impl AsContextMut,
 	) -> Result<Pointer<u8>> {
 		let memory = self.memory.data_mut(ctx.as_context_mut());
 
@@ -370,9 +372,9 @@ impl InstanceWrapper {
 	/// Returns `Err` in case the given memory region cannot be deallocated.
 	pub fn deallocate(
 		&self,
+		mut ctx: impl AsContextMut,
 		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
 		ptr: Pointer<u8>,
-		mut ctx: impl AsContextMut,
 	) -> Result<()> {
 		let memory = self.memory.data_mut(ctx.as_context_mut());
 
@@ -380,15 +382,15 @@ impl InstanceWrapper {
 	}
 
 	/// Returns the pointer to the first byte of the linear memory for this instance.
-	pub fn base_ptr(&self) -> *const u8 {
-		self.memory.data_ptr(&*self.store.borrow())
+	pub fn base_ptr(&self, ctx: impl AsContext) -> *const u8 {
+		self.memory.data_ptr(ctx)
 	}
 
 	/// Removes physical backing from the allocated linear memory. This leads to returning the memory
 	/// back to the system. While the memory is zeroed this is considered as a side-effect and is not
 	/// relied upon. Thus this function acts as a hint.
-	pub fn decommit(&self) {
-		if self.memory.data_size(&*self.store.borrow()) == 0 {
+	pub fn decommit(&self, ctx: impl AsContext) {
+		if self.memory.data_size(&ctx) == 0 {
 			return
 		}
 
@@ -397,8 +399,8 @@ impl InstanceWrapper {
 				use std::sync::Once;
 
 				unsafe {
-					let ptr = self.memory.data_ptr(&*self.store.borrow());
-					let len = self.memory.data_size(&*self.store.borrow());
+					let ptr = self.memory.data_ptr(&ctx);
+					let len = self.memory.data_size(ctx);
 
 					// Linux handles MADV_DONTNEED reliably. The result is that the given area
 					// is unmapped and will be zeroed on the next pagefault.

@@ -39,7 +39,7 @@ use std::{
 	rc::Rc,
 	sync::Arc,
 };
-use wasmtime::{AsContextMut, Engine, StoreLimits};
+use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
 
 pub(crate) type Store = wasmtime::Store<StoreLimits>;
 
@@ -64,7 +64,6 @@ struct InstanceCreator {
 impl InstanceCreator {
 	fn instantiate(&self, ctx: impl AsContextMut) -> Result<InstanceWrapper> {
 		InstanceWrapper::new(
-			self.store.clone(),
 			&*self.module,
 			&*self.imports,
 			self.heap_pages,
@@ -130,7 +129,6 @@ impl WasmModule for WasmtimeRuntime {
 
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
 			let instance_wrapper = InstanceWrapper::new(
-				store.clone(),
 				&self.module,
 				&imports,
 				self.config.heap_pages,
@@ -185,24 +183,21 @@ impl WasmInstance for WasmtimeInstance {
 				heap_base,
 				store,
 			} => {
-				let store = &mut *store.borrow_mut();
-				let entrypoint = instance_wrapper.resolve_entrypoint(method, store)?;
+				let mut store = &mut *store.borrow_mut();
+				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut store)?;
 
 				data_segments_snapshot.apply(|offset, contents| {
-					instance_wrapper.write_memory_from(
-						Pointer::new(offset),
-						contents,
-						&mut *instance_wrapper.store().borrow_mut(),
-					)
+					instance_wrapper.write_memory_from(&mut store, Pointer::new(offset), contents)
 				})?;
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result = perform_call(data, instance_wrapper.clone(), entrypoint, allocator);
+				let result =
+					perform_call(&mut store, data, instance_wrapper.clone(), entrypoint, allocator);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
-				instance_wrapper.decommit();
+				instance_wrapper.decommit(&store);
 
 				result
 			},
@@ -210,10 +205,10 @@ impl WasmInstance for WasmtimeInstance {
 				let mut store = &mut *instance_creator.store.borrow_mut();
 				let instance_wrapper = instance_creator.instantiate(&mut store)?;
 				let heap_base = instance_wrapper.extract_heap_base(&mut store)?;
-				let entrypoint = instance_wrapper.resolve_entrypoint(method, store)?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut store)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
-				perform_call(data, Rc::new(instance_wrapper), entrypoint, allocator)
+				perform_call(store, data, Rc::new(instance_wrapper), entrypoint, allocator)
 			},
 		}
 	}
@@ -236,8 +231,8 @@ impl WasmInstance for WasmtimeInstance {
 				// associated with it.
 				None
 			},
-			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
-				Some(instance_wrapper.base_ptr()),
+			Strategy::FastInstanceReuse { instance_wrapper, store, .. } =>
+				Some(instance_wrapper.base_ptr(&*store.borrow())),
 		}
 	}
 }
@@ -566,44 +561,44 @@ pub fn prepare_runtime_artifact(
 }
 
 fn perform_call(
+	mut ctx: impl AsContextMut,
 	data: &[u8],
 	instance_wrapper: Rc<InstanceWrapper>,
 	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
-	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
+	let (data_ptr, data_len) =
+		inject_input_data(&mut ctx, &instance_wrapper, &mut allocator, data)?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
 	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(
-			data_ptr,
-			data_len,
-			&mut *instance_wrapper.store().borrow_mut(),
-		)?))
+		Ok(unpack_ptr_and_len(entrypoint.call(&mut ctx, data_ptr, data_len)?))
 	});
 	let (output_ptr, output_len) = ret?;
-	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
+	let output = extract_output_data(ctx, &instance_wrapper, output_ptr, output_len)?;
 
 	Ok(output)
 }
 
 fn inject_input_data(
+	mut ctx: impl AsContextMut,
 	instance: &InstanceWrapper,
 	allocator: &mut FreeingBumpHeapAllocator,
 	data: &[u8],
 ) -> Result<(Pointer<u8>, WordSize)> {
 	let data_len = data.len() as WordSize;
-	let data_ptr = instance.allocate(allocator, data_len, &mut *instance.store().borrow_mut())?;
-	instance.write_memory_from(data_ptr, data, &mut *instance.store().borrow_mut())?;
+	let data_ptr = instance.allocate(&mut ctx, allocator, data_len)?;
+	instance.write_memory_from(ctx, data_ptr, data)?;
 	Ok((data_ptr, data_len))
 }
 
 fn extract_output_data(
+	ctx: impl AsContext,
 	instance: &InstanceWrapper,
 	output_ptr: u32,
 	output_len: u32,
 ) -> Result<Vec<u8>> {
 	let mut output = vec![0; output_len as usize];
-	instance.read_memory_into(Pointer::new(output_ptr), &mut output)?;
+	instance.read_memory_into(ctx, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }

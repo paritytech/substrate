@@ -138,12 +138,13 @@ impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> 
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		self.instance.read_memory_into(address, dest).map_err(|e| e.to_string())
+		let ctx = &self.1;
+		self.0.instance.read_memory_into(ctx, address, dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
 		let ctx = &mut self.1;
-		self.0.instance.write_memory_from(address, data, ctx).map_err(|e| e.to_string())
+		self.0.instance.write_memory_from(ctx, address, data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
@@ -152,7 +153,7 @@ impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> 
 
 		self.0
 			.instance
-			.allocate(&mut *allocator.borrow_mut(), size, ctx)
+			.allocate(ctx, &mut *allocator.borrow_mut(), size)
 			.map_err(|e| e.to_string())
 	}
 
@@ -162,7 +163,7 @@ impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> 
 
 		self.0
 			.instance
-			.deallocate(&mut *allocator.borrow_mut(), ptr, ctx)
+			.deallocate(ctx, &mut *allocator.borrow_mut(), ptr)
 			.map_err(|e| e.to_string())
 	}
 
@@ -196,9 +197,9 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 			self.0
 				.instance
 				.write_memory_from(
+					&mut self.1,
 					Pointer::new(dst_range.start as u32),
 					&sandboxed_memory[src_range],
-					&mut self.1,
 				)
 				.expect("ranges are checked above; write can't fail; qed");
 			Ok(sandbox_primitives::ERR_OK)
@@ -226,8 +227,10 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			self.instance
+			self.0
+				.instance
 				.read_memory_into(
+					&mut self.1,
 					Pointer::new(src_range.start as u32),
 					&mut sandboxed_memory[dst_range],
 				)
