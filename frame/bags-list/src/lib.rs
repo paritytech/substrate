@@ -265,7 +265,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	// Benchmark helpers
-	// #[cfg(feature = "runtime-benchmarks")]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn prepare_on_update_benchmark(
 		origin_thresh: VoteWeight,
 		dest_thresh: VoteWeight,

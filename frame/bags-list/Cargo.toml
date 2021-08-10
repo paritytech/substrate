@@ -60,5 +60,6 @@ runtime-benchmarks = [
 	"sp-io",
 	"pallet-balances",
 	"sp-tracing",
+  "frame-election-provider-support/runtime-benchmarks",
 ]
 

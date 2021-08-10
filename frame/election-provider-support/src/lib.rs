@@ -333,7 +333,7 @@ pub trait SortedListProvider<AccountId> {
 	fn sanity_check() -> Result<(), &'static str>;
 
 	// Benchmark helpers
-	// #[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn prepare_on_update_benchmark(
 		origin_thresh: VoteWeight,
 		dest_thresh: VoteWeight,

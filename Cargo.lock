@@ -5616,15 +5616,12 @@ dependencies = [
 name = "pallet-staking"
 version = "4.0.0-dev"
 dependencies = [
- "chrono",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
- "git2",
  "hex",
  "log",
- "num-format",
  "pallet-authorship",
  "pallet-bags-list",
  "pallet-balances",
