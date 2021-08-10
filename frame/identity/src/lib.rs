@@ -451,8 +451,8 @@ pub mod pallet {
 
 			Ok(Some(
 				T::WeightInfo::set_subs_old(old_ids.len() as u32) // P: Real number of old accounts removed.
-					.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)), /* S: New subs
-				                                                                 * added. */
+					// S: New subs added
+					.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)),
 			)
 			.into())
 		}

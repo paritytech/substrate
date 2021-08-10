@@ -133,7 +133,8 @@
 //! <!-- Original author of paragraph: ??? -->
 //!
 //! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should
-//! only be // included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the README file.
+//! // only be included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the
+//! // README file.
 //!
 //! \### Dispatchable Functions
 //!

@@ -2276,7 +2276,7 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 /// 	and write inside
-/// on_initialize/on_finalize/on_runtime_upgrade/offchain_worker/integrity_test
+/// 	`on_initialize`, `on_finalize`, `on_runtime_upgrade`, `offchain_worker`, `integrity_test`.
 ///
 /// 	then write:
 /// 	```ignore

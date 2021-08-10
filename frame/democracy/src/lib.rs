@@ -1626,10 +1626,8 @@ impl<T: Config> Pallet<T> {
 	fn launch_public(now: T::BlockNumber) -> DispatchResult {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
-			|x| Self::backing_for((x.1).0).unwrap_or_else(Zero::zero), /* ^^ defensive only: All
-			                                                            * current public
-			                                                            * proposals have an
-			                                                            * amount locked */
+			// defensive only: All current public proposals have an amount locked
+			|x| Self::backing_for((x.1).0).unwrap_or_else(Zero::zero),
 		) {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);
