@@ -20,10 +20,11 @@
 pub use self::gen_client::Client as BalancesClient;
 pub use pallet_balances_rpc_runtime_api::BalancesApi as BalancesRuntimeApi;
 
-use core::{fmt, str::FromStr};
 use codec::Codec;
+use core::{fmt, str::FromStr};
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
+use pallet_balances_rpc_runtime_api::SerdeWrapper;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -31,30 +32,25 @@ use sp_runtime::{
 	traits::{Block as BlockT, MaybeDisplay, MaybeFromStr},
 };
 use std::sync::Arc;
-use pallet_balances_rpc_runtime_api::SerdeWrapper;
 
 /// Balances RPC methods.
 #[rpc]
 pub trait BalancesApi<BlockHash, AccountId, Balance>
 where
-	Balance: FromStr + fmt::Display
+	Balance: FromStr + fmt::Display,
 {
-    #[rpc(name="balances_freeBalance")]
-    fn free_balance(
-		&self,
-		who: AccountId,
-		at: Option<BlockHash>
-	) -> Result<SerdeWrapper<Balance>>;
+	#[rpc(name = "balances_freeBalance")]
+	fn free_balance(&self, who: AccountId, at: Option<BlockHash>) -> Result<SerdeWrapper<Balance>>;
 }
 
 /// A struct that implements the ['BalancesApi'].
 pub struct BalancesRpcHandler<C, P> {
-    client: Arc<C>,
-    _marker: std::marker::PhantomData<P>,
+	client: Arc<C>,
+	_marker: std::marker::PhantomData<P>,
 }
 
 impl<C, P> BalancesRpcHandler<C, P> {
-    /// Create new `Balances` with the given reference to the client.
+	/// Create new `Balances` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
 	}
@@ -74,25 +70,21 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, AccountId, Balance>
-	BalancesApi<
-		<Block as BlockT>::Hash,
-		AccountId,
-		Balance,
-    > for BalancesRpcHandler<C, Block>
+impl<C, Block, AccountId, Balance> BalancesApi<<Block as BlockT>::Hash, AccountId, Balance>
+	for BalancesRpcHandler<C, Block>
 where
-    Block: BlockT,
-    C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-    C::Api: BalancesRuntimeApi<Block, AccountId, Balance>,
-    AccountId: Codec,
+	Block: BlockT,
+	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
+	C::Api: BalancesRuntimeApi<Block, AccountId, Balance>,
+	AccountId: Codec,
 	Balance: Codec + MaybeDisplay + MaybeFromStr,
 {
-    fn free_balance(
-        &self,
-        who: AccountId,
+	fn free_balance(
+		&self,
+		who: AccountId,
 		at: Option<<Block as BlockT>::Hash>,
-    ) -> Result<SerdeWrapper<Balance>> {
-        let api = self.client.runtime_api();
+	) -> Result<SerdeWrapper<Balance>> {
+		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
@@ -102,5 +94,5 @@ where
 			message: "Unable to query balances info.".into(),
 			data: Some(format!("{:?}", e).into()),
 		})
-    }
+	}
 }
