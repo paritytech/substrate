@@ -105,30 +105,41 @@ fn remove_last_node_in_bags_cleans_bag() {
 
 #[test]
 fn migrate_works() {
-	ExtBuilder::default().add_ids(vec![(710, 15), (711, 16), (712, 2_000)]).build_and_execute(|| {
-		// given
-		assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![710, 711]), (1000, vec![2, 3, 4]), (2_000, vec![712])]);
-		let old_thresholds = <Runtime as Config>::BagThresholds::get();
-		assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
+	ExtBuilder::default()
+		.add_ids(vec![(710, 15), (711, 16), (712, 2_000)])
+		.build_and_execute(|| {
+			// given
+			assert_eq!(
+				get_bags(),
+				vec![
+					(10, vec![1]),
+					(20, vec![710, 711]),
+					(1000, vec![2, 3, 4]),
+					(2_000, vec![712])
+				]
+			);
+			let old_thresholds = <Runtime as Config>::BagThresholds::get();
+			assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
 
-		// when the new thresholds adds `15` and removes `2_000`
-		const NEW_THRESHOLDS: &'static [VoteWeight] = &[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
-		BagThresholds::set(NEW_THRESHOLDS);
-		// and we call
-		List::<Runtime>::migrate(old_thresholds);
+			// when the new thresholds adds `15` and removes `2_000`
+			const NEW_THRESHOLDS: &'static [VoteWeight] =
+				&[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
+			BagThresholds::set(NEW_THRESHOLDS);
+			// and we call
+			List::<Runtime>::migrate(old_thresholds);
 
-		// then
-		assert_eq!(
-			get_bags(),
-			vec![
-				(10, vec![1]),
-				(15, vec![710]), // nodes in range 11 ..= 15 move from bag 20 to bag 15
-				(20, vec![711]),
-				(1000, vec![2, 3, 4]),
-				(10_000, vec![712]), // nodes in range 1_001 ..= 2_000 move from bag 2_000 to bag 10_000
-			]
-		);
-	});
+			// then
+			assert_eq!(
+				get_bags(),
+				vec![
+					(10, vec![1]),
+					(15, vec![710]), // nodes in range 11 ..= 15 move from bag 20 to bag 15
+					(20, vec![711]),
+					(1000, vec![2, 3, 4]),
+					(10_000, vec![712]), // nodes in range 1_001 ..= 2_000 move from bag 2_000 to bag 10_000
+				]
+			);
+		});
 }
 
 mod list {
