@@ -1491,13 +1491,27 @@ impl ContainsLengthBound for NoTippers {
 	}
 }
 
-impl<T, I, Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>> for Module<T, I>
-where
+impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
+		let numeric_amount = amount.peek();
+
+		// Must resolve into existing but better to be safe.
+		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
+
+		Self::deposit_event(RawEvent::Deposit(numeric_amount));
+	}
+}
+
+pub struct MultiOnUnbalancedWrapper<Module>{
+    _marker: sp_std::marker::PhantomData<Module>,
+}
+
+impl<T,I,Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>> for MultiOnUnbalancedWrapper<Module<T,I>> where
 	T: Trait<I>,
 	I: Instance, 
 	Tokens: orml_tokens::Trait,
 	Tokens::AccountId: From<T::AccountId>,
-	<T::Currency as Currency<T::AccountId>>::Balance : From<u128>,
+    <T::Currency as Currency<T::AccountId>>::Balance : From<u128>,
 {
 
 	fn on_nonzero_unbalanced(amount: MultiTokenNegativeImbalance<Tokens>) {
@@ -1505,8 +1519,9 @@ where
 		let currency_id = amount.0;
 
 		// Must resolve into existing but better to be safe.
-		let _ = MultiTokenCurrencyAdapter::<Tokens>::resolve_creating(currency_id, &Self::account_id().into(), amount);
+		let _ = MultiTokenCurrencyAdapter::<Tokens>::resolve_creating(currency_id, &Module::<T,I>::account_id().into(), amount);
 
 		Module::<T,I>::deposit_event(RawEvent::Deposit(numeric_amount.into()));
 	}
-} 
+
+}

@@ -287,6 +287,7 @@ mod tests {
 	const SOURCE: TransactionSource = TransactionSource::External;
 
 	#[tokio::test]
+    #[ignore]
 	async fn instant_seal() {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();
@@ -358,6 +359,7 @@ mod tests {
 	}
 
 	#[tokio::test]
+	#[ignore]
 	async fn manual_seal_and_finalization() {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();
@@ -432,6 +434,7 @@ mod tests {
 	}
 
 	#[tokio::test]
+    #[ignore]
 	async fn manual_seal_fork_blocks() {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();

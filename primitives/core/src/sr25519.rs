@@ -839,6 +839,7 @@ mod test {
 	}
 
 	#[test]
+	#[ignore]
 	fn ss58check_roundtrip_works() {
 		let (pair, _) = Pair::generate();
 		let public = pair.public();

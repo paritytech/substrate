@@ -183,7 +183,7 @@ fn record_proof_works() {
 		.new_block_at(&block_id, Default::default(), true)
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
-	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
+	let (block, _, proof) = builder.build(Default::default()).expect("Bake block").into_inner();
 
 	let backend = create_proof_check_backend::<HashFor<Block>>(
 		storage_root,
