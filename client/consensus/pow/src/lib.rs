@@ -560,6 +560,7 @@ where
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.lock().on_major_syncing();
+				debug!(target: "pow", "SyncOracle is syncing.");
 				continue
 			}
 
@@ -572,7 +573,8 @@ where
 						 Select best chain error: {:?}",
 						err
 					);
-					return
+					warn!(target: "pow", "Unable to seal block");
+					continue
 				},
 			};
 			let best_hash = best_header.hash();
@@ -584,11 +586,14 @@ where
 					 Probably a node update is required!",
 					err,
 				);
-				return
+				warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
+				continue
 			}
 
 			if worker.lock().best_hash() == Some(best_hash) {
-				return
+				debug!(target: "pow", "Got the best hash");
+				debug!(target: "pow", "Still waiting for seal for block {}", best_hash);
+				continue
 			}
 
 			// The worker is locked for the duration of the whole proposing period. Within this period,
@@ -603,7 +608,8 @@ where
 						 Fetch difficulty failed: {:?}",
 						err,
 					);
-					return
+					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
+					continue
 				},
 			};
 
@@ -619,7 +625,8 @@ where
 						 Creating inherent data providers failed: {:?}",
 						err,
 					);
-					return
+					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
+					continue
 				},
 			};
 
@@ -632,7 +639,8 @@ where
 						 Creating inherent data failed: {:?}",
 						e,
 					);
-					return
+					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
+					continue;
 				},
 			};
 
@@ -652,7 +660,8 @@ where
 						 Creating proposer failed: {:?}",
 						err,
 					);
-					return
+					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
+					continue;
 				},
 			};
 
@@ -668,7 +677,8 @@ where
 						 Creating proposal failed: {:?}",
 						err,
 					);
-					return
+					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
+					continue;
 				},
 			};
 
