@@ -366,10 +366,10 @@ impl CliConfiguration for RunCmd {
 			let interface =
 				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
-			Some(PrometheusConfig::new_with_default_registry(SocketAddr::new(
-				interface.into(),
-				self.prometheus_port.unwrap_or(default_listen_port),
-			)))
+			Some(PrometheusConfig::new_with_default_registry(
+				SocketAddr::new(interface.into(), self.prometheus_port.unwrap_or(default_listen_port)),
+				self.chain_id()
+			))
 		})
 	}
 

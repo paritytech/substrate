@@ -38,6 +38,7 @@ use sp_core::crypto::SecretString;
 use std::{
 	future::Future,
 	io,
+	iter,
 	net::SocketAddr,
 	path::{Path, PathBuf},
 	pin::Pin,
@@ -197,10 +198,10 @@ impl PrometheusConfig {
 	/// Create a new config using the default registry.
 	///
 	/// The default registry prefixes metrics with `substrate`.
-	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+	pub fn new_with_default_registry(port: SocketAddr, chain_id: String) -> Self {
 		Self {
 			port,
-			registry: Registry::new_custom(Some("substrate".into()), None)
+			registry: Registry::new_custom(None, Some(iter::once((String::from("chain"), chain_id)).collect()))
 				.expect("this can only fail if the prefix is empty"),
 		}
 	}

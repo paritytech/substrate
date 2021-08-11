@@ -39,7 +39,7 @@ impl RpcMetrics {
 				.map(|r| {
 					register(
 						CounterVec::new(
-							Opts::new("rpc_calls_total", "Number of rpc calls received"),
+							Opts::new("substrate_rpc_calls_total", "Number of rpc calls received"),
 							&["protocol"],
 						)?,
 						r,

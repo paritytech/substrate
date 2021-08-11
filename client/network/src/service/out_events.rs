@@ -192,7 +192,7 @@ impl Metrics {
 		Ok(Self {
 			events_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_events_total",
+					"substrate_sub_libp2p_out_events_events_total",
 					"Number of broadcast network events that have been sent or received across all \
 					 channels"
 				),
@@ -200,7 +200,7 @@ impl Metrics {
 			)?, registry)?,
 			notifications_sizes: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_notifications_sizes",
+					"substrate_sub_libp2p_out_events_notifications_sizes",
 					"Size of notification events that have been sent or received across all \
 					 channels"
 				),
@@ -208,7 +208,7 @@ impl Metrics {
 			)?, registry)?,
 			num_channels: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_num_channels",
+					"substrate_sub_libp2p_out_events_num_channels",
 					"Number of internal active channels that broadcast network events",
 				),
 				&["name"]
