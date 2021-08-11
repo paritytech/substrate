@@ -651,6 +651,11 @@ publish-rustdoc:
       when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
+  # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
+  # artifacts from being dowloaded by this job.
+  needs:
+    - job:                         build-rustdoc
+      artifacts:                   true
   script:
     - rm -rf /tmp/*
     # Set git config
