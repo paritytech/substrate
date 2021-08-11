@@ -572,13 +572,15 @@ fn nominating_and_rewards_should_work() {
 			mock::make_all_reward_payment(1);
 			let payout_for_10 = total_payout_1 / 3;
 			let payout_for_20 = 2 * total_payout_1 / 3;
-			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==>
+			// 2/9 + 3/11
 			assert_eq_error_rate!(
 				Balances::total_balance(&2),
 				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
 				2,
 			);
-			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
+			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==>
+			// 2/9 + 3/11
 			assert_eq_error_rate!(
 				Balances::total_balance(&4),
 				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
@@ -591,7 +593,8 @@ fn nominating_and_rewards_should_work() {
 				initial_balance + 5 * payout_for_10 / 9,
 				2,
 			);
-			// Validator 20: got `1200/2200` external stake => 12/22 =? 6/11 => Validator's share = 5/11
+			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share =
+			// 5/11
 			assert_eq_error_rate!(
 				Balances::total_balance(&20),
 				initial_balance_20 + 5 * payout_for_20 / 11,
@@ -684,7 +687,8 @@ fn double_staking_should_fail() {
 #[test]
 fn double_controlling_should_fail() {
 	// should test (in the same order):
-	// * an account already bonded as controller CANNOT be reused as the controller of another account.
+	// * an account already bonded as controller CANNOT be reused as the controller of another
+	//   account.
 	ExtBuilder::default().build_and_execute(|| {
 		let arbitrary_value = 5;
 		// 2 = controller, 1 stashed => ok
@@ -1116,6 +1120,7 @@ fn bond_extra_works() {
 
 #[test]
 fn bond_extra_and_withdraw_unbonded_works() {
+	//
 	// * Should test
 	// * Given an account being bonded [and chosen as a validator](not mandatory)
 	// * It can add extra funds to the bonded account.
@@ -1282,6 +1287,7 @@ fn too_many_unbond_calls_should_not_work() {
 
 #[test]
 fn rebond_works() {
+	//
 	// * Should test
 	// * Given an account being bonded [and chosen as a validator](not mandatory)
 	// * it can unbond a portion of its funds from the stash account.
@@ -1683,7 +1689,8 @@ fn on_free_balance_zero_stash_removes_nominator() {
 
 #[test]
 fn switching_roles() {
-	// Test that it should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
+	// Test that it should be possible to switch between roles (nominator, validator, idle) with
+	// minimal overhead.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Reset reward destination
 		for i in &[10, 20] {
@@ -3354,7 +3361,8 @@ fn payout_stakers_handles_weight_refund() {
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 
-		// The validator is not rewarded in this era; so there will be zero payouts to claim for this era.
+		// The validator is not rewarded in this era; so there will be zero payouts to claim for
+		// this era.
 
 		// Era 3
 		start_active_era(3);
@@ -4118,7 +4126,8 @@ fn chill_other_works() {
 			assert_eq!(CounterForNominators::<Test>::get(), 15 + initial_nominators);
 			assert_eq!(CounterForValidators::<Test>::get(), 15 + initial_validators);
 
-			// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting with 16)
+			// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting
+			// with 16)
 			for i in 6..15 {
 				let b = 4 * i + 1;
 				let d = 4 * i + 3;

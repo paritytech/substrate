@@ -254,8 +254,9 @@ impl KeystoreContainer {
 	///
 	/// # Note
 	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
-	/// a remote keystore for example. Only use this if you a certain that you require it!
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
+	/// implementation, like a remote keystore for example. Only use this if you a certain that you
+	/// require it!
 	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
 		Some(self.local.clone())
 	}

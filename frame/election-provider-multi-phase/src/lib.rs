@@ -334,8 +334,8 @@ pub enum Phase<Bn> {
 	/// number.
 	///
 	/// We do not yet check whether the unsigned phase is active or passive. The intent is for the
-	/// blockchain to be able to declare: "I believe that there exists an adequate signed solution,"
-	/// advising validators not to bother running the unsigned offchain worker.
+	/// blockchain to be able to declare: "I believe that there exists an adequate signed
+	/// solution," advising validators not to bother running the unsigned offchain worker.
 	///
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
 	/// and always compute their own solution. However, by default, when the unsigned phase is
@@ -716,20 +716,23 @@ pub mod pallet {
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// our needs vary according to whether or not the unsigned phase follows a signed phase
+					// our needs vary according to whether or not the unsigned phase follows a
+					// signed phase
 					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed
 					{
-						// there was previously a signed phase: close the signed phase, no need for snapshot.
+						// there was previously a signed phase: close the signed phase, no need for
+						// snapshot.
 						//
 						// Notes:
 						//
-						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is
-						//     a guard against the case that `elect` is called prematurely. This adds
-						//     a small amount of overhead, but that is unfortunately unavoidable.
+						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This
+						//     is a guard against the case that `elect` is called prematurely. This
+						//     adds a small amount of overhead, but that is unfortunately
+						//     unavoidable.
 						let (_success, weight) = Self::finalize_signed_phase();
 						// In the future we can consider disabling the unsigned phase if the signed
-						// phase completes successfully, but for now we're enabling it unconditionally
-						// as a defensive measure.
+						// phase completes successfully, but for now we're enabling it
+						// unconditionally as a defensive measure.
 						(false, true, weight)
 					} else {
 						// No signed phase: create a new snapshot, definitely `enable` the unsigned
@@ -1068,6 +1071,7 @@ pub mod pallet {
 
 	#[pallet::origin]
 	pub struct Origin<T>(PhantomData<T>);
+
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -1320,7 +1324,8 @@ impl<T: Config> Pallet<T> {
 		<DesiredTargets<T>>::put(desired_targets);
 
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
-		// `encoded_size` encodes it without storing it anywhere, this should not cause any allocation.
+		// `encoded_size` encodes it without storing it anywhere, this should not cause any
+		// allocation.
 		let snapshot = RoundSnapshot { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(info, "snapshot pre-calculated size {:?}", size);
@@ -1473,7 +1478,8 @@ impl<T: Config> Pallet<T> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
-		// - signed phase was open, in which case this is essential for correct functioning of the system
+		// - signed phase was open, in which case this is essential for correct functioning of the
+		//   system
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let (_, signed_finalize_weight) = Self::finalize_signed_phase();

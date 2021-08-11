@@ -45,7 +45,8 @@ pub enum Command {
 	OnRuntimeUpgrade(OnRuntimeUpgradeCmd),
 	/// Execute "OffchainWorkerApi_offchain_worker" against the given runtime state.
 	OffchainWorker(OffchainWorkerCmd),
-	/// Execute "Core_execute_block" using the given block and the runtime state of the parent block.
+	/// Execute "Core_execute_block" using the given block and the runtime state of the parent
+	/// block.
 	ExecuteBlock(ExecuteBlockCmd),
 }
 

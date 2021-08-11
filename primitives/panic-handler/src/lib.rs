@@ -112,7 +112,8 @@ impl AbortGuard {
 	}
 
 	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
-	/// **never** abort the process (even if `AbortGuard::force_abort()` guard will be created afterwards).
+	/// **never** abort the process (even if `AbortGuard::force_abort()` guard will be created
+	/// afterwards).
 	pub fn never_abort() -> AbortGuard {
 		AbortGuard { previous_val: set_abort(OnPanic::NeverAbort), _not_send: PhantomData }
 	}

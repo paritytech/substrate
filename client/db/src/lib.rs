@@ -1067,8 +1067,8 @@ impl<T: Clone> FrozenForDuration<T> {
 
 /// Disk backend.
 ///
-/// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
-/// Otherwise, trie nodes are kept only from some recent blocks.
+/// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
+/// blocks. Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
@@ -1459,8 +1459,9 @@ impl<Block: BlockT> Backend<Block> {
 				if operation.commit_state {
 					transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
 				} else {
-					// When we don't want to commit the genesis state, we still preserve it in memory
-					// to bootstrap consensus. It is queried for an initial list of authorities, etc.
+					// When we don't want to commit the genesis state, we still preserve it in
+					// memory to bootstrap consensus. It is queried for an initial list of
+					// authorities, etc.
 					*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
 						pending_block.header.state_root().clone(),
 						operation.db_updates.clone(),
@@ -3403,7 +3404,8 @@ pub(crate) mod tests {
 		let block5 = insert_header(&backend, 5, block4, None, Default::default());
 		assert_eq!(backend.blockchain().info().best_hash, block5);
 
-		// Insert 1 as best again. This should fail because canonicalization_delay == 3 and best == 5
+		// Insert 1 as best again. This should fail because canonicalization_delay == 3 and best ==
+		// 5
 		let header = Header {
 			number: 1,
 			parent_hash: block0,

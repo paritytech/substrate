@@ -167,8 +167,8 @@ where
 {
 	/// Reads a storage kv pair of a contract.
 	///
-	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the contract
-	/// doesn't store under the given `key` `None` is returned.
+	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
+	/// contract doesn't store under the given `key` `None` is returned.
 	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
 		child::get_raw(&child_trie_info(&trie_id), &blake2_256(key))
 	}
@@ -230,7 +230,8 @@ where
 		Ok(())
 	}
 
-	/// Creates a new contract descriptor in the storage with the given code hash at the given address.
+	/// Creates a new contract descriptor in the storage with the given code hash at the given
+	/// address.
 	///
 	/// Returns `Err` if there is already a contract (or a tombstone) exists at the given address.
 	pub fn new_contract(

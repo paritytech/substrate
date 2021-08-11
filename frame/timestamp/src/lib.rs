@@ -27,13 +27,14 @@
 //!
 //! The Timestamp pallet allows the validators to set and validate a timestamp with each block.
 //!
-//! It uses inherents for timestamp data, which is provided by the block author and validated/verified
-//! by other validators. The timestamp can be set only once per block and must be set each block.
-//! There could be a constraint on how much time must pass before setting the new timestamp.
+//! It uses inherents for timestamp data, which is provided by the block author and
+//! validated/verified by other validators. The timestamp can be set only once per block and must be
+//! set each block. There could be a constraint on how much time must pass before setting the new
+//! timestamp.
 //!
-//! **NOTE:** The Timestamp pallet is the recommended way to query the on-chain time instead of using
-//! an approach based on block numbers. The block number based time measurement can cause issues
-//! because of cumulative calculation errors and hence should be avoided.
+//! **NOTE:** The Timestamp pallet is the recommended way to query the on-chain time instead of
+//! using an approach based on block numbers. The block number based time measurement can cause
+//! issues because of cumulative calculation errors and hence should be avoided.
 //!
 //! ## Interface
 //!
@@ -52,7 +53,8 @@
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the Timestamp pallet in your custom pallet to query the current timestamp.
+//! The following example shows how to use the Timestamp pallet in your custom pallet to query the
+//! current timestamp.
 //!
 //! ### Prerequisites
 //!
@@ -120,13 +122,14 @@ pub mod pallet {
 			+ Copy
 			+ MaxEncodedLen;
 
-		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
+		/// Something which can be notified when the timestamp is set. Set this to `()` if not
+		/// needed.
 		type OnTimestampSet: OnTimestampSet<Self::Moment>;
 
-		/// The minimum period between blocks. Beware that this is different to the *expected* period
-		/// that the block production apparatus provides. Your chosen consensus system will generally
-		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
-		/// period on default settings.
+		/// The minimum period between blocks. Beware that this is different to the *expected*
+		/// period that the block production apparatus provides. Your chosen consensus system will
+		/// generally work with this to determine a sensible block time. e.g. For Aura, it will be
+		/// double this period on default settings.
 		#[pallet::constant]
 		type MinimumPeriod: Get<Self::Moment>;
 
@@ -179,7 +182,8 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - `O(1)` (Note that implementations of `OnTimestampSet` must also be `O(1)`)
-		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
+		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in
+		///   `on_finalize`)
 		/// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
 		/// # </weight>
 		#[pallet::weight((

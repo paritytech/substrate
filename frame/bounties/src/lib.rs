@@ -161,7 +161,8 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Approved,
 	/// The bounty is funded and waiting for curator assignment.
 	Funded,
-	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the curator.
+	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the
+	/// curator.
 	CuratorProposed {
 		/// The assigned curator of this bounty.
 		curator: AccountId,

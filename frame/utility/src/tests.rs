@@ -579,7 +579,8 @@ fn batch_all_does_not_nest() {
 		);
 
 		// And for those who want to get a little fancy, we check that the filter persists across
-		// other kinds of dispatch wrapping functions... in this case `batch_all(batch(batch_all(..)))`
+		// other kinds of dispatch wrapping functions... in this case
+		// `batch_all(batch(batch_all(..)))`
 		let batch_nested = Call::Utility(UtilityCall::batch(vec![batch_all]));
 		// Batch will end with `Ok`, but does not actually execute as we can see from the event
 		// and balances.

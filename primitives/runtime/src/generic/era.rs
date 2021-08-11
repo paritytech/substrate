@@ -55,8 +55,9 @@ pub enum Era {
 // phase = 1
 // n = Q(current - phase, period) + phase
 impl Era {
-	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
-	/// and a block number on which it should start (or, for long periods, be shortly after the start).
+	/// Create a new era based on a period (which should be a power of two between 4 and 65536
+	/// inclusive) and a block number on which it should start (or, for long periods, be shortly
+	/// after the start).
 	///
 	/// If using `Era` in the context of `FRAME` runtime, make sure that `period`
 	/// does not exceed `BlockHashCount` parameter passed to `system` module, since that
