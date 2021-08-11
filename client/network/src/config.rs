@@ -27,6 +27,7 @@ pub use crate::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	warp_request_handler::WarpSyncProvider,
 };
 pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
 
@@ -44,7 +45,8 @@ use libp2p::{
 	multiaddr, wasm_ext, Multiaddr, PeerId,
 };
 use prometheus_endpoint::Registry;
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sc_consensus::ImportQueue;
+use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -136,6 +138,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
+
+	/// Optional warp sync protocol support. Include protocol config and sync provider.
+	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
 }
 
 /// Role of the local node.
@@ -267,6 +272,7 @@ impl fmt::Debug for ProtocolId {
 /// assert_eq!(peer_id, "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse::<PeerId>().unwrap());
 /// assert_eq!(addr, "/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap());
 /// ```
+///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let addr: Multiaddr = addr_str.parse()?;
 	parse_addr(addr)
@@ -390,6 +396,8 @@ pub enum SyncMode {
 		/// Download indexed transactions for recent blocks.
 		storage_chain_mode: bool,
 	},
+	/// Warp sync - verify authority set transitions and the latest state.
+	Warp,
 }
 
 impl Default for SyncMode {

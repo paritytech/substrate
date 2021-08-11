@@ -892,3 +892,9 @@ impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }
+
+impl<T: Config> frame_support::traits::DisabledValidators for Module<T> {
+	fn is_disabled(index: u32) -> bool {
+		<Module<T>>::disabled_validators().binary_search(&index).is_ok()
+	}
+}

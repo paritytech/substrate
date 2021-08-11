@@ -31,29 +31,28 @@ pub use tokens::{
 };
 
 mod members;
+#[allow(deprecated)]
+pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
-	All, AsContains, ChangeMembers, Contains, ContainsLengthBound, InitializeMembers, IsInVec,
-	SortedMembers,
+	AsContains, ChangeMembers, Contains, ContainsLengthBound, Everything, InitializeMembers,
+	IsInVec, Nothing, SortedMembers,
 };
 
 mod validation;
 pub use validation::{
-	EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, KeyOwnerProofSystem, Lateness,
-	OneSessionHandler, ValidatorRegistration, ValidatorSet, ValidatorSetWithIdentification,
-	VerifySeal,
+	DisabledValidators, EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor,
+	KeyOwnerProofSystem, Lateness, OneSessionHandler, ValidatorRegistration, ValidatorSet,
+	ValidatorSetWithIdentification, VerifySeal,
 };
 
 mod filter;
-pub use filter::{
-	AllowAll, ClearFilterGuard, DenyAll, Filter, FilterStack, FilterStackGuard, InstanceFilter,
-	IntegrityTest,
-};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
 
 mod misc;
 pub use misc::{
-	Backing, ConstU32, EnsureInherentsAreFirst, ExecuteBlock, ExtrinsicCall, Get, GetBacking,
-	GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker, OnKilledAccount,
-	OnNewAccount, SameOrOther, Time, TryDrop, UnixTime,
+	Backing, ConstU32, EnsureInherentsAreFirst, EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get,
+	GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker,
+	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime,
 };
 
 mod stored_map;
@@ -63,8 +62,8 @@ pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, PalletInfo, PalletInfoAccess,
-	PalletVersion, PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo, PalletInfoAccess,
+	StorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;

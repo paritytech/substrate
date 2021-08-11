@@ -237,7 +237,7 @@ use frame_support::{
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_arithmetic::{
-	traits::{CheckedAdd, Zero},
+	traits::{CheckedAdd, Saturating, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
@@ -554,7 +554,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
@@ -565,6 +565,9 @@ pub mod pallet {
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
+
+		/// Something that can predict the fee of a call. Used to sensibly distribute rewards.
+		type EstimateCallFee: EstimateCallFee<Call<Self>, BalanceOf<Self>>;
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
@@ -854,7 +857,7 @@ pub mod pallet {
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			solution: Box<RawSolution<CompactOf<T>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -873,7 +876,7 @@ pub mod pallet {
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
 			let ready =
-				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
+				Self::feasibility_check(*solution, ElectionCompute::Unsigned).expect(error_message);
 
 			// Store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
@@ -944,7 +947,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			solution: Box<RawSolution<CompactOf<T>>>,
 			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -973,7 +976,14 @@ pub mod pallet {
 
 			// create the submission
 			let deposit = Self::deposit_for(&solution, size);
-			let submission = SignedSubmission { who: who.clone(), deposit, solution };
+			let reward = {
+				let call = Call::submit(solution.clone(), num_signed_submissions);
+				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
+				T::SignedRewardBase::get().saturating_add(call_fee)
+			};
+
+			let submission =
+				SignedSubmission { who: who.clone(), deposit, solution: *solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1918,7 +1928,7 @@ mod tests {
 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
-					solution,
+					Box::new(solution),
 					MultiPhase::signed_submissions().len() as u32
 				));
 			}

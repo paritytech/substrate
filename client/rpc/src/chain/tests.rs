@@ -24,11 +24,11 @@ use futures::{
 	executor,
 };
 use sc_block_builder::BlockBuilderProvider;
+use sp_consensus::BlockOrigin;
 use sp_rpc::list::ListOrValue;
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{Block, Header, H256},
-	sp_consensus::BlockOrigin,
 };
 
 #[test]

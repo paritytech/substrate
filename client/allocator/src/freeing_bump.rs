@@ -68,6 +68,7 @@
 //!   sizes.
 
 use crate::Error;
+pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
 	convert::{TryFrom, TryInto},
@@ -95,15 +96,13 @@ const LOG_TARGET: &'static str = "wasm-heap";
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.
 //
-// The maximum possible allocation size was chosen rather arbitrary. 32 MiB should be enough for
-// everybody.
+// The maximum possible allocation size is set in the primitives to 32MiB.
 //
 // N_ORDERS - represents the number of orders supported.
 //
 // This number corresponds to the number of powers between the minimum possible allocation and
 // maximum possible allocation, or: 2^3...2^25 (both ends inclusive, hence 23).
 const N_ORDERS: usize = 23;
-const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
@@ -327,6 +326,7 @@ pub struct FreeingBumpHeapAllocator {
 	poisoned: bool,
 	max_total_size: u32,
 	max_bumper: u32,
+	last_observed_memory_size: u32,
 }
 
 impl Drop for FreeingBumpHeapAllocator {
@@ -356,6 +356,7 @@ impl FreeingBumpHeapAllocator {
 			poisoned: false,
 			max_total_size: 0,
 			max_bumper: aligned_heap_base,
+			last_observed_memory_size: 0,
 		}
 	}
 
@@ -364,6 +365,9 @@ impl FreeingBumpHeapAllocator {
 	/// There is no minimum size, but whatever size is passed into
 	/// this function is rounded to the next power of two. If the requested
 	/// size is below 8 bytes it will be rounded up to 8 bytes.
+	///
+	/// The identity or the type of the passed memory object does not matter. However, the size of
+	/// memory cannot shrink compared to the memory passed in previous invocations.
 	///
 	/// NOTE: Once the allocator has returned an error all subsequent requests will return an error.
 	///
@@ -381,6 +385,8 @@ impl FreeingBumpHeapAllocator {
 		}
 
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
+
+		Self::observe_memory_size(&mut self.last_observed_memory_size, mem)?;
 		let order = Order::from_size(size)?;
 
 		let header_ptr: u32 = match self.free_lists[order] {
@@ -431,6 +437,9 @@ impl FreeingBumpHeapAllocator {
 
 	/// Deallocates the space which was allocated for a pointer.
 	///
+	/// The identity or the type of the passed memory object does not matter. However, the size of
+	/// memory cannot shrink compared to the memory passed in previous invocations.
+	///
 	/// NOTE: Once the allocator has returned an error all subsequent requests will return an error.
 	///
 	/// # Arguments
@@ -447,6 +456,8 @@ impl FreeingBumpHeapAllocator {
 		}
 
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
+
+		Self::observe_memory_size(&mut self.last_observed_memory_size, mem)?;
 
 		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
@@ -493,6 +504,17 @@ impl FreeingBumpHeapAllocator {
 		let res = *bumper;
 		*bumper += size;
 		Ok(res)
+	}
+
+	fn observe_memory_size<M: Memory + ?Sized>(
+		last_observed_memory_size: &mut u32,
+		mem: &mut M,
+	) -> Result<(), Error> {
+		if mem.size() < *last_observed_memory_size {
+			return Err(Error::MemoryShrinked)
+		}
+		*last_observed_memory_size = mem.size();
+		Ok(())
 	}
 }
 
@@ -921,5 +943,49 @@ mod tests {
 		// then
 		assert!(heap.poisoned);
 		assert!(heap.deallocate(mem.as_mut(), alloc_ptr).is_err());
+	}
+
+	#[test]
+	fn test_n_orders() {
+		// Test that N_ORDERS is consistent with min and max possible allocation.
+		assert_eq!(
+			MIN_POSSIBLE_ALLOCATION * 2u32.pow(N_ORDERS as u32 - 1),
+			MAX_POSSIBLE_ALLOCATION
+		);
+	}
+
+	#[test]
+	fn accepts_growing_memory() {
+		const ITEM_SIZE: u32 = 16;
+		const ITEM_ON_HEAP_SIZE: usize = 16 + HEADER_SIZE as usize;
+
+		let mut mem = vec![0u8; ITEM_ON_HEAP_SIZE * 2];
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		let _ = heap.allocate(&mut mem[..], ITEM_SIZE).unwrap();
+		let _ = heap.allocate(&mut mem[..], ITEM_SIZE).unwrap();
+
+		mem.extend_from_slice(&[0u8; ITEM_ON_HEAP_SIZE]);
+
+		let _ = heap.allocate(&mut mem[..], ITEM_SIZE).unwrap();
+	}
+
+	#[test]
+	fn doesnt_accept_shrinking_memory() {
+		const ITEM_SIZE: u32 = 16;
+		const ITEM_ON_HEAP_SIZE: usize = 16 + HEADER_SIZE as usize;
+
+		let initial_size = ITEM_ON_HEAP_SIZE * 3;
+		let mut mem = vec![0u8; initial_size];
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		let _ = heap.allocate(&mut mem[..], ITEM_SIZE).unwrap();
+
+		mem.truncate(initial_size - 1);
+
+		match heap.allocate(&mut mem[..], ITEM_SIZE).unwrap_err() {
+			Error::MemoryShrinked => (),
+			_ => panic!(),
+		}
 	}
 }

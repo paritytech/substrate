@@ -30,7 +30,7 @@ use sc_client_api::{
 	RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
 	RemoteReadChildRequest, RemoteReadRequest, Storage, StorageProof, StorageProvider,
 };
-use sc_executor::{NativeExecutor, NativeVersion, RuntimeVersion, WasmExecutionMethod};
+use sc_executor::{NativeExecutor, RuntimeVersion, WasmExecutionMethod};
 use sc_light::{
 	backend::{Backend, GenesisOrUnavailableState},
 	blockchain::{Blockchain, BlockchainCache},
@@ -47,7 +47,7 @@ use sp_core::{testing::TaskExecutor, NativeOrEncoded, H256};
 use sp_externalities::Extensions;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as _, HashFor, Header as HeaderT, NumberFor},
+	traits::{BlakeTwo256, Block as _, Header as HeaderT, NumberFor},
 	Digest, Justifications,
 };
 use sp_state_machine::{ExecutionManager, OverlayedChanges};
@@ -248,17 +248,12 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		unreachable!()
 	}
 
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
+	fn prove_execution(
 		&self,
-		_trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
-		_overlay: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8],
+		_: &BlockId<Block>,
+		_: &str,
+		_: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), ClientError> {
-		unreachable!()
-	}
-
-	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		unreachable!()
 	}
 }
@@ -456,7 +451,6 @@ fn code_is_executed_at_genesis_only() {
 
 type TestChecker = LightDataChecker<
 	NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
-	BlakeTwo256,
 	Block,
 	DummyStorage,
 >;

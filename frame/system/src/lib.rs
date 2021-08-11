@@ -85,7 +85,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
-		EnsureOrigin, Filter, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
+		Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
 		PalletInfo, SortedMembers, StoredMap,
 	},
 	weights::{
@@ -161,7 +161,7 @@ pub mod pallet {
 	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
-		type BaseCallFilter: Filter<Self::Call>;
+		type BaseCallFilter: Contains<Self::Call>;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]

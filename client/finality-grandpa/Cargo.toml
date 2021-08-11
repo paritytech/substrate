@@ -22,7 +22,7 @@ futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.8"
 parking_lot = "0.11.1"
-rand = "0.7.2"
+rand = "0.8.4"
 parity-scale-codec = { version = "2.0.0", features = ["derive"] }
 sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
@@ -46,7 +46,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 finality-grandpa = { version = "0.14.1", features = ["derive-codec"] }
 pin-project = "1.0.4"
-linked-hash-map = "0.5.2"
+linked-hash-map = "0.5.4"
 async-trait = "0.1.50"
 wasm-timer = "0.2"
 

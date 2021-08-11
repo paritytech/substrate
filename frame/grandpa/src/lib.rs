@@ -42,7 +42,7 @@ use fg_primitives::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	storage,
-	traits::{KeyOwnerProofSystem, OneSessionHandler},
+	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion},
 	weights::{Pays, Weight},
 };
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
@@ -67,6 +67,9 @@ pub use equivocation::{
 
 pub use pallet::*;
 
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -75,6 +78,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -186,12 +190,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, T::BlockNumber>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			Self::do_report_equivocation(Some(reporter), equivocation_proof, key_owner_proof)
+			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
@@ -206,14 +210,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, T::BlockNumber>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)
 		}

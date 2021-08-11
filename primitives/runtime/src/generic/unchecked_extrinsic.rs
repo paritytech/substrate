@@ -228,19 +228,29 @@ where
 	Extra: SignedExtension,
 {
 	fn encode(&self) -> Vec<u8> {
-		super::encode_with_vec_prefix::<Self, _>(|v| {
-			// 1 byte version id.
-			match self.signature.as_ref() {
-				Some(s) => {
-					v.push(EXTRINSIC_VERSION | 0b1000_0000);
-					s.encode_to(v);
-				},
-				None => {
-					v.push(EXTRINSIC_VERSION & 0b0111_1111);
-				},
-			}
-			self.function.encode_to(v);
-		})
+		let mut tmp = Vec::with_capacity(sp_std::mem::size_of::<Self>());
+
+		// 1 byte version id.
+		match self.signature.as_ref() {
+			Some(s) => {
+				tmp.push(EXTRINSIC_VERSION | 0b1000_0000);
+				s.encode_to(&mut tmp);
+			},
+			None => {
+				tmp.push(EXTRINSIC_VERSION & 0b0111_1111);
+			},
+		}
+		self.function.encode_to(&mut tmp);
+
+		let compact_len = codec::Compact::<u32>(tmp.len() as u32);
+
+		// Allocate the output buffer with the correct length
+		let mut output = Vec::with_capacity(compact_len.size_hint() + tmp.len());
+
+		compact_len.encode_to(&mut output);
+		output.extend(tmp);
+
+		output
 	}
 }
 
