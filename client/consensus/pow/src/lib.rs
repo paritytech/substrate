@@ -560,7 +560,6 @@ where
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.lock().on_major_syncing();
-				debug!(target: "pow", "SyncOracle is syncing.");
 				continue
 			}
 
@@ -573,7 +572,6 @@ where
 						 Select best chain error: {:?}",
 						err
 					);
-					warn!(target: "pow", "Unable to seal block");
 					continue
 				},
 			};
@@ -586,13 +584,11 @@ where
 					 Probably a node update is required!",
 					err,
 				);
-				warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
 				continue
 			}
 
 			if worker.lock().best_hash() == Some(best_hash) {
 				debug!(target: "pow", "Got the best hash");
-				debug!(target: "pow", "Still waiting for seal for block {}", best_hash);
 				continue
 			}
 
@@ -608,7 +604,6 @@ where
 						 Fetch difficulty failed: {:?}",
 						err,
 					);
-					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
 					continue
 				},
 			};
@@ -625,7 +620,6 @@ where
 						 Creating inherent data providers failed: {:?}",
 						err,
 					);
-					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
 					continue
 				},
 			};
@@ -639,7 +633,6 @@ where
 						 Creating inherent data failed: {:?}",
 						e,
 					);
-					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
 					continue;
 				},
 			};
@@ -660,7 +653,6 @@ where
 						 Creating proposer failed: {:?}",
 						err,
 					);
-					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
 					continue;
 				},
 			};
@@ -677,7 +669,6 @@ where
 						 Creating proposal failed: {:?}",
 						err,
 					);
-					warn!(target: "pow", "Still waiting for seal for block {}", best_hash);
 					continue;
 				},
 			};
