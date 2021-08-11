@@ -105,12 +105,6 @@ frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../..
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
-# WASM-specific dependencies
-wasm-bindgen = { version = "0.2.73", optional = true }
-wasm-bindgen-futures = { version = "0.4.18", optional = true }
-browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev"}
-libp2p-wasm-ext = { version = "0.28", features = ["websocket"], optional = true }
-
 [target.'cfg(target_arch="x86_64")'.dependencies]
 node-executor = { version = "3.0.0-dev", path = "../executor", features = [ "wasmtime" ] }
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
@@ -149,12 +143,6 @@ optional = true
 
 [features]
 default = [ "cli" ]
-browser = [
-	"browser-utils",
-	"wasm-bindgen",
-	"wasm-bindgen-futures",
-	"libp2p-wasm-ext",
-]
 cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",
