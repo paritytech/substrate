@@ -1631,7 +1631,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 			match inner.live_topics.topic_info(&topic) {
 				None => return true,
 				// round messages don't require further checking.
-				Some((Some(_), _)) => return false,   */
+				Some((Some(_), _)) => return false,
 				Some((None, _)) => {},
 			};
 
