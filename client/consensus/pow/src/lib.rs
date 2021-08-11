@@ -560,7 +560,7 @@ where
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.lock().on_major_syncing();
-				return
+				continue // Stops loops from breaking thus continues authorship task
 			}
 
 			let best_header = match select_chain.best_chain().await {
@@ -588,7 +588,7 @@ where
 			}
 
 			if worker.lock().best_hash() == Some(best_hash) {
-				return
+				continue // Prevents premature termination of node
 			}
 
 			// The worker is locked for the duration of the whole proposing period. Within this period,
