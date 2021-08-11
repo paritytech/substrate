@@ -368,7 +368,7 @@ impl CliConfiguration for RunCmd {
 
 			Some(PrometheusConfig::new_with_default_registry(
 				SocketAddr::new(interface.into(), self.prometheus_port.unwrap_or(default_listen_port)),
-				self.chain_id()
+				self.shared_params.chain_id(self.shared_params.dev)
 			))
 		})
 	}
