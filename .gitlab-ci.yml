@@ -533,9 +533,6 @@ build-rustdoc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
   variables:
     <<:                            *default-vars
     RUSTDOCFLAGS:                  "--html-in-header $(pwd)/.maintain/rustdoc-header.html"
@@ -547,6 +544,7 @@ build-rustdoc:
     paths:
     - ./crate-docs/
   script:
+    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
@@ -646,11 +644,6 @@ publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
   image:                           paritytech/tools:latest
-  needs:
-    - job:                         build-rustdoc
-      artifacts:                   true
-    - job:                         build-linux-substrate
-      artifacts:                   false
   variables:
     GIT_DEPTH:                     100
   rules:
