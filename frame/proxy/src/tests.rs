@@ -123,8 +123,9 @@ impl InstanceFilter<Call> for ProxyType {
 	fn filter(&self, c: &Call) -> bool {
 		match self {
 			ProxyType::Any => true,
-			ProxyType::JustTransfer =>
-				matches!(c, Call::Balances(pallet_balances::Call::transfer(..))),
+			ProxyType::JustTransfer => {
+				matches!(c, Call::Balances(pallet_balances::Call::transfer(..)))
+			},
 			ProxyType::JustUtility => matches!(c, Call::Utility(..)),
 		}
 	}

@@ -1967,8 +1967,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Dialing(peer_id)) =>
-					trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id),
+				Poll::Ready(SwarmEvent::Dialing(peer_id)) => {
+					trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id)
+				},
 				Poll::Ready(SwarmEvent::IncomingConnection { local_addr, send_back_addr }) => {
 					trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{}))",
 						local_addr, send_back_addr);
@@ -2007,9 +2008,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
+				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) => {
 					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}",
-						address, error),
+						address, error)
+				},
 				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses }) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_local_addresses.sub(addresses.len() as u64);
