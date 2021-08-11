@@ -222,7 +222,7 @@ where
 						.await;
 				};
 
-				executor.execute_new(Box::pin(fut));
+				executor.execute(Box::pin(fut));
 				Ok(())
 			},
 		)?;

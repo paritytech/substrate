@@ -7756,7 +7756,6 @@ dependencies = [
  "async-trait",
  "futures 0.3.15",
  "hash-db",
- "jsonrpc-core",
  "jsonrpsee",
  "lazy_static",
  "log",

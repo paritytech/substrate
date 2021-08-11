@@ -70,7 +70,7 @@ where
 		let executor = self.executor.clone();
 
 		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeAllHead");
-		executor.execute_new(Box::pin(fut));
+		executor.execute(Box::pin(fut));
 		Ok(())
 	}
 
@@ -79,7 +79,7 @@ where
 		let executor = self.executor.clone();
 
 		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeNewHeads");
-		executor.execute_new(Box::pin(fut));
+		executor.execute(Box::pin(fut));
 		Ok(())
 	}
 
@@ -89,7 +89,7 @@ where
 
 		let fut =
 			helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
-		executor.execute_new(Box::pin(fut));
+		executor.execute(Box::pin(fut));
 		Ok(())
 	}
 }

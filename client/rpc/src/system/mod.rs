@@ -55,7 +55,7 @@ pub enum Request<B: traits::Block> {
 	/// Must return information about the peers we are connected to.
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
-	NetworkState(oneshot::Sender<rpc::Value>),
+	NetworkState(oneshot::Sender<serde_json::Value>),
 	/// Must return any potential parse error.
 	NetworkAddReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return any potential parse error.
