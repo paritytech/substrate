@@ -27,10 +27,9 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		BasePath, Configuration, DatabaseSource, KeystoreConfig,
-		NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
-		Role, RpcMethods, TaskExecutor, TelemetryEndpoints, TransactionPoolOptions,
-		WasmExecutionMethod,
+		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
+		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+		TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
 };

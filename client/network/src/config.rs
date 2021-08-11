@@ -29,7 +29,7 @@ pub use crate::{
 	},
 	warp_request_handler::WarpSyncProvider,
 };
-pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
