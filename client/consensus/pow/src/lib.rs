@@ -560,7 +560,7 @@ where
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.lock().on_major_syncing();
-				return
+				continue
 			}
 
 			let best_header = match select_chain.best_chain().await {
