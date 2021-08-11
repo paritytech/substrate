@@ -17,7 +17,7 @@
 
 //! Mock file for npos-elections.
 
-#![cfg(any(test, mocks))]
+#![cfg(test)]
 
 use std::{
 	collections::{HashMap, HashSet},
@@ -35,20 +35,27 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use crate::{seq_phragmen, Assignment, ElectionResult, ExtendedBalance, PerThing128, VoteWeight};
 
-sp_npos_elections_compact::generate_solution_type!(
-	#[compact]
-	pub struct Compact::<VoterIndex = u32, TargetIndex = u16, Accuracy = Accuracy>(16)
-);
-
 pub type AccountId = u64;
+
 /// The candidate mask allows easy disambiguation between voters and candidates: accounts
 /// for which this bit is set are candidates, and without it, are voters.
 pub const CANDIDATE_MASK: AccountId = 1 << ((std::mem::size_of::<AccountId>() * 8) - 1);
-pub type CandidateId = AccountId;
 
-pub type Accuracy = sp_runtime::Perbill;
+pub type TestAccuracy = sp_runtime::Perbill;
 
-pub type MockAssignment = crate::Assignment<AccountId, Accuracy>;
+crate::generate_solution_type! {
+	pub struct TestSolution::<
+		VoterIndex = u32,
+		TargetIndex = u16,
+		Accuracy = TestAccuracy,
+	>(16)
+}
+
+pub fn p(p: u8) -> TestAccuracy {
+	TestAccuracy::from_percent(p.into())
+}
+
+pub type MockAssignment = crate::Assignment<AccountId, TestAccuracy>;
 pub type Voter = (AccountId, VoteWeight, Vec<AccountId>);
 
 #[derive(Default, Debug)]
@@ -422,7 +429,7 @@ pub fn generate_random_votes(
 	candidate_count: usize,
 	voter_count: usize,
 	mut rng: impl Rng,
-) -> (Vec<Voter>, Vec<MockAssignment>, Vec<CandidateId>) {
+) -> (Vec<Voter>, Vec<MockAssignment>, Vec<AccountId>) {
 	// cache for fast generation of unique candidate and voter ids
 	let mut used_ids = HashSet::with_capacity(candidate_count + voter_count);
 
@@ -452,7 +459,8 @@ pub fn generate_random_votes(
 
 		// it's not interesting if a voter chooses 0 or all candidates, so rule those cases out.
 		// also, let's not generate any cases which result in a compact overflow.
-		let n_candidates_chosen = rng.gen_range(1, candidates.len().min(16));
+		let n_candidates_chosen =
+			rng.gen_range(1, candidates.len().min(<TestSolution as crate::NposSolution>::LIMIT));
 
 		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
 		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
@@ -473,16 +481,16 @@ pub fn generate_random_votes(
 
 		// distribute the available stake randomly
 		let stake_distribution = if num_chosen_winners == 0 {
-			Vec::new()
+			continue
 		} else {
 			let mut available_stake = 1000;
 			let mut stake_distribution = Vec::with_capacity(num_chosen_winners);
 			for _ in 0..num_chosen_winners - 1 {
-				let stake = rng.gen_range(0, available_stake);
-				stake_distribution.push(Accuracy::from_perthousand(stake));
+				let stake = rng.gen_range(0, available_stake).min(1);
+				stake_distribution.push(TestAccuracy::from_perthousand(stake));
 				available_stake -= stake;
 			}
-			stake_distribution.push(Accuracy::from_perthousand(available_stake));
+			stake_distribution.push(TestAccuracy::from_perthousand(available_stake));
 			stake_distribution.shuffle(&mut rng);
 			stake_distribution
 		};
@@ -514,16 +522,26 @@ where
 	usize: TryInto<VoterIndex>,
 {
 	let cache = generate_cache(voters.iter().map(|(id, _, _)| *id));
-	move |who| cache.get(who).cloned().and_then(|i| i.try_into().ok())
+	move |who| {
+		if cache.get(who).is_none() {
+			println!("WARNING: voter {} will raise InvalidIndex", who);
+		}
+		cache.get(who).cloned().and_then(|i| i.try_into().ok())
+	}
 }
 
 /// Create a function that returns the index of a candidate in the candidates list.
 pub fn make_target_fn<TargetIndex>(
-	candidates: &[CandidateId],
-) -> impl Fn(&CandidateId) -> Option<TargetIndex>
+	candidates: &[AccountId],
+) -> impl Fn(&AccountId) -> Option<TargetIndex>
 where
 	usize: TryInto<TargetIndex>,
 {
 	let cache = generate_cache(candidates.iter().cloned());
-	move |who| cache.get(who).cloned().and_then(|i| i.try_into().ok())
+	move |who| {
+		if cache.get(who).is_none() {
+			println!("WARNING: target {} will raise InvalidIndex", who);
+		}
+		cache.get(who).cloned().and_then(|i| i.try_into().ok())
+	}
 }
