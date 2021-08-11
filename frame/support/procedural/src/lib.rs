@@ -92,23 +92,24 @@ impl Counter {
 ///   ```
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the
-///   [`StorageMap generator`](../frame_support/storage/generator/trait.StorageMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the [`StorageMap
+///   generator`](../frame_support/storage/generator/trait.StorageMap.html). And
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. You will generally want to use one
 ///   of three hashers:
 ///   * `blake2_128_concat`: The default, safe choice. Use if you are unsure or don't care. It is
-///     secure against user-tainted keys, fairly fast and memory-efficient and supports
-///     iteration over its keys and values. This must be used if the keys of your map can be
-///     selected *en masse* by untrusted users.
+///     secure against user-tainted keys, fairly fast and memory-efficient and supports iteration
+///     over its keys and values. This must be used if the keys of your map can be selected *en
+///     masse* by untrusted users.
 ///   * `twox_64_concat`: This is an insecure hasher and can only be used safely if you know that
 ///     the preimages cannot be chosen at will by untrusted users. It is memory-efficient, extremely
 ///     performant and supports iteration over its keys and values. You can safely use this is the
 ///     key is:
 ///     - A (slowly) incrementing index.
-///     - Known to be the result of a cryptographic hash (though `identity` is a better choice here).
+///     - Known to be the result of a cryptographic hash (though `identity` is a better choice
+///       here).
 ///     - Known to be the public key of a cryptographic key pair in existence.
 ///   * `identity`: This is not a hasher at all, and just uses the key material directly. Since it
 ///     does no hashing or appending, it's the fastest possible hasher, however, it's also the least
@@ -132,8 +133,9 @@ impl Counter {
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
 ///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
-///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageDoubleMap
+///   generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html). And
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be chosen with care, see
@@ -147,8 +149,8 @@ impl Counter {
 ///
 ///   Thus keys are stored at:
 ///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2))
-///   ```
+///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++
+/// Hasher2(encode(key2))   ```
 ///
 /// Supported hashers (ordered from least to best security):
 ///
@@ -176,8 +178,8 @@ impl Counter {
 /// Will include the item in `GenesisConfig`.
 /// * \[optional\] `build(#closure)`: Closure called with storage overlays.
 /// * \[optional\] `max_values(#expr)`: `expr` is an expression returning a `u32`. It is used to
-/// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the maximum
-/// number of values is 1.
+/// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the
+/// maximum number of values is 1.
 /// * `#type`: Storage type.
 /// * \[optional\] `#default`: Value returned when none.
 ///
@@ -339,8 +341,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// # Type definitions
 ///
-/// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`).
-///   E.g. `type System = frame_system::Pallet<Runtime>`
+/// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`). E.g. `type
+///   System = frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)

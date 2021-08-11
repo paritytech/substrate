@@ -33,7 +33,7 @@ use frame_support::{
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
-	traits::{Currency, Filter, OnInitialize, ReservableCurrency},
+	traits::{Contains, Currency, OnInitialize, ReservableCurrency},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
@@ -163,7 +163,7 @@ impl ChainExtension<Test> for TestExtension {
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
 				Ok(RetVal::Converging(func_id))
-			},
+			}
 			1 => {
 				let env = env.only_in();
 				TEST_EXTENSION.with(|e| {
@@ -171,17 +171,17 @@ impl ChainExtension<Test> for TestExtension {
 						(env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(func_id))
-			},
+			}
 			2 => {
 				let mut env = env.buf_in_buf_out();
 				let weight = env.read(2)?[1].into();
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(func_id))
-			},
+			}
 			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
 				panic!("Passed unknown func_id to test chain extension: {}", func_id);
-			},
+			}
 		}
 	}
 
@@ -197,7 +197,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
@@ -282,8 +282,8 @@ impl TestFilter {
 	}
 }
 
-impl Filter<Call> for TestFilter {
-	fn filter(call: &Call) -> bool {
+impl Contains<Call> for TestFilter {
+	fn contains(call: &Call) -> bool {
 		CALL_FILTER.with(|fltr| fltr.borrow()(call))
 	}
 }
@@ -742,8 +742,8 @@ fn deduct_blocks() {
 
 		// Check result
 		let rent = <Test as Config>::RentFraction::get()
-			.mul_ceil((8 + 4 + code_len) * 10_000 + 10_000 - (endowment - rent0)) *
-			4;
+			.mul_ceil((8 + 4 + code_len) * 10_000 + 10_000 - (endowment - rent0))
+			* 4;
 		let contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 		assert_eq!(contract.rent_allowance, allowance - rent0 - rent);
 		assert_eq!(contract.deduct_block, 5);
@@ -763,8 +763,8 @@ fn deduct_blocks() {
 
 		// Check result
 		let rent_2 = <Test as Config>::RentFraction::get()
-			.mul_ceil((8 + 4 + code_len) * 10_000 + 10_000 - (endowment - rent0 - rent)) *
-			2;
+			.mul_ceil((8 + 4 + code_len) * 10_000 + 10_000 - (endowment - rent0 - rent))
+			* 2;
 		let contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 		assert_eq!(contract.rent_allowance, allowance - rent0 - rent - rent_2);
 		assert_eq!(contract.deduct_block, 7);
@@ -1362,7 +1362,7 @@ fn restoration(
 				(true, false, false) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::InvalidTombstone);
 					assert_eq!(System::events(), vec![]);
-				},
+				}
 				(_, true, false) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::InvalidContractOrigin);
 					assert_eq!(
@@ -1426,12 +1426,12 @@ fn restoration(
 							},
 						]
 					);
-				},
+				}
 				(false, false, true) => {
 					assert_err_ignore_postinfo!(result, Error::<Test>::CodeNotFound);
 					assert_refcount!(set_rent_code_hash, 0);
 					assert_eq!(System::events(), vec![]);
-				},
+				}
 				_ => unreachable!(),
 			}
 		} else {
@@ -1644,7 +1644,7 @@ fn self_destruct_works() {
 
 		// The call triggers rent collection that reduces the amount of balance
 		// that remains for the beneficiary.
-		let balance_after_rent = 92_934;
+		let balance_after_rent = 92_942;
 
 		pretty_assertions::assert_eq!(
 			System::events(),

@@ -215,7 +215,8 @@ where
 				},
 				Err(err) => {
 					warn!("Failed to submit extrinsic: {}", err);
-					// reject the subscriber (ignore errors - we don't care if subscriber is no longer there).
+					// reject the subscriber (ignore errors - we don't care if subscriber is no
+					// longer there).
 					let _ = subscriber.reject(err.into());
 				},
 			});

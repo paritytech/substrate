@@ -45,9 +45,7 @@ rand = { version = "0.7.3" }
 # substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, features = [
-	"mocks",
-], path = "../../primitives/npos-elections" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 frame-election-provider-support = { version = "4.0.0-dev", features = [
 	"runtime-benchmarks",
@@ -73,5 +71,5 @@ std = [
 	"frame-election-provider-support/std",
 	"log/std",
 ]
-runtime-benchmarks = ["frame-benchmarking", "rand", "sp-npos-elections/mocks"]
+runtime-benchmarks = ["frame-benchmarking", "rand"]
 try-runtime = ["frame-support/try-runtime"]

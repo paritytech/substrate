@@ -72,8 +72,8 @@ impl StorageProof {
 	}
 
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
-	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
-	/// proofs due to deduplication of trie nodes.
+	/// covering all keys. The merged proof output may be smaller than the aggregate size of the
+	/// input proofs due to deduplication of trie nodes.
 	pub fn merge<I>(proofs: I) -> Self
 	where
 		I: IntoIterator<Item = Self>,

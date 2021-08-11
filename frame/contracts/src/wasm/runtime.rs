@@ -534,8 +534,8 @@ where
 	/// when the caller is not interested in the result.
 	///
 	/// `create_token` can optionally instruct this function to charge the gas meter with the token
-	/// it returns. `create_token` receives the variable amount of bytes that are about to be copied by
-	/// this function.
+	/// it returns. `create_token` receives the variable amount of bytes that are about to be copied
+	/// by this function.
 	///
 	/// In addition to the error conditions of `write_sandbox_memory` this functions returns
 	/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
