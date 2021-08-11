@@ -19,10 +19,7 @@
 use super::*;
 use crate::testing::TaskExecutor;
 use assert_matches::assert_matches;
-use futures::{
-	compat::{Future01CompatExt, Stream01CompatExt},
-	executor,
-};
+use futures::executor;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
 use sp_rpc::list::ListOrValue;
@@ -37,7 +34,7 @@ fn should_return_header() {
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
-		api.header(Some(client.genesis_hash()).into()).wait(),
+		executor::block_on(api.header(Some(client.genesis_hash()).into())),
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
@@ -49,7 +46,7 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		api.header(None.into()).wait(),
+		executor::block_on(api.header(None.into())),
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
@@ -60,7 +57,10 @@ fn should_return_header() {
 		}
 	);
 
-	assert_matches!(api.header(Some(H256::from_low_u64_be(5)).into()).wait(), Ok(None));
+	assert_matches!(
+		executor::block_on(api.header(Some(H256::from_low_u64_be(5)).into())),
+		Ok(None)
+	);
 }
 
 #[test]
@@ -74,12 +74,12 @@ fn should_return_a_block() {
 
 	// Genesis block is not justified
 	assert_matches!(
-		api.block(Some(client.genesis_hash()).into()).wait(),
+		executor::block_on(api.block(Some(client.genesis_hash()).into())),
 		Ok(Some(SignedBlock { justifications: None, .. }))
 	);
 
 	assert_matches!(
-		api.block(Some(block_hash).into()).wait(),
+		executor::block_on(api.block(Some(block_hash).into())),
 		Ok(Some(ref x)) if x.block == Block {
 			header: Header {
 				parent_hash: client.genesis_hash(),
@@ -94,7 +94,7 @@ fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		api.block(None.into()).wait(),
+		executor::block_on(api.block(None.into())),
 		Ok(Some(ref x)) if x.block == Block {
 			header: Header {
 				parent_hash: client.genesis_hash(),
@@ -108,7 +108,7 @@ fn should_return_a_block() {
 		}
 	);
 
-	assert_matches!(api.block(Some(H256::from_low_u64_be(5)).into()).wait(), Ok(None));
+	assert_matches!(executor::block_on(api.block(Some(H256::from_low_u64_be(5)).into())), Ok(None));
 }
 
 #[test]
@@ -191,20 +191,20 @@ fn should_notify_about_latest_block() {
 		api.subscribe_all_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
+		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial head sent.
-	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future());
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future());
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future()).0, None);
 }
 
 #[test]
@@ -218,20 +218,20 @@ fn should_notify_about_best_block() {
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
+		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial head sent.
-	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future());
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future());
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(executor::block_on(Stream01CompatExt::compat(next).into_future()).0, None);
+	assert_eq!(executor::block_on(next.into_future()).0, None);
 }
 
 #[test]
@@ -245,7 +245,7 @@ fn should_notify_about_finalized_block() {
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
+		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -253,11 +253,11 @@ fn should_notify_about_finalized_block() {
 	}
 
 	// assert initial head sent.
-	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future());
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future());
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future()).0, None);
 }
