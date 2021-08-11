@@ -494,13 +494,13 @@ pub mod pallet {
 					T::Currency::free_balance(&stash) >= balance,
 					"Stash does not have enough balance to bond."
 				);
-				let _ = <Pallet<T>>::bond(
+				frame_support::assert_ok!(<Pallet<T>>::bond(
 					T::Origin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
-				);
-				let _ = match status {
+				));
+				frame_support::assert_ok!(match status {
 					StakerStatus::Validator => <Pallet<T>>::validate(
 						T::Origin::from(Some(controller.clone()).into()),
 						Default::default(),
@@ -510,7 +510,7 @@ pub mod pallet {
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
-				};
+				});
 			}
 		}
 	}
