@@ -1644,7 +1644,7 @@ fn self_destruct_works() {
 
 		// The call triggers rent collection that reduces the amount of balance
 		// that remains for the beneficiary.
-		let balance_after_rent = 93_078;
+		let balance_after_rent = 92_934;
 
 		pretty_assertions::assert_eq!(
 			System::events(),
@@ -1673,7 +1673,8 @@ fn self_destruct_works() {
 					event: Event::Contracts(crate::Event::Terminated(addr.clone(), DJANGO)),
 					topics: vec![],
 				},
-			]
+			],
+			"Rent might have changed due to wasm size change. Has wat crate been updated?"
 		);
 
 		// Check that account is gone
