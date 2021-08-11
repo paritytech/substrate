@@ -15,16 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Code generation for getting the compact representation from the `IndexAssignment` type.
+//! Code generation for getting the solution representation from the `IndexAssignment` type.
 
-use crate::field_name_for;
+use crate::vote_field;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-pub(crate) fn from_impl(count: usize) -> TokenStream2 {
+pub(crate) fn from_impl(struct_name: &syn::Ident, count: usize) -> TokenStream2 {
 	let from_impl_single = {
-		let name = field_name_for(1);
-		quote!(1 => compact.#name.push(
+		let name = vote_field(1);
+		quote!(1 => #struct_name.#name.push(
 			(
 				*who,
 				distribution[0].0,
@@ -32,32 +32,18 @@ pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 		),)
 	};
 
-	let from_impl_double = {
-		let name = field_name_for(2);
-		quote!(2 => compact.#name.push(
-			(
-				*who,
-				(
-					distribution[0].0,
-					distribution[0].1,
-				),
-				distribution[1].0,
-			)
-		),)
-	};
-
-	let from_impl_rest = (3..=count)
+	let from_impl_rest = (2..=count)
 		.map(|c| {
 			let inner = (0..c - 1)
 				.map(|i| quote!((distribution[#i].0, distribution[#i].1),))
 				.collect::<TokenStream2>();
 
-			let field_name = field_name_for(c);
+			let field_name = vote_field(c);
 			let last_index = c - 1;
 			let last = quote!(distribution[#last_index].0);
 
 			quote!(
-				#c => compact.#field_name.push(
+				#c => #struct_name.#field_name.push(
 					(
 						*who,
 						[#inner],
@@ -70,7 +56,6 @@ pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 
 	quote!(
 		#from_impl_single
-		#from_impl_double
 		#from_impl_rest
 	)
 }
