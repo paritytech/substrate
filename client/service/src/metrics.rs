@@ -63,8 +63,10 @@ impl PrometheusMetrics {
 		)?
 		.set(1);
 
-		register(Gauge::<U64>::new("substrate_node_roles", "The roles the node is running as")?, &registry)?
-			.set(roles);
+		register(
+			Gauge::<U64>::new("substrate_node_roles", "The roles the node is running as")?,
+			&registry
+		)?.set(roles);
 
 		register_globals(registry)?;
 

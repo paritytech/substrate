@@ -168,7 +168,8 @@ impl Metrics {
 				&["protocol", "lower_ilog2_bucket_bound"]
 			)?, registry)?,
 			listeners_local_addresses: prometheus::register(Gauge::new(
-				"substrate_sub_libp2p_listeners_local_addresses", "Number of local addresses we're listening on"
+				"substrate_sub_libp2p_listeners_local_addresses",
+				"Number of local addresses we're listening on"
 			)?, registry)?,
 			listeners_errors_total: prometheus::register(Counter::new(
 				"substrate_sub_libp2p_listeners_errors_total",
@@ -200,10 +201,12 @@ impl Metrics {
 				&["protocol"]
 			)?, registry)?,
 			peerset_num_discovered: prometheus::register(Gauge::new(
-				"substrate_sub_libp2p_peerset_num_discovered", "Number of nodes stored in the peerset manager",
+				"substrate_sub_libp2p_peerset_num_discovered",
+				"Number of nodes stored in the peerset manager",
 			)?, registry)?,
 			peerset_num_requested: prometheus::register(Gauge::new(
-				"substrate_sub_libp2p_peerset_num_requested", "Number of nodes that the peerset manager wants us to be connected to",
+				"substrate_sub_libp2p_peerset_num_requested",
+				"Number of nodes that the peerset manager wants us to be connected to",
 			)?, registry)?,
 			pending_connections: prometheus::register(Gauge::new(
 				"substrate_sub_libp2p_pending_connections",
