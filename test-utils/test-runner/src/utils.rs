@@ -25,7 +25,7 @@ use sc_network::{
 	multiaddr,
 };
 use sc_service::{
-	config::KeystoreConfig, BasePath, ChainSpec, Configuration, DatabaseConfig, KeepBlocks,
+	config::KeystoreConfig, BasePath, ChainSpec, Configuration, DatabaseSource, KeepBlocks,
 	TaskExecutor, TaskType, TransactionStorageMode,
 };
 use sp_keyring::sr25519::Keyring::Alice;
@@ -79,7 +79,7 @@ pub fn default_config(
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path { path: root_path.join("key"), password: None },
-		database: DatabaseConfig::RocksDb { path: root_path.join("db"), cache_size: 128 },
+		database: DatabaseSource::RocksDb { path: root_path.join("db"), cache_size: 128 },
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		chain_spec,

@@ -50,9 +50,15 @@ pub struct BenchmarkCmd {
 	#[structopt(long = "high", use_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
-	/// Select how many repetitions of this benchmark should run.
+	/// Select how many repetitions of this benchmark should run from within the wasm.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
+
+	/// Select how many repetitions of this benchmark should run from the client.
+	///
+	/// NOTE: Using this alone may give slower results, but will afford you maximum Wasm memory.
+	#[structopt(long, default_value = "1")]
+	pub external_repeat: u32,
 
 	/// Print the raw results.
 	#[structopt(long = "raw")]
@@ -130,11 +136,9 @@ pub struct BenchmarkCmd {
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
 
-	/// List the benchmarks available.
+	/// List the benchmarks that match your query rather than running them.
 	///
-	/// * If nothing else is specified, all pallets and benchmarks will be listed.
-	/// * If the `pallet` argument is passed, then we will only list benchmarks for that pallet.
-	/// * If the `extrinsic` argument is set to `*`, we will hide the individual benchmarks.
+	/// When nothing is provided, we list all benchmarks.
 	#[structopt(long)]
 	pub list: bool,
 }

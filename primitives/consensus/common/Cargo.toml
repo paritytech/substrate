@@ -25,13 +25,6 @@ futures-timer = "3.0.1"
 sp-std = { version = "4.0.0-dev", path = "../../std" }
 sp-version = { version = "4.0.0-dev", path = "../../version" }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../utils" }
-sp-trie = { version = "4.0.0-dev", path = "../../trie" }
-sp-api = { version = "4.0.0-dev", path = "../../api" }
-parking_lot = "0.11.1"
-serde = { version = "1.0", features = ["derive"] }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
-wasm-timer = "0.2.5"
 thiserror = "1.0.21"
 
 [dev-dependencies]

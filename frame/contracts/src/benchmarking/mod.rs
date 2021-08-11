@@ -288,6 +288,7 @@ benchmarks! {
 		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
 	}
 
+	#[skip_meta]
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = ContractWithStorage::<T>::new(k, T::Schedule::get().limits.payload_len)?;
@@ -815,6 +816,7 @@ benchmarks! {
 	}
 
 	// `d`: Number of supplied delta keys
+	#[skip_meta]
 	seal_restore_to_per_delta {
 		let d in 0 .. API_BENCHMARK_BATCHES;
 		let mut tombstone = ContractWithStorage::<T>::new(0, 0)?;
@@ -1057,6 +1059,7 @@ benchmarks! {
 	// The contract is a bit more complex because I needs to use different keys in order
 	// to generate unique storage accesses. However, it is still dominated by the storage
 	// accesses.
+	#[skip_meta]
 	seal_set_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
@@ -1122,6 +1125,7 @@ benchmarks! {
 	// Similar to seal_set_storage. However, we store all the keys that we are about to
 	// delete beforehand in order to prevent any optimizations that could occur when
 	// deleting a non existing key.
+	#[skip_meta]
 	seal_clear_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
@@ -1165,6 +1169,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// We make sure that all storage accesses are to unique keys.
+	#[skip_meta]
 	seal_get_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
