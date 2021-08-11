@@ -494,6 +494,7 @@ impl NetworkConfiguration {
 			transport: TransportConfig::Normal {
 				enable_mdns: false,
 				allow_private_ipv4: true,
+				// TODO: (dp): remove this
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
@@ -634,6 +635,7 @@ pub enum TransportConfig {
 		///
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
+		// TODO: (dp): remove this
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	},
 

@@ -291,6 +291,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let (transport, bandwidth) = {
+				// TODO: (dp): remove config_wasm, I think
 				let (config_mem, config_wasm) = match params.network_config.transport {
 					TransportConfig::MemoryOnly => (true, None),
 					TransportConfig::Normal { wasm_external_transport, .. } =>

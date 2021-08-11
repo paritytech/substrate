@@ -32,6 +32,7 @@ use std::{io, pin::Pin, time::Duration};
 /// upgrading.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
+// TODO: (dp) remove the external transport stuff
 pub(crate) fn initialize_transport(
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 ) -> Result<WsTrans, io::Error> {

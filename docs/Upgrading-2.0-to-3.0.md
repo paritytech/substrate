@@ -439,7 +439,7 @@ and add the new service:
 
 The telemetry subsystem has seen a few fixes and refactorings to allow for a more flexible handling, in particular in regards to parachains. Most notably `sc_service::spawn_tasks` now returns the `telemetry_connection_notifier` as the second member of the tuple, (`let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(`), which should be passed to `telemetry_on_connect` of `new_full_base` now: `telemetry_on_connect: telemetry_connection_notifier.map(|x| x.on_connect_stream()),` (see the service-section below for a full diff).
 
-On the browser-side, this complicates setup a tiny bit, yet not terribly. Instead of `init_console_log`,  we now use `init_logging_and_telemetry` and need to make sure we spawn the runner for its handle at the end (the other changes are formatting and cosmetics):
+<!-- On the browser-side, this complicates setup a tiny bit, yet not terribly. Instead of `init_console_log`,  we now use `init_logging_and_telemetry` and need to make sure we spawn the runner for its handle at the end (the other changes are formatting and cosmetics):
 
 ```diff
 --- a/bin/node/cli/src/browser.rs
@@ -500,7 +500,7 @@ On the browser-side, this complicates setup a tiny bit, yet not terribly. Instea
 +
  	Ok(browser_utils::start_client(task_manager, rpc_handlers))
  }
- ```
+ ``` -->
 
 ##### Async & Remote Keystore support
 

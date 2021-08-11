@@ -51,6 +51,7 @@ pub use self::bandwidth::BandwidthSinks;
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
+	// TODO: (dp): remove this
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,

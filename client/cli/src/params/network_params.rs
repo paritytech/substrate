@@ -222,6 +222,7 @@ impl NetworkParams {
 			transport: TransportConfig::Normal {
 				enable_mdns: !is_dev && !self.no_mdns,
 				allow_private_ipv4,
+				// TODO: (dp): remove this
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
