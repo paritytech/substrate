@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use jsonrpsee::types::error::CallError;
+
 #[derive(derive_more::Display, derive_more::From, Debug)]
 /// Top-level error type for the RPC handler
 pub enum Error {
@@ -33,7 +35,6 @@ pub enum Error {
 	ProveFinalityFailed(sc_finality_grandpa::FinalityProofError),
 }
 
-// TODO: remove
 /// The error codes returned by jsonrpc.
 pub enum ErrorCode {
 	/// Returned when Grandpa RPC endpoint is not ready.
@@ -46,7 +47,6 @@ pub enum ErrorCode {
 	ProveFinality,
 }
 
-// TODO: remove (?) – need support for application specific error codes.
 impl From<Error> for ErrorCode {
 	fn from(error: Error) -> Self {
 		match error {
@@ -58,14 +58,13 @@ impl From<Error> for ErrorCode {
 	}
 }
 
-// TODO: remove
-impl From<Error> for jsonrpc_core::Error {
+impl From<Error> for CallError {
 	fn from(error: Error) -> Self {
-		let message = format!("{}", error);
+		let message = error.to_string();
 		let code = ErrorCode::from(error);
-		jsonrpc_core::Error {
+		Self::Custom {
+			code: code as i32,
 			message,
-			code: jsonrpc_core::ErrorCode::ServerError(code as i64),
 			data: None,
 		}
 	}
