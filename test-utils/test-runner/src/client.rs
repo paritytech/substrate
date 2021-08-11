@@ -18,8 +18,10 @@
 //! Client parts
 use crate::{default_config, ChainInfo};
 use futures::channel::mpsc;
+use jsonrpsee::types::RpcModule;
 use manual_seal::{
 	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
+	rpc::ManualSeal,
 	import_queue, run_manual_seal, EngineCommand, ManualSealParams,
 };
 use sc_client_api::backend::Backend;
@@ -173,6 +175,14 @@ where
 
 	// Channel for the rpc handler to communicate with the authorship task.
 	let (command_sink, commands_stream) = mpsc::channel(10);
+	let rpc_sink = command_sink.clone();
+
+	let rpc_builder = Box::new(move |_, _| -> RpcModule<()> {
+		let seal = ManualSeal::new(rpc_sink).into_rpc_module().expect("TODO; error handling");
+		let mut module = RpcModule::new(());
+		module.merge(seal).expect("TODO: error handling");
+		module
+	});
 
 	let _rpc_handlers = {
 		let params = SpawnTasksParams {
@@ -183,15 +193,7 @@ where
 			keystore: keystore.sync_keystore(),
 			on_demand: None,
 			transaction_pool: transaction_pool.clone(),
-			// TODO: (dp) implement with ManualSeal
-			rpc_builder: Box::new(|_, _| jsonrpsee::RpcModule::new(())),
-			// rpc_extensions_builder: Box::new(move |_, _| {
-			//     let mut io = jsonrpc_core::IoHandler::default();
-			//     io.extend_with(
-			//         ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone()))
-			//     );
-			//     io
-			// }),
+			rpc_builder,
 			remote_blockchain: None,
 			network,
 			system_rpc_tx,
