@@ -1039,7 +1039,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_debug_message",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
