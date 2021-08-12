@@ -349,8 +349,7 @@ where
 			);
 
 			changes_stream
-				.map_err(|_| rpc::Error::internal_error())
-				.map(Ok)
+				.map_ok(Ok)
 				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 				.map(|_| ())
@@ -430,8 +429,7 @@ where
 			);
 
 			versions_stream
-				.map_err(|_| rpc::Error::internal_error())
-				.map(Ok)
+				.map_ok(Ok)
 				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 				.map(|_| ())
