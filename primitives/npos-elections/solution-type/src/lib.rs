@@ -134,20 +134,22 @@ struct SolutionDef {
 }
 
 fn check_attributes(input: ParseStream) -> syn::Result<bool> {
-	let attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
-	if attrs.len() > 1 {
+	let mut attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
+	if attrs.len() != 1 {
 		return Err(syn_err("compact solution can accept only #[compact]"))
 	}
-
-	Ok(attrs.iter().any(|attr| {
-		if attr.path.segments.len() == 1 {
-			let segment = attr.path.segments.first().expect("Vec with len 1 can be popped.");
-			if segment.ident == Ident::new("compact", Span::call_site()) {
-				return true
-			}
+	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
+	if attr.path.segments.len() == 1 {
+		let segment = attr.path.segments.first()
+			.expect("attributes path segments vec with len 1 can be popped.");
+		if segment.ident == Ident::new("compact", Span::call_site()) {
+			Ok(true)
+		} else {
+			Err(syn_err("only attribute is not #[compact]"))
 		}
-		false
-	}))
+	} else {
+		Err(syn_err("must be one attribute, only #[compact]"))
+	}
 }
 
 impl Parse for SolutionDef {
