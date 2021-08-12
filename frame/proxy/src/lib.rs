@@ -228,9 +228,7 @@ pub mod pallet {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::add_proxy_delegate(&who, delegate.clone(), proxy_type.clone(), delay)?;
-			Self::deposit_event(Event::<T>::ProxyAdded(who, delegate, proxy_type, delay));
-			Ok(())
+			Self::add_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
 		/// Unregister a proxy account for the sender.
@@ -655,7 +653,11 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
 		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
-			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
+			let proxy_def = ProxyDefinition {
+				delegate: delegatee.clone(),
+				proxy_type: proxy_type.clone(),
+				delay,
+			};
 			let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
 			proxies.try_insert(i, proxy_def).map_err(|_| Error::<T>::TooMany)?;
 			let new_deposit = Self::deposit(proxies.len() as u32);
@@ -665,6 +667,12 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(delegator, *deposit - new_deposit);
 			}
 			*deposit = new_deposit;
+			Self::deposit_event(Event::<T>::ProxyAdded(
+				delegator.clone(),
+				delegatee,
+				proxy_type,
+				delay,
+			));
 			Ok(())
 		})
 	}
