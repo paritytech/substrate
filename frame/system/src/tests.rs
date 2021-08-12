@@ -50,12 +50,52 @@ fn stored_map_works() {
 		assert_ok!(System::insert(&0, 69));
 		assert!(System::is_provider_required(&0));
 
+		assert_eq!(
+			Account::<Test>::get(0),
+			AccountInfo { nonce: 0, providers: 1, consumers: 1, sufficients: 0, data: 69 }
+		);
+
 		System::dec_consumers(&0);
 		assert!(!System::is_provider_required(&0));
+
+		assert_eq!(
+			Account::<Test>::get(0),
+			AccountInfo { nonce: 0, providers: 1, consumers: 0, sufficients: 0, data: 69 }
+		);
 
 		assert!(KILLED.with(|r| r.borrow().is_empty()));
 		assert_ok!(System::remove(&0));
 		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+
+		assert_ok!(System::try_mutate_exists(&0, |data| -> Result<(), &str>{
+			*data = Some(55);
+			Ok(())
+		}));
+
+		assert_eq!(
+			Account::<Test>::get(0),
+			AccountInfo { nonce: 0, providers: 1, consumers: 0, sufficients: 0, data: 55 }
+		);
+
+		assert_ok!(System::try_mutate_exists(&0, |data| -> Result<(), &str>{
+			*data = Some(Default::default());
+			Ok(())
+		}));
+
+		assert_eq!(
+			Account::<Test>::get(0),
+			AccountInfo { nonce: 0, providers: 1, consumers: 0, sufficients: 0, data: 0 }
+		);
+
+		assert_ok!(System::try_mutate_exists(&0, |data| -> Result<(), &str>{
+			*data = Some(55);
+			Ok(())
+		}));
+
+		assert_eq!(
+			Account::<Test>::get(0),
+			AccountInfo { nonce: 0, providers: 1, consumers: 0, sufficients: 0, data: 55 }
+		);
 	});
 }
 
