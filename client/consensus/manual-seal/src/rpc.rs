@@ -18,15 +18,15 @@
 
 //! RPC interface for the `ManualSeal` Engine.
 
+use crate::error::{to_call_error, Error};
 use futures::{
 	channel::{mpsc, oneshot},
-	FutureExt, SinkExt
+	FutureExt, SinkExt,
 };
-use jsonrpsee::types::{RpcModule, Error as JsonRpseeError};
+use jsonrpsee::types::{Error as JsonRpseeError, RpcModule};
 use sc_consensus::ImportedAux;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::EncodedJustification;
-use crate::error::{Error, to_call_error};
 
 /// Helper macro to bail early in async context when you want to
 /// return `Box::pin(future::err(e))` once an error occurs.
@@ -100,33 +100,37 @@ impl<Hash: Send + Sync + DeserializeOwned + Serialize + 'static> ManualSeal<Hash
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {
 		let mut module = RpcModule::new(self);
 
-		module.register_async_method::<CreatedBlock<Hash>, _>("engine_createBlock", |params, engine| {
-			let mut seq = params.sequence();
+		module.register_async_method::<CreatedBlock<Hash>, _>(
+			"engine_createBlock",
+			|params, engine| {
+				let mut seq = params.sequence();
 
-			let create_empty = unwrap_or_fut_err!(seq.next());
-			let finalize = unwrap_or_fut_err!(seq.next());
-			let parent_hash = unwrap_or_fut_err!(seq.optional_next());
-			let mut sink = engine.import_block_channel.clone();
+				let create_empty = unwrap_or_fut_err!(seq.next());
+				let finalize = unwrap_or_fut_err!(seq.next());
+				let parent_hash = unwrap_or_fut_err!(seq.optional_next());
+				let mut sink = engine.import_block_channel.clone();
 
-			async move {
-				let (sender, receiver) = oneshot::channel();
-				// NOTE: this sends a Result over the channel.
-				let command = EngineCommand::SealNewBlock {
-					create_empty,
-					finalize,
-					parent_hash,
-					sender: Some(sender),
-				};
+				async move {
+					let (sender, receiver) = oneshot::channel();
+					// NOTE: this sends a Result over the channel.
+					let command = EngineCommand::SealNewBlock {
+						create_empty,
+						finalize,
+						parent_hash,
+						sender: Some(sender),
+					};
 
-				sink.send(command).await.map_err(|e| to_call_error(e))?;
+					sink.send(command).await.map_err(|e| to_call_error(e))?;
 
-				match receiver.await {
-					Ok(Ok(rx)) => Ok(rx),
-					Ok(Err(e)) => Err(to_call_error(e)),
-					Err(e) => Err(to_call_error(e))
+					match receiver.await {
+						Ok(Ok(rx)) => Ok(rx),
+						Ok(Err(e)) => Err(to_call_error(e)),
+						Err(e) => Err(to_call_error(e)),
+					}
 				}
-			}.boxed()
-		})?;
+				.boxed()
+			},
+		)?;
 
 		module.register_async_method("engine_finalizeBlock", |params, engine| {
 			let mut seq = params.sequence();
@@ -137,14 +141,12 @@ impl<Hash: Send + Sync + DeserializeOwned + Serialize + 'static> ManualSeal<Hash
 
 			async move {
 				let (sender, receiver) = oneshot::channel();
-				let command = EngineCommand::FinalizeBlock {
-					hash,
-					sender: Some(sender),
-					justification
-				};
+				let command =
+					EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification };
 				sink.send(command).await.map_err(|e| to_call_error(e))?;
 				receiver.await.map(|_| true).map_err(|e| to_call_error(e))
-			}.boxed()
+			}
+			.boxed()
 		})?;
 
 		Ok(module)

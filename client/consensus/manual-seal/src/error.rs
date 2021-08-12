@@ -92,13 +92,8 @@ impl Error {
 	}
 }
 
-
 /// Helper method to convert error type to JsonCallError.
 pub fn to_call_error(err: impl Into<Error>) -> CallError {
 	let err = err.into();
-	CallError::Custom {
-		code: err.to_code(),
-		message: err.to_string(),
-		data: None,
-	}
+	CallError::Custom { code: err.to_code(), message: err.to_string(), data: None }
 }

@@ -62,11 +62,7 @@ impl From<Error> for CallError {
 	fn from(error: Error) -> Self {
 		let message = error.to_string();
 		let code = ErrorCode::from(error);
-		Self::Custom {
-			code: code as i32,
-			message,
-			data: None,
-		}
+		Self::Custom { code: code as i32, message, data: None }
 	}
 }
 

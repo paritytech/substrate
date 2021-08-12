@@ -21,8 +21,9 @@ use futures::channel::mpsc;
 use jsonrpsee::types::RpcModule;
 use manual_seal::{
 	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
+	import_queue,
 	rpc::ManualSeal,
-	import_queue, run_manual_seal, EngineCommand, ManualSealParams,
+	run_manual_seal, EngineCommand, ManualSealParams,
 };
 use sc_client_api::backend::Backend;
 use sc_service::{
