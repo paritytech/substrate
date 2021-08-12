@@ -39,7 +39,6 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-# kvdb-memorydb = "0.10.0"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 thiserror = "1.0.21"

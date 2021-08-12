@@ -19,10 +19,6 @@ sp-application-crypto = { version = "4.0.0-dev", default-features = false, path 
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
-# [dev-dependencies]
-# sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
-# pretty_assertions = "0.6.1"
-
 [features]
 default = ["std"]
 std = [

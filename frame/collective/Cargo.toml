@@ -27,7 +27,6 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
-# pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]

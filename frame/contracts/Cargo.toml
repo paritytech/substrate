@@ -45,7 +45,6 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 [dev-dependencies]
 assert_matches = "1"
 hex-literal = "0.3"
-# paste = "1"
 pretty_assertions = "0.7"
 wat = "1"
 

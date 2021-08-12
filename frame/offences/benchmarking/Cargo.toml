@@ -36,7 +36,6 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
-# serde = { version = "1.0.101" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 

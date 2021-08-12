@@ -26,8 +26,6 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-# sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
-# hex-literal = "0.3.1"
 
 [features]
 default = ["std"]

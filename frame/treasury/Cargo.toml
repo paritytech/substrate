@@ -32,7 +32,6 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../
 [dev-dependencies]
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-# sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 
 [features]
 default = ["std"]

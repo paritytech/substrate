@@ -89,8 +89,5 @@ directories = "3.0.1"
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
-# sp-consensus-babe = { version = "0.10.0-dev", path = "../../primitives/consensus/babe" }
-# grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../finality-grandpa" }
-# grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = { version = "0.2.25", default-features = false }
 async-std = { version = "1.6.5", default-features = false }

@@ -48,7 +48,3 @@ log = "0.4.8"
 tempfile = "3.1.0"
 fs_extra = "1"
 futures = "0.3.1"
-
-# [dev-dependencies]
-# criterion = "0.3.0"
-# sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

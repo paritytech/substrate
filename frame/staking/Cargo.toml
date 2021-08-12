@@ -36,7 +36,6 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-# sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -48,8 +47,6 @@ frame-election-provider-support = { version = "4.0.0-dev", features = [
 	"runtime-benchmarks",
 ], path = "../election-provider-support" }
 rand_chacha = { version = "0.2" }
-# parking_lot = "0.11.1"
-# hex = "0.4"
 
 [features]
 default = ["std"]

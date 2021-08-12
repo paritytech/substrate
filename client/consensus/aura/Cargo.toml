@@ -43,11 +43,9 @@ getrandom = { version = "0.2", features = ["js"], optional = true }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
-# sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-# sc-service = { version = "0.10.0-dev", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 tempfile = "3.1.0"
 parking_lot = "0.11.1"

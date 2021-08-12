@@ -29,10 +29,6 @@ sp-trie = { version = "4.0.0-dev", optional = true, default-features = false, pa
 log = { version = "0.4.0", default-features = false }
 impl-trait-for-tuples = "0.2.1"
 
-# [dev-dependencies]
-# sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-# lazy_static = "1.4.0"
-
 [features]
 default = ["std", "historical"]
 historical = ["sp-trie"]

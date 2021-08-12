@@ -27,7 +27,6 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-# hex-literal = "0.3.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
