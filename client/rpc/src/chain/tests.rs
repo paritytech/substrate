@@ -182,7 +182,7 @@ fn should_return_finalized_hash() {
 
 #[test]
 fn should_notify_about_latest_block() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -197,19 +197,14 @@ fn should_notify_about_latest_block() {
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
-	// assert initial head sent.
-	let (notification, next) = executor::block_on(transport.into_future());
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future());
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future()).0, None);
+	// Check for the correct number of notifications
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
 fn should_notify_about_best_block() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -224,19 +219,14 @@ fn should_notify_about_best_block() {
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
-	// assert initial head sent.
-	let (notification, next) = executor::block_on(transport.into_future());
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future());
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future()).0, None);
+	// Assert that the correct number of notifications have been sent.
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
 fn should_notify_about_finalized_block() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -252,12 +242,7 @@ fn should_notify_about_finalized_block() {
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 
-	// assert initial head sent.
-	let (notification, next) = executor::block_on(transport.into_future());
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future());
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future()).0, None);
+	// Assert that the correct number of notifications have been sent.
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }

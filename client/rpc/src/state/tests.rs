@@ -178,16 +178,14 @@ fn should_notify_about_storage_changes() {
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
-	// assert notification sent to transport
-	let notification = executor::block_on(transport.next());
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(transport.next()), None);
+	// Check notification sent to transport
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
 fn should_send_initial_storage_changes_and_notifications() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -223,14 +221,9 @@ fn should_send_initial_storage_changes_and_notifications() {
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
-	// assert initial values sent to transport
-	let (notification, next) = executor::block_on(transport.into_future());
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future());
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future()).0, None);
+	// Check for the correct number of notifications
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
@@ -465,7 +458,7 @@ fn should_return_runtime_version() {
 
 #[test]
 fn should_notify_on_runtime_version_initially() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -483,10 +476,8 @@ fn should_notify_on_runtime_version_initially() {
 	}
 
 	// assert initial version sent.
-	let (notification, next) = executor::block_on(transport.into_future());
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future()).0, None);
+	executor::block_on((&mut transport).take(1).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
