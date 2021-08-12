@@ -374,7 +374,7 @@ mod tests {
 		// Unsubscribe again and fail
 		assert_eq!(
 			io.handle_request_sync(&unsub_req, meta),
-			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()),
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
 		);
 	}
 
@@ -396,7 +396,7 @@ mod tests {
 				r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
 				meta.clone()
 			),
-			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into())
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
 		);
 	}
 
