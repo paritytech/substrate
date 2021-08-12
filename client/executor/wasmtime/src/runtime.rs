@@ -56,21 +56,21 @@ enum Strategy {
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
-		store: Rc<RefCell<Store>>,
+		store: Store,
 	},
 	RecreateInstance(InstanceCreator),
 }
 
 struct InstanceCreator {
-	store: Rc<RefCell<Store>>,
+	store: Store,
 	module: Arc<wasmtime::Module>,
 	imports: Arc<Imports>,
 	heap_pages: u32,
 }
 
 impl InstanceCreator {
-	fn instantiate(&self, ctx: impl AsContextMut) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&*self.module, &*self.imports, self.heap_pages, ctx)
+	fn instantiate(&mut self) -> Result<InstanceWrapper> {
+		InstanceWrapper::new(&*self.module, &*self.imports, self.heap_pages, &mut self.store)
 	}
 }
 
@@ -152,16 +152,10 @@ impl WasmModule for WasmtimeRuntime {
 			self.config.allow_missing_func_imports,
 		)?;
 
-		let store = Rc::new(RefCell::new(store));
-
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
-			let instance_wrapper = InstanceWrapper::new(
-				&self.module,
-				&imports,
-				self.config.heap_pages,
-				&mut *store.borrow_mut(),
-			)?;
-			let heap_base = instance_wrapper.extract_heap_base(&mut *store.borrow_mut())?;
+			let instance_wrapper =
+				InstanceWrapper::new(&self.module, &imports, self.config.heap_pages, &mut store)?;
+			let heap_base = instance_wrapper.extract_heap_base(&mut store)?;
 
 			// This function panics if the instance was created from a runtime blob different from which
 			// the mutable globals were collected. Here, it is easy to see that there is only a single
@@ -169,7 +163,7 @@ impl WasmModule for WasmtimeRuntime {
 			// collecting the mutable globals.
 			let globals_snapshot = GlobalsSnapshot::take(
 				&snapshot_data.mutable_globals,
-				&mut InstanceGlobals { ctx: &mut *store.borrow_mut(), instance: &instance_wrapper },
+				&mut InstanceGlobals { ctx: &mut store, instance: &instance_wrapper },
 			);
 
 			Strategy::FastInstanceReuse {
@@ -203,27 +197,31 @@ pub struct WasmtimeInstance {
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
-	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
-		match &self.strategy {
+	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
+		match &mut self.strategy {
 			Strategy::FastInstanceReuse {
 				instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot,
 				heap_base,
-				store,
+				ref mut store,
 			} => {
-				let mut store = &mut *store.borrow_mut();
-				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut store)?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut *store)?;
 
 				data_segments_snapshot.apply(|offset, contents| {
-					instance_wrapper.write_memory_from(&mut store, Pointer::new(offset), contents)
+					instance_wrapper.write_memory_from(&mut *store, Pointer::new(offset), contents)
 				})?;
 				globals_snapshot
-					.apply(&mut InstanceGlobals { ctx: &mut store, instance: &**instance_wrapper });
+					.apply(&mut InstanceGlobals { ctx: &mut *store, instance: &*instance_wrapper });
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result =
-					perform_call(&mut store, data, instance_wrapper.clone(), entrypoint, allocator);
+				let result = perform_call(
+					&mut *store,
+					data,
+					instance_wrapper.clone(),
+					entrypoint,
+					allocator,
+				);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
@@ -231,26 +229,31 @@ impl WasmInstance for WasmtimeInstance {
 
 				result
 			},
-			Strategy::RecreateInstance(instance_creator) => {
-				let mut store = &mut *instance_creator.store.borrow_mut();
-				let instance_wrapper = instance_creator.instantiate(&mut store)?;
-				let heap_base = instance_wrapper.extract_heap_base(&mut store)?;
-				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut store)?;
+			Strategy::RecreateInstance(ref mut instance_creator) => {
+				let instance_wrapper = instance_creator.instantiate()?;
+				let heap_base = instance_wrapper.extract_heap_base(&mut instance_creator.store)?;
+				let entrypoint =
+					instance_wrapper.resolve_entrypoint(method, &mut instance_creator.store)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
-				perform_call(store, data, Rc::new(instance_wrapper), entrypoint, allocator)
+				perform_call(
+					&mut instance_creator.store,
+					data,
+					Rc::new(instance_wrapper),
+					entrypoint,
+					allocator,
+				)
 			},
 		}
 	}
 
-	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		match &self.strategy {
-			Strategy::FastInstanceReuse { instance_wrapper, store, .. } =>
-				instance_wrapper.get_global_val(&mut *store.borrow_mut(), name),
-			Strategy::RecreateInstance(instance_creator) => {
-				let mut ctx = &mut *instance_creator.store.borrow_mut();
-				instance_creator.instantiate(&mut ctx)?.get_global_val(ctx, name)
-			},
+	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
+		match &mut self.strategy {
+			Strategy::FastInstanceReuse { instance_wrapper, ref mut store, .. } =>
+				instance_wrapper.get_global_val(&mut *store, name),
+			Strategy::RecreateInstance(ref mut instance_creator) => instance_creator
+				.instantiate()?
+				.get_global_val(&mut instance_creator.store, name),
 		}
 	}
 
@@ -262,7 +265,7 @@ impl WasmInstance for WasmtimeInstance {
 				None
 			},
 			Strategy::FastInstanceReuse { instance_wrapper, store, .. } =>
-				Some(instance_wrapper.base_ptr(&*store.borrow())),
+				Some(instance_wrapper.base_ptr(&store)),
 		}
 	}
 }

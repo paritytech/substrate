@@ -25,7 +25,7 @@ use sp_wasm_interface::{Function, ValueType};
 use std::any::Any;
 use wasmtime::{
 	Caller, Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
-	StoreLimits, Trap, Val,
+	Trap, Val,
 };
 
 pub struct Imports {
@@ -182,8 +182,9 @@ fn call_static<'a>(
 			therefore host_ctx cannot be None;
 			qed
 			",
-			).clone();
-		let mut host_state = host_state.borrow_mut();
+			)
+			.clone();
+		let host_state = host_state.borrow_mut();
 
 		let mut host_ctx = host_state.materialize(&mut caller);
 

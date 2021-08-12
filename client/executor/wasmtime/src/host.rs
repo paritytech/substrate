@@ -30,7 +30,7 @@ use sc_executor_common::{
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use std::{cell::RefCell, rc::Rc};
-use wasmtime::{Caller, Func, StoreLimits, Val};
+use wasmtime::{Caller, Func, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -309,7 +309,8 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
 			let ctx = &mut self.1;
-			let table_item = self.0
+			let table_item = self
+				.0
 				.instance
 				.table()
 				.as_ref()

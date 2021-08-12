@@ -168,7 +168,7 @@ impl WasmExecutor {
 	where
 		F: FnOnce(
 			AssertUnwindSafe<&Arc<dyn WasmModule>>,
-			AssertUnwindSafe<&dyn WasmInstance>,
+			AssertUnwindSafe<&mut dyn WasmInstance>,
 			Option<&RuntimeVersion>,
 			AssertUnwindSafe<&mut dyn Externalities>,
 		) -> Result<Result<R>>,
@@ -222,7 +222,7 @@ impl WasmExecutor {
 			.new_instance()
 			.map_err(|e| format!("Failed to create instance: {:?}", e))?;
 
-		let instance = AssertUnwindSafe(instance);
+		let mut instance = AssertUnwindSafe(instance);
 		let mut ext = AssertUnwindSafe(ext);
 		let module = AssertUnwindSafe(module);
 
@@ -399,7 +399,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					// pool of instances should be used.
 					//
 					// https://github.com/paritytech/substrate/issues/7354
-					let instance =
+					let mut instance =
 						module.new_instance().expect("Failed to create new instance from module");
 
 					instance
@@ -486,7 +486,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 			runtime_code,
 			ext,
 			false,
-			|module, instance, onchain_version, mut ext| {
+			|module, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
 
