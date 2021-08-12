@@ -210,6 +210,7 @@ mod tests {
 				&Default::default(),
 				&Default::default(),
 				frame_system::InitKind::Full,
+				&Default::default(),
 			);
 			CollectiveFlip::on_initialize(i);
 

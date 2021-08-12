@@ -158,6 +158,7 @@ fn construct_block(
 		state_root,
 		extrinsics_root,
 		digest: Digest { logs: vec![] },
+        seed: Default::default(),
 	};
 	let hash = header.hash();
 	let mut overlay = OverlayedChanges::default();

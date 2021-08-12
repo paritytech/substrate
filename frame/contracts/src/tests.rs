@@ -672,6 +672,7 @@ fn initialize_block(number: u64) {
 		&[0u8; 32].into(),
 		&Default::default(),
 		Default::default(),
+		&Default::default(),
 	);
 }
 

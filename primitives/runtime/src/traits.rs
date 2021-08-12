@@ -537,6 +537,12 @@ pub trait Header:
 	fn hash(&self) -> Self::Hash {
 		<Self::Hashing as Hash>::hash_of(self)
 	}
+
+	/// Returns seed used for shuffling
+	fn seed(&self) -> &Self::Hash;
+
+	/// Returns seed used for shuffling
+	fn set_seed(& mut self,seed: Self::Hash);
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for

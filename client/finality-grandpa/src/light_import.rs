@@ -708,6 +708,7 @@ pub mod tests {
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
+                seed: Default::default(),
 			},
 		);
 		block.justification = justification;

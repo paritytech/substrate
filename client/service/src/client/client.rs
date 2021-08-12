@@ -889,7 +889,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 							let mut header = import_block.header.clone();
 							let mut slice: &[u8] = & mut seed.seed;
-							header.set_extrinsics_root(<Block::Hash>::decode(& mut slice).unwrap());
+							header.set_seed(<Block::Hash>::decode(& mut slice).unwrap());
 
 							runtime_api.execute_block_with_context(
 								&at,

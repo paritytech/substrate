@@ -51,6 +51,8 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<Hash::Output>,
+	/// Previous block extrinsics shuffling seed
+	pub seed: Hash::Output,
 }
 
 #[cfg(feature = "std")]
@@ -97,6 +99,7 @@ impl<Number, Hash> Decode for Header<Number, Hash> where
 			state_root: Decode::decode(input)?,
 			extrinsics_root: Decode::decode(input)?,
 			digest: Decode::decode(input)?,
+			seed: Default::default(),
 		})
 	}
 }
@@ -153,6 +156,13 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 		&mut self.digest
 	}
 
+    fn seed(&self) -> &Self::Hash { &self.seed }
+
+	/// Returns seed used for shuffling
+	fn set_seed(& mut self,seed: Self::Hash) {
+        self.seed = seed;
+    }
+
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -166,6 +176,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 			state_root,
 			parent_hash,
 			digest,
+            seed: Default::default(),
 		}
 	}
 }
