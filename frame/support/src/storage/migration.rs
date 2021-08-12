@@ -249,7 +249,8 @@ pub fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], val
 	frame_support::storage::unhashed::put(&key, &value);
 }
 
-/// Remove all items under a storage prefix by the `module`, the map's `item` name and the key `hash`.
+/// Remove all items under a storage prefix by the `module`, the map's `item` name and the key
+/// `hash`.
 pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	let mut key = vec![0u8; 32 + hash.len()];
 	key[0..16].copy_from_slice(&Twox128::hash(module));
