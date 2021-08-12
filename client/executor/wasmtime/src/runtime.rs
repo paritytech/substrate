@@ -22,7 +22,7 @@ use crate::{
 	host::HostState,
 	imports::{resolve_imports, Imports},
 	instance_wrapper::{EntryPoint, InstanceWrapper},
-	state_holder, util,
+	util,
 };
 
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -45,7 +45,7 @@ use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
 
 pub(crate) struct StoreData {
 	limits: StoreLimits,
-	host_state: Option<Rc<RefCell<HostState>>>,
+	pub(crate) host_state: Option<Rc<RefCell<HostState>>>,
 }
 
 pub(crate) type Store = wasmtime::Store<StoreData>;
@@ -127,7 +127,7 @@ impl WasmtimeRuntime {
 		let mut store = Store::new(&self.engine, StoreData { limits, host_state: None });
 
 		if self.config.max_memory_pages.is_some() {
-			store.limiter(|s| s);
+			store.limiter(|s| &mut s.limits);
 		}
 
 		store
@@ -591,7 +591,7 @@ pub fn prepare_runtime_artifact(
 }
 
 fn perform_call(
-	mut ctx: impl AsContextMut,
+	mut ctx: impl AsContextMut<Data = StoreData>,
 	data: &[u8],
 	instance_wrapper: Rc<InstanceWrapper>,
 	entrypoint: EntryPoint,
@@ -603,12 +603,14 @@ fn perform_call(
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
 
 	// Set the host state before calling into wasm.
-	ctx.data_mut().host_state = Some(host_state);
+	ctx.as_context_mut().data_mut().host_state = Some(Rc::new(RefCell::new(host_state)));
 
-	let ret = entrypoint.call(&mut ctx, data_ptr, data_len).and_then(|r| Ok(unpack_ptr_and_len(r)));
+	let ret = entrypoint
+		.call(&mut ctx, data_ptr, data_len)
+		.and_then(|r| Ok(unpack_ptr_and_len(r)));
 
 	// Take the host state
-	ctx.data_mut().host_state.take();
+	ctx.as_context_mut().data_mut().host_state.take();
 
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(ctx, &instance_wrapper, output_ptr, output_len)?;

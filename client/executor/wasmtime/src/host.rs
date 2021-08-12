@@ -19,7 +19,7 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::{instance_wrapper::InstanceWrapper, util};
+use crate::{instance_wrapper::InstanceWrapper, runtime::StoreData, util};
 use codec::{Decode, Encode};
 use log::trace;
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -42,7 +42,7 @@ pub struct SupervisorFuncRef(Func);
 /// The state required to construct a HostContext context. The context only lasts for one host
 /// call, whereas the state is maintained for the duration of a Wasm runtime call, which may make
 /// many different host calls that must share state.
-pub struct HostState {
+pub(crate) struct HostState {
 	// We need some interior mutability here since the host state is shared between all host
 	// function handlers and the wasmtime backend's `impl WasmRuntime`.
 	//
@@ -70,7 +70,7 @@ impl HostState {
 	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
 	pub fn materialize<'a, 'b, 'c>(
 		&'a self,
-		caller: &'b mut Caller<'c, StoreLimits>,
+		caller: &'b mut Caller<'c, StoreData>,
 	) -> HostContext<'a, 'b, 'c> {
 		HostContext(self, caller)
 	}
@@ -79,7 +79,7 @@ impl HostState {
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub struct HostContext<'a, 'b, 'c>(&'a HostState, &'b mut Caller<'c, StoreLimits>);
+pub(crate) struct HostContext<'a, 'b, 'c>(&'a HostState, &'b mut Caller<'c, StoreData>);
 
 impl<'a, 'b, 'c> std::ops::Deref for HostContext<'a, 'b, 'c> {
 	type Target = HostState;

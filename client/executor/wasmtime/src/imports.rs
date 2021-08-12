@@ -18,11 +18,11 @@
 
 use crate::{
 	runtime::{Store, StoreData},
-	state_holder, util,
+	util,
 };
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, ValueType};
-use std::{any::Any, borrow::BorrowMut};
+use std::any::Any;
 use wasmtime::{
 	Caller, Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
 	StoreLimits, Trap, Val,
@@ -37,7 +37,7 @@ pub struct Imports {
 
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
-pub fn resolve_imports(
+pub(crate) fn resolve_imports(
 	store: &mut Store,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
@@ -172,13 +172,21 @@ fn call_static<'a>(
 	mut caller: Caller<'a, StoreData>,
 ) -> Result<(), wasmtime::Trap> {
 	let unwind_result = {
-		let mut host_ctx = caller.data().host_state.as_ref().expect(
-			"host functions can be called only from wasm instance;
+		let host_state = caller
+			.data()
+			.host_state
+			.as_ref()
+			.expect(
+				"host functions can be called only from wasm instance;
 			wasm instance is always called initializing context;
 			therefore host_ctx cannot be None;
 			qed
 			",
-		).borrow_mut();
+			).clone();
+		let mut host_state = host_state.borrow_mut();
+
+		let mut host_ctx = host_state.materialize(&mut caller);
+
 		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
 		// available in substrate.
 		//

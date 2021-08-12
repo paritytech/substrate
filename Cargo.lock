@@ -7591,7 +7591,6 @@ dependencies = [
  "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
- "scoped-tls",
  "sp-core",
  "sp-io",
  "sp-runtime-interface",
