@@ -37,8 +37,7 @@ pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
 use std::{
 	future::Future,
-	io,
-	iter,
+	io, iter,
 	net::SocketAddr,
 	path::{Path, PathBuf},
 	pin::Pin,
@@ -230,7 +229,7 @@ impl Configuration {
 					crate::DEFAULT_PROTOCOL_ID
 				);
 				crate::DEFAULT_PROTOCOL_ID
-			},
+			}
 		};
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	}

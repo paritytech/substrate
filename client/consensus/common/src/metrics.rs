@@ -40,14 +40,20 @@ impl Metrics {
 		Ok(Self {
 			import_queue_processed: register(
 				CounterVec::new(
-					Opts::new("substrate_import_queue_processed_total", "Blocks processed by import queue"),
+					Opts::new(
+						"substrate_import_queue_processed_total",
+						"Blocks processed by import queue",
+					),
 					&["result"], // 'success or failure
 				)?,
 				registry,
 			)?,
 			block_verification_time: register(
 				HistogramVec::new(
-					HistogramOpts::new("substrate_block_verification_time", "Time taken to verify blocks"),
+					HistogramOpts::new(
+						"substrate_block_verification_time",
+						"Time taken to verify blocks",
+					),
 					&["result"],
 				)?,
 				registry,
