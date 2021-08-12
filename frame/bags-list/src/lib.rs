@@ -52,6 +52,7 @@
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
 use frame_system::ensure_signed;
 use sp_std::prelude::*;
+ use frame_support::traits::Get;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
@@ -264,6 +265,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::clear()
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bag_thresholds() -> Vec<VoteWeight> {
+		T::BagThresholds::get().to_vec()
+	}
+
 	// Benchmark helpers
 	#[cfg(feature = "runtime-benchmarks")]
 	fn prepare_on_update_benchmark(
@@ -271,6 +277,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		dest_thresh: VoteWeight,
 		to_update: T::AccountId,
 	) {
-		todo!()
+		todo!()	
 	}
 }

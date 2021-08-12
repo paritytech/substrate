@@ -145,7 +145,7 @@ impl<T: Config> RebagScenario<T> {
 	/// An expensive rebag scenario:
 	///
 	/// - the node to be rebagged (r) is the head of a bag that has at least one other node. The bag
-	///   itself will need to be read and written to update the head. The node pointed to by
+	///   itself will need to be read and written to update its head. The node pointed to by
 	///   r.next will need to be read and written as it will need to have its prev pointer updated.
 	///
 	/// - the destination bag has at least one node, which will need its next pointer updated.
@@ -164,8 +164,8 @@ impl<T: Config> RebagScenario<T> {
 		let dest_factor: BalanceOf<T> =
 			dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
 
-		// create a validator to nominate
-		let validator = create_validators::<T>(1, 100).unwrap().first().unwrap().clone();
+		// create a validators to nominate.
+		let validators = create_validators::<T>(T::MAX_NOMINATIONS, 100)?;
 
 		// create an account in the destination bag
 		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
@@ -175,7 +175,7 @@ impl<T: Config> RebagScenario<T> {
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(dest_controller1).into(),
-			vec![validator.clone()],
+			validators.clone()
 		)?;
 
 		// create accounts in origin bag
@@ -186,7 +186,7 @@ impl<T: Config> RebagScenario<T> {
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
-			vec![validator.clone()],
+			validators.clone()
 		)?;
 
 		let (origin_stash2, origin_controller2) = create_stash_controller_with_max_free::<T>(
@@ -196,7 +196,7 @@ impl<T: Config> RebagScenario<T> {
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller2.clone()).into(),
-			vec![validator.clone()],
+			validators
 		)?;
 
 		Ok(RebagScenario { dest_stash1, origin_stash1, origin_controller1, origin_stash2 })
@@ -224,7 +224,6 @@ benchmarks! {
 		clear_validators_and_nominators::<T>();
 
 		// The worst case scenario includes the voter changing bags.
-
 		let total_issuance = T::Currency::total_issuance();
 		// the bag the voter will start at
 		let origin_bag_thresh =
@@ -303,26 +302,51 @@ benchmarks! {
 	withdraw_unbonded_kill {
 		// Slashing Spans
 		let s in 0 .. MAX_SPANS;
-		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
-		add_slashing_spans::<T>(&stash, s);
-		let amount = T::Currency::minimum_balance() * 10u32.into();
-		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
+		// scenario setup, but we don't care about the setup of the destination bag.
+		let scenario
+			= RebagScenario::<T>::new(One::one(), One::one())?;
+		let controller = scenario.origin_controller1;
+		let stash = scenario.origin_stash1;
+		assert!(T::SortedListProvider::contains(&stash));
+
+		let ed = T::Currency::minimum_balance();
+		let mut ledger = Ledger::<T>::get(&controller).unwrap();
+		ledger.active = ed - One::one();
+		Ledger::<T>::insert(&controller, ledger);
+
 		CurrentEra::<T>::put(EraIndex::max_value());
-		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
-		let original_total: BalanceOf<T> = ledger.total;
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
+		assert!(!T::SortedListProvider::contains(&stash));
 	}
 
 	validate {
-		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// A worst case scenario includes the voter being a bag head (which implies they are already
+		// a nominator), so we can reuse the rebag scenario setup, but we don't care about the setup
+		// of the destination bag.
+
+		let scenario = RebagScenario::<T>::new(One::one(), One::one())?;
+		let controller = scenario.origin_controller1;
+		let stash = scenario.origin_stash1;
+		assert!(T::SortedListProvider::contains(&stash));
+
+		// let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
-		assert!(Validators::<T>::contains_key(stash));
+		assert!(Validators::<T>::contains_key(&stash));
+		assert!(!T::SortedListProvider::contains(&stash));
 	}
 
 	kick {
@@ -400,9 +424,24 @@ benchmarks! {
 	}
 
 	chill {
-		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
+		// scenario setup, but we don't care about the setup of the destination bag.
+
+		// thresholds are inconsequential because we are just care that we are removing a head.
+		let scenario
+			= RebagScenario::<T>::new(One::one(), One::one())?;
+		let controller = scenario.origin_controller1;
+		let stash = scenario.origin_stash1;
+		assert!(T::SortedListProvider::contains(&stash));
+
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller))
+	verify {
+		assert!(!T::SortedListProvider::contains(&stash));
+	}
 
 	set_payee {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
@@ -554,6 +593,7 @@ benchmarks! {
 		// The worst case scenario includes the voter changing bags.
 
 		let total_issuance = T::Currency::total_issuance();
+
 		// the bag the voter will start at
 		let origin_bag_thresh =
 			T::CurrencyToVote::to_currency(1u128, total_issuance);
@@ -569,7 +609,20 @@ benchmarks! {
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
 		// so the sum of unlocking chunks puts voter into the dest bag
-		assert!(value * l.into() + origin_bag_thresh > origin_bag_thresh);
+		crate::log!(
+			info,
+			"value: {:#?}, origin thresh: {:#?}, dest thresh: {:#?}",
+			value,
+			origin_bag_thresh,
+			dest_bag_thresh
+		);
+		println!(
+			"value: {:#?}, origin thresh: {:#?}, dest thresh: {:#?}",
+			value,
+			origin_bag_thresh,
+			dest_bag_thresh
+		);
+		assert!((value * l.into() + origin_bag_thresh) > origin_bag_thresh);
 		assert!(value * l.into() + origin_bag_thresh <= dest_bag_thresh);
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value,
@@ -624,19 +677,27 @@ benchmarks! {
 
 	reap_stash {
 		let s in 1 .. MAX_SPANS;
-		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
-		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
+		// scenario setup, but we don't care about the setup of the destination bag.
+		let scenario
+			= RebagScenario::<T>::new(One::one(), One::one())?;
+		let controller = scenario.origin_controller1;
+		let stash = scenario.origin_stash1;
+
 		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
 		whitelist_account!(controller);
 
 		assert!(Bonded::<T>::contains_key(&stash));
-		assert!(Validators::<T>::contains_key(&stash));
+		assert!(T::SortedListProvider::contains(&stash));
 
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
-		assert!(!Validators::<T>::contains_key(&stash));
+		assert!(!T::SortedListProvider::contains(&stash));
 	}
 
 	new_era {
@@ -782,8 +843,19 @@ benchmarks! {
 	}
 
 	chill_other {
-		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
+		// scenario setup, but we don't care about the setup of the destination bag.
+
+		// thresholds are inconsequential because we are just care that we are removing a head.
+		let scenario
+			= RebagScenario::<T>::new(One::one(), One::one())?;
+		let controller = scenario.origin_controller1;
+		let stash = scenario.origin_stash1;
+		assert!(T::SortedListProvider::contains(&stash));
+
 		Staking::<T>::set_staking_limits(
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
@@ -795,7 +867,7 @@ benchmarks! {
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())
 	verify {
-		assert!(!Validators::<T>::contains_key(controller));
+		assert!(!T::SortedListProvider::contains(&stash));
 	}
 }
 

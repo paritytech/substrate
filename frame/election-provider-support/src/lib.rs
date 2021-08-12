@@ -339,6 +339,9 @@ pub trait SortedListProvider<AccountId> {
 		dest_thresh: VoteWeight,
 		to_update: AccountId,
 	);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn bag_thresholds() -> Vec<VoteWeight>;
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
