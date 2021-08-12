@@ -426,10 +426,8 @@ where
 mod tests {
 	use sc_service::RpcSession;
 
-	fn create_session_and_receiver() -> (
-		RpcSession,
-		futures::channel::mpsc::UnboundedReceiver<String>
-	) {
+	fn create_session_and_receiver(
+	) -> (RpcSession, futures::channel::mpsc::UnboundedReceiver<String>) {
 		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let mem = RpcSession::new(tx.into());
 

@@ -136,8 +136,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::Peers(tx));
 
-		async move { rx.await.map_err(|_| rpc::Error::internal_error()) }
-			.boxed()
+		async move { rx.await.map_err(|_| rpc::Error::internal_error()) }.boxed()
 	}
 
 	fn system_network_state(&self) -> rpc::BoxFuture<rpc::Result<rpc::Value>> {
@@ -146,14 +145,10 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
 
-		async move { rx.await.map_err(|_| rpc::Error::internal_error()) }
-			.boxed()
+		async move { rx.await.map_err(|_| rpc::Error::internal_error()) }.boxed()
 	}
 
-	fn system_add_reserved_peer(
-		&self,
-		peer: String,
-	) -> rpc::BoxFuture<rpc::Result<()>> {
+	fn system_add_reserved_peer(&self, peer: String) -> rpc::BoxFuture<rpc::Result<()>> {
 		bail_if_unsafe!(self.deny_unsafe);
 
 		let (tx, rx) = oneshot::channel();
@@ -168,10 +163,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		.boxed()
 	}
 
-	fn system_remove_reserved_peer(
-		&self,
-		peer: String,
-	) -> rpc::BoxFuture<rpc::Result<()>> {
+	fn system_remove_reserved_peer(&self, peer: String) -> rpc::BoxFuture<rpc::Result<()>> {
 		bail_if_unsafe!(self.deny_unsafe);
 
 		let (tx, rx) = oneshot::channel();

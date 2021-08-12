@@ -19,8 +19,8 @@
 //! RPC Metadata
 use std::sync::Arc;
 
-use jsonrpc_pubsub::{PubSubMetadata, Session};
 use futures::channel::mpsc;
+use jsonrpc_pubsub::{PubSubMetadata, Session};
 
 /// RPC Metadata.
 ///
