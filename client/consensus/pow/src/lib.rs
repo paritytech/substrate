@@ -573,7 +573,7 @@ where
 						err
 					);
 					continue
-				},
+				}
 			};
 			let best_hash = best_header.hash();
 
@@ -605,7 +605,7 @@ where
 						err,
 					);
 					continue
-				},
+				}
 			};
 
 			let inherent_data_providers = match create_inherent_data_providers
@@ -621,7 +621,7 @@ where
 						err,
 					);
 					continue
-				},
+				}
 			};
 
 			let inherent_data = match inherent_data_providers.create_inherent_data() {
@@ -633,8 +633,8 @@ where
 						 Creating inherent data failed: {:?}",
 						e,
 					);
-					continue;
-				},
+					continue
+				}
 			};
 
 			let mut inherent_digest = Digest::<Block::Hash>::default();
@@ -653,8 +653,8 @@ where
 						 Creating proposer failed: {:?}",
 						err,
 					);
-					continue;
-				},
+					continue
+				}
 			};
 
 			let proposal = match proposer
@@ -669,8 +669,8 @@ where
 						 Creating proposal failed: {:?}",
 						err,
 					);
-					continue;
-				},
+					continue
+				}
 			};
 
 			let build = MiningBuild::<Block, Algorithm, C, _> {
