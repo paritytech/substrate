@@ -1,0 +1,47 @@
+[package]
+name = "hoster"
+version = "3.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = ""
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+
+[dependencies]
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../client/service" }
+sc-telemetry = { version = "4.0.0-dev", path = "../../client/telemetry" }
+sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
+sc-transaction-pool = { version = "4.0.0-dev", path = "../../client/transaction-pool" }
+sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../client/db" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
+sp-consensus-babe = { version = "0.10.0-dev", path = "../../primitives/consensus/babe" }
+sc-consensus-babe = { version = "0.10.0-dev", path = "../../client/consensus/babe" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
+sp-authorship = { version = "4.0.0-dev", path = "../../primitives/authorship" }
+sc-client-api = { version = "4.0.0-dev", path = "../../client/api" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../primitives/timestamp" }
+sc-finality-grandpa = { version = "0.10.0-dev", path = "../../client/finality-grandpa" }
+num-traits = "0.2.14"
+sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
+sc-consensus-slots = { version = "0.10.0-dev", path = "../../client/consensus/slots" }
+sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
+sc-basic-authorship = { version = "0.10.0-dev", path = "../../client/basic-authorship" }
+sc-consensus-uncles = { version = "0.10.0-dev", path = "../../client/consensus/uncles" }
+sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../primitives/transaction-storage-proof" }
+sc-authority-discovery = { version = "0.10.0-dev",  path = "../../client/authority-discovery" }
+sc-network = { version = "0.10.0-dev", path = "../../client/network" }
+futures = "0.3.15"
+sp-authority-discovery = { version = "4.0.0-dev",  path = "../../primitives/authority-discovery" }
+sc-cli = { version = "0.10.0-dev", path = "../../client/cli" }
+sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
+structopt = "0.3.22"
+
+[dev-dependencies]
+node-runtime = { version = "3.0.0-dev", path = "../node/runtime" }
+node-executor = { version = "3.0.0-dev", path = "../node/executor" }
+node-cli = { version = "3.0.0-dev", path = "../node/cli" }

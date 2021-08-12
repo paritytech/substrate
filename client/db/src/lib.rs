@@ -58,7 +58,7 @@ use std::{
 use crate::{
 	changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction},
 	stats::StateUsageStats,
-	storage_cache::{new_shared_cache, CachingState, SharedCache, SyncingCachingState},
+	storage_cache::{new_shared_cache, CachingState, SharedCache},
 	utils::{meta_keys, read_db, read_meta, DatabaseType, Meta},
 };
 use codec::{Decode, Encode};
@@ -96,6 +96,8 @@ use sp_state_machine::{
 	StorageCollection, UsageInfo as StateUsageInfo,
 };
 use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
+
+pub use crate::storage_cache::SyncingCachingState;
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sc_state_db::PruningMode;
