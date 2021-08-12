@@ -2806,25 +2806,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpc-core"
-version = "15.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0745a6379e3edc893c84ec203589790774e4247420033e71a76d3ab4687991fa"
-dependencies = [
- "futures 0.1.31",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
 name = "jsonrpsee"
 version = "0.3.0"
 source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6db2ee15af05fbe2b4ad5417a730820321aea69f"
 dependencies = [
  "jsonrpsee-http-server",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "jsonrpsee-utils",
  "jsonrpsee-ws-server",
 ]
@@ -2838,7 +2825,7 @@ dependencies = [
  "futures-util",
  "globset",
  "hyper 0.14.11",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "jsonrpsee-utils",
  "lazy_static",
  "log",
@@ -2881,6 +2868,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-types"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee#6db2ee15af05fbe2b4ad5417a730820321aea69f"
+dependencies = [
+ "async-trait",
+ "beef",
+ "futures-channel",
+ "futures-util",
+ "hyper 0.14.11",
+ "log",
+ "serde",
+ "serde_json",
+ "soketto 0.6.0",
+ "thiserror",
+]
+
+[[package]]
 name = "jsonrpsee-utils"
 version = "0.3.0"
 source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6db2ee15af05fbe2b4ad5417a730820321aea69f"
@@ -2889,7 +2893,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "hyper 0.14.11",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "log",
  "parking_lot 0.11.1",
  "rand 0.8.4",
@@ -2907,7 +2911,7 @@ dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.15",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "log",
  "pin-project 1.0.5",
  "rustls 0.19.1",
@@ -2929,7 +2933,7 @@ source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6db2ee15af05
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "jsonrpsee-utils",
  "log",
  "rustc-hash",
@@ -4050,7 +4054,7 @@ version = "3.0.0-dev"
 dependencies = [
  "futures 0.3.15",
  "futures-timer 3.0.2",
- "jsonrpc-core",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee)",
  "libp2p",
  "node-cli",
  "parking_lot 0.11.1",

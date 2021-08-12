@@ -24,11 +24,15 @@
 //! ```text
 //! CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner WASM_BINDGEN_TEST_TIMEOUT=60 cargo test --target wasm32-unknown-unknown
 //! ```
-//! For debug infomation, such as the informant, run without the `--headless`
+//! For debug information, such as the informant, run without the `--headless`
 //! flag and open a browser to the url that `wasm-pack test` outputs.
-//! For more infomation see <https://rustwasm.github.io/docs/wasm-pack/>.
+//! For more information see <https://rustwasm.github.io/docs/wasm-pack/>.
 
-use jsonrpc_core::types::{Id, MethodCall, Params, Success, Version};
+use jsonrpsee_types::v2::{
+	params::{Id, JsonRpcParams},
+	request::JsonRpcCallSer,
+	response::JsonRpcResponse,
+};
 use serde::de::DeserializeOwned;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
@@ -37,21 +41,14 @@ use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 wasm_bindgen_test_configure!(run_in_browser);
 
 fn rpc_call(method: &str) -> String {
-	serde_json::to_string(&MethodCall {
-		jsonrpc: Some(Version::V2),
-		method: method.into(),
-		params: Params::None,
-		id: Id::Num(1),
-	})
-	.unwrap()
+	serde_json::to_string(&JsonRpcCallSer::new(Id::Number(1), method, JsonRpcParams::NoParams))
+		.unwrap()
 }
 
 fn deserialize_rpc_result<T: DeserializeOwned>(js_value: JsValue) -> T {
 	let string = js_value.as_string().unwrap();
-	let value = serde_json::from_str::<Success>(&string).unwrap().result;
-	// We need to convert a `Value::Object` into a proper type.
-	let value_string = serde_json::to_string(&value).unwrap();
-	serde_json::from_str(&value_string).unwrap()
+	let val = serde_json::from_str::<JsonRpcResponse<T>>(&string).unwrap().result;
+	val
 }
 
 #[wasm_bindgen_test]
