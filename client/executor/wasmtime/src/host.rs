@@ -99,7 +99,6 @@ impl<'a, 'b, 'c> SandboxCapabilities for HostContext<'a, 'b, 'c> {
 		state: u32,
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
-		eprintln!("HEY");
 		let result = dispatch_thunk.0.call(
 			&mut self.1,
 			&[
