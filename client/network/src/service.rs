@@ -729,7 +729,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			preventing the message from being delivered.
 	///
 	/// The protocol must have been registered with
-	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
+	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::
+	/// notifications_protocols).
 	pub fn write_notification(
 		&self,
 		target: PeerId,
@@ -774,7 +775,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Obtains a [`NotificationSender`] for a connected peer, if it exists.
 	///
 	/// A `NotificationSender` is scoped to a particular connection to the peer that holds
-	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two steps:
+	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two
+	/// steps:
 	///
 	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
 	/// for another notification, yielding a [`NotificationSenderReady`] token.
@@ -794,7 +796,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// in which case enqueued notifications will be lost.
 	///
 	/// The protocol must have been registered with
-	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
+	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::
+	/// notifications_protocols).
 	///
 	/// # Usage
 	///
@@ -883,10 +886,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// notifications should remain the default ways of communicating information. For example, a
 	/// peer can announce something through a notification, after which the recipient can obtain
 	/// more information by performing a request.
-	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way you
-	/// will get an error immediately for disconnected peers, instead of waiting for a potentially very
-	/// long connection attempt, which would suggest that something is wrong anyway, as you are
-	/// supposed to be connected because of the notification protocol.
+	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way
+	/// you will get an error immediately for disconnected peers, instead of waiting for a
+	/// potentially very long connection attempt, which would suggest that something is wrong
+	/// anyway, as you are supposed to be connected because of the notification protocol.
 	///
 	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
@@ -914,7 +917,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Variation of `request` which starts a request whose response is delivered on a provided channel.
+	/// Variation of `request` which starts a request whose response is delivered on a provided
+	/// channel.
 	///
 	/// Instead of blocking and waiting for a reply, this function returns immediately, sending
 	/// responses via the passed in sender. This alternative API exists to make it easier to
@@ -1130,7 +1134,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
+	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
+	// convenience.
 	pub fn remove_peers_from_reserved_set(
 		&self,
 		protocol: Cow<'static, str>,
@@ -1198,7 +1203,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
+	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
+	// convenience.
 	pub fn remove_from_peers_set(
 		&self,
 		protocol: Cow<'static, str>,
@@ -1314,7 +1320,8 @@ pub struct NotificationSender {
 }
 
 impl NotificationSender {
-	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
+	/// Returns a future that resolves when the `NotificationSender` is ready to send a
+	/// notification.
 	pub async fn ready<'a>(
 		&'a self,
 	) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
@@ -1371,7 +1378,8 @@ impl<'a> NotificationSenderReady<'a> {
 /// Error returned by [`NetworkService::send_notification`].
 #[derive(Debug, derive_more::Display, derive_more::Error)]
 pub enum NotificationSenderError {
-	/// The notification receiver has been closed, usually because the underlying connection closed.
+	/// The notification receiver has been closed, usually because the underlying connection
+	/// closed.
 	///
 	/// Some of the notifications most recently sent may not have been received. However,
 	/// the peer may still be connected and a new `NotificationSender` for the same

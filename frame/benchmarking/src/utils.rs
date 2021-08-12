@@ -202,7 +202,8 @@ pub trait Benchmarking {
 	fn add_to_whitelist(&mut self, add: TrackedStorageKey) {
 		let mut whitelist = self.get_whitelist();
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
-			// If we already have this key in the whitelist, update to be the most constrained value.
+			// If we already have this key in the whitelist, update to be the most constrained
+			// value.
 			Some(item) => {
 				item.reads += add.reads;
 				item.writes += add.writes;
@@ -239,8 +240,8 @@ pub trait Benchmarking<T> {
 	/// extrinsic, so these are sometimes just called "extrinsics".
 	///
 	/// Parameters
-	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
-	///            needed for weight calculation.
+	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be needed for
+	///   weight calculation.
 	fn benchmarks(extra: bool) -> Vec<BenchmarkMetadata>;
 
 	/// Run the benchmarks for this pallet.

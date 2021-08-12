@@ -25,7 +25,8 @@ use std::{
 	task::{Context, Poll},
 };
 
-/// Wrapper struct (wrapping nothing in case of http_dummy) used for keeping the hyper_rustls client running.
+/// Wrapper struct (wrapping nothing in case of http_dummy) used for keeping the hyper_rustls client
+/// running.
 #[derive(Clone)]
 pub struct SharedClient;
 

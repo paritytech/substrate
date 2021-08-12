@@ -687,7 +687,8 @@ pub struct WasmiInstance {
 	missing_functions: Vec<String>,
 }
 
-// This is safe because `WasmiInstance` does not leak any references to `self.memory` and `self.instance`
+// This is safe because `WasmiInstance` does not leak any references to `self.memory` and
+// `self.instance`
 unsafe impl Send for WasmiInstance {}
 
 impl WasmInstance for WasmiInstance {

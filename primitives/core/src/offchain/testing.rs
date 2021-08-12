@@ -168,8 +168,8 @@ impl OffchainState {
 	/// Add expected HTTP request.
 	///
 	/// This method can be used to initialize expected HTTP requests and their responses
-	/// before running the actual code that utilizes them (for instance before calling into runtime).
-	/// Expected request has to be fulfilled before this struct is dropped,
+	/// before running the actual code that utilizes them (for instance before calling into
+	/// runtime). Expected request has to be fulfilled before this struct is dropped,
 	/// the `response` and `response_headers` fields will be used to return results to the callers.
 	/// Requests are expected to be performed in the insertion order.
 	pub fn expect_request(&mut self, expected: PendingRequest) {

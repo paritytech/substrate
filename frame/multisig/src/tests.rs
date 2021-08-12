@@ -812,8 +812,9 @@ fn weight_check_works() {
 
 #[test]
 fn multisig_handles_no_preimage_after_all_approve() {
-	// This test checks the situation where everyone approves a multi-sig, but no-one provides the call data.
-	// In the end, any of the multisig callers can approve again with the call data and the call will go through.
+	// This test checks the situation where everyone approves a multi-sig, but no-one provides the
+	// call data. In the end, any of the multisig callers can approve again with the call data and
+	// the call will go through.
 	new_test_ext().execute_with(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
 		assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));

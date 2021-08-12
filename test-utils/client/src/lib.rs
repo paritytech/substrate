@@ -392,8 +392,9 @@ where
 	C: BlockchainEvents<B>,
 	B: BlockT,
 {
-	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
-	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not
+	/// return if no blocks are ever created, thus you should restrict the maximum amount of time of
+	/// the test execution.
 	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 

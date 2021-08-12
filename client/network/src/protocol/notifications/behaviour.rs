@@ -63,8 +63,8 @@ use wasm_timer::Instant;
 /// - [`PeerState::Disabled`]: Has open TCP connection(s) unbeknownst to the peerset. No substream
 ///   is open.
 /// - [`PeerState::Enabled`]: Has open TCP connection(s), acknowledged by the peerset.
-///   - Notifications substreams are open on at least one connection, and external
-///     API has been notified.
+///   - Notifications substreams are open on at least one connection, and external API has been
+///     notified.
 ///   - Notifications substreams aren't open.
 /// - [`PeerState::Incoming`]: Has open TCP connection(s) and remote would like to open substreams.
 ///   Peerset has been asked to attribute an inbound slot.
@@ -1255,8 +1255,8 @@ impl NetworkBehaviour for Notifications {
 						.iter()
 						.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote));
 
-					// If no connection is `OpenDesiredByRemote` anymore, clean up the peerset incoming
-					// request.
+					// If no connection is `OpenDesiredByRemote` anymore, clean up the peerset
+					// incoming request.
 					if no_desired_left {
 						// In the incoming state, we don't report "Dropped". Instead we will just
 						// ignore the corresponding Accept/Reject.

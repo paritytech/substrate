@@ -112,8 +112,8 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// Request response configuration for the block request protocol.
 	///
 	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
-	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
-	/// requests, if enabled.
+	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
+	/// block requests, if enabled.
 	///
 	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
 	/// allowing outgoing but not incoming requests, or constructed via
@@ -272,7 +272,6 @@ impl fmt::Debug for ProtocolId {
 /// assert_eq!(peer_id, "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse::<PeerId>().unwrap());
 /// assert_eq!(addr, "/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap());
 /// ```
-///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let addr: Multiaddr = addr_str.parse()?;
 	parse_addr(addr)
@@ -506,7 +505,8 @@ impl NetworkConfiguration {
 		}
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config =
 			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
@@ -520,7 +520,8 @@ impl NetworkConfiguration {
 		config
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
 	pub fn new_memory() -> NetworkConfiguration {
 		let mut config =
 			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
@@ -629,8 +630,8 @@ pub enum TransportConfig {
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
-		/// need some binding between the networking provided by the operating system or environment
-		/// and libp2p.
+		/// need some binding between the networking provided by the operating system or
+		/// environment and libp2p.
 		///
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
@@ -710,12 +711,12 @@ impl NodeKeyConfig {
 	///
 	///  * If the secret is configured as input, the corresponding keypair is returned.
 	///
-	///  * If the secret is configured as a file, it is read from that file, if it exists.
-	///    Otherwise a new secret is generated and stored. In either case, the
-	///    keypair obtained from the secret is returned.
+	///  * If the secret is configured as a file, it is read from that file, if it exists. Otherwise
+	///    a new secret is generated and stored. In either case, the keypair obtained from the
+	///    secret is returned.
 	///
-	///  * If the secret is configured to be new, it is generated and the corresponding
-	///    keypair is returned.
+	///  * If the secret is configured to be new, it is generated and the corresponding keypair is
+	///    returned.
 	pub fn into_keypair(self) -> io::Result<Keypair> {
 		use NodeKeyConfig::*;
 		match self {

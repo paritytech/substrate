@@ -64,8 +64,8 @@ enum ForwardingState<B: BlockT> {
 	/// more messages to forward.
 	Idle,
 	/// The gossip engine is in the progress of forwarding messages and thus will not poll the
-	/// network for more messages until it has send all current messages into the subscribed message
-	/// sinks.
+	/// network for more messages until it has send all current messages into the subscribed
+	/// message sinks.
 	Busy(VecDeque<(B::Hash, TopicNotification)>),
 }
 
