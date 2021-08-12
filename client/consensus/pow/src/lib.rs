@@ -588,7 +588,6 @@ where
 			}
 
 			if worker.lock().best_hash() == Some(best_hash) {
-				debug!(target: "pow", "Got the best hash");
 				continue
 			}
 
