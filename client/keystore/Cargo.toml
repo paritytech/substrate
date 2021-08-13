@@ -17,17 +17,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 async-trait = "0.1.50"
 derive_more = "0.99.2"
-futures = "0.3.9"
-futures-util = "0.3.4"
 sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 hex = "0.4.0"
-merlin = { version = "2.0", default-features = false }
 parking_lot = "0.11.1"
-rand = "0.7.2"
 serde_json = "1.0.41"
-subtle = "2.1.1"
 
 [dev-dependencies]
 tempfile = "3.1.0"

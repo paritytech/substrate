@@ -29,11 +29,10 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = ["test-helpers"] }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
+    "test-helpers",
+] }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
-substrate-test-runtime-client = { version = "2.0.0",  path = "../../../test-utils/runtime/client" }
-lazy_static = "1.4"
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
