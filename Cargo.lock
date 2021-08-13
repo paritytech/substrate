@@ -1613,9 +1613,19 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
+checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
+dependencies = [
+ "log 0.4.14",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
 dependencies = [
  "atty",
  "humantime 2.1.0",
@@ -5328,7 +5338,7 @@ name = "pallet-mmr"
 version = "4.0.0-dev"
 dependencies = [
  "ckb-merkle-mountain-range",
- "env_logger 0.8.3",
+ "env_logger 0.9.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6572,7 +6582,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
 dependencies = [
- "env_logger 0.8.3",
+ "env_logger 0.8.4",
  "log 0.4.14",
  "rand 0.8.4",
 ]
@@ -7000,7 +7010,7 @@ dependencies = [
 name = "remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
- "env_logger 0.8.3",
+ "env_logger 0.9.0",
  "frame-support",
  "hex",
  "jsonrpsee-proc-macros",
