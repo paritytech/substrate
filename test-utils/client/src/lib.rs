@@ -307,7 +307,7 @@ pub struct RpcTransactionOutput {
 	/// The session object.
 	pub session: RpcSession,
 	/// An async receiver if data will be returned via a callback.
-	pub receiver: futures01::sync::mpsc::Receiver<String>,
+	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 }
 
 impl std::fmt::Debug for RpcTransactionOutput {
@@ -347,7 +347,7 @@ impl RpcHandlersExt for RpcHandlers {
 		&self,
 		extrinsic: OpaqueExtrinsic,
 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
-		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let mem = RpcSession::new(tx.into());
 		Box::pin(
 			self.rpc_query(
@@ -370,7 +370,7 @@ impl RpcHandlersExt for RpcHandlers {
 pub(crate) fn parse_rpc_result(
 	result: Option<String>,
 	session: RpcSession,
-	receiver: futures01::sync::mpsc::Receiver<String>,
+	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 ) -> Result<RpcTransactionOutput, RpcTransactionError> {
 	if let Some(ref result) = result {
 		let json: serde_json::Value =
@@ -426,8 +426,9 @@ where
 mod tests {
 	use sc_service::RpcSession;
 
-	fn create_session_and_receiver() -> (RpcSession, futures01::sync::mpsc::Receiver<String>) {
-		let (tx, rx) = futures01::sync::mpsc::channel(0);
+	fn create_session_and_receiver(
+	) -> (RpcSession, futures::channel::mpsc::UnboundedReceiver<String>) {
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let mem = RpcSession::new(tx.into());
 
 		(mem, rx)

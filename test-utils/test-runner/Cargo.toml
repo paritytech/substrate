@@ -48,8 +48,8 @@ sp-runtime-interface = { path = "../../primitives/runtime-interface" }
 frame-system = { path = "../../frame/system" }
 
 log = "0.4.8"
-futures = { package = "futures", version = "0.3", features = ["compat"] }
+futures = "0.3.16"
 tokio = { version = "0.2", features = ["signal"] }
 # Calling RPC
-jsonrpc-core = "15.1"
+jsonrpc-core = "18.0"
 num-traits = "0.2.14"
