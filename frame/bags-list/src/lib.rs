@@ -140,8 +140,8 @@ pub mod pallet {
 		///   the procedure given above, then the constant ratio is equal to 2.
 		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined according to
 		///   the procedure given above, then the constant ratio is approximately equal to 1.248.
-		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will
-		///   fall into bag 0, an id with weight 2 will fall into bag 1, etc.
+		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will fall
+		///   into bag 0, an id with weight 2 will fall into bag 1, etc.
 		///
 		/// # Migration
 		///
@@ -265,7 +265,23 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn is_in_bag(id: &T::AccountId, weight: VoteWeight) -> bool {
+	fn is_in_bag(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
+		use frame_support::traits::Get;
+		let info = T::BagThresholds::get()
+			.into_iter()
+			.chain(std::iter::once(&VoteWeight::MAX)) // assumes this is not an explicit threshold
+			.filter_map(|t| {
+				list::Bag::<T>::get(*t)
+					.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
+			})
+			.collect::<Vec<_>>();
+		println!("bags info {:#?}", info);
+
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn is_bag_head(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
+		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().head_id() == Some(id)
 	}
 }

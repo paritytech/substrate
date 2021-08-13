@@ -332,11 +332,18 @@ pub trait SortedListProvider<AccountId> {
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
 
-	/// If the voter is in the notional bag for the given weight.
+	/// Wether the voter is in the notional bag for the given weight. Only relevant for
+	/// implementations that use bags.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn is_in_bag(_: &AccountId, _: VoteWeight) -> bool {
-		// TODO problematic if this always returns true
-		true // default to true for impls that don't have a bag.
+	fn is_in_bag(_: &AccountId, _: VoteWeight, mock: bool) -> bool {
+		mock // default to returning mock value for values that are not relevant
+	}
+
+	/// Wether the voter is the head of the notional bag for the given weight. Only relevant for
+	/// implementations that use bags.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn is_bag_head(_: &AccountId, _: VoteWeight, mock: bool) -> bool {
+		mock // default to returning mock value for values that are not relevant
 	}
 }
 

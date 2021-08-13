@@ -37,8 +37,8 @@
 //!    ```
 //!
 //! 2. Write a little program to generate the definitions. This can be a near-identical copy of
-//!    `substrate/frame/bags-list/generate-bags`. This program exists only to hook together the runtime
-//!    definitions with the various calculations here.
+//!    `substrate/frame/bags-list/generate-bags`. This program exists only to hook together the
+//! runtime    definitions with the various calculations here.
 //!
 //! 3. Run that program:
 //!

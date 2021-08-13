@@ -139,16 +139,16 @@ struct RebagScenario<T: Config> {
 	/// Controller of the Stash that is expected to be rebagged.
 	origin_controller1: T::AccountId,
 	origin_stash2: T::AccountId,
-	origin_bag_thresh: BalanceOf<T>,
-	dest_bag_thresh: BalanceOf<T>,
+	origin_thresh_as_vote: VoteWeight,
+	dest_thresh_as_vote: VoteWeight,
 }
 
 impl<T: Config> RebagScenario<T> {
 	/// An expensive rebag scenario:
 	///
 	/// - the node to be rebagged (r) is the head of a bag that has at least one other node. The bag
-	///   itself will need to be read and written to update its head. The node pointed to by
-	///   r.next will need to be read and written as it will need to have its prev pointer updated.
+	///   itself will need to be read and written to update its head. The node pointed to by r.next
+	///   will need to be read and written as it will need to have its prev pointer updated.
 	///
 	/// - the destination bag has at least one node, which will need its next pointer updated.
 	fn new(
@@ -198,27 +198,75 @@ impl<T: Config> RebagScenario<T> {
 		)?;
 		Staking::<T>::nominate(RawOrigin::Signed(dest_controller1).into(), validators)?;
 
+		let total_issuance = T::Currency::total_issuance();
+		let origin_thresh_as_vote = T::CurrencyToVote::to_vote(origin_bag_thresh, total_issuance);
+		let dest_thresh_as_vote = T::CurrencyToVote::to_vote(dest_bag_thresh, total_issuance);
+
 		Ok(RebagScenario {
 			dest_stash1,
 			origin_stash1,
 			origin_controller1,
 			origin_stash2,
-			origin_bag_thresh,
-			dest_bag_thresh,
+			origin_thresh_as_vote,
+			dest_thresh_as_vote,
 		})
 	}
 
-	fn assert_preconditions(&self) {
-		let total_issuance = T::Currency::total_issuance();
-		let dest_thresh_as_vote = T::CurrencyToVote::to_vote(self.dest_bag_thresh, total_issuance);
-		let origin_thresh_as_vote = T::CurrencyToVote::to_vote(self.origin_bag_thresh, total_issuance);
+	fn check_preconditions(&self) {
+		let RebagScenario {
+			dest_stash1,
+			origin_stash2,
+			dest_thresh_as_vote,
+			origin_thresh_as_vote,
+			..
+		} = self;
+		// destination stash is not in the origin bag.
+		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
+		// origin stash2 is in the origin bag
+		assert!(T::SortedListProvider::is_in_bag(&origin_stash2, *origin_thresh_as_vote, true));
+		// head checks implicitly check that dest stash1 and origin stash1 are in the correct bags.
+		self.check_head_preconditions();
+	}
 
+	fn check_postconditions(&self) {
+		let RebagScenario {
+			dest_stash1,
+			origin_stash1,
+			dest_thresh_as_vote,
+			origin_thresh_as_vote,
+			..
+		} = self;
 		// destination stash is not in the origin bag
-		assert!(!T::SortedListProvider::is_in_bag(&self.dest_stash1, origin_thresh_as_vote));
+		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
 		// and is in the destination bag.
-		assert!(T::SortedListProvider::is_in_bag(&self.dest_stash1, dest_thresh_as_vote));
-		// the origin stash is in the origin bag.
-		assert!(T::SortedListProvider::is_in_bag(&self.origin_stash1, origin_thresh_as_vote));
+		assert!(T::SortedListProvider::is_in_bag(&dest_stash1, *dest_thresh_as_vote, true));
+		// the origin stash is in the destination bag.
+		assert!(T::SortedListProvider::is_in_bag(&origin_stash1, *dest_thresh_as_vote, true));
+		self.check_head_postconditions();
+	}
+
+	fn check_head_preconditions(&self) {
+		let RebagScenario {
+			dest_stash1,
+			origin_stash1,
+			dest_thresh_as_vote,
+			origin_thresh_as_vote,
+			..
+		} = self;
+		assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_thresh_as_vote, true));
+		assert!(T::SortedListProvider::is_bag_head(&origin_stash1, *origin_thresh_as_vote, true));
+	}
+
+	fn check_head_postconditions(&self) {
+		let RebagScenario {
+			dest_stash1,
+			origin_stash2,
+			dest_thresh_as_vote,
+			origin_thresh_as_vote,
+			..
+		} = self;
+		assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_thresh_as_vote, true));
+		assert!(T::SortedListProvider::is_bag_head(&origin_stash2, *origin_thresh_as_vote, true));
 	}
 }
 
@@ -262,13 +310,15 @@ benchmarks! {
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(stash);
 
-		scenario.assert_preconditions();
+		scenario.check_preconditions();
 
 	}: _(RawOrigin::Signed(stash.clone()), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
+
+		scenario.check_postconditions();
 	}
 
 	unbond {
@@ -293,7 +343,7 @@ benchmarks! {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 
-		scenario.assert_preconditions();
+		scenario.check_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), amount)
@@ -301,6 +351,8 @@ benchmarks! {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded > new_bonded);
+
+		scenario.check_postconditions();
 	}
 
 	// Withdraw only updates the ledger
@@ -681,11 +733,7 @@ benchmarks! {
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
 
-		scenario.assert_preconditions();
-		assert_eq!(
-			T::SortedListProvider::iter().collect::<Vec<_>>(),
-			vec![scenario.dest_stash1.clone(), stash.clone(), scenario.origin_stash2.clone()]
-		);
+		scenario.check_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), rebond_amount)
@@ -694,11 +742,7 @@ benchmarks! {
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
 
-		// the ordering in the list doesn't change
-		assert_eq!(
-			T::SortedListProvider::iter().collect::<Vec<_>>(),
-			vec![scenario.dest_stash1.clone(), stash.clone(), scenario.origin_stash2.clone()]
-		);
+		scenario.check_postconditions();
 	}
 
 	set_history_depth {

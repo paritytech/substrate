@@ -768,13 +768,14 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
+				// ledger must be updated prior to call to `Self::weight_of`.
+				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&stash) {
 					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
-				Self::update_ledger(&controller, &ledger);
 			}
 			Ok(())
 		}
