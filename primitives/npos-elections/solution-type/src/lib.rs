@@ -138,7 +138,7 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	if attrs.len() > 1 {
 		return Err(syn_err("compact solution can accept only #[compact]"))
 	}
-	if attrs.len() < 1 {
+	if attrs.is_empty() {
 		return Ok(false)
 	}
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
