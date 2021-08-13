@@ -15,11 +15,11 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 finality-grandpa = { version = "0.14.1", features = ["derive-codec"] }
-jsonrpc-core = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-derive = "15.1.0"
-jsonrpc-pubsub = "15.1.0"
-futures = { version = "0.3.4", features = ["compat"] }
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+futures = "0.3.16"
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
 log = "0.4.8"

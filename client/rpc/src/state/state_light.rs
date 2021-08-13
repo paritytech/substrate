@@ -22,20 +22,13 @@ use codec::Decode;
 use futures::{
 	channel::oneshot::{channel, Sender},
 	future::{ready, Either},
-	FutureExt, StreamExt as _, TryFutureExt, TryStreamExt as _,
+	Future, FutureExt, SinkExt, Stream, StreamExt as _, TryFutureExt, TryStreamExt as _,
 };
 use hash_db::Hasher;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
 use parking_lot::Mutex;
-use rpc::{
-	futures::{
-		future::{result, Future},
-		stream::Stream,
-		Sink,
-	},
-	Result as RpcResult,
-};
+use rpc::Result as RpcResult;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	sync::Arc,
@@ -171,6 +164,7 @@ where
 impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Client>
 where
 	Block: BlockT,
+	Block::Hash: Unpin,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + 'static,
 {
@@ -180,17 +174,14 @@ where
 		method: String,
 		call_data: Bytes,
 	) -> FutureResult<Bytes> {
-		Box::new(
-			call(
-				&*self.remote_blockchain,
-				self.fetcher.clone(),
-				self.block_or_best(block),
-				method,
-				call_data,
-			)
-			.boxed()
-			.compat(),
+		call(
+			&*self.remote_blockchain,
+			self.fetcher.clone(),
+			self.block_or_best(block),
+			method,
+			call_data,
 		)
+		.boxed()
 	}
 
 	fn storage_keys(
@@ -198,7 +189,7 @@ where
 		_block: Option<Block::Hash>,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage_pairs(
@@ -206,7 +197,7 @@ where
 		_block: Option<Block::Hash>,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage_keys_paged(
@@ -216,11 +207,11 @@ where
 		_count: u32,
 		_start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage_size(&self, _: Option<Block::Hash>, _: StorageKey) -> FutureResult<Option<u64>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage(
@@ -228,21 +219,18 @@ where
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
-		Box::new(
-			storage(
-				&*self.remote_blockchain,
-				self.fetcher.clone(),
-				self.block_or_best(block),
-				vec![key.0.clone()],
-			)
-			.boxed()
-			.compat()
-			.map(move |mut values| {
-				values
-					.remove(&key)
-					.expect("successful request has entries for all requested keys; qed")
-			}),
+		storage(
+			&*self.remote_blockchain,
+			self.fetcher.clone(),
+			self.block_or_best(block),
+			vec![key.0.clone()],
 		)
+		.map_ok(move |mut values| {
+			values
+				.remove(&key)
+				.expect("successful request has entries for all requested keys; qed")
+		})
+		.boxed()
 	}
 
 	fn storage_hash(
@@ -250,38 +238,28 @@ where
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(StateBackend::storage(self, block, key).and_then(|maybe_storage| {
-			result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
-		}))
+		let res = StateBackend::storage(self, block, key);
+		async move { res.await.map(|r| r.map(|s| HashFor::<Block>::hash(&s.0))) }.boxed()
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
-		let metadata =
-			self.call(block, "Metadata_metadata".into(), Bytes(Vec::new()))
-				.and_then(|metadata| {
-					OpaqueMetadata::decode(&mut &metadata.0[..]).map(Into::into).map_err(
-						|decode_err| {
-							client_err(ClientError::CallResultDecode(
-								"Unable to decode metadata",
-								decode_err,
-							))
-						},
-					)
-				});
-
-		Box::new(metadata)
+		self.call(block, "Metadata_metadata".into(), Bytes(Vec::new()))
+			.and_then(|metadata| async move {
+				OpaqueMetadata::decode(&mut &metadata.0[..])
+					.map(Into::into)
+					.map_err(|decode_err| {
+						client_err(ClientError::CallResultDecode(
+							"Unable to decode metadata",
+							decode_err,
+						))
+					})
+			})
+			.boxed()
 	}
 
 	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
-		Box::new(
-			runtime_version(
-				&*self.remote_blockchain,
-				self.fetcher.clone(),
-				self.block_or_best(block),
-			)
+		runtime_version(&*self.remote_blockchain, self.fetcher.clone(), self.block_or_best(block))
 			.boxed()
-			.compat(),
-		)
 	}
 
 	fn query_storage(
@@ -290,7 +268,7 @@ where
 		_to: Option<Block::Hash>,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn query_storage_at(
@@ -298,7 +276,7 @@ where
 		_keys: Vec<StorageKey>,
 		_at: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn read_proof(
@@ -306,7 +284,7 @@ where
 		_block: Option<Block::Hash>,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<ReadProof<Block::Hash>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn subscribe_storage(
@@ -334,10 +312,7 @@ where
 
 			let changes_stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
 				storage_subscriptions.clone(),
-				self.client
-					.import_notification_stream()
-					.map(|notification| Ok::<_, ()>(notification.hash))
-					.compat(),
+				self.client.import_notification_stream().map(|notification| notification.hash),
 				display_error(
 					storage(&*remote_blockchain, fetcher.clone(), initial_block, initial_keys)
 						.map(move |r| r.map(|r| (initial_block, r))),
@@ -365,21 +340,17 @@ where
 						.as_ref()
 						.map(|old_value| **old_value != new_value)
 						.unwrap_or(true);
-					match value_differs {
-						true => Some(StorageChangeSet {
-							block,
-							changes: new_value
-								.iter()
-								.map(|(k, v)| (k.clone(), v.clone()))
-								.collect(),
-						}),
-						false => None,
-					}
+
+					value_differs.then(|| StorageChangeSet {
+						block,
+						changes: new_value.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+					})
 				},
 			);
 
-			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(changes_stream.map(|changes| Ok(changes)))
+			changes_stream
+				.map_ok(Ok)
+				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 				.map(|_| ())
 		});
@@ -441,10 +412,7 @@ where
 
 			let versions_stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
 				version_subscriptions,
-				self.client
-					.import_notification_stream()
-					.map(|notification| Ok::<_, ()>(notification.hash))
-					.compat(),
+				self.client.import_notification_stream().map(|notification| notification.hash),
 				display_error(
 					runtime_version(&*remote_blockchain, fetcher.clone(), initial_block)
 						.map(move |r| r.map(|r| (initial_block, r))),
@@ -455,15 +423,14 @@ where
 						.as_ref()
 						.map(|old_version| *old_version != new_version)
 						.unwrap_or(true);
-					match version_differs {
-						true => Some(new_version.clone()),
-						false => None,
-					}
+
+					version_differs.then(|| new_version.clone())
 				},
 			);
 
-			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(versions_stream.map(|version| Ok(version)))
+			versions_stream
+				.map_ok(Ok)
+				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 				.map(|_| ())
 		});
@@ -483,7 +450,7 @@ where
 		_targets: Option<String>,
 		_storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 }
 
@@ -499,7 +466,7 @@ where
 		_storage_key: PrefixedStorageKey,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<ReadProof<Block::Hash>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage_keys(
@@ -508,7 +475,7 @@ where
 		_storage_key: PrefixedStorageKey,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage_keys_paged(
@@ -519,7 +486,7 @@ where
 		_count: u32,
 		_start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
 
 	fn storage(
@@ -560,7 +527,7 @@ where
 				}
 			});
 
-		Box::new(child_storage.boxed().compat())
+		child_storage.boxed()
 	}
 
 	fn storage_hash(
@@ -569,11 +536,9 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(ChildStateBackend::storage(self, block, storage_key, key).and_then(
-			|maybe_storage| {
-				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
-			},
-		))
+		let child_storage = ChildStateBackend::storage(self, block, storage_key, key);
+
+		async move { child_storage.await.map(|r| r.map(|s| HashFor::<Block>::hash(&s.0))) }.boxed()
 	}
 }
 
@@ -687,54 +652,50 @@ fn subscription_stream<
 	initial_request: InitialRequestFuture,
 	issue_request: IssueRequest,
 	compare_values: CompareValues,
-) -> impl Stream<Item = N, Error = ()>
+) -> impl Stream<Item = std::result::Result<N, ()>>
 where
 	Block: BlockT,
 	Requests: 'static + SharedRequests<Block::Hash, V>,
-	FutureBlocksStream: Stream<Item = Block::Hash, Error = ()>,
+	FutureBlocksStream: Stream<Item = Block::Hash>,
 	V: Send + 'static + Clone,
-	InitialRequestFuture:
-		std::future::Future<Output = Result<(Block::Hash, V), ()>> + Send + 'static,
+	InitialRequestFuture: Future<Output = Result<(Block::Hash, V), ()>> + Send + 'static,
 	IssueRequest: 'static + Fn(Block::Hash) -> IssueRequestFuture,
-	IssueRequestFuture: std::future::Future<Output = Result<V, Error>> + Send + 'static,
+	IssueRequestFuture: Future<Output = Result<V, Error>> + Send + 'static,
 	CompareValues: Fn(Block::Hash, Option<&V>, &V) -> Option<N>,
 {
 	// we need to send initial value first, then we'll only be sending if value has changed
 	let previous_value = Arc::new(Mutex::new(None));
 
 	// prepare 'stream' of initial values
-	let initial_value_stream = ignore_error(initial_request).boxed().compat().into_stream();
+	let initial_value_stream = initial_request.into_stream();
 
 	// prepare stream of future values
 	//
 	// we do not want to stop stream if single request fails
 	// (the warning should have been already issued by the request issuer)
-	let future_values_stream = future_blocks_stream.and_then(move |block| {
-		ignore_error(
+	let future_values_stream = future_blocks_stream
+		.then(move |block| {
 			maybe_share_remote_request::<Block, _, _, _, _>(
 				shared_requests.clone(),
 				block,
 				&issue_request,
 			)
-			.map(move |r| r.map(|v| (block, v))),
-		)
-		.boxed()
-		.compat()
-	});
+			.map(move |r| r.map(|v| (block, v)))
+		})
+		.filter(|r| ready(r.is_ok()));
 
 	// now let's return changed values for selected blocks
 	initial_value_stream
 		.chain(future_values_stream)
-		.filter_map(move |block_and_new_value| {
-			block_and_new_value.and_then(|(block, new_value)| {
-				let mut previous_value = previous_value.lock();
-				compare_values(block, previous_value.as_ref(), &new_value).map(
-					|notification_value| {
-						*previous_value = Some(new_value);
-						notification_value
-					},
-				)
-			})
+		.try_filter_map(move |(block, new_value)| {
+			let mut previous_value = previous_value.lock();
+			let res = compare_values(block, previous_value.as_ref(), &new_value).map(
+				|notification_value| {
+					*previous_value = Some(new_value);
+					notification_value
+				},
+			);
+			async move { Ok(res) }
 		})
 		.map_err(|_| ())
 }
@@ -789,24 +750,10 @@ where
 	})
 }
 
-/// Convert successful future result into Ok(Some(result)) and error into Ok(None),
-/// displaying warning.
-fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output = Result<Option<T>, ()>>
-where
-	F: std::future::Future<Output = Result<T, ()>>,
-{
-	future.then(|result| {
-		ready(match result {
-			Ok(result) => Ok(Some(result)),
-			Err(()) => Ok(None),
-		})
-	})
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use rpc::futures::stream::futures_ordered;
+	use futures::{executor, stream};
 	use sp_core::H256;
 	use substrate_test_runtime_client::runtime::Block;
 
@@ -814,7 +761,7 @@ mod tests {
 	fn subscription_stream_works() {
 		let stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
 			SimpleSubscriptions::default(),
-			futures_ordered(vec![result(Ok(H256::from([2; 32]))), result(Ok(H256::from([3; 32])))]),
+			stream::iter(vec![H256::from([2; 32]), H256::from([3; 32])]),
 			ready(Ok((H256::from([1; 32]), 100))),
 			|block| match block[0] {
 				2 => ready(Ok(100)),
@@ -827,14 +774,14 @@ mod tests {
 			},
 		);
 
-		assert_eq!(stream.collect().wait(), Ok(vec![100, 200]));
+		assert_eq!(executor::block_on(stream.collect::<Vec<_>>()), vec![Ok(100), Ok(200)]);
 	}
 
 	#[test]
 	fn subscription_stream_ignores_failed_requests() {
 		let stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
 			SimpleSubscriptions::default(),
-			futures_ordered(vec![result(Ok(H256::from([2; 32]))), result(Ok(H256::from([3; 32])))]),
+			stream::iter(vec![H256::from([2; 32]), H256::from([3; 32])]),
 			ready(Ok((H256::from([1; 32]), 100))),
 			|block| match block[0] {
 				2 => ready(Err(client_err(ClientError::NotAvailableOnLightClient))),
@@ -847,7 +794,7 @@ mod tests {
 			},
 		);
 
-		assert_eq!(stream.collect().wait(), Ok(vec![100, 200]));
+		assert_eq!(executor::block_on(stream.collect::<Vec<_>>()), vec![Ok(100), Ok(200)]);
 	}
 
 	#[test]

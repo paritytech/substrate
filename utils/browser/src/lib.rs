@@ -17,11 +17,9 @@
 
 use futures::{
 	channel::{mpsc, oneshot},
-	compat::*,
-	future::{ok, ready, select},
+	future::{ready, select},
 	prelude::*,
 };
-use futures01::sync::mpsc as mpsc01;
 use libp2p_wasm_ext::{ffi, ExtTransport};
 use log::{debug, info};
 use sc_chain_spec::Extension;
@@ -166,7 +164,7 @@ impl Client {
 	/// Allows starting an RPC request. Returns a `Promise` containing the result of that request.
 	#[wasm_bindgen(js_name = "rpcSend")]
 	pub fn rpc_send(&mut self, rpc: &str) -> js_sys::Promise {
-		let rpc_session = RpcSession::new(mpsc01::channel(1).0);
+		let rpc_session = RpcSession::new(mpsc::unbounded().0);
 		let (tx, rx) = oneshot::channel();
 		let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
 			rpc_json: rpc.to_owned(),
@@ -184,7 +182,7 @@ impl Client {
 	/// Subscribes to an RPC pubsub endpoint.
 	#[wasm_bindgen(js_name = "rpcSubscribe")]
 	pub fn rpc_subscribe(&mut self, rpc: &str, callback: js_sys::Function) {
-		let (tx, rx) = mpsc01::channel(4);
+		let (tx, rx) = mpsc::unbounded();
 		let rpc_session = RpcSession::new(tx);
 		let (fut_tx, fut_rx) = oneshot::channel();
 		let _ = self.rpc_send_tx.unbounded_send(RpcMessage {
@@ -200,10 +198,9 @@ impl Client {
 
 		wasm_bindgen_futures::spawn_local(async move {
 			let _ = rx
-				.compat()
-				.try_for_each(|s| {
+				.for_each(|s| {
 					let _ = callback.call1(&callback, &JsValue::from_str(&s));
-					ok(())
+					ready(())
 				})
 				.await;
 

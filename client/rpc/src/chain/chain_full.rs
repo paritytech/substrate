@@ -18,19 +18,16 @@
 
 //! Blockchain API backend for full nodes.
 
+use super::{client_err, error::FutureResult, ChainBackend};
+use futures::FutureExt;
 use jsonrpc_pubsub::manager::SubscriptionManager;
-use rpc::futures::future::result;
-use std::sync::Arc;
-
 use sc_client_api::{BlockBackend, BlockchainEvents};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::Block as BlockT,
 };
-
-use super::{client_err, error::FutureResult, ChainBackend};
-use sp_blockchain::HeaderBackend;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -52,6 +49,7 @@ impl<Block: BlockT, Client> FullChain<Block, Client> {
 impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	fn client(&self) -> &Arc<Client> {
@@ -63,14 +61,12 @@ where
 	}
 
 	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
-		Box::new(result(
-			self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err),
-		))
+		let res = self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
+		async move { res }.boxed()
 	}
 
 	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
-		Box::new(result(
-			self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err),
-		))
+		let res = self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
+		async move { res }.boxed()
 	}
 }
