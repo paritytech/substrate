@@ -25,7 +25,7 @@ use node_runtime::{
 	UncheckedExtrinsic,
 };
 use node_testing::keyring::*;
-use sc_executor::{Externalities, NativeExecutor, RuntimeInfo, WasmExecutionMethod};
+use sc_executor::{Externalities, NativeExecutor, RuntimeVersionOf, WasmExecutionMethod};
 use sp_core::{
 	storage::well_known_keys,
 	traits::{CodeExecutor, RuntimeCode},
@@ -40,8 +40,8 @@ criterion_main!(benches);
 /// The wasm runtime code.
 pub fn compact_code_unwrap() -> &'static [u8] {
 	node_runtime::WASM_BINARY.expect(
-		"Development wasm binary is not available. \
-									  Testing is only supported with the flag disabled.",
+		"Development wasm binary is not available. Testing is only supported with the flag \
+		 disabled.",
 	)
 }
 

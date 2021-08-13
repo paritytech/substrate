@@ -17,6 +17,7 @@
 
 use crate::pallet::Def;
 
+///
 /// * Generate the struct
 /// * implement the `Get<..>` on it
 /// * Rename the name of the function to internal name

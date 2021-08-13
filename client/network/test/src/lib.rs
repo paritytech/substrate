@@ -40,7 +40,10 @@ use sc_client_api::{
 	BlockBackend, BlockImportNotification, BlockchainEvents, FinalityNotification,
 	FinalityNotifications, ImportNotifications,
 };
-use sc_consensus::LongestChain;
+use sc_consensus::{
+	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
+	ForkChoiceStrategy, ImportResult, JustificationImport, LongestChain, Verifier,
+};
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
@@ -58,11 +61,8 @@ use sp_blockchain::{
 	HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
-	block_import::{BlockImport, ImportResult},
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
-	import_queue::{BasicQueue, BoxJustificationImport, Verifier},
-	BlockCheckParams, BlockImportParams, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy,
-	JustificationImport,
+	BlockOrigin, Error as ConsensusError,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -108,25 +108,19 @@ impl PassThroughVerifier {
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let maybe_keys = header
+		let maybe_keys = block
+			.header
 			.digest()
 			.log(|l| {
 				l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
 					.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
 			})
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
-		let mut import = BlockImportParams::new(origin, header);
-		import.body = body;
-		import.finalized = self.finalized;
-		import.justifications = justifications;
-		import.fork_choice = Some(self.fork_choice.clone());
-
-		Ok((import, maybe_keys))
+		block.finalized = self.finalized;
+		block.fork_choice = Some(self.fork_choice.clone());
+		Ok((block, maybe_keys))
 	}
 }
 
@@ -152,7 +146,7 @@ pub enum PeersClient {
 impl PeersClient {
 	pub fn as_full(&self) -> Option<Arc<PeersFullClient>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => Some(client.clone()),
+			PeersClient::Full(ref client, _) => Some(client.clone()),
 			_ => None,
 		}
 	}
@@ -163,15 +157,15 @@ impl PeersClient {
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.get_aux(key),
-			PeersClient::Light(ref client, ref _backend) => client.get_aux(key),
+			PeersClient::Full(ref client, _) => client.get_aux(key),
+			PeersClient::Light(ref client, _) => client.get_aux(key),
 		}
 	}
 
 	pub fn info(&self) -> BlockchainInfo<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.chain_info(),
-			PeersClient::Light(ref client, ref _backend) => client.chain_info(),
+			PeersClient::Full(ref client, _) => client.chain_info(),
+			PeersClient::Light(ref client, _) => client.chain_info(),
 		}
 	}
 
@@ -180,8 +174,8 @@ impl PeersClient {
 		block: &BlockId<Block>,
 	) -> ClientResult<Option<<Block as BlockT>::Header>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.header(block),
-			PeersClient::Light(ref client, ref _backend) => client.header(block),
+			PeersClient::Full(ref client, _) => client.header(block),
+			PeersClient::Light(ref client, _) => client.header(block),
 		}
 	}
 
@@ -200,22 +194,22 @@ impl PeersClient {
 
 	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.justifications(block),
-			PeersClient::Light(ref client, ref _backend) => client.justifications(block),
+			PeersClient::Full(ref client, _) => client.justifications(block),
+			PeersClient::Light(ref client, _) => client.justifications(block),
 		}
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.finality_notification_stream(),
-			PeersClient::Light(ref client, ref _backend) => client.finality_notification_stream(),
+			PeersClient::Full(ref client, _) => client.finality_notification_stream(),
+			PeersClient::Light(ref client, _) => client.finality_notification_stream(),
 		}
 	}
 
 	pub fn import_notification_stream(&self) -> ImportNotifications<Block> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.import_notification_stream(),
-			PeersClient::Light(ref client, ref _backend) => client.import_notification_stream(),
+			PeersClient::Full(ref client, _) => client.import_notification_stream(),
+			PeersClient::Light(ref client, _) => client.import_notification_stream(),
 		}
 	}
 
@@ -389,13 +383,10 @@ where
 				block.header.parent_hash,
 			);
 			let header = block.header.clone();
-			let (import_block, cache) = futures::executor::block_on(self.verifier.verify(
-				origin,
-				header.clone(),
-				None,
-				if headers_only { None } else { Some(block.extrinsics) },
-			))
-			.unwrap();
+			let mut import_block = BlockImportParams::new(origin, header.clone());
+			import_block.body = if headers_only { None } else { Some(block.extrinsics) };
+			let (import_block, cache) =
+				futures::executor::block_on(self.verifier.verify(import_block)).unwrap();
 			let cache = if let Some(cache) = cache {
 				cache.into_iter().collect()
 			} else {
@@ -631,21 +622,13 @@ struct VerifierAdapter<B: BlockT> {
 impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let hash = header.hash();
-		self.verifier
-			.lock()
-			.await
-			.verify(origin, header, justifications, body)
-			.await
-			.map_err(|e| {
-				self.failed_verifications.lock().insert(hash, e.clone());
-				e
-			})
+		let hash = block.header.hash();
+		self.verifier.lock().await.verify(block).await.map_err(|e| {
+			self.failed_verifications.lock().insert(hash, e.clone());
+			e
+		})
 	}
 }
 
@@ -850,6 +833,7 @@ where
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
+			warp_sync: None,
 		})
 		.unwrap();
 
@@ -939,6 +923,7 @@ where
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
+			warp_sync: None,
 		})
 		.unwrap();
 

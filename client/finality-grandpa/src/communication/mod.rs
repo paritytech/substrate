@@ -191,16 +191,16 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 
 	/// `NeighborPacketWorker` processing packets sent through the `NeighborPacketSender`.
-	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
-	// thus one has to wrap `neighbor_packet_worker` with an `Arc` `Mutex`.
+	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its
+	// children, thus one has to wrap `neighbor_packet_worker` with an `Arc` `Mutex`.
 	neighbor_packet_worker: Arc<Mutex<periodic::NeighborPacketWorker<B>>>,
 
 	/// Receiver side of the peer report stream populated by the gossip validator, forwarded to the
 	/// gossip engine.
-	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its children,
-	// thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given that it is
-	// just an `UnboundedReceiver`, one could also switch to a multi-producer-*multi*-consumer
-	// channel implementation.
+	// `NetworkBridge` is required to be cloneable, thus one needs to be able to clone its
+	// children, thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given
+	// that it is just an `UnboundedReceiver`, one could also switch to a
+	// multi-producer-*multi*-consumer channel implementation.
 	gossip_validator_report_stream: Arc<Mutex<TracingUnboundedReceiver<PeerReport>>>,
 
 	telemetry: Option<TelemetryHandle>,
@@ -291,8 +291,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			.note_round(round, |to, neighbor| self.neighbor_sender.send(to, neighbor));
 	}
 
-	/// Get a stream of signature-checked round messages from the network as well as a sink for round messages to the
-	/// network all within the current set.
+	/// Get a stream of signature-checked round messages from the network as well as a sink for
+	/// round messages to the network all within the current set.
 	pub(crate) fn round_communication(
 		&self,
 		keystore: Option<LocalIdKeystore>,

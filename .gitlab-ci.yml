@@ -55,9 +55,15 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   tags:
     - kubernetes-parity-build
-  interruptible:                   true
 
 .rust-info-script:                 &rust-info-script
   - rustup show
@@ -97,6 +103,7 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
 
 .test-refs-no-trigger-prs-only:   &test-refs-no-trigger-prs-only
   rules:
@@ -273,7 +280,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -343,6 +350,8 @@ unleash-check:
     - mkdir -p target/unleash
     - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+  # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -520,13 +529,10 @@ build-macos-subkey:
   tags:
     - osx
 
-build-rust-doc:
+build-rustdoc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
@@ -537,13 +543,15 @@ build-rust-doc:
     paths:
     - ./crate-docs/
   script:
+    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
+    # FIXME: remove me after CI image gets nonroot
+    - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
-  allow_failure:                   true
 
 #### stage:                        publish
 
@@ -578,7 +586,7 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job 
+    # pass artifacts to the trigger-simnet job
     - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
@@ -632,32 +640,49 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-publish-s3-doc:
+publish-rustdoc:
   stage:                           publish
-  image:                           paritytech/awscli:latest
-  allow_failure:                   true
-  needs:
-    - job:                         build-rust-doc
-      artifacts:                   true
-    - job:                         build-linux-substrate
-      artifacts:                   false
-  <<:                              *build-refs
   <<:                              *kubernetes-env
+  image:                           paritytech/tools:latest
   variables:
-    GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io"
-    PREFIX:                        "substrate-rustdoc"
+    GIT_DEPTH:                     100
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "master"
+  # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
+  # artifacts from being dowloaded by this job.
+  needs:
+    - job:                         build-rustdoc
+      artifacts:                   true
   script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - ls -lah crate-docs
-    - aws s3 sync --delete --size-only --only-show-errors
-        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
+    - rm -rf /tmp/*
+    # Set git config
+    - rm -rf .git/config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # Save README and docs
+    - cp -r ./crate-docs/ /tmp/doc/
+    - cp README.md /tmp/doc/
+    - git checkout gh-pages
+    # Remove everything and restore generated docs and README
+    - rm -rf ./*
+    - mv /tmp/doc/* .
+    # Upload files
+    - git add --all --force
+    # `git commit` has an exit code of > 0 if there is nothing to commit.
+    # This causes GitLab to exit immediately and marks this job failed.
+    # We don't want to mark the entire job failed if there's nothing to
+    # publish though, hence the `|| true`.
+    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
+        echo "___Nothing to commit___"
+    - git push origin gh-pages --force
   after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
-        --human-readable --summarize
+    - rm -rf .git/ ./*
 
 publish-draft-release:
   stage:                           publish
@@ -669,12 +694,14 @@ publish-draft-release:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
-publish-to-crates-io:
+unleash-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
+    # remove allow_failure: true on the check job
+    # - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -713,7 +740,7 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}

@@ -91,23 +91,36 @@ impl<B: BlockT> InformantDisplay<B> {
 			(diff_bytes_inbound, diff_bytes_outbound)
 		};
 
-		let (level, status, target) =
-			match (net_status.sync_state, net_status.best_seen_block, net_status.state_sync) {
-				(_, _, Some(state)) => (
-					"⚙️ ",
-					"Downloading state".into(),
-					format!(
-						", {}%, ({:.2}) Mib",
-						state.percentage,
-						(state.size as f32) / (1024f32 * 1024f32)
-					),
+		let (level, status, target) = match (
+			net_status.sync_state,
+			net_status.best_seen_block,
+			net_status.state_sync,
+			net_status.warp_sync,
+		) {
+			(_, _, _, Some(warp)) => (
+				"⏩",
+				"Warping".into(),
+				format!(
+					", {}, ({:.2}) Mib",
+					warp.phase,
+					(warp.total_bytes as f32) / (1024f32 * 1024f32)
 				),
-				(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
-				(SyncState::Downloading, None, _) =>
-					("⚙️ ", format!("Preparing{}", speed), "".into()),
-				(SyncState::Downloading, Some(n), None) =>
-					("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
-			};
+			),
+			(_, _, Some(state), _) => (
+				"⚙️ ",
+				"Downloading state".into(),
+				format!(
+					", {}%, ({:.2}) Mib",
+					state.percentage,
+					(state.size as f32) / (1024f32 * 1024f32)
+				),
+			),
+			(SyncState::Idle, _, _, _) => ("💤", "Idle".into(), "".into()),
+			(SyncState::Downloading, None, _, _) =>
+				("⚙️ ", format!("Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n), None, _) =>
+				("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
+		};
 
 		if self.format.enable_color {
 			info!(

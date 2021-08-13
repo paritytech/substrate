@@ -45,12 +45,11 @@ use sc_client_api::{
 	BlockBackend, ExecutionStrategy,
 };
 use sc_client_db::PruningMode;
+use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
-use sp_consensus::{
-	BlockImport, BlockImportParams, BlockOrigin, ForkChoiceStrategy, ImportResult, ImportedAux,
-};
+use sp_consensus::BlockOrigin;
 use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
 use sp_inherents::InherentData;
 use sp_runtime::{
@@ -221,10 +220,10 @@ pub enum DatabaseType {
 }
 
 impl DatabaseType {
-	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSettingsSrc {
+	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSource {
 		match self {
-			Self::RocksDb => sc_client_db::DatabaseSettingsSrc::RocksDb { path, cache_size: 512 },
-			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb { path },
+			Self::RocksDb => sc_client_db::DatabaseSource::RocksDb { path, cache_size: 512 },
+			Self::ParityDb => sc_client_db::DatabaseSource::ParityDb { path },
 		}
 	}
 }
@@ -307,8 +306,8 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersReaping => {
 						Call::Balances(BalancesCall::transfer(
 							sp_runtime::MultiAddress::Id(receiver),
-							// Transfer so that ending balance would be 1 less than existential deposit
-							// so that we kill the sender account.
+							// Transfer so that ending balance would be 1 less than existential
+							// deposit so that we kill the sender account.
 							100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
 						))
 					},

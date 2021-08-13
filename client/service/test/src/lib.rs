@@ -29,7 +29,7 @@ use sc_network::{
 };
 use sc_service::{
 	client::Client,
-	config::{BasePath, DatabaseConfig, KeystoreConfig},
+	config::{BasePath, DatabaseSource, KeystoreConfig},
 	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
 	SpawnTaskHandle, TaskExecutor, TaskManager, TransactionStorageMode,
 };
@@ -236,7 +236,7 @@ fn node_config<
 		network: network_config,
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
-		database: DatabaseConfig::RocksDb { path: root.join("db"), cache_size: 128 },
+		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),

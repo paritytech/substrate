@@ -310,7 +310,8 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// If there is no established connection to the target peer, the behavior is determined by the choice of `connect`.
+	/// If there is no established connection to the target peer, the behavior is determined by the
+	/// choice of `connect`.
 	///
 	/// An error is returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(
@@ -364,8 +365,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 			.map(|(p, (r, _))| (p.to_string(), NetworkBehaviour::new_handler(r)));
 
 		MultiHandler::try_from_iter(iter).expect(
-			"Protocols are in a HashMap and there can be at most one handler per \
-						  protocol name, which is the only possible error; qed",
+			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
+			 which is the only possible error; qed",
 		)
 	}
 
@@ -700,8 +701,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out))
 						},
 
-						// An inbound request failed, either while reading the request or due to failing
-						// to send a response.
+						// An inbound request failed, either while reading the request or due to
+						// failing to send a response.
 						RequestResponseEvent::InboundFailure {
 							request_id, peer, error, ..
 						} => {

@@ -118,7 +118,8 @@ impl ExecutionContext {
 
 		match self {
 			Importing | Syncing | BlockConstruction => offchain::Capabilities::none(),
-			// Enable keystore, transaction pool and Offchain DB reads by default for offchain calls.
+			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
+			// calls.
 			OffchainCall(None) => [
 				offchain::Capability::Keystore,
 				offchain::Capability::OffchainDbRead,
@@ -455,3 +456,8 @@ macro_rules! impl_maybe_marker {
 		)+
 	}
 }
+
+/// The maximum number of bytes that can be allocated at one time.
+// The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
+// everybody.
+pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB

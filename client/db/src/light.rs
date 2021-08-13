@@ -518,8 +518,8 @@ where
 
 			self.db.commit(transaction)?;
 			cache.commit(cache_ops).expect(
-				"only fails if cache with given name isn't loaded yet;\
-						cache is already loaded because there are cache_ops; qed",
+				"only fails if cache with given name isn't loaded yet; cache is already loaded \
+				 because there are cache_ops; qed",
 			);
 		}
 
@@ -569,8 +569,8 @@ where
 
 				self.db.commit(transaction)?;
 				cache.commit(cache_ops).expect(
-					"only fails if cache with given name isn't loaded yet;\
-							cache is already loaded because there are cache_ops; qed",
+					"only fails if cache with given name isn't loaded yet; cache is already loaded \
+					 because there are cache_ops; qed",
 				);
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
@@ -829,8 +829,8 @@ pub(crate) mod tests {
 			assert_eq!(raw_db.count(columns::HEADER), 1 + ucht_size + ucht_size);
 			assert_eq!(raw_db.count(columns::CHT), 0);
 
-			// insert block #{2 * cht::size() + 1} && check that new CHT is created + headers of this CHT are pruned
-			// nothing is yet finalized, so nothing is pruned.
+			// insert block #{2 * cht::size() + 1} && check that new CHT is created + headers of
+			// this CHT are pruned nothing is yet finalized, so nothing is pruned.
 			prev_hash = insert_block(&db, HashMap::new(), || {
 				header_producer(&prev_hash, 1 + cht_size + cht_size)
 			});

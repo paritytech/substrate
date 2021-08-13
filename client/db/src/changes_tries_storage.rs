@@ -59,8 +59,8 @@ pub fn extract_new_configuration<Header: HeaderT>(
 		.and_then(ChangesTrieSignal::as_new_configuration)
 }
 
-/// Opaque configuration cache transaction. During its lifetime, no-one should modify cache. This is currently
-/// guaranteed because import lock is held during block import/finalization.
+/// Opaque configuration cache transaction. During its lifetime, no-one should modify cache. This is
+/// currently guaranteed because import lock is held during block import/finalization.
 pub struct DbChangesTrieStorageTransaction<Block: BlockT> {
 	/// Cache operations that must be performed after db transaction is committed.
 	cache_ops: DbCacheTransactionOps<Block>,
@@ -110,12 +110,13 @@ struct ChangesTriesMeta<Block: BlockT> {
 	/// The range is inclusive from both sides.
 	/// Is None only if:
 	/// 1) we haven't yet finalized any blocks (except genesis)
-	/// 2) if best_finalized_block - min_blocks_to_keep points to the range where changes tries are disabled
-	/// 3) changes tries pruning is disabled
+	/// 2) if best_finalized_block - min_blocks_to_keep points to the range where changes tries are
+	/// disabled 3) changes tries pruning is disabled
 	pub oldest_digest_range: Option<(NumberFor<Block>, NumberFor<Block>)>,
 	/// End block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
 	/// It is guaranteed that we have no any changes tries before (and including) this block.
-	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).
+	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if
+	/// created).
 	pub oldest_pruned_digest_range_end: NumberFor<Block>,
 }
 
@@ -284,8 +285,8 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	pub fn post_commit(&self, tx: Option<DbChangesTrieStorageTransaction<Block>>) {
 		if let Some(tx) = tx {
 			self.cache.0.write().commit(tx.cache_ops).expect(
-				"only fails if cache with given name isn't loaded yet;\
-						cache is already loaded because there is tx; qed",
+				"only fails if cache with given name isn't loaded yet; cache is already loaded \
+				 because there is tx; qed",
 			);
 		}
 	}
@@ -358,18 +359,23 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			let next_config = match cache_tx {
 				Some(cache_tx) if config_for_new_block && cache_tx.new_config.is_some() => {
 					let config = cache_tx.new_config.clone().expect("guarded by is_some(); qed");
-					ChangesTrieConfigurationRange {
+					Ok(ChangesTrieConfigurationRange {
 						zero: (block_num, block_hash),
 						end: None,
 						config,
-					}
+					})
 				},
 				_ if config_for_new_block => self.configuration_at(&BlockId::Hash(
 					*new_header
 						.expect("config_for_new_block is only true when new_header is passed; qed")
 						.parent_hash(),
-				))?,
-				_ => self.configuration_at(&BlockId::Hash(next_digest_range_start_hash))?,
+				)),
+				_ => self.configuration_at(&BlockId::Hash(next_digest_range_start_hash)),
+			};
+			let next_config = match next_config {
+				Ok(next_config) => next_config,
+				Err(ClientError::UnknownBlock(_)) => break, // No block means nothing to prune.
+				Err(e) => return Err(e),
 			};
 			if let Some(config) = next_config.config {
 				let mut oldest_digest_range = config
@@ -1126,8 +1132,8 @@ mod tests {
 			vec![3, 3],
 		);
 
-		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
-		// the 1st one points to the block #3 because it isn't truncated
+		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl
+		// specifics), the 1st one points to the block #3 because it isn't truncated
 		backend.revert(1, false).unwrap();
 		assert_eq!(
 			backend

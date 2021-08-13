@@ -110,13 +110,13 @@ pub struct NetworkParams {
 
 	/// Enable peer discovery on local networks.
 	///
-	/// By default this option is `true` for `--dev` or when the chain type is `Local`/`Development`
-	/// and false otherwise.
+	/// By default this option is `true` for `--dev` or when the chain type is
+	/// `Local`/`Development` and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
 
-	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
-	/// presence of potentially adversarial nodes.
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
+	/// the presence of potentially adversarial nodes.
 	///
 	/// See the S/Kademlia paper for more information on the high level design as well as its
 	/// security improvements.
@@ -128,10 +128,13 @@ pub struct NetworkParams {
 	pub ipfs_server: bool,
 
 	/// Blockchain syncing mode.
-	/// Full - Download and validate full blockchain history (Default).
-	/// Fast - Download blocks and the latest state only.
-	/// FastUnsafe - Same as Fast, but do skips downloading state proofs.
-	#[structopt(long, default_value = "Full")]
+	///
+	/// - `Full`: Download and validate full blockchain history.
+	///
+	/// - `Fast`: Download blocks and the latest state only.
+	///
+	/// - `FastUnsafe`: Same as `Fast`, but skip downloading state proofs.
+	#[structopt(long, value_name = "SYNC_MODE", default_value = "Full")]
 	pub sync: SyncMode,
 }
 

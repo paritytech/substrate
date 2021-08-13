@@ -22,15 +22,15 @@ use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{in_mem, BlockBackend, BlockchainEvents, StorageProvider};
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, PruningMode, TransactionStorageMode,
+	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
+};
+use sc_consensus::{
+	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
 };
 use sc_executor::native_executor_instance;
 use sc_service::client::{self, new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, BlockStatus,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, SelectChain,
-};
+use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -1209,6 +1209,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -1432,7 +1433,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				state_pruning: PruningMode::ArchiveAll,
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
-				source: DatabaseSettingsSrc::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
 		)
@@ -1555,6 +1556,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
@@ -1570,6 +1572,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1592,6 +1595,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1610,6 +1614,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 
@@ -1643,7 +1648,7 @@ fn returns_status_for_pruned_blocks() {
 				state_pruning: PruningMode::keep_blocks(1),
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
-				source: DatabaseSettingsSrc::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
 		)
@@ -1676,6 +1681,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1712,6 +1718,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 1,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1745,6 +1752,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 2,
 		parent_hash: a2.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1779,6 +1787,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: b1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 	assert_eq!(
@@ -1817,7 +1826,8 @@ fn imports_blocks_with_changes_tries_config_change() {
 	// blocks 24,25 are changing the key
 	// block 26 is empty
 	// block 27 changes the key
-	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to 3^1
+	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to
+	// `3^1`
 	// ===================================================================
 	// block 29 is empty
 	// block 30 changes the key

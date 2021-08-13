@@ -32,28 +32,27 @@ use syn::parse::{Parse, ParseStream};
 /// [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model))
 /// for those parameters. Parameters are:
 /// - `min_inflation`: the minimal amount to be rewarded between validators, expressed as a fraction
-///   of total issuance. Known as `I_0` in the literature.
-///   Expressed in millionth, must be between 0 and 1_000_000.
+///   of total issuance. Known as `I_0` in the literature. Expressed in millionth, must be between 0
+///   and 1_000_000.
 ///
 /// - `max_inflation`: the maximum amount to be rewarded between validators, expressed as a fraction
-///   of total issuance. This is attained only when `ideal_stake` is achieved.
-///   Expressed in millionth, must be between min_inflation and 1_000_000.
+///   of total issuance. This is attained only when `ideal_stake` is achieved. Expressed in
+///   millionth, must be between min_inflation and 1_000_000.
 ///
 /// - `ideal_stake`: the fraction of total issued tokens that should be actively staked behind
-///   validators. Known as `x_ideal` in the literature.
-///   Expressed in millionth, must be between 0_100_000 and 0_900_000.
+///   validators. Known as `x_ideal` in the literature. Expressed in millionth, must be between
+///   0_100_000 and 0_900_000.
 ///
 /// - `falloff`: Known as `decay_rate` in the literature. A co-efficient dictating the strength of
 ///   the global incentivization to get the `ideal_stake`. A higher number results in less typical
-///   inflation at the cost of greater volatility for validators.
-///   Expressed in millionth, must be between 0 and 1_000_000.
+///   inflation at the cost of greater volatility for validators. Expressed in millionth, must be
+///   between 0 and 1_000_000.
 ///
 /// - `max_piece_count`: The maximum number of pieces in the curve. A greater number uses more
-///   resources but results in higher accuracy.
-///   Must be between 2 and 1_000.
+///   resources but results in higher accuracy. Must be between 2 and 1_000.
 ///
-/// - `test_precision`: The maximum error allowed in the generated test.
-///   Expressed in millionth, must be between 0 and 1_000_000.
+/// - `test_precision`: The maximum error allowed in the generated test. Expressed in millionth,
+///   must be between 0 and 1_000_000.
 ///
 /// # Example
 ///
@@ -62,14 +61,14 @@ use syn::parse::{Parse, ParseStream};
 /// use sp_runtime::curve::PiecewiseLinear;
 ///
 /// pallet_staking_reward_curve::build! {
-/// 	const I_NPOS: PiecewiseLinear<'static> = curve!(
-/// 		min_inflation: 0_025_000,
-/// 		max_inflation: 0_100_000,
-/// 		ideal_stake: 0_500_000,
-/// 		falloff: 0_050_000,
-/// 		max_piece_count: 40,
-/// 		test_precision: 0_005_000,
-/// 	);
+///     const I_NPOS: PiecewiseLinear<'static> = curve!(
+///         min_inflation: 0_025_000,
+///         max_inflation: 0_100_000,
+///         ideal_stake: 0_500_000,
+///         falloff: 0_050_000,
+///         max_piece_count: 40,
+///         test_precision: 0_005_000,
+///     );
 /// }
 /// ```
 #[proc_macro]
@@ -163,9 +162,9 @@ fn parse_field<Token: Parse + Default + ToTokens>(
 	input: ParseStream,
 	bounds: Bounds,
 ) -> syn::Result<u32> {
-	<Token>::parse(&input)?;
-	<syn::Token![:]>::parse(&input)?;
-	let value_lit = syn::LitInt::parse(&input)?;
+	<Token>::parse(input)?;
+	<syn::Token![:]>::parse(input)?;
+	let value_lit = syn::LitInt::parse(input)?;
 	let value: u32 = value_lit.base10_parse()?;
 	if !bounds.check(value) {
 		return Err(syn::Error::new(
@@ -186,15 +185,15 @@ impl Parse for INposInput {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let args_input;
 
-		<syn::Token![const]>::parse(&input)?;
-		let ident = <syn::Ident>::parse(&input)?;
-		<syn::Token![:]>::parse(&input)?;
-		let typ = <syn::Type>::parse(&input)?;
-		<syn::Token![=]>::parse(&input)?;
-		<keyword::curve>::parse(&input)?;
-		<syn::Token![!]>::parse(&input)?;
+		<syn::Token![const]>::parse(input)?;
+		let ident = <syn::Ident>::parse(input)?;
+		<syn::Token![:]>::parse(input)?;
+		let typ = <syn::Type>::parse(input)?;
+		<syn::Token![=]>::parse(input)?;
+		<keyword::curve>::parse(input)?;
+		<syn::Token![!]>::parse(input)?;
 		syn::parenthesized!(args_input in input);
-		<syn::Token![;]>::parse(&input)?;
+		<syn::Token![;]>::parse(input)?;
 
 		if !input.is_empty() {
 			return Err(input.error("expected end of input stream, no token expected"))
@@ -288,9 +287,7 @@ impl INPoS {
 fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 	let inpos = INPoS::from_input(input);
 
-	let mut points = vec![];
-	points.push((0, inpos.i_0));
-	points.push((inpos.x_ideal, inpos.i_ideal_times_x_ideal));
+	let mut points = vec![(0, inpos.i_0), (inpos.x_ideal, inpos.i_ideal_times_x_ideal)];
 
 	// For each point p: (next_p.0 - p.0) < segment_length && (next_p.1 - p.1) < segment_length.
 	// This ensures that the total number of segment doesn't overflow max_piece_count.
@@ -355,8 +352,8 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	for (x, y) in points {
 		let error = || {
 			panic!(
-				"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
-			because of point:
+				"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] because \
+				 of point:
 			x = {:07} per million
 			y = {:07} per million",
 				x, y
@@ -445,5 +442,4 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 			}
 		}
 	)
-	.into()
 }

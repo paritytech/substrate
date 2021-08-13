@@ -104,7 +104,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		SortedMembers, WithdrawReasons,
+		SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -121,6 +121,9 @@ pub use weights::WeightInfo;
 
 /// All migrations.
 pub mod migrations;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -239,6 +242,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -397,9 +401,9 @@ pub mod pallet {
 		///   origin is removed as a runner-up.
 		/// - `origin` is a current member. In this case, the deposit is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
-		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists,
-		///   they are immediately used. If the prime is renouncing, then no prime will exist until
-		///   the next round.
+		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists, they
+		///   are immediately used. If the prime is renouncing, then no prime will exist until the
+		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
 		///
@@ -669,9 +673,10 @@ pub mod pallet {
 						"Genesis member does not have enough stake.",
 					);
 
-					// Note: all members will only vote for themselves, hence they must be given exactly
-					// their own stake as total backing. Any sane election should behave as such.
-					// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+					// Note: all members will only vote for themselves, hence they must be given
+					// exactly their own stake as total backing. Any sane election should behave as
+					// such. Nonetheless, stakes will be updated for term 1 onwards according to the
+					// election.
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) =>
@@ -688,9 +693,9 @@ pub mod pallet {
 					});
 
 					// set self-votes to make persistent. Genesis voters don't have any bond, nor do
-					// they have any lock. NOTE: this means that we will still try to remove a lock once
-					// this genesis voter is removed, and for now it is okay because remove_lock is noop
-					// if lock is not there.
+					// they have any lock. NOTE: this means that we will still try to remove a lock
+					// once this genesis voter is removed, and for now it is okay because
+					// remove_lock is noop if lock is not there.
 					<Voting<T>>::insert(
 						&member,
 						Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
@@ -1116,7 +1121,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();

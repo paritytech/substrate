@@ -107,7 +107,8 @@ impl From<String> for Transport {
 /// A state snapshot config may be present and will be written to in that case.
 #[derive(Clone)]
 pub struct OnlineConfig<B: BlockT> {
-	/// The block hash at which to get the runtime state. Will be latest finalized head if not provided.
+	/// The block hash at which to get the runtime state. Will be latest finalized head if not
+	/// provided.
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
