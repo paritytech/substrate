@@ -80,7 +80,6 @@ To create a Polkadot companion PR:
 . Make the changes required and build polkadot locally.
 . Submit all this as a PR against the Polkadot Repo.
 . Link to your Polkadot PR in the _description_ of your _Substrate_ PR as "polkadot companion: [URL]"
-. Link to your Substrate PR in the _description_ of your _Polkadot_ PR as "Companion PR for [URL]"
 . Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
 . Someone will need to approve the Polkadot PR before the Substrate CI will go green. (The Polkadot CI failing can be ignored as long as the polkadot job in the _substrate_ PR is green).
 . Wait for reviews on both the Substrate and the Polkadot PRs.
