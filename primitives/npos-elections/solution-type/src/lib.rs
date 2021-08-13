@@ -135,8 +135,11 @@ struct SolutionDef {
 
 fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	let mut attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
-	if attrs.len() != 1 {
+	if attrs.len() > 1 {
 		return Err(syn_err("compact solution can accept only #[compact]"))
+	}
+	if attrs.len() < 1 {
+		return Ok(false)
 	}
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
 	if attr.path.segments.len() == 1 {
