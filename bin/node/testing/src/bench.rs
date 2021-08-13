@@ -220,10 +220,10 @@ pub enum DatabaseType {
 }
 
 impl DatabaseType {
-	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSettingsSrc {
+	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSource {
 		match self {
-			Self::RocksDb => sc_client_db::DatabaseSettingsSrc::RocksDb { path, cache_size: 512 },
-			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb { path },
+			Self::RocksDb => sc_client_db::DatabaseSource::RocksDb { path, cache_size: 512 },
+			Self::ParityDb => sc_client_db::DatabaseSource::ParityDb { path },
 		}
 	}
 }
