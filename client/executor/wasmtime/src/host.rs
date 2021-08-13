@@ -72,19 +72,22 @@ impl HostState {
 		&'a self,
 		caller: &'b mut Caller<'c, StoreData>,
 	) -> HostContext<'a, 'b, 'c> {
-		HostContext(self, caller)
+		HostContext { host_state: self, caller }
 	}
 }
 
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub(crate) struct HostContext<'a, 'b, 'c>(&'a HostState, &'b mut Caller<'c, StoreData>);
+pub(crate) struct HostContext<'a, 'b, 'c> {
+	host_state: &'a HostState,
+	caller: &'b mut Caller<'c, StoreData>,
+}
 
 impl<'a, 'b, 'c> std::ops::Deref for HostContext<'a, 'b, 'c> {
 	type Target = HostState;
 	fn deref(&self) -> &HostState {
-		self.0
+		self.host_state
 	}
 }
 
@@ -100,7 +103,7 @@ impl<'a, 'b, 'c> SandboxCapabilities for HostContext<'a, 'b, 'c> {
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
 		let result = dispatch_thunk.0.call(
-			&mut self.1,
+			&mut self.caller,
 			&[
 				Val::I32(u32::from(invoke_args_ptr) as i32),
 				Val::I32(invoke_args_len as i32),
@@ -137,30 +140,36 @@ impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> 
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		let ctx = &self.1;
-		self.0.instance.read_memory_into(ctx, address, dest).map_err(|e| e.to_string())
+		let ctx = &self.caller;
+		self.host_state
+			.instance
+			.read_memory_into(ctx, address, dest)
+			.map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		let ctx = &mut self.1;
-		self.0.instance.write_memory_from(ctx, address, data).map_err(|e| e.to_string())
+		let ctx = &mut self.caller;
+		self.host_state
+			.instance
+			.write_memory_from(ctx, address, data)
+			.map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
-		let ctx = &mut self.1;
-		let allocator = &self.0.allocator;
+		let ctx = &mut self.caller;
+		let allocator = &self.host_state.allocator;
 
-		self.0
+		self.host_state
 			.instance
 			.allocate(ctx, &mut *allocator.borrow_mut(), size)
 			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
-		let ctx = &mut self.1;
-		let allocator = &self.0.allocator;
+		let ctx = &mut self.caller;
+		let allocator = &self.host_state.allocator;
 
-		self.0
+		self.host_state
 			.instance
 			.deallocate(ctx, &mut *allocator.borrow_mut(), ptr)
 			.map_err(|e| e.to_string())
@@ -188,15 +197,15 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			let supervisor_mem_size = self.instance.memory_size(&self.1) as usize;
+			let supervisor_mem_size = self.instance.memory_size(&self.caller) as usize;
 			let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			self.0
+			self.host_state
 				.instance
 				.write_memory_from(
-					&mut self.1,
+					&mut self.caller,
 					Pointer::new(dst_range.start as u32),
 					&sandboxed_memory[src_range],
 				)
@@ -216,7 +225,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
 			let len = val_len as usize;
-			let supervisor_mem_size = self.instance.memory_size(&self.1) as usize;
+			let supervisor_mem_size = self.instance.memory_size(&self.caller) as usize;
 			let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
@@ -226,10 +235,10 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 				Some(range) => range,
 				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			};
-			self.0
+			self.host_state
 				.instance
 				.read_memory_into(
-					&mut self.1,
+					&mut self.caller,
 					Pointer::new(src_range.start as u32),
 					&mut sandboxed_memory[dst_range],
 				)
@@ -307,9 +316,9 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	) -> sp_wasm_interface::Result<u32> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
-			let ctx = &mut self.1;
+			let ctx = &mut self.caller;
 			let table_item = self
-				.0
+				.host_state
 				.instance
 				.table()
 				.as_ref()
