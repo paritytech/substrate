@@ -185,10 +185,12 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match *self {
 			OffchainErr::TooEarly => write!(fmt, "Too early to send heartbeat."),
-			OffchainErr::WaitingForInclusion(ref block) =>
-				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block),
-			OffchainErr::AlreadyOnline(auth_idx) =>
-				write!(fmt, "Authority {} is already online", auth_idx),
+			OffchainErr::WaitingForInclusion(ref block) => {
+				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block)
+			},
+			OffchainErr::AlreadyOnline(auth_idx) => {
+				write!(fmt, "Authority {} is already online", auth_idx)
+			},
 			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
 			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
 			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),

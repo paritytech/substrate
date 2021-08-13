@@ -32,7 +32,6 @@ sp-block-builder = { path = "../../primitives/block-builder" }
 sp-api = { path = "../../primitives/api" }
 sp-transaction-pool = { path = "../../primitives/transaction-pool" }
 sp-consensus = { path = "../../primitives/consensus/common" }
-sp-keystore = { path = "../../primitives/keystore" }
 sp-runtime = { path = "../../primitives/runtime" }
 sp-session = { path = "../../primitives/session" }
 sp-offchain = { path = "../../primitives/offchain" }

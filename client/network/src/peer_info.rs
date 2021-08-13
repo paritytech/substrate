@@ -352,8 +352,9 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						let event = PeerInfoEvent::Identified { peer_id, info };
 						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
 					},
-					IdentifyEvent::Error { peer_id, error } =>
-						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
+					IdentifyEvent::Error { peer_id, error } => {
+						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
+					},
 					IdentifyEvent::Pushed { .. } => {},
 					IdentifyEvent::Sent { .. } => {},
 				},

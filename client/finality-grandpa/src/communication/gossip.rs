@@ -1194,19 +1194,21 @@ impl<Block: BlockT> Inner<Block> {
 		catch_up_request: &CatchUpRequestMessage,
 	) -> (bool, Option<Report>) {
 		let report = match &self.pending_catch_up {
-			PendingCatchUp::Requesting { who: peer, instant, .. } =>
+			PendingCatchUp::Requesting { who: peer, instant, .. } => {
 				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
 					return (false, None)
 				} else {
 					// report peer for timeout
 					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
-				},
-			PendingCatchUp::Processing { instant, .. } =>
+				}
+			},
+			PendingCatchUp::Processing { instant, .. } => {
 				if instant.elapsed() < CATCH_UP_PROCESS_TIMEOUT {
 					return (false, None)
 				} else {
 					None
-				},
+				}
+			},
 			_ => None,
 		};
 

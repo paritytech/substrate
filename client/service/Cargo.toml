@@ -17,9 +17,7 @@ default = ["db"]
 # The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
 # a path to a database, an error will be produced at runtime.
 db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
-wasmtime = [
-	"sc-executor/wasmtime",
-]
+wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
 
@@ -30,7 +28,6 @@ jsonrpc-pubsub = "18.0"
 jsonrpc-core = "18.0"
 rand = "0.7.3"
 parking_lot = "0.11.1"
-lazy_static = "1.4.0"
 log = "0.4.11"
 futures-timer = "3.0.1"
 wasm-timer = "0.2"
@@ -40,7 +37,6 @@ hash-db = "0.15.2"
 serde = "1.0.126"
 serde_json = "1.0.41"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
 sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }
@@ -75,12 +71,14 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-build
 sc-informant = { version = "0.10.0-dev", path = "../informant" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 tracing = "0.1.25"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = [
+	"primitive-types",
+] }
 async-trait = "0.1.50"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
@@ -90,8 +88,5 @@ directories = "3.0.1"
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../primitives/consensus/babe" }
-grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = { version = "0.2.25", default-features = false }
 async-std = { version = "1.6.5", default-features = false }

@@ -29,5 +29,4 @@ tracing = "0.1.25"
 [dev-dependencies]
 async-std = "1.6.5"
 quickcheck = "1.0.3"
-rand = "0.7.2"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
