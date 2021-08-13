@@ -67,9 +67,9 @@ pub mod pallet {
 		/// Required origin for setting or resetting the prime member.
 		type PrimeOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The receiver of the signal for when the membership has been initialized. This happens pre-
-		/// genesis and will usually be the same as `MembershipChanged`. If you need to do something
-		/// different on initialization, then you can change this accordingly.
+		/// The receiver of the signal for when the membership has been initialized. This happens
+		/// pre-genesis and will usually be the same as `MembershipChanged`. If you need to do
+		/// something different on initialization, then you can change this accordingly.
 		type MembershipInitialized: InitializeMembers<Self::AccountId>;
 
 		/// The receiver of the signal for when the membership has changed.
@@ -217,7 +217,7 @@ pub mod pallet {
 			T::SwapOrigin::ensure_origin(origin)?;
 
 			if remove == add {
-				return Ok(());
+				return Ok(())
 			}
 
 			let mut members = <Members<T, I>>::get();

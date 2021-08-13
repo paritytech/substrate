@@ -43,7 +43,7 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
 			target: "runtime::membership",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return 0;
+		return 0
 	}
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
@@ -106,9 +106,9 @@ pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N:
 			// or we ensure that it has no common prefix with twox_128(new),
 			// or isn't the pallet version that is already stored using the pallet name
 			|next_key| {
-				!next_key.starts_with(&new_pallet_prefix)
-					|| next_key == pallet_version_key
-					|| next_key == storage_version_key
+				!next_key.starts_with(&new_pallet_prefix) ||
+					next_key == pallet_version_key ||
+					next_key == storage_version_key
 			},
 		),
 		"unexpected next_key({}) = {:?}",
