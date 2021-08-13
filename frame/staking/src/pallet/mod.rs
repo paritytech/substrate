@@ -768,7 +768,7 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				// ledger must be updated prior to call to `Self::weight_of`.
+				// ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&stash) {

@@ -166,8 +166,12 @@ impl<T: Config> RebagScenario<T> {
 		let dest_factor: BalanceOf<T> =
 			dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
 
-		// create a validators to nominate.
-		let validators = create_validators::<T>(T::MAX_NOMINATIONS, 100, 333)?;
+		// create validators to nominate.
+		let validators = create_validators::<T>(
+			T::MAX_NOMINATIONS,
+			100,
+			T::MAX_NOMINATIONS * 2, // account seed prevents unintentional account collisions
+		)?;
 
 		// create accounts in origin bag
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_max_free::<T>(
@@ -214,11 +218,11 @@ impl<T: Config> RebagScenario<T> {
 
 	fn check_preconditions(&self) {
 		let RebagScenario { dest_stash1, origin_stash2, origin_thresh_as_vote, .. } = self;
-		// destination stash is not in the origin bag.
+		// destination stash1 is not in the origin bag.
 		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
 		// origin stash2 is in the origin bag
 		assert!(T::SortedListProvider::is_in_bag(&origin_stash2, *origin_thresh_as_vote, true));
-		// head checks implicitly check that dest stash1 and origin stash1 are in the correct bags.
+		// this implicitly checks that dest stash1 and origin stash1 are in the correct bags.
 		self.check_head_preconditions();
 	}
 
@@ -230,11 +234,11 @@ impl<T: Config> RebagScenario<T> {
 			origin_thresh_as_vote,
 			..
 		} = self;
-		// destination stash is not in the origin bag
+		// dest stash1 is not in the origin bag
 		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
 		// and is in the destination bag.
 		assert!(T::SortedListProvider::is_in_bag(&dest_stash1, *dest_thresh_as_vote, true));
-		// the origin stash is in the destination bag.
+		// origin stash1 is now in the destination bag.
 		assert!(T::SortedListProvider::is_in_bag(&origin_stash1, *dest_thresh_as_vote, true));
 		// dest stash1 is the head of the destination bag.
 		assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_thresh_as_vote, true));
@@ -242,15 +246,22 @@ impl<T: Config> RebagScenario<T> {
 	}
 
 	fn check_head_preconditions(&self) {
-		let RebagScenario {
-			dest_stash1,
-			origin_stash1,
-			dest_thresh_as_vote,
-			origin_thresh_as_vote,
-			..
-		} = self;
-		assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_thresh_as_vote, true));
-		assert!(T::SortedListProvider::is_bag_head(&origin_stash1, *origin_thresh_as_vote, true));
+		assert!(T::SortedListProvider::is_bag_head(
+			&self.dest_stash1,
+			self.dest_thresh_as_vote,
+			true
+		));
+		self.check_origin_head_preconditions();
+	}
+
+	// Just checking the origin head is useful for scenarios where we start out with all the nodes
+	// in the same bag, and thus no destination node is actually ever a head.
+	fn check_origin_head_preconditions(&self) {
+		assert!(T::SortedListProvider::is_bag_head(
+			&self.origin_stash1,
+			self.origin_thresh_as_vote,
+			true
+		));
 	}
 
 	// Just checking the origin head is useful for scenarios where we start out with all the nodes
@@ -299,16 +310,15 @@ benchmarks! {
 		let controller = scenario.origin_controller1.clone();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
-		whitelist_account!(stash);
 
 		scenario.check_preconditions();
 
+		whitelist_account!(stash);
 	}: _(RawOrigin::Signed(stash.clone()), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
-
 		scenario.check_postconditions();
 	}
 
@@ -342,7 +352,6 @@ benchmarks! {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded > new_bonded);
-
 		scenario.check_postconditions();
 	}
 
@@ -374,8 +383,7 @@ benchmarks! {
 
 		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
 		// scenario setup, but we don't care about the setup of the destination bag.
-		let scenario
-			= RebagScenario::<T>::new(One::one(), One::one())?;
+		let scenario = RebagScenario::<T>::new(One::one(), One::one())?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -384,8 +392,10 @@ benchmarks! {
 		let mut ledger = Ledger::<T>::get(&controller).unwrap();
 		ledger.active = ed - One::one();
 		Ledger::<T>::insert(&controller, ledger);
-
 		CurrentEra::<T>::put(EraIndex::max_value());
+
+		scenario.check_origin_head_preconditions();
+
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
@@ -406,6 +416,8 @@ benchmarks! {
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
+
+		scenario.check_origin_head_preconditions();
 
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
@@ -524,6 +536,8 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
+		scenario.check_origin_head_preconditions();
+
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller))
 	verify {
@@ -593,8 +607,10 @@ benchmarks! {
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
-
 		add_slashing_spans::<T>(&stash, s);
+
+		scenario.check_origin_head_preconditions();
+
 	}: _(RawOrigin::Root, stash.clone(), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
@@ -772,11 +788,12 @@ benchmarks! {
 
 		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
-		whitelist_account!(controller);
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
+		scenario.check_origin_head_preconditions();
 
+		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
@@ -948,6 +965,9 @@ benchmarks! {
 			Some(0),
 			Some(Percent::from_percent(0))
 		)?;
+
+		scenario.check_origin_head_preconditions();
+
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())
 	verify {

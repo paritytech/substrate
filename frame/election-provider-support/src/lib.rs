@@ -334,16 +334,20 @@ pub trait SortedListProvider<AccountId> {
 
 	/// Wether the voter is in the notional bag for the given weight. Only relevant for
 	/// implementations that use bags.
+	///
+	/// `mock` parameter is for implementations where this method is not relevant.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn is_in_bag(_: &AccountId, _: VoteWeight, mock: bool) -> bool {
-		mock // default to returning mock value for values that are not relevant
+		mock
 	}
 
 	/// Wether the voter is the head of the notional bag for the given weight. Only relevant for
 	/// implementations that use bags.
+	///
+	/// `mock` parameter is for implementations where this method is not relevant.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn is_bag_head(_: &AccountId, _: VoteWeight, mock: bool) -> bool {
-		mock // default to returning mock value for values that are not relevant
+		mock
 	}
 }
 

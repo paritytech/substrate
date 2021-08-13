@@ -17,7 +17,7 @@
 
 //! Make the set of bag thresholds to be used with pallet-bags-list.
 
-use generate_bags::generate_thresholds_module;
+use generate_bags::generate_thresholds;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -35,5 +35,5 @@ fn main() -> Result<(), std::io::Error> {
 	let Opt { n_bags, output } = Opt::from_args();
 	let mut ext = sp_io::TestExternalities::new_empty();
 
-	ext.execute_with(|| generate_thresholds_module::<node_runtime::Runtime>(n_bags, &output))
+	ext.execute_with(|| generate_thresholds::<node_runtime::Runtime>(n_bags, &output))
 }
