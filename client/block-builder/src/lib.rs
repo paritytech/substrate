@@ -294,9 +294,18 @@ where
 			}
 		};
 
-		let header = self
+		let mut header = self
 			.api
 			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+
+
+		// store hash of all extrinsics include in given bloack
+		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
+			self.extrinsics.iter().map(Encode::encode).collect(),
+		);
+		info!("storing extrinsics root {:2X?}", extrinsics_root);
+		header.set_extrinsics_root(extrinsics_root);
+
 
 		// debug_assert_eq!(
 		// 	header.extrinsics_root().clone(),

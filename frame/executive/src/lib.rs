@@ -219,7 +219,7 @@ where
 			header.parent_hash(),
 			header.extrinsics_root(),
 			&digests,
-            header.seed()
+			header.seed()
 		);
 	}
 
@@ -253,7 +253,7 @@ where
 			extrinsics_root,
 			digest,
 			frame_system::InitKind::Full,
-            seed
+			seed
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
@@ -267,7 +267,6 @@ where
 	fn runtime_upgraded() -> bool {
 		let last = frame_system::LastRuntimeUpgrade::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
-
 		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
 			frame_system::LastRuntimeUpgrade::put(
 				frame_system::LastRuntimeUpgradeInfo::from(current),
@@ -291,11 +290,9 @@ where
 		);
 
 		// Check that transaction trie root represents the transactions.
-		//FIXME return extrinsic root check
-		// let xts_root = extrinsics_root::<System::Hashing,
-		// _>(&block.extrinsics()); header.extrinsics_root().check_equal(&
-		// xts_root); assert!(header.extrinsics_root() == &xts_root,
-		// "Transaction trie root must be valid.");
+		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
