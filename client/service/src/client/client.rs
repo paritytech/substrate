@@ -909,19 +909,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				}
 
 				let state = self.backend.state_at(at)?;
-				let changes_trie_state = changes_tries_state_at_block(&at, self.backend.changes_trie_storage())?;
+				let changes_trie_state = changes_tries_state_at_block(
+					&at,
+					self.backend.changes_trie_storage(),
+				)?;
 
 				let gen_storage_changes =
 					runtime_api.into_storage_changes(&state, changes_trie_state.as_ref(), *parent_hash)?;
 
 				// TODO not to myself - bring it back in this PR
-				// if import_block.header.state_root()
-				// 	!= &gen_storage_changes.transaction_storage_root
-				// {
-				// 	return Err(Error::InvalidStateRoot)
-				// } else {
-				**storage_changes = Some(gen_storage_changes);
-				// }
+				if import_block.header.state_root()
+					!= &gen_storage_changes.transaction_storage_root
+				{
+					return Err(Error::InvalidStateRoot)
+				} else {
+					**storage_changes = Some(gen_storage_changes);
+				}
 			}
 			// No block body, no storage changes
 			(true, None, None) => {}

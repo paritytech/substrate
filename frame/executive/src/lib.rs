@@ -267,6 +267,7 @@ where
 	fn runtime_upgraded() -> bool {
 		let last = frame_system::LastRuntimeUpgrade::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
+
 		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
 			frame_system::LastRuntimeUpgrade::put(
 				frame_system::LastRuntimeUpgradeInfo::from(current),
@@ -307,8 +308,6 @@ where
 			Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
-
-			frame_support::debug::RuntimeLogger::init();
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
@@ -429,13 +428,11 @@ where
 		// check storage root.
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
-		//assert!(header.state_root() == storage_root, "Storage root must match
-		// that calculated.");
+		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
-	/// side-effects; it merely checks whether the transaction would panic if it
-	/// were included or not.
+	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(
@@ -479,7 +476,7 @@ where
 			header.extrinsics_root(),
 			&digests,
 			frame_system::InitKind::Inspection,
-            header.seed(),
+			header.seed(),
 		);
 
 		// Initialize logger, so the log messages are visible

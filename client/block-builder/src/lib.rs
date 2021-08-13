@@ -303,16 +303,7 @@ where
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
 			self.extrinsics.iter().map(Encode::encode).collect(),
 		);
-		info!("storing extrinsics root {:2X?}", extrinsics_root);
 		header.set_extrinsics_root(extrinsics_root);
-
-
-		// debug_assert_eq!(
-		// 	header.extrinsics_root().clone(),
-		// 	HashFor::<Block>::ordered_trie_root(
-		// 		self.extrinsics.iter().map(Encode::encode).collect(),
-		// 	),
-		// );
 
 		let proof = self.api.extract_proof();
 
@@ -322,9 +313,11 @@ where
 			self.backend.changes_trie_storage(),
 		)?;
 
-		let storage_changes =
-			self.api
-				.into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)?;
+		let storage_changes = self.api.into_storage_changes(
+			&state,
+			changes_trie_state.as_ref(),
+			parent_hash,
+		)?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
