@@ -28,7 +28,7 @@
 //! actively calling any function.
 
 use crate::api::timestamp;
-use bytes::buf::{Reader, Buf};
+use bytes::buf::{Buf, Reader};
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
