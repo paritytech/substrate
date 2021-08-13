@@ -139,6 +139,8 @@ struct RebagScenario<T: Config> {
 	/// Controller of the Stash that is expected to be rebagged.
 	origin_controller1: T::AccountId,
 	origin_stash2: T::AccountId,
+	origin_bag_thresh: BalanceOf<T>,
+	dest_bag_thresh: BalanceOf<T>,
 }
 
 impl<T: Config> RebagScenario<T> {
@@ -167,14 +169,6 @@ impl<T: Config> RebagScenario<T> {
 		// create a validators to nominate.
 		let validators = create_validators::<T>(T::MAX_NOMINATIONS, 100, 333)?;
 
-		// create an account in the destination bag
-		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
-			USER_SEED + 1,
-			dest_factor,
-			Default::default(),
-		)?;
-		Staking::<T>::nominate(RawOrigin::Signed(dest_controller1).into(), validators.clone())?;
-
 		// create accounts in origin bag
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_max_free::<T>(
 			USER_SEED + 2,
@@ -191,9 +185,40 @@ impl<T: Config> RebagScenario<T> {
 			origin_factor,
 			Default::default(),
 		)?;
-		Staking::<T>::nominate(RawOrigin::Signed(origin_controller2.clone()).into(), validators)?;
+		Staking::<T>::nominate(
+			RawOrigin::Signed(origin_controller2.clone()).into(),
+			validators.clone(),
+		)?;
 
-		Ok(RebagScenario { dest_stash1, origin_stash1, origin_controller1, origin_stash2 })
+		// create an account in the destination bag
+		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
+			USER_SEED + 1,
+			dest_factor,
+			Default::default(),
+		)?;
+		Staking::<T>::nominate(RawOrigin::Signed(dest_controller1).into(), validators)?;
+
+		Ok(RebagScenario {
+			dest_stash1,
+			origin_stash1,
+			origin_controller1,
+			origin_stash2,
+			origin_bag_thresh,
+			dest_bag_thresh,
+		})
+	}
+
+	fn assert_preconditions(&self) {
+		let total_issuance = T::Currency::total_issuance();
+		let dest_thresh_as_vote = T::CurrencyToVote::to_vote(self.dest_bag_thresh, total_issuance);
+		let origin_thresh_as_vote = T::CurrencyToVote::to_vote(self.origin_bag_thresh, total_issuance);
+
+		// destination stash is not in the origin bag
+		assert!(!T::SortedListProvider::is_in_bag(&self.dest_stash1, origin_thresh_as_vote));
+		// and is in the destination bag.
+		assert!(T::SortedListProvider::is_in_bag(&self.dest_stash1, dest_thresh_as_vote));
+		// the origin stash is in the origin bag.
+		assert!(T::SortedListProvider::is_in_bag(&self.origin_stash1, origin_thresh_as_vote));
 	}
 }
 
@@ -237,6 +262,8 @@ benchmarks! {
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(stash);
 
+		scenario.assert_preconditions();
+
 	}: _(RawOrigin::Signed(stash.clone()), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
@@ -265,6 +292,9 @@ benchmarks! {
 		let amount = origin_bag_thresh - dest_bag_thresh;
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
+
+		scenario.assert_preconditions();
+
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), amount)
 	verify {
@@ -425,7 +455,7 @@ benchmarks! {
 		)?;
 
 		assert!(!Nominators::<T>::contains_key(&stash));
-		assert!(!T::SortedListProvider::contains(&stash))
+		assert!(!T::SortedListProvider::contains(&stash));
 
 		let validators = create_validators::<T>(n, 100, 0)?;
 		whitelist_account!(controller);
@@ -650,12 +680,14 @@ benchmarks! {
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
-		whitelist_account!(controller);
 
+		scenario.assert_preconditions();
 		assert_eq!(
 			T::SortedListProvider::iter().collect::<Vec<_>>(),
 			vec![scenario.dest_stash1.clone(), stash.clone(), scenario.origin_stash2.clone()]
 		);
+
+		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), rebond_amount)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;

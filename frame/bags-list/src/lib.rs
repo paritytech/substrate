@@ -263,4 +263,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	fn clear() {
 		List::<T>::clear()
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn is_in_bag(id: &T::AccountId, weight: VoteWeight) -> bool {
+		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
+	}
 }

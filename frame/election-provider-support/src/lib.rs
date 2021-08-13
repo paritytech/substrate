@@ -331,6 +331,13 @@ pub trait SortedListProvider<AccountId> {
 	fn clear();
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
+
+	/// If the voter is in the notional bag for the given weight.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn is_in_bag(_: &AccountId, _: VoteWeight) -> bool {
+		// TODO problematic if this always returns true
+		true // default to true for impls that don't have a bag.
+	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
