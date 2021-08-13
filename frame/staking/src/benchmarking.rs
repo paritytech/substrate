@@ -165,7 +165,7 @@ impl<T: Config> RebagScenario<T> {
 			dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
 
 		// create a validators to nominate.
-		let validators = create_validators::<T>(T::MAX_NOMINATIONS, 100)?;
+		let validators = create_validators::<T>(T::MAX_NOMINATIONS, 100, 333)?;
 
 		// create an account in the destination bag
 		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
@@ -173,10 +173,7 @@ impl<T: Config> RebagScenario<T> {
 			dest_factor,
 			Default::default(),
 		)?;
-		Staking::<T>::nominate(
-			RawOrigin::Signed(dest_controller1).into(),
-			validators.clone()
-		)?;
+		Staking::<T>::nominate(RawOrigin::Signed(dest_controller1).into(), validators.clone())?;
 
 		// create accounts in origin bag
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_max_free::<T>(
@@ -186,7 +183,7 @@ impl<T: Config> RebagScenario<T> {
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
-			validators.clone()
+			validators.clone(),
 		)?;
 
 		let (origin_stash2, origin_controller2) = create_stash_controller_with_max_free::<T>(
@@ -194,10 +191,7 @@ impl<T: Config> RebagScenario<T> {
 			origin_factor,
 			Default::default(),
 		)?;
-		Staking::<T>::nominate(
-			RawOrigin::Signed(origin_controller2.clone()).into(),
-			validators
-		)?;
+		Staking::<T>::nominate(RawOrigin::Signed(origin_controller2.clone()).into(), validators)?;
 
 		Ok(RebagScenario { dest_stash1, origin_stash1, origin_controller1, origin_stash2 })
 	}
@@ -339,8 +333,6 @@ benchmarks! {
 		let stash = scenario.origin_stash1;
 		assert!(T::SortedListProvider::contains(&stash));
 
-		// let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), prefs)
@@ -358,7 +350,7 @@ benchmarks! {
 
 		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
 		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators::<T>(T::MAX_NOMINATIONS - 1, 100)?;
+		let rest_of_validators = create_validators::<T>(T::MAX_NOMINATIONS - 1, 100, 0)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
@@ -415,12 +407,28 @@ benchmarks! {
 	// Worst case scenario, T::MAX_NOMINATIONS
 	nominate {
 		let n in 1 .. T::MAX_NOMINATIONS;
-		let (stash, controller) = create_stash_controller::<T>(n + 1, 100, Default::default())?;
-		let validators = create_validators::<T>(n, 100)?;
+
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// The worst case scenario: a voter is inserted into a bag that already has voters so both
+		// the bag itself and the tail.next pointer need to be updated.
+
+		let threshold = One::one(); // all the voters in the scenario will be in the same bag.
+		let scenario = RebagScenario::<T>::new(threshold, threshold)?;
+		let origin_threshold_factor: BalanceOf<T> =
+			threshold * 10u32.into() / T::Currency::minimum_balance();
+		let (stash, controller) = create_stash_controller_with_max_free::<T>(
+			SEED + 931494657,
+			origin_threshold_factor, // bond an amount that puts them in the bag with nodes.
+			Default::default(),
+		)?;
+
+		let validators = create_validators::<T>(n, 100, 0)?;
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), validators)
 	verify {
-		assert!(Nominators::<T>::contains_key(stash));
+		// assert!(Nominators::<T>::contains_key(stash));
 	}
 
 	chill {
@@ -493,11 +501,24 @@ benchmarks! {
 	force_unstake {
 		// Slashing Spans
 		let s in 0 .. MAX_SPANS;
-		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
+		// scenario setup, but we don't care about the setup of the destination bag.
+
+		// thresholds are inconsequential because we are just care that we are removing a head.
+		let scenario
+			= RebagScenario::<T>::new(One::one(), One::one())?;
+		let controller = scenario.origin_controller1;
+		let stash = scenario.origin_stash1;
+		assert!(T::SortedListProvider::contains(&stash));
+
 		add_slashing_spans::<T>(&stash, s);
-	}: _(RawOrigin::Root, stash, s)
+	}: _(RawOrigin::Root, stash.clone(), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
+		assert!(!T::SortedListProvider::contains(&stash));
 	}
 
 	cancel_deferred_slash {
@@ -609,19 +630,6 @@ benchmarks! {
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
 		// so the sum of unlocking chunks puts voter into the dest bag
-		crate::log!(
-			info,
-			"value: {:#?}, origin thresh: {:#?}, dest thresh: {:#?}",
-			value,
-			origin_bag_thresh,
-			dest_bag_thresh
-		);
-		println!(
-			"value: {:#?}, origin thresh: {:#?}, dest thresh: {:#?}",
-			value,
-			origin_bag_thresh,
-			dest_bag_thresh
-		);
 		assert!((value * l.into() + origin_bag_thresh) > origin_bag_thresh);
 		assert!(value * l.into() + origin_bag_thresh <= dest_bag_thresh);
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {

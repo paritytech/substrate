@@ -136,11 +136,12 @@ pub fn create_stash_and_dead_controller<T: Config>(
 pub fn create_validators<T: Config>(
 	max: u32,
 	balance_factor: u32,
+	seed: u32
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0..max {
 		let (stash, controller) =
-			create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
+			create_stash_controller::<T>(i + seed, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
