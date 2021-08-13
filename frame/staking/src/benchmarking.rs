@@ -503,7 +503,7 @@ benchmarks! {
 		let origin_threshold_factor: BalanceOf<T> =
 			threshold * 10u32.into() / T::Currency::minimum_balance();
 		let (stash, controller) = create_stash_controller_with_max_free::<T>(
-			SEED + 931494657,
+			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
 			origin_threshold_factor, // bond an amount that puts them in the bag with nodes.
 			Default::default(),
 		)?;
