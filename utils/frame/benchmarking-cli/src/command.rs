@@ -18,7 +18,8 @@
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{
-	Analysis, BenchmarkBatch, BenchmarkList, BenchmarkResults, BenchmarkSelector,
+	Analysis, BenchmarkBatch, BenchmarkBatchSplitResults, BenchmarkList, BenchmarkParameter,
+	BenchmarkResults, BenchmarkSelector,
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
@@ -38,14 +39,18 @@ use std::{fmt::Debug, sync::Arc, time};
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
-fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
-	if batches.is_empty() {
-		return batches
+fn combine_batches(
+	time_batches: Vec<BenchmarkBatch>,
+	db_batches: Vec<BenchmarkBatch>,
+) -> Vec<BenchmarkBatchSplitResults> {
+	if time_batches.is_empty() && db_batches.is_empty() {
+		return Default::default()
 	}
 
-	let mut all_benchmarks = LinkedHashMap::<_, Vec<BenchmarkResults>>::new();
+	let mut all_benchmarks =
+		LinkedHashMap::<_, (Vec<BenchmarkResults>, Vec<BenchmarkResults>)>::new();
 
-	batches
+	db_batches
 		.into_iter()
 		.for_each(|BenchmarkBatch { pallet, instance, benchmark, results }| {
 			// We use this key to uniquely identify a benchmark among batches.
@@ -53,21 +58,31 @@ fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 
 			match all_benchmarks.get_mut(&key) {
 				// We already have this benchmark, so we extend the results.
-				Some(x) => x.extend(results),
+				Some(x) => x.1.extend(results),
 				// New benchmark, so we add a new entry with the initial results.
 				None => {
-					all_benchmarks.insert(key, results);
+					all_benchmarks.insert(key, (Vec::new(), results));
 				},
+			}
+		});
+
+	time_batches
+		.into_iter()
+		.for_each(|BenchmarkBatch { pallet, instance, benchmark, results }| {
+			// We use this key to uniquely identify a benchmark among batches.
+			let key = (pallet, instance, benchmark);
+
+			match all_benchmarks.get_mut(&key) {
+				// We already have this benchmark, so we extend the results.
+				Some(x) => x.0.extend(results),
+				None => panic!("all benchmark keys should have been populated by db batches"),
 			}
 		});
 
 	all_benchmarks
 		.into_iter()
-		.map(|((pallet, instance, benchmark), results)| BenchmarkBatch {
-			pallet,
-			instance,
-			benchmark,
-			results,
+		.map(|((pallet, instance, benchmark), (time_results, db_results))| {
+			BenchmarkBatchSplitResults { pallet, instance, benchmark, time_results, db_results }
 		})
 		.collect::<Vec<_>>()
 }
@@ -110,7 +125,14 @@ impl BenchmarkCmd {
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
-		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof)?;
+		let state_with_tracking = BenchmarkingState::<BB>::new(
+			genesis_storage.clone(),
+			cache_size,
+			self.record_proof,
+			true,
+		)?;
+		let state_without_tracking =
+			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			self.heap_pages,
@@ -129,15 +151,16 @@ impl BenchmarkCmd {
 		};
 
 		// Get Benchmark List
+		let state = &state_without_tracking;
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-			&state,
+			state,
 			None,
 			&mut changes,
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
 			extensions(),
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
@@ -147,35 +170,81 @@ impl BenchmarkCmd {
 			<(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
 				.map_err(|e| format!("Failed to decode benchmark metadata: {:?}", e))?;
 
-		if self.list {
-			list_benchmark(pallet, extrinsic, list);
-			return Ok(())
-		}
-
 		// Use the benchmark list and the user input to determine the set of benchmarks to run.
 		let mut benchmarks_to_run = Vec::new();
-		for item in list {
-			if pallet == &item.pallet[..] || pallet == &b"*"[..] {
-				if &pallet[..] == &b"*"[..] || &extrinsic[..] == &b"*"[..] {
-					for benchmark in item.benchmarks {
-						benchmarks_to_run.push((item.pallet.clone(), benchmark));
+		list.iter()
+			.filter(|item| pallet.is_empty() || pallet == &b"*"[..] || pallet == &item.pallet[..])
+			.for_each(|item| {
+				for benchmark in &item.benchmarks {
+					if extrinsic.is_empty() ||
+						&extrinsic[..] == &b"*"[..] ||
+						extrinsic == benchmark.name
+					{
+						benchmarks_to_run.push((
+							item.pallet.clone(),
+							benchmark.name.clone(),
+							benchmark.components.clone(),
+						))
 					}
-				} else {
-					benchmarks_to_run.push((pallet.to_vec(), extrinsic.to_vec()));
 				}
-			}
+			});
+
+		if benchmarks_to_run.is_empty() {
+			return Err("No benchmarks found which match your input.".into())
+		}
+
+		if self.list {
+			// List benchmarks instead of running them
+			list_benchmark(benchmarks_to_run);
+			return Ok(())
 		}
 
 		// Run the benchmarks
 		let mut batches = Vec::new();
+		let mut batches_db = Vec::new();
 		let mut timer = time::SystemTime::now();
-		for (pallet, extrinsic) in benchmarks_to_run {
-			for s in 0..self.steps {
-				for r in 0..self.repeat {
-					// This should run only a single instance of a benchmark for `pallet` and
-					// `extrinsic`. All loops happen above.
-					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-						&state,
+		for (pallet, extrinsic, components) in benchmarks_to_run {
+			let all_components = if components.is_empty() {
+				vec![Default::default()]
+			} else {
+				let mut all_components = Vec::new();
+				for (idx, (name, low, high)) in components.iter().enumerate() {
+					let lowest = self.lowest_range_values.get(idx).cloned().unwrap_or(*low);
+					let highest = self.highest_range_values.get(idx).cloned().unwrap_or(*high);
+
+					let diff = highest - lowest;
+
+					// Create up to `STEPS` steps for that component between high and low.
+					let step_size = (diff / self.steps).max(1);
+					let num_of_steps = diff / step_size + 1;
+					for s in 0..num_of_steps {
+						// This is the value we will be testing for component `name`
+						let component_value = lowest + step_size * s;
+
+						// Select the max value for all the other components.
+						let c: Vec<(BenchmarkParameter, u32)> = components
+							.iter()
+							.enumerate()
+							.map(|(idx, (n, _, h))| {
+								if n == name {
+									(*n, component_value)
+								} else {
+									(*n, *self.highest_range_values.get(idx).unwrap_or(h))
+								}
+							})
+							.collect();
+						all_components.push(c);
+					}
+				}
+				all_components
+			};
+			for (s, selected_components) in all_components.iter().enumerate() {
+				// First we run a verification
+				if !self.no_verify {
+					// Dont use these results since verification code will add overhead
+					let state = &state_without_tracking;
+					let _results = StateMachine::<_, _, NumberFor<BB>, _>::new(
+						state,
 						None,
 						&mut changes,
 						&executor,
@@ -183,16 +252,73 @@ impl BenchmarkCmd {
 						&(
 							&pallet.clone(),
 							&extrinsic.clone(),
-							self.lowest_range_values.clone(),
-							self.highest_range_values.clone(),
-							(s, self.steps),
-							(r, self.repeat),
-							!self.no_verify,
-							self.extra,
+							&selected_components.clone(),
+							true, // run verification code
+							1,    // no need to do internal repeats
 						)
 							.encode(),
 						extensions(),
-						&sp_state_machine::backend::BackendRuntimeCode::new(&state)
+						&sp_state_machine::backend::BackendRuntimeCode::new(state)
+							.runtime_code()?,
+						sp_core::testing::TaskExecutor::new(),
+					)
+					.execute(strategy.into())
+					.map_err(|e| {
+						format!("Error executing and verifying runtime benchmark: {:?}", e)
+					})?;
+				}
+				// Do one loop of DB tracking.
+				{
+					let state = &state_with_tracking;
+					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+						state, // todo remove tracking
+						None,
+						&mut changes,
+						&executor,
+						"Benchmark_dispatch_benchmark",
+						&(
+							&pallet.clone(),
+							&extrinsic.clone(),
+							&selected_components.clone(),
+							false, // dont run verification code for final values
+							self.repeat,
+						)
+							.encode(),
+						extensions(),
+						&sp_state_machine::backend::BackendRuntimeCode::new(state)
+							.runtime_code()?,
+						sp_core::testing::TaskExecutor::new(),
+					)
+					.execute(strategy.into())
+					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+
+					let batch =
+						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
+							&mut &result[..],
+						)
+						.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
+
+					batches_db.extend(batch);
+				}
+				// Finally run a bunch of loops to get extrinsic timing information.
+				for r in 0..self.external_repeat {
+					let state = &state_without_tracking;
+					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+						state, // todo remove tracking
+						None,
+						&mut changes,
+						&executor,
+						"Benchmark_dispatch_benchmark",
+						&(
+							&pallet.clone(),
+							&extrinsic.clone(),
+							&selected_components.clone(),
+							false, // dont run verification code for final values
+							self.repeat,
+						)
+							.encode(),
+						extensions(),
+						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
 					)
@@ -217,10 +343,10 @@ impl BenchmarkCmd {
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								s,
+								s, // todo show step
 								self.steps,
 								r,
-								self.repeat,
+								self.external_repeat,
 							);
 						}
 					}
@@ -230,7 +356,7 @@ impl BenchmarkCmd {
 
 		// Combine all of the benchmark results, so that benchmarks of the same pallet/function
 		// are together.
-		let batches = combine_batches(batches);
+		let batches: Vec<BenchmarkBatchSplitResults> = combine_batches(batches, batches_db);
 
 		if let Some(output_path) = &self.output {
 			crate::writer::write_results(&batches, &storage_info, output_path, self)?;
@@ -249,17 +375,20 @@ impl BenchmarkCmd {
 			);
 
 			// Skip raw data + analysis if there are no results
-			if batch.results.is_empty() {
+			if batch.time_results.is_empty() {
 				continue
 			}
 
 			if self.raw_data {
 				// Print the table header
-				batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
+				batch.time_results[0]
+					.components
+					.iter()
+					.for_each(|param| print!("{:?},", param.0));
 
 				print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
 				// Print the values
-				batch.results.iter().for_each(|result| {
+				batch.time_results.iter().for_each(|result| {
 					let parameters = &result.components;
 					parameters.iter().for_each(|param| print!("{:?},", param.1));
 					// Print extrinsic time and storage root time
@@ -282,17 +411,17 @@ impl BenchmarkCmd {
 			if !self.no_median_slopes {
 				println!("Median Slopes Analysis\n========");
 				if let Some(analysis) =
-					Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime)
+					Analysis::median_slopes(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 				{
 					println!("-- Extrinsic Time --\n{}", analysis);
 				}
 				if let Some(analysis) =
-					Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads)
+					Analysis::median_slopes(&batch.db_results, BenchmarkSelector::Reads)
 				{
 					println!("Reads = {:?}", analysis);
 				}
 				if let Some(analysis) =
-					Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes)
+					Analysis::median_slopes(&batch.db_results, BenchmarkSelector::Writes)
 				{
 					println!("Writes = {:?}", analysis);
 				}
@@ -300,17 +429,17 @@ impl BenchmarkCmd {
 			if !self.no_min_squares {
 				println!("Min Squares Analysis\n========");
 				if let Some(analysis) =
-					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime)
+					Analysis::min_squares_iqr(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 				{
 					println!("-- Extrinsic Time --\n{}", analysis);
 				}
 				if let Some(analysis) =
-					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads)
+					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::Reads)
 				{
 					println!("Reads = {:?}", analysis);
 				}
 				if let Some(analysis) =
-					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes)
+					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::Writes)
 				{
 					println!("Writes = {:?}", analysis);
 				}
@@ -335,39 +464,9 @@ impl CliConfiguration for BenchmarkCmd {
 }
 
 /// List the benchmarks available in the runtime, in a CSV friendly format.
-///
-/// If `pallet_input` and `extrinsic_input` is empty, we list everything.
-///
-/// If `pallet_input` is present, we only list the benchmarks for that pallet.
-///
-/// If `extrinsic_input` is `*`, we will hide the individual benchmarks for each pallet, and just
-/// show a single line for each available pallet.
-fn list_benchmark(pallet_input: &[u8], extrinsic_input: &[u8], list: Vec<BenchmarkList>) {
-	let filtered_list = list
-		.into_iter()
-		.filter(|item| pallet_input.is_empty() || pallet_input == &item.pallet)
-		.collect::<Vec<_>>();
-
-	if filtered_list.is_empty() {
-		println!("Pallet not found.");
-		return
-	}
-
+fn list_benchmark(benchmarks_to_run: Vec<(Vec<u8>, Vec<u8>, Vec<(BenchmarkParameter, u32, u32)>)>) {
 	println!("pallet, benchmark");
-	for item in filtered_list {
-		let pallet_string =
-			String::from_utf8(item.pallet.clone()).expect("Encoded from String; qed");
-
-		if extrinsic_input == &b"*"[..] {
-			println!("{}, *", pallet_string)
-		} else {
-			for benchmark in item.benchmarks {
-				println!(
-					"{}, {}",
-					pallet_string,
-					String::from_utf8(benchmark).expect("Encoded from String; qed"),
-				);
-			}
-		}
+	for (pallet, extrinsic, _components) in benchmarks_to_run {
+		println!("{}, {}", String::from_utf8_lossy(&pallet), String::from_utf8_lossy(&extrinsic));
 	}
 }

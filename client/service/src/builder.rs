@@ -37,7 +37,7 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
+use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeVersionOf};
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
@@ -80,12 +80,12 @@ pub trait RpcExtensionBuilder {
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output;
+	) -> Result<Self::Output, Error>;
 }
 
 impl<F, R> RpcExtensionBuilder for F
 where
-	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> Result<R, Error>,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
@@ -94,7 +94,7 @@ where
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
+	) -> Result<Self::Output, Error> {
 		(*self)(deny, subscription_executor)
 	}
 }
@@ -114,8 +114,8 @@ where
 		&self,
 		_deny: sc_rpc::DenyUnsafe,
 		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
-		self.0.clone()
+	) -> Result<Self::Output, Error> {
+		Ok(self.0.clone())
 	}
 }
 
@@ -254,8 +254,9 @@ impl KeystoreContainer {
 	///
 	/// # Note
 	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
-	/// a remote keystore for example. Only use this if you a certain that you require it!
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
+	/// implementation, like a remote keystore for example. Only use this if you a certain that you
+	/// require it!
 	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
 		Some(self.local.clone())
 	}
@@ -454,7 +455,7 @@ pub fn new_client<E, Block, RA>(
 >
 where
 	Block: BlockT,
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
@@ -560,6 +561,8 @@ where
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl: BlockT,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
 		+ MallocSizeOfWasm
@@ -655,7 +658,7 @@ where
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
 			sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser"),
-		)
+		)?
 		.into(),
 	));
 
@@ -742,7 +745,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -761,6 +764,8 @@ where
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 {
 	use sc_rpc::{author, chain, offchain, state, system};
 
@@ -813,7 +818,7 @@ where
 		offchain::OffchainApi::to_delegate(offchain)
 	});
 
-	sc_rpc_server::rpc_handler(
+	Ok(sc_rpc_server::rpc_handler(
 		(
 			state::StateApi::to_delegate(state),
 			state::ChildStateApi::to_delegate(child_state),
@@ -821,10 +826,10 @@ where
 			maybe_offchain_rpc,
 			author::AuthorApi::to_delegate(author),
 			system::SystemApi::to_delegate(system),
-			rpc_extensions_builder.build(deny_unsafe, task_executor),
+			rpc_extensions_builder.build(deny_unsafe, task_executor)?,
 		),
 		rpc_middleware,
-	)
+	))
 }
 
 /// Parameters to pass into `build_network`.

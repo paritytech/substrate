@@ -35,7 +35,7 @@
 //! A custom WASM blob will override on-chain WASM if the spec version matches. If it is
 //! required to overrides multiple runtimes, multiple WASM blobs matching each of the spec versions
 //! needed must be provided in the given directory.
-use sc_executor::RuntimeInfo;
+use sc_executor::RuntimeVersionOf;
 use sp_blockchain::Result;
 use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
 use sp_state_machine::BasicExternalities;
@@ -112,7 +112,7 @@ pub struct WasmOverride<E> {
 
 impl<E> WasmOverride<E>
 where
-	E: RuntimeInfo + Clone + 'static,
+	E: RuntimeVersionOf + Clone + 'static,
 {
 	pub fn new<P>(path: P, executor: E) -> Result<Self>
 	where
@@ -192,7 +192,7 @@ where
 #[cfg(test)]
 pub fn dummy_overrides<E>(executor: &E) -> WasmOverride<E>
 where
-	E: RuntimeInfo + Clone + 'static,
+	E: RuntimeVersionOf + Clone + 'static,
 {
 	let mut overrides = HashMap::new();
 	overrides.insert(0, WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0]));

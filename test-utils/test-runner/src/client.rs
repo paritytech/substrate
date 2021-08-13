@@ -94,7 +94,8 @@ where
 		+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>
 		+ GrandpaApi<T::Block>,
 	<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
-	<<T as ChainInfo>::Block as BlockT>::Hash: FromStr,
+	<<T as ChainInfo>::Block as BlockT>::Hash: FromStr + Unpin,
+	<<T as ChainInfo>::Block as BlockT>::Header: Unpin,
 	<<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number:
 		num_traits::cast::AsPrimitive<usize>,
 {
@@ -192,7 +193,7 @@ where
 			rpc_extensions_builder: Box::new(move |_, _| {
 				let mut io = jsonrpc_core::IoHandler::default();
 				io.extend_with(ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone())));
-				io
+				Ok(io)
 			}),
 			remote_blockchain: None,
 			network,

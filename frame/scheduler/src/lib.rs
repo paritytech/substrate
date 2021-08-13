@@ -40,12 +40,11 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a
-//!   specified block and with a specified priority.
-//! * `cancel` - cancel a scheduled dispatch, specified by block number and
-//!   index.
-//! * `schedule_named` - augments the `schedule` interface with an additional
-//!   `Vec<u8>` parameter that can be used for identification.
+//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a specified block and
+//!   with a specified priority.
+//! * `cancel` - cancel a scheduled dispatch, specified by block number and index.
+//! * `schedule_named` - augments the `schedule` interface with an additional `Vec<u8>` parameter
+//!   that can be used for identification.
 //! * `cancel_named` - the named complement to the cancel function.
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -152,8 +151,8 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ From<system::Call<Self>>;
 
-		/// The maximum weight that may be scheduled per block for any dispatchables of less priority
-		/// than `schedule::HARD_DEADLINE`.
+		/// The maximum weight that may be scheduled per block for any dispatchables of less
+		/// priority than `schedule::HARD_DEADLINE`.
 		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
@@ -833,7 +832,7 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Filter, OnFinalize, OnInitialize},
+		traits::{Contains, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
@@ -925,8 +924,8 @@ mod tests {
 
 	// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 	pub struct BaseFilter;
-	impl Filter<Call> for BaseFilter {
-		fn filter(call: &Call) -> bool {
+	impl Contains<Call> for BaseFilter {
+		fn contains(call: &Call) -> bool {
 			!matches!(call, Call::Logger(LoggerCall::log(_, _)))
 		}
 	}
@@ -1006,7 +1005,7 @@ mod tests {
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -1022,7 +1021,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
@@ -1039,7 +1038,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call));
 			// Will trigger on the next block.
 			run_to_block(3);
@@ -1081,7 +1080,7 @@ mod tests {
 	fn reschedule_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(),
 				(4, 0)
@@ -1112,7 +1111,7 @@ mod tests {
 	fn reschedule_named_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule_named(
 					1u32.encode(),
@@ -1154,7 +1153,7 @@ mod tests {
 	fn reschedule_named_perodic_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule_named(
 					1u32.encode(),
@@ -1321,7 +1320,8 @@ mod tests {
 				root(),
 				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
 			));
-			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
+			// With base weights, 69 and 42 should not fit together, but do because of hard
+			// deadlines
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 		});

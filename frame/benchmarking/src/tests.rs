@@ -87,7 +87,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -199,6 +199,24 @@ mod benchmarks {
 		variable_components {
 			let b in ( T::LowerBound::get() ) .. T::UpperBound::get();
 		}: dummy (RawOrigin::None, b.into())
+
+		#[extra]
+		extra_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: set_value(RawOrigin::Signed(caller), b.into())
+		verify {
+			assert_eq!(Value::get(), Some(b));
+		}
+
+		#[skip_meta]
+		skip_meta_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: set_value(RawOrigin::Signed(caller), b.into())
+		verify {
+			assert_eq!(Value::get(), Some(b));
+		}
 	}
 
 	#[test]
@@ -291,13 +309,13 @@ mod benchmarks {
 	#[test]
 	fn benchmarks_generate_unit_tests() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_value::<Test>());
-			assert_ok!(test_benchmark_other_name::<Test>());
-			assert_ok!(test_benchmark_sort_vector::<Test>());
-			assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
-			assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
-			assert_ok!(test_benchmark_no_components::<Test>());
-			assert_ok!(test_benchmark_variable_components::<Test>());
+			assert_ok!(Pallet::<Test>::test_benchmark_set_value());
+			assert_ok!(Pallet::<Test>::test_benchmark_other_name());
+			assert_ok!(Pallet::<Test>::test_benchmark_sort_vector());
+			assert_err!(Pallet::<Test>::test_benchmark_bad_origin(), "Bad origin");
+			assert_err!(Pallet::<Test>::test_benchmark_bad_verify(), "You forgot to sort!");
+			assert_ok!(Pallet::<Test>::test_benchmark_no_components());
+			assert_ok!(Pallet::<Test>::test_benchmark_variable_components());
 		});
 	}
 }

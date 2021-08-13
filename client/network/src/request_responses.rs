@@ -310,7 +310,8 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// If there is no established connection to the target peer, the behavior is determined by the choice of `connect`.
+	/// If there is no established connection to the target peer, the behavior is determined by the
+	/// choice of `connect`.
 	///
 	/// An error is returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(
@@ -700,8 +701,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out))
 						},
 
-						// An inbound request failed, either while reading the request or due to failing
-						// to send a response.
+						// An inbound request failed, either while reading the request or due to
+						// failing to send a response.
 						RequestResponseEvent::InboundFailure {
 							request_id, peer, error, ..
 						} => {

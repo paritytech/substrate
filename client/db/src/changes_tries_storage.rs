@@ -59,8 +59,8 @@ pub fn extract_new_configuration<Header: HeaderT>(
 		.and_then(ChangesTrieSignal::as_new_configuration)
 }
 
-/// Opaque configuration cache transaction. During its lifetime, no-one should modify cache. This is currently
-/// guaranteed because import lock is held during block import/finalization.
+/// Opaque configuration cache transaction. During its lifetime, no-one should modify cache. This is
+/// currently guaranteed because import lock is held during block import/finalization.
 pub struct DbChangesTrieStorageTransaction<Block: BlockT> {
 	/// Cache operations that must be performed after db transaction is committed.
 	cache_ops: DbCacheTransactionOps<Block>,
@@ -110,12 +110,13 @@ struct ChangesTriesMeta<Block: BlockT> {
 	/// The range is inclusive from both sides.
 	/// Is None only if:
 	/// 1) we haven't yet finalized any blocks (except genesis)
-	/// 2) if best_finalized_block - min_blocks_to_keep points to the range where changes tries are disabled
-	/// 3) changes tries pruning is disabled
+	/// 2) if best_finalized_block - min_blocks_to_keep points to the range where changes tries are
+	/// disabled 3) changes tries pruning is disabled
 	pub oldest_digest_range: Option<(NumberFor<Block>, NumberFor<Block>)>,
 	/// End block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
 	/// It is guaranteed that we have no any changes tries before (and including) this block.
-	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).
+	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if
+	/// created).
 	pub oldest_pruned_digest_range_end: NumberFor<Block>,
 }
 
@@ -1131,8 +1132,8 @@ mod tests {
 			vec![3, 3],
 		);
 
-		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
-		// the 1st one points to the block #3 because it isn't truncated
+		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl
+		// specifics), the 1st one points to the block #3 because it isn't truncated
 		backend.revert(1, false).unwrap();
 		assert_eq!(
 			backend

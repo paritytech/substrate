@@ -89,7 +89,8 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
 	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
@@ -176,7 +177,8 @@ pub trait StateApi<Hash> {
 	/// ## Node requirements
 	///
 	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
-	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
+	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime
+	///   versions
 	/// for which tracing is desired.
 	///
 	/// ## Node recommendations
@@ -192,10 +194,12 @@ pub trait StateApi<Hash> {
 	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
 	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
 	/// - Compile the runtime with `cargo build --release --features with-tracing`
-	/// - Tracing-enabled WASM runtime should be found in `./target/release/wbuild/{{chain}}-runtime`
+	/// - Tracing-enabled WASM runtime should be found in
+	///   `./target/release/wbuild/{{chain}}-runtime`
 	/// and be called something like `{{your_chain}}_runtime.compact.wasm`. This can be
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
-	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
+	/// - Run the node with the wasm blob overrides by placing them in a folder with all your
+	///   runtimes,
 	/// and passing the path of this folder to your chain, e.g.:
 	/// - `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///

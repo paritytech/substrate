@@ -203,7 +203,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			let deps =
 				crate::rpc::FullDeps { client: client.clone(), pool: pool.clone(), deny_unsafe };
 
-			crate::rpc::create_full(deps)
+			Ok(crate::rpc::create_full(deps))
 		})
 	};
 
@@ -436,7 +436,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		transaction_pool,
 		task_manager: &mut task_manager,
 		on_demand: Some(on_demand),
-		rpc_extensions_builder: Box::new(|_, _| ()),
+		rpc_extensions_builder: Box::new(|_, _| Ok(())),
 		config,
 		client,
 		keystore: keystore_container.sync_keystore(),

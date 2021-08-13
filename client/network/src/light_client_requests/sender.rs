@@ -26,8 +26,9 @@
 //! 2. Forward the request to [`crate::request_responses::RequestResponsesBehaviour`] via
 //! [`OutEvent::SendRequest`](sender::OutEvent::SendRequest).
 //!
-//! 3. Wait for the response and forward the response via the [`futures::channel::oneshot::Sender`] provided earlier
-//! with [`LightClientRequestSender::request`](sender::LightClientRequestSender::request).
+//! 3. Wait for the response and forward the response via the [`futures::channel::oneshot::Sender`]
+//! provided earlier with [`LightClientRequestSender::request`](sender::LightClientRequestSender::
+//! request).
 
 use crate::{
 	config::ProtocolId,
