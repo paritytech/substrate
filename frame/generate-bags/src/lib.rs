@@ -66,7 +66,7 @@ use std::{
 /// Note that this value depends on the current issuance, a quantity known to change over time.
 /// This makes the project of computing a static value suitable for inclusion in a static,
 /// generated file _excitingly unstable_.
-fn get_existential_weight<T: pallet_staking::Config>() -> VoteWeight {
+fn existential_weight<T: pallet_staking::Config>() -> VoteWeight {
 	use frame_support::traits::{Currency, CurrencyToVote};
 
 	let existential_deposit = <T::Currency as Currency<T::AccountId>>::minimum_balance();
@@ -195,7 +195,7 @@ pub fn generate_thresholds_module<T: pallet_staking::Config>(
 		<T as frame_system::Config>::Version::get().spec_name,
 	)?;
 
-	let existential_weight = get_existential_weight::<T>();
+	let existential_weight = existential_weight::<T>();
 	num_buf.write_formatted(&existential_weight, &format);
 	writeln!(buf)?;
 	writeln!(buf, "/// Existential weight for this runtime.")?;

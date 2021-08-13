@@ -50,7 +50,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
-use frame_support::traits::Get;
 use frame_system::ensure_signed;
 use sp_std::prelude::*;
 
@@ -263,20 +262,5 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	fn clear() {
 		List::<T>::clear()
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn bag_thresholds() -> Vec<VoteWeight> {
-		T::BagThresholds::get().to_vec()
-	}
-
-	// Benchmark helpers
-	#[cfg(feature = "runtime-benchmarks")]
-	fn prepare_on_update_benchmark(
-		origin_thresh: VoteWeight,
-		dest_thresh: VoteWeight,
-		to_update: T::AccountId,
-	) {
-		todo!()
 	}
 }

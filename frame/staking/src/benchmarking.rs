@@ -424,11 +424,15 @@ benchmarks! {
 			Default::default(),
 		)?;
 
+		assert!(!Nominators::<T>::contains_key(&stash));
+		assert!(!T::SortedListProvider::contains(&stash))
+
 		let validators = create_validators::<T>(n, 100, 0)?;
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), validators)
 	verify {
-		// assert!(Nominators::<T>::contains_key(stash));
+		assert!(Nominators::<T>::contains_key(&stash));
+		assert!(T::SortedListProvider::contains(&stash))
 	}
 
 	chill {
