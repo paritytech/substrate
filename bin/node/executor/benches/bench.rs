@@ -25,7 +25,7 @@ use node_runtime::{
 	UncheckedExtrinsic,
 };
 use node_testing::keyring::*;
-use sc_executor::{Externalities, NativeExecutor, RuntimeInfo, WasmExecutionMethod};
+use sc_executor::{Externalities, NativeExecutor, RuntimeVersionOf, WasmExecutionMethod};
 use sp_core::{
 	storage::well_known_keys,
 	traits::{CodeExecutor, RuntimeCode},

@@ -67,15 +67,19 @@ impl From<io::Error> for UpgradeError {
 impl fmt::Display for UpgradeError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			UpgradeError::UnknownDatabaseVersion =>
-				write!(f, "Database version cannot be read from exisiting db_version file"),
+			UpgradeError::UnknownDatabaseVersion => {
+				write!(f, "Database version cannot be read from exisiting db_version file")
+			},
 			UpgradeError::MissingDatabaseVersionFile => write!(f, "Missing database version file"),
-			UpgradeError::UnsupportedVersion(version) =>
-				write!(f, "Database version no longer supported: {}", version),
-			UpgradeError::FutureDatabaseVersion(version) =>
-				write!(f, "Database version comes from future version of the client: {}", version),
-			UpgradeError::DecodingJustificationBlock =>
-				write!(f, "Decodoning justification block failed"),
+			UpgradeError::UnsupportedVersion(version) => {
+				write!(f, "Database version no longer supported: {}", version)
+			},
+			UpgradeError::FutureDatabaseVersion(version) => {
+				write!(f, "Database version comes from future version of the client: {}", version)
+			},
+			UpgradeError::DecodingJustificationBlock => {
+				write!(f, "Decodoning justification block failed")
+			},
 			UpgradeError::Io(err) => write!(f, "Io error: {}", err),
 		}
 	}

@@ -74,8 +74,8 @@ impl TryFrom<Option<String>> for AnalysisChoice {
 }
 
 impl Analysis {
-	// Useful for when there are no components, and we just need an median value of the benchmark results.
-	// Note: We choose the median value because it is more robust to outliers.
+	// Useful for when there are no components, and we just need an median value of the benchmark
+	// results. Note: We choose the median value because it is more robust to outliers.
 	fn median_value(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
 		if r.is_empty() {
 			return None

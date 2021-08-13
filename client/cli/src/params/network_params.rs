@@ -110,13 +110,13 @@ pub struct NetworkParams {
 
 	/// Enable peer discovery on local networks.
 	///
-	/// By default this option is `true` for `--dev` or when the chain type is `Local`/`Development`
-	/// and false otherwise.
+	/// By default this option is `true` for `--dev` or when the chain type is
+	/// `Local`/`Development` and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
 
-	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
-	/// presence of potentially adversarial nodes.
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
+	/// the presence of potentially adversarial nodes.
 	///
 	/// See the S/Kademlia paper for more information on the high level design as well as its
 	/// security improvements.

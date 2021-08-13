@@ -23,9 +23,10 @@
 //! - Before running contract code we check if the cached code has the schedule version that
 //! is equal to the current saved schedule.
 //! If it is equal then run the code, if it isn't reinstrument with the current schedule.
-//! - When we update the schedule we want it to have strictly greater version than the current saved one:
-//! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
-//! Thus, before executing a contract it should be reinstrument with new schedule.
+//! - When we update the schedule we want it to have strictly greater version than the current saved
+//!   one:
+//! this guarantees that every instrumented contract code in cache cannot have the version equal to
+//! the current one. Thus, before executing a contract it should be reinstrument with new schedule.
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::private::reinstrument;

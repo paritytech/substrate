@@ -245,10 +245,12 @@ where
 			future.await.expect(ERROR);
 
 			match future_block.await.expect(ERROR) {
-				Ok(block) =>
-					log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
-				Err(err) =>
-					log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err),
+				Ok(block) => {
+					log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num)
+				},
+				Err(err) => {
+					log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err)
+				},
 			}
 		}
 	}

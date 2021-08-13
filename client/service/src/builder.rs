@@ -37,7 +37,7 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
+use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeVersionOf};
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
@@ -254,8 +254,9 @@ impl KeystoreContainer {
 	///
 	/// # Note
 	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
-	/// a remote keystore for example. Only use this if you a certain that you require it!
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
+	/// implementation, like a remote keystore for example. Only use this if you a certain that you
+	/// require it!
 	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
 		Some(self.local.clone())
 	}
@@ -454,7 +455,7 @@ pub fn new_client<E, Block, RA>(
 >
 where
 	Block: BlockT,
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
@@ -560,6 +561,8 @@ where
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl: BlockT,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
 		+ MallocSizeOfWasm
@@ -761,6 +764,8 @@ where
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 {
 	use sc_rpc::{author, chain, offchain, state, system};
 

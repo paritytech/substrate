@@ -238,7 +238,8 @@ impl<N: Zero> Lateness<N> for () {
 }
 
 /// Implementors of this trait provide information about whether or not some validator has
-/// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
+/// been registered with them. The [Session module](../../pallet_session/index.html) is an
+/// implementor.
 pub trait ValidatorRegistration<ValidatorId> {
 	/// Returns true if the provided validator ID has been registered with the implementing runtime
 	/// module
