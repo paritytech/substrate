@@ -19,12 +19,7 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt};
-use jsonrpc_core::futures::{
-	future::{Executor as Executor01, Future as Future01},
-	sink::Sink as Sink01,
-	stream::Stream as Stream01,
-};
+use futures::{task::Spawn, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
@@ -42,8 +37,7 @@ use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use notification::JustificationNotification;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
-type FutureResult<T> =
-	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, jsonrpc_core::Error>>;
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
@@ -108,7 +102,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 		finality_proof_provider: Arc<ProofProvider>,
 	) -> Self
 	where
-		E: Executor01<Box<dyn Future01<Item = (), Error = ()> + Send>> + Send + Sync + 'static,
+		E: Spawn + Sync + Send + 'static,
 	{
 		let manager = SubscriptionManager::new(Arc::new(executor));
 		Self { authority_set, voter_state, justification_stream, manager, finality_proof_provider }
@@ -129,7 +123,7 @@ where
 	fn round_state(&self) -> FutureResult<ReportedRoundStates> {
 		let round_states = ReportedRoundStates::from(&self.authority_set, &self.voter_state);
 		let future = async move { round_states }.boxed();
-		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
+		future.map_err(jsonrpc_core::Error::from).boxed()
 	}
 
 	fn subscribe_justifications(
@@ -140,14 +134,11 @@ where
 		let stream = self
 			.justification_stream
 			.subscribe()
-			.map(|x| Ok::<_, ()>(JustificationNotification::from(x)))
-			.map_err(|e| warn!("Notification stream error: {:?}", e))
-			.compat();
+			.map(|x| Ok(Ok::<_, jsonrpc_core::Error>(JustificationNotification::from(x))));
 
 		self.manager.add(subscriber, |sink| {
-			let stream = stream.map(|res| Ok(res));
-			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(stream)
+			stream
+				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 				.map(|_| ())
 		});
 	}
@@ -166,15 +157,13 @@ where
 	) -> FutureResult<Option<EncodedFinalityProof>> {
 		let result = self.finality_proof_provider.rpc_prove_finality(block);
 		let future = async move { result }.boxed();
-		Box::new(
-			future
-				.map_err(|e| {
-					warn!("Error proving finality: {}", e);
-					error::Error::ProveFinalityFailed(e)
-				})
-				.map_err(jsonrpc_core::Error::from)
-				.compat(),
-		)
+		future
+			.map_err(|e| {
+				warn!("Error proving finality: {}", e);
+				error::Error::ProveFinalityFailed(e)
+			})
+			.map_err(jsonrpc_core::Error::from)
+			.boxed()
 	}
 }
 
@@ -350,8 +339,8 @@ mod tests {
 		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
 
-	fn setup_session() -> (sc_rpc::Metadata, jsonrpc_core::futures::sync::mpsc::Receiver<String>) {
-		let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
+	fn setup_session() -> (sc_rpc::Metadata, futures::channel::mpsc::UnboundedReceiver<String>) {
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let meta = sc_rpc::Metadata::new(tx);
 		(meta, rx)
 	}
@@ -385,7 +374,7 @@ mod tests {
 		// Unsubscribe again and fail
 		assert_eq!(
 			io.handle_request_sync(&unsub_req, meta),
-			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()),
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
 		);
 	}
 
@@ -407,7 +396,7 @@ mod tests {
 				r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
 				meta.clone()
 			),
-			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into())
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
 		);
 	}
 
@@ -483,7 +472,7 @@ mod tests {
 		justification_sender.notify(|| Ok(justification.clone())).unwrap();
 
 		// Inspect what we received
-		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
+		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
 		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
 		let mut json_map = match recv.params {
 			Params::Map(json_map) => json_map,
