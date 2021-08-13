@@ -28,6 +28,7 @@ use test_runner::{ChainInfo, SignatureVerificationOverride};
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
+/// Executor instance.
 pub struct Executor;
 
 impl sc_executor::NativeExecutionDispatch for Executor {
