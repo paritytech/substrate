@@ -19,12 +19,7 @@
 #![warn(missing_docs)]
 
 use beefy_gadget::notification::BeefySignedCommitmentStream;
-use futures::{StreamExt, TryStreamExt};
-use jsonrpc_core::futures::{
-	future::{Executor as Executor01, Future as Future01},
-	sink::Sink as Sink01,
-	stream::Stream as Stream01,
-};
+use futures::{FutureExt, SinkExt, StreamExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
@@ -71,7 +66,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	/// Creates a new BeefyRpcHandler instance.
 	pub fn new<E>(signed_commitment_stream: BeefySignedCommitmentStream<Block>, executor: E) -> Self
 	where
-		E: Executor01<Box<dyn Future01<Item = (), Error = ()> + Send>> + Send + Sync + 'static,
+		E: futures::task::Spawn + Send + Sync + 'static,
 	{
 		let manager = SubscriptionManager::new(Arc::new(executor));
 		Self {
@@ -95,14 +90,11 @@ where
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
-			.map(|x| Ok::<_, ()>(notification::SignedCommitment::new::<Block>(x)))
-			.map_err(|e| warn!("Notification stream error: {:?}", e))
-			.compat();
+			.map(|x| Ok::<_, ()>(Ok(notification::SignedCommitment::new::<Block>(x))));
 
 		self.manager.add(subscriber, |sink| {
-			let stream = stream.map(Ok);
-			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(stream)
+			stream
+				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 				.map(|_| ())
 		});
 	}
