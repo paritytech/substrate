@@ -174,17 +174,14 @@ fn call_static<'a>(
 	let unwind_result = {
 		let host_state = caller
 			.data()
-			.host_state
-			.as_ref()
+			.host_state()
 			.expect(
 				"host functions can be called only from wasm instance;
 			wasm instance is always called initializing context;
 			therefore host_ctx cannot be None;
 			qed
 			",
-			)
-			.clone();
-		let host_state = host_state.borrow_mut();
+			).clone();
 
 		let mut host_ctx = host_state.materialize(&mut caller);
 

@@ -36,7 +36,6 @@ use sc_executor_common::{
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, Value, WordSize};
 use std::{
-	cell::RefCell,
 	path::{Path, PathBuf},
 	rc::Rc,
 	sync::Arc,
@@ -45,7 +44,14 @@ use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
 
 pub(crate) struct StoreData {
 	limits: StoreLimits,
-	pub(crate) host_state: Option<Rc<RefCell<HostState>>>,
+	host_state: Option<Rc<HostState>>,
+}
+
+impl StoreData {
+	/// Returns a reference to the host state.
+	pub fn host_state(&self) -> Option<&Rc<HostState>> {
+		self.host_state.as_ref()
+	}
 }
 
 pub(crate) type Store = wasmtime::Store<StoreData>;
@@ -606,7 +612,7 @@ fn perform_call(
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
 
 	// Set the host state before calling into wasm.
-	ctx.as_context_mut().data_mut().host_state = Some(Rc::new(RefCell::new(host_state)));
+	ctx.as_context_mut().data_mut().host_state = Some(Rc::new(host_state));
 
 	let ret = entrypoint
 		.call(&mut ctx, data_ptr, data_len)
