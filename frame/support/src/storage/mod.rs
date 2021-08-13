@@ -160,8 +160,8 @@ pub trait StorageValue<T: FullCodec> {
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
-	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
-	/// precisely prior initialized modules doesn't make use of this storage).
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**.
+	/// (More precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
@@ -989,7 +989,8 @@ impl<T> ChildTriePrefixIterator<T> {
 }
 
 impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
-	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
+	/// `prefix`.
 	///
 	/// NOTE: Iterator with [`Self::drain`] will remove any value who failed to decode
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
@@ -1012,7 +1013,8 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 }
 
 impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
-	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
+	/// `prefix`.
 	///
 	/// NOTE: Iterator with [`Self::drain`] will remove any key or value who failed to decode
 	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(

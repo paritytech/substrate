@@ -306,7 +306,8 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 ) -> OpenDbResult {
 	// first upgrade database to required version
 	match crate::upgrade::upgrade_db::<Block>(&path, db_type) {
-		// in case of missing version file, assume that database simply does not exist at given location
+		// in case of missing version file, assume that database simply does not exist at given
+		// location
 		Ok(_) | Err(crate::upgrade::UpgradeError::MissingDatabaseVersionFile) => (),
 		Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
 	}

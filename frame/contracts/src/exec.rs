@@ -173,8 +173,8 @@ pub trait Ext: sealing::Sealed {
 	/// Instantiate a contract from the given code.
 	///
 	/// Returns the original code size of the called contract.
-	/// The newly created account will be associated with `code`. `value` specifies the amount of value
-	/// transferred from this to the newly created account (also known as endowment).
+	/// The newly created account will be associated with `code`. `value` specifies the amount of
+	/// value transferred from this to the newly created account (also known as endowment).
 	///
 	/// # Return Value
 	///
@@ -190,8 +190,8 @@ pub trait Ext: sealing::Sealed {
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
-	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
-	/// be performed on this `Ext` instance.
+	/// Since this function removes the self contract eagerly, if succeeded, no further actions
+	/// should be performed on this `Ext` instance.
 	///
 	/// This function will fail if the same contract is present on the contract
 	/// call stack.
@@ -199,8 +199,8 @@ pub trait Ext: sealing::Sealed {
 
 	/// Restores the given destination contract sacrificing the current one.
 	///
-	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
-	/// be performed on this `Ext` instance.
+	/// Since this function removes the self contract eagerly, if succeeded, no further actions
+	/// should be performed on this `Ext` instance.
 	///
 	/// This function will fail if the same contract is present
 	/// on the contract call stack.
@@ -1283,8 +1283,8 @@ mod sealing {
 
 /// These tests exercise the executive layer.
 ///
-/// In these tests the VM/loader are mocked. Instead of dealing with wasm bytecode they use simple closures.
-/// This allows you to tackle executive logic more thoroughly without writing a
+/// In these tests the VM/loader are mocked. Instead of dealing with wasm bytecode they use simple
+/// closures. This allows you to tackle executive logic more thoroughly without writing a
 /// wasm VM code.
 #[cfg(test)]
 mod tests {

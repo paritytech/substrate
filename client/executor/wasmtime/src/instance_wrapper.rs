@@ -108,8 +108,8 @@ pub struct InstanceWrapper {
 	instance: Instance,
 	// The memory instance of the `instance`.
 	//
-	// It is important to make sure that we don't make any copies of this to make it easier to proof
-	// See `memory_as_slice` and `memory_as_slice_mut`.
+	// It is important to make sure that we don't make any copies of this to make it easier to
+	// proof See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
 	table: Option<Table>,
 	// Make this struct explicitly !Send & !Sync.
@@ -385,9 +385,9 @@ impl InstanceWrapper {
 		self.memory.data_ptr(ctx)
 	}
 
-	/// Removes physical backing from the allocated linear memory. This leads to returning the memory
-	/// back to the system. While the memory is zeroed this is considered as a side-effect and is not
-	/// relied upon. Thus this function acts as a hint.
+	/// Removes physical backing from the allocated linear memory. This leads to returning the
+	/// memory back to the system. While the memory is zeroed this is considered as a side-effect
+	/// and is not relied upon. Thus this function acts as a hint.
 	pub fn decommit(&self, ctx: impl AsContext) {
 		if self.memory.data_size(&ctx) == 0 {
 			return

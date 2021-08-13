@@ -156,7 +156,7 @@ members = [
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
-	"primitives/npos-elections/compact",
+	"primitives/npos-elections/solution-type",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",

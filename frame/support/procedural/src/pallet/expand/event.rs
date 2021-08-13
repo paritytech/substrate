@@ -21,6 +21,7 @@ use crate::{
 };
 use syn::{spanned::Spanned, Ident};
 
+///
 /// * Add __Ignore variant on Event
 /// * Impl various trait on Event including metadata
 /// * if deposit_event is defined, implement deposit_event on module.

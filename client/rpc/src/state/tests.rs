@@ -18,11 +18,9 @@
 
 use self::error::Error;
 use super::{state_full::split_range, *};
-
 use crate::testing::TaskExecutor;
 use assert_matches::assert_matches;
-use futures::{compat::Future01CompatExt, executor};
-use futures01::stream::Stream;
+use futures::{executor, StreamExt};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
@@ -63,37 +61,33 @@ fn should_return_storage() {
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
-		client
-			.storage(key.clone(), Some(genesis_hash).into())
-			.wait()
+		executor::block_on(client.storage(key.clone(), Some(genesis_hash).into()))
 			.map(|x| x.map(|x| x.0.len()))
 			.unwrap()
 			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		client
-			.storage_hash(key.clone(), Some(genesis_hash).into())
-			.wait()
+		executor::block_on(client.storage_hash(key.clone(), Some(genesis_hash).into()))
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_eq!(
-		client.storage_size(key.clone(), None).wait().unwrap().unwrap() as usize,
+		executor::block_on(client.storage_size(key.clone(), None)).unwrap().unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_eq!(
-		client.storage_size(StorageKey(b":map".to_vec()), None).wait().unwrap().unwrap() as usize,
+		executor::block_on(client.storage_size(StorageKey(b":map".to_vec()), None))
+			.unwrap()
+			.unwrap() as usize,
 		2 + 3,
 	);
 	assert_eq!(
 		executor::block_on(
 			child
 				.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
-				.map(|x| x.map(|x| x.0.len()))
-				.compat(),
+				.map(|x| x.map(|x| x.unwrap().0.len()))
 		)
-		.unwrap()
 		.unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
@@ -114,21 +108,26 @@ fn should_return_child_storage() {
 	let key = StorageKey(b"key".to_vec());
 
 	assert_matches!(
-		child.storage(
+		executor::block_on(child.storage(
 			child_key.clone(),
 			key.clone(),
 			Some(genesis_hash).into(),
-		).wait(),
+		)),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		child
-			.storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into(),)
-			.wait()
-			.map(|x| x.is_some()),
+		executor::block_on(child.storage_hash(
+			child_key.clone(),
+			key.clone(),
+			Some(genesis_hash).into(),
+		))
+		.map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None).wait(), Ok(Some(1)));
+	assert_matches!(
+		executor::block_on(child.storage_size(child_key.clone(), key.clone(), None)),
+		Ok(Some(1))
+	);
 }
 
 #[test]
@@ -139,16 +138,18 @@ fn should_call_contract() {
 		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
 
 	assert_matches!(
-		client
-			.call("balanceOf".into(), Bytes(vec![1, 2, 3]), Some(genesis_hash).into())
-			.wait(),
+		executor::block_on(client.call(
+			"balanceOf".into(),
+			Bytes(vec![1, 2, 3]),
+			Some(genesis_hash).into()
+		)),
 		Err(Error::Client(_))
 	)
 }
 
 #[test]
 fn should_notify_about_storage_changes() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -162,7 +163,7 @@ fn should_notify_about_storage_changes() {
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
 		// assert id assigned
-		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
+		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder
@@ -177,16 +178,14 @@ fn should_notify_about_storage_changes() {
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
-	// assert notification sent to transport
-	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
+	// Check notification sent to transport
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
 fn should_send_initial_storage_changes_and_notifications() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
@@ -207,7 +206,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 		);
 
 		// assert id assigned
-		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
+		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder
@@ -222,14 +221,9 @@ fn should_send_initial_storage_changes_and_notifications() {
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
-	// assert initial values sent to transport
-	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
+	// Check for the correct number of notifications
+	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
@@ -299,7 +293,7 @@ fn should_query_storage() {
 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
-		assert_eq!(result.wait().unwrap(), expected);
+		assert_eq!(executor::block_on(result).unwrap(), expected);
 
 		// Query all changes
 		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
@@ -312,18 +306,18 @@ fn should_query_storage() {
 				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
 			],
 		});
-		assert_eq!(result.wait().unwrap(), expected);
+		assert_eq!(executor::block_on(result).unwrap(), expected);
 
 		// Query changes up to block2.
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
-		assert_eq!(result.wait().unwrap(), expected);
+		assert_eq!(executor::block_on(result).unwrap(), expected);
 
 		// Inverted range.
 		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
 		assert_eq!(
-			result.wait().map_err(|e| e.to_string()),
+			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
@@ -339,7 +333,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
 
 		assert_eq!(
-			result.wait().map_err(|e| e.to_string()),
+			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", genesis_hash),
 				to: format!("{:?}", Some(random_hash1)),
@@ -355,7 +349,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
 
 		assert_eq!(
-			result.wait().map_err(|e| e.to_string()),
+			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(genesis_hash)),
@@ -371,7 +365,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, None);
 
 		assert_eq!(
-			result.wait().map_err(|e| e.to_string()),
+			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(block2_hash)), // Best block hash.
@@ -387,7 +381,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
 
 		assert_eq!(
-			result.wait().map_err(|e| e.to_string()),
+			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1), // First hash not found.
 				to: format!("{:?}", Some(random_hash2)),
@@ -403,7 +397,7 @@ fn should_query_storage() {
 		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
 
 		assert_eq!(
-			result.wait().unwrap(),
+			executor::block_on(result).unwrap(),
 			vec![StorageChangeSet {
 				block: block1_hash,
 				changes: vec![
@@ -454,7 +448,7 @@ fn should_return_runtime_version() {
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
 		\"transactionVersion\":1}";
 
-	let runtime_version = api.runtime_version(None.into()).wait().unwrap();
+	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
 	assert_eq!(serialized, result);
 
@@ -464,7 +458,7 @@ fn should_return_runtime_version() {
 
 #[test]
 fn should_notify_on_runtime_version_initially() {
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -478,14 +472,12 @@ fn should_notify_on_runtime_version_initially() {
 		api.subscribe_runtime_version(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
+		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
 	}
 
 	// assert initial version sent.
-	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
+	executor::block_on((&mut transport).take(1).collect::<Vec<_>>());
+	assert!(executor::block_on(transport.next()).is_none());
 }
 
 #[test]
