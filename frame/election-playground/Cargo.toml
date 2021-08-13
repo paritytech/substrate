@@ -1,0 +1,28 @@
+[package]
+name = "pallet-election-playground"
+version = "0.1.0"
+edition = "2018"
+
+
+[dev-dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+log = { version = "0.4.14" }
+parking_lot = "0.11.0"
+
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
+sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+
+frame-system = { version = "4.0.0-dev", path = "../system" }
+frame-support = { version = "4.0.0-dev", path = "../support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-staking = { version = "4.0.0-dev", path = "../staking" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+pallet-session = { version = "4.0.0-dev", path = "../session" }
+pallet-election-provider-multi-block = { version = "4.0.0-dev", path = "../election-provider-multi-block" }

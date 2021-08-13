@@ -65,6 +65,10 @@ pub trait Config {
 	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	/// Maximum targets to get from the data provider.
+	type TargetsPageSize: Get<Option<usize>>;
+	/// Maximum voters to get from the data provider.
+	type VoterPageSize: Get<Option<usize>>;
 }
 
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
@@ -72,8 +76,10 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
-		let (voters, _) = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
-		let (targets, _) = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
+		let (voters, _) = Self::DataProvider::voters(T::TargetsPageSize::get(), 0)
+			.map_err(Error::DataProvider)?;
+		let (targets, _) =
+			Self::DataProvider::targets(T::VoterPageSize::get(), 0).map_err(Error::DataProvider)?;
 		let (desired_targets, _) =
 			Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
@@ -114,13 +120,15 @@ mod tests {
 		type BlockNumber = BlockNumber;
 		type Accuracy = Perbill;
 		type DataProvider = mock_data_provider::DataProvider;
+		type TargetsPageSize = ();
+		type VoterPageSize = ();
 	}
 
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
 		use super::*;
-		use crate::data_provider;
+		use crate::{data_provider, PageIndex};
 
 		pub struct DataProvider;
 
@@ -128,11 +136,15 @@ mod tests {
 			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
 			fn voters(
 				_: Option<usize>,
+				_: PageIndex,
 			) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
 				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], 0))
 			}
 
-			fn targets(_: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+			fn targets(
+				_: Option<usize>,
+				_: PageIndex,
+			) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 				Ok((vec![10, 20, 30], 0))
 			}
 

@@ -262,6 +262,8 @@ impl onchain::Config for Test {
 	type BlockWeights = BlockWeights;
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+	type TargetsPageSize = ();
+	type VoterPageSize = ();
 }
 
 impl crate::pallet::pallet::Config for Test {

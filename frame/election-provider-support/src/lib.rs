@@ -179,6 +179,8 @@ pub mod data_provider {
 	pub type Result<T> = sp_std::result::Result<T, &'static str>;
 }
 
+pub type PageIndex = u8;
+
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// Maximum number of votes per voter that this data provider is providing.
@@ -186,24 +188,29 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
+	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
 	///
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)>;
+	// TODO: remove the weight from the interface.
+	fn targets(
+		maybe_page_size: Option<usize>,
+		remaining_pages: PageIndex,
+	) -> data_provider::Result<(Vec<AccountId>, Weight)>;
 
 	/// All possible voters for the election.
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
+	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
 	///
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
 	fn voters(
-		maybe_max_len: Option<usize>,
+		maybe_page_size: Option<usize>,
+		remaining_pages: PageIndex,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)>;
 
 	/// The number of targets to elect.
@@ -249,11 +256,12 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+	fn targets(_: Option<usize>, _: PageIndex) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		Ok(Default::default())
 	}
 	fn voters(
-		_maybe_max_len: Option<usize>,
+		_: Option<usize>,
+		_: PageIndex,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
 		Ok(Default::default())
 	}
@@ -306,10 +314,14 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 /// Something that implements this trait will do a best-effort sort over ids, and thus can be
 /// used on the implementing side of [`ElectionDataProvider`].
 pub trait SortedListProvider<AccountId> {
-	type Error;
+	type Error: sp_std::fmt::Debug;
 
-	/// Returns iterator over the list, which can have `take` called on it.
+	/// Returns an iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
+	/// Returns an iterator over the list, starting from the given voter.
+	///
+	/// May return an error if `start` is invalid.
+	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error>;
 	/// get the current count of ids in the list.
 	fn count() -> u32;
 	/// Return true if the list already contains `id`.

@@ -1922,8 +1922,8 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			assert_eq!(
 				&supports,
 				&vec![
-					(21, Support { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
-					(31, Support { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] })
+					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
+					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
 				],
 			);
 		});
@@ -1966,10 +1966,10 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
 			assert_eq!(
-				&supports,
-				&vec![
+				supports,
+				vec![
 					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
-					(21, Support { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] })
+					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
 				],
 			);
 		});
@@ -3864,7 +3864,7 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None, 0)
 				.unwrap()
 				.0
 				.into_iter()
@@ -3878,7 +3878,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None, 0)
 					.unwrap()
 					.0
 					.iter()
@@ -3894,7 +3894,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None, 0)
 					.unwrap()
 					.0
 					.iter()
@@ -3907,7 +3907,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None, 0)
 					.unwrap()
 					.0
 					.iter()
@@ -3929,17 +3929,17 @@ mod election_data_provider {
 				5
 			);
 
-			// if limits is less..
-			assert_eq!(Staking::voters(Some(1)).unwrap().0.len(), 1);
+			// if limits is less, but enough to get validators and self votes.
+			assert_eq!(Staking::voters(Some(2), 0).unwrap().0.len(), 2);
 
 			// if limit is equal..
-			assert_eq!(Staking::voters(Some(5)).unwrap().0.len(), 5);
+			assert_eq!(Staking::voters(Some(5), 0).unwrap().0.len(), 5);
 
 			// if limit is more.
-			assert_eq!(Staking::voters(Some(55)).unwrap().0.len(), 5);
+			assert_eq!(Staking::voters(Some(55), 0).unwrap().0.len(), 5);
 
 			// if target limit is less, then we return an error.
-			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+			assert_eq!(Staking::targets(Some(1), 0).unwrap_err(), "Target snapshot too big");
 		});
 	}
 

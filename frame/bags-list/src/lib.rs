@@ -231,6 +231,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Box::new(List::<T>::iter().map(|n| n.id().clone()))
 	}
 
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		let iter = List::<T>::iter_from(start)?;
+		Ok(Box::new(iter.map(|n| n.id().clone())))
+	}
+
 	fn count() -> u32 {
 		CounterForListNodes::<T>::get()
 	}

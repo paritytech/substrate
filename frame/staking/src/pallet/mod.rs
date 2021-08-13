@@ -447,6 +447,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
+	/// Last nominator that was being iterated. This is only Some when we're in the middle of giving
+	/// a snapshot out.
+	#[pallet::storage]
+	pub(crate) type LastIteratedNominator<T: Config> =
+		StorageValue<_, Option<(T::AccountId, VoterType)>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,

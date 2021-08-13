@@ -40,6 +40,8 @@ use sp_std::{
 pub enum Error {
 	/// A duplicate id has been detected.
 	Duplicate,
+	/// Node not found.
+	NodeNotFound,
 }
 
 #[cfg(test)]
@@ -222,6 +224,31 @@ impl<T: Config> List<T> {
 		};
 
 		iter.filter_map(Bag::get).flat_map(|bag| bag.iter())
+	}
+
+	/// Same as `iter`, but we start from a specific node.
+	pub(crate) fn iter_from(start: &T::AccountId) -> Result<impl Iterator<Item = Node<T>>, Error> {
+		// We chain two iterators:
+		// 1. from the given `start` till the end of the bag
+		// 2. all the bags that come after `start`'s bag.
+
+		let start_node = Node::get(start).ok_or(Error::NodeNotFound)?;
+		let start_node_upper = start_node.bag_upper;
+		let start_bag = sp_std::iter::successors(start_node.next(), |prev| prev.next());
+
+		let thresholds = T::BagThresholds::get();
+		// TODO: what if the partial bag is the implicit last one.
+		// TODO: what if the partial bag is the smallest bag.
+		let idx = thresholds.partition_point(|&threshold| start_node_upper > threshold);
+		let leftover_bags = thresholds
+			.into_iter()
+			.take(idx)
+			.copied()
+			.rev()
+			.filter_map(Bag::get)
+			.flat_map(|bag| bag.iter());
+
+		Ok(start_bag.chain(leftover_bags))
 	}
 
 	/// Insert several ids into the appropriate bags in the list. Continues with insertions

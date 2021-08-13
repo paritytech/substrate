@@ -602,8 +602,9 @@ benchmarks! {
 		});
 
 		let num_voters = (v + n) as usize;
+		let slashing_spans = SlashingSpans::<T>::iter().collect::<BTreeMap<_, _>>();
 	}: {
-		let voters = <Staking<T>>::get_npos_voters(None);
+		let voters = <Staking<T>>::get_npos_voters_init(None, 0, &slashing_spans);
 		assert_eq!(voters.len(), num_voters);
 	}
 

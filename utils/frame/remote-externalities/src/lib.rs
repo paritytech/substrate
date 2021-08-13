@@ -281,7 +281,7 @@ impl<B: BlockT> Builder<B> {
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
-		info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
+		debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyPair> = vec![];
 		let client = self.as_online().rpc_client();

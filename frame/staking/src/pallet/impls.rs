@@ -18,7 +18,7 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
+	data_provider, ElectionDataProvider, ElectionProvider, PageIndex, SortedListProvider, Supports,
 	VoteWeight, VoteWeightProvider,
 };
 use frame_support::{
@@ -641,6 +641,42 @@ impl<T: Config> Pallet<T> {
 		SlashRewardFraction::<T>::put(fraction);
 	}
 
+	pub fn get_npos_voters_continue(
+		maybe_max_len: Option<usize>,
+		remaining: PageIndex,
+		last: T::AccountId,
+		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
+	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+		let to_take = maybe_max_len.unwrap_or(usize::MAX);
+
+		let mut round_voters = vec![];
+		for nominator in T::SortedListProvider::iter_from(&last).unwrap().take(to_take) {
+			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
+				<Nominators<T>>::get(&nominator)
+			{
+				targets.retain(|stash| {
+					slashing_spans
+						.get(stash)
+						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
+				});
+				if !targets.len().is_zero() {
+					round_voters.push((nominator.clone(), Self::weight_of(&nominator), targets))
+				}
+			} else {
+				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
+			}
+		}
+
+		match remaining {
+			0 => LastIteratedNominator::<T>::kill(),
+			_ => {
+				LastIteratedNominator::<T>::put(round_voters.last().map(|(x, _, _)| x).cloned());
+			},
+		};
+
+		round_voters
+	}
+
 	/// Get all of the voters that are eligible for the npos election.
 	///
 	/// `voter_count` imposes a cap on the number of voters returned; care should be taken to ensure
@@ -652,8 +688,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
 	/// auto-chilled.
-	pub fn get_npos_voters(
+	pub fn get_npos_voters_init(
 		maybe_max_len: Option<usize>,
+		remaining: PageIndex,
+		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let nominator_count = CounterForNominators::<T>::get() as usize;
 		let validator_count = CounterForValidators::<T>::get() as usize;
@@ -663,6 +701,9 @@ impl<T: Config> Pallet<T> {
 		drop(all_voter_count);
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+
+		// TODO: I don't want to deal with this case for now.
+		assert!(maybe_max_len.map_or(true, |m| validator_count < m));
 
 		// first, grab all validators, capped by the maximum allowed length.
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
@@ -674,7 +715,7 @@ impl<T: Config> Pallet<T> {
 
 		// .. and grab whatever we have left from nominators.
 		let nominators_quota = max_allowed_len.saturating_sub(validator_count);
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		let mut all_nominators = Vec::with_capacity(nominators_quota);
 		for nominator in T::SortedListProvider::iter().take(nominators_quota) {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
@@ -685,22 +726,33 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets))
+					all_nominators.push((nominator.clone(), Self::weight_of(&nominator), targets))
 				}
 			} else {
 				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
 			}
 		}
 
-		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == all_voters.len());
+		match remaining {
+			0 => LastIteratedNominator::<T>::kill(),
+			_ => {
+				LastIteratedNominator::<T>::put(all_nominators.last().map(|(x, _, _)| x).cloned());
+			},
+		};
+
+		// all_nominators should have never re-allocated
+		debug_assert!(all_nominators.capacity() >= all_nominators.len());
+		all_voters.extend(all_nominators);
+		// all_voters should have never re-allocated.
+		debug_assert_eq!(all_voters.capacity(), all_voters.len());
 
 		log!(
-			info,
-			"generated {} npos voters, {} from validators and {} nominators",
+			debug,
+			"generated {} npos voters, {} from validators and {} nominators, leftover calls: {}",
 			all_voters.len(),
 			validator_count,
-			nominators_quota
+			nominators_quota,
+			remaining,
 		);
 		all_voters
 	}
@@ -800,10 +852,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	fn voters(
 		maybe_max_len: Option<usize>,
+		remaining: PageIndex,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
-		let nominator_count = CounterForNominators::<T>::get();
-		let validator_count = CounterForValidators::<T>::get();
-
 		// check a few counters one last time...
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
@@ -813,17 +863,22 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 			"voter_count must be accurate",
 		);
 
-		let slashing_span_count = <SlashingSpans<T>>::iter().count();
-		let weight = T::WeightInfo::get_npos_voters(
-			nominator_count,
-			validator_count,
-			slashing_span_count as u32,
-		);
-
-		Ok((Self::get_npos_voters(maybe_max_len), weight))
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		if let Some(last) = LastIteratedNominator::<T>::get() {
+			Ok((Self::get_npos_voters_continue(maybe_max_len, remaining, last, &slashing_spans), 0))
+		} else {
+			Ok((Self::get_npos_voters_init(maybe_max_len, remaining, &slashing_spans), 0))
+		}
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+	fn targets(
+		maybe_max_len: Option<usize>,
+		remaining: PageIndex,
+	) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		if remaining > 0u8 {
+			return Err("Targets must only have page size 0.")
+		}
+
 		let target_count = CounterForValidators::<T>::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
@@ -1218,10 +1273,18 @@ pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
 
-	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
+
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		Ok(Box::new(
+			Nominators::<T>::iter_from(Nominators::<T>::hashed_key_for(start)).map(|(n, _)| n),
+		))
+	}
+
 	fn count() -> u32 {
 		CounterForNominators::<T>::get()
 	}
