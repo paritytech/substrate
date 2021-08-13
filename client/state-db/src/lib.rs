@@ -25,15 +25,17 @@
 //! There's a limit of 32 blocks that may have the same block number in the canonicalization window.
 //!
 //! Canonicalization function selects one root from the top of the tree and discards all other roots
-//! and their subtrees. Upon canonicalization all trie nodes that were inserted in the block are added to
-//! the backing DB and block tracking is moved to the pruning window, where no forks are allowed.
+//! and their subtrees. Upon canonicalization all trie nodes that were inserted in the block are
+//! added to the backing DB and block tracking is moved to the pruning window, where no forks are
+//! allowed.
 //!
 //! # Canonicalization vs Finality
-//! Database engine uses a notion of canonicality, rather then finality. A canonical block may not be yet finalized
-//! from the perspective of the consensus engine, but it still can't be reverted in the database. Most of the time
-//! during normal operation last canonical block is the same as last finalized. However if finality stall for a
-//! long duration for some reason, there's only a certain number of blocks that can fit in the non-canonical overlay,
-//! so canonicalization of an unfinalized block may be forced.
+//! Database engine uses a notion of canonicality, rather then finality. A canonical block may not
+//! be yet finalized from the perspective of the consensus engine, but it still can't be reverted in
+//! the database. Most of the time during normal operation last canonical block is the same as last
+//! finalized. However if finality stall for a long duration for some reason, there's only a certain
+//! number of blocks that can fit in the non-canonical overlay, so canonicalization of an
+//! unfinalized block may be forced.
 //!
 //! # Pruning.
 //! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until
@@ -177,7 +179,8 @@ pub struct CommitSet<H: Hash> {
 /// Pruning constraints. If none are specified pruning is
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct Constraints {
-	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical states.
+	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical
+	/// states.
 	pub max_blocks: Option<u32>,
 	/// Maximum memory in the pruning overlay.
 	pub max_mem: Option<usize>,

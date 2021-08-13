@@ -222,7 +222,8 @@ pub type ValidatorId<T> = <<T as Config>::ValidatorSet as ValidatorSet<
 	<T as frame_system::Config>::AccountId,
 >>::ValidatorId;
 
-/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of
+/// `ValidatorId`.
 pub type IdentificationTuple<T> = (
 	ValidatorId<T>,
 	<<T as Config>::ValidatorSet as ValidatorSetWithIdentification<
@@ -375,8 +376,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len)
-		///   and E is length of `heartbeat.network_state.external_address`
+		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
+		///   length of `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
 		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
@@ -447,7 +448,8 @@ pub mod pallet {
 		}
 	}
 
-	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
+	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is
+	/// incorrect.
 	pub(crate) const INVALID_VALIDATORS_LEN: u8 = 10;
 
 	#[pallet::validate_unsigned]

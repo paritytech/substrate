@@ -110,7 +110,7 @@ impl<M: Metadata + Sync, CM: CustomMiddleware<M>> RequestMiddleware<M> for RpcMi
 	fn on_request<F, X>(&self, request: Request, meta: M, next: F) -> Either<FutureResponse, X>
 	where
 		F: Fn(Request, M) -> X + Send + Sync,
-		X: Future<Item = Option<Response>, Error = ()> + Send + 'static,
+		X: Future<Output = Option<Response>> + Send + 'static,
 	{
 		if let Some(ref rpc_calls) = self.metrics.rpc_calls {
 			rpc_calls.with_label_values(&[self.transport_label.as_str()]).inc();
@@ -122,7 +122,7 @@ impl<M: Metadata + Sync, CM: CustomMiddleware<M>> RequestMiddleware<M> for RpcMi
 	fn on_call<F, X>(&self, call: Call, meta: M, next: F) -> Either<Self::CallFuture, X>
 	where
 		F: Fn(Call, M) -> X + Send + Sync,
-		X: Future<Item = Option<Output>, Error = ()> + Send + 'static,
+		X: Future<Output = Option<Output>> + Send + 'static,
 	{
 		self.custom_middleware.on_call(call, meta, next)
 	}

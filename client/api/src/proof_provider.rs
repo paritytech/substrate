@@ -55,11 +55,11 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<(Block::Header, StorageProof)>;
 
-	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
-	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
-	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
-	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
-	/// of this block.
+	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given
+	/// blocks range. `min` is the hash of the first block, which changes trie root is known to the
+	/// requester - when we're using changes tries from ascendants of this block, we should provide
+	/// proofs for changes tries roots `max` is the hash of the last block known to the requester -
+	/// we can't use changes tries from descendants of this block.
 	/// Works only for runtimes that are supporting changes tries.
 	fn key_changes_proof(
 		&self,
@@ -72,7 +72,8 @@ pub trait ProofProvider<Block: BlockT> {
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_key` exclusively,
-	/// building proofs until size limit is reached. Returns combined proof and the number of collected keys.
+	/// building proofs until size limit is reached. Returns combined proof and the number of
+	/// collected keys.
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,

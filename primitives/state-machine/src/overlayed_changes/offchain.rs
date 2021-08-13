@@ -21,7 +21,8 @@ use super::changeset::OverlayedMap;
 use sp_core::offchain::OffchainOverlayedChange;
 use sp_std::prelude::Vec;
 
-/// In-memory storage for offchain workers recoding changes for the actual offchain storage implementation.
+/// In-memory storage for offchain workers recoding changes for the actual offchain storage
+/// implementation.
 #[derive(Debug, Clone, Default)]
 pub struct OffchainOverlayedChanges(OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>);
 

@@ -253,7 +253,6 @@ where
 				)
 				.set_parent_hash(at_hash);
 				// TODO: https://github.com/paritytech/substrate/issues/4455
-				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
 					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
