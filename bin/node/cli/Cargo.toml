@@ -41,10 +41,9 @@ hex-literal = "0.3.1"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
-parking_lot = "0.11.1"
 
 # primitives
-sp-authority-discovery = { version = "4.0.0-dev",  path = "../../../primitives/authority-discovery" }
+sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
@@ -54,7 +53,6 @@ sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
@@ -70,28 +68,17 @@ sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 sc-consensus-uncles = { version = "0.10.0-dev", path = "../../../client/consensus/uncles" }
 grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
-sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
-sc-tracing = { version = "4.0.0-dev", path = "../../../client/tracing" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
-sc-authority-discovery = { version = "0.10.0-dev",  path = "../../../client/authority-discovery" }
+sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 
 # frame dependencies
-pallet-indices = { version = "4.0.0-dev", path = "../../../frame/indices" }
-pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../frame/timestamp" }
-pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
-pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { version = "4.0.0-dev", path = "../../../frame/authority-discovery" }
-pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
-pallet-grandpa = { version = "4.0.0-dev", path = "../../../frame/grandpa" }
 
 # node-specific dependencies
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
@@ -108,14 +95,24 @@ try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../ut
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.73", optional = true }
 wasm-bindgen-futures = { version = "0.4.18", optional = true }
-browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev"}
-libp2p-wasm-ext = { version = "0.28", features = ["websocket"], optional = true }
+browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev" }
+libp2p-wasm-ext = { version = "0.28", features = [
+	"websocket",
+], optional = true }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
-node-executor = { version = "3.0.0-dev", path = "../executor", features = [ "wasmtime" ] }
-sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
-sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/trie", features = ["memory-tracker"] }
+node-executor = { version = "3.0.0-dev", path = "../executor", features = [
+	"wasmtime",
+] }
+sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [
+	"wasmtime",
+] }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
+	"wasmtime",
+] }
+sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/trie", features = [
+	"memory-tracker",
+] }
 
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
@@ -148,7 +145,7 @@ path = "../../../client/cli"
 optional = true
 
 [features]
-default = [ "cli" ]
+default = ["cli"]
 browser = [
 	"browser-utils",
 	"wasm-bindgen",
@@ -172,7 +169,4 @@ runtime-benchmarks = [
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = [
-	"node-runtime/try-runtime",
-	"try-runtime-cli",
-]
+try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]

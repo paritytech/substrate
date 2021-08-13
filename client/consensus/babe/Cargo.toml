@@ -14,7 +14,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = [
+    "derive",
+] }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
@@ -37,14 +39,11 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
-sc-consensus-uncles = { version = "0.10.0-dev", path = "../uncles" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../../primitives/utils" }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0" }
 futures = "0.3.9"
-futures-timer = "3.0.1"
 parking_lot = "0.11.1"
 log = "0.4.8"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
@@ -56,12 +55,9 @@ async-trait = "0.1.50"
 
 [dev-dependencies]
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
-sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 rand_chacha = "0.2.2"

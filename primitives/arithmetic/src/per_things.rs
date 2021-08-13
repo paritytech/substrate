@@ -392,18 +392,20 @@ where
 		// Already rounded down
 		Rounding::Down => {},
 		// Round up if the fractional part of the result is non-zero.
-		Rounding::Up =>
+		Rounding::Up => {
 			if rem_mul_upper % denom_upper > 0.into() {
 				// `rem * numer / denom` is less than `numer`, so this will not overflow.
 				rem_mul_div_inner += 1.into();
-			},
+			}
+		},
 		// Round up if the fractional part of the result is greater than a half. An exact half is
 		// rounded down.
-		Rounding::Nearest =>
+		Rounding::Nearest => {
 			if rem_mul_upper % denom_upper > denom_upper / 2.into() {
 				// `rem * numer / denom` is less than `numer`, so this will not overflow.
 				rem_mul_div_inner += 1.into();
-			},
+			}
+		},
 	}
 	rem_mul_div_inner.into()
 }

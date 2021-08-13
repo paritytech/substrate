@@ -30,17 +30,13 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
-sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
-sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.11.1"
 lazy_static = { version = "1.4.0", optional = true }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 
 [dev-dependencies]
@@ -50,7 +46,6 @@ sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
-sc-cli = { version = "0.10.0-dev", path = "../cli" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 
 [features]

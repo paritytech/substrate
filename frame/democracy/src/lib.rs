@@ -1427,7 +1427,7 @@ impl<T: Config> Pallet<T> {
 						}
 						ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 					},
-					Some(ReferendumInfo::Finished { end, approved }) =>
+					Some(ReferendumInfo::Finished { end, approved }) => {
 						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
 							let unlock_at = end + T::EnactmentPeriod::get() * lock_periods.into();
 							let now = frame_system::Pallet::<T>::block_number();
@@ -1438,7 +1438,8 @@ impl<T: Config> Pallet<T> {
 								);
 								prior.accumulate(unlock_at, balance)
 							}
-						},
+						}
+					},
 					None => {}, // Referendum was cancelled.
 				}
 				votes.remove(i);

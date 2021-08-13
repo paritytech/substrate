@@ -13,11 +13,12 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio02"] }
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = [
+    "tokio02",
+] }
 jsonrpsee-proc-macros = "0.3.0"
 
-hex = "0.4.0"
-env_logger = "0.9.0"
+env_logger = "0.9"
 log = "0.4.11"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde_json = "1.0"
@@ -29,8 +30,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
-pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev"}
-frame-support = { path = "../../../frame/support", version = "4.0.0-dev"}
+pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev" }
 
 [features]
 remote-test = []
