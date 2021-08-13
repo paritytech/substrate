@@ -1647,7 +1647,7 @@ fn self_destruct_works() {
 		let mut events = System::events();
 		let balance_after_rent = 99_000;
 
-		// Tha actual figure will bounce about with wasm compiler updates as the rent depends on
+		// The actual figure will bounce about with wasm compiler updates as the rent depends on
 		// the compiled wasm size, so we replace it with a fixed value
 		// as rent isn't what we're testing for in this test.
 		let mut actual_balance_after_rent = 99_000;
