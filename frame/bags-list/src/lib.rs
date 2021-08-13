@@ -266,17 +266,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn is_in_bag(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
-		use frame_support::traits::Get;
-		let info = T::BagThresholds::get()
-			.into_iter()
-			.chain(std::iter::once(&VoteWeight::MAX)) // assumes this is not an explicit threshold
-			.filter_map(|t| {
-				list::Bag::<T>::get(*t)
-					.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
-			})
-			.collect::<Vec<_>>();
-		println!("bags info {:#?}", info);
-
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
 	}
 
