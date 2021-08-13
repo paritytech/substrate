@@ -23,13 +23,18 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{ChangeMembers, Contains, Get, InitializeMembers, SortedMembers};
+use frame_support::traits::{
+	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion,
+};
 
 pub mod migrations;
 pub mod weights;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -39,6 +44,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
