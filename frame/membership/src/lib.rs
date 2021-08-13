@@ -26,6 +26,7 @@
 use frame_support::traits::{
 	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion,
 };
+use sp_std::prelude::*;
 
 pub mod migrations;
 pub mod weights;
