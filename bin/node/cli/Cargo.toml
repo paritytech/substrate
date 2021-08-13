@@ -1,6 +1,6 @@
 [package]
 name = "node-cli"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
@@ -81,10 +81,10 @@ pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/tra
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
 # node-specific dependencies
-node-runtime = { version = "4.0.0-dev", path = "../runtime" }
-node-rpc = { version = "4.0.0-dev", path = "../rpc" }
+node-runtime = { version = "3.0.0-dev", path = "../runtime" }
+node-rpc = { version = "3.0.0-dev", path = "../rpc" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
-node-executor = { version = "4.0.0-dev", path = "../executor" }
+node-executor = { version = "3.0.0-dev", path = "../executor" }
 
 # CLI-specific dependencies
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli" }
@@ -101,7 +101,7 @@ libp2p-wasm-ext = { version = "0.28", features = [
 ], optional = true }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
-node-executor = { version = "4.0.0-dev", path = "../executor", features = [
+node-executor = { version = "3.0.0-dev", path = "../executor", features = [
 	"wasmtime",
 ] }
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [

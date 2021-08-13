@@ -4177,7 +4177,7 @@ dependencies = [
 
 [[package]]
 name = "node-browser-testing"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "jsonrpc-core",
  "node-cli",
@@ -4191,7 +4191,7 @@ dependencies = [
 
 [[package]]
 name = "node-cli"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "assert_cmd",
  "async-std",
@@ -4262,7 +4262,7 @@ dependencies = [
 
 [[package]]
 name = "node-executor"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "criterion",
  "frame-benchmarking",
@@ -4318,7 +4318,7 @@ dependencies = [
 
 [[package]]
 name = "node-rpc"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "jsonrpc-core",
  "node-primitives",
@@ -4360,7 +4360,7 @@ dependencies = [
 
 [[package]]
 name = "node-runtime"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-election-provider-support",
@@ -4511,7 +4511,7 @@ dependencies = [
 
 [[package]]
 name = "node-testing"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "frame-system",
  "fs_extra",
@@ -5051,7 +5051,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-example-parallel"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",

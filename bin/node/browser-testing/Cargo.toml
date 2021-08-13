@@ -1,6 +1,6 @@
 [package]
 name = "node-browser-testing"
-version = "4.0.0-dev"
+version = "3.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Tests for the in-browser light client."
 edition = "2018"
@@ -14,7 +14,9 @@ wasm-bindgen = { version = "=0.2.73", features = ["serde-serialize"] }
 wasm-bindgen-futures = "0.4.18"
 wasm-bindgen-test = "0.3.18"
 
-node-cli = { path = "../cli", default-features = false, features = ["browser"], version = "4.0.0-dev"}
+node-cli = { path = "../cli", default-features = false, features = [
+    "browser",
+], version = "3.0.0-dev" }
 
 # This is a HACK to make browser tests pass.
 # enables [`instant/wasm_bindgen`]
