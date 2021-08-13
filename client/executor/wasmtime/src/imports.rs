@@ -181,7 +181,8 @@ fn call_static<'a>(
 			therefore host_ctx cannot be None;
 			qed
 			",
-			).clone();
+			)
+			.clone();
 
 		let mut host_ctx = host_state.materialize(&mut caller);
 

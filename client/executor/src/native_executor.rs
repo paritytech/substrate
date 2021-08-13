@@ -288,7 +288,7 @@ impl CodeExecutor for WasmExecutor {
 			runtime_code,
 			ext,
 			false,
-			|module, instance, _onchain_version, mut ext| {
+			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
 					instance.call_export(method, data).map(NativeOrEncoded::Encoded)
