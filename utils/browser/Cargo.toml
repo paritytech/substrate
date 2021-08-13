@@ -13,8 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = { version = "0.3", features = ["compat"] }
-futures01 = { package = "futures", version = "0.1.29" }
+futures = "0.3.16"
 log = "0.4.8"
 libp2p-wasm-ext = { version = "0.28.1", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
