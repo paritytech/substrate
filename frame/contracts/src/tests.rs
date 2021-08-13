@@ -2615,7 +2615,6 @@ fn reinstrument_does_charge() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn debug_message_works() {
 	let (wasm, code_hash) = compile_module::<Test>("debug_message_works").unwrap();
 
@@ -2638,7 +2637,6 @@ fn debug_message_works() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn debug_message_logging_disabled() {
 	let (wasm, code_hash) = compile_module::<Test>("debug_message_logging_disabled").unwrap();
 
@@ -2663,7 +2661,6 @@ fn debug_message_logging_disabled() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn debug_message_invalid_utf8() {
 	let (wasm, code_hash) = compile_module::<Test>("debug_message_invalid_utf8").unwrap();
 

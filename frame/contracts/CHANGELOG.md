@@ -38,9 +38,10 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Changed
 
-- Replaced `seal_println` with the **unstable** `seal_debug_message` API which allows
-output to an RPC client.
+- Replaced `seal_println` with the `seal_debug_message` API which allows outputting debug
+messages to the console and RPC clients.
 [#8773](https://github.com/paritytech/substrate/pull/8773)
+[#9550](https://github.com/paritytech/substrate/pull/9550)
 
 - Make storage and fields of `Schedule` private to the crate.
 [#8359](https://github.com/paritytech/substrate/pull/8359)

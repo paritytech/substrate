@@ -140,8 +140,8 @@ pub mod pallet {
 		/// further constraints on what uncles can be included, other than their ancestry.
 		///
 		/// For PoW, as long as the seals are checked, there is no need to use anything
-		/// but the `VerifySeal` implementation as the filter. This is because the cost of making many equivocating
-		/// uncles is high.
+		/// but the `VerifySeal` implementation as the filter. This is because the cost of making
+		/// many equivocating uncles is high.
 		///
 		/// For PoS, there is no such limitation, so a further constraint must be imposed
 		/// beyond a seal check in order to prevent an arbitrary number of

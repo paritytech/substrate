@@ -25,10 +25,9 @@ test-helpers = []
 
 [dependencies]
 thiserror = "1.0.21"
-futures01 = { package = "futures", version = "0.1.29" }
-futures = { version = "0.3.4", features = ["compat"] }
-jsonrpc-pubsub = "15.1"
-jsonrpc-core = "15.1"
+futures = "0.3.16"
+jsonrpc-pubsub = "18.0"
+jsonrpc-core = "18.0"
 rand = "0.7.3"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"

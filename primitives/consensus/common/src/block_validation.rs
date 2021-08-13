@@ -60,9 +60,9 @@ pub trait BlockAnnounceValidator<B: Block> {
 	/// Returning [`Validation::Failure`] will lead to a decrease of the
 	/// peers reputation as it sent us invalid data.
 	///
-	/// The returned future should only resolve to an error iff there was an internal error validating
-	/// the block announcement. If the block announcement itself is invalid, this should *always*
-	/// return [`Validation::Failure`].
+	/// The returned future should only resolve to an error iff there was an internal error
+	/// validating the block announcement. If the block announcement itself is invalid, this should
+	/// *always* return [`Validation::Failure`].
 	fn validate(
 		&mut self,
 		header: &B::Header,

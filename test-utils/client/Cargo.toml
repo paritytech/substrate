@@ -13,8 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-futures = "0.3.9"
-futures01 = { package = "futures", version = "0.1.29" }
+futures = "0.3.16"
 hash-db = "0.15.2"
 hex = "0.4"
 serde = "1.0.126"

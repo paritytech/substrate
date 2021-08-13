@@ -188,8 +188,8 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 	}
 
 	/// Verifies the warp sync proof starting at the given set id and with the given authorities.
-	/// Verification stops when either the proof is exhausted or finality for the target header can be proven.
-	/// If the proof is valid the new set id and authorities is returned.
+	/// Verification stops when either the proof is exhausted or finality for the target header can
+	/// be proven. If the proof is valid the new set id and authorities is returned.
 	fn verify(
 		&self,
 		set_id: SetId,

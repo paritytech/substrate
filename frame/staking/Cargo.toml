@@ -47,7 +47,7 @@ num-format = { version = "0.4.0", optional = true }
 sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections", features = ["mocks"] }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/reward-curve" }

@@ -573,9 +573,9 @@ where
 
 			if let Some((root, is_empty, _)) = root {
 				let root = root.encode();
-				// We store update in the overlay in order to be able to use 'self.storage_transaction'
-				// cache. This is brittle as it rely on Ext only querying the trie backend for
-				// storage root.
+				// We store update in the overlay in order to be able to use
+				// 'self.storage_transaction' cache. This is brittle as it rely on Ext only querying
+				// the trie backend for storage root.
 				// A better design would be to manage 'child_storage_transaction' in a
 				// similar way as 'storage_transaction' but for each child trie.
 				if is_empty {

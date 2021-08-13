@@ -173,8 +173,9 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
 		}
 
-		// Track the number of payout ops to nominators. Note: `WeightInfo::payout_stakers_alive_staked`
-		// always assumes at least a validator is paid out, so we do not need to count their payout op.
+		// Track the number of payout ops to nominators. Note:
+		// `WeightInfo::payout_stakers_alive_staked` always assumes at least a validator is paid
+		// out, so we do not need to count their payout op.
 		let mut nominator_payout_count: u32 = 0;
 
 		// Lets now calculate how this is split to the nominators.
@@ -316,6 +317,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
 	/// * update `BondedEras` and apply slashes.

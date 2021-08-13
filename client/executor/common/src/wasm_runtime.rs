@@ -98,7 +98,8 @@ pub trait WasmInstance: Send {
 	///
 	/// This is meant to be the starting address of the memory mapped area for the linear memory.
 	///
-	/// This function is intended only for a specific test that measures physical memory consumption.
+	/// This function is intended only for a specific test that measures physical memory
+	/// consumption.
 	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
 		None
 	}

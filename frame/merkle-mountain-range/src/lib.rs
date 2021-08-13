@@ -96,14 +96,14 @@ pub mod pallet {
 		/// and some of the inner mmr nodes might be pruned from on-chain storage.
 		/// The latter will contain all the entries in their full form.
 		///
-		/// Each node is stored in the Off-chain DB under key derived from the [`Self::INDEXING_PREFIX`] and
-		/// it's in-tree index (MMR position).
+		/// Each node is stored in the Off-chain DB under key derived from the
+		/// [`Self::INDEXING_PREFIX`] and it's in-tree index (MMR position).
 		const INDEXING_PREFIX: &'static [u8];
 
 		/// A hasher type for MMR.
 		///
-		/// To construct trie nodes that result in merging (bagging) two peaks, depending on the node
-		/// kind we take either:
+		/// To construct trie nodes that result in merging (bagging) two peaks, depending on the
+		/// node kind we take either:
 		/// - The node (hash) itself if it's an inner node.
 		/// - The hash of SCALE-encoding of the leaf data if it's a leaf node.
 		///
@@ -128,22 +128,22 @@ pub mod pallet {
 
 		/// Data stored in the leaf nodes.
 		///
-		/// The [LeafData](primitives::LeafDataProvider) is responsible for returning the entire leaf
-		/// data that will be inserted to the MMR.
+		/// The [LeafData](primitives::LeafDataProvider) is responsible for returning the entire
+		/// leaf data that will be inserted to the MMR.
 		/// [LeafDataProvider](primitives::LeafDataProvider)s can be composed into tuples to put
-		/// multiple elements into the tree. In such a case it might be worth using [primitives::Compact]
-		/// to make MMR proof for one element of the tuple leaner.
+		/// multiple elements into the tree. In such a case it might be worth using
+		/// [primitives::Compact] to make MMR proof for one element of the tuple leaner.
 		///
-		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or block
-		/// number as an easiest way to ensure that.
+		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
+		/// block number as an easiest way to ensure that.
 		type LeafData: primitives::LeafDataProvider;
 
 		/// A hook to act on the new MMR root.
 		///
 		/// For some applications it might be beneficial to make the MMR root available externally
-		/// apart from having it in the storage. For instance you might output it in the header digest
-		/// (see [`frame_system::Pallet::deposit_log`]) to make it available for Light Clients.
-		/// Hook complexity should be `O(1)`.
+		/// apart from having it in the storage. For instance you might output it in the header
+		/// digest (see [`frame_system::Pallet::deposit_log`]) to make it available for Light
+		/// Clients. Hook complexity should be `O(1)`.
 		type OnNewRoot: primitives::OnNewRoot<<Self as Config<I>>::Hash>;
 
 		/// Weights for this pallet.
