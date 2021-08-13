@@ -12,13 +12,15 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-hex-literal = "0.3.1"
-tempfile = "3.1.0"
-tokio = "0.1.22"
-futures01 = { package = "futures", version = "0.1.29" }
-log = "0.4.8"
 fdlimit = "0.2.1"
+futures = "0.3.16"
+hex-literal = "0.3.1"
+log = "0.4.8"
 parking_lot = "0.11.1"
+tempfile = "3.1.0"
+tokio = { version = "0.2", features = ["rt-core", "stream", "time"] }
+
+parity-scale-codec = "2.0.0"
 sc-light = { version = "4.0.0-dev", path = "../../light" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
@@ -27,7 +29,6 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../primitives/externa
 sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
 sp-storage = { version = "4.0.0-dev", path = "../../../primitives/storage" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../db" }
-futures = "0.3.16"
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
@@ -41,5 +42,4 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sp-panic-handler = { version = "3.0.0", path = "../../../primitives/panic-handler" }
-parity-scale-codec = "2.0.0"
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
