@@ -213,12 +213,7 @@ impl<T: Config> RebagScenario<T> {
 	}
 
 	fn check_preconditions(&self) {
-		let RebagScenario {
-			dest_stash1,
-			origin_stash2,
-			origin_thresh_as_vote,
-			..
-		} = self;
+		let RebagScenario { dest_stash1, origin_stash2, origin_thresh_as_vote, .. } = self;
 		// destination stash is not in the origin bag.
 		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
 		// origin stash2 is in the origin bag
@@ -261,11 +256,7 @@ impl<T: Config> RebagScenario<T> {
 	// Just checking the origin head is useful for scenarios where we start out with all the nodes
 	// in the same bag, and thus no destination node is actually ever a head.
 	fn check_origin_head_postconditions(&self) {
-		let RebagScenario {
-			origin_stash2,
-			origin_thresh_as_vote,
-			..
-		} = self;
+		let RebagScenario { origin_stash2, origin_thresh_as_vote, .. } = self;
 		assert!(T::SortedListProvider::is_bag_head(&origin_stash2, *origin_thresh_as_vote, true));
 	}
 }
