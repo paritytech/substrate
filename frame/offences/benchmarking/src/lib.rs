@@ -291,23 +291,38 @@ benchmarks! {
 		let slash = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slash(id, BalanceOf::<T>::from(slash_amount)))
 		);
+		let balance_slash = |id| core::iter::once(
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed(id, slash_amount.into()))
+		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
 		);
+		let balance_deposit = |id, amount: u32| core::iter::once(
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(id, amount.into()))
+		);
+		let mut balance_slashes = vec![];
+		let reporter = reporters.first().unwrap();
 		let mut slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
-				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| slash(nom));
-				chill(offender.stash.clone())
-				.chain(slash(offender.stash))
-				.chain(nom_slashes)
+				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
+					balance_slashes.push(balance_slash(nom.clone()));
+					slash(nom).map(Into::into).chain(balance_slash(nom.clone()).map(Into::into))
+				}).collect::<Vec<_>>();
+
+				chill(offender.stash.clone().map(Into::into))
+				.chain(slash(offender.stash).map(Into::into))
+				.chain(balance_slash(offender.stash.clone()).map(Into::into))
+				.chain(nom_slashes.into_iter())
+				.chain(balance_deposit(reporter.clone(), reward_amount / r).map(Into::into))
 			})
 			.collect::<Vec<_>>();
 		let reward_events = reporters.into_iter()
 			.flat_map(|reporter| vec![
 				frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
 				<T as BalancesConfig>::Event::from(
-					pallet_balances::Event::<T>::Endowed(reporter, (reward_amount / r).into())
-				).into()
+					pallet_balances::Event::<T>::Endowed(reporter.clone(), (reward_amount / r).into())
+				).into(),
+				balance_deposit(reporter, reward_amount / r).into(),
 			]);
 
 		// Rewards are applied after first offender and it's nominators.
@@ -318,6 +333,7 @@ benchmarks! {
 		#[cfg(test)]
 		check_events::<T, _>(
 			std::iter::empty()
+				.chain(balance_slashes.into_iter().map(Into::into))
 				.chain(slash_events.into_iter().map(Into::into))
 				.chain(reward_events)
 				.chain(slash_rest.into_iter().map(Into::into))
