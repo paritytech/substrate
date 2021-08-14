@@ -91,8 +91,8 @@ use sp_runtime::{
 
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::EnsureOrigin};
 
-use frame_system::pallet_prelude::*;
 use frame_support::pallet_prelude::*;
+use frame_system::pallet_prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -100,8 +100,6 @@ pub use pallet::*;
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 
 type PositiveImbalanceOf<T> = pallet_treasury::PositiveImbalanceOf<T>;
-
-
 
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
@@ -157,7 +155,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 }
 
 #[frame_support::pallet]
-pub mod pallet{
+pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
@@ -169,34 +167,35 @@ pub mod pallet{
 		/// The amount held on deposit for placing a bounty proposal.
 		#[pallet::constant]
 		type BountyDepositBase: Get<BalanceOf<Self>>;
-	
+
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		#[pallet::constant]
 		type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
-	
+
 		/// Bounty duration in blocks.
 		#[pallet::constant]
 		type BountyUpdatePeriod: Get<Self::BlockNumber>;
-	
-		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
+
+		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty
+		/// curator.
 		#[pallet::constant]
 		type BountyCuratorDeposit: Get<Permill>;
-	
+
 		/// Minimum value for a bounty.
 		#[pallet::constant]
 		type BountyValueMinimum: Get<BalanceOf<Self>>;
-	
+
 		/// The amount held on deposit per byte within the tip report reason or bounty description.
 		#[pallet::constant]
 		type DataDepositPerByte: Get<BalanceOf<Self>>;
-	
+
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-	
+
 		/// Maximum acceptable reason length.
 		#[pallet::constant]
 		type MaximumReasonLength: Get<u32>;
-	
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -261,18 +260,13 @@ pub mod pallet{
 		_,
 		Twox64Concat,
 		BountyIndex,
-		Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>
+		Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 	>;
 
 	/// The description of each bounty.
 	#[pallet::storage]
 	#[pallet::getter(fn bounty_descriptions)]
-	pub type BountyDescriptions<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BountyIndex,
-		Vec<u8>
-	>;
+	pub type BountyDescriptions<T: Config> = StorageMap<_, Twox64Concat, BountyIndex, Vec<u8>>;
 
 	/// Bounty indices that have been approved but not yet funded.
 	#[pallet::storage]
@@ -313,7 +307,10 @@ pub mod pallet{
 		/// - O(1).
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::approve_bounty())]
-		pub fn approve_bounty(origin: OriginFor<T>, #[pallet::compact] bounty_id: BountyIndex) -> DispatchResult {
+		pub fn approve_bounty(
+			origin: OriginFor<T>,
+			#[pallet::compact] bounty_id: BountyIndex,
+		) -> DispatchResult {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
@@ -347,7 +344,6 @@ pub mod pallet{
 
 			let curator = T::Lookup::lookup(curator)?;
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				match bounty.status {
 					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {},
@@ -368,8 +364,8 @@ pub mod pallet{
 		///
 		/// This function can only be called by the `RejectOrigin` a signed origin.
 		///
-		/// If this function is called by the `RejectOrigin`, we assume that the curator is malicious
-		/// or inactive. As a result, we will slash the curator when possible.
+		/// If this function is called by the `RejectOrigin`, we assume that the curator is
+		/// malicious or inactive. As a result, we will slash the curator when possible.
 		///
 		/// If the origin is the curator, we take this as a sign they are unable to do their job and
 		/// they willingly give up. We could slash them, but for now we allow them to recover their
@@ -404,7 +400,7 @@ pub mod pallet{
 					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {
 						// No curator to unassign at this point.
 						return Err(Error::<T>::UnexpectedStatus.into())
-					}
+					},
 					BountyStatus::CuratorProposed { ref curator } => {
 						// A curator has been proposed, but not accepted yet.
 						// Either `RejectOrigin` or the proposed curator can unassign the curator.
@@ -425,7 +421,7 @@ pub mod pallet{
 									let block_number = frame_system::Pallet::<T>::block_number();
 									if *update_due < block_number {
 										slash_curator(curator, &mut bounty.curator_deposit);
-										// Continue to change bounty status below...
+									// Continue to change bounty status below...
 									} else {
 										// Curator has more time to give an update.
 										return Err(Error::<T>::Premature.into())
@@ -433,7 +429,8 @@ pub mod pallet{
 								} else {
 									// Else this is the curator, willingly giving up their role.
 									// Give back their deposit.
-									let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
+									let err_amount =
+										T::Currency::unreserve(&curator, bounty.curator_deposit);
 									debug_assert!(err_amount.is_zero());
 									// Continue to change bounty status below...
 								}
@@ -447,7 +444,7 @@ pub mod pallet{
 						ensure!(maybe_sender.is_none(), BadOrigin);
 						slash_curator(curator, &mut bounty.curator_deposit);
 						// Continue to change bounty status below...
-					}
+					},
 				};
 
 				bounty.status = BountyStatus::Funded;
@@ -465,7 +462,10 @@ pub mod pallet{
 		/// - O(1).
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::accept_curator())]
-		pub fn accept_curator(origin: OriginFor<T>, #[pallet::compact] bounty_id: BountyIndex) -> DispatchResult {
+		pub fn accept_curator(
+			origin: OriginFor<T>,
+			#[pallet::compact] bounty_id: BountyIndex,
+		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
@@ -479,8 +479,10 @@ pub mod pallet{
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let update_due = frame_system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get();
-						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
+						let update_due = frame_system::Pallet::<T>::block_number() +
+							T::BountyUpdatePeriod::get();
+						bounty.status =
+							BountyStatus::Active { curator: curator.clone(), update_due };
 
 						Ok(())
 					},
@@ -490,7 +492,8 @@ pub mod pallet{
 			Ok(())
 		}
 
-		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds after a delay.
+		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds
+		/// after a delay.
 		///
 		/// The dispatch origin for this call must be the curator of this bounty.
 		///
@@ -502,9 +505,9 @@ pub mod pallet{
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::award_bounty())]
 		pub fn award_bounty(
-			origin: OriginFor<T>, 
-			#[pallet::compact] bounty_id: BountyIndex, 
-			beneficiary: <T::Lookup as StaticLookup>::Source
+			origin: OriginFor<T>,
+			#[pallet::compact] bounty_id: BountyIndex,
+			beneficiary: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -512,10 +515,7 @@ pub mod pallet{
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				match &bounty.status {
-					BountyStatus::Active {
-						curator,
-						..
-					} => {
+					BountyStatus::Active { curator, .. } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
@@ -523,7 +523,8 @@ pub mod pallet{
 				bounty.status = BountyStatus::PendingPayout {
 					curator: signer,
 					beneficiary: beneficiary.clone(),
-					unlock_at: frame_system::Pallet::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
+					unlock_at: frame_system::Pallet::<T>::block_number() +
+						T::BountyDepositPayoutDelay::get(),
 				};
 
 				Ok(())
@@ -543,13 +544,21 @@ pub mod pallet{
 		/// - O(1).
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::claim_bounty())]
-		pub fn claim_bounty(origin: OriginFor<T>, #[pallet::compact] bounty_id: BountyIndex) -> DispatchResult {
+		pub fn claim_bounty(
+			origin: OriginFor<T>,
+			#[pallet::compact] bounty_id: BountyIndex,
+		) -> DispatchResult {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidIndex)?;
-				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } = bounty.status {
-					ensure!(frame_system::Pallet::<T>::block_number() >= unlock_at, Error::<T>::Premature);
+				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } =
+					bounty.status
+				{
+					ensure!(
+						frame_system::Pallet::<T>::block_number() >= unlock_at,
+						Error::<T>::Premature
+					);
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
 					let fee = bounty.fee.min(balance); // just to be safe
@@ -558,7 +567,8 @@ pub mod pallet{
 					debug_assert!(err_amount.is_zero());
 					let res = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
 					debug_assert!(res.is_ok());
-					let res = T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
+					let res =
+						T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
 					debug_assert!(res.is_ok());
 
 					*maybe_bounty = None;
@@ -585,61 +595,74 @@ pub mod pallet{
 		/// - O(1).
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::close_bounty_proposed().max(<T as Config>::WeightInfo::close_bounty_active()))]
-		pub fn close_bounty(origin: OriginFor<T>, #[pallet::compact] bounty_id: BountyIndex) -> DispatchResultWithPostInfo {
+		pub fn close_bounty(
+			origin: OriginFor<T>,
+			#[pallet::compact] bounty_id: BountyIndex,
+		) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResultWithPostInfo {
-				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
+			Bounties::<T>::try_mutate_exists(
+				bounty_id,
+				|maybe_bounty| -> DispatchResultWithPostInfo {
+					let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 
-				match &bounty.status {
-					BountyStatus::Proposed => {
-						// The reject origin would like to cancel a proposed bounty.
-						BountyDescriptions::<T>::remove(bounty_id);
-						let value = bounty.bond;
-						let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
-						T::OnSlash::on_unbalanced(imbalance);
-						*maybe_bounty = None;
+					match &bounty.status {
+						BountyStatus::Proposed => {
+							// The reject origin would like to cancel a proposed bounty.
+							BountyDescriptions::<T>::remove(bounty_id);
+							let value = bounty.bond;
+							let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
+							T::OnSlash::on_unbalanced(imbalance);
+							*maybe_bounty = None;
 
-						Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
-						// Return early, nothing else to do.
-						return Ok(Some(<T as Config>::WeightInfo::close_bounty_proposed()).into())
-					},
-					BountyStatus::Approved => {
-						// For weight reasons, we don't allow a council to cancel in this phase.
-						// We ask for them to wait until it is funded before they can cancel.
-						return Err(Error::<T>::UnexpectedStatus.into())
-					},
-					BountyStatus::Funded |
-					BountyStatus::CuratorProposed { .. } => {
-						// Nothing extra to do besides the removal of the bounty below.
-					},
-					BountyStatus::Active { curator, .. } => {
-						// Cancelled by council, refund deposit of the working curator.
-						let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
-						debug_assert!(err_amount.is_zero());
-						// Then execute removal of the bounty below.
-					},
-					BountyStatus::PendingPayout { .. } => {
-						// Bounty is already pending payout. If council wants to cancel
-						// this bounty, it should mean the curator was acting maliciously.
-						// So the council should first unassign the curator, slashing their
-						// deposit.
-						return Err(Error::<T>::PendingPayout.into())
+							Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
+							// Return early, nothing else to do.
+							return Ok(
+								Some(<T as Config>::WeightInfo::close_bounty_proposed()).into()
+							)
+						},
+						BountyStatus::Approved => {
+							// For weight reasons, we don't allow a council to cancel in this phase.
+							// We ask for them to wait until it is funded before they can cancel.
+							return Err(Error::<T>::UnexpectedStatus.into())
+						},
+						BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {
+							// Nothing extra to do besides the removal of the bounty below.
+						},
+						BountyStatus::Active { curator, .. } => {
+							// Cancelled by council, refund deposit of the working curator.
+							let err_amount =
+								T::Currency::unreserve(&curator, bounty.curator_deposit);
+							debug_assert!(err_amount.is_zero());
+							// Then execute removal of the bounty below.
+						},
+						BountyStatus::PendingPayout { .. } => {
+							// Bounty is already pending payout. If council wants to cancel
+							// this bounty, it should mean the curator was acting maliciously.
+							// So the council should first unassign the curator, slashing their
+							// deposit.
+							return Err(Error::<T>::PendingPayout.into())
+						},
 					}
-				}
 
-				let bounty_account = Self::bounty_account_id(bounty_id);
+					let bounty_account = Self::bounty_account_id(bounty_id);
 
-				BountyDescriptions::<T>::remove(bounty_id);
+					BountyDescriptions::<T>::remove(bounty_id);
 
-				let balance = T::Currency::free_balance(&bounty_account);
-				let res = T::Currency::transfer(&bounty_account, &Self::account_id(), balance, AllowDeath); // should not fail
-				debug_assert!(res.is_ok());
-				*maybe_bounty = None;
+					let balance = T::Currency::free_balance(&bounty_account);
+					let res = T::Currency::transfer(
+						&bounty_account,
+						&Self::account_id(),
+						balance,
+						AllowDeath,
+					); // should not fail
+					debug_assert!(res.is_ok());
+					*maybe_bounty = None;
 
-				Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
-				Ok(Some(<T as Config>::WeightInfo::close_bounty_active()).into())
-			})
+					Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
+					Ok(Some(<T as Config>::WeightInfo::close_bounty_active()).into())
+				},
+			)
 		}
 
 		/// Extend the expiry time of an active bounty.
@@ -654,9 +677,9 @@ pub mod pallet{
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::extend_bounty_expiry())]
 		pub fn extend_bounty_expiry(
-			origin: OriginFor<T>, 
-			#[pallet::compact] bounty_id: BountyIndex, 
-			_remark: Vec<u8>
+			origin: OriginFor<T>,
+			#[pallet::compact] bounty_id: BountyIndex,
+			_remark: Vec<u8>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
@@ -666,7 +689,9 @@ pub mod pallet{
 				match bounty.status {
 					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T>::RequireCurator);
-						*update_due = (frame_system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
+						*update_due = (frame_system::Pallet::<T>::block_number() +
+							T::BountyUpdatePeriod::get())
+						.max(*update_due);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
