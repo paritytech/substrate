@@ -119,7 +119,7 @@ where
 						.await;
 				}
 				.boxed();
-				ctx.executor.execute_new(fut);
+				ctx.executor.execute(fut);
 				Ok(())
 			},
 		)?;

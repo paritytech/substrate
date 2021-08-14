@@ -512,7 +512,7 @@ where
 				.await;
 		}
 		.boxed();
-		executor.execute_new(fut);
+		executor.execute(fut);
 
 		Ok(())
 	}
@@ -589,7 +589,7 @@ where
 		}
 		.boxed();
 
-		executor.execute_new(fut);
+		executor.execute(fut);
 
 		Ok(())
 	}

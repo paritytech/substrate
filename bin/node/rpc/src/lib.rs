@@ -79,13 +79,10 @@ pub struct GrandpaDeps<B> {
 	pub finality_provider: Arc<FinalityProofProvider<B, Block>>,
 }
 
-/// A IO handler that uses all Full RPC extensions.
-pub type IoHandler = jsonrpc_core::IoHandler<()>;
-
 /// Instantiate all Full RPC extensions.
 // TODO(niklasad1): replace these.
-pub fn create_full() -> jsonrpc_core::IoHandler<()> {
-	jsonrpc_core::IoHandler::default()
+pub fn create_full() -> () {
+	todo!();
 }
 
 // TODO(niklasad1): we probably need this too.
