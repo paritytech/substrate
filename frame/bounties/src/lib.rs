@@ -594,7 +594,8 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
-		#[pallet::weight(<T as Config>::WeightInfo::close_bounty_proposed().max(<T as Config>::WeightInfo::close_bounty_active()))]
+		#[pallet::weight(<T as Config>::WeightInfo::close_bounty_proposed()
+			.max(<T as Config>::WeightInfo::close_bounty_active()))]
 		pub fn close_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] bounty_id: BountyIndex,
