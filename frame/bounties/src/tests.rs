@@ -160,11 +160,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn last_event() -> RawEvent<u64, u128> {
+fn last_event() -> pallet::Event<Test> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Bounties(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let Event::<Test>::Bounties(inner) = e { Some(inner) } else { None })
 		.last()
 		.unwrap()
 }
