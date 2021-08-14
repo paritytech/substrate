@@ -157,7 +157,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 }
 
 #[frame_support::pallet]
-pub mod pallet{
+pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
