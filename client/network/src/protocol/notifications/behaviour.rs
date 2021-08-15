@@ -44,7 +44,7 @@ use std::{
 	task::{Context, Poll},
 	time::Duration,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other peers.
 ///

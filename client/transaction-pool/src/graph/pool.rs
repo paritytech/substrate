@@ -27,7 +27,7 @@ use sp_runtime::{
 		TransactionSource, TransactionTag as Tag, TransactionValidity, TransactionValidityError,
 	},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::{
 	base_pool as base,
@@ -455,7 +455,7 @@ mod tests {
 	};
 	use std::collections::{HashMap, HashSet};
 	use substrate_test_runtime::{AccountId, Block, Extrinsic, Hashing, Transfer, H256};
-	use wasm_timer::Instant;
+	use std::time::Instant;
 
 	const INVALID_NONCE: u64 = 254;
 	const SOURCE: TransactionSource = TransactionSource::External;

@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionSource, TransactionTag as Tag, ValidTransaction},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::{
 	base_pool::{self as base, PruneStatus},

@@ -30,7 +30,7 @@ use std::{
 	sync::Arc,
 	time,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and

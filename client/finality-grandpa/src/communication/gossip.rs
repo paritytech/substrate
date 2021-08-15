@@ -103,7 +103,7 @@ use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	time::Duration,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);

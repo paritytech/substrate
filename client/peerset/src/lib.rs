@@ -42,9 +42,9 @@ use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	pin::Pin,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Instant, Duration},
 };
-use wasm_timer::{Delay, Instant};
+use wasm_timer::Delay;
 
 pub use libp2p::PeerId;
 

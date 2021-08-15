@@ -61,7 +61,6 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality
 thiserror = "1"
 unsigned-varint = { version = "0.6.0", features = ["futures", "asynchronous_codec"] }
 void = "1.0.2"
-wasm-timer = "0.2"
 zeroize = "1.2.0"
 
 [dependencies.libp2p]

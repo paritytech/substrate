@@ -42,7 +42,7 @@ use std::{
 	task::{Context, Poll},
 	time::Duration,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);

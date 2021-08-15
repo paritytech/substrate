@@ -26,7 +26,7 @@ use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	time::Duration,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 // Time to wait before trying to get the same extra data from the same peer.
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);

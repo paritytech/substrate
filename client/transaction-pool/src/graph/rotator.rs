@@ -23,7 +23,7 @@
 
 use parking_lot::RwLock;
 use std::{collections::HashMap, hash, iter, time::Duration};
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::base_pool::Transaction;
 

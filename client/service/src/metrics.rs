@@ -29,7 +29,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{Block, NumberFor, SaturatedConversion, UniqueSaturatedInto};
 use sp_utils::metrics::register_globals;
 use std::{sync::Arc, time::Duration};
-use wasm_timer::Instant;
+use std::time::Instant;
 
 struct PrometheusMetrics {
 	// generic info

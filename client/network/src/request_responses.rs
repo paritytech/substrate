@@ -62,7 +62,7 @@ use std::{
 	task::{Context, Poll},
 	time::Duration,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
 

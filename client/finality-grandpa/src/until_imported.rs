@@ -48,7 +48,7 @@ use std::{
 	task::{Context, Poll},
 	time::Duration,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 

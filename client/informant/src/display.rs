@@ -26,7 +26,7 @@ use std::{
 	convert::{TryFrom, TryInto},
 	fmt,
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 /// State of the informant display system.
 ///

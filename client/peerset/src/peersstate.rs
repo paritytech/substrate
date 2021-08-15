@@ -37,7 +37,7 @@ use std::{
 		HashMap, HashSet,
 	},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 /// State storage behind the peerset.
 ///
