@@ -453,23 +453,6 @@ check-polkadot-companion-build:
     - cd polkadot && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
 
-# TODO: (dp) Remove
-# test-browser-node:
-#   stage:                           build
-#   <<:                              *docker-env
-#   <<:                              *test-refs
-#   needs:
-#     - job:                         check-web-wasm
-#       artifacts:                   false
-#   variables:
-#     <<:                                         *default-vars
-#     CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
-#     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
-#     # TODO: (dp) Remove
-#     WASM_BINDGEN_TEST_TIMEOUT:                  120
-#   script:
-#     - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing
-
 build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
