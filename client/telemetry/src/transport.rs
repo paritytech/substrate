@@ -71,10 +71,6 @@ pub(crate) type WsTrans = libp2p::core::transport::Boxed<
 
 /// Wraps around an `AsyncWrite` and implements `Sink`. Guarantees that each item being sent maps
 /// to one call of `write`.
-///
-/// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
-/// that each telemetry message maps to one single call to `write` in the WASM FFI.
-// TODO: (dp) Looks like we don't need this if we remove the `wasm_ext::ExtTransport`? Rework it without.
 #[pin_project::pin_project]
 pub(crate) struct StreamSink<T>(#[pin] T, Option<Vec<u8>>);
 
