@@ -114,7 +114,8 @@ where
 			Endow::CollectRent => {
 				// storage_size cannot be zero because otherwise a contract that is just above
 				// the subsistence threshold does not pay rent given a large enough subsistence
-				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
+				// threshold. But we need rent payments to occur in order to benchmark for worst
+				// cases.
 				let storage_size = u32::MAX / 10;
 
 				// Endowment should be large but not as large to inhibit rent payments.
@@ -1038,7 +1039,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_debug_message",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),

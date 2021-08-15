@@ -33,12 +33,12 @@
 //!
 //! The recovery process for each recoverable account can be configured by the account owner.
 //! They are able to choose:
-//! * `friends` - The list of friends that the account owner trusts to protect the
-//!   recovery process for their account.
-//! * `threshold` - The number of friends that need to approve a recovery process for
-//!   the account to be successfully recovered.
-//! * `delay_period` - The minimum number of blocks after the beginning of the recovery
-//!   process that need to pass before the account can be successfully recovered.
+//! * `friends` - The list of friends that the account owner trusts to protect the recovery process
+//!   for their account.
+//! * `threshold` - The number of friends that need to approve a recovery process for the account to
+//!   be successfully recovered.
+//! * `delay_period` - The minimum number of blocks after the beginning of the recovery process that
+//!   need to pass before the account can be successfully recovered.
 //!
 //! There is a configurable deposit that all users need to pay to create a recovery
 //! configuration. This deposit is composed of a base deposit plus a multiplier for
@@ -101,25 +101,23 @@
 //! security of an account if used incorrectly. Some recommended practices for users
 //! of this pallet are:
 //!
-//! * Configure a significant `delay_period` for your recovery process: As long as you
-//!   have access to your recoverable account, you need only check the blockchain once
-//!   every `delay_period` blocks to ensure that no recovery attempt is successful
-//!   against your account. Using off-chain notification systems can help with this,
-//!   but ultimately, setting a large `delay_period` means that even the most skilled
-//!   attacker will need to wait this long before they can access your account.
-//! * Use a high threshold of approvals: Setting a value of 1 for the threshold means
-//!   that any of your friends would be able to recover your account. They would
-//!   simply need to start a recovery process and approve their own process. Similarly,
-//!   a threshold of 2 would mean that any 2 friends could work together to gain
-//!   access to your account. The only way to prevent against these kinds of attacks
-//!   is to choose a high threshold of approvals and select from a diverse friend
-//!   group that would not be able to reasonably coordinate with one another.
-//! * Reset your configuration over time: Since the entire deposit of creating a
-//!   recovery configuration is returned to the user, the only cost of updating
-//!   your recovery configuration is the transaction fees for the calls. Thus,
-//!   it is strongly encouraged to regularly update your recovery configuration
-//!   as your life changes and your relationship with new and existing friends
-//!   change as well.
+//! * Configure a significant `delay_period` for your recovery process: As long as you have access
+//!   to your recoverable account, you need only check the blockchain once every `delay_period`
+//!   blocks to ensure that no recovery attempt is successful against your account. Using off-chain
+//!   notification systems can help with this, but ultimately, setting a large `delay_period` means
+//!   that even the most skilled attacker will need to wait this long before they can access your
+//!   account.
+//! * Use a high threshold of approvals: Setting a value of 1 for the threshold means that any of
+//!   your friends would be able to recover your account. They would simply need to start a recovery
+//!   process and approve their own process. Similarly, a threshold of 2 would mean that any 2
+//!   friends could work together to gain access to your account. The only way to prevent against
+//!   these kinds of attacks is to choose a high threshold of approvals and select from a diverse
+//!   friend group that would not be able to reasonably coordinate with one another.
+//! * Reset your configuration over time: Since the entire deposit of creating a recovery
+//!   configuration is returned to the user, the only cost of updating your recovery configuration
+//!   is the transaction fees for the calls. Thus, it is strongly encouraged to regularly update
+//!   your recovery configuration as your life changes and your relationship with new and existing
+//!   friends change as well.
 //!
 //! ## Interface
 //!
@@ -131,22 +129,27 @@
 //! * `initiate_recovery` - Start the recovery process for a recoverable account.
 //!
 //! #### For Friends of a Recoverable Account
-//! * `vouch_recovery` - As a `friend` of a recoverable account, vouch for a recovery attempt on the account.
+//! * `vouch_recovery` - As a `friend` of a recoverable account, vouch for a recovery attempt on the
+//!   account.
 //!
 //! #### For a User Who Successfully Recovered an Account
 //!
-//! * `claim_recovery` - Claim access to the account that you have successfully completed the recovery process for.
-//! * `as_recovered` - Send a transaction as an account that you have recovered. See other functions below.
+//! * `claim_recovery` - Claim access to the account that you have successfully completed the
+//!   recovery process for.
+//! * `as_recovered` - Send a transaction as an account that you have recovered. See other functions
+//!   below.
 //!
 //! #### For the Recoverable Account
 //!
-//! * `close_recovery` - Close an active recovery process for your account and reclaim the recovery deposit.
-//! * `remove_recovery` - Remove the recovery configuration from the account, making it un-recoverable.
+//! * `close_recovery` - Close an active recovery process for your account and reclaim the recovery
+//!   deposit.
+//! * `remove_recovery` - Remove the recovery configuration from the account, making it
+//!   un-recoverable.
 //!
 //! #### For Super Users
 //!
-//! * `set_recovered` - The ROOT origin is able to skip the recovery process and directly allow
-//!   one account to access another.
+//! * `set_recovered` - The ROOT origin is able to skip the recovery process and directly allow one
+//!   account to access another.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -231,9 +234,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type ConfigDepositBase: Get<BalanceOf<Self>>;
 
-		/// The amount of currency needed per additional user when creating a recovery configuration.
+		/// The amount of currency needed per additional user when creating a recovery
+		/// configuration.
 		///
-		/// This is held for adding `sizeof(AccountId)` bytes more into a pre-existing storage value.
+		/// This is held for adding `sizeof(AccountId)` bytes more into a pre-existing storage
+		/// value.
 		#[pallet::constant]
 		type FriendDepositFactor: Get<BalanceOf<Self>>;
 
@@ -417,13 +422,13 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
-		/// - `friends`: A list of friends you trust to vouch for recovery attempts.
-		///   Should be ordered and contain no duplicate values.
-		/// - `threshold`: The number of friends that must vouch for a recovery attempt
-		///   before the account can be recovered. Should be less than or equal to
-		///   the length of the list of friends.
-		/// - `delay_period`: The number of blocks after a recovery attempt is initialized
-		///   that needs to pass before the account can be recovered.
+		/// - `friends`: A list of friends you trust to vouch for recovery attempts. Should be
+		///   ordered and contain no duplicate values.
+		/// - `threshold`: The number of friends that must vouch for a recovery attempt before the
+		///   account can be recovered. Should be less than or equal to the length of the list of
+		///   friends.
+		/// - `delay_period`: The number of blocks after a recovery attempt is initialized that
+		///   needs to pass before the account can be recovered.
 		///
 		/// # <weight>
 		/// - Key: F (len of friends)
@@ -480,8 +485,8 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
-		/// - `account`: The lost account that you want to recover. This account
-		///   needs to be recoverable (i.e. have a recovery configuration).
+		/// - `account`: The lost account that you want to recover. This account needs to be
+		///   recoverable (i.e. have a recovery configuration).
 		///
 		/// # <weight>
 		/// - One storage read to check that account is recoverable. O(F)
@@ -526,8 +531,7 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `lost`: The lost account that you want to recover.
-		/// - `rescuer`: The account trying to rescue the lost account that you
-		///   want to vouch for.
+		/// - `rescuer`: The account trying to rescue the lost account that you want to vouch for.
 		///
 		/// The combination of these two parameters must point to an active recovery
 		/// process.
@@ -575,8 +579,8 @@ pub mod pallet {
 		/// `threshold` or more vouches, waited `delay_period` blocks since initiation.
 		///
 		/// Parameters:
-		/// - `account`: The lost account that you want to claim has been successfully
-		///   recovered by you.
+		/// - `account`: The lost account that you want to claim has been successfully recovered by
+		///   you.
 		///
 		/// # <weight>
 		/// Key: F (len of friends in config), V (len of vouching friends)

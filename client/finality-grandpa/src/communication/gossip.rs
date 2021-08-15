@@ -483,8 +483,8 @@ struct Peers<N> {
 	/// gossiping.
 	first_stage_peers: HashSet<PeerId>,
 	/// The randomly picked set of peers we'll gossip to in the second stage of gossiping if the
-	/// first stage didn't allow us to spread the voting data enough to conclude the round. This set
-	/// should have size `sqrt(connected_peers)`.
+	/// first stage didn't allow us to spread the voting data enough to conclude the round. This
+	/// set should have size `sqrt(connected_peers)`.
 	second_stage_peers: HashSet<PeerId>,
 	/// The randomly picked set of `LUCKY_PEERS` light clients we'll gossip commit messages to.
 	lucky_light_peers: HashSet<PeerId>,
@@ -583,9 +583,11 @@ impl<N: Ord> Peers<N> {
 
 	fn reshuffle(&mut self) {
 		// we want to randomly select peers into three sets according to the following logic:
-		// - first set: LUCKY_PEERS random peers where at least LUCKY_PEERS/2 are authorities (unless
+		// - first set: LUCKY_PEERS random peers where at least LUCKY_PEERS/2 are authorities
+		//   (unless
 		// we're not connected to that many authorities)
-		// - second set: max(LUCKY_PEERS, sqrt(peers)) peers where at least LUCKY_PEERS are authorities.
+		// - second set: max(LUCKY_PEERS, sqrt(peers)) peers where at least LUCKY_PEERS are
+		//   authorities.
 		// - third set: LUCKY_PEERS random light client peers
 
 		let shuffled_peers = {
@@ -1192,19 +1194,21 @@ impl<Block: BlockT> Inner<Block> {
 		catch_up_request: &CatchUpRequestMessage,
 	) -> (bool, Option<Report>) {
 		let report = match &self.pending_catch_up {
-			PendingCatchUp::Requesting { who: peer, instant, .. } =>
+			PendingCatchUp::Requesting { who: peer, instant, .. } => {
 				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
 					return (false, None)
 				} else {
 					// report peer for timeout
 					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
-				},
-			PendingCatchUp::Processing { instant, .. } =>
+				}
+			},
+			PendingCatchUp::Processing { instant, .. } => {
 				if instant.elapsed() < CATCH_UP_PROCESS_TIMEOUT {
 					return (false, None)
 				} else {
 					None
-				},
+				}
+			},
 			_ => None,
 		};
 
@@ -1220,8 +1224,10 @@ impl<Block: BlockT> Inner<Block> {
 	/// The initial logic for filtering round messages follows the given state
 	/// transitions:
 	///
-	/// - State 1: allowed to LUCKY_PEERS random peers (where at least LUCKY_PEERS/2 are authorities)
-	/// - State 2: allowed to max(LUCKY_PEERS, sqrt(random peers)) (where at least LUCKY_PEERS are authorities)
+	/// - State 1: allowed to LUCKY_PEERS random peers (where at least LUCKY_PEERS/2 are
+	///   authorities)
+	/// - State 2: allowed to max(LUCKY_PEERS, sqrt(random peers)) (where at least LUCKY_PEERS are
+	///   authorities)
 	/// - State 3: allowed to all peers
 	///
 	/// Transitions will be triggered on repropagation attempts by the underlying gossip layer.
@@ -1249,7 +1255,8 @@ impl<Block: BlockT> Inner<Block> {
 	/// The initial logic for filtering global messages follows the given state
 	/// transitions:
 	///
-	/// - State 1: allowed to max(LUCKY_PEERS, sqrt(peers)) (where at least LUCKY_PEERS are authorities)
+	/// - State 1: allowed to max(LUCKY_PEERS, sqrt(peers)) (where at least LUCKY_PEERS are
+	///   authorities)
 	/// - State 2: allowed to all peers
 	///
 	/// We are more lenient with global messages since there should be a lot
@@ -1625,7 +1632,8 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 			// it is expired.
 			match inner.live_topics.topic_info(&topic) {
 				None => return true,
-				Some((Some(_), _)) => return false, /* round messages don't require further checking. */
+				// round messages don't require further checking.
+				Some((Some(_), _)) => return false,
 				Some((None, _)) => {},
 			};
 

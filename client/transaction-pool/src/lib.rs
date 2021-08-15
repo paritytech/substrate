@@ -290,16 +290,16 @@ where
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
 		xt: TransactionFor<Self>,
-	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
+	) -> PoolFuture<Pin<Box<TransactionStatusStreamFor<Self>>>, Self::Error> {
 		let at = *at;
 		let pool = self.pool.clone();
 
 		self.metrics.report(|metrics| metrics.submitted_transactions.inc());
 
 		async move {
-			pool.submit_and_watch(&at, source, xt)
-				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-				.await
+			let watcher = pool.submit_and_watch(&at, source, xt).await?;
+
+			Ok(watcher.into_stream().boxed())
 		}
 		.boxed()
 	}

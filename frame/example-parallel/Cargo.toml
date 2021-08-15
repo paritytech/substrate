@@ -21,9 +21,6 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-tasks = { version = "4.0.0-dev", default-features = false, path = "../../primitives/tasks" }
 
-[dev-dependencies]
-serde = { version = "1.0.126" }
-
 [features]
 default = ["std"]
 std = [

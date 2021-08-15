@@ -29,10 +29,10 @@
 //! identify which substrate node is reporting the telemetry. Every task spawned using sc-service's
 //! `TaskManager` automatically inherit this span.
 //!
-//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a [`TelemetryWorkerHandle`].
-//! This handle can be cloned and passed around. It uses an asynchronous channel to communicate with
-//! the running [`TelemetryWorker`] dedicated to registration. Registering can happen at any point
-//! in time during the process execution.
+//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a
+//! [`TelemetryWorkerHandle`]. This handle can be cloned and passed around. It uses an asynchronous
+//! channel to communicate with the running [`TelemetryWorker`] dedicated to registration.
+//! Registering can happen at any point in time during the process execution.
 
 #![warn(missing_docs)]
 

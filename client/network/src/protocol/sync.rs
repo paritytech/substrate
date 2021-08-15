@@ -27,7 +27,6 @@
 //! The `ChainSync` struct maintains the state of the block requests. Whenever something happens on
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
-//!
 
 use crate::{
 	protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},
@@ -900,8 +899,8 @@ impl<B: BlockT> ChainSync<B> {
 			// If our best queued is more than `MAX_BLOCKS_TO_LOOK_BACKWARDS` blocks away from the
 			// common number, the peer best number is higher than our best queued and the common
 			// number is smaller than the last finalized block number, we should do an ancestor
-			// search to find a better common block. If the queue is full we wait till all blocks are
-			// imported though.
+			// search to find a better common block. If the queue is full we wait till all blocks
+			// are imported though.
 			if best_queued.saturating_sub(peer.common_number) > MAX_BLOCKS_TO_LOOK_BACKWARDS.into() &&
 				best_queued < peer.best_number &&
 				peer.common_number < last_finalized &&
@@ -1149,8 +1148,8 @@ impl<B: BlockT> ChainSync<B> {
 								ancestry_request::<B>(next_num),
 							))
 						} else {
-							// Ancestry search is complete. Check if peer is on a stale fork unknown to us and
-							// add it to sync targets if necessary.
+							// Ancestry search is complete. Check if peer is on a stale fork unknown
+							// to us and add it to sync targets if necessary.
 							trace!(
 								target: "sync",
 								"Ancestry search complete. Ours={} ({}), Theirs={} ({}), Common={:?} ({})",
@@ -1774,8 +1773,8 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// This should be polled until it returns [`Poll::Pending`].
 	///
-	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to import passed
-	/// header (call `on_block_data`). The network request isn't sent in this case.
+	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to
+	/// import passed header (call `on_block_data`). The network request isn't sent in this case.
 	pub fn poll_block_announce_validation(
 		&mut self,
 		cx: &mut std::task::Context,
@@ -2002,7 +2001,8 @@ impl<B: BlockT> ChainSync<B> {
 		})
 	}
 
-	/// Find a block to start sync from. If we sync with state, that's the latest block we have state for.
+	/// Find a block to start sync from. If we sync with state, that's the latest block we have
+	/// state for.
 	fn reset_sync_start_point(&mut self) -> Result<(), ClientError> {
 		let info = self.client.info();
 		if matches!(self.mode, SyncMode::LightState { .. }) && info.finalized_state.is_some() {
@@ -2132,8 +2132,8 @@ fn ancestry_request<B: BlockT>(block: NumberFor<B>) -> BlockRequest<B> {
 	}
 }
 
-/// The ancestor search state expresses which algorithm, and its stateful parameters, we are using to
-/// try to find an ancestor block
+/// The ancestor search state expresses which algorithm, and its stateful parameters, we are using
+/// to try to find an ancestor block
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum AncestorSearchState<B: BlockT> {
 	/// Use exponential backoff to find an ancestor, then switch to binary search.
@@ -2161,7 +2161,8 @@ fn handle_ancestor_search_state<B: BlockT>(
 		AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
 			let next_distance_to_tip = *next_distance_to_tip;
 			if block_hash_match && next_distance_to_tip == One::one() {
-				// We found the ancestor in the first step so there is no need to execute binary search.
+				// We found the ancestor in the first step so there is no need to execute binary
+				// search.
 				return None
 			}
 			if block_hash_match {
@@ -2645,13 +2646,13 @@ mod test {
 
 	/// This test is a regression test as observed on a real network.
 	///
-	/// The node is connected to multiple peers. Both of these peers are having a best block (1) that
-	/// is below our best block (3). Now peer 2 announces a fork of block 3 that we will
+	/// The node is connected to multiple peers. Both of these peers are having a best block (1)
+	/// that is below our best block (3). Now peer 2 announces a fork of block 3 that we will
 	/// request from peer 2. After importing the fork, peer 2 and then peer 1 will announce block 4.
-	/// But as peer 1 in our view is still at block 1, we will request block 2 (which we already have)
-	/// from it. In the meanwhile peer 2 sends us block 4 and 3 and we send another request for block
-	/// 2 to peer 2. Peer 1 answers with block 2 and then peer 2. This will need to succeed, as we
-	/// have requested block 2 from both peers.
+	/// But as peer 1 in our view is still at block 1, we will request block 2 (which we already
+	/// have) from it. In the meanwhile peer 2 sends us block 4 and 3 and we send another request
+	/// for block 2 to peer 2. Peer 1 answers with block 2 and then peer 2. This will need to
+	/// succeed, as we have requested block 2 from both peers.
 	#[test]
 	fn do_not_report_peer_on_block_response_for_block_request() {
 		sp_tracing::try_init_simple();
@@ -2756,9 +2757,9 @@ mod test {
 	///
 	/// The scenario is that the node is doing a full resync and is connected to some node that is
 	/// doing a major sync as well. This other node that is doing a major sync will finish before
-	/// our node and send a block announcement message, but we don't have seen any block announcement
-	/// from this node in its sync process. Meaning our common number didn't change. It is now expected
-	/// that we start an ancestor search to find the common number.
+	/// our node and send a block announcement message, but we don't have seen any block
+	/// announcement from this node in its sync process. Meaning our common number didn't change. It
+	/// is now expected that we start an ancestor search to find the common number.
 	#[test]
 	fn do_ancestor_search_when_common_block_to_best_qeued_gap_is_to_big() {
 		sp_tracing::try_init_simple();
