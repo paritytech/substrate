@@ -396,11 +396,6 @@ check-tracing:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    # WASM support is in progress. As more and more crates support WASM, we
-    # should add entries here. See https://github.com/paritytech/substrate/issues/2416
-    # Note: we don't need to test crates imported in `bin/node/cli`
-    # TODO: (dp) Is this part of the web-wasm effort or something else?
-    # - time cargo build --manifest-path=client/consensus/aura/Cargo.toml --target=wasm32-unknown-unknown --features getrandom
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
