@@ -58,6 +58,8 @@ pub mod prelude {
 	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
+/// A unit struct which implements `NativeExecutionDispatch` feeding in the
+/// hard-coded runtime.
 pub struct LocalExecutor;
 
 impl sc_executor::NativeExecutionDispatch for LocalExecutor {
