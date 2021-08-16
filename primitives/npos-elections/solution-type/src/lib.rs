@@ -136,7 +136,11 @@ struct SolutionDef {
 fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	let mut attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
 	if attrs.len() > 1 {
-		return Err(syn_err("compact solution can accept only #[compact]"))
+		let extra_attr = attrs.pop().expect("attributes vec with len > 1 can be popped");
+		return Err(syn::Error::new_spanned(
+			extra_attr.clone(),
+			"compact solution can accept only #[compact]",
+		))
 	}
 	if attrs.is_empty() {
 		return Ok(false)
@@ -145,10 +149,7 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	if attr.path.is_ident("compact") {
 		Ok(true)
 	} else {
-		Err(syn::Error::new_spanned(
-			attr.clone(),
-			"compact solution can accept only #[compact]",
-		))
+		Err(syn::Error::new_spanned(attr.clone(), "compact solution can accept only #[compact]"))
 	}
 }
 
