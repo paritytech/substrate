@@ -606,7 +606,7 @@ impl Pair {
 fn parse_signature_standard(
 	x: &[u8],
 ) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
-	let sig = libsecp256k1::Signature::parse_standard_slice(&x[0..64])?;
+	let sig = libsecp256k1::Signature::parse_standard_slice(&x[..64])?;
 	let ri = libsecp256k1::RecoveryId::parse(x[64])?;
 	Ok((sig, ri))
 }
