@@ -113,7 +113,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::Health(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -123,7 +123,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::LocalPeerId(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -136,7 +136,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::LocalListenAddresses(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -147,7 +147,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::Peers(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -163,7 +163,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkState(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -173,7 +173,7 @@ impl<B: traits::Block> System<B> {
 		//
 		// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
 		// is an example of a valid, passing multiaddr with PeerId attached.
-		rpc_module.register_async_method("system_addReservedPeer", |param, system| {
+		rpc_module.register_async_method::<(), _>("system_addReservedPeer", |param, system| {
 			let peer = match param.one() {
 				Ok(peer) => peer,
 				Err(e) => return Box::pin(futures::future::err(e)),
@@ -182,29 +182,47 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
-				rx.await.map_err(oneshot_canceled_err)
+				match rx.await {
+					Ok(Ok(())) => Ok(()),
+					Ok(Err(e)) => Err(to_call_error(e)),
+					Err(e) => Err(to_call_error(e)),
+				}
 			}
 			.boxed()
 		})?;
 
 		// Remove a reserved peer. Returns the empty string or an error. The string
 		// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
-		rpc_module.register_async_method("system_removeReservedPeer", |_, system| {
-			async move {
-				system.deny_unsafe.check_if_safe()?;
-				let (tx, rx) = oneshot::channel();
-				let _ = system.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
-				rx.await.map_err(oneshot_canceled_err)
-			}
-			.boxed()
-		})?;
+		rpc_module.register_async_method::<(), _>(
+			"system_removeReservedPeer",
+			|param, system| {
+				let peer = match param.one() {
+					Ok(peer) => peer,
+					Err(e) => return Box::pin(futures::future::err(e)),
+				};
+
+				async move {
+					system.deny_unsafe.check_if_safe()?;
+					let (tx, rx) = oneshot::channel();
+					let _ = system
+						.send_back
+						.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
+					match rx.await {
+						Ok(Ok(())) => Ok(()),
+						Ok(Err(e)) => Err(to_call_error(e)),
+						Err(e) => Err(to_call_error(e)),
+					}
+				}
+				.boxed()
+			},
+		)?;
 
 		// Returns the list of reserved peers
 		rpc_module.register_async_method("system_reservedPeers", |_, system| {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -215,7 +233,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NodeRoles(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -227,7 +245,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::SyncState(tx));
-				rx.await.map_err(oneshot_canceled_err)
+				rx.await.map_err(to_call_error)
 			}
 			.boxed()
 		})?;
@@ -237,7 +255,7 @@ impl<B: traits::Block> System<B> {
 		// The syntax is identical to the CLI `<target>=<level>`:
 		//
 		// `sync=debug,state=trace`
-		rpc_module.register_method("system_addLogFilter", |param, system| {
+		rpc_module.register_method::<(), _>("system_addLogFilter", |param, system| {
 			system.deny_unsafe.check_if_safe()?;
 
 			let directives = param.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
@@ -247,7 +265,7 @@ impl<B: traits::Block> System<B> {
 		})?;
 
 		// Resets the log filter to Substrate defaults
-		rpc_module.register_method("system_resetLogFilter", |_, system| {
+		rpc_module.register_method::<(), _>("system_resetLogFilter", |_, system| {
 			system.deny_unsafe.check_if_safe()?;
 			logging::reset_log_filter()
 				.map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
@@ -257,6 +275,6 @@ impl<B: traits::Block> System<B> {
 	}
 }
 
-fn oneshot_canceled_err(canc: oneshot::Canceled) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(canc))
+fn to_call_error<E: std::error::Error + Send + Sync + 'static>(err: E) -> JsonRpseeCallError {
+	JsonRpseeCallError::Failed(Box::new(err))
 }
