@@ -13,39 +13,40 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-static_assertions = "1.1.0"
 serde = { version = "1.0.126", optional = true }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io ={ version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-session = { version = "4.0.0-dev", default-features = false, features = ["historical"], path = "../session" }
+pallet-session = { version = "4.0.0-dev", default-features = false, features = [
+	"historical",
+], path = "../session" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 log = { version = "0.4.14", default-features = false }
-paste = "1.0"
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
-pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/reward-curve" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
-frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
+frame-election-provider-support = { version = "4.0.0-dev", features = [
+	"runtime-benchmarks",
+], path = "../election-provider-support" }
 rand_chacha = { version = "0.2" }
-parking_lot = "0.11.1"
-hex = "0.4"
 
 [features]
 default = ["std"]

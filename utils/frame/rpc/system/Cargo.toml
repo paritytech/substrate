@@ -20,7 +20,6 @@ jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
 log = "0.4.8"
-serde = { version = "1.0.126", features = ["derive"] }
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }

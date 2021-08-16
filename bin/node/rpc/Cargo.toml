@@ -23,7 +23,6 @@ sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensu
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }
 sc-finality-grandpa-rpc = { version = "0.10.0-dev", path = "../../../client/finality-grandpa/rpc" }
-sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }

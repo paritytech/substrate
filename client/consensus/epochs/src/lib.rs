@@ -561,12 +561,13 @@ where
 							// Ok, we found our node.
 							// and here we figure out which of the internal epochs
 							// of a genesis node to use based on their start slot.
-							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) =>
+							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) => {
 								if epoch_1.start_slot <= slot {
 									(EpochIdentifierPosition::Genesis1, epoch_1.clone())
 								} else {
 									(EpochIdentifierPosition::Genesis0, epoch_0.clone())
-								},
+								}
+							},
 							PersistedEpochHeader::Regular(ref epoch_n) =>
 								(EpochIdentifierPosition::Regular, epoch_n.clone()),
 						},
