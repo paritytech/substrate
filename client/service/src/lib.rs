@@ -37,7 +37,7 @@ mod task_manager;
 use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 
 use codec::{Decode, Encode};
-use futures::{compat::*, stream, Future, FutureExt, Stream, StreamExt};
+use futures::{stream, Future, FutureExt, Stream, StreamExt};
 use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_network::PeerId;
@@ -59,7 +59,7 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseConfig, KeepBlocks, PruningMode, Role, RpcMethods,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
 	TaskExecutor, TaskType, TransactionStorageMode,
 };
 pub use sc_chain_spec::{
@@ -112,11 +112,7 @@ impl RpcHandlers {
 		mem: &RpcSession,
 		request: &str,
 	) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0
-			.handle_request(request, mem.metadata.clone())
-			.compat()
-			.map(|res| res.expect("this should never fail"))
-			.boxed()
+		self.0.handle_request(request, mem.metadata.clone()).boxed()
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
@@ -342,7 +338,8 @@ mod waiting {
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
 	H: FnMut(
@@ -353,7 +350,7 @@ fn start_rpc_servers<
 	config: &Configuration,
 	mut gen_handler: H,
 	rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, Error> {
+) -> Result<Box<dyn std::any::Any + Send>, Error> {
 	fn maybe_start_server<T, F>(
 		address: Option<SocketAddr>,
 		mut start: F,
@@ -387,16 +384,20 @@ fn start_rpc_servers<
 	}
 
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| {
-			sc_rpc_server::start_ipc(
-				&*path,
-				gen_handler(
-					sc_rpc::DenyUnsafe::No,
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
-				)?,
-			)
-			.map_err(Error::from)
-		}),
+		config
+			.rpc_ipc
+			.as_ref()
+			.map(|path| {
+				sc_rpc_server::start_ipc(
+					&*path,
+					gen_handler(
+						sc_rpc::DenyUnsafe::No,
+						sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
+					)?,
+				)
+				.map_err(Error::from)
+			})
+			.transpose()?,
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,
@@ -428,7 +429,8 @@ fn start_rpc_servers<
 	)))
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<
 	H: FnMut(
@@ -439,7 +441,7 @@ fn start_rpc_servers<
 	_: &Configuration,
 	_: H,
 	_: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send>, error::Error> {
 	Ok(Box::new(()))
 }
 
@@ -457,7 +459,7 @@ impl RpcSession {
 	/// messages.
 	///
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
+	pub fn new(sender: futures::channel::mpsc::UnboundedSender<String>) -> RpcSession {
 		RpcSession { metadata: sender.into() }
 	}
 }
@@ -539,7 +541,8 @@ where
 					},
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
-						// it is not bad at least, just some internal node logic error, so peer is innocent.
+						// it is not bad at least, just some internal node logic error, so peer is
+						// innocent.
 						TransactionImport::KnownGood
 					},
 				},

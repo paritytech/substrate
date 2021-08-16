@@ -79,6 +79,7 @@ benchmarks! {
 		assert_eq!(System::<T>::digest().logs.len(), (d + 1) as usize)
 	}
 
+	#[skip_meta]
 	set_storage {
 		let i in 1 .. 1000;
 
@@ -95,6 +96,7 @@ benchmarks! {
 		assert_eq!(value, last_hash.as_ref().to_vec());
 	}
 
+	#[skip_meta]
 	kill_storage {
 		let i in 1 .. 1000;
 
@@ -116,6 +118,7 @@ benchmarks! {
 		assert_eq!(storage::unhashed::get_raw(last_hash.as_ref()), None);
 	}
 
+	#[skip_meta]
 	kill_prefix {
 		let p in 1 .. 1000;
 

@@ -165,14 +165,14 @@ pub mod pallet {
 		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
 		/// Limit of proof size.
 		///
-		/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the proofs
-		/// on-chain. If A is the one that generates the proof, then it requires that either:
+		/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the
+		/// proofs on-chain. If A is the one that generates the proof, then it requires that either:
 		/// - A's blockchain has the same proof length limit as B's blockchain.
 		/// - Or A's blockchain has shorter proof length limit as B's blockchain.
 		///
-		/// If B sees A is on a blockchain with larger proof length limit, then it should kindly refuse
-		/// to accept the atomic swap request if A generates the proof, and asks that B generates the
-		/// proof instead.
+		/// If B sees A is on a blockchain with larger proof length limit, then it should kindly
+		/// refuse to accept the atomic swap request if A generates the proof, and asks that B
+		/// generates the proof instead.
 		#[pallet::constant]
 		type ProofLimit: Get<u32>;
 	}

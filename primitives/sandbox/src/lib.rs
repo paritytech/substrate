@@ -23,9 +23,9 @@
 //! and without the performance penalty of full wasm emulation inside wasm.
 //!
 //! This is achieved by using bindings to the wasm VM, which are published by the host API.
-//! This API is thin and consists of only a handful functions. It contains functions for instantiating
-//! modules and executing them, but doesn't contain functions for inspecting the module
-//! structure. The user of this library is supposed to read the wasm module.
+//! This API is thin and consists of only a handful functions. It contains functions for
+//! instantiating modules and executing them, but doesn't contain functions for inspecting the
+//! module structure. The user of this library is supposed to read the wasm module.
 //!
 //! When this crate is used in the `std` environment all these functions are implemented by directly
 //! calling the wasm VM.
@@ -168,8 +168,8 @@ impl<T> Instance<T> {
 	/// run the `start` function (if it is present in the module) with the given `state`.
 	///
 	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
-	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
-	/// be returned.
+	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)`
+	/// will be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
 	pub fn new(
@@ -188,8 +188,8 @@ impl<T> Instance<T> {
 	///
 	/// - An export function name isn't a proper utf8 byte sequence,
 	/// - This module doesn't have an exported function with the given name,
-	/// - If types of the arguments passed to the function doesn't match function signature
-	///   then trap occurs (as if the exported function was called via call_indirect),
+	/// - If types of the arguments passed to the function doesn't match function signature then
+	///   trap occurs (as if the exported function was called via call_indirect),
 	/// - Trap occurred at the execution time.
 	pub fn invoke(
 		&mut self,

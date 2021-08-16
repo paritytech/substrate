@@ -365,14 +365,16 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in
+	/// that block.
 	fn storage_pairs(
 		&self,
 		id: &BlockId<Block>,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
 
-	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
+	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in
+	/// that block.
 	fn storage_keys_iter<'a>(
 		&self,
 		id: &BlockId<Block>,
@@ -380,7 +382,8 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
+	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that
+	/// block.
 	fn child_storage(
 		&self,
 		id: &BlockId<Block>,
@@ -388,7 +391,8 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage
+	/// keys.
 	fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
@@ -406,7 +410,8 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
+	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that
+	/// block.
 	fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
@@ -569,7 +574,8 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT>:
 	) -> sp_blockchain::Result<ChangesTrieConfigurationRange<NumberFor<Block>, Block::Hash>>;
 	/// Get end block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
 	/// It is guaranteed that we have no any changes tries before (and including) this block.
-	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).
+	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if
+	/// created).
 	fn oldest_pruned_digest_range_end(&self) -> NumberFor<Block>;
 }
 
@@ -616,7 +622,8 @@ pub trait ProvideChtRoots<Block: BlockT> {
 		block: NumberFor<Block>,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Get changes trie CHT root for given block. Returns None if the block is not a part of any CHT.
+	/// Get changes trie CHT root for given block. Returns None if the block is not a part of any
+	/// CHT.
 	fn changes_trie_cht_root(
 		&self,
 		cht_size: NumberFor<Block>,

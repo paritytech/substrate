@@ -1332,8 +1332,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		// we assume there's at least one member or this logic won't work.
 		if !members.is_empty() {
 			let candidates = <Candidates<T, I>>::take();
-			// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
-			// critical issues or side-effects. This is auto-correcting as members fall out of society.
+			// NOTE: This may cause member length to surpass `MaxMembers`, but results in no
+			// consensus critical issues or side-effects. This is auto-correcting as members fall
+			// out of society.
 			members.reserve(candidates.len());
 
 			let maturity =
@@ -1369,8 +1370,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					let matching_vote = if is_accepted { Vote::Approve } else { Vote::Reject };
 
 					let bad_vote = |m: &T::AccountId| {
-						// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
-						// and increase their strikes. after MaxStrikes then they go into suspension.
+						// Voter voted wrong way (or was just a lazy skeptic) then reduce their
+						// payout and increase their strikes. after MaxStrikes then they go into
+						// suspension.
 						let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
 
 						let strikes = <Strikes<T, I>>::mutate(m, |s| {
@@ -1405,9 +1407,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 						Self::pay_accepted_candidate(&candidate, value, kind, maturity);
 
-						// We track here the total_approvals so that every candidate has a unique range
-						// of numbers from 0 to `total_approvals` with length `approval_count` so each
-						// candidate is proportionally represented when selecting a "primary" below.
+						// We track here the total_approvals so that every candidate has a unique
+						// range of numbers from 0 to `total_approvals` with length `approval_count`
+						// so each candidate is proportionally represented when selecting a
+						// "primary" below.
 						Some((candidate, total_approvals, value))
 					} else {
 						// Suspend Candidate
@@ -1474,8 +1477,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
-				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
-				// critical issues or side-effects. This is auto-correcting as members fall out of society.
+				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no
+				// consensus critical issues or side-effects. This is auto-correcting as members
+				// fall out of society.
 				<Members<T, I>>::put(&members[..]);
 				<Head<T, I>>::put(&primary);
 
@@ -1565,7 +1569,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				value
 			},
 			BidKind::Vouch(voucher, tip) => {
-				// Check that the voucher is still vouching, else some other logic may have removed their status.
+				// Check that the voucher is still vouching, else some other logic may have removed
+				// their status.
 				if <Vouching<T, I>>::take(&voucher) == Some(VouchingStatus::Vouching) {
 					// In the case that a vouched-for bid is accepted we unset the
 					// vouching status and transfer the tip over to the voucher.

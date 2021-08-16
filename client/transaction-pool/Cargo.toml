@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 thiserror = "1.0.21"
-futures = { version = "0.3.1", features = ["compat"] }
+futures = "0.3.16"
 intervalier = "0.4.0"
 log = "0.4.8"
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
@@ -31,9 +31,8 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "./api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 wasm-timer = "0.2"
-derive_more = "0.99.2"
 serde = { version = "1.0.126", features = ["derive"] }
-linked-hash-map = "0.5.2"
+linked-hash-map = "0.5.4"
 retain_mut = "0.1.3"
 
 [dev-dependencies]

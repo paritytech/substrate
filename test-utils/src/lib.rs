@@ -19,8 +19,8 @@
 
 #[doc(hidden)]
 pub use futures;
-/// Marks async function to be executed by an async runtime and provide a `TaskExecutor`, suitable
-/// to test environment.
+/// Marks async function to be executed by an async runtime and provide a `TaskExecutor`,
+/// suitable to test environment.
 ///
 /// # Requirements
 ///

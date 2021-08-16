@@ -250,8 +250,8 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Auxiliary function for "converting" the transaction type.
 	///
-	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that `Self` now
-	/// uses a different transaction type.
+	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that
+	/// `Self` now uses a different transaction type.
 	pub fn clear_storage_changes_and_mutate<Transaction2>(
 		self,
 	) -> BlockImportParams<Block, Transaction2> {
