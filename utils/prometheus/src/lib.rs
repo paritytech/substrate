@@ -38,7 +38,7 @@ mod sourced;
 pub use sourced::{MetricSource, SourcedCounter, SourcedGauge, SourcedMetric};
 
 #[cfg(not(target_os = "unknown"))]
-pub use known_os::init_prometheus;
+pub use known_os::*;
 #[cfg(target_os = "unknown")]
 pub use unknown_os::init_prometheus;
 
@@ -137,18 +137,28 @@ mod known_os {
 		prometheus_addr: SocketAddr,
 		registry: Registry,
 	) -> Result<(), Error> {
-		use networking::Incoming;
 		let listener = async_std::net::TcpListener::bind(&prometheus_addr)
 			.await
 			.map_err(|_| Error::PortInUse(prometheus_addr))?;
 
-		log::info!("〽️ Prometheus exporter started at {}", prometheus_addr);
+		init_prometheus_with_listener(listener, registry).await
+	}
+
+	/// Init prometheus using the given listener.
+	pub(crate) async fn init_prometheus_with_listener(
+		listener: async_std::net::TcpListener,
+		registry: Registry,
+	) -> Result<(), Error> {
+		use networking::Incoming;
+
+		log::info!("〽️ Prometheus exporter started at {}", listener.local_addr()?);
 
 		let service = make_service_fn(move |_| {
 			let registry = registry.clone();
 
 			async move {
 				Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
+					eprintln!("{:?}", req);
 					request_metrics(req, registry.clone())
 				}))
 			}
@@ -160,5 +170,50 @@ mod known_os {
 		let result = server.await.map_err(Into::into);
 
 		result
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use hyper::{Client, Uri};
+	use std::convert::TryFrom;
+
+	#[test]
+	fn prometheus_works() {
+		const METRIC_NAME: &str = "test_test_metric_name_test_test";
+
+		let runtime = tokio::runtime::Runtime::new().expect("Creates the runtime");
+
+		let listener = runtime
+			.block_on(async_std::net::TcpListener::bind("0.0.0.0:0"))
+			.expect("Creates listener");
+
+		let local_addr = listener.local_addr().expect("Returns the local addr");
+
+		let registry = Registry::default();
+		register(
+			prometheus::Counter::new(METRIC_NAME, "yeah").expect("Creates test counter"),
+			&registry,
+		)
+		.expect("Registers the test metric");
+
+		runtime.spawn(init_prometheus_with_listener(listener, registry));
+
+		runtime.block_on(async {
+			let client = Client::new();
+
+			// Make a GET /ip to 'http://httpbin.org'
+			let res = client
+				.get(Uri::try_from(&format!("http://{}/metrics", local_addr)).expect("Parses URI"))
+				.await
+				.expect("Requests metrics");
+
+			// Concatenate the body stream into a single buffer...
+			let buf = hyper::body::to_bytes(res).await.expect("Converts body to bytes");
+
+			let body = String::from_utf8(buf.to_vec()).expect("Converts body to String");
+			assert!(body.contains(&format!("{} 0", METRIC_NAME)));
+		});
 	}
 }
