@@ -88,7 +88,7 @@ pub(crate) mod v1 {
 
 		log::debug!(
 			target: "runtime::vesting",
-			"migration: Vesting storage version v1 POST migration checks succesful!"
+			"migration: Vesting storage version v1 POST migration checks successful!"
 		);
 		Ok(())
 	}

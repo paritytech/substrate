@@ -643,8 +643,8 @@ fn merge_ongoing_schedules() {
 
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
 
-		// Merging schedules un-vests all pre-existing schedules prior to merging, which is reflected
-		// in account 2's updated usable balance.
+		// Merging schedules un-vests all pre-existing schedules prior to merging, which is
+		// reflected in account 2's updated usable balance.
 		let sched0_vested_now = sched0.per_block() * (cur_block - sched0.starting_block());
 		let sched1_vested_now = sched1.per_block() * (cur_block - sched1.starting_block());
 		assert_eq!(Balances::usable_balance(&2), sched0_vested_now + sched1_vested_now);
@@ -937,7 +937,8 @@ fn merge_finished_and_yet_to_be_started_schedules() {
 
 		System::set_block_number(30);
 
-		// At block 30, sched0 has finished unlocking while sched1 and sched2 are still fully locked,
+		// At block 30, sched0 has finished unlocking while sched1 and sched2 are still fully
+		// locked,
 		assert_eq!(Vesting::vesting_balance(&2), Some(sched1.locked() + sched2.locked()));
 		// but since we have not vested usable balance is still 0.
 		assert_eq!(Balances::usable_balance(&2), 0);

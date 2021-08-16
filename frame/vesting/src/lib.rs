@@ -275,8 +275,8 @@ pub mod pallet {
 		T::AccountId = "AccountId", BalanceOf<T> = "Balance", T::BlockNumber = "BlockNumber"
 	)]
 	pub enum Event<T: Config> {
-		/// The amount vested has been updated. This could indicate a change in funds available. The
-		/// balance given is the amount which is left unvested (and thus locked).
+		/// The amount vested has been updated. This could indicate a change in funds available.
+		/// The balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
 		VestingUpdated(T::AccountId, BalanceOf<T>),
 		/// An \[account\] has become fully vested.
@@ -410,10 +410,11 @@ pub mod pallet {
 			Self::do_vested_transfer(source, target, schedule)
 		}
 
-		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over the
-		/// highest possible start and end blocks. If both schedules have already started the current
-		/// block will be used as the schedule start; with the caveat that if one schedule is finished
-		/// by the current block, the other will be treated as the new merged schedule, unmodified.
+		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over
+		/// the highest possible start and end blocks. If both schedules have already started the
+		/// current block will be used as the schedule start; with the caveat that if one schedule
+		/// is finished by the current block, the other will be treated as the new merged schedule,
+		/// unmodified.
 		///
 		/// NOTE: If `schedule1_index == schedule2_index` this is a no-op.
 		/// NOTE: This will unlock all schedules through the current block prior to merging.
@@ -421,7 +422,8 @@ pub mod pallet {
 		/// and both will be removed.
 		///
 		/// Merged schedule attributes:
-		/// - `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block, current_block)`.
+		/// - `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block,
+		///   current_block)`.
 		/// - `ending_block`: `MAX(schedule1.ending_block, schedule2.ending_block)`.
 		/// - `locked`: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`.
 		///
@@ -640,8 +642,8 @@ impl<T: Config> Pallet<T> {
 				let schedule2 = *schedules.get(idx2).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
 
 				// The length of `schedules` decreases by 2 here since we filter out 2 schedules.
-				// Thus we know below that we can push the new merged schedule without error (assuming
-				// initial state was valid).
+				// Thus we know below that we can push the new merged schedule without error
+				// (assuming initial state was valid).
 				let (mut schedules, mut locked_now) =
 					Self::report_schedule_updates(schedules.to_vec(), action);
 
