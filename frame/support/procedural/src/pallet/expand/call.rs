@@ -19,6 +19,7 @@ use crate::{pallet::Def, COUNTER};
 use frame_support_procedural_tools::clean_type_string;
 use syn::spanned::Spanned;
 
+///
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {

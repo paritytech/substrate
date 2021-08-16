@@ -529,13 +529,10 @@ build-macos-subkey:
   tags:
     - osx
 
-build-rust-doc:
+build-rustdoc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
@@ -546,13 +543,15 @@ build-rust-doc:
     paths:
     - ./crate-docs/
   script:
+    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
+    # FIXME: remove me after CI image gets nonroot
+    - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
-  allow_failure:                   true
 
 #### stage:                        publish
 
@@ -641,32 +640,49 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-publish-s3-doc:
+publish-rustdoc:
   stage:                           publish
-  image:                           paritytech/awscli:latest
-  allow_failure:                   true
-  needs:
-    - job:                         build-rust-doc
-      artifacts:                   true
-    - job:                         build-linux-substrate
-      artifacts:                   false
-  <<:                              *build-refs
   <<:                              *kubernetes-env
+  image:                           paritytech/tools:latest
   variables:
-    GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io"
-    PREFIX:                        "substrate-rustdoc"
+    GIT_DEPTH:                     100
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "master"
+  # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
+  # artifacts from being dowloaded by this job.
+  needs:
+    - job:                         build-rustdoc
+      artifacts:                   true
   script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - ls -lah crate-docs
-    - aws s3 sync --delete --size-only --only-show-errors
-        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
+    - rm -rf /tmp/*
+    # Set git config
+    - rm -rf .git/config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # Save README and docs
+    - cp -r ./crate-docs/ /tmp/doc/
+    - cp README.md /tmp/doc/
+    - git checkout gh-pages
+    # Remove everything and restore generated docs and README
+    - rm -rf ./*
+    - mv /tmp/doc/* .
+    # Upload files
+    - git add --all --force
+    # `git commit` has an exit code of > 0 if there is nothing to commit.
+    # This causes GitLab to exit immediately and marks this job failed.
+    # We don't want to mark the entire job failed if there's nothing to
+    # publish though, hence the `|| true`.
+    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
+        echo "___Nothing to commit___"
+    - git push origin gh-pages --force
   after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
-        --human-readable --summarize
+    - rm -rf .git/ ./*
 
 publish-draft-release:
   stage:                           publish

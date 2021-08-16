@@ -100,8 +100,8 @@ impl WasmModule for WasmtimeRuntime {
 		// and results.
 		//
 		// NOTE: Attentive reader may notice that this could've been moved in `WasmModule` creation.
-		//       However, I am not sure if that's a good idea since it would be pushing our luck further
-		//       by assuming that `Store` not only `Send` but also `Sync`.
+		//       However, I am not sure if that's a good idea since it would be pushing our luck
+		// further       by assuming that `Store` not only `Send` but also `Sync`.
 		let imports = resolve_imports(
 			&store,
 			&self.module,
@@ -115,10 +115,10 @@ impl WasmModule for WasmtimeRuntime {
 				InstanceWrapper::new(&store, &self.module, &imports, self.config.heap_pages)?;
 			let heap_base = instance_wrapper.extract_heap_base()?;
 
-			// This function panics if the instance was created from a runtime blob different from which
-			// the mutable globals were collected. Here, it is easy to see that there is only a single
-			// runtime blob and thus it's the same that was used for both creating the instance and
-			// collecting the mutable globals.
+			// This function panics if the instance was created from a runtime blob different from
+			// which the mutable globals were collected. Here, it is easy to see that there is only
+			// a single runtime blob and thus it's the same that was used for both creating the
+			// instance and collecting the mutable globals.
 			let globals_snapshot =
 				GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
 
@@ -291,10 +291,10 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// estimate of the actual stack limit in wasmtime. This is because wasmtime measures it's stack
 /// usage in bytes.
 ///
-/// The actual number of bytes consumed by a function is not trivial to compute  without going through
-/// full compilation. Therefore, it's expected that `native_stack_max` is grealy overestimated and
-/// thus never reached in practice. The stack overflow check introduced by the instrumentation and
-/// that relies on the logical item count should be reached first.
+/// The actual number of bytes consumed by a function is not trivial to compute  without going
+/// through full compilation. Therefore, it's expected that `native_stack_max` is grealy
+/// overestimated and thus never reached in practice. The stack overflow check introduced by the
+/// instrumentation and that relies on the logical item count should be reached first.
 ///
 /// See [here][stack_height] for more details of the instrumentation
 ///
@@ -307,12 +307,12 @@ pub struct DeterministicStackLimit {
 	pub logical_max: u32,
 	/// The maximum number of bytes for stack used by wasmtime JITed code.
 	///
-	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm function
-	/// after translation into machine code. It is also not quite trivial.
+	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm
+	/// function after translation into machine code. It is also not quite trivial.
 	///
 	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
-	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the current
-	/// instrumentation algorithm.
+	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the
+	/// current instrumentation algorithm.
 	///
 	/// This value cannot be 0.
 	pub native_stack_max: u32,
@@ -335,9 +335,9 @@ pub struct Semantics {
 	// I.e. if [`CodeSupplyMode::Verbatim`] is used.
 	pub fast_instance_reuse: bool,
 
-	/// Specifiying `Some` will enable deterministic stack height. That is, all executor invocations
-	/// will reach stack overflow at the exactly same point across different wasmtime versions and
-	/// architectures.
+	/// Specifiying `Some` will enable deterministic stack height. That is, all executor
+	/// invocations will reach stack overflow at the exactly same point across different wasmtime
+	/// versions and architectures.
 	///
 	/// This is achieved by a combination of running an instrumentation pass on input code and
 	/// configuring wasmtime accordingly.
@@ -351,10 +351,10 @@ pub struct Semantics {
 	/// non-determinism.
 	///
 	/// By default, the wasm spec allows some local non-determinism wrt. certain floating point
-	/// operations. Specifically, those operations that are not defined to operate on bits (e.g. fneg)
-	/// can produce NaN values. The exact bit pattern for those is not specified and may depend
-	/// on the particular machine that executes wasmtime generated JITed machine code. That is
-	/// a source of non-deterministic values.
+	/// operations. Specifically, those operations that are not defined to operate on bits (e.g.
+	/// fneg) can produce NaN values. The exact bit pattern for those is not specified and may
+	/// depend on the particular machine that executes wasmtime generated JITed machine code. That
+	/// is a source of non-deterministic values.
 	///
 	/// The classical runtime environment for Substrate allowed it and punted this on the runtime
 	/// developers. For PVFs, we want to ensure that execution is deterministic though. Therefore,
@@ -368,11 +368,11 @@ pub struct Config {
 
 	/// The total number of wasm pages an instance can request.
 	///
-	/// If specified, the runtime will be able to allocate only that much of wasm memory pages. This
-	/// is the total number and therefore the [`heap_pages`] is accounted for.
+	/// If specified, the runtime will be able to allocate only that much of wasm memory pages.
+	/// This is the total number and therefore the [`heap_pages`] is accounted for.
 	///
-	/// That means that the initial number of pages of a linear memory plus the [`heap_pages`] should
-	/// be less or equal to `max_memory_pages`, otherwise the instance won't be created.
+	/// That means that the initial number of pages of a linear memory plus the [`heap_pages`]
+	/// should be less or equal to `max_memory_pages`, otherwise the instance won't be created.
 	///
 	/// Moreover, `memory.grow` will fail (return -1) if the sum of the number of currently mounted
 	/// pages and the number of additional pages exceeds `max_memory_pages`.
@@ -382,8 +382,8 @@ pub struct Config {
 
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
 	/// othewise, the instantiation fails. If this option is set to `true`, then this behavior is
-	/// overriden and imports that are requested by the module and not provided by the host functions
-	/// will be resolved using stubs. These stubs will trap upon a call.
+	/// overriden and imports that are requested by the module and not provided by the host
+	/// functions will be resolved using stubs. These stubs will trap upon a call.
 	pub allow_missing_func_imports: bool,
 
 	/// A directory in which wasmtime can store its compiled artifacts cache.
@@ -402,15 +402,16 @@ enum CodeSupplyMode<'a> {
 		// some instrumentations for both anticipated paths: substrate execution and PVF execution.
 		//
 		// Should there raise a need in performing no instrumentation and the client doesn't need
-		// to do any checks, then we can provide a `Cow` like semantics here: if we need the blob and
-		//  the user got `RuntimeBlob` then extract it, or otherwise create it from the given
+		// to do any checks, then we can provide a `Cow` like semantics here: if we need the blob
+		// and  the user got `RuntimeBlob` then extract it, or otherwise create it from the given
 		// bytecode.
 		blob: RuntimeBlob,
 	},
 
 	/// The code is supplied in a form of a compiled artifact.
 	///
-	/// This assumes that the code is already prepared for execution and the same `Config` was used.
+	/// This assumes that the code is already prepared for execution and the same `Config` was
+	/// used.
 	Artifact { compiled_artifact: &'a [u8] },
 }
 
@@ -430,11 +431,12 @@ pub fn create_runtime(
 ///
 /// # Safety
 ///
-/// The caller must ensure that the compiled artifact passed here was produced by [`prepare_runtime_artifact`].
-/// Otherwise, there is a risk of arbitrary code execution with all implications.
+/// The caller must ensure that the compiled artifact passed here was produced by
+/// [`prepare_runtime_artifact`]. Otherwise, there is a risk of arbitrary code execution with all
+/// implications.
 ///
-/// It is ok though if the `compiled_artifact` was created by code of another version or with different
-/// configuration flags. In such case the caller will receive an `Err` deterministically.
+/// It is ok though if the `compiled_artifact` was created by code of another version or with
+/// different configuration flags. In such case the caller will receive an `Err` deterministically.
 pub unsafe fn create_runtime_from_artifact(
 	compiled_artifact: &[u8],
 	config: Config,
@@ -445,8 +447,8 @@ pub unsafe fn create_runtime_from_artifact(
 
 /// # Safety
 ///
-/// This is only unsafe if called with [`CodeSupplyMode::Artifact`]. See [`create_runtime_from_artifact`]
-/// to get more details.
+/// This is only unsafe if called with [`CodeSupplyMode::Artifact`]. See
+/// [`create_runtime_from_artifact`] to get more details.
 unsafe fn do_create_runtime(
 	code_supply_mode: CodeSupplyMode<'_>,
 	config: Config,

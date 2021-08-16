@@ -163,8 +163,9 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
 		}
 
-		// Track the number of payout ops to nominators. Note: `WeightInfo::payout_stakers_alive_staked`
-		// always assumes at least a validator is paid out, so we do not need to count their payout op.
+		// Track the number of payout ops to nominators. Note:
+		// `WeightInfo::payout_stakers_alive_staked` always assumes at least a validator is paid
+		// out, so we do not need to count their payout op.
 		let mut nominator_payout_count: u32 = 0;
 
 		// Lets now calculate how this is split to the nominators.
@@ -306,6 +307,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
 	/// * update `BondedEras` and apply slashes.
@@ -674,7 +676,8 @@ impl<T: Config> Pallet<T> {
 		all_voters
 	}
 
-	/// This is a very expensive function and result should be cached versus being called multiple times.
+	/// This is a very expensive function and result should be cached versus being called multiple
+	/// times.
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
 		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
 	}
