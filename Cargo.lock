@@ -9967,6 +9967,7 @@ checksum = "6703a273949a90131b290be1fe7b039d0fc884aa1935860dfcbe056f28cd8092"
 dependencies = [
  "bytes 0.5.6",
  "fnv",
+ "futures-core",
  "iovec",
  "lazy_static",
  "libc",
