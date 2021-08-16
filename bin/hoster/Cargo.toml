@@ -20,6 +20,8 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../primitives/consensus/babe" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../client/consensus/babe" }
+sp-consensus-aura = { version = "0.10.0-dev", path = "../../primitives/consensus/aura" }
+sc-consensus-aura = { version = "0.10.0-dev", path = "../../client/consensus/aura" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-authorship = { version = "4.0.0-dev", path = "../../primitives/authorship" }
