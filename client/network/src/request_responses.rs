@@ -60,9 +60,8 @@ use std::{
 	io, iter,
 	pin::Pin,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use std::time::Instant;
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
 

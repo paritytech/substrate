@@ -454,9 +454,11 @@ mod tests {
 		traits::Hash,
 		transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
 	};
-	use std::collections::{HashMap, HashSet};
+	use std::{
+		collections::{HashMap, HashSet},
+		time::Instant,
+	};
 	use substrate_test_runtime::{AccountId, Block, Extrinsic, Hashing, Transfer, H256};
-	use std::time::Instant;
 
 	const INVALID_NONCE: u64 = 254;
 	const SOURCE: TransactionSource = TransactionSource::External;

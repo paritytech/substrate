@@ -46,9 +46,8 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use std::time::Instant;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 

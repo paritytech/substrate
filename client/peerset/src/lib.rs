@@ -42,7 +42,7 @@ use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	pin::Pin,
 	task::{Context, Poll},
-	time::{Instant, Duration},
+	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
 
