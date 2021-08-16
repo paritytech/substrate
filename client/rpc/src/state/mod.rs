@@ -598,7 +598,7 @@ where
 		})?;
 
 		// Returns proof of storage for child key entries at a specific block's state.
-		module.register_async_method("childstate_getChildReadProof", |params, state| {
+		module.register_async_method("state_getChildReadProof", |params, state| {
 			let mut seq = params.sequence();
 
 			let storage_key = unwrap_or_fut_err!(seq.next());
@@ -610,8 +610,6 @@ where
 			}
 			.boxed()
 		})?;
-
-		module.register_alias("state_getChildReadProof", "childstate_getChildReadProof")?;
 
 		Ok(module)
 	}

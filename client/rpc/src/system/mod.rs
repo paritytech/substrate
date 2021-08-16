@@ -98,7 +98,7 @@ impl<B: traits::Block> System<B> {
 
 		// Get the chain's type.
 		rpc_module
-			.register_method("system_ChainType", |_, system| Ok(system.info.chain_type.clone()))?;
+			.register_method("system_chainType", |_, system| Ok(system.info.chain_type.clone()))?;
 
 		// Get a custom set of properties as a JSON object, defined in the chain spec.
 		rpc_module
@@ -189,7 +189,7 @@ impl<B: traits::Block> System<B> {
 
 		// Remove a reserved peer. Returns the empty string or an error. The string
 		// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
-		rpc_module.register_async_method("system_removeReservedPeer	", |_, system| {
+		rpc_module.register_async_method("system_removeReservedPeer", |_, system| {
 			async move {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
