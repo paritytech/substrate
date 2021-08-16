@@ -27,8 +27,8 @@
 //! The System pallet defines the core data types used in a Substrate runtime.
 //! It also provides several utility functions (see [`Pallet`]) for other FRAME pallets.
 //!
-//! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
-//! among other things that support the execution of the current block.
+//! In addition, it manages the storage items for extrinsics data, indexes, event records, and
+//! digest items, among other things that support the execution of the current block.
 //!
 //! It also handles low-level tasks like depositing logs, basic set up and take down of
 //! temporary storage entries, and access to previous block hashes.
@@ -54,10 +54,10 @@
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
-//!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one used to sign the
-//!     transaction.
-//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used to sign the
-//!     transaction.
+//!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one used to sign
+//!     the transaction.
+//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used to sign
+//!     the transaction.
 //!
 //! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
 //! extensions included in a chain.
@@ -180,8 +180,8 @@ pub mod pallet {
 		/// The aggregated `Call` type.
 		type Call: Dispatchable + Debug;
 
-		/// Account index (aka nonce) type. This stores the number of previous transactions associated
-		/// with a sender account.
+		/// Account index (aka nonce) type. This stores the number of previous transactions
+		/// associated with a sender account.
 		type Index: Parameter
 			+ Member
 			+ MaybeSerializeDeserialize
@@ -238,10 +238,10 @@ pub mod pallet {
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
-		/// Used to define the type and conversion mechanism for referencing accounts in transactions.
-		/// It's perfectly reasonable for this to be an identity conversion (with the source type being
-		/// `AccountId`), but other pallets (e.g. Indices pallet) may provide more functional/efficient
-		/// alternatives.
+		/// Used to define the type and conversion mechanism for referencing accounts in
+		/// transactions. It's perfectly reasonable for this to be an identity conversion (with the
+		/// source type being `AccountId`), but other pallets (e.g. Indices pallet) may provide more
+		/// functional/efficient alternatives.
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
 		/// The block header.
@@ -363,10 +363,11 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
 		/// - 1 storage write (codec `O(C)`).
-		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is expensive).
+		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
+		///   expensive).
 		/// - 1 event.
-		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
-		/// We will treat this as a full block.
+		/// The weight of this function is dependent on the runtime, but generally this is very
+		/// expensive. We will treat this as a full block.
 		/// # </weight>
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
@@ -384,8 +385,8 @@ pub mod pallet {
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 event.
-		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
-		/// # </weight>
+		/// The weight of this function is dependent on the runtime. We will treat this as a full
+		/// block. # </weight>
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,

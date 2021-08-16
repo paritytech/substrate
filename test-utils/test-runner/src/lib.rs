@@ -23,15 +23,15 @@
 //! Allows you to test
 //! <br />
 //!
-//! -   Migrations
-//! -   Runtime Upgrades
-//! -   Pallets and general runtime functionality.
+//! - Migrations
+//! - Runtime Upgrades
+//! - Pallets and general runtime functionality.
 //!
 //! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
-//! The running node has no signature verification, which allows us author extrinsics for any account on chain.
-//!     <br/>
+//! The running node has no signature verification, which allows us author extrinsics for any
+//! account on chain.     <br/>
 //!     <br/>
 //!
 //! <h2>How do I Use this?</h2>

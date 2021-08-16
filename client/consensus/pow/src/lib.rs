@@ -591,8 +591,8 @@ where
 				return
 			}
 
-			// The worker is locked for the duration of the whole proposing period. Within this period,
-			// the mining target is outdated and useless anyway.
+			// The worker is locked for the duration of the whole proposing period. Within this
+			// period, the mining target is outdated and useless anyway.
 
 			let difficulty = match algorithm.difficulty(best_hash) {
 				Ok(x) => x,

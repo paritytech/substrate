@@ -135,8 +135,8 @@ pub mod pallet {
 		/// BABE requires some logic to be triggered on every block to query for whether an epoch
 		/// has ended and to perform the transition to the next epoch.
 		///
-		/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
-		/// when no other module is responsible for changing authority set.
+		/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be
+		/// used when no other module is responsible for changing authority set.
 		type EpochChangeTrigger: EpochChangeTrigger;
 
 		/// A way to check whether a given validator is disabled and should not be authoring blocks.
@@ -281,7 +281,8 @@ pub mod pallet {
 	#[pallet::getter(fn lateness)]
 	pub(super) type Lateness<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-	/// The configuration for the current epoch. Should never be `None` as it is initialized in genesis.
+	/// The configuration for the current epoch. Should never be `None` as it is initialized in
+	/// genesis.
 	#[pallet::storage]
 	pub(super) type EpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
@@ -496,11 +497,11 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
-	/// and the caller is the only caller of this function.
+	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change`
+	/// has returned `true`, and the caller is the only caller of this function.
 	///
-	/// Typically, this is not handled directly by the user, but by higher-level validator-set manager logic like
-	/// `pallet-session`.
+	/// Typically, this is not handled directly by the user, but by higher-level validator-set
+	/// manager logic like `pallet-session`.
 	pub fn enact_epoch_change(
 		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 		next_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,

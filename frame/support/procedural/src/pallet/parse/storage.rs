@@ -112,7 +112,8 @@ pub struct StorageDef {
 	pub instances: Vec<helper::InstanceUsage>,
 	/// Optional getter to generate. If some then query_kind is ensured to be some as well.
 	pub getter: Option<syn::Ident>,
-	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of ident.
+	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of
+	/// ident.
 	pub rename_as: Option<syn::LitStr>,
 	/// Whereas the querytype of the storage is OptionQuery or ValueQuery.
 	/// Note that this is best effort as it can't be determined when QueryKind is generic, and
