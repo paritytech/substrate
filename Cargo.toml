@@ -221,8 +221,6 @@ members = [
 #
 # This list is ordered alphabetically.
 [profile.dev.package]
-aes-soft = { opt-level = 3 }
-aesni = { opt-level = 3 }
 blake2 = { opt-level = 3 }
 blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
