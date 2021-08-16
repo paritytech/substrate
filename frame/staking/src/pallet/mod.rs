@@ -23,10 +23,7 @@ use frame_support::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
 		LockableCurrency, OnUnbalanced, UnixTime,
 	},
-	weights::{
-		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-		Weight,
-	},
+	weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
@@ -65,12 +62,12 @@ pub mod pallet {
 
 		/// Time used for computing era duration.
 		///
-		/// It is guaranteed to start being called from the first `on_finalize`. Thus value at genesis
-		/// is not used.
+		/// It is guaranteed to start being called from the first `on_finalize`. Thus value at
+		/// genesis is not used.
 		type UnixTime: UnixTime;
 
-		/// Convert a balance into a number used for election calculation. This must fit into a `u64`
-		/// but is allowed to be sensibly lossy. The `u64` is used to communicate with the
+		/// Convert a balance into a number used for election calculation. This must fit into a
+		/// `u64` but is allowed to be sensibly lossy. The `u64` is used to communicate with the
 		/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
 		/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 		/// [`BalanceOf`].
@@ -132,13 +129,14 @@ pub mod pallet {
 		/// See [Era payout](./index.html#era-payout).
 		type EraPayout: EraPayout<BalanceOf<Self>>;
 
-		/// Something that can estimate the next session change, accurately or as a best effort guess.
+		/// Something that can estimate the next session change, accurately or as a best effort
+		/// guess.
 		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
 		/// The maximum number of nominators rewarded for each validator.
 		///
-		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
-		/// their reward. This used to limit the i/o cost for the nominator payout.
+		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can
+		/// claim their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
@@ -440,9 +438,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
-	/// The threshold for when users can start calling `chill_other` for other validators / nominators.
-	/// The threshold is compared to the actual number of validators / nominators (`CountFor*`) in
-	/// the system compared to the configured max (`Max*Count`).
+	/// The threshold for when users can start calling `chill_other` for other validators /
+	/// nominators. The threshold is compared to the actual number of validators / nominators
+	/// (`CountFor*`) in the system compared to the configured max (`Max*Count`).
 	#[pallet::storage]
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
@@ -497,13 +495,13 @@ pub mod pallet {
 					T::Currency::free_balance(&stash) >= balance,
 					"Stash does not have enough balance to bond."
 				);
-				let _ = <Pallet<T>>::bond(
+				frame_support::assert_ok!(<Pallet<T>>::bond(
 					T::Origin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
-				);
-				let _ = match status {
+				));
+				frame_support::assert_ok!(match status {
 					StakerStatus::Validator => <Pallet<T>>::validate(
 						T::Origin::from(Some(controller.clone()).into()),
 						Default::default(),
@@ -513,7 +511,7 @@ pub mod pallet {
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
-				};
+				});
 			}
 		}
 	}
@@ -601,11 +599,11 @@ pub mod pallet {
 		BadTarget,
 		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
 		CannotChillOther,
-		/// There are too many nominators in the system. Governance needs to adjust the staking settings
-		/// to keep things safe for the runtime.
+		/// There are too many nominators in the system. Governance needs to adjust the staking
+		/// settings to keep things safe for the runtime.
 		TooManyNominators,
-		/// There are too many validators in the system. Governance needs to adjust the staking settings
-		/// to keep things safe for the runtime.
+		/// There are too many validators in the system. Governance needs to adjust the staking
+		/// settings to keep things safe for the runtime.
 		TooManyValidators,
 	}
 
@@ -639,7 +637,8 @@ pub mod pallet {
 				if active_era.start.is_none() {
 					let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 					active_era.start = Some(now_as_millis_u64);
-					// This write only ever happens once, we don't include it in the weight in general
+					// This write only ever happens once, we don't include it in the weight in
+					// general
 					ActiveEra::<T>::put(active_era);
 				}
 			}
@@ -734,8 +733,8 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
-		/// Unlike [`bond`](Self::bond) or [`unbond`](Self::unbond) this function does not impose any limitation
-		/// on the amount that can be added.
+		/// Unlike [`bond`](Self::bond) or [`unbond`](Self::unbond) this function does not impose
+		/// any limitation on the amount that can be added.
 		///
 		/// Emits `Bonded`.
 		///
@@ -857,23 +856,24 @@ pub mod pallet {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight =
-				if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
-					// This account must have called `unbond()` with some value that caused the active
-					// portion to fall below existential deposit + will have no more unlocking chunks
-					// left. We can now safely remove all staking-related information.
-					Self::kill_stash(&stash, num_slashing_spans)?;
-					// Remove the lock.
-					T::Currency::remove_lock(STAKING_ID, &stash);
-					// This is worst case scenario, so we use the full weight and return None
-					None
-				} else {
-					// This was the consequence of a partial unbond. just update the ledger and move on.
-					Self::update_ledger(&controller, &ledger);
+			let post_info_weight = if ledger.unlocking.is_empty() &&
+				ledger.active < T::Currency::minimum_balance()
+			{
+				// This account must have called `unbond()` with some value that caused the active
+				// portion to fall below existential deposit + will have no more unlocking chunks
+				// left. We can now safely remove all staking-related information.
+				Self::kill_stash(&stash, num_slashing_spans)?;
+				// Remove the lock.
+				T::Currency::remove_lock(STAKING_ID, &stash);
+				// This is worst case scenario, so we use the full weight and return None
+				None
+			} else {
+				// This was the consequence of a partial unbond. just update the ledger and move on.
+				Self::update_ledger(&controller, &ledger);
 
-					// This is only an update, so we use less overall weight.
-					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-				};
+				// This is only an update, so we use less overall weight.
+				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
+			};
 
 			// `old_total` should never be less than the new total because
 			// `consolidate_unlocked` strictly subtracts balance.
@@ -901,8 +901,9 @@ pub mod pallet {
 
 			// Only check limits if they are not already a validator.
 			if !Validators::<T>::contains_key(stash) {
-				// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
-				// Until then, we explicitly block new validators to protect the runtime.
+				// If this error is reached, we need to adjust the `MinValidatorBond` and start
+				// calling `chill_other`. Until then, we explicitly block new validators to protect
+				// the runtime.
 				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
 					ensure!(
 						CounterForValidators::<T>::get() < max_validators,
@@ -940,8 +941,9 @@ pub mod pallet {
 
 			// Only check limits if they are not already a nominator.
 			if !Nominators::<T>::contains_key(stash) {
-				// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
-				// Until then, we explicitly block new nominators to protect the runtime.
+				// If this error is reached, we need to adjust the `MinNominatorBond` and start
+				// calling `chill_other`. Until then, we explicitly block new nominators to protect
+				// the runtime.
 				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
 					ensure!(
 						CounterForNominators::<T>::get() < max_nominators,
@@ -1183,8 +1185,8 @@ pub mod pallet {
 		/// # <weight>
 		/// O(S) where S is the number of slashing spans to be removed
 		/// Reads: Bonded, Slashing Spans, Account, Locks
-		/// Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Account, Locks
-		/// Writes Each: SpanSlash * S
+		/// Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
+		/// Account, Locks Writes Each: SpanSlash * S
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
@@ -1311,18 +1313,18 @@ pub mod pallet {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
+			let initial_unlocking = ledger.unlocking.len() as u32;
 			let ledger = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
-			Ok(Some(
-				35 * WEIGHT_PER_MICROS +
-					50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight) +
-					T::DbWeight::get().reads_writes(3, 2),
-			)
-			.into())
+
+			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
+				.saturating_add(initial_unlocking)
+				.saturating_sub(ledger.unlocking.len() as u32);
+			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
 		}
 
 		/// Set `HistoryDepth` value. This function will delete any history information
@@ -1330,10 +1332,10 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `new_history_depth`: The new history depth you would like to set.
-		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch.
-		///    This should report all the storage items that will be deleted by clearing old
-		///    era history. Needed to report an accurate weight for the dispatch. Trusted by
-		///    `Root` to report an accurate number.
+		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch. This
+		///   should report all the storage items that will be deleted by clearing old era history.
+		///   Needed to report an accurate weight for the dispatch. Trusted by `Root` to report an
+		///   accurate number.
 		///
 		/// Origin must be root.
 		///
@@ -1344,7 +1346,8 @@ pub mod pallet {
 		///     - Reads: Current Era, History Depth
 		///     - Writes: History Depth
 		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
-		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
+		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
+		///       ErasStartSessionIndex
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
 		pub fn set_history_depth(
@@ -1378,7 +1381,8 @@ pub mod pallet {
 		/// Complexity: O(S) where S is the number of slashing spans on the account.
 		/// DB Weight:
 		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
-		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Stash Account, Locks
+		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
+		///   Stash Account, Locks
 		/// - Writes Each: SpanSlash * S
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
@@ -1440,10 +1444,10 @@ pub mod pallet {
 		///
 		/// * `min_nominator_bond`: The minimum active bond needed to be a nominator.
 		/// * `min_validator_bond`: The minimum active bond needed to be a validator.
-		/// * `max_nominator_count`: The max number of users who can be a nominator at once.
-		///   When set to `None`, no limit is enforced.
-		/// * `max_validator_count`: The max number of users who can be a validator at once.
-		///   When set to `None`, no limit is enforced.
+		/// * `max_nominator_count`: The max number of users who can be a nominator at once. When
+		///   set to `None`, no limit is enforced.
+		/// * `max_validator_count`: The max number of users who can be a validator at once. When
+		///   set to `None`, no limit is enforced.
 		///
 		/// Origin must be Root to call this function.
 		///

@@ -62,8 +62,8 @@ pub fn to_big_uint(x: u128) -> biguint::BigUint {
 
 /// Safely and accurately compute `a * b / c`. The approach is:
 ///   - Simply try `a * b / c`.
-///   - Else, convert them both into big numbers and re-try. `Err` is returned if the result
-///     cannot be safely casted back to u128.
+///   - Else, convert them both into big numbers and re-try. `Err` is returned if the result cannot
+///     be safely casted back to u128.
 ///
 /// Invariant: c must be greater than or equal to 1.
 pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u128, &'static str> {

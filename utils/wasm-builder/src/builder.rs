@@ -215,12 +215,17 @@ fn generate_rerun_if_changed_instructions() {
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
 ///
 /// `file_name` - The name + path of the file being generated. The file contains the
-///               constant `WASM_BINARY`, which contains the built WASM binary.
+/// constant `WASM_BINARY`, which contains the built WASM binary.
+///
 /// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
+///
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
+///
 /// `features_to_enable` - Features that should be enabled for the project.
-/// `wasm_binary_name` - The optional wasm binary name that is extended with `.compact.compressed.wasm`.
-///                      If `None`, the project name will be used.
+///
+/// `wasm_binary_name` - The optional wasm binary name that is extended with
+///
+/// `.compact.compressed.wasm`. If `None`, the project name will be used.
 fn build_project(
 	file_name: PathBuf,
 	project_cargo_toml: PathBuf,

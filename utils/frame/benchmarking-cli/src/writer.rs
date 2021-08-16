@@ -188,7 +188,8 @@ fn get_benchmark_data(
 	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
 
-	// Analysis data may include components that are not used, this filters out anything whose value is zero.
+	// Analysis data may include components that are not used, this filters out anything whose value
+	// is zero.
 	let mut used_components = Vec::new();
 	let mut used_extrinsic_time = Vec::new();
 	let mut used_reads = Vec::new();

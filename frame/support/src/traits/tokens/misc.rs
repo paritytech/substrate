@@ -51,8 +51,8 @@ pub enum WithdrawConsequence<Balance> {
 }
 
 impl<Balance: Zero> WithdrawConsequence<Balance> {
-	/// Convert the type into a `Result` with `DispatchError` as the error or the additional `Balance`
-	/// by which the account will be reduced.
+	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
+	/// `Balance` by which the account will be reduced.
 	pub fn into_result(self) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {

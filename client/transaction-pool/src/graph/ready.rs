@@ -114,7 +114,8 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
 	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
-	/// Best transactions that are ready to be included to the block without any other previous transaction.
+	/// Best transactions that are ready to be included to the block without any other previous
+	/// transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
 
@@ -145,10 +146,12 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	///
 	/// Transactions are returned in order:
 	/// 1. First by the dependencies:
-	/// 	- never return transaction that requires a tag, which was not provided by one of the previously
+	/// 	- never return transaction that requires a tag, which was not provided by one of the
+	///    previously
 	/// returned transactions
 	/// 2. Then by priority:
-	/// - If there are two transactions with all requirements satisfied the one with higher priority goes first.
+	/// - If there are two transactions with all requirements satisfied the one with higher priority
+	///   goes first.
 	/// 3. Then by the ttl that's left
 	/// - transactions that are valid for a shorter time go first
 	/// 4. Lastly we sort by the time in the queue
@@ -252,8 +255,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Removes a subtree of transactions from the ready pool.
 	///
-	/// NOTE removing a transaction will also cause a removal of all transactions that depend on that one
-	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
+	/// NOTE removing a transaction will also cause a removal of all transactions that depend on
+	/// that one (i.e. the entire subgraph that this transaction is a start of will be removed).
 	/// All removed transactions are returned.
 	pub fn remove_subtree(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let to_remove = hashes.to_vec();

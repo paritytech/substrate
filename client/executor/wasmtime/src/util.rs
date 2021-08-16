@@ -44,7 +44,8 @@ pub fn from_wasmtime_val(val: wasmtime::Val) -> Value {
 	}
 }
 
-/// Converts a sp_wasm_interface's [`Value`] into the corresponding variant in wasmtime's [`wasmtime::Val`].
+/// Converts a sp_wasm_interface's [`Value`] into the corresponding variant in wasmtime's
+/// [`wasmtime::Val`].
 pub fn into_wasmtime_val(value: Value) -> wasmtime::Val {
 	match value {
 		Value::I32(v) => wasmtime::Val::I32(v),

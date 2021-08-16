@@ -23,15 +23,15 @@
 //! Allows you to test
 //! <br />
 //!
-//! -   Migrations
-//! -   Runtime Upgrades
-//! -   Pallets and general runtime functionality.
+//! - Migrations
+//! - Runtime Upgrades
+//! - Pallets and general runtime functionality.
 //!
 //! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
-//! The running node has no signature verification, which allows us author extrinsics for any account on chain.
-//!     <br/>
+//! The running node has no signature verification, which allows us author extrinsics for any
+//! account on chain.     <br/>
 //!     <br/>
 //!
 //! <h2>How do I Use this?</h2>
@@ -42,7 +42,7 @@
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
 //!     TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, BasePath,
-//!     DatabaseConfig, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
+//!     DatabaseSource, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
 //!     config::{NetworkConfiguration, KeystoreConfig},
 //! };
 //! use std::sync::Arc;
@@ -62,12 +62,19 @@
 //!
 //! type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 //!
-//! sc_executor::native_executor_instance!(
-//! 	pub Executor,
-//! 	node_runtime::api::dispatch,
-//! 	node_runtime::native_version,
-//! 	SignatureVerificationOverride,
-//! );
+//! pub struct Executor;
+//!
+//! impl sc_executor::NativeExecutionDispatch for Executor {
+//! 	type ExtendHostFunctions = SignatureVerificationOverride;
+//!
+//! 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+//! 		node_runtime::api::dispatch(method, data)
+//! 	}
+//!
+//! 	fn native_version() -> sc_executor::NativeVersion {
+//! 		node_runtime::native_version()
+//! 	}
+//! }
 //!
 //! struct Requirements;
 //!

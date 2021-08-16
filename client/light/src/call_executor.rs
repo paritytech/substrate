@@ -44,7 +44,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::RemoteBackend, call_executor::CallExecutor, light::RemoteCallRequest,
 };
-use sc_executor::{NativeVersion, RuntimeVersion};
+use sc_executor::RuntimeVersion;
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -161,10 +161,6 @@ where
 		} else {
 			Err(ClientError::NotAvailableOnLightClient)
 		}
-	}
-
-	fn native_runtime_version(&self) -> Option<&NativeVersion> {
-		None
 	}
 }
 
