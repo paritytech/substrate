@@ -870,15 +870,3 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
-
-/// ensure that the given staking ledger has `total`, `own`, and is being only backed by `others`.
-pub(crate) fn assert_eq_exposure(
-	exposure: Exposure<AccountId, Balance>,
-	total: Balance,
-	own: Balance,
-	others: Vec<IndividualExposure<AccountId, Balance>>,
-) {
-	assert_eq!(exposure.total, total);
-	assert_eq!(exposure.own, own);
-	substrate_test_utils::assert_eq_uvec!(exposure.others, others);
-}
