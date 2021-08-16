@@ -42,6 +42,7 @@ fn should_return_header() {
 			extrinsics_root:
 				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 			digest: Default::default(),
+			seed: Default::default(),
 		}
 	);
 
@@ -54,6 +55,7 @@ fn should_return_header() {
 			extrinsics_root:
 				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 			digest: Default::default(),
+			seed: Default::default(),
 		}
 	);
 
@@ -85,6 +87,7 @@ fn should_return_a_block() {
 				extrinsics_root:
 					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 				digest: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![],
 		}
@@ -100,6 +103,7 @@ fn should_return_a_block() {
 				extrinsics_root:
 					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 				digest: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![],
 		}

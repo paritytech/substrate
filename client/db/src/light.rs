@@ -642,6 +642,7 @@ pub(crate) mod tests {
 			state_root: Hash::random(),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
+			seed: Default::default(),
 		}
 	}
 

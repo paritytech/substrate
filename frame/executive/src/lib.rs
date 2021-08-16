@@ -218,7 +218,8 @@ where
 			header.number(),
 			header.parent_hash(),
 			header.extrinsics_root(),
-			&digests
+			&digests,
+			header.seed()
 		);
 	}
 
@@ -237,6 +238,7 @@ where
 		parent_hash: &System::Hash,
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
+		seed: &System::Hash,
 	) {
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
@@ -251,6 +253,7 @@ where
 			extrinsics_root,
 			digest,
 			frame_system::InitKind::Full,
+			seed
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
@@ -288,11 +291,9 @@ where
 		);
 
 		// Check that transaction trie root represents the transactions.
-		//FIXME return extrinsic root check
-		// let xts_root = extrinsics_root::<System::Hashing,
-		// _>(&block.extrinsics()); header.extrinsics_root().check_equal(&
-		// xts_root); assert!(header.extrinsics_root() == &xts_root,
-		// "Transaction trie root must be valid.");
+		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -308,19 +309,12 @@ where
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
-			frame_support::debug::RuntimeLogger::init();
-
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
 			let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
 
 			let mut seed: [u8;32] = Default::default();
-			// NOTE: separation of block creating and block execution results with
-			// disabling of extrinsic_root validation on block execution. Therefor
-			// temporarly we can use that field in header to inject shuffling seed without
-			// changing API. Ideally new field `seed` should be introduced to
-			// sp_runtime::traits::Header - TBD
-			seed.copy_from_slice(header.extrinsics_root().as_ref());
+			seed.copy_from_slice(header.seed().as_ref());
 			let shuffled_extrinsics = shuffle_using_seed::<Block>(extrinsics_with_author, seed);
 
 			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number()); 
@@ -434,13 +428,11 @@ where
 		// check storage root.
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
-		//assert!(header.state_root() == storage_root, "Storage root must match
-		// that calculated.");
+		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
-	/// side-effects; it merely checks whether the transaction would panic if it
-	/// were included or not.
+	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(
@@ -484,6 +476,7 @@ where
 			header.extrinsics_root(),
 			&digests,
 			frame_system::InitKind::Inspection,
+			header.seed(),
 		);
 
 		// Initialize logger, so the log messages are visible
@@ -767,6 +760,7 @@ mod tests {
 					state_root: hex!("465a1569d309039bdf84b0479d28064ea29e6584584dc7d788904bb14489c6f6").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			}, Default::default());
@@ -785,6 +779,7 @@ mod tests {
 					state_root: [0u8; 32].into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![] },
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			}, Default::default());
@@ -803,6 +798,7 @@ mod tests {
 					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			}, Default::default());

@@ -590,7 +590,8 @@ mod tests {
 				&hash,
 				&Default::default(),
 				&Default::default(),
-				Default::default()
+				Default::default(),
+				&Default::default(),
 			);
 
 			for number in 1..8 {
@@ -691,6 +692,7 @@ mod tests {
 				&Default::default(),
 				header.digest(),
 				Default::default(),
+				&Default::default(),
 			);
 
 			assert_eq!(Authorship::author(), author);

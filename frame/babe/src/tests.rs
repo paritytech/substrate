@@ -92,6 +92,7 @@ fn first_block_epoch_zero_start() {
 			&Default::default(),
 			&pre_digest,
 			Default::default(),
+			&Default::default(),
 		);
 
 		// see implementation of the function for details why: we issue an
