@@ -142,8 +142,8 @@ pub mod pallet {
 		///   the procedure given above, then the constant ratio is equal to 2.
 		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined according to
 		///   the procedure given above, then the constant ratio is approximately equal to 1.248.
-		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will
-		///   fall into bag 0, an id with weight 2 will fall into bag 1, etc.
+		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will fall
+		///   into bag 0, an id with weight 2 will fall into bag 1, etc.
 		///
 		/// # Migration
 		///

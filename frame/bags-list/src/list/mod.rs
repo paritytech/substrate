@@ -111,10 +111,10 @@ impl<T: Config> List<T> {
 	/// Postconditions:
 	///
 	/// - All `bag_upper` currently in storage are members of `T::BagThresholds`.
-	/// - No id is changed unless required to by the difference between the old threshold list
-	///   and the new.
-	/// - ids whose bags change at all are implicitly rebagged into the appropriate bag in the
-	///   new threshold set.
+	/// - No id is changed unless required to by the difference between the old threshold list and
+	///   the new.
+	/// - ids whose bags change at all are implicitly rebagged into the appropriate bag in the new
+	///   threshold set.
 	#[allow(dead_code)]
 	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
 		// we can't check all preconditions, but we can check one
