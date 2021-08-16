@@ -405,7 +405,7 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
-		let (election_result, weight) = if is_genesis {
+		let election_result = if is_genesis {
 			T::GenesisElectionProvider::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
@@ -418,13 +418,7 @@ impl<T: Config> Pallet<T> {
 		}
 		.ok()?;
 
-		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
-			frame_support::weights::DispatchClass::Mandatory,
-		);
-
 		let exposures = Self::collect_exposures(election_result);
-
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
 			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
 			match CurrentEra::<T>::get() {
@@ -737,13 +731,13 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	for Pallet<T>
 {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
-	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
-		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
+	fn desired_targets() -> data_provider::Result<u32> {
+		Ok(Self::validator_count())
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 		let nominator_count = CounterForNominators::<T>::get();
 		let validator_count = CounterForValidators::<T>::get();
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
@@ -754,24 +748,17 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 			return Err("Voter snapshot too big")
 		}
 
-		let slashing_span_count = <SlashingSpans<T>>::iter().count();
-		let weight = T::WeightInfo::get_npos_voters(
-			nominator_count,
-			validator_count,
-			slashing_span_count as u32,
-		);
-		Ok((Self::get_npos_voters(), weight))
+		Ok(Self::get_npos_voters())
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
 		let target_count = CounterForValidators::<T>::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big")
 		}
 
-		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
-		Ok((Self::get_npos_targets(), weight))
+		Ok(Self::get_npos_targets())
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
@@ -807,7 +794,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
 		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
@@ -827,7 +814,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_target(target: T::AccountId) {
 		let stake = MinValidatorBond::<T>::get() * 100u32.into();
 		<Bonded<T>>::insert(target.clone(), target.clone());
@@ -847,7 +834,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
 		<Bonded<T>>::remove_all(None);
 		<Ledger<T>>::remove_all(None);
@@ -855,7 +842,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		<Nominators<T>>::remove_all(None);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,

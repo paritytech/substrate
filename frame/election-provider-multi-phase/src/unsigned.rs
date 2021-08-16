@@ -662,19 +662,16 @@ mod max_weight {
 
 	struct TestWeight;
 	impl crate::weights::WeightInfo for TestWeight {
+		fn create_snapshot(_: u32, _: u32) -> Weight {
+			unreachable!()
+		}
 		fn on_initialize_nothing() -> Weight {
 			unreachable!()
 		}
 		fn on_initialize_open_signed() -> Weight {
 			unreachable!()
 		}
-		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-			unreachable!()
-		}
-		fn elect_queued(_v: u32, _t: u32, _a: u32, _d: u32) -> Weight {
-			0
-		}
-		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
+		fn on_initialize_open_unsigned() -> Weight {
 			unreachable!()
 		}
 		fn finalize_signed_phase_accept_solution() -> Weight {

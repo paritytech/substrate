@@ -192,37 +192,22 @@ frame_benchmarking::benchmarks! {
 	}
 
 	on_initialize_open_signed {
-		// NOTE: this benchmark currently doesn't have any components because the length of a db
-		// read/write is not captured. Otherwise, it is quite influenced by how much data
-		// `T::ElectionDataProvider` is reading and passing on.
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
+		<MultiPhase<T>>::on_initialize_open_signed();
 	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
 	}
 
-	on_initialize_open_unsigned_with_snapshot {
+	on_initialize_open_unsigned {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
-	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into()).unwrap();
-	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
-	}
-
-	on_initialize_open_unsigned_without_snapshot {
-		// need to assume signed phase was open before
-		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert!(<MultiPhase<T>>::current_phase().is_signed());
 	}: {
 		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
 	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
@@ -259,38 +244,21 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
-	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.
-	elect_queued {
+	create_snapshot {
 		// number of votes in snapshot.
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
-		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
-		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
-		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
-		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(witness, a, d)?;
-		let ready_solution =
-			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed).unwrap();
-
-		// these are set by the `solution_with_size` function.
-		assert!(<DesiredTargets<T>>::get().is_some());
-		assert!(<Snapshot<T>>::get().is_some());
-		assert!(<SnapshotMetadata<T>>::get().is_some());
-		<CurrentPhase<T>>::put(Phase::Signed);
-		// assume a queued solution is stored, regardless of where it comes from.
-		<QueuedSolution<T>>::put(ready_solution);
+		T::DataProvider::clear();
+		set_up_data_provider::<T>(v, t);
+		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+		<MultiPhase::<T>>::create_snapshot().unwrap()
 	} verify {
-		assert!(<MultiPhase<T>>::queued_solution().is_none());
-		assert!(<DesiredTargets<T>>::get().is_none());
-		assert!(<Snapshot<T>>::get().is_none());
-		assert!(<SnapshotMetadata<T>>::get().is_none());
-		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
 	}
 
 	submit {
@@ -303,7 +271,8 @@ frame_benchmarking::benchmarks! {
 			..Default::default()
 		};
 
-		MultiPhase::<T>::on_initialize_open_signed().expect("should be ok to start signed phase");
+		<MultiPhase<T>>::create_snapshot().unwrap();
+		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
