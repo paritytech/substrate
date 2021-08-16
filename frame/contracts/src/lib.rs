@@ -17,43 +17,47 @@
 
 //! # Contract Pallet
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! smart-contracts.
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the [`Currency`] trait to have smart-contract functionality. It can
-//! be used with other modules that implement accounts based on [`Currency`]. These "smart-contract accounts"
-//! have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
+//! This module extends accounts based on the [`Currency`] trait to have smart-contract
+//! functionality. It can be used with other modules that implement accounts based on [`Currency`].
+//! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
+//! to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
-//! This means that multiple smart-contracts can be instantiated from the same hash, without replicating
-//! the code each time.
+//! This means that multiple smart-contracts can be instantiated from the same hash, without
+//! replicating the code each time.
 //!
-//! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
-//! This call can alter the storage entries of the smart-contract account, instantiate new smart-contracts,
-//! or call other smart-contracts.
+//! When a smart-contract is called, its associated code is retrieved via the code hash and gets
+//! executed. This call can alter the storage entries of the smart-contract account, instantiate new
+//! smart-contracts, or call other smart-contracts.
 //!
-//! Finally, when an account is reaped, its associated code and storage of the smart-contract account
-//! will also be deleted.
+//! Finally, when an account is reaped, its associated code and storage of the smart-contract
+//! account will also be deleted.
 //!
 //! ### Gas
 //!
-//! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
-//! Unused gas is refunded after the call, regardless of the execution outcome.
+//! Senders must specify a gas limit with every call, as all instructions invoked by the
+//! smart-contract require gas. Unused gas is refunded after the call, regardless of the execution
+//! outcome.
 //!
-//! If the gas limit is reached, then all calls and state changes (including balance transfers) are only
-//! reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
-//! then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
-//! changes still persist.
+//! If the gas limit is reached, then all calls and state changes (including balance transfers) are
+//! only reverted at the current call's contract level. For example, if contract A calls B and B
+//! runs out of gas mid-call, then all of B's calls are reverted. Assuming correct error handling by
+//! contract A, A's other calls and state changes still persist.
 //!
 //! ### Notable Scenarios
 //!
-//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
-//! and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
-//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not
+//! "bubble up", and the call will only revert at the specific contract level. For example, if
+//! contract A calls contract B, and B fails, A can decide how to handle that failure, either
+//! proceeding or reverting A's changes.
 //!
 //! ## Interface
 //!
@@ -226,17 +230,18 @@ pub mod pallet {
 		/// deposited while the contract is alive. Costs for additional storage are added to
 		/// this base cost.
 		///
-		/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
-		/// making them pay rent. This creates an incentive to remove them early in order to save rent.
+		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
+		/// by making them pay rent. This creates an incentive to remove them early in order to save
+		/// rent.
 		#[pallet::constant]
 		type DepositPerContract: Get<BalanceOf<Self>>;
 
 		/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
 		///
-		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
-		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
-		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
-		/// then it would pay 500 BU/day.
+		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1
+		/// BU/byte/day, then a contract with 1,000,000 BU that uses 1,000 bytes of storage would
+		/// pay no rent. But if the balance reduced to 500,000 BU and the storage stayed the same at
+		/// 1,000, then it would pay 500 BU/day.
 		#[pallet::constant]
 		type DepositPerStorageByte: Get<BalanceOf<Self>>;
 
@@ -353,7 +358,8 @@ pub mod pallet {
 		///
 		/// Instantiation is executed as follows:
 		///
-		/// - The supplied `code` is instrumented, deployed, and a `code_hash` is created for that code.
+		/// - The supplied `code` is instrumented, deployed, and a `code_hash` is created for that
+		///   code.
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
@@ -458,7 +464,8 @@ pub mod pallet {
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
 			// adding a handicap: for signed extrinsics we use a slightly older block number
-			// for the eviction check. This can be viewed as if we pushed regular users back in past.
+			// for the eviction check. This can be viewed as if we pushed regular users back in
+			// past.
 			let handicap = if signed { T::SignedClaimHandicap::get() } else { Zero::zero() };
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
@@ -530,8 +537,8 @@ pub mod pallet {
 		/// # Params
 		///
 		/// - `contract`: The contract that emitted the event.
-		/// - `data`: Data supplied by the contract. Metadata generated during contract
-		///           compilation is needed to decode it.
+		/// - `data`: Data supplied by the contract. Metadata generated during contract compilation
+		///   is needed to decode it.
 		ContractEmitted(T::AccountId, Vec<u8>),
 
 		/// A code with the specified hash was removed.

@@ -23,15 +23,15 @@
 //! Allows you to test
 //! <br />
 //!
-//! -   Migrations
-//! -   Runtime Upgrades
-//! -   Pallets and general runtime functionality.
+//! - Migrations
+//! - Runtime Upgrades
+//! - Pallets and general runtime functionality.
 //!
 //! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
-//! The running node has no signature verification, which allows us author extrinsics for any account on chain.
-//!     <br/>
+//! The running node has no signature verification, which allows us author extrinsics for any
+//! account on chain.     <br/>
 //!     <br/>
 //!
 //! <h2>How do I Use this?</h2>
@@ -42,7 +42,7 @@
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
 //!     TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, BasePath,
-//!     DatabaseConfig, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
+//!     DatabaseSource, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
 //!     config::{NetworkConfiguration, KeystoreConfig},
 //! };
 //! use std::sync::Arc;

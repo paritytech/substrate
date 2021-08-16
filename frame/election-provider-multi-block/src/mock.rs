@@ -16,11 +16,11 @@
 // limitations under the License.
 
 use super::*;
-use crate as multi_phase;
+use crate::{self as multi_phase, unsigned::Assignment};
 use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
-use multi_phase::unsigned::{IndexAssignmentOf, Voter};
+use multi_phase::unsigned::IndexAssignmentOf;
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -41,6 +41,7 @@ use sp_runtime::{
 use std::{convert::TryFrom, sync::Arc};
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;
 
 frame_support::construct_runtime!(
@@ -150,9 +151,88 @@ pub fn trim_helpers() -> TrimHelpers {
 	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
 }
 
+/// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
+fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
+	let mut flatten: Vec<Vec<Voter<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
+	flatten.resize(Pages::get() as usize, vec![]);
+	let voter_snapshot = <PagedVoterSnapshot<Runtime>>::iter().collect::<Vec<_>>();
+	for (page, voters) in voter_snapshot {
+		flatten[page as usize] = voters
+	}
+
+	flatten
+}
+
+pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
+	// read all voter snapshots
+	let voter_snapshot = nested_voter_snapshot();
+	assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
+	let target_snapshot = MultiPhase::paged_target_snapshot(0).unwrap();
+	let desired_targets = MultiPhase::desired_targets().unwrap();
+
+	let all_voters = voter_snapshot.iter().flatten().cloned().collect::<Vec<_>>();
+
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
+		desired_targets as usize,
+		target_snapshot.clone(),
+		all_voters.clone(),
+		None,
+	)
+	.unwrap();
+
+	// compute score from the overall solution before dealing with pages in any way.
+	let score = {
+		let cache = helpers::generate_voter_cache::<Runtime>(&all_voters);
+		let stake_of = helpers::stake_of_fn::<Runtime>(&all_voters, &cache);
+		let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of).unwrap();
+		let winners = to_without_backing(winners);
+		to_supports::<AccountId>(&winners, &staked).unwrap().evaluate()
+	};
+
+	let page_for_voter = |voter: &AccountId| -> PageIndex {
+		// TODO: for now we do this in a super naive way.
+		voter_snapshot
+			.iter()
+			.enumerate()
+			.find_map(|(page, voters)| {
+				if voters.iter().find(|(x, _, _)| x == voter).is_some() {
+					Some(page as PageIndex)
+				} else {
+					None
+				}
+			})
+			.unwrap()
+	};
+
+	let mut paged_assignments: Vec<Vec<Assignment<Runtime>>> =
+		Vec::with_capacity(Pages::get() as usize);
+	paged_assignments.resize(Pages::get() as usize, vec![]);
+	for assignment in assignments {
+		let page = page_for_voter(&assignment.who);
+		paged_assignments[page as usize].push(assignment);
+	}
+
+	let target_index = helpers::target_index_fn_linear::<Runtime>(&target_snapshot);
+
+	let mut solution_pages: Vec<SolutionOf<Runtime>> = Vec::with_capacity(Pages::get() as usize);
+	for (index, assignment_page) in paged_assignments.iter().enumerate() {
+		let corresponding_snapshot = &voter_snapshot[index];
+		let voter_index = helpers::voter_index_fn_linear::<Runtime>(corresponding_snapshot);
+		let page =
+			<SolutionOf<Runtime>>::from_assignment(assignment_page, voter_index, &target_index)
+				.unwrap();
+		solution_pages.push(page);
+	}
+
+	let round = MultiPhase::round();
+
+	PagedRawSolution { solution_pages, round, score }
+}
+
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
+#[deprecated]
 pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
@@ -244,13 +324,18 @@ parameter_types! {
 		(1, 10, vec![10, 20]),
 		(2, 10, vec![30, 40]),
 		(3, 10, vec![40]),
-		(4, 10, vec![10, 20, 30, 40]),
+		(4, 10, vec![10, 20, 40]),
+		(5, 10, vec![10, 30, 40]),
+		(6, 10, vec![20, 30, 40]),
+		(7, 10, vec![20, 30]),
+		(8, 10, vec![10]),
 		// self votes.
 		(10, 10, vec![10]),
 		(20, 20, vec![20]),
 		(30, 30, vec![30]),
 		(40, 40, vec![40]),
 	];
+	pub static LastIteratedVoterIndex: Option<usize> = None;
 
 	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
 	pub static DesiredTargets: u32 = 2;
@@ -393,13 +478,6 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
-
-parameter_types! {
-	pub static TargetsCurrentPage: (PagedIndex, Option<AccountId>) = (Pages::get(), None);
-	pub static VotersCurrentPage: (PageIndex, Option<AccountId>) = (Pages::get(), None);
-}
-
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
@@ -409,6 +487,9 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		let targets = Targets::get();
 
+		if remaining != 0 {
+			return Err("targets shall not have more than a single page")
+		}
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
 			return Err("Targets too big")
 		}
@@ -421,8 +502,28 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		remaining: PageIndex,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
 		let mut voters = Voters::get();
+
+		// jump to the first non-iterated, if this is a follow up.
+		if let Some(index) = LastIteratedVoterIndex::get() {
+			voters = voters.iter().skip(index).cloned().collect::<Vec<_>>();
+		}
+
+		// take as many as you can.
 		if let Some(max_len) = maybe_max_len {
 			voters.truncate(max_len)
+		}
+
+		if voters.is_empty() {
+			return Ok((vec![], 0))
+		}
+
+		if remaining > 0 {
+			let last = voters.last().cloned().unwrap();
+			LastIteratedVoterIndex::set(Some(
+				Voters::get().iter().position(|v| v == &last).map(|i| i + 1).unwrap(),
+			));
+		} else {
+			LastIteratedVoterIndex::set(None)
 		}
 
 		Ok((voters, 0))
@@ -489,8 +590,12 @@ impl ExtBuilder {
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn fallback(self, fallback: FallbackStrategy) -> Self {
-		<Fallback>::set(fallback);
+	pub fn pages(self, pages: PageIndex) -> Self {
+		<Pages>::set(pages);
+		self
+	}
+	pub fn voter_per_page(self, count: u32) -> Self {
+		<VoterSnapshotPerBlock>::set(count);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
@@ -523,6 +628,7 @@ impl ExtBuilder {
 		<SignedMaxWeight>::set(weight);
 		self
 	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -567,4 +673,97 @@ impl ExtBuilder {
 
 pub(crate) fn balances(who: &u64) -> (u64, u64) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+#[test]
+fn raw_paged_solution_works() {
+	ExtBuilder::default().pages(2).voter_per_page(4).build_and_execute(|| {
+		// get voter snapshot
+		(0..Pages::get())
+			.rev()
+			.map(|p| MultiPhase::create_voters_snapshot_paged(p))
+			.collect::<Result<Vec<_>, _>>()
+			.unwrap();
+
+		// get target snapshot.
+		assert_eq!(MultiPhase::create_targets_snapshot(), Ok(4));
+
+		// 2 pages of 8 voters
+		assert_eq!(<PagedVoterSnapshot<Runtime>>::iter().count(), 2);
+		assert_eq!(<PagedVoterSnapshot<Runtime>>::iter().map(|(_p, x)| x).flatten().count(), 8);
+		// 1 page of 4 voters
+		assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
+		assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().map(|(_p, x)| x).flatten().count(), 4);
+
+		let solution = raw_paged_solution();
+		assert_eq!(
+			solution.solution_pages,
+			vec![
+				// in page 0 of the snapshot.
+				TestNposSolution {
+					votes1: vec![(1, 3), (3, 0)],
+					votes2: vec![(0, [(0, PerU16::from_parts(32768))], 3)],
+					..Default::default()
+				},
+				// in page 1 of the snapshot.
+				TestNposSolution {
+					votes1: vec![(0, 0), (1, 3), (2, 3)],
+					votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
+					..Default::default()
+				},
+			]
+		);
+
+		assert_eq!(solution.score, [30, 70, 2500]);
+	})
+}
+
+#[test]
+fn staking_mock_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_eq!(StakingMock::voters(None, 0).unwrap().0.len(), 12);
+		assert!(LastIteratedVoterIndex::get().is_none());
+
+		assert_eq!(
+			StakingMock::voters(Some(4), 0)
+				.unwrap()
+				.0
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![1, 2, 3, 4],
+		);
+		assert!(LastIteratedVoterIndex::get().is_none());
+
+		assert_eq!(
+			StakingMock::voters(Some(4), 2)
+				.unwrap()
+				.0
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![1, 2, 3, 4],
+		);
+		assert_eq!(LastIteratedVoterIndex::get().unwrap(), 4);
+		assert_eq!(
+			StakingMock::voters(Some(4), 1)
+				.unwrap()
+				.0
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![5, 6, 7, 8],
+		);
+		assert_eq!(LastIteratedVoterIndex::get().unwrap(), 8);
+		assert_eq!(
+			StakingMock::voters(Some(4), 0)
+				.unwrap()
+				.0
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![10, 20, 30, 40],
+		);
+		assert!(LastIteratedVoterIndex::get().is_none());
+	})
 }

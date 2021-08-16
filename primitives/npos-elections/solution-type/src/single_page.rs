@@ -93,6 +93,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		#vis struct #ident { #single #rest }
 
 		use _npos::__OrInvalidIndex;
+		impl _npos::codec::EncodeLike for #ident {}
 		impl _npos::NposSolution for #ident {
 			const LIMIT: usize = #count;
 			type VoterIndex = #voter_type;

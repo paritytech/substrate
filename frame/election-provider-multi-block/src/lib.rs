@@ -261,10 +261,11 @@ mod mock;
 #[macro_use]
 pub mod helpers;
 
-const LOG_TARGET: &'static str = "runtime::election-provider";
+const LOG_TARGET: &'static str = "runtime::multiblock-election";
 
 pub mod signed;
 pub mod unsigned;
+mod verifier;
 pub mod weights;
 
 pub use signed::{
@@ -337,8 +338,8 @@ pub enum Phase<Bn> {
 	/// number.
 	///
 	/// We do not yet check whether the unsigned phase is active or passive. The intent is for the
-	/// blockchain to be able to declare: "I believe that there exists an adequate signed solution,"
-	/// advising validators not to bother running the unsigned offchain worker.
+	/// blockchain to be able to declare: "I believe that there exists an adequate signed
+	/// solution," advising validators not to bother running the unsigned offchain worker.
 	///
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
 	/// and always compute their own solution. However, by default, when the unsigned phase is
@@ -573,8 +574,8 @@ pub enum FeasibilityError {
 	WrongWinnerCount,
 	/// The snapshot is not available.
 	///
-	/// Kinda defensive: The pallet should technically never attempt to do a feasibility check when
-	/// no snapshot is present.
+	/// Kinda defensive: The pallet should technically never attempt to do a feasibility check
+	/// when no snapshot is present.
 	SnapshotUnavailable,
 	/// Internal error from the election crate.
 	NposElection(sp_npos_elections::Error),
@@ -787,7 +788,8 @@ pub mod pallet {
 					let remaining_pages = T::Pages::get().saturating_sub(One::one());
 					log!(info, "starting snapshot creation[{}]", remaining_pages);
 					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
-					Self::create_snapshot_paged(remaining_pages, true);
+					let _ = Self::create_targets_snapshot();
+					Self::create_voters_snapshot_paged(remaining_pages).unwrap();
 					0
 				},
 				Phase::Snapshot(0)
@@ -808,7 +810,7 @@ pub mod pallet {
 					let remaining_pages = x.saturating_sub(1);
 					log!(info, "continuing snapshot creation[{}]", remaining_pages);
 					CurrentPhase::<T>::put(Phase::Snapshot(x));
-					Self::create_snapshot_paged(remaining_pages, false);
+					Self::create_voters_snapshot_paged(remaining_pages);
 					0
 				},
 				_ => T::WeightInfo::on_initialize_nothing(),
@@ -847,8 +849,9 @@ pub mod pallet {
 			let pages_bn: T::BlockNumber = T::Pages::get().into();
 			// pages must be at least 1.
 			assert!(T::Pages::get() > 0);
-			assert!(pages_bn > T::SignedPhase::get());
-			assert!(pages_bn > T::UnsignedPhase::get());
+			// pages shall not be more than the length of any phase
+			assert!(pages_bn < T::SignedPhase::get());
+			assert!(pages_bn < T::UnsignedPhase::get());
 
 			// ----------------------------
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
@@ -1055,8 +1058,8 @@ pub mod pallet {
 			// }
 
 			// signed_submissions.put();
-			// Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
-			// Ok(())
+			// Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed,
+			// ejected_a_solution)); Ok(())
 		}
 	}
 
@@ -1369,53 +1372,57 @@ impl<T: Config> Pallet<T> {
 		Ok(weight.saturating_add(T::DbWeight::get().writes(1)))
 	}
 
-	/// Creates the snapshot. Writes new data to:
+	/// Creates the target snapshot. Writes new data to:
 	///
 	/// 1. [`SnapshotMetadata`]
-	/// 2. [`PagedVoterSnapshot`]
 	/// 2. [`PagedTargetSnapshot`]
 	/// 3. [`DesiredTargets`]
 	///
 	/// Returns `Ok()` if operation is okay.
-	pub fn create_snapshot_paged(
-		remaining: PageIndex,
-		with_targets: bool,
-	) -> Result<Weight, ElectionError> {
-		log!(
-			trace,
-			"creating paged snapshot, {} pages remaining, getting targets? {}",
-			remaining,
-			with_targets
+	pub fn create_targets_snapshot() -> Result<u32, ElectionError> {
+		log!(trace, "creating target snapshot");
+		// if requested, get the targets as well.
+		let (desired_targets, _) =
+			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
+		<DesiredTargets<T>>::put(desired_targets);
+
+		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
+
+		let (targets, _) =
+			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
+
+		let length = targets.len();
+		if length > target_limit {
+			debug_assert!(false, "Snapshot limit has not been respected.");
+			return Err(ElectionError::DataProvider("Snapshot too big."))
+		}
+
+		Self::write_storage_with_pre_allocate(
+			&<PagedTargetSnapshot<T>>::hashed_key_for(0),
+			targets,
 		);
 
-		let targets_len = if with_targets {
-			// if requested, get the targets as well.
-			let (desired_targets, _) =
-				T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
-			<DesiredTargets<T>>::put(desired_targets);
+		// update the metadata.
+		<SnapshotMetadata<T>>::mutate(|m| {
+			let mut new_metadata = m.unwrap_or_default();
+			new_metadata.targets = new_metadata.targets.saturating_add(length as u32);
+			*m = Some(new_metadata);
+		});
 
-			let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-			let (targets, _) = T::DataProvider::targets(Some(target_limit), 0)
-				.map_err(ElectionError::DataProvider)?;
-			let length = targets.len();
+		Ok(length as u32)
+	}
 
-			if length > target_limit {
-				debug_assert!(false, "Snapshot limit has not been respected.");
-				return Err(ElectionError::DataProvider("Snapshot too big."))
-			}
+	/// Creates the voter snapshot. Writes new data to:
+	///
+	/// 1. [`SnapshotMetadata`]
+	/// 2. [`PagedTargetSnapshot`]
+	/// 3. [`DesiredTargets`]
+	///
+	/// Returns `Ok()` if operation is okay.
+	pub fn create_voters_snapshot_paged(remaining: PageIndex) -> Result<Weight, ElectionError> {
+		log!(trace, "creating paged snapshot, {} pages remaining", remaining);
 
-			Self::write_storage_with_pre_allocate(
-				&<PagedTargetSnapshot<T>>::hashed_key_for(0),
-				targets,
-			);
-			length
-		} else {
-			Zero::zero()
-		};
-
-		let voter_limit = T::VoterSnapshotPerBlock::get()
-			.saturated_into::<usize>()
-			.saturating_sub(targets_len);
+		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
 		let (voters, _) = T::DataProvider::voters(Some(voter_limit), remaining)
 			.map_err(ElectionError::DataProvider)?;
 
@@ -1429,7 +1436,6 @@ impl<T: Config> Pallet<T> {
 		<SnapshotMetadata<T>>::mutate(|m| {
 			let mut new_metadata = m.unwrap_or_default();
 			new_metadata.voters = new_metadata.voters.saturating_add(voters.len() as u32);
-			new_metadata.targets = new_metadata.targets.saturating_add(targets_len as u32);
 			// TODO: just change this to not be an option??
 			*m = Some(new_metadata);
 		});
@@ -1443,11 +1449,22 @@ impl<T: Config> Pallet<T> {
 		Ok(0)
 	}
 
+	fn write_storage_with_pre_allocate<E: Encode>(key: &[u8], data: E) {
+		let size = data.encoded_size();
+		let mut buffer = Vec::with_capacity(size);
+		data.encode_to(&mut buffer);
+
+		// do some checks.
+		debug_assert_eq!(buffer, data.encode());
+		// buffer should have not re-allocated since.
+		debug_assert!(buffer.len() == size && size == buffer.capacity());
+		sp_io::storage::set(key, &buffer);
+	}
+
 	/// Creates the snapshot. Writes new data to:
 	///
 	/// 1. [`SnapshotMetadata`]
 	/// 2. [`RoundSnapshot`]
-	/// 3. [`DesiredTargets`]
 	///
 	/// Returns `Ok(consumed_weight)` if operation is okay.
 	#[deprecated(note = "use `create_snapshot_paged` instead")]
@@ -1480,7 +1497,8 @@ impl<T: Config> Pallet<T> {
 		<DesiredTargets<T>>::put(desired_targets);
 
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
-		// `encoded_size` encodes it without storing it anywhere, this should not cause any allocation.
+		// `encoded_size` encodes it without storing it anywhere, this should not cause any
+		// allocation.
 		let snapshot = RoundSnapshot { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(info, "snapshot pre-calculated size {:?}", size);
@@ -1497,18 +1515,6 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(w2)
 			.saturating_add(w3)
 			.saturating_add(T::DbWeight::get().writes(3)))
-	}
-
-	fn write_storage_with_pre_allocate<E: Encode>(key: &[u8], data: E) {
-		let size = data.encoded_size();
-		let mut buffer = Vec::with_capacity(size);
-		data.encode_to(&mut buffer);
-
-		// do some checks.
-		debug_assert_eq!(buffer, data.encode());
-		// buffer should have not re-allocated since.
-		debug_assert!(buffer.len() == size && size == buffer.capacity());
-		sp_io::storage::set(key, &buffer);
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
@@ -1653,8 +1659,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
-		// TODO: ensure that if this called both ahead of time and too late, the state is cleaned up.
-		// TODO: probably try one last time to verufy any ongoing solution being verified
+		// TODO: ensure that if this called both ahead of time and too late, the state is cleaned
+		// up. TODO: probably try one last time to verufy any ongoing solution being verified
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
@@ -1730,180 +1736,7 @@ pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	InvalidTransaction::Custom(error_number)
 }
 
-#[cfg(test)]
-mod feasibility_check {
-	//! All of the tests here should be dedicated to only testing the feasibility check and nothing
-	//! more. The best way to audit and review these tests is to try and come up with a solution
-	//! that is invalid, but gets through the system as valid.
-
-	use super::*;
-	use crate::mock::{
-		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
-		TargetIndex, UnsignedPhase, VoterIndex,
-	};
-	use frame_support::assert_noop;
-
-	const COMPUTE: ElectionCompute = ElectionCompute::OnChain;
-
-	#[test]
-	fn snapshot_is_there() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-			let solution = raw_solution();
-
-			// For whatever reason it might be:
-			<Snapshot<Runtime>>::kill();
-
-			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::SnapshotUnavailable
-			);
-		})
-	}
-
-	#[test]
-	fn round() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut solution = raw_solution();
-			solution.round += 1;
-			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::InvalidRound
-			);
-		})
-	}
-
-	#[test]
-	fn desired_targets() {
-		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let raw = raw_solution();
-
-			assert_eq!(raw.solution.unique_targets().len(), 4);
-			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
-
-			assert_noop!(
-				MultiPhase::feasibility_check(raw, COMPUTE),
-				FeasibilityError::WrongWinnerCount,
-			);
-		})
-	}
-
-	#[test]
-	fn winner_indices() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut raw = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().targets.len(), 4);
-			// ----------------------------------------------------^^ valid range is [0..3].
-
-			// Swap all votes from 3 to 4. This will ensure that the number of unique winners will
-			// still be 4, but one of the indices will be gibberish. Requirement is to make sure 3 a
-			// winner, which we don't do here.
-			raw.solution
-				.votes1
-				.iter_mut()
-				.filter(|(_, t)| *t == TargetIndex::from(3u16))
-				.for_each(|(_, t)| *t += 1);
-			raw.solution.votes2.iter_mut().for_each(|(_, [(t0, _)], t1)| {
-				if *t0 == TargetIndex::from(3u16) {
-					*t0 += 1
-				};
-				if *t1 == TargetIndex::from(3u16) {
-					*t1 += 1
-				};
-			});
-			assert_noop!(
-				MultiPhase::feasibility_check(raw, COMPUTE),
-				FeasibilityError::InvalidWinner
-			);
-		})
-	}
-
-	#[test]
-	fn voter_indices() {
-		// Should be caught in `solution.into_assignment`.
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut solution = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
-			// ----------------------------------------------------^^ valid range is [0..7].
-
-			// Check that there is an index 7 in votes1, and flip to 8.
-			assert!(
-				solution
-					.solution
-					.votes1
-					.iter_mut()
-					.filter(|(v, _)| *v == VoterIndex::from(7u32))
-					.map(|(v, _)| *v = 8)
-					.count() > 0
-			);
-			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex),
-			);
-		})
-	}
-
-	#[test]
-	fn voter_votes() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut solution = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
-			// ----------------------------------------------------^^ valid range is [0..7].
-
-			// First, check that voter at index 7 (40) actually voted for 3 (40) -- this is self
-			// vote. Then, change the vote to 2 (30).
-			assert_eq!(
-				solution
-					.solution
-					.votes1
-					.iter_mut()
-					.filter(|(v, t)| *v == 7 && *t == 3)
-					.map(|(_, t)| *t = 2)
-					.count(),
-				1,
-			);
-			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::InvalidVote,
-			);
-		})
-	}
-
-	#[test]
-	fn score() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut solution = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
-
-			// Simply faff with the score.
-			solution.score[0] += 1;
-
-			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::InvalidScore,
-			);
-		})
-	}
-}
+/*
 
 #[cfg(test)]
 mod tests {
@@ -2270,3 +2103,4 @@ mod tests {
 		println!("can support {} voters to yield a weight of {}", active, weight_with(active));
 	}
 }
+*/

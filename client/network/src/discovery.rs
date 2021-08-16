@@ -1002,7 +1002,8 @@ mod tests {
 							match e {
 								DiscoveryOut::UnroutablePeer(other) |
 								DiscoveryOut::Discovered(other) => {
-									// Call `add_self_reported_address` to simulate identify happening.
+									// Call `add_self_reported_address` to simulate identify
+									// happening.
 									let addr = swarms
 										.iter()
 										.find_map(|(s, a)| {

@@ -269,7 +269,8 @@ pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///
 	/// The order must be the same as it expects them in
-	/// [`on_new_session`](Self::on_new_session<Ks>) and [`on_genesis_session`](Self::on_genesis_session<Ks>).
+	/// [`on_new_session`](Self::on_new_session<Ks>) and
+	/// [`on_genesis_session`](Self::on_genesis_session<Ks>).
 	const KEY_TYPE_IDS: &'static [KeyTypeId];
 
 	/// The given validator set will be used for the genesis session.
@@ -490,8 +491,8 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event {
-		/// New session has happened. Note that the argument is the \[session_index\], not the block
-		/// number as the type might suggest.
+		/// New session has happened. Note that the argument is the \[session_index\], not the
+		/// block number as the type might suggest.
 		NewSession(SessionIndex),
 	}
 );
