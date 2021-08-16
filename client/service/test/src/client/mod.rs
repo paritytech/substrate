@@ -64,19 +64,19 @@ mod light;
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
 native_executor_instance!(
-	Executor,
+	ExecutorDispatch,
 	substrate_test_runtime_client::runtime::api::dispatch,
 	substrate_test_runtime_client::runtime::native_version,
 );
 
-fn executor() -> sc_executor::NativeElseWasmExecutor<Executor> {
+fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
 	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn prepare_client_with_key_changes() -> (
 	client::Client<
 		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
+		substrate_test_runtime_client::ExecutorDispatch,
 		Block,
 		RuntimeApi,
 	>,
@@ -2099,7 +2099,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		LocalCallExecutor<
 			Block,
 			in_mem::Backend<Block>,
-			sc_executor::NativeElseWasmExecutor<LocalExecutor>,
+			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 		>,
 		substrate_test_runtime_client::runtime::Block,
 		substrate_test_runtime_client::runtime::RuntimeApi,

@@ -63,7 +63,7 @@
 //! type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 //!
 //! sc_executor::native_executor_instance!(
-//! 	pub Executor,
+//! 	pub ExecutorDispatch,
 //! 	node_runtime::api::dispatch,
 //! 	node_runtime::native_version,
 //! 	SignatureVerificationOverride,
@@ -74,8 +74,8 @@
 //! impl ChainInfo for Requirements {
 //!     /// Provide a Block type with an OpaqueExtrinsic
 //!     type Block = node_primitives::Block;
-//!     /// Provide an Executor type for the runtime
-//!     type Executor = Executor;
+//!     /// Provide an ExecutorDispatch type for the runtime
+//!     type ExecutorDispatch = ExecutorDispatch;
 //!     /// Provide the runtime itself
 //!     type Runtime = node_runtime::Runtime;
 //!     /// A touch of runtime api
@@ -86,7 +86,7 @@
 //! 	type BlockImport = BlockImport<
 //! 		Self::Block,
 //! 		TFullBackend<Self::Block>,
-//! 		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
+//! 		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 //! 		Self::SelectChain,
 //!     >;
 //!     /// and a dash of SignedExtensions
@@ -112,7 +112,7 @@
 //!     /// The function signature tells you all you need to know. ;)
 //! 	fn create_client_parts(config: &Configuration) -> Result<
 //! 		(
-//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>>,
+//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>>,
 //! 			Arc<TFullBackend<Self::Block>>,
 //! 			KeyStorePtr,
 //! 			TaskManager,
@@ -121,7 +121,7 @@
 //! 				dyn ConsensusDataProvider<
 //! 					Self::Block,
 //! 					Transaction = TransactionFor<
-//! 						TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
+//! 						TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 //! 						Self::Block
 //! 					>,
 //! 				>
@@ -136,7 +136,7 @@
 //! 			backend,
 //! 			keystore,
 //! 			task_manager,
-//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>(config)?;
+//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>(config)?;
 //! 		let client = Arc::new(client);
 //!
 //! 		let inherent_providers = InherentDataProviders::new();
@@ -250,8 +250,8 @@ pub trait ChainInfo: Sized {
 	/// Opaque block type
 	type Block: BlockT;
 
-	/// Executor type
-	type Executor: NativeExecutionDispatch + 'static;
+	/// ExecutorDispatch dispatch type
+	type ExecutorDispatch: NativeExecutionDispatch + 'static;
 
 	/// Runtime
 	type Runtime: frame_system::Config;
@@ -262,7 +262,7 @@ pub trait ChainInfo: Sized {
 		+ 'static
 		+ ConstructRuntimeApi<
 			Self::Block,
-			TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
+			TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 		>;
 
 	/// select chain type.
@@ -276,7 +276,7 @@ pub trait ChainInfo: Sized {
 			Self::Block,
 			Error = sp_consensus::Error,
 			Transaction = TransactionFor<
-				TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
+				TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 				Self::Block,
 			>,
 		> + 'static;

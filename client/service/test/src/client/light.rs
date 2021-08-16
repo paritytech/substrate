@@ -258,7 +258,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 	}
 }
 
-fn local_executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutor> {
+fn local_executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch> {
 	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
@@ -446,7 +446,7 @@ fn code_is_executed_at_genesis_only() {
 }
 
 type TestChecker = LightDataChecker<
-	NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutor>,
+	NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch>,
 	Block,
 	DummyStorage,
 >;

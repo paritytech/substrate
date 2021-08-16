@@ -612,7 +612,7 @@ impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeE
 ///
 /// ```
 /// sc_executor::native_executor_instance!(
-///     pub MyExecutor,
+///     pub MyExecutorDispatch,
 ///     substrate_test_runtime::api::dispatch,
 ///     substrate_test_runtime::native_version,
 /// );
@@ -634,7 +634,7 @@ impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeE
 /// }
 ///
 /// sc_executor::native_executor_instance!(
-///     pub MyExecutor,
+///     pub MyExecutorDispatch,
 ///     substrate_test_runtime::api::dispatch,
 ///     substrate_test_runtime::native_version,
 ///     my_interface::HostFunctions,
@@ -692,7 +692,7 @@ mod tests {
 	}
 
 	native_executor_instance!(
-		pub MyExecutor,
+		pub MyExecutorDispatch,
 		substrate_test_runtime::api::dispatch,
 		substrate_test_runtime::native_version,
 		(my_interface::HostFunctions, my_interface::HostFunctions),
@@ -700,7 +700,8 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeElseWasmExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
+		let executor =
+			NativeElseWasmExecutor::<MyExecutorDispatch>::new(WasmExecutionMethod::Interpreted, None, 8);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);
 		});

@@ -365,12 +365,12 @@ mod tests {
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
 	};
-	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutor};
+	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutorDispatch};
 
 	#[test]
 	fn should_get_override_if_exists() {
 		let executor =
-			NativeElseWasmExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+			NativeElseWasmExecutor::<LocalExecutorDispatch>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
 
 		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());

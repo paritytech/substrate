@@ -51,7 +51,7 @@ type ClientParts<T> = (
 		TFullClient<
 			<T as ChainInfo>::Block,
 			<T as ChainInfo>::RuntimeApi,
-			NativeElseWasmExecutor<<T as ChainInfo>::Executor>,
+			NativeElseWasmExecutor<<T as ChainInfo>::ExecutorDispatch>,
 		>,
 	>,
 	Arc<
@@ -84,7 +84,7 @@ where
 	T: ChainInfo + 'static,
 	<T::RuntimeApi as ConstructRuntimeApi<
 		T::Block,
-		TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::Executor>>,
+		TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
 	>>::RuntimeApi: Core<T::Block>
 		+ Metadata<T::Block>
 		+ OffchainWorkerApi<T::Block>
@@ -107,7 +107,7 @@ where
 			default_config(task_executor, chain_spec),
 	};
 
-	let executor = NativeElseWasmExecutor::<T::Executor>::new(
+	let executor = NativeElseWasmExecutor::<T::ExecutorDispatch>::new(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,

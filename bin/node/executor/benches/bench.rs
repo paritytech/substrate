@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
-use node_executor::Executor;
+use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
 	constants::currency::*, Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header,
@@ -77,7 +77,7 @@ fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256
 }
 
 fn construct_block<E: Externalities>(
-	executor: &NativeElseWasmExecutor<Executor>,
+	executor: &NativeElseWasmExecutor<ExecutorDispatch>,
 	ext: &mut E,
 	number: BlockNumber,
 	parent_hash: Hash,
@@ -157,7 +157,7 @@ fn construct_block<E: Externalities>(
 
 fn test_blocks(
 	genesis_config: &GenesisConfig,
-	executor: &NativeElseWasmExecutor<Executor>,
+	executor: &NativeElseWasmExecutor<ExecutorDispatch>,
 ) -> Vec<(Vec<u8>, Hash)> {
 	let mut test_ext = new_test_ext(genesis_config);
 	let mut block1_extrinsics = vec![CheckedExtrinsic {

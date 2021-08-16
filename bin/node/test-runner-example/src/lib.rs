@@ -30,7 +30,7 @@ use test_runner::{ChainInfo, SignatureVerificationOverride};
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
 sc_executor::native_executor_instance!(
-	pub Executor,
+	pub ExecutorDispatch,
 	node_runtime::api::dispatch,
 	node_runtime::native_version,
 	(
@@ -44,14 +44,14 @@ struct NodeTemplateChainInfo;
 
 impl ChainInfo for NodeTemplateChainInfo {
 	type Block = node_primitives::Block;
-	type Executor = Executor;
+	type ExecutorDispatch = ExecutorDispatch;
 	type Runtime = node_runtime::Runtime;
 	type RuntimeApi = node_runtime::RuntimeApi;
 	type SelectChain = sc_consensus::LongestChain<TFullBackend<Self::Block>, Self::Block>;
 	type BlockImport = BlockImport<
 		Self::Block,
 		TFullBackend<Self::Block>,
-		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
+		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;

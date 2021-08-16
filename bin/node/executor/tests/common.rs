@@ -35,7 +35,7 @@ use sp_runtime::{
 };
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 
-use node_executor::Executor;
+use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
 	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, Runtime,
@@ -96,7 +96,7 @@ pub fn from_block_number(n: u32) -> Header {
 	Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 }
 
-pub fn executor() -> NativeElseWasmExecutor<Executor> {
+pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
 	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
