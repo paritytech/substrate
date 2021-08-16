@@ -146,7 +146,10 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 		Ok(true)
 		}
 	} else {
-		Err(syn_err("must be one attribute, only #[compact]"))
+		Err(syn::Error::new_spanned(
+			attr.clone(),
+			"compact solution can accept only #[compact]",
+		))
 	}
 }
 
