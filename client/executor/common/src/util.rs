@@ -75,7 +75,6 @@ pub mod wasmi {
 		/// access. By returning the memory object "as is" we bypass all of the checks.
 		///
 		/// Intended to use only during module initialization.
-		///
 		pub unsafe fn clone_inner(&self) -> ::wasmi::MemoryRef {
 			self.0.clone()
 		}
@@ -160,8 +159,8 @@ pub mod wasmer {
 		/// # Safety
 		///
 		/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
-		/// returned it must be ensured that only one mutable and no shared references to memory exists
-		/// at the same time.
+		/// returned it must be ensured that only one mutable and no shared references to memory
+		/// exists at the same time.
 		unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
 			let ptr = memory.data_ptr();
 			let len: usize =
@@ -211,8 +210,8 @@ pub mod wasmer {
 			unsafe {
 				let memory = self.buffer.borrow();
 
-				// This should be safe since we don't grow up memory while caching this reference and
-				// we give up the reference before returning from this function.
+				// This should be safe since we don't grow up memory while caching this reference
+				// and we give up the reference before returning from this function.
 				let source = Self::memory_as_slice(&memory);
 
 				let range = checked_range(source_addr.into(), destination.len(), source.len())
@@ -227,8 +226,8 @@ pub mod wasmer {
 			unsafe {
 				let memory = self.buffer.borrow_mut();
 
-				// This should be safe since we don't grow up memory while caching this reference and
-				// we give up the reference before returning from this function.
+				// This should be safe since we don't grow up memory while caching this reference
+				// and we give up the reference before returning from this function.
 				let destination = Self::memory_as_slice_mut(&memory);
 
 				let range = checked_range(dest_addr.into(), source.len(), destination.len())

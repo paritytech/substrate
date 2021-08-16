@@ -177,9 +177,9 @@ pub trait SandboxCapabilities: FunctionContext {
 	/// This first invokes the dispatch_thunk function, passing in the function index of the
 	/// desired function to call and serialized arguments. The thunk calls the desired function
 	/// with the deserialized arguments, then serializes the result into memory and returns
-	/// reference. The pointer to and length of the result in linear memory is encoded into an `i64`,
-	/// with the upper 32 bits representing the pointer and the lower 32 bits representing the
-	/// length.
+	/// reference. The pointer to and length of the result in linear memory is encoded into an
+	/// `i64`, with the upper 32 bits representing the pointer and the lower 32 bits representing
+	/// the length.
 	///
 	/// # Errors
 	///
@@ -895,9 +895,9 @@ impl<FR> Store<FR> {
 
 		let sandbox_instance = DTH::with_dispatch_thunk(|dispatch_thunk| {
 			Rc::new(SandboxInstance {
-				// In general, it's not a very good idea to use `.not_started_instance()` for anything
-				// but for extracting memory and tables. But in this particular case, we are extracting
-				// for the purpose of running `start` function which should be ok.
+				// In general, it's not a very good idea to use `.not_started_instance()` for
+				// anything but for extracting memory and tables. But in this particular case, we
+				// are extracting for the purpose of running `start` function which should be ok.
 				backend_instance: BackendInstance::Wasmi(
 					wasmi_instance.not_started_instance().clone(),
 				),
@@ -916,7 +916,8 @@ impl<FR> Store<FR> {
 						.run_start(guest_externals)
 						.map_err(|_| InstantiationError::StartTrapped)
 
-					// Note: no need to run start on wasmtime instance, since it's done automatically
+					// Note: no need to run start on wasmtime instance, since it's done
+					// automatically
 				},
 			)
 		})?;
