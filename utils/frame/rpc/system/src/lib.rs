@@ -77,8 +77,15 @@ where
 
 		// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
 		module.register_async_method("system_dryRun", |params, system| {
-			let (extrinsic, at) = match params.parse() {
+			let mut seq = params.sequence();
+
+			let extrinsic = match seq.next() {
 				Ok(params) => params,
+				Err(e) => return Box::pin(future::err(e)),
+			};
+
+			let at = match seq.optional_next() {
+				Ok(at) => at,
 				Err(e) => return Box::pin(future::err(e)),
 			};
 
