@@ -144,7 +144,6 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
 	if attr.path.is_ident("compact") {
 		Ok(true)
-		}
 	} else {
 		Err(syn::Error::new_spanned(
 			attr.clone(),
