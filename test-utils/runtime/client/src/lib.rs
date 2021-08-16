@@ -51,7 +51,7 @@ pub mod prelude {
 	};
 	// Client structs
 	pub use super::{
-		Backend, Executor, LightBackend, LightExecutor, LocalExecutor, NativeExecutor, TestClient,
+		Backend, Executor, LightBackend, LightExecutor, LocalExecutor, NativeElseWasmExecutor, TestClient,
 		TestClientBuilder, WasmExecutionMethod,
 	};
 	// Keyring
@@ -71,7 +71,7 @@ pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>
 pub type Executor = client::LocalCallExecutor<
 	substrate_test_runtime::Block,
 	Backend,
-	NativeExecutor<LocalExecutor>,
+	NativeElseWasmExecutor<LocalExecutor>,
 >;
 
 /// Test client light database backend.
@@ -86,7 +86,7 @@ pub type LightExecutor = sc_light::GenesisCallExecutor<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>,
 		>,
-		NativeExecutor<LocalExecutor>,
+		NativeElseWasmExecutor<LocalExecutor>,
 	>,
 >;
 
@@ -170,7 +170,7 @@ pub type Client<B> = client::Client<
 	client::LocalCallExecutor<
 		substrate_test_runtime::Block,
 		B,
-		sc_executor::NativeExecutor<LocalExecutor>,
+		sc_executor::NativeElseWasmExecutor<LocalExecutor>,
 	>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
@@ -267,7 +267,7 @@ impl<B> TestClientBuilderExt<B>
 		client::LocalCallExecutor<
 			substrate_test_runtime::Block,
 			B,
-			sc_executor::NativeExecutor<LocalExecutor>,
+			sc_executor::NativeElseWasmExecutor<LocalExecutor>,
 		>,
 		B,
 	> where
@@ -426,6 +426,6 @@ pub fn new_light_fetcher() -> LightFetcher {
 }
 
 /// Create a new native executor.
-pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+pub fn new_native_executor() -> sc_executor::NativeElseWasmExecutor<LocalExecutor> {
+	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }

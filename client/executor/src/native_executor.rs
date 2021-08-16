@@ -197,8 +197,8 @@ impl WasmExecutor {
 	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantation, a `Err` is returned.
-	/// that describes the message.
+	/// In case of problems with during creation of the runtime or instantation, a `Err` is
+	/// returned. that describes the message.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
 		&self,
@@ -313,7 +313,7 @@ impl RuntimeVersionOf for WasmExecutor {
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-pub struct NativeExecutor<D> {
+pub struct NativeElseWasmExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: std::marker::PhantomData<D>,
 	/// Native runtime version info.
@@ -322,7 +322,7 @@ pub struct NativeExecutor<D> {
 	wasm: WasmExecutor,
 }
 
-impl<D: NativeExecutionDispatch> NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	/// Create new instance.
 	///
 	/// # Parameters
@@ -358,7 +358,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			None,
 		);
 
-		NativeExecutor {
+		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
 			wasm: wasm_executor,
@@ -366,7 +366,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> {
 	fn runtime_version(
 		&self,
 		ext: &mut dyn Externalities,
@@ -379,7 +379,7 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> GetNativeVersion for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> GetNativeVersion for NativeElseWasmExecutor<D> {
 	fn native_version(&self) -> &NativeVersion {
 		&self.native_version
 	}
@@ -456,8 +456,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						let _ = sender.send(output);
 					},
 					Err(error) => {
-						// If execution is panicked, the `join` in the original runtime code will panic as well,
-						// since the sender is dropped without sending anything.
+						// If execution is panicked, the `join` in the original runtime code will
+						// panic as well, since the sender is dropped without sending anything.
 						log::error!("Call error in spawned task: {:?}", error);
 					},
 				}
@@ -510,7 +510,7 @@ fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
 	});
 }
 
-impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecutor<D> {
 	type Error = Error;
 
 	fn call<
@@ -586,9 +586,9 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> Clone for NativeElseWasmExecutor<D> {
 	fn clone(&self) -> Self {
-		NativeExecutor {
+		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
 			wasm: self.wasm.clone(),
@@ -596,7 +596,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeElseWasmExecutor<D> {
 	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
@@ -700,7 +700,7 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
+		let executor = NativeElseWasmExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);
 		});

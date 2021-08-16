@@ -176,8 +176,8 @@ impl<B: BlockT> ExtraRequests<B> {
 		}
 
 		if best_finalized_number > self.best_seen_finalized_number {
-			// normally we'll receive finality notifications for every block => finalize would be enough
-			// but if many blocks are finalized at once, some notifications may be omitted
+			// normally we'll receive finality notifications for every block => finalize would be
+			// enough but if many blocks are finalized at once, some notifications may be omitted
 			// => let's use finalize_with_ancestors here
 			match self.tree.finalize_with_ancestors(
 				best_finalized_hash,
@@ -315,7 +315,8 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 			for (peer, sync) in
 				peers.iter().filter(|(_, sync)| sync.state == PeerSyncState::Available)
 			{
-				// only ask peers that have synced at least up to the block number that we're asking the extra for
+				// only ask peers that have synced at least up to the block number that we're asking
+				// the extra for
 				if sync.best_number < request.1 {
 					continue
 				}

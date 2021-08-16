@@ -30,6 +30,7 @@ struct ConstDef {
 	pub default_byte_impl: proc_macro2::TokenStream,
 }
 
+///
 /// * Impl fn module_constant_metadata for pallet.
 pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;

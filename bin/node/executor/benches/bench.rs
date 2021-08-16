@@ -25,7 +25,7 @@ use node_runtime::{
 	UncheckedExtrinsic,
 };
 use node_testing::keyring::*;
-use sc_executor::{Externalities, NativeExecutor, RuntimeVersionOf, WasmExecutionMethod};
+use sc_executor::{Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod};
 use sp_core::{
 	storage::well_known_keys,
 	traits::{CodeExecutor, RuntimeCode},
@@ -77,7 +77,7 @@ fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256
 }
 
 fn construct_block<E: Externalities>(
-	executor: &NativeExecutor<Executor>,
+	executor: &NativeElseWasmExecutor<Executor>,
 	ext: &mut E,
 	number: BlockNumber,
 	parent_hash: Hash,
@@ -157,7 +157,7 @@ fn construct_block<E: Externalities>(
 
 fn test_blocks(
 	genesis_config: &GenesisConfig,
-	executor: &NativeExecutor<Executor>,
+	executor: &NativeElseWasmExecutor<Executor>,
 ) -> Vec<(Vec<u8>, Hash)> {
 	let mut test_ext = new_test_ext(genesis_config);
 	let mut block1_extrinsics = vec![CheckedExtrinsic {
@@ -191,7 +191,7 @@ fn bench_execute_block(c: &mut Criterion) {
 				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
 			};
 
-			let executor = NativeExecutor::new(wasm_method, None, 8);
+			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8);
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),
 				hash: vec![1, 2, 3],

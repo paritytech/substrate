@@ -204,15 +204,15 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use std::fs::{self, File};
 	use substrate_test_runtime_client::LocalExecutor;
 
 	fn wasm_test<F>(fun: F)
 	where
-		F: Fn(&Path, &[u8], &NativeExecutor<LocalExecutor>),
+		F: Fn(&Path, &[u8], &NativeElseWasmExecutor<LocalExecutor>),
 	{
-		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
+		let exec = NativeElseWasmExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,
@@ -227,7 +227,7 @@ mod tests {
 	fn should_get_runtime_version() {
 		let wasm = WasmBlob::new(substrate_test_runtime::wasm_binary_unwrap().to_vec());
 		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+			NativeElseWasmExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
 
 		let version = WasmOverride::runtime_version(&executor, &wasm, Some(128))
 			.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");

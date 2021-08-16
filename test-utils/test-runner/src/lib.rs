@@ -23,15 +23,15 @@
 //! Allows you to test
 //! <br />
 //!
-//! -   Migrations
-//! -   Runtime Upgrades
-//! -   Pallets and general runtime functionality.
+//! - Migrations
+//! - Runtime Upgrades
+//! - Pallets and general runtime functionality.
 //!
 //! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
-//! The running node has no signature verification, which allows us author extrinsics for any account on chain.
-//!     <br/>
+//! The running node has no signature verification, which allows us author extrinsics for any
+//! account on chain.     <br/>
 //!     <br/>
 //!
 //! <h2>How do I Use this?</h2>
@@ -86,7 +86,7 @@
 //! 	type BlockImport = BlockImport<
 //! 		Self::Block,
 //! 		TFullBackend<Self::Block>,
-//! 		TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
+//! 		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
 //! 		Self::SelectChain,
 //!     >;
 //!     /// and a dash of SignedExtensions
@@ -112,7 +112,7 @@
 //!     /// The function signature tells you all you need to know. ;)
 //! 	fn create_client_parts(config: &Configuration) -> Result<
 //! 		(
-//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>>,
+//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>>,
 //! 			Arc<TFullBackend<Self::Block>>,
 //! 			KeyStorePtr,
 //! 			TaskManager,
@@ -121,7 +121,7 @@
 //! 				dyn ConsensusDataProvider<
 //! 					Self::Block,
 //! 					Transaction = TransactionFor<
-//! 						TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
+//! 						TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
 //! 						Self::Block
 //! 					>,
 //! 				>
@@ -136,7 +136,7 @@
 //! 			backend,
 //! 			keystore,
 //! 			task_manager,
-//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>(config)?;
+//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>(config)?;
 //! 		let client = Arc::new(client);
 //!
 //! 		let inherent_providers = InherentDataProviders::new();
@@ -228,7 +228,7 @@
 //! ```
 
 use sc_consensus::BlockImport;
-use sc_executor::{NativeExecutionDispatch, NativeExecutor};
+use sc_executor::{NativeExecutionDispatch, NativeElseWasmExecutor};
 use sc_service::TFullClient;
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::SelectChain;
@@ -262,7 +262,7 @@ pub trait ChainInfo: Sized {
 		+ 'static
 		+ ConstructRuntimeApi<
 			Self::Block,
-			TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
+			TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
 		>;
 
 	/// select chain type.
@@ -276,7 +276,7 @@ pub trait ChainInfo: Sized {
 			Self::Block,
 			Error = sp_consensus::Error,
 			Transaction = TransactionFor<
-				TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
+				TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
 				Self::Block,
 			>,
 		> + 'static;

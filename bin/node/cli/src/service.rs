@@ -26,19 +26,19 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_babe::{self, SlotProportion};
-use sc_executor::NativeExecutor;
+use sc_executor::NativeElseWasmExecutor;
 use sc_network::{Event, NetworkService};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
-type FullClient = sc_service::TFullClient<Block, RuntimeApi, NativeExecutor<Executor>>;
+type FullClient = sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<Executor>>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
-type LightClient = sc_service::TLightClient<Block, RuntimeApi, NativeExecutor<Executor>>;
+type LightClient = sc_service::TLightClient<Block, RuntimeApi, NativeElseWasmExecutor<Executor>>;
 
 pub fn new_partial(
 	config: &Configuration,
@@ -76,7 +76,7 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let executor = NativeExecutor::<Executor>::new(
+	let executor = NativeElseWasmExecutor::<Executor>::new(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
@@ -460,7 +460,7 @@ pub fn new_light_base(
 		})
 		.transpose()?;
 
-	let executor = NativeExecutor::<Executor>::new(
+	let executor = NativeElseWasmExecutor::<Executor>::new(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,

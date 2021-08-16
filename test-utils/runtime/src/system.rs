@@ -349,7 +349,7 @@ mod tests {
 	use super::*;
 
 	use crate::{wasm_binary_unwrap, Header, Transfer};
-	use sc_executor::{native_executor_instance, NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{native_executor_instance, NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
 		map,
 		traits::{CodeExecutor, RuntimeCode},
@@ -361,8 +361,8 @@ mod tests {
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(NativeDispatch, crate::api::dispatch, crate::native_version);
 
-	fn executor() -> NativeExecutor<NativeDispatch> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
+		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn new_test_ext() -> TestExternalities {

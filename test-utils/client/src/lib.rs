@@ -27,7 +27,7 @@ pub use sc_client_api::{
 	BadBlocks, ForkBlocks,
 };
 pub use sc_client_db::{self, Backend};
-pub use sc_executor::{self, NativeExecutor, WasmExecutionMethod};
+pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers, RpcSession};
 pub use sp_consensus;
 pub use sp_keyring::{
@@ -265,7 +265,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 }
 
 impl<Block: BlockT, E, Backend, G: GenesisInit>
-	TestClientBuilder<Block, client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>, Backend, G>
+	TestClientBuilder<Block, client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<E>>, Backend, G>
 {
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<RuntimeApi, I>(
@@ -274,20 +274,20 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 	) -> (
 		client::Client<
 			Backend,
-			client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<E>>,
 			Block,
 			RuntimeApi,
 		>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		I: Into<Option<NativeExecutor<E>>>,
+		I: Into<Option<NativeElseWasmExecutor<E>>>,
 		E: sc_executor::NativeExecutionDispatch + 'static,
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor
 			.into()
-			.unwrap_or_else(|| NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8));
+			.unwrap_or_else(|| NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8));
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,
@@ -307,7 +307,7 @@ pub struct RpcTransactionOutput {
 	/// The session object.
 	pub session: RpcSession,
 	/// An async receiver if data will be returned via a callback.
-	pub receiver: futures01::sync::mpsc::Receiver<String>,
+	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 }
 
 impl std::fmt::Debug for RpcTransactionOutput {
@@ -347,7 +347,7 @@ impl RpcHandlersExt for RpcHandlers {
 		&self,
 		extrinsic: OpaqueExtrinsic,
 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
-		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let mem = RpcSession::new(tx.into());
 		Box::pin(
 			self.rpc_query(
@@ -370,7 +370,7 @@ impl RpcHandlersExt for RpcHandlers {
 pub(crate) fn parse_rpc_result(
 	result: Option<String>,
 	session: RpcSession,
-	receiver: futures01::sync::mpsc::Receiver<String>,
+	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 ) -> Result<RpcTransactionOutput, RpcTransactionError> {
 	if let Some(ref result) = result {
 		let json: serde_json::Value =
@@ -392,8 +392,9 @@ where
 	C: BlockchainEvents<B>,
 	B: BlockT,
 {
-	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
-	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not
+	/// return if no blocks are ever created, thus you should restrict the maximum amount of time of
+	/// the test execution.
 	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
@@ -425,8 +426,9 @@ where
 mod tests {
 	use sc_service::RpcSession;
 
-	fn create_session_and_receiver() -> (RpcSession, futures01::sync::mpsc::Receiver<String>) {
-		let (tx, rx) = futures01::sync::mpsc::channel(0);
+	fn create_session_and_receiver(
+	) -> (RpcSession, futures::channel::mpsc::UnboundedReceiver<String>) {
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let mem = RpcSession::new(tx.into());
 
 		(mem, rx)

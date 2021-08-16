@@ -145,8 +145,8 @@ where
 						child.number < *number && is_descendent_of(&child.hash, hash)?)
 				{
 					root.children.push(child);
-					// assuming that the tree is well formed only one child should pass this requirement
-					// due to ancestry restrictions (i.e. they must be different forks).
+					// assuming that the tree is well formed only one child should pass this
+					// requirement due to ancestry restrictions (i.e. they must be different forks).
 					is_first = false;
 				} else {
 					removed.push(child);
@@ -912,14 +912,15 @@ mod test {
 	) -> (ForkTree<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, TestError>) {
 		let mut tree = ForkTree::new();
 
+		#[rustfmt::skip]
+		//
 		//     - B - C - D - E
 		//    /
 		//   /   - G
 		//  /   /
 		// A - F - H - I
 		//          \
-		//           - L - M
-		//              \
+		//           - L - M \
 		//               - O
 		//  \
 		//   — J - K

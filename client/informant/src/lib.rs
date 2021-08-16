@@ -52,11 +52,13 @@ impl Default for OutputFormat {
 	}
 }
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
+/// "unknown")`.
 #[cfg(target_os = "unknown")]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
+/// "unknown")`.
 #[cfg(not(target_os = "unknown"))]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
 

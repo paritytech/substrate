@@ -22,7 +22,7 @@
 use grandpa::GrandpaBlockImport;
 use sc_consensus_babe::BabeBlockImport;
 use sc_consensus_manual_seal::consensus::babe::SlotTimestampProvider;
-use sc_executor::NativeExecutor;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullClient};
 use sp_runtime::generic::Era;
 use test_runner::{ChainInfo, SignatureVerificationOverride};
@@ -51,7 +51,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 	type BlockImport = BlockImport<
 		Self::Block,
 		TFullBackend<Self::Block>,
-		TFullClient<Self::Block, Self::RuntimeApi, NativeExecutor<Self::Executor>>,
+		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::Executor>>,
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;

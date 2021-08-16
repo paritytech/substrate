@@ -69,8 +69,8 @@ native_executor_instance!(
 	substrate_test_runtime_client::runtime::native_version,
 );
 
-fn executor() -> sc_executor::NativeExecutor<Executor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+fn executor() -> sc_executor::NativeElseWasmExecutor<Executor> {
+	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn prepare_client_with_key_changes() -> (
@@ -1826,7 +1826,8 @@ fn imports_blocks_with_changes_tries_config_change() {
 	// blocks 24,25 are changing the key
 	// block 26 is empty
 	// block 27 changes the key
-	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to 3^1
+	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to
+	// `3^1`
 	// ===================================================================
 	// block 29 is empty
 	// block 30 changes the key
@@ -2098,7 +2099,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		LocalCallExecutor<
 			Block,
 			in_mem::Backend<Block>,
-			sc_executor::NativeExecutor<LocalExecutor>,
+			sc_executor::NativeElseWasmExecutor<LocalExecutor>,
 		>,
 		substrate_test_runtime_client::runtime::Block,
 		substrate_test_runtime_client::runtime::RuntimeApi,

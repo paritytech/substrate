@@ -23,7 +23,7 @@ use crate::{
 	Inspector,
 };
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_executor::NativeExecutor;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
 use std::str::FromStr;
@@ -37,7 +37,7 @@ impl InspectCmd {
 		RA: Send + Sync + 'static,
 		EX: NativeExecutionDispatch + 'static,
 	{
-		let executor = NativeExecutor::<EX>::new(
+		let executor = NativeElseWasmExecutor::<EX>::new(
 			config.wasm_method,
 			config.default_heap_pages,
 			config.max_runtime_instances,
