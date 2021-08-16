@@ -478,7 +478,12 @@ where
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
+pub struct SpawnTasksParams<'a, TBl, TCl, TExPool, TRpc, Backend, TCm = NoopCustomMiddleware>
+where
+	TBl: BlockT,
+	TCm: CustomMiddleware<sc_rpc::Metadata>,
+	RpcHandlers<TCm>: Clone,
+{
 	/// The service configuration.
 	pub config: Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
@@ -504,6 +509,18 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
+	/// Optional parameters
+	pub optional: OptionalSpawnTasksParams<TCm>,
+}
+
+/// Optional parameters
+#[derive(Default)]
+pub struct OptionalSpawnTasksParams<TCm = NoopCustomMiddleware>
+where
+	TCm: CustomMiddleware<sc_rpc::Metadata>,
+	RpcHandlers<TCm>: Clone,
+{
+	pub rpc_middleware: TCm,
 }
 
 /// Build a shared offchain workers instance.
@@ -538,45 +555,8 @@ where
 }
 
 /// Spawn the tasks that are required to run a node.
-pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
-	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<RpcHandlers<NoopCustomMiddleware>, Error>
-where
-	TCl: ProvideRuntimeApi<TBl>
-		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
-		+ Chain<TBl>
-		+ BlockBackend<TBl>
-		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
-		+ ProofProvider<TBl>
-		+ HeaderBackend<TBl>
-		+ BlockchainEvents<TBl>
-		+ ExecutorProvider<TBl>
-		+ UsageProvider<TBl>
-		+ StorageProvider<TBl, TBackend>
-		+ CallApiAt<TBl>
-		+ Send
-		+ 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
-		+ sc_offchain::OffchainWorkerApi<TBl>
-		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
-		+ sp_session::SessionKeys<TBl>
-		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
-	TBl: BlockT,
-	TBl::Hash: Unpin,
-	TBl::Header: Unpin,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ MallocSizeOfWasm
-		+ 'static,
-	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-{
-	spawn_tasks_with_rpc_middleware(params, NoopCustomMiddleware::default())
-}
-
-/// Spawn the tasks that are required to run a node with a customn rpc middleware
-pub fn spawn_tasks_with_rpc_middleware<TBl, TBackend, TExPool, TRpc, TCl, TCm>(
-	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-	rpc_middleware: TCm,
+pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl, TCm>(
+	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend, TCm>,
 ) -> Result<RpcHandlers<TCm>, Error>
 where
 	TCl: ProvideRuntimeApi<TBl>
@@ -622,6 +602,7 @@ where
 		network,
 		system_rpc_tx,
 		telemetry,
+		optional: OptionalSpawnTasksParams { rpc_middleware },
 	} = params;
 
 	let chain_info = client.usage_info().chain;

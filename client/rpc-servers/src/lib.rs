@@ -87,7 +87,10 @@ mod inner {
 	/// Start HTTP server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_http<M: pubsub::PubSubMetadata + Default + Sync + Unpin, CM: CustomMiddleware<M>>(
+	pub fn start_http<
+		M: pubsub::PubSubMetadata + Default + Sync + Unpin,
+		CM: CustomMiddleware<M>,
+	>(
 		addr: &std::net::SocketAddr,
 		thread_pool_size: Option<usize>,
 		cors: Option<&Vec<String>>,

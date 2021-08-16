@@ -199,6 +199,7 @@ where
 			network,
 			system_rpc_tx,
 			telemetry: None,
+			optional: Default::default(),
 		};
 		spawn_tasks(params)?
 	};
