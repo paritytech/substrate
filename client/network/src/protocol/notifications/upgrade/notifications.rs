@@ -385,7 +385,7 @@ where
 
 	fn upgrade_outbound(self, mut socket: TSubstream, negotiated_name: Self::Info) -> Self::Future {
 		Box::pin(async move {
-			upgrade::write_with_len_prefix(&mut socket, &self.initial_message).await?;
+			upgrade::write_length_prefixed(&mut socket, &self.initial_message).await?;
 
 			// Reading handshake.
 			let handshake_len = unsigned_varint::aio::read_usize(&mut socket).await?;

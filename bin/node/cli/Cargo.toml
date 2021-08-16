@@ -95,10 +95,8 @@ try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../ut
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.73", optional = true }
 wasm-bindgen-futures = { version = "0.4.18", optional = true }
-browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev" }
-libp2p-wasm-ext = { version = "0.28", features = [
-	"websocket",
-], optional = true }
+browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.10.0-dev"}
+libp2p-wasm-ext = { version = "0.29", features = ["websocket"], optional = true }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
 node-executor = { version = "3.0.0-dev", path = "../executor", features = [

@@ -722,7 +722,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						KademliaEvent::PendingRoutablePeer { .. } => {
 							// We are not interested in this event at the moment.
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::GetClosestPeers(res),
 							..
 						} => match res {
@@ -741,7 +741,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								}
 							},
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::GetRecord(res),
 							stats,
 							..
@@ -778,7 +778,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::PutRecord(res),
 							stats,
 							..
@@ -799,7 +799,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 						},
-						KademliaEvent::QueryResult {
+						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::RepublishRecord(res),
 							..
 						} => match res {
@@ -829,6 +829,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 							address,
 							score,
+						}),
+					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+							peer_id,
+							connection,
 						}),
 				}
 			}
@@ -861,6 +866,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 						address,
 						score,
+					}),
+				NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
 					}),
 			}
 		}
@@ -931,7 +941,7 @@ mod tests {
 		},
 		identity::Keypair,
 		noise,
-		swarm::Swarm,
+		swarm::{Swarm, SwarmEvent},
 		yamux, Multiaddr, PeerId,
 	};
 	use std::{collections::HashSet, task::Poll};
@@ -1000,32 +1010,42 @@ mod tests {
 					match swarms[swarm_n].0.poll_next_unpin(cx) {
 						Poll::Ready(Some(e)) => {
 							match e {
-								DiscoveryOut::UnroutablePeer(other) |
-								DiscoveryOut::Discovered(other) => {
-									// Call `add_self_reported_address` to simulate identify
-									// happening.
-									let addr = swarms
-										.iter()
-										.find_map(|(s, a)| {
-											if s.behaviour().local_peer_id == other {
-												Some(a.clone())
-											} else {
-												None
-											}
-										})
-										.unwrap();
-									swarms[swarm_n].0.behaviour_mut().add_self_reported_address(
-										&other,
-										[protocol_name_from_protocol_id(&protocol_id)].iter(),
-										addr,
-									);
+								SwarmEvent::Behaviour(behavior) => {
+									match behavior {
+										DiscoveryOut::UnroutablePeer(other) |
+										DiscoveryOut::Discovered(other) => {
+											// Call `add_self_reported_address` to simulate identify
+											// happening.
+											let addr = swarms
+												.iter()
+												.find_map(|(s, a)| {
+													if s.behaviour().local_peer_id == other {
+														Some(a.clone())
+													} else {
+														None
+													}
+												})
+												.unwrap();
+											swarms[swarm_n]
+												.0
+												.behaviour_mut()
+												.add_self_reported_address(
+													&other,
+													[protocol_name_from_protocol_id(&protocol_id)]
+														.iter(),
+													addr,
+												);
 
-									to_discover[swarm_n].remove(&other);
+											to_discover[swarm_n].remove(&other);
+										},
+										DiscoveryOut::RandomKademliaStarted(_) => {},
+										e => {
+											panic!("Unexpected event: {:?}", e)
+										},
+									}
 								},
-								DiscoveryOut::RandomKademliaStarted(_) => {},
-								e => {
-									panic!("Unexpected event: {:?}", e)
-								},
+								// ignore non Behaviour events
+								_ => {},
 							}
 							continue 'polling
 						},
