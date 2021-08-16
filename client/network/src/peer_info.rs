@@ -340,6 +340,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						address,
 						score,
 					}),
+				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
+					}),
 			}
 		}
 
@@ -372,6 +377,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 						address,
 						score,
+					}),
+				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
 					}),
 			}
 		}

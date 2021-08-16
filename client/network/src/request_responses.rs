@@ -567,6 +567,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								address,
 								score,
 							}),
+						NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+							return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+								peer_id,
+								connection,
+							}),
 					};
 
 					match ev {
@@ -1009,7 +1014,7 @@ mod tests {
 				let (mut swarm, _) = swarms.remove(0);
 				async move {
 					loop {
-						match swarm.next_event().await {
+						match swarm.select_next_some().await {
 							SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 								result.unwrap();
 							},
@@ -1028,7 +1033,7 @@ mod tests {
 			let mut response_receiver = None;
 
 			loop {
-				match swarm.next_event().await {
+				match swarm.select_next_some().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
 						swarm.behaviour_mut().send_request(
@@ -1106,7 +1111,7 @@ mod tests {
 				let (mut swarm, _) = swarms.remove(0);
 				async move {
 					loop {
-						match swarm.next_event().await {
+						match swarm.select_next_some().await {
 							SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 								assert!(result.is_ok());
 								break
@@ -1126,7 +1131,7 @@ mod tests {
 			let mut response_receiver = None;
 
 			loop {
-				match swarm.next_event().await {
+				match swarm.select_next_some().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
 						swarm.behaviour_mut().send_request(
@@ -1226,7 +1231,7 @@ mod tests {
 			.spawn_obj(
 				async move {
 					loop {
-						match swarm_2.next_event().await {
+						match swarm_2.select_next_some().await {
 							SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 								result.unwrap();
 							},
@@ -1279,7 +1284,7 @@ mod tests {
 			let mut num_responses = 0;
 
 			loop {
-				match swarm_1.next_event().await {
+				match swarm_1.select_next_some().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender_1, receiver_1) = oneshot::channel();
 						let (sender_2, receiver_2) = oneshot::channel();
