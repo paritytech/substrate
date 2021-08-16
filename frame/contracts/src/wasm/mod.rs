@@ -1932,11 +1932,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn debug_message_works() {
 		const CODE_DEBUG_MESSAGE: &str = r#"
 (module
-	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 0) "Hello World!")
@@ -1959,11 +1958,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn debug_message_invalid_utf8_fails() {
 		const CODE_DEBUG_MESSAGE_FAIL: &str = r#"
 (module
-	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 0) "\fc")

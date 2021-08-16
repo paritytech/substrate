@@ -44,9 +44,11 @@ impl tokio::io::AsyncRead for TcpStream {
 	fn poll_read(
 		self: Pin<&mut Self>,
 		cx: &mut Context,
-		buf: &mut [u8],
-	) -> Poll<Result<usize, std::io::Error>> {
-		Pin::new(&mut Pin::into_inner(self).0).poll_read(cx, buf)
+		buf: &mut tokio::io::ReadBuf<'_>,
+	) -> Poll<Result<(), std::io::Error>> {
+		Pin::new(&mut Pin::into_inner(self).0)
+			.poll_read(cx, buf.initialized_mut())
+			.map_ok(drop)
 	}
 }
 

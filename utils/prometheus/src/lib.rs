@@ -16,7 +16,7 @@
 // limitations under the License.
 
 #[cfg(not(target_os = "unknown"))]
-use futures_util::{future::Future, FutureExt};
+use futures_util::future::Future;
 use prometheus::core::Collector;
 pub use prometheus::{
 	self,
@@ -67,8 +67,9 @@ mod known_os {
 	use super::*;
 	use hyper::{
 		http::StatusCode,
+		server::Server,
 		service::{make_service_fn, service_fn},
-		Body, Request, Response, Server,
+		Body, Request, Response,
 	};
 
 	#[derive(Debug, derive_more::Display, derive_more::From)]
@@ -153,10 +154,8 @@ mod known_os {
 			}
 		});
 
-		let server = Server::builder(Incoming(listener.incoming()))
-			.executor(Executor)
-			.serve(service)
-			.boxed();
+		let server =
+			Server::builder(Incoming(listener.incoming())).executor(Executor).serve(service);
 
 		let result = server.await.map_err(Into::into);
 

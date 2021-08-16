@@ -270,8 +270,8 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 }
 
 // NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T, S1>
-// to allow comparison of bounded vectors with different bounds.
+// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T,
+// S1> to allow comparison of bounded vectors with different bounds.
 impl<T, S> PartialEq for WeakBoundedVec<T, S>
 where
 	T: PartialEq,

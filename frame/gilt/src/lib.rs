@@ -294,8 +294,8 @@ pub mod pallet {
 		DurationTooBig,
 		/// The amount of the bid is less than the minimum allowed.
 		AmountTooSmall,
-		/// The queue for the bid's duration is full and the amount bid is too low to get in through
-		/// replacing an existing bid.
+		/// The queue for the bid's duration is full and the amount bid is too low to get in
+		/// through replacing an existing bid.
 		BidTooLow,
 		/// Gilt index is unknown.
 		Unknown,
@@ -506,8 +506,8 @@ pub mod pallet {
 	pub struct IssuanceInfo<Balance> {
 		/// The balance held in reserve over all active gilts.
 		pub reserved: Balance,
-		/// The issuance not held in reserve for active gilts. Together with `reserved` this sums to
-		/// `Currency::total_issuance`.
+		/// The issuance not held in reserve for active gilts. Together with `reserved` this sums
+		/// to `Currency::total_issuance`.
 		pub non_gilt: Balance,
 		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
 		/// and could be less than `reserved` (though in most cases should be greater).
@@ -586,8 +586,8 @@ pub mod pallet {
 								let amount = bid.amount;
 								// Can never overflow due to block above.
 								remaining -= amount;
-								// Should never underflow since it should track the total of the bids
-								// exactly, but we'll be defensive.
+								// Should never underflow since it should track the total of the
+								// bids exactly, but we'll be defensive.
 								qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
 
 								// Now to activate the bid...

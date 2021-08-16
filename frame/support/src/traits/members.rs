@@ -185,8 +185,8 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		sorted_new: &[AccountId],
 	);
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it
+	/// to call `change_members_sorted`.
 	///
 	/// This resets any previous value of prime.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {

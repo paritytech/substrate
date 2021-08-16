@@ -258,8 +258,8 @@ pub trait Storage {
 pub trait DefaultChildStorage {
 	/// Get a default child storage value for a given key.
 	///
-	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
-	/// Result is `None` if the value for `key` in the child storage can not be found.
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
+	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
 	fn get(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage(&child_info, key).map(|s| s.to_vec())
@@ -435,11 +435,12 @@ pub trait Trie {
 	}
 }
 
-/// Interface that provides miscellaneous functions for communicating between the runtime and the node.
+/// Interface that provides miscellaneous functions for communicating between the runtime and the
+/// node.
 #[runtime_interface]
 pub trait Misc {
-	// NOTE: We use the target 'runtime' for messages produced by general printing functions, instead
-	// of LOG_TARGET.
+	// NOTE: We use the target 'runtime' for messages produced by general printing functions,
+	// instead of LOG_TARGET.
 
 	/// Print a number.
 	fn print_num(val: u64) {
@@ -466,8 +467,8 @@ pub trait Misc {
 	/// # Performance
 	///
 	/// This function may be very expensive to call depending on the wasm binary. It may be
-	/// relatively cheap if the wasm binary contains version information. In that case, uncompression
-	/// of the wasm blob is the dominating factor.
+	/// relatively cheap if the wasm binary contains version information. In that case,
+	/// uncompression of the wasm blob is the dominating factor.
 	///
 	/// If the wasm binary does not have the version information attached, then a legacy mechanism
 	/// may be involved. This means that a runtime call will be performed to query the version.
@@ -986,8 +987,8 @@ pub trait Offchain {
 
 	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
-	/// Returns the id of newly started request.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded
+	/// parameters. Returns the id of newly started request.
 	fn http_request_start(
 		&mut self,
 		method: &str,
@@ -1149,13 +1150,14 @@ where
 #[runtime_interface(wasm_only, no_tracing)]
 pub trait WasmTracing {
 	/// Whether the span described in `WasmMetadata` should be traced wasm-side
-	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
+	/// On the host converts into a static Metadata and checks against the global `tracing`
+	/// dispatcher.
 	///
 	/// When returning false the calling code should skip any tracing-related execution. In general
 	/// within the same block execution this is not expected to change and it doesn't have to be
 	/// checked more than once per metadata. This exists for optimisation purposes but is still not
-	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation might
-	/// chose to cache the result for the execution of the entire block.
+	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation
+	/// might chose to cache the result for the execution of the entire block.
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
 		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
 		tracing::dispatcher::get_default(|d| d.enabled(metadata))
