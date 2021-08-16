@@ -87,7 +87,9 @@ where
 	pub fn new(
 		rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 		task_manager: TaskManager,
-		client: Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>>,
+		client: Arc<
+			TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
+		>,
 		pool: Arc<
 			dyn TransactionPool<
 				Block = <T as ChainInfo>::Block,
@@ -127,7 +129,9 @@ where
 	}
 
 	/// Return a reference to the Client
-	pub fn client(&self) -> Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>> {
+	pub fn client(
+		&self,
+	) -> Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>> {
 		self.client.clone()
 	}
 

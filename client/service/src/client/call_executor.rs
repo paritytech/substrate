@@ -369,8 +369,11 @@ mod tests {
 
 	#[test]
 	fn should_get_override_if_exists() {
-		let executor =
-			NativeElseWasmExecutor::<LocalExecutorDispatch>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
 
 		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());

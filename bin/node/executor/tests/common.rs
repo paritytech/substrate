@@ -67,8 +67,7 @@ impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
 ///
 /// `compact` since it is after post-processing with wasm-gc which performs tree-shaking thus
 /// making the binary slimmer. There is a convention to use compact version of the runtime
-/// as canonical. This is why `native_executor_instance` also uses the compact version of the
-/// runtime.
+/// as canonical.
 pub fn compact_code_unwrap() -> &'static [u8] {
 	node_runtime::WASM_BINARY.expect(
 		"Development wasm binary is not available. Testing is only supported with the flag \

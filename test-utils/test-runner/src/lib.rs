@@ -62,12 +62,19 @@
 //!
 //! type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 //!
-//! sc_executor::native_executor_instance!(
-//! 	pub ExecutorDispatch,
-//! 	node_runtime::api::dispatch,
-//! 	node_runtime::native_version,
-//! 	SignatureVerificationOverride,
-//! );
+//! pub struct ExecutorDispatch;
+//!
+//! impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
+//! 	type ExtendHostFunctions = SignatureVerificationOverride;
+//!
+//! 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+//! 		node_runtime::api::dispatch(method, data)
+//! 	}
+//!
+//! 	fn native_version() -> sc_executor::NativeVersion {
+//! 		node_runtime::native_version()
+//! 	}
+//! }
 //!
 //! struct Requirements;
 //!
@@ -228,7 +235,7 @@
 //! ```
 
 use sc_consensus::BlockImport;
-use sc_executor::{NativeExecutionDispatch, NativeElseWasmExecutor};
+use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
 use sc_service::TFullClient;
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::SelectChain;
@@ -262,7 +269,11 @@ pub trait ChainInfo: Sized {
 		+ 'static
 		+ ConstructRuntimeApi<
 			Self::Block,
-			TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
+			TFullClient<
+				Self::Block,
+				Self::RuntimeApi,
+				NativeElseWasmExecutor<Self::ExecutorDispatch>,
+			>,
 		>;
 
 	/// select chain type.
@@ -276,7 +287,11 @@ pub trait ChainInfo: Sized {
 			Self::Block,
 			Error = sp_consensus::Error,
 			Transaction = TransactionFor<
-				TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
+				TFullClient<
+					Self::Block,
+					Self::RuntimeApi,
+					NativeElseWasmExecutor<Self::ExecutorDispatch>,
+				>,
 				Self::Block,
 			>,
 		> + 'static;

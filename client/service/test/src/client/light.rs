@@ -258,7 +258,8 @@ impl CallExecutor<Block> for DummyCallExecutor {
 	}
 }
 
-fn local_executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch> {
+fn local_executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch>
+{
 	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
