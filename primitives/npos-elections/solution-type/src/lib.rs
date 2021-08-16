@@ -142,16 +142,8 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 		return Ok(false)
 	}
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
-	if attr.path.segments.len() == 1 {
-		let segment = attr
-			.path
-			.segments
-			.first()
-			.expect("attributes path segments vec with len 1 can be popped.");
-		if segment.ident == Ident::new("compact", Span::call_site()) {
-			Ok(true)
-		} else {
-			Err(syn_err("only attribute is not #[compact]"))
+	if attr.path.is_ident("compact") {
+		Ok(true)
 		}
 	} else {
 		Err(syn_err("must be one attribute, only #[compact]"))
