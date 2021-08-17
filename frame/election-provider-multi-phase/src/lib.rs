@@ -701,9 +701,7 @@ pub mod pallet {
 					match Self::create_snapshot() {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
-							log!(info, "Starting signed phase round {}.", Self::round());
-							// write phase and 1 event, read round.
-							T::DbWeight::get().reads_writes(1, 2)
+							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
 							// Not much we can do about this at this point.
@@ -738,17 +736,20 @@ pub mod pallet {
 						(true, true)
 					};
 
-					match Self::on_initialize_open_unsigned(need_snapshot, enabled, now) {
-						Ok(_) => {
-							log!(info, "Starting unsigned phase({}).", enabled);
-							// write phase and 1 event, read round.
-							T::DbWeight::get().reads_writes(1, 2)
-						},
-						Err(why) => {
-							// Not much we can do about this at this point.
-							log!(warn, "failed to open unsigned phase due to {:?}", why);
-							T::WeightInfo::on_initialize_nothing()
-						},
+					if need_snapshot {
+						match Self::create_snapshot() {
+							Ok(_) => {
+								Self::on_initialize_open_unsigned(enabled, now);
+								T::WeightInfo::on_initialize_open_unsigned()
+							},
+							Err(why) => {
+								log!(warn, "failed to open unsigned phase due to {:?}", why);
+								T::WeightInfo::on_initialize_nothing()
+							},
+						}
+					} else {
+						Self::on_initialize_open_unsigned(enabled, now);
+						T::WeightInfo::on_initialize_open_unsigned()
 					}
 				}
 				_ => T::WeightInfo::on_initialize_nothing(),
@@ -1247,25 +1248,17 @@ impl<T: Config> Pallet<T> {
 
 	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
 	pub fn on_initialize_open_signed() {
+		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
 	}
 
 	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
-	pub fn on_initialize_open_unsigned(
-		need_snapshot: bool,
-		enabled: bool,
-		now: T::BlockNumber,
-	) -> Result<(), ElectionError> {
-		if need_snapshot {
-			// If not being followed by a signed phase, then create the snapshots.
-			debug_assert!(Self::snapshot().is_none());
-			Self::create_snapshot()?;
-		};
-
+	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
+		let round = Self::round();
+		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
-		Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
-		Ok(())
+		Self::deposit_event(Event::UnsignedPhaseStarted(round));
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
@@ -1278,7 +1271,7 @@ impl<T: Config> Pallet<T> {
 	) {
 		let metadata =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
-		log!(debug, "creating a snapshot with metadata {:?}", metadata);
+		log!(info, "creating a snapshot with metadata {:?}", metadata);
 
 		<SnapshotMetadata<T>>::put(metadata);
 		<DesiredTargets<T>>::put(desired_targets);

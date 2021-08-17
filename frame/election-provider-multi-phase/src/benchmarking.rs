@@ -203,7 +203,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
+		<MultiPhase<T>>::on_initialize_open_unsigned(true, 1u32.into())
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
