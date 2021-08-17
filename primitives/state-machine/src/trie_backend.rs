@@ -35,10 +35,11 @@ use sp_trie::{
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub(crate) essence: TrieBackendEssence<S, H>,
+	/// TODO remove pub
 	// Allows setting alt hashing at start for testing only
 	// (mainly for in_memory_backend when it cannot read it from
-	// state).
-	pub(crate) force_alt_hashing: Option<Option<u32>>,
+	// state). TODO rename alt_hashing TODO accessor and no public.
+	pub force_alt_hashing: Option<Option<u32>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
@@ -46,8 +47,8 @@ where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root), force_alt_hashing: None }
+	pub fn new(storage: S, root: H::Out, alt_hashing: Option<Option<u32>>) -> Self {
+		TrieBackend { essence: TrieBackendEssence::new(storage, root), force_alt_hashing: alt_hashing }
 	}
 
 	/// Get backend essence reference.

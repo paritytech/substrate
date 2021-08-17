@@ -172,7 +172,8 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	}
 
 	/// Convert into a [`StorageProof`].
-	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
+	pub fn to_storage_proof<H: Hasher>(&self, alt_hashing: Option<Option<u32>>) -> StorageProof {
+		// TODO consider alt_hashing as inner field
 		let trie_nodes = self
 			.inner
 			.read()
@@ -192,7 +193,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 			})
 			.collect();
 
-		StorageProof::new(trie_nodes)
+		StorageProof::new(trie_nodes, alt_hashing)
 	}
 
 	/// Reset the internal state.
@@ -233,12 +234,13 @@ where
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend { backend: essence.backend_storage(), proof_recorder };
-		ProvingBackend(TrieBackend::new(recorder, root))
+		ProvingBackend(TrieBackend::new(recorder, root, backend.force_alt_hashing.clone()))
 	}
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>()
+		let alt_hashing = self.0.force_alt_hashing.clone();
+		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>(alt_hashing)
 	}
 
 	/// Returns the estimated encoded size of the proof.
@@ -398,10 +400,11 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
+	let alt_hashing = proof.alt_hashing.clone();
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		Ok(TrieBackend::new(db, root, alt_hashing))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}

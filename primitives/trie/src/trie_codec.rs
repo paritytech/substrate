@@ -202,6 +202,7 @@ pub fn encode_compact<L>(proof: StorageProof, root: TrieHash<L>) -> Result<Compa
 where
 	L: TrieConfiguration,
 {
+	let alt_hashing = proof.alt_hashing.clone();
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
@@ -252,5 +253,5 @@ where
 		compact_proof.extend(child_proof);
 	}
 
-	Ok(CompactProof { encoded_nodes: compact_proof })
+	Ok(CompactProof { encoded_nodes: compact_proof, alt_hashing })
 }

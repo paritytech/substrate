@@ -31,26 +31,29 @@ use trie_db::NodeCodec;
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
+	pub alt_hashing: Option<Option<u32>>, // TODO non public
 }
 
 /// Storage proof in compact form.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
+	pub alt_hashing: Option<Option<u32>>,
 }
 
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
+	pub fn new(trie_nodes: Vec<Vec<u8>>, alt_hashing: Option<Option<u32>>) -> Self {
+		StorageProof { trie_nodes, alt_hashing }
 	}
 
 	/// Returns a new empty proof.
 	///
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
-	pub fn empty() -> Self {
-		StorageProof { trie_nodes: Vec::new() }
+	pub fn empty(alt_hashing: Option<Option<u32>>) -> Self {
+		// TODO consider alt_hashing default value.
+		StorageProof { trie_nodes: Vec::new(), alt_hashing }
 	}
 
 	/// Returns whether this is an empty proof.
@@ -90,14 +93,20 @@ impl StorageProof {
 	where
 		I: IntoIterator<Item = Self>,
 	{
+		let mut alt_hashing = None;
+		let alt_hashing = &mut alt_hashing;
 		let trie_nodes = proofs
 			.into_iter()
-			.flat_map(|proof| proof.iter_nodes())
+			.flat_map(|proof| {
+				debug_assert!(alt_hashing == &None || alt_hashing == &proof.alt_hashing);
+				*alt_hashing = proof.alt_hashing.clone();
+				proof.iter_nodes()
+			})
 			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
 			.into_iter()
 			.collect();
 
-		Self { trie_nodes }
+		Self { trie_nodes, alt_hashing: *alt_hashing }
 	}
 
 	/// Encode as a compact proof with default
@@ -134,6 +143,7 @@ impl CompactProof {
 		&self,
 		expected_root: Option<&H::Out>,
 	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
+		let alt_hashing = self.alt_hashing.clone();
 		let mut db = crate::MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
@@ -146,6 +156,7 @@ impl CompactProof {
 					.into_iter()
 					.filter_map(|kv| if (kv.1).1 > 0 { Some((kv.1).0) } else { None })
 					.collect(),
+				alt_hashing,
 			),
 			root,
 		))
