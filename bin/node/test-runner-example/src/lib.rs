@@ -28,15 +28,22 @@ use test_runner::{ChainInfo, SignatureVerificationOverride};
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
-sc_executor::native_executor_instance!(
-	pub Executor,
-	node_runtime::api::dispatch,
-	node_runtime::native_version,
-	(
-		frame_benchmarking::benchmarking::HostFunctions,
-		SignatureVerificationOverride,
-	)
-);
+/// A unit struct which implements `NativeExecutionDispatch` feeding in the
+/// hard-coded runtime.
+pub struct Executor;
+
+impl sc_executor::NativeExecutionDispatch for Executor {
+	type ExtendHostFunctions =
+		(frame_benchmarking::benchmarking::HostFunctions, SignatureVerificationOverride);
+
+	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+		node_runtime::api::dispatch(method, data)
+	}
+
+	fn native_version() -> sc_executor::NativeVersion {
+		node_runtime::native_version()
+	}
+}
 
 /// ChainInfo implementation.
 struct NodeTemplateChainInfo;

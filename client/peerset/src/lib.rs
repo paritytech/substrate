@@ -648,8 +648,9 @@ impl Peerset {
 					peer_id, DISCONNECT_REPUTATION_CHANGE, entry.reputation());
 				entry.disconnect();
 			},
-			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
-				error!(target: "peerset", "Received dropped() for non-connected node"),
+			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) => {
+				error!(target: "peerset", "Received dropped() for non-connected node")
+			},
 		}
 
 		if let DropReason::Refused = reason {

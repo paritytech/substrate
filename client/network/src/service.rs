@@ -1631,7 +1631,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 
 			// Process the next action coming from the network.
-			let next_event = this.network_service.next_event();
+			let next_event = this.network_service.select_next_some();
 			futures::pin_mut!(next_event);
 			let poll_value = next_event.poll_unpin(cx);
 
@@ -1919,14 +1919,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::NewListenAddr(addr)) => {
-					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr);
+				Poll::Ready(SwarmEvent::NewListenAddr { address, .. }) => {
+					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", address);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_local_addresses.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) => {
-					info!(target: "sub-libp2p", "📪 No longer listening on {}", addr);
+				Poll::Ready(SwarmEvent::ExpiredListenAddr { address, .. }) => {
+					info!(target: "sub-libp2p", "📪 No longer listening on {}", address);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_local_addresses.dec();
 					}
@@ -1967,8 +1967,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Dialing(peer_id)) =>
-					trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id),
+				Poll::Ready(SwarmEvent::Dialing(peer_id)) => {
+					trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id)
+				},
 				Poll::Ready(SwarmEvent::IncomingConnection { local_addr, send_back_addr }) => {
 					trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{}))",
 						local_addr, send_back_addr);
@@ -2008,9 +2009,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
-					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}",
-						address, error),
-				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses }) => {
+					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}", address, error),
+				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses, .. }) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_local_addresses.sub(addresses.len() as u64);
 					}
@@ -2029,7 +2029,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						),
 					}
 				},
-				Poll::Ready(SwarmEvent::ListenerError { error }) => {
+				Poll::Ready(SwarmEvent::ListenerError { error, .. }) => {
 					debug!(target: "sub-libp2p", "Libp2p => ListenerError: {}", error);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_errors_total.inc();
