@@ -181,7 +181,7 @@ check-signed-tag:
   <<:                              *kubernetes-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^v/[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - ./.maintain/gitlab/check_signed.sh
 
@@ -587,9 +587,9 @@ build-rustdoc:
   after_script:
     - buildah logout "$IMAGE_NAME"
     # pass artifacts to the trigger-simnet job
-    - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
+    - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
-    - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
+    - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
@@ -729,9 +729,11 @@ deploy-prometheus-alerting-rules:
         - .gitlab-ci.yml
         - .maintain/monitoring/**/*
 
-trigger-simnet:
+# runs quick and log tests on nightly schedule
+simnet-tests:
   stage:                           deploy
-  image:                           paritytech/tools:latest
+  # fixme: replace v8 with $SIMNET_REF on line below
+  image:                           docker.io/paritytech/simnet:v8
   <<:                              *kubernetes-env
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
@@ -740,13 +742,42 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
-  # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
-  variables:
-    TRGR_PROJECT:                  ${CI_PROJECT_NAME}
-    TRGR_REF:                      ${CI_COMMIT_REF_NAME}
-    # Simnet project ID
-    DWNSTRM_ID:                    332
+  # variables:
+  # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
+  # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
+  # ${SIMNET_REF} is a gitlab variable
   script:
-    # API trigger for a Simnet job
-    - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
+    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
+        --github-remote-dir=https://github.com/paritytech/substrate/tree/master/simnet_tests
+        --config=simnet_tests/configs/default_local_testnet.toml
+        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+  retry: 2
+  tags:
+    - parity-simnet
+
+# runs on every commit
+# simnet-tests-quick:
+#   stage:                           deploy
+#   # fixme: replace v8 with $SIMNET_REF on line below
+#   image:                           docker.io/paritytech/simnet:v8
+#   <<:                              *kubernetes-env
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "pipeline"
+#       when: never
+#     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+#     - if: $CI_COMMIT_REF_NAME == "master"
+#   needs:
+#     - job:                         publish-docker-substrate
+#   # variables:
+#   # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
+#   # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
+#   # ${SIMNET_REF} is a gitlab variable
+#   script:
+#     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
+#         --github-remote-dir=https://github.com/paritytech/substrate/tree/master/simnet_tests
+#         --config=simnet_tests/configs/default_local_testnet.toml
+#         --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+#         --features=simnet_tests/tests/quick/
+#   retry: 2
+#   tags:
+#     - parity-simnet
