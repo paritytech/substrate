@@ -40,7 +40,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::generic;
+use sp_runtime::{generic, traits::Block as BlockT};
 use sp_session::SessionKeys;
 
 use self::error::{Error, Result};
@@ -79,6 +79,8 @@ where
 	P: TransactionPool + Sync + Send + 'static,
 	Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
 	Client::Api: SessionKeys<P::Block>,
+	P::Hash: Unpin,
+	<P::Block as BlockT>::Hash: Unpin,
 {
 	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {

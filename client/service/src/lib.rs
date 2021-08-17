@@ -339,13 +339,14 @@ where
 	Ok(Box::new((http, ws)))
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>>(
 	_: &Configuration,
 	_: H,
 	_: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send>, error::Error> {
 	Ok(Box::new(()))
 }
 
@@ -426,7 +427,8 @@ where
 					},
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
-						// it is not bad at least, just some internal node logic error, so peer is innocent.
+						// it is not bad at least, just some internal node logic error, so peer is
+						// innocent.
 						TransactionImport::KnownGood
 					},
 				},

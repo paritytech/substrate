@@ -302,7 +302,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 // 	/// The session object.
 // 	pub session: RpcSession,
 // 	/// An async receiver if data will be returned via a callback.
-// 	pub receiver: futures01::sync::mpsc::Receiver<String>,
+// 	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 // }
 
 // impl std::fmt::Debug for RpcTransactionOutput {
@@ -342,10 +342,10 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 // 		&self,
 // 		extrinsic: OpaqueExtrinsic,
 // 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
-// 		let (tx, rx) = futures01::sync::mpsc::channel(0);
+// 		let (tx, rx) = futures::channel::mpsc::unbounded();
 // 		let mem = RpcSession::new(tx.into());
-// 		Box::pin(self
-// 			.rpc_query(
+// 		Box::pin(
+// 			self.rpc_query(
 // 				&mem,
 // 				&format!(
 // 					r#"{{
@@ -357,7 +357,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 // 					hex::encode(extrinsic.encode())
 // 				),
 // 			)
-// 			.map(move |result| parse_rpc_result(result, mem, rx))
+// 			.map(move |result| parse_rpc_result(result, mem, rx)),
 // 		)
 // 	}
 // }
@@ -365,29 +365,20 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 // pub(crate) fn parse_rpc_result(
 // 	result: Option<String>,
 // 	session: RpcSession,
-// 	receiver: futures01::sync::mpsc::Receiver<String>,
+// 	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 // ) -> Result<RpcTransactionOutput, RpcTransactionError> {
 // 	if let Some(ref result) = result {
-// 		let json: serde_json::Value = serde_json::from_str(result)
-// 			.expect("the result can only be a JSONRPC string; qed");
-// 		let error = json
-// 			.as_object()
-// 			.expect("JSON result is always an object; qed")
-// 			.get("error");
+// 		let json: serde_json::Value =
+// 			serde_json::from_str(result).expect("the result can only be a JSONRPC string; qed");
+// 		let error = json.as_object().expect("JSON result is always an object; qed").get("error");
 
 // 		if let Some(error) = error {
-// 			return Err(
-// 				serde_json::from_value(error.clone())
-// 					.expect("the JSONRPC result's error is always valid; qed")
-// 			)
+// 			return Err(serde_json::from_value(error.clone())
+// 				.expect("the JSONRPC result's error is always valid; qed"))
 // 		}
 // 	}
 
-// 	Ok(RpcTransactionOutput {
-// 		result,
-// 		session,
-// 		receiver,
-// 	})
+// 	Ok(RpcTransactionOutput { result, session, receiver })
 // }
 
 /// An extension trait for `BlockchainEvents`.
@@ -396,8 +387,9 @@ where
 	C: BlockchainEvents<B>,
 	B: BlockT,
 {
-	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
-	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not
+	/// return if no blocks are ever created, thus you should restrict the maximum amount of time of
+	/// the test execution.
 	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
@@ -429,8 +421,9 @@ where
 mod tests {
 	use sc_service::RpcSession;
 
-	fn create_session_and_receiver() -> (RpcSession, futures01::sync::mpsc::Receiver<String>) {
-		let (tx, rx) = futures01::sync::mpsc::channel(0);
+	fn create_session_and_receiver(
+	) -> (RpcSession, futures::channel::mpsc::UnboundedReceiver<String>) {
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let mem = RpcSession::new(tx.into());
 
 		(mem, rx)

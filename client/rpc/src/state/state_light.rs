@@ -161,6 +161,7 @@ where
 impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Client>
 where
 	Block: BlockT,
+	Block::Hash: Unpin,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + 'static,
 {
@@ -695,7 +696,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use rpc::futures::stream::futures_ordered;
+	use futures::{executor, stream};
 	use sp_core::H256;
 	use substrate_test_runtime_client::runtime::Block;
 
@@ -703,7 +704,7 @@ mod tests {
 	fn subscription_stream_works() {
 		let stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
 			SimpleSubscriptions::default(),
-			futures_ordered(vec![result(Ok(H256::from([2; 32]))), result(Ok(H256::from([3; 32])))]),
+			stream::iter(vec![H256::from([2; 32]), H256::from([3; 32])]),
 			ready(Ok((H256::from([1; 32]), 100))),
 			|block| match block[0] {
 				2 => ready(Ok(100)),
@@ -716,14 +717,14 @@ mod tests {
 			},
 		);
 
-		assert_eq!(stream.collect().wait(), Ok(vec![100, 200]));
+		assert_eq!(executor::block_on(stream.collect::<Vec<_>>()), vec![Ok(100), Ok(200)]);
 	}
 
 	#[test]
 	fn subscription_stream_ignores_failed_requests() {
 		let stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
 			SimpleSubscriptions::default(),
-			futures_ordered(vec![result(Ok(H256::from([2; 32]))), result(Ok(H256::from([3; 32])))]),
+			stream::iter(vec![H256::from([2; 32]), H256::from([3; 32])]),
 			ready(Ok((H256::from([1; 32]), 100))),
 			|block| match block[0] {
 				2 => ready(Err(client_err(ClientError::NotAvailableOnLightClient))),
@@ -736,7 +737,7 @@ mod tests {
 			},
 		);
 
-		assert_eq!(stream.collect().wait(), Ok(vec![100, 200]));
+		assert_eq!(executor::block_on(stream.collect::<Vec<_>>()), vec![Ok(100), Ok(200)]);
 	}
 
 	#[test]

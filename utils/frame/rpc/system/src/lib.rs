@@ -348,7 +348,7 @@ mod tests {
 		let nonce = accounts.nonce(AccountKeyring::Alice.into());
 
 		// then
-		assert_eq!(nonce.wait().unwrap(), 2);
+		assert_eq!(block_on(nonce).unwrap(), 2);
 	}
 
 	#[test]
@@ -367,7 +367,7 @@ mod tests {
 		let res = accounts.dry_run(vec![].into(), None);
 
 		// then
-		assert_eq!(res.wait(), Err(RpcError::method_not_found()));
+		assert_eq!(block_on(res), Err(RpcError::method_not_found()));
 	}
 
 	#[test]
@@ -394,7 +394,7 @@ mod tests {
 		let res = accounts.dry_run(tx.encode().into(), None);
 
 		// then
-		let bytes = res.wait().unwrap().0;
+		let bytes = block_on(res).unwrap().0;
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(apply_res, Ok(Ok(())));
 	}
@@ -423,7 +423,7 @@ mod tests {
 		let res = accounts.dry_run(tx.encode().into(), None);
 
 		// then
-		let bytes = res.wait().unwrap().0;
+		let bytes = block_on(res).unwrap().0;
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
 	}

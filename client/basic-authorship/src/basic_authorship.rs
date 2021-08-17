@@ -68,8 +68,8 @@ pub struct ProposerFactory<A, B, C, PR> {
 	metrics: PrometheusMetrics,
 	/// The default block size limit.
 	///
-	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size limit will be
-	/// used.
+	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size
+	/// limit will be used.
 	default_block_size_limit: usize,
 	telemetry: Option<TelemetryHandle>,
 	/// When estimating the block size, should the proof be included?
@@ -81,7 +81,8 @@ pub struct ProposerFactory<A, B, C, PR> {
 impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 	/// Create a new proposer factory.
 	///
-	/// Proof recording will be disabled when using proposers built by this instance to build blocks.
+	/// Proof recording will be disabled when using proposers built by this instance to build
+	/// blocks.
 	pub fn new(
 		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
@@ -140,7 +141,8 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// The default value for the block size limit is:
 	/// [`DEFAULT_BLOCK_SIZE_LIMIT`].
 	///
-	/// If there is no block size limit passed to [`sp_consensus::Proposer::propose`], this value will be used.
+	/// If there is no block size limit passed to [`sp_consensus::Proposer::propose`], this value
+	/// will be used.
 	pub fn set_default_block_size_limit(&mut self, limit: usize) {
 		self.default_block_size_limit = limit;
 	}

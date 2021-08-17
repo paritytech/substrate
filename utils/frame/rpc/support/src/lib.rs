@@ -29,7 +29,6 @@ use sp_storage::{StorageData, StorageKey};
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
-/// # use futures::compat::Future01CompatExt;
 /// # use jsonrpc_client_transports::RpcError;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use codec::Encode;
@@ -66,7 +65,7 @@ use sp_storage::{StorageData, StorageKey};
 /// }
 ///
 /// # async fn test() -> Result<(), RpcError> {
-/// let conn = http::connect("http://[::1]:9933").compat().await?;
+/// let conn = http::connect("http://[::1]:9933").await?;
 /// let cl = StateClient::<Hash>::new(conn);
 ///
 /// let q = StorageQuery::value::<LastActionId>();
@@ -128,10 +127,10 @@ impl<V: FullCodec> StorageQuery<V> {
 		state_client: &StateClient<Hash>,
 		block_index: Option<Hash>,
 	) -> Result<Option<V>, RpcError> {
-		let opt: Option<StorageData> = state_client.storage(self.key, block_index).compat().await?;
+		let opt: Option<StorageData> = state_client.storage(self.key, block_index).await?;
 		opt.map(|encoded| V::decode_all(&encoded.0))
 			.transpose()
-			.map_err(|decode_err| RpcError::Other(decode_err.into()))
+			.map_err(|decode_err| RpcError::Other(Box::new(decode_err)))
 	}
 	*/
 }

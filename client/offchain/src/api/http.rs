@@ -28,7 +28,7 @@
 //! actively calling any function.
 
 use crate::api::timestamp;
-use bytes::buf::ext::{BufExt, Reader};
+use bytes::buf::{Buf, Reader};
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
@@ -51,7 +51,7 @@ pub struct SharedClient(Arc<HyperClient<HttpsConnector<client::HttpConnector>, B
 
 impl SharedClient {
 	pub fn new() -> Self {
-		Self(Arc::new(HyperClient::builder().build(HttpsConnector::new())))
+		Self(Arc::new(HyperClient::builder().build(HttpsConnector::with_native_roots())))
 	}
 }
 
@@ -719,7 +719,7 @@ mod tests {
 
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
 			std::thread::spawn(move || {
-				let mut rt = tokio::runtime::Runtime::new().unwrap();
+				let rt = tokio::runtime::Runtime::new().unwrap();
 				let worker = rt.spawn(worker);
 				let server = rt.spawn(async move {
 					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap()).serve(

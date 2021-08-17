@@ -56,6 +56,7 @@ use sp_blockchain::HeaderBackend;
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	/// Get client reference.
@@ -123,6 +124,7 @@ pub fn new_full<Block: BlockT, Client>(
 ) -> Chain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain { backend: Box::new(self::chain_full::FullChain::new(client, executor)) }
@@ -137,6 +139,7 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 ) -> Chain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 	F: Send + Sync + 'static,
 {
@@ -159,6 +162,7 @@ impl<Block: BlockT, Client> Chain<Block, Client>
 where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	Block: BlockT + 'static,
+	<Block as BlockT>::Header: Unpin,
 {
 	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {

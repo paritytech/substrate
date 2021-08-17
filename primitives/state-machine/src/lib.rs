@@ -206,7 +206,8 @@ mod execution {
 		NativeWhenPossible,
 		/// Use the given wasm module.
 		AlwaysWasm,
-		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy as an error.
+		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy
+		/// as an error.
 		Both,
 		/// First native, then if that fails or is not possible, wasm.
 		NativeElseWasm,
@@ -230,10 +231,12 @@ mod execution {
 		/// otherwise fall back to the wasm.
 		NativeWhenPossible,
 		/// Use the given wasm module. The backend on which code is executed code could be
-		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
-		/// for all storage queries since the storage entries it has come from an external node).
+		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to
+		/// provide for all storage queries since the storage entries it has come from an external
+		/// node).
 		AlwaysWasm(BackendTrustLevel),
-		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepancy.
+		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of
+		/// any discrepancy.
 		Both(F),
 		/// First native, then if that fails or is not possible, wasm.
 		NativeElseWasm,
@@ -278,12 +281,14 @@ mod execution {
 		ExecutionManager::NativeElseWasm
 	}
 
-	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
+	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out
+	/// the type.
 	fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
 	}
 
-	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
+	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out
+	/// the type.
 	fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 	}
@@ -390,8 +395,8 @@ mod execution {
 		///
 		/// Returns the SCALE encoded result of the executed function.
 		pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
-			// We are not giving a native call and thus we are sure that the result can never be a native
-			// value.
+			// We are not giving a native call and thus we are sure that the result can never be a
+			// native value.
 			self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 				strategy.get_manager(),
 				None,

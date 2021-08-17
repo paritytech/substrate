@@ -305,8 +305,8 @@ mod tests {
 		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
 
-	fn setup_session() -> (sc_rpc::Metadata, jsonrpc_core::futures::sync::mpsc::Receiver<String>) {
-		let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
+	fn setup_session() -> (sc_rpc::Metadata, futures::channel::mpsc::UnboundedReceiver<String>) {
+		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let meta = sc_rpc::Metadata::new(tx);
 		(meta, rx)
 	}
@@ -340,7 +340,7 @@ mod tests {
 		// Unsubscribe again and fail
 		assert_eq!(
 			io.handle_request_sync(&unsub_req, meta),
-			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()),
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
 		);
 	}
 
@@ -362,7 +362,7 @@ mod tests {
 				r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
 				meta.clone()
 			),
-			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into())
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
 		);
 	}
 
@@ -438,7 +438,7 @@ mod tests {
 		justification_sender.notify(|| Ok(justification.clone())).unwrap();
 
 		// Inspect what we received
-		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
+		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
 		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
 		let mut json_map = match recv.params {
 			Params::Map(json_map) => json_map,

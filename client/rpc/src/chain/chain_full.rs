@@ -51,6 +51,7 @@ impl<Block: BlockT, Client> FullChain<Block, Client> {
 impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	fn client(&self) -> &Arc<Client> {

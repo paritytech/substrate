@@ -26,27 +26,35 @@
 //!
 //! ### Documentation Guidelines:
 //!
-//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
-//! <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
+//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs
+//! addressing issues with --> <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
-//!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
-//!         accompany pallet functions and be restricted to the pallet interface,
-//!         not the internals of the pallet implementation. Only state inputs,
-//!         outputs, and a brief description that mentions whether calling it
-//!         requires root, but without repeating the source code details.
-//!         Capitalize the first word of each documentation comment and end it with
-//!         a full stop. See
-//!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
-//!     <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
-//!     <li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
-//!     <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
-//!         <code>u64</code>)</li>
-//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
-//!     <li>Extended tutorials - should be moved to external files and refer to.</li>
-//!     <!-- Original author of paragraph: @AmarRSingh -->
-//!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
-//!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
+//! <li>Documentation comments (i.e. <code>/// comment</code>) - should
+//! accompany pallet functions and be restricted to the pallet interface,
+//! not the internals of the pallet implementation. Only state inputs,
+//! outputs, and a brief description that mentions whether calling it
+//! requires root, but without repeating the source code details.
+//! Capitalize the first word of each documentation comment and end it with
+//! a full stop. See
+//! <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
+//! target="_blank"> Generic example of annotating source code with documentation comments</a></li>
+//!
+//! <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
+//!
+//! <li>Code comments - Supplement complex code with a brief explanation, not every line of
+//! code.</li>
+//!
+//! <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>,
+//! <code>InherentType</code>, <code>u64</code>)</li>
+//!
+//! <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay
+//! valid.</li>
+//!
+//! <li>Extended tutorials - should be moved to external files and refer to.</li>
+//!
+//! <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
+//!
+//! <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
 //! </ul>
 //!
 //! ### Documentation Template:<br>
@@ -84,12 +92,13 @@
 //!
 //! \## Terminology
 //!
-//! // Add terminology used in the custom pallet. Include concepts, storage items, or actions that you think
-//! // deserve to be noted to give context to the rest of the documentation or pallet usage. The author needs to
-//! // use some judgment about what is included. We don't want a list of every storage item nor types - the user
-//! // can go to the code for that. For example, "transfer fee" is obvious and should not be included, but
-//! // "free balance" and "reserved balance" should be noted to give context to the pallet.
-//! // Please do not link to outside resources. The reference docs should be the ultimate source of truth.
+//! // Add terminology used in the custom pallet. Include concepts, storage items, or actions that
+//! you think // deserve to be noted to give context to the rest of the documentation or pallet
+//! usage. The author needs to // use some judgment about what is included. We don't want a list of
+//! every storage item nor types - the user // can go to the code for that. For example, "transfer
+//! fee" is obvious and should not be included, but // "free balance" and "reserved balance" should
+//! be noted to give context to the pallet. // Please do not link to outside resources. The
+//! reference docs should be the ultimate source of truth.
 //!
 //! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //!
@@ -106,7 +115,8 @@
 //! \#### <INSERT_SCENARIO_NAME>
 //!
 //! // Describe requirements prior to interacting with the custom pallet.
-//! // Describe the process of interacting with the custom pallet for this scenario and public API functions used.
+//! // Describe the process of interacting with the custom pallet for this scenario and public API
+//! functions used.
 //!
 //! \## Interface
 //!
@@ -130,14 +140,16 @@
 //!
 //! <!-- Original author of paragraph: ??? -->
 //!
-//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be
-//! // included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the README file.
+//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should
+//! // only be included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the
+//! // README file.
 //!
 //! \### Dispatchable Functions
 //!
 //! <!-- Original author of paragraph: @AmarRSingh & @joepetrowski -->
 //!
-//! // A brief description of dispatchable functions and a link to the rustdoc with their actual documentation.
+//! // A brief description of dispatchable functions and a link to the rustdoc with their actual
+//! documentation.
 //!
 //! // <b>MUST</b> have link to Call enum
 //! // <b>MUST</b> have origin information included in function doc
@@ -154,7 +166,8 @@
 //!
 //! <!-- Original author of paragraph: @AmarRSingh -->
 //!
-//! // It is up to the writer of the respective pallet (with respect to how much information to provide).
+//! // It is up to the writer of the respective pallet (with respect to how much information to
+//! provide).
 //!
 //! \#### Public Inspection functions - Immutable (getters)
 //!
@@ -217,7 +230,8 @@
 //!
 //! \### Simple Code Snippet
 //!
-//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_PALLET_NAME>)
+//! // Show a simple example (e.g. how to query a public getter function of
+//! <INSERT_CUSTOM_PALLET_NAME>)
 //!
 //! \### Example from FRAME
 //!
@@ -408,10 +422,10 @@ pub mod pallet {
 	// - Public calls that are signed by an external account.
 	// - Root calls that are allowed to be made only by the governance system.
 	// - Unsigned calls that can be of two kinds:
-	//   * "Inherent extrinsics" that are opinions generally held by the block
-	//     authors that build child blocks.
-	//   * Unsigned Transactions that are of intrinsic recognizable utility to the
-	//     network, and are validated by the runtime.
+	//   * "Inherent extrinsics" that are opinions generally held by the block authors that build
+	//     child blocks.
+	//   * Unsigned Transactions that are of intrinsic recognizable utility to the network, and are
+	//     validated by the runtime.
 	//
 	// Information about where this dispatch initiated from is provided as the first argument
 	// "origin". As such functions must always look like:
@@ -466,10 +480,10 @@ pub mod pallet {
 		//
 		// If you don't respect these rules, it is likely that your chain will be attackable.
 		//
-		// Each transaction must define a `#[pallet::weight(..)]` attribute to convey a set of static
-		// information about its dispatch. FRAME System and FRAME Executive pallet then use this
-		// information to properly execute the transaction, whilst keeping the total load of the
-		// chain in a moderate rate.
+		// Each transaction must define a `#[pallet::weight(..)]` attribute to convey a set of
+		// static information about its dispatch. FRAME System and FRAME Executive pallet then use
+		// this information to properly execute the transaction, whilst keeping the total load of
+		// the chain in a moderate rate.
 		//
 		// The parenthesized value of the `#[pallet::weight(..)]` attribute can be any type that
 		// implements a set of traits, namely [`WeighData`] and [`ClassifyDispatch`].
@@ -478,8 +492,8 @@ pub mod pallet {
 		// call. A higher weight means a larger transaction (less of which can be placed in a
 		// single block).
 		//
-		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the benchmark
-		// toolchain.
+		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
+		// benchmark toolchain.
 		#[pallet::weight(
 			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
 		)]
@@ -522,8 +536,8 @@ pub mod pallet {
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
 		//
-		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to determine
-		// its weight
+		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to
+		// determine its weight
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,
@@ -531,8 +545,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			// Print out log or debug message in the console via log::{error, warn, info, debug, trace},
-			// accepting format strings similar to `println!`.
+			// Print out log or debug message in the console via log::{error, warn, info, debug,
+			// trace}, accepting format strings similar to `println!`.
 			// https://substrate.dev/rustdocs/v3.0.0/log/index.html
 			info!("New value is now: {:?}", new_value);
 
@@ -631,7 +645,8 @@ impl<T: Config> Pallet<T> {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T>>::get();
-		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
+		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an
+		// Option<> type.
 		let result = <Foo<T>>::mutate(|foo| {
 			*foo = foo.saturating_add(increase_by);
 			*foo

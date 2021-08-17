@@ -203,7 +203,8 @@ where
 		Ok(())
 	}
 
-	/// Iterates through all blocks that are changing keys within range.filtered_range and collects these changes.
+	/// Iterates through all blocks that are changing keys within range.filtered_range and collects
+	/// these changes.
 	fn query_storage_filtered(
 		&self,
 		range: &QueryStorageRange<Block>,
@@ -258,6 +259,7 @@ where
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Hash: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
 		+ StorageProvider<Block, BE>

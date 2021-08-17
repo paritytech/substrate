@@ -21,9 +21,13 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../b
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../grandpa" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../im-online" }
-pallet-offences = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../offences" }
+pallet-offences = { version = "4.0.0-dev", default-features = false, features = [
+	"runtime-benchmarks",
+], path = "../../offences" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
+	"runtime-benchmarks",
+], path = "../../staking" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
@@ -32,7 +36,6 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
-serde = { version = "1.0.101" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 

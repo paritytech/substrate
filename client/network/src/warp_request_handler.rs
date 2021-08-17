@@ -49,7 +49,8 @@ pub enum VerificationResult<Block: BlockT> {
 
 /// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
 pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
-	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof size is reached.
+	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof
+	/// size is reached.
 	fn generate(
 		&self,
 		start: B::Hash,
@@ -61,11 +62,13 @@ pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
 		set_id: SetId,
 		authorities: AuthorityList,
 	) -> Result<VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>;
-	/// Get current list of authorities. This is supposed to be genesis authorities when starting sync.
+	/// Get current list of authorities. This is supposed to be genesis authorities when starting
+	/// sync.
 	fn current_authorities(&self) -> AuthorityList;
 }
 
-/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing incoming requests.
+/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing
+/// incoming requests.
 pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
 	RequestResponseConfig {
 		name: generate_protocol_name(protocol_id).into(),

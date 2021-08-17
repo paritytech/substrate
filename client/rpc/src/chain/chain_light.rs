@@ -62,6 +62,7 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client, F>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {
