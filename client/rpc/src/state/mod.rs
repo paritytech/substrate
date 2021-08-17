@@ -611,6 +611,11 @@ where
 			.boxed()
 		})?;
 
+		// TODO(niklasad1): add this back and make a PR to polkadot-js
+		// if this is enabled we get:
+		// `API/INIT: RPC methods not decorated: childstate_getChildReadProof polkadot.02.b5a3865f.js:1:204979`
+		// module.register_alias("childstate_getChildReadProof", "state_getChildReadProof")?;
+
 		Ok(module)
 	}
 }
