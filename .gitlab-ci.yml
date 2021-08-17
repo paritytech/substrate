@@ -300,6 +300,14 @@ cargo-check-try-runtime:
     - time cargo check --features try-runtime
     - sccache -s
 
+cargo-check-wasmer-sandbox:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - time cargo check --features wasmer-sandbox
+    - sccache -s
+
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
