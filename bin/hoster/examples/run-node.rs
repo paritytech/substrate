@@ -1,5 +1,5 @@
 fn main() {
-	hoster::Builder::<
+	substrate_runtime_hoster::Builder::<
 		node_runtime::Block,
 		node_runtime::RuntimeApi,
 		node_executor::Executor,

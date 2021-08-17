@@ -5,7 +5,7 @@ use sp_api::ConstructRuntimeApi;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use std::str::FromStr;
+use std::{marker::Unpin, str::FromStr};
 
 type StateBackend<Block> =
 	sc_client_db::SyncingCachingState<sc_client_db::RefTrackingState<Block>, Block>;
@@ -106,8 +106,9 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 {
 	pub fn run(self) -> Result<(), sc_cli::Error>
 	where
-		Block: BlockT + std::marker::Unpin,
-		<Block as BlockT>::Hash: FromStr,
+		Block: BlockT + Unpin,
+		<Block as BlockT>::Hash: FromStr + Unpin,
+		<Block as BlockT>::Header: Unpin,
 		<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
 		Executor: NativeExecutionDispatch + 'static,
 		RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
@@ -150,8 +151,9 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 {
 	pub fn run(self) -> Result<(), sc_cli::Error>
 	where
-		Block: BlockT + std::marker::Unpin,
-		<Block as BlockT>::Hash: FromStr,
+		Block: BlockT + Unpin,
+		<Block as BlockT>::Hash: FromStr + Unpin,
+		<Block as BlockT>::Header: Unpin,
 		<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
 		Executor: NativeExecutionDispatch + 'static,
 		RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>

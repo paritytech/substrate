@@ -2447,48 +2447,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hoster"
-version = "3.0.0-dev"
-dependencies = [
- "futures 0.3.16",
- "node-cli",
- "node-executor",
- "node-runtime",
- "num-traits",
- "sc-authority-discovery",
- "sc-basic-authorship",
- "sc-chain-spec",
- "sc-cli",
- "sc-client-api",
- "sc-client-db",
- "sc-consensus",
- "sc-consensus-aura",
- "sc-consensus-babe",
- "sc-consensus-slots",
- "sc-consensus-uncles",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-network",
- "sc-service",
- "sc-telemetry",
- "sc-transaction-pool",
- "sp-api",
- "sp-authority-discovery",
- "sp-authorship",
- "sp-block-builder",
- "sp-consensus",
- "sp-consensus-aura",
- "sp-consensus-babe",
- "sp-offchain",
- "sp-runtime",
- "sp-session",
- "sp-timestamp",
- "sp-transaction-pool",
- "sp-transaction-storage-proof",
- "structopt",
-]
-
-[[package]]
 name = "hostname"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9743,6 +9701,48 @@ dependencies = [
  "log 0.4.14",
  "prometheus",
  "tokio 1.10.0",
+]
+
+[[package]]
+name = "substrate-runtime-hoster"
+version = "3.0.0-dev"
+dependencies = [
+ "futures 0.3.16",
+ "node-cli",
+ "node-executor",
+ "node-runtime",
+ "num-traits",
+ "sc-authority-discovery",
+ "sc-basic-authorship",
+ "sc-chain-spec",
+ "sc-cli",
+ "sc-client-api",
+ "sc-client-db",
+ "sc-consensus",
+ "sc-consensus-aura",
+ "sc-consensus-babe",
+ "sc-consensus-slots",
+ "sc-consensus-uncles",
+ "sc-executor",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-service",
+ "sc-telemetry",
+ "sc-transaction-pool",
+ "sp-api",
+ "sp-authority-discovery",
+ "sp-authorship",
+ "sp-block-builder",
+ "sp-consensus",
+ "sp-consensus-aura",
+ "sp-consensus-babe",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-timestamp",
+ "sp-transaction-pool",
+ "sp-transaction-storage-proof",
+ "structopt",
 ]
 
 [[package]]

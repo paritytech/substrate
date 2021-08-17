@@ -12,14 +12,15 @@ use sp_consensus::SlotData;
 use sp_consensus_aura::sr25519::{AuthorityId as AuraId, AuthorityPair as AuraPair};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use std::{str::FromStr, sync::Arc};
+use std::{marker::Unpin, str::FromStr, sync::Arc};
 
 pub fn new_full_babe<Block, RuntimeApi, Executor>(
 	mut config: sc_service::Configuration,
 ) -> Result<sc_service::TaskManager, ServiceError>
 where
-	Block: BlockT + std::marker::Unpin,
-	<Block as BlockT>::Hash: FromStr,
+	Block: BlockT + Unpin,
+	<Block as BlockT>::Hash: FromStr + Unpin,
+	<Block as BlockT>::Header: Unpin,
 	<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
 	Executor: NativeExecutionDispatch + 'static,
 	RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
@@ -305,7 +306,8 @@ pub fn new_full_aura<Block, RuntimeApi, Executor>(
 ) -> Result<sc_service::TaskManager, ServiceError>
 where
 	Block: BlockT + std::marker::Unpin,
-	<Block as BlockT>::Hash: FromStr,
+	<Block as BlockT>::Hash: FromStr + Unpin,
+	<Block as BlockT>::Header: Unpin,
 	<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
 	Executor: NativeExecutionDispatch + 'static,
 	RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
