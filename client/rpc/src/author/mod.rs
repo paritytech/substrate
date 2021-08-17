@@ -191,7 +191,7 @@ where
 		)?;
 
 		module.register_subscription(
-			"author_submitAndWatchExtrinsic",
+			"author_extrinsicUpdate",
 			"author_unwatchExtrinsic",
 			|params, mut sink, ctx| {
 				let xt: Bytes = params.one()?;
@@ -228,6 +228,8 @@ where
 				Ok(())
 			},
 		)?;
+
+		module.register_alias("author_submitAndWatchExtrinsic", "author_extrinsicUpdate")?;
 
 		Ok(module)
 	}

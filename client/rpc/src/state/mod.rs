@@ -420,23 +420,26 @@ where
 		})?;
 
 		module.register_subscription(
-			"state_subscribeRuntimeVersion",
+			"state_runtimeVersion",
 			"state_unsubscribeRuntimeVersion",
 			|_params, sink, ctx| ctx.backend.subscribe_runtime_version(sink).map_err(Into::into),
 		)?;
 
-		module.register_alias("chain_subscribeRuntimeVersion", "state_subscribeRuntimeVersion")?;
+		module.register_alias("chain_subscribeRuntimeVersion", "state_runtimeVersion")?;
+		module.register_alias("state_subscribeRuntimeVersion", "state_runtimeVersion")?;
 		module
 			.register_alias("chain_unsubscribeRuntimeVersion", "state_unsubscribeRuntimeVersion")?;
 
 		module.register_subscription(
-			"state_subscribeStorage",
+			"state_storage",
 			"state_unsubscribeStorage",
 			|params, sink, ctx| {
 				let keys = params.one::<Vec<StorageKey>>().ok();
 				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
 			},
 		)?;
+		module.register_alias("chain_subscribeStorage", "state_storage")?;
+		module.register_alias("state_subscribeStorage", "state_storage")?;
 
 		Ok(module)
 	}
