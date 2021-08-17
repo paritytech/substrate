@@ -261,7 +261,7 @@ where
 	}
 
 	/// so you've decided to run the test runner as a binary, use this to shutdown gracefully.
-	pub async fn until_shutdown(mut self) {
+	pub async fn until_shutdown(mut self) -> Option<Box<dyn std::any::Any + Send>> {
 		let manager = self.task_manager.take();
 		if let Some(mut task_manager) = manager {
 			let task = task_manager.future().fuse();
@@ -269,7 +269,9 @@ where
 			futures::pin_mut!(signal);
 			futures::future::select(task, signal).await;
 			// we don't really care whichever comes first.
-			task_manager.clean_shutdown().await
+			Some(task_manager.clean_shutdown().await)
+		} else {
+			None
 		}
 	}
 }
