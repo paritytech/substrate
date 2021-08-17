@@ -173,7 +173,7 @@ impl<B: traits::Block> System<B> {
 		//
 		// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
 		// is an example of a valid, passing multiaddr with PeerId attached.
-		rpc_module.register_async_method::<(), _>("system_addReservedPeer", |param, system| {
+		rpc_module.register_async_method("system_addReservedPeer", |param, system| {
 			let peer = match param.one() {
 				Ok(peer) => peer,
 				Err(e) => return Box::pin(futures::future::err(e)),
@@ -255,7 +255,7 @@ impl<B: traits::Block> System<B> {
 		// The syntax is identical to the CLI `<target>=<level>`:
 		//
 		// `sync=debug,state=trace`
-		rpc_module.register_method::<(), _>("system_addLogFilter", |param, system| {
+		rpc_module.register_method("system_addLogFilter", |param, system| {
 			system.deny_unsafe.check_if_safe()?;
 
 			let directives = param.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
@@ -265,7 +265,7 @@ impl<B: traits::Block> System<B> {
 		})?;
 
 		// Resets the log filter to Substrate defaults
-		rpc_module.register_method::<(), _>("system_resetLogFilter", |_, system| {
+		rpc_module.register_method("system_resetLogFilter", |_, system| {
 			system.deny_unsafe.check_if_safe()?;
 			logging::reset_log_filter()
 				.map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
