@@ -91,9 +91,6 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 
 		to_supports(&winners, &staked).map_err(Error::from)
 	}
-
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn prepare_elect() {}
 }
 
 #[cfg(test)]

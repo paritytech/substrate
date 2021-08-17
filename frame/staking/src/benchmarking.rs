@@ -582,7 +582,6 @@ benchmarks! {
 		assert!(balance_before > balance_after);
 	}
 
-	#[extra]
 	get_npos_voters {
 		// number of validator intention.
 		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
@@ -604,7 +603,6 @@ benchmarks! {
 		assert_eq!(voters.len() as u32, v + n);
 	}
 
-	#[extra]
 	get_npos_targets {
 		// number of validator intention.
 		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;

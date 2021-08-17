@@ -641,15 +641,18 @@ impl<T: Config> Pallet<T> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
 
+		let mut validator_count = 0u32;
 		for (validator, _) in <Validators<T>>::iter() {
 			// Append self vote.
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
+			validator_count.saturating_inc();
 		}
 
 		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
+		let mut nominator_count = 0u32;
 		for (nominator, nominations) in Nominators::<T>::iter() {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
@@ -663,9 +666,16 @@ impl<T: Config> Pallet<T> {
 
 			if !targets.is_empty() {
 				let vote_weight = weight_of(&nominator);
-				all_voters.push((nominator, vote_weight, targets))
+				all_voters.push((nominator, vote_weight, targets));
+				nominator_count.saturating_inc();
 			}
 		}
+
+		Self::register_weight(T::WeightInfo::get_npos_voters(
+			validator_count,
+			nominator_count,
+			slashing_spans.len() as u32,
+		));
 
 		all_voters
 	}
@@ -673,7 +683,17 @@ impl<T: Config> Pallet<T> {
 	/// This is a very expensive function and result should be cached versus being called multiple
 	/// times.
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+		let mut validator_count = 0u32;
+		let targets = Validators::<T>::iter()
+			.map(|(v, _)| {
+				validator_count.saturating_inc();
+				v
+			})
+			.collect::<Vec<_>>();
+
+		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
+
+		targets
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
@@ -725,6 +745,16 @@ impl<T: Config> Pallet<T> {
 			false
 		}
 	}
+
+	/// Register some amount of weight directly with the system pallet.
+	///
+	/// This is always mandatory weight.
+	fn register_weight(weight: Weight) {
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
+	}
 }
 
 impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
@@ -732,6 +762,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
 	fn desired_targets() -> data_provider::Result<u32> {
+		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 

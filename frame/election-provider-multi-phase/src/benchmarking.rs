@@ -151,8 +151,6 @@ fn solution_with_size<T: Config>(
 }
 
 fn set_up_data_provider<T: Config>(v: u32, t: u32) {
-	// number of votes in snapshot.
-
 	T::DataProvider::clear();
 	log!(
 		info,
@@ -244,21 +242,59 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
-	create_snapshot {
-		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
-		// number of targets in snapshot.
-		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+	create_snapshot_internal {
+		// number of votes in snapshot. Fixed to maximum.
+		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
+		// number of targets in snapshot. Fixed to maximum.
+		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		T::DataProvider::clear();
+		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
+		let targets = T::DataProvider::targets(None).unwrap();
+		let voters = T::DataProvider::voters(None).unwrap();
+		let desired_targets = T::DataProvider::desired_targets().unwrap();
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<MultiPhase::<T>>::create_snapshot().unwrap()
+		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
+	}
+
+	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.
+	elect_queued {
+		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
+		// a subset of `v`.
+		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		// number of desired targets. Must be a subset of `t`.
+		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+
+		// number of votes in snapshot. Not dominant.
+		let v  = T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot. Not dominant.
+		let t = T::BenchmarkingConfig::TARGETS[1];
+
+		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
+		let raw_solution = solution_with_size::<T>(witness, a, d)?;
+		let ready_solution =
+			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed).unwrap();
+		<CurrentPhase<T>>::put(Phase::Signed);
+		// assume a queued solution is stored, regardless of where it comes from.
+		<QueuedSolution<T>>::put(ready_solution);
+
+		// these are set by the `solution_with_size` function.
+		assert!(<DesiredTargets<T>>::get().is_some());
+		assert!(<Snapshot<T>>::get().is_some());
+		assert!(<SnapshotMetadata<T>>::get().is_some());
+	}: {
+		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+	} verify {
+		assert!(<MultiPhase<T>>::queued_solution().is_none());
+		assert!(<DesiredTargets<T>>::get().is_none());
+		assert!(<Snapshot<T>>::get().is_none());
+		assert!(<SnapshotMetadata<T>>::get().is_none());
+		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
 	}
 
 	submit {
@@ -376,7 +412,6 @@ frame_benchmarking::benchmarks! {
 		// number of targets in snapshot. Fixed to maximum.
 		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		T::DataProvider::clear();
 		set_up_data_provider::<T>(v, t);
 		let now = frame_system::Pallet::<T>::block_number();
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
@@ -399,7 +434,6 @@ frame_benchmarking::benchmarks! {
 		// number of targets in snapshot. Fixed to maximum.
 		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		T::DataProvider::clear();
 		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {

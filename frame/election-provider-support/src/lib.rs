@@ -184,6 +184,9 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
+	///
+	/// This should be implemented as a self-weighing function. The implementor should register its
+	/// appropriate weight at the end of execution with the system pallet directly.
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
 
 	/// All possible voters for the election.
@@ -192,11 +195,17 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
+	///
+	/// This should be implemented as a self-weighing function. The implementor should register its
+	/// appropriate weight at the end of execution with the system pallet directly.
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>;
 
 	/// The number of targets to elect.
+	///
+	/// This should be implemented as a self-weighing function. The implementor should register its
+	/// appropriate weight at the end of execution with the system pallet directly.
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
@@ -270,11 +279,10 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// Elect a new set of winners.
 	///
 	/// The result is returned in a target major format, namely as vector of supports.
+	///
+	/// This should be implemented as a self-weighing function. The implementor should register its
+	/// appropriate weight at the end of execution with the system pallet directly.
 	fn elect() -> Result<Supports<AccountId>, Self::Error>;
-
-	/// Brace your `elect` function for being benchmarked.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn prepare_elect();
 }
 
 #[cfg(feature = "std")]
@@ -285,7 +293,4 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")
 	}
-
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn prepare_elect() {}
 }

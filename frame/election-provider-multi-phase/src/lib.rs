@@ -1268,43 +1268,17 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Creates the snapshot. Writes new data to:
+	/// Parts of [`create_snapshot`] that happen inside of this pallet.
 	///
-	/// 1. [`SnapshotMetadata`]
-	/// 2. [`RoundSnapshot`]
-	/// 3. [`DesiredTargets`]
-	///
-	/// Returns `Ok(())` if operation is okay.
-	///
-	/// This is a *self-weighing* function, it will register its own extra weight as
-	/// [`DispatchClass::Mandatory`] with the system pallet.
-	pub fn create_snapshot() -> Result<(), ElectionError> {
-		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
-
-		let targets =
-			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
-		let voters =
-			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
-		let desired_targets =
-			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
-
-		// Defensive-only.
-		if targets.len() > target_limit || voters.len() > voter_limit {
-			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
-		}
-
-		// Only write snapshot if all existed.
+	/// Extracted for easier weight calculation.
+	fn create_snapshot_internal(
+		targets: Vec<T::AccountId>,
+		voters: Vec<crate::unsigned::Voter<T>>,
+		desired_targets: u32,
+	) {
 		let metadata =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
 		log!(debug, "creating a snapshot with metadata {:?}", metadata);
-
-		// register the weight of this snapshot creation.
-		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			T::WeightInfo::create_snapshot(metadata.voters, metadata.targets),
-			DispatchClass::Mandatory,
-		);
 
 		<SnapshotMetadata<T>>::put(metadata);
 		<DesiredTargets<T>>::put(desired_targets);
@@ -1324,8 +1298,60 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(buffer.len() == size && size == buffer.capacity());
 
 		sp_io::storage::set(&<Snapshot<T>>::hashed_key(), &buffer);
+	}
 
+	/// Parts of [`create_snapshot`] that happen outside of this pallet.
+	///
+	/// Extracted for easier weight calculation.
+	fn create_snapshot_external(
+	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError> {
+		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
+		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
+
+		let targets =
+			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
+		let voters =
+			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
+		let desired_targets =
+			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
+
+		// Defensive-only.
+		if targets.len() > target_limit || voters.len() > voter_limit {
+			debug_assert!(false, "Snapshot limit has not been respected.");
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+		}
+
+		Ok((targets, voters, desired_targets))
+	}
+
+	/// Creates the snapshot. Writes new data to:
+	///
+	/// 1. [`SnapshotMetadata`]
+	/// 2. [`RoundSnapshot`]
+	/// 3. [`DesiredTargets`]
+	///
+	/// Returns `Ok(())` if operation is okay.
+	///
+	/// This is a *self-weighing* function, it will register its own extra weight as
+	/// [`DispatchClass::Mandatory`] with the system pallet.
+	pub fn create_snapshot() -> Result<(), ElectionError> {
+		// this is self-weighing itself..
+		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
+
+		// ..therefore we only measure the weight of this and add it.
+		Self::create_snapshot_internal(targets, voters, desired_targets);
+		Self::register_weight(T::WeightInfo::create_snapshot_internal());
 		Ok(())
+	}
+
+	/// Register some amount of weight directly with the system pallet.
+	///
+	/// This is always mandatory weight.
+	fn register_weight(weight: Weight) {
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
@@ -1472,7 +1498,11 @@ impl<T: Config> Pallet<T> {
 			.map_or_else(
 				|| match T::Fallback::get() {
 					FallbackStrategy::OnChain => Self::onchain_fallback()
-						.map(|s| (s, ElectionCompute::OnChain))
+						.map(|s| {
+							// onchain election incurs maximum block weight
+							Self::register_weight(T::BlockWeights::get().max_block);
+							(s, ElectionCompute::OnChain)
+						})
 						.map_err(Into::into),
 					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
 				},
@@ -1493,6 +1523,16 @@ impl<T: Config> Pallet<T> {
 				err
 			})
 	}
+
+	/// record the weight of the given `supports`.
+	fn weigh_supports(supports: &Supports<T::AccountId>) {
+		let active_voters = supports
+			.iter()
+			.map(|(_, x)| x)
+			.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
+		let desired_targets = supports.len() as u32;
+		Self::register_weight(T::WeightInfo::elect_queued(active_voters, desired_targets));
+	}
 }
 
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
@@ -1502,7 +1542,8 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
-				// All went okay, put sign to be Off, clean snapshot, etc.
+				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
+				Self::weigh_supports(&supports);
 				Self::rotate_round();
 				Ok(supports)
 			},
@@ -1512,16 +1553,6 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				Err(why)
 			},
 		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn prepare_elect() {
-		// prepare your reasonable, worse-case for benchmarking. store some value in queued
-		// solution.
-		let supports = Self::onchain_fallback().expect("onchain fallback should work; qed");
-		let ready = ReadySolution { supports, ..Default::default() };
-		<QueuedSolution<T>>::put(ready);
-		// NOTE: we don't assume any signed solution, we manually register that weight.
 	}
 }
 

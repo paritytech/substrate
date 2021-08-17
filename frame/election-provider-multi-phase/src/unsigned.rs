@@ -662,7 +662,10 @@ mod max_weight {
 
 	struct TestWeight;
 	impl crate::weights::WeightInfo for TestWeight {
-		fn create_snapshot(_: u32, _: u32) -> Weight {
+		fn elect_queued(a: u32, d: u32) -> Weight {
+			unreachable!()
+		}
+		fn create_snapshot_internal() -> Weight {
 			unreachable!()
 		}
 		fn on_initialize_nothing() -> Weight {
