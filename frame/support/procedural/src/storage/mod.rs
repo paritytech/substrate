@@ -117,7 +117,7 @@ impl From<DeclStorageDef> for DeclStorageDefExt {
 	fn from(mut def: DeclStorageDef) -> Self {
 		let hidden_crate_name = def.hidden_crate.as_ref().map(|i| i.to_string())
 			.unwrap_or_else(|| "decl_storage".to_string());
-	
+
 		let hidden_crate = generate_crate_access(&hidden_crate_name, "frame-support");
 		let hidden_imports = generate_hidden_includes(&hidden_crate_name, "frame-support");
 

@@ -50,7 +50,7 @@ pub type Weight = u64;
 ///
 /// As 1 gas is equal to 1 weight we base this on the conducted benchmarks which
 /// determined runtime weights:
-/// https://github.com/paritytech/substrate/pull/5446
+/// <https://github.com/paritytech/substrate/pull/5446>
 const GAS_PER_SECOND: Weight = 1_000_000_000_000;
 
 /// The maximum amount of weight that the call and instantiate rpcs are allowed to consume.
@@ -385,7 +385,8 @@ mod tests {
 		}
 		test(r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "0x68656c704f6b",
+			"gasRequired": 8000,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Ok": {
 				"flags": 5,
@@ -395,7 +396,8 @@ mod tests {
 		}"#);
 		test(r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "0x68656c70457272",
+			"gasRequired": 5200,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}
@@ -411,7 +413,8 @@ mod tests {
 		}
 		test(r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "0x68656c704f6b",
+			"gasRequired": 8000,
+			"debugMessage": "HelloWorld",
 			"result": {
 			   "Ok": {
 				  "result": {
@@ -425,7 +428,8 @@ mod tests {
 		}"#);
 		test(r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "0x68656c70457272",
+			"gasRequired": 5200,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}

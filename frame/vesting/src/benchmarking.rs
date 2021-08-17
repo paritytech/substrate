@@ -226,6 +226,6 @@ benchmarks! {
 
 impl_benchmark_test_suite!(
 	Vesting,
-	crate::tests::ExtBuilder::default().existential_deposit(256).build(),
-	crate::tests::Test,
+	crate::mock::ExtBuilder::default().existential_deposit(256).build(),
+	crate::mock::Test,
 );

@@ -25,10 +25,16 @@
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
 use crate::Config;
-use parity_wasm::elements::{
-	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
+use pwasm_utils::{
+	stack_height::inject_limiter,
+	parity_wasm::{
+		elements::{
+			self, Instruction, Instructions, FuncBody, ValueType, BlockType, Section,
+			CustomSection,
+		},
+		builder,
+	},
 };
-use pwasm_utils::stack_height::inject_limiter;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
@@ -127,7 +133,7 @@ where
 		let func_offset = u32::try_from(def.imported_functions.len()).unwrap();
 
 		// Every contract must export "deploy" and "call" functions
-		let mut contract = parity_wasm::builder::module()
+		let mut contract = builder::module()
 			// deploy function (first internal function)
 			.function()
 				.signature().build()
@@ -166,7 +172,7 @@ where
 
 		// Import supervisor functions. They start with idx 0.
 		for func in def.imported_functions {
-			let sig = parity_wasm::builder::signature()
+			let sig = builder::signature()
 				.with_params(func.params)
 				.with_results(func.return_type.into_iter().collect())
 				.build_sig();
@@ -174,7 +180,7 @@ where
 			contract = contract.import()
 				.module(func.module)
 				.field(func.name)
-				.with_external(parity_wasm::elements::External::Function(sig))
+				.with_external(elements::External::Function(sig))
 				.build();
 		}
 
@@ -252,9 +258,14 @@ where
 
 	/// Same as `dummy` but with maximum sized linear memory and a dummy section of specified size.
 	pub fn dummy_with_bytes(dummy_bytes: u32) -> Self {
+		// We want the module to have the size `dummy_bytes`.
+		// This is not completely correct as the overhead grows when the contract grows
+		// because of variable length integer encoding. However, it is good enough to be that
+		// close for benchmarking purposes.
+		let module_overhead = 65;
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
-			dummy_section: dummy_bytes,
+			dummy_section: dummy_bytes.saturating_sub(module_overhead),
 			.. Default::default()
 		}
 		.into()
@@ -264,7 +275,7 @@ where
 	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
 	pub fn sized(target_bytes: u32) -> Self {
-		use parity_wasm::elements::Instruction::{If, I32Const, Return, End};
+		use self::elements::Instruction::{If, I32Const, Return, End};
 		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
 		// size fields inside the binary wasm module representation which are leb128 encoded
@@ -496,8 +507,8 @@ pub mod body {
 
 	/// Replace the locals of the supplied `body` with `num` i64 locals.
 	pub fn inject_locals(body: &mut FuncBody, num: u32) {
-		use parity_wasm::elements::Local;
-		*body.locals_mut() = (0..num).map(|i| Local::new(i, ValueType::I64)).collect()
+		use self::elements::Local;
+		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
 	}
 }
 

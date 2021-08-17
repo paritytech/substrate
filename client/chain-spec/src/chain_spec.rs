@@ -21,7 +21,7 @@
 
 use std::{borrow::Cow, fs::File, path::PathBuf, sync::Arc, collections::HashMap};
 use serde::{Serialize, Deserialize};
-use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
+use sp_core::{storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild}, Bytes};
 use sp_runtime::BuildStorage;
 use serde_json as json;
 use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
@@ -160,6 +160,12 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
 	light_sync_state: Option<SerializableLightSyncState>,
+	/// Mapping from `block_hash` to `wasm_code`.
+	///
+	/// The given `wasm_code` will be used to substitute the on-chain wasm code from the given
+	/// block hash onwards.
+	#[serde(default)]
+	code_substitutes: HashMap<String, Bytes>,
 }
 
 /// A type denoting empty extensions.
@@ -249,6 +255,7 @@ impl<G, E> ChainSpec<G, E> {
 			consensus_engine: (),
 			genesis: Default::default(),
 			light_sync_state: None,
+			code_substitutes: HashMap::new(),
 		};
 
 		ChainSpec {
@@ -394,6 +401,10 @@ where
 
 	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
 		ChainSpec::set_light_sync_state(self, light_sync_state)
+	}
+
+	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>> {
+		self.client_spec.code_substitutes.iter().map(|(h, c)| (h.clone(), c.0.clone())).collect()
 	}
 }
 

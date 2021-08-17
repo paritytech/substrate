@@ -159,6 +159,7 @@ pub mod pallet {
 		/// If B sees A is on a blockchain with larger proof length limit, then it should kindly refuse
 		/// to accept the atomic swap request if A generates the proof, and asks that B generates the
 		/// proof instead.
+		#[pallet::constant]
 		type ProofLimit: Get<u32>;
 	}
 
@@ -226,7 +227,7 @@ pub mod pallet {
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
-		pub(crate) fn create_swap(
+		pub fn create_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
 			hashed_proof: HashedProof,
@@ -268,7 +269,7 @@ pub mod pallet {
 				.saturating_add((proof.len() as Weight).saturating_mul(100))
 				.saturating_add(action.weight())
 		)]
-		pub(crate) fn claim_swap(
+		pub fn claim_swap(
 			origin: OriginFor<T>,
 			proof: Vec<u8>,
 			action: T::SwapAction,
@@ -303,7 +304,7 @@ pub mod pallet {
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
-		pub(crate) fn cancel_swap(
+		pub fn cancel_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
 			hashed_proof: HashedProof,

@@ -161,9 +161,15 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq + Debug {}
-impl<T: FullCodec + Copy + Default + Eq + PartialEq + Debug> AssetId for T {}
+pub trait AssetId: FullCodec + Copy  + Eq + PartialEq + Debug {}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
 impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}
+
+/// Converts a balance value into an asset balance.
+pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+	type Error;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
+}

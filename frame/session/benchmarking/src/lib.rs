@@ -28,7 +28,6 @@ use sp_std::vec;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::{
 	codec::Decode,
-	storage::StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
@@ -59,7 +58,7 @@ benchmarks! {
 			false,
 			RewardDestination::Staked,
 		)?;
-		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
+		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		// Whitelist controller account from further DB operations.
@@ -75,7 +74,7 @@ benchmarks! {
 			false,
 			RewardDestination::Staked
 		)?;
-		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
+		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
@@ -125,7 +124,7 @@ fn check_membership_proof_setup<T: Config>(
 	(sp_runtime::KeyTypeId, &'static [u8; 32]),
 	sp_session::MembershipProof,
 ) {
-	pallet_staking::ValidatorCount::put(n);
+	pallet_staking::ValidatorCount::<T>::put(n);
 
 	// create validators and set random session keys
 	for (n, who) in create_validators::<T>(n, 1000)
@@ -137,7 +136,7 @@ fn check_membership_proof_setup<T: Config>(
 		use rand::SeedableRng;
 
 		let validator = T::Lookup::lookup(who).unwrap();
-		let controller = pallet_staking::Module::<T>::bonded(validator).unwrap();
+		let controller = pallet_staking::Pallet::<T>::bonded(validator).unwrap();
 
 		let keys = {
 			let mut keys = [0u8; 128];

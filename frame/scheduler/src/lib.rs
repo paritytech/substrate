@@ -148,6 +148,7 @@ pub mod pallet {
 
 		/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 		/// than `schedule::HARD_DEADLINE`.
+		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
 		/// Required origin to schedule or cancel calls.
@@ -155,6 +156,7 @@ pub mod pallet {
 
 		/// The maximum number of scheduled calls in the queue for a single block.
 		/// Not strictly enforced, but used for weight estimation.
+		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -346,7 +348,7 @@ pub mod pallet {
 		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule(
+		pub fn schedule(
 			origin: OriginFor<T>,
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -376,7 +378,7 @@ pub mod pallet {
 		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
+		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
@@ -394,7 +396,7 @@ pub mod pallet {
 		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule_named(
+		pub fn schedule_named(
 			origin: OriginFor<T>,
 			id: Vec<u8>,
 			when: T::BlockNumber,
@@ -426,7 +428,7 @@ pub mod pallet {
 		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
+		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
@@ -439,7 +441,7 @@ pub mod pallet {
 		/// Same as [`schedule`].
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule_after(
+		pub fn schedule_after(
 			origin: OriginFor<T>,
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -461,10 +463,10 @@ pub mod pallet {
 		/// Schedule a named task after a delay.
 		///
 		/// # <weight>
-		/// Same as [`schedule_named`].
+		/// Same as [`schedule_named`](Self::schedule_named).
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule_named_after(
+		pub fn schedule_named_after(
 			origin: OriginFor<T>,
 			id: Vec<u8>,
 			after: T::BlockNumber,
@@ -867,7 +869,7 @@ mod tests {
 		#[pallet::call]
 		impl<T: Config> Pallet<T> where <T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>  {
 			#[pallet::weight(*weight)]
-			fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
+			pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
 					log.borrow_mut().push((origin.caller().clone(), i));
@@ -876,7 +878,7 @@ mod tests {
 			}
 
 			#[pallet::weight(*weight)]
-			fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
+			pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
 					log.borrow_mut().push((origin.caller().clone(), i));

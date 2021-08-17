@@ -33,7 +33,7 @@ use sp_runtime::{
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
-	storage::child::{self, KillChildStorageResult, ChildInfo},
+	storage::child::{self, KillStorageResult, ChildInfo},
 	traits::Get,
 	weights::Weight,
 };
@@ -97,11 +97,11 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
 	pub rent_allowance: Balance,
-	/// The amount of rent that was payed by the contract over its whole lifetime.
+	/// The amount of rent that was paid by the contract over its whole lifetime.
 	///
 	/// A restored contract starts with a value of zero just like a new contract.
-	pub rent_payed: Balance,
-	/// Last block rent has been payed.
+	pub rent_paid: Balance,
+	/// Last block rent has been paid.
 	pub deduct_block: BlockNumber,
 	/// Last block child storage has been written.
 	pub last_write: Option<BlockNumber>,
@@ -243,7 +243,7 @@ where
 				// charge rent for it during instantiation.
 				<frame_system::Pallet<T>>::block_number().saturating_sub(1u32.into()),
 			rent_allowance: <BalanceOf<T>>::max_value(),
-			rent_payed: <BalanceOf<T>>::zero(),
+			rent_paid: <BalanceOf<T>>::zero(),
 			pair_count: 0,
 			last_write: None,
 			_reserved: None,
@@ -331,14 +331,14 @@ where
 				let removed = queue.swap_remove(0);
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
-					KillChildStorageResult::SomeRemaining(_) => {
+					KillStorageResult::SomeRemaining(_) => {
 						log::error!(
 							target: "runtime::contracts",
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
 					},
-					KillChildStorageResult::AllRemoved(_) => (),
+					KillStorageResult::AllRemoved(_) => (),
 				}
 			}
 			remaining_key_budget = remaining_key_budget

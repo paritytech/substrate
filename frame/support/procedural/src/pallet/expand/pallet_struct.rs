@@ -102,40 +102,58 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	};
 
-	let storage_info = if let Some(storage_info_span) = def.pallet_struct.generate_storage_info {
-		let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
-		let storage_cfg_attrs = &def.storages.iter()
-			.map(|storage| &storage.cfg_attrs)
-			.collect::<Vec<_>>();
-
-		quote::quote_spanned!(storage_info_span =>
-			impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
-				for #pallet_ident<#type_use_gen>
-				#storages_where_clauses
-			{
-				fn storage_info()
-					-> #frame_support::sp_std::vec::Vec<#frame_support::traits::StorageInfo>
-				{
-					let mut res = #frame_support::sp_std::vec![];
-
-					#(
-						#(#storage_cfg_attrs)*
-						{
-							let mut storage_info = <
-								#storage_names<#type_use_gen>
-								as #frame_support::traits::StorageInfoTrait
-							>::storage_info();
-							res.append(&mut storage_info);
-						}
-					)*
-
-					res
-				}
-			}
+	// Depending on the flag `generate_storage_info` we use partial or full storage info from
+	// storage.
+	let (
+		storage_info_span,
+		storage_info_trait,
+		storage_info_method,
+	) = if let Some(span) = def.pallet_struct.generate_storage_info {
+		(
+			span,
+			quote::quote_spanned!(span => StorageInfoTrait),
+			quote::quote_spanned!(span => storage_info),
 		)
 	} else {
-		Default::default()
+		let span = def.pallet_struct.attr_span;
+		(
+			span,
+			quote::quote_spanned!(span => PartialStorageInfoTrait),
+			quote::quote_spanned!(span => partial_storage_info),
+		)
 	};
+
+	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
+	let storage_cfg_attrs = &def.storages.iter()
+		.map(|storage| &storage.cfg_attrs)
+		.collect::<Vec<_>>();
+
+	let storage_info = quote::quote_spanned!(storage_info_span =>
+		impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
+			for #pallet_ident<#type_use_gen>
+			#storages_where_clauses
+		{
+			fn storage_info()
+				-> #frame_support::sp_std::vec::Vec<#frame_support::traits::StorageInfo>
+			{
+				#[allow(unused_mut)]
+				let mut res = #frame_support::sp_std::vec![];
+
+				#(
+					#(#storage_cfg_attrs)*
+					{
+						let mut storage_info = <
+							#storage_names<#type_use_gen>
+							as #frame_support::traits::#storage_info_trait
+						>::#storage_info_method();
+						res.append(&mut storage_info);
+					}
+				)*
+
+				res
+			}
+		}
+	);
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#module_error_metadata

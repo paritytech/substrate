@@ -30,7 +30,7 @@ use sp_std::convert::TryFrom;
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -579,8 +579,28 @@ ss58_address_format!(
 		(67, "equilibrium", "Equilibrium Network, standard account (*25519).")
 	SoraAccount =>
 		(69, "sora", "SORA Network, standard account (*25519).")
+	MantaAccount =>
+		(77, "manta", "Manta Network, standard account (*25519).")
+	CalamariAccount =>
+		(78, "calamari", "Manta Canary Network, standard account (*25519).")
+	PolkaSmith =>
+		(98, "polkasmith", "PolkaSmith Canary Network, standard account (*25519).")
+	PolkaFoundry =>
+		(99, "polkafoundry", "PolkaFoundry Network, standard account (*25519).")
+  OriginTrailAccount =>
+		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
+	HeikoAccount =>
+		(110, "heiko", "Heiko, session key (*25519).")
+	ParallelAccount =>
+		(172, "parallel", "Parallel, session key (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
+	Moonbeam =>
+		(1284, "moonbeam", "Moonbeam, session key (*25519).")
+	Moonriver =>
+		(1285, "moonriver", "Moonriver, session key (*25519).")
+	BasiliskAccount =>
+		(10041, "basilisk", "Basilisk standard account (*25519).")
 
 	// Note: 16384 and above are reserved.
 );
@@ -683,7 +703,7 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 

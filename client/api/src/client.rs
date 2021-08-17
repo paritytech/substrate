@@ -31,6 +31,7 @@ use crate::blockchain::Info;
 use crate::notifications::StorageEventStream;
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
+use sc_transaction_pool_api::ChainEvent;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotification<Block>>;
@@ -83,6 +84,16 @@ pub trait BlockBackend<Block: BlockT> {
 		&self,
 		id: &BlockId<Block>
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+
+	/// Get all indexed transactions for a block,
+	/// including renewed transactions.
+	///
+	/// Note that this will only fetch transactions
+	/// that are indexed by the runtime with `storage_index_transaction`.
+	fn block_indexed_body(
+		&self,
+		id: &BlockId<Block>,
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
 
 	/// Get full block by id.
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
@@ -268,7 +279,7 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 }
 
-impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::ChainEvent<B> {
+impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 	type Error = ();
 
 	fn try_from(n: BlockImportNotification<B>) -> Result<Self, ()> {
@@ -283,7 +294,7 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::Cha
 	}
 }
 
-impl<B: BlockT> From<FinalityNotification<B>> for sp_transaction_pool::ChainEvent<B> {
+impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	fn from(n: FinalityNotification<B>) -> Self {
 		Self::Finalized {
 			hash: n.hash,

@@ -4,7 +4,7 @@ An incomplete guide.
 
 ## Refreshing the node-template
 
-Not much has changed on the top and API level for developing Substrate betweeen 2.0 and 3.0. If you've made only small changes to the node-template, we recommend to do the following - it is easiest and quickest path forward:
+Not much has changed on the top and API level for developing Substrate between 2.0 and 3.0. If you've made only small changes to the node-template, we recommend to do the following - it is easiest and quickest path forward:
 1. take a diff between 2.0 and your changes
 2. store that diff
 3. remove everything, copy over the 3.0 node-template
@@ -143,7 +143,7 @@ And update the overall definition for weights on frame and a few related types a
 +const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 +
 +impl frame_system::Config for Runtime {
- 	type BaseCallFilter = ();
+ 	type BaseCallFilter = frame_support::traits::AllowAll;
 +	type BlockWeights = RuntimeBlockWeights;
 +	type BlockLength = RuntimeBlockLength;
 +	type DbWeight = RocksDbWeight;
@@ -558,7 +558,7 @@ First and foremost, grandpa internalised a few aspects, and thus `new_partial` d
 +	));
 ```
 
-As these changes pull through the enitrety of `cli/src/service.rs`, we recommend looking at the final diff below for guidance.
+As these changes pull through the entirety of `cli/src/service.rs`, we recommend looking at the final diff below for guidance.
 
 ##### In a nutshell
 

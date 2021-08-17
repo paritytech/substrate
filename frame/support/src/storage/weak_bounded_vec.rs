@@ -20,13 +20,13 @@
 
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
 use crate::{
-	traits::{Get, MaxEncodedLen},
+	traits::Get,
 	storage::{StorageDecodeLength, StorageTryAppend},
 };
 
@@ -72,8 +72,8 @@ impl<T, S> WeakBoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index` is out of bounds.
-	pub fn remove(&mut self, index: usize) {
-		self.0.remove(index);
+	pub fn remove(&mut self, index: usize) -> T {
+		self.0.remove(index)
 	}
 
 	/// Exactly the same semantics as [`Vec::swap_remove`].
@@ -81,13 +81,21 @@ impl<T, S> WeakBoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index` is out of bounds.
-	pub fn swap_remove(&mut self, index: usize) {
-		self.0.swap_remove(index);
+	pub fn swap_remove(&mut self, index: usize) -> T {
+		self.0.swap_remove(index)
 	}
 
 	/// Exactly the same semantics as [`Vec::retain`].
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
+	}
+
+	/// Exactly the same semantics as [`Vec::get_mut`].
+	pub fn get_mut<I: SliceIndex<[T]>>(
+		&mut self,
+		index: I,
+	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
+		self.0.get_mut(index)
 	}
 }
 

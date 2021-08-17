@@ -23,7 +23,7 @@
 use sp_std::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 
 #[cfg(feature = "full_crypto")]
 use core::convert::TryFrom;
@@ -54,7 +54,10 @@ type Seed = [u8; 32];
 
 /// A public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner,
+	MaxEncodedLen,
+)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.

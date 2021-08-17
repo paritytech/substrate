@@ -20,7 +20,7 @@
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Pallet, Event,
 	TombstoneContractInfo, Config, CodeHash, Error,
-	storage::Storage, wasm::PrefabWasmModule, exec::Executable,
+	storage::Storage, wasm::PrefabWasmModule, exec::Executable, gas::GasMeter,
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
@@ -96,7 +96,7 @@ where
 	/// Process a report that a contract under the given address should be evicted.
 	///
 	/// Enact the eviction right away if the contract should be evicted and return the amount
-	/// of rent that the contract payed over its lifetime.
+	/// of rent that the contract paid over its lifetime.
 	/// Otherwise, **do nothing** and return None.
 	///
 	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
@@ -130,15 +130,15 @@ where
 		match verdict {
 			Verdict::Evict { ref amount } => {
 				// The outstanding `amount` is withdrawn inside `enact_verdict`.
-				let rent_payed = amount
+				let rent_paid = amount
 					.as_ref()
 					.map(|a| a.peek())
 					.unwrap_or_else(|| <BalanceOf<T>>::zero())
-					.saturating_add(contract.rent_payed);
+					.saturating_add(contract.rent_paid);
 				Self::enact_verdict(
 					account, contract, current_block_number, verdict, Some(module),
 				)?;
-				Ok((Some(rent_payed), code_len))
+				Ok((Some(rent_paid), code_len))
 			}
 			_ => Ok((None, code_len)),
 		}
@@ -232,10 +232,6 @@ where
 	/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
 	/// the restored account. The restored account will inherit the last write block and its last
 	/// deduct block will be set to the current block.
-	///
-	/// # Return Value
-	///
-	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
 	pub fn restore_to(
 		origin: &T::AccountId,
 		mut origin_contract: AliveContractInfo<T>,
@@ -243,18 +239,19 @@ where
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
 		delta: Vec<crate::exec::StorageKey>,
-	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<(), DispatchError> {
 		let child_trie_info = origin_contract.child_trie_info();
 
 		let current_block = <frame_system::Pallet<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			return Err((Error::<T>::InvalidContractOrigin.into(), 0, 0));
+			return Err(Error::<T>::InvalidContractOrigin.into());
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|c| c.get_tombstone())
-			.ok_or((Error::<T>::InvalidDestinationContract.into(), 0, 0))?;
+			.ok_or(Error::<T>::InvalidDestinationContract)?;
 
 		let last_write = if !delta.is_empty() {
 			Some(current_block)
@@ -263,7 +260,7 @@ where
 		};
 
 		// Fails if the code hash does not exist on chain
-		let caller_code_len = E::add_user(code_hash).map_err(|e| (e, 0, 0))?;
+		E::add_user(code_hash, gas_meter)?;
 
 		// We are allowed to eagerly modify storage even though the function can
 		// fail later due to tombstones not matching. This is because the restoration
@@ -287,17 +284,17 @@ where
 		);
 
 		if tombstone != dest_tombstone {
-			return Err((Error::<T>::InvalidTombstone.into(), caller_code_len, 0));
+			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
 		origin_contract.storage_size -= bytes_taken;
 
 		<ContractInfoOf<T>>::remove(&origin);
-		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
+		E::remove_user(origin_contract.code_hash, gas_meter)?;
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			code_hash,
 			rent_allowance,
-			rent_payed: <BalanceOf<T>>::zero(),
+			rent_paid: <BalanceOf<T>>::zero(),
 			deduct_block: current_block,
 			last_write,
 			.. origin_contract
@@ -306,8 +303,7 @@ where
 		let origin_free_balance = T::Currency::free_balance(&origin);
 		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
 		T::Currency::deposit_creating(&dest, origin_free_balance);
-
-		Ok((caller_code_len, tombstone_code_len))
+		Ok(())
 	}
 
 	/// Create a new `RentStatus` struct for pass through to a requesting contract.
@@ -544,7 +540,7 @@ where
 				let contract = ContractInfo::Alive(AliveContractInfo::<T> {
 					rent_allowance: alive_contract_info.rent_allowance - amount.peek(),
 					deduct_block: current_block_number,
-					rent_payed: alive_contract_info.rent_payed.saturating_add(amount.peek()),
+					rent_paid: alive_contract_info.rent_paid.saturating_add(amount.peek()),
 					..alive_contract_info
 				});
 				<ContractInfoOf<T>>::insert(account, &contract);

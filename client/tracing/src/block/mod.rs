@@ -20,10 +20,9 @@ use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}, time
 
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record, Id}};
-use tracing_subscriber::CurrentSpan;
 
 use sc_client_api::BlockBackend;
-use sc_rpc_server::MAX_PAYLOAD;
+use sc_rpc_server::RPC_MAX_PAYLOAD_DEFAULT;
 use sp_api::{Core, Metadata, ProvideRuntimeApi, Encode};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -55,6 +54,7 @@ const DEFAULT_TARGETS: &str = "pallet,frame,state";
 const TRACE_TARGET: &str = "block_trace";
 // The name of a field required for all events.
 const REQUIRED_EVENT_FIELD: &str  = "method";
+const MEGABYTE: usize = 1024 * 1024;
 
 /// Tracing Block Result type alias
 pub type TraceBlockResult<T> = Result<T, Error>;
@@ -75,7 +75,6 @@ pub enum Error {
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
 	next_id: AtomicU64,
-	current_span: CurrentSpan,
 	spans: Mutex<HashMap<Id, SpanDatum>>,
 	events: Mutex<Vec<TraceEvent>>,
 }
@@ -93,7 +92,6 @@ impl BlockSubscriber {
 		BlockSubscriber {
 			targets,
 			next_id,
-			current_span: CurrentSpan::default(),
 			spans: Mutex::new(HashMap::new()),
 			events: Mutex::new(Vec::new()),
 		}
@@ -117,8 +115,7 @@ impl Subscriber for BlockSubscriber {
 		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
-		let parent_id = attrs.parent().cloned()
-			.or_else(|| self.current_span.id());
+		let parent_id = attrs.parent().cloned();
 		let span = SpanDatum {
 			id: id.clone(),
 			parent_id,
@@ -150,8 +147,7 @@ impl Subscriber for BlockSubscriber {
 	fn event(&self, event: &tracing::Event<'_>) {
 		let mut values = crate::Values::default();
 		event.record(&mut values);
-		let parent_id = event.parent().cloned()
-			.or_else(|| self.current_span.id());
+		let parent_id = event.parent().cloned();
 		let trace_event = TraceEvent {
 			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
@@ -162,14 +158,10 @@ impl Subscriber for BlockSubscriber {
 		self.events.lock().push(trace_event);
 	}
 
-	fn enter(&self, id: &Id) {
-		self.current_span.enter(id.clone());
+	fn enter(&self, _id: &Id) {
 	}
 
-	fn exit(&self, span: &Id) {
-		if self.spans.lock().contains_key(span) {
-			self.current_span.exit();
-		}
+	fn exit(&self, _span: &Id) {
 	}
 }
 
@@ -183,6 +175,7 @@ pub struct BlockExecutor<Block: BlockT, Client> {
 	block: Block::Hash,
 	targets: Option<String>,
 	storage_keys: Option<String>,
+	rpc_max_payload: usize,
 }
 
 impl<Block, Client> BlockExecutor<Block, Client>
@@ -198,8 +191,11 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		rpc_max_payload: Option<usize>,
 	) -> Self {
-		Self { client, block, targets, storage_keys }
+		let rpc_max_payload = rpc_max_payload.map(|mb| mb.saturating_mul(MEGABYTE))
+			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+		Self { client, block, targets, storage_keys, rpc_max_payload }
 	}
 
 	/// Execute block, record all spans and events belonging to `Self::targets`
@@ -269,7 +265,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
 		let approx_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
-		let response = if approx_payload_size > MAX_PAYLOAD {
+		let response = if approx_payload_size > self.rpc_max_payload {
 				TraceBlockResponse::TraceError(TraceError {
 					error:
 						"Payload likely exceeds max payload size of RPC server.".to_string()

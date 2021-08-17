@@ -40,13 +40,14 @@ use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo,
 	parameter_types, assert_storage_noop,
-	traits::{Currency, ReservableCurrency, OnInitialize},
+	traits::{Currency, ReservableCurrency, OnInitialize, Filter},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
 	storage::child,
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::assert_eq;
+use std::cell::RefCell;
 
 use crate as pallet_contracts;
 
@@ -62,7 +63,8 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Randomness: pallet_randomness_collective_flip::{Pallet, Call, Storage},
+		Randomness: pallet_randomness_collective_flip::{Pallet, Storage},
+		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -125,7 +127,7 @@ pub mod test_utils {
 }
 
 thread_local! {
-	static TEST_EXTENSION: sp_std::cell::RefCell<TestExtension> = Default::default();
+	static TEST_EXTENSION: RefCell<TestExtension> = Default::default();
 }
 
 pub struct TestExtension {
@@ -211,7 +213,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
@@ -235,8 +237,11 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
+impl pallet_randomness_collective_flip::Config for Test {}
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -253,6 +258,11 @@ impl pallet_timestamp::Config for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
+impl pallet_utility::Config for Test {
+	type Event = Event;
+	type Call = Call;
+	type WeightInfo = ();
+}
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
 	pub const TombstoneDeposit: u64 = 16;
@@ -266,9 +276,6 @@ parameter_types! {
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
-}
-
-parameter_types! {
 	pub const TransactionByteFee: u64 = 0;
 }
 
@@ -278,11 +285,32 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 	}
 }
 
+/// A filter whose filter function can be swapped at runtime.
+pub struct TestFilter;
+
+thread_local! {
+	static CALL_FILTER: RefCell<fn(&Call) -> bool> = RefCell::new(|_| true);
+}
+
+impl TestFilter {
+	pub fn set_filter(filter: fn(&Call) -> bool) {
+		CALL_FILTER.with(|fltr| *fltr.borrow_mut() = filter);
+	}
+}
+
+impl Filter<Call> for TestFilter {
+	fn filter(call: &Call) -> bool {
+		CALL_FILTER.with(|fltr| fltr.borrow()(call))
+	}
+}
+
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
 	type Event = Event;
+	type Call = Call;
+	type CallFilter = TestFilter;
 	type RentPayment = ();
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;
@@ -360,13 +388,13 @@ where
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
-		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call(0);
+		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call();
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
 			Err(
 				DispatchErrorWithPostInfo {
-					error: Error::<Test>::NotCallable.into(),
+					error: Error::<Test>::ContractNotFound.into(),
 					post_info: PostDispatchInfo {
 						actual_weight: Some(base_cost),
 						pays_fee: Default::default(),
@@ -396,7 +424,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
-				rent_payed: 0,
+				rent_paid: 0,
 				last_write: None,
 				_reserved: None,
 			});
@@ -412,7 +440,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
-				rent_payed: 0,
+				rent_paid: 0,
 				last_write: None,
 				_reserved: None,
 			});
@@ -479,50 +507,50 @@ fn instantiate_and_call_and_deposit_event() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(ALICE.clone())),
+					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(addr.clone(), subsistence * 100)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Transfer(ALICE, addr.clone(), subsistence * 100)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(crate::Event::CodeStored(code_hash.into())),
+					event: Event::Contracts(crate::Event::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(crate::Event::Instantiated(ALICE, addr.clone())),
+					event: Event::Contracts(crate::Event::Instantiated(ALICE, addr.clone())),
 					topics: vec![],
 				},
 			]);
@@ -1088,7 +1116,7 @@ fn call_removed_contract() {
 			// Calling contract should deny access because rent cannot be paid.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
-				Error::<Test>::NotCallable
+				Error::<Test>::RentNotPaid,
 			);
 			// No event is generated because the contract is not actually removed.
 			assert_eq!(System::events(), vec![]);
@@ -1096,7 +1124,7 @@ fn call_removed_contract() {
 			// Subsequent contract calls should also fail.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
-				Error::<Test>::NotCallable
+				Error::<Test>::RentNotPaid,
 			);
 
 			// A snitch can now remove the contract
@@ -1208,45 +1236,45 @@ fn restoration(
 			let mut events = vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(ALICE)),
+					event: Event::System(frame_system::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(addr_bob.clone())),
+					event: Event::System(frame_system::Event::NewAccount(addr_bob.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(addr_bob.clone(), 30_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Transfer(ALICE, addr_bob.clone(), 30_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::CodeStored(set_rent_code_hash.into())
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::Instantiated(ALICE, addr_bob.clone())
 					),
 					topics: vec![],
@@ -1269,26 +1297,26 @@ fn restoration(
 				events.extend([
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::frame_system(frame_system::Event::NewAccount(addr_dummy.clone())),
+						event: Event::System(frame_system::Event::NewAccount(addr_dummy.clone())),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_balances(
+						event: Event::Balances(
 							pallet_balances::Event::Endowed(addr_dummy.clone(), 20_000)
 						),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_balances(
+						event: Event::Balances(
 							pallet_balances::Event::Transfer(ALICE, addr_dummy.clone(), 20_000)
 						),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(
+						event: Event::Contracts(
 							crate::Event::Instantiated(ALICE, addr_dummy.clone())
 						),
 						topics: vec![],
@@ -1321,7 +1349,7 @@ fn restoration(
 				Contracts::call(
 					Origin::signed(ALICE), addr_bob.clone(), 0, GAS_LIMIT, call::null()
 				),
-				Error::<Test>::NotCallable
+				Error::<Test>::RentNotPaid,
 			);
 			assert!(System::events().is_empty());
 			assert!(ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_alive().is_some());
@@ -1416,46 +1444,46 @@ fn restoration(
 						assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(crate::Event::Evicted(addr_bob)),
+								event: Event::Contracts(crate::Event::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::frame_system(frame_system::Event::NewAccount(CHARLIE)),
+								event: Event::System(frame_system::Event::NewAccount(CHARLIE)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(pallet_balances::Event::Endowed(CHARLIE, 1_000_000)),
+								event: Event::Balances(pallet_balances::Event::Endowed(CHARLIE, 1_000_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::frame_system(frame_system::Event::NewAccount(addr_django.clone())),
+								event: Event::System(frame_system::Event::NewAccount(addr_django.clone())),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(pallet_balances::Event::Endowed(addr_django.clone(), 30_000)),
+								event: Event::Balances(pallet_balances::Event::Endowed(addr_django.clone(), 30_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(
+								event: Event::Balances(
 									pallet_balances::Event::Transfer(CHARLIE, addr_django.clone(), 30_000)
 								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(
+								event: Event::Contracts(
 									crate::Event::CodeStored(restoration_code_hash)
 								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(
+								event: Event::Contracts(
 									crate::Event::Instantiated(CHARLIE, addr_django.clone())
 								),
 								topics: vec![],
@@ -1489,17 +1517,17 @@ fn restoration(
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(crate::Event::CodeRemoved(restoration_code_hash)),
+						event: Event::Contracts(crate::Event::CodeRemoved(restoration_code_hash)),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::frame_system(system::Event::KilledAccount(addr_django.clone())),
+						event: Event::System(system::Event::KilledAccount(addr_django.clone())),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(
+						event: Event::Contracts(
 							crate::Event::Restored(
 								addr_django, addr_bob, bob_contract.code_hash, 50
 							)
@@ -1724,29 +1752,33 @@ fn self_destruct_works() {
 				Ok(_)
 			);
 
+			// The call triggers rent collection that reduces the amount of balance
+			// that remains for the beneficiary.
+			let balance_after_rent = 93_078;
+
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(
+					event: Event::System(
 						frame_system::Event::KilledAccount(addr.clone())
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
-						pallet_balances::Event::Transfer(addr.clone(), DJANGO, 93_086)
+					event: Event::Balances(
+						pallet_balances::Event::Transfer(addr.clone(), DJANGO, balance_after_rent)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(crate::Event::CodeRemoved(code_hash)),
+					event: Event::Contracts(crate::Event::CodeRemoved(code_hash)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::Terminated(addr.clone(), DJANGO)
 					),
 					topics: vec![],
@@ -1758,7 +1790,7 @@ fn self_destruct_works() {
 
 			// check that the beneficiary (django) got remaining balance
 			// some rent was deducted before termination
-			assert_eq!(Balances::free_balance(DJANGO), 1_093_086);
+			assert_eq!(Balances::free_balance(DJANGO), 1_000_000 + balance_after_rent);
 		});
 }
 
@@ -2669,11 +2701,11 @@ fn surcharge_reward_is_capped() {
 		let balance = Balances::free_balance(&ALICE);
 		let reward = <Test as Config>::SurchargeReward::get();
 
-		// some rent should have payed due to instantiation
-		assert_ne!(contract.rent_payed, 0);
+		// some rent should have paid due to instantiation
+		assert_ne!(contract.rent_paid, 0);
 
 		// the reward should be parameterized sufficiently high to make this test useful
-		assert!(reward > contract.rent_payed);
+		assert!(reward > contract.rent_paid);
 
 		// make contract eligible for eviction
 		initialize_block(40);
@@ -2682,13 +2714,13 @@ fn surcharge_reward_is_capped() {
 		assert_ok!(Contracts::claim_surcharge(Origin::none(), addr.clone(), Some(ALICE)));
 
 		// this reward does not take into account the last rent payment collected during eviction
-		let capped_reward = reward.min(contract.rent_payed);
+		let capped_reward = reward.min(contract.rent_paid);
 
 		// this is smaller than the actual reward because it does not take into account the
 		// rent collected during eviction
 		assert!(Balances::free_balance(&ALICE) > balance + capped_reward);
 
-		// the full reward is not payed out because of the cap introduced by rent_payed
+		// the full reward is not paid out because of the cap introduced by rent_paid
 		assert!(Balances::free_balance(&ALICE) < balance + reward);
 	});
 }
@@ -2933,5 +2965,130 @@ fn debug_message_invalid_utf8() {
 			true,
 		);
 		assert_err!(result.result, <Error<Test>>::DebugMessageInvalidUTF8);
+	});
+}
+
+#[test]
+fn gas_estimation_nested_call_fixed_limit() {
+	let (caller_code, caller_hash) = compile_module::<Test>("call_with_limit").unwrap();
+	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				caller_code,
+				vec![],
+				vec![0],
+			),
+		);
+		let addr_caller = Contracts::contract_address(&ALICE, &caller_hash, &[0]);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				callee_code,
+				vec![],
+				vec![1],
+			),
+		);
+		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);
+
+		let input: Vec<u8> = AsRef::<[u8]>::as_ref(&addr_callee)
+			.iter()
+			.cloned()
+			.chain((GAS_LIMIT / 5).to_le_bytes())
+			.collect();
+
+		// Call in order to determine the gas that is required for this call
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			input.clone(),
+			false,
+		);
+		assert_ok!(&result.result);
+
+		assert!(result.gas_required > result.gas_consumed);
+
+		// Make the same call using the estimated gas. Should succeed.
+		assert_ok!(Contracts::bare_call(
+			ALICE,
+			addr_caller,
+			0,
+			result.gas_required,
+			input,
+			false,
+		).result);
+	});
+}
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn gas_estimation_call_runtime() {
+	let (caller_code, caller_hash) = compile_module::<Test>("call_runtime").unwrap();
+	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				caller_code,
+				vec![],
+				vec![0],
+			),
+		);
+		let addr_caller = Contracts::contract_address(&ALICE, &caller_hash, &[0]);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				callee_code,
+				vec![],
+				vec![1],
+			),
+		);
+		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);
+
+		// Call something trivial with a huge gas limit so that we can observe the effects
+		// of pre-charging. This should create a difference between consumed and required.
+		let call = Call::Contracts(crate::Call::call(addr_callee, 0, GAS_LIMIT / 3, vec![]));
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			call.encode(),
+			false,
+		);
+		assert_ok!(&result.result);
+
+		assert!(result.gas_required > result.gas_consumed);
+
+		// Make the same call using the required gas. Should succeed.
+		assert_ok!(Contracts::bare_call(
+			ALICE,
+			addr_caller,
+			0,
+			result.gas_required,
+			call.encode(),
+			false,
+		).result);
 	});
 }

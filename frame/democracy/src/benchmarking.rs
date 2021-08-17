@@ -21,12 +21,11 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, account, whitelist_account, impl_benchmark_test_suite};
 use frame_support::{
-	assert_noop, assert_ok, IterableStorageMap,
-	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable,
-        schedule::DispatchTime},
+	assert_noop, assert_ok,
+	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
 };
 use frame_system::{RawOrigin, Pallet as System, self};
-use sp_runtime::traits::{Bounded, One};
+use sp_runtime::traits::{Bounded, One, BadOrigin};
 
 use crate::Pallet as Democracy;
 
@@ -69,13 +68,13 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		vote_threshold,
 		0u32.into(),
 	);
-	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
+	let referendum_index: ReferendumIndex = ReferendumCount::<T>::get() - 1;
 	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
 		DispatchTime::At(1u32.into()),
 		None,
 		63,
-		system::RawOrigin::Root.into(),
+		frame_system::RawOrigin::Root.into(),
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
 	).map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
@@ -119,13 +118,13 @@ benchmarks! {
 		// Create s existing "seconds"
 		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
-			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::max_value())?;
+			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::MAX)?;
 		}
 
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 1) as usize, "Seconds not recorded");
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), 0, u32::max_value())
+	}: _(RawOrigin::Signed(caller), 0, u32::MAX)
 	verify {
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 2) as usize, "`second` benchmark did not work");
@@ -360,7 +359,7 @@ benchmarks! {
 		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
 
 		// Launch external
-		LastTabledWasExternal::put(false);
+		LastTabledWasExternal::<T>::put(false);
 
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&r);
@@ -402,7 +401,7 @@ benchmarks! {
 
 		// Launch public
 		assert!(add_proposal::<T>(r).is_ok(), "proposal not created");
-		LastTabledWasExternal::put(true);
+		LastTabledWasExternal::<T>::put(true);
 
 		let block_number = T::LaunchPeriod::get();
 
@@ -610,7 +609,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::max_value())
+	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::MAX)
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		assert!(!Preimages::<T>::contains_key(proposal_hash));
@@ -760,7 +759,7 @@ benchmarks! {
 	}: enact_proposal(RawOrigin::Root, proposal_hash, 0)
 	verify {
 		// Fails due to mismatched origin
-		assert_last_event::<T>(RawEvent::Executed(0, false).into());
+		assert_last_event::<T>(Event::<T>::Executed(0, Err(BadOrigin.into())).into());
 	}
 
 	#[extra]

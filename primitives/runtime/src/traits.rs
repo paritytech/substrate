@@ -26,7 +26,7 @@ use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
-use crate::codec::{Codec, Encode, Decode};
+use crate::codec::{Codec, Encode, Decode, MaxEncodedLen};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 	UnknownTransaction,
@@ -149,25 +149,6 @@ pub struct BadOrigin;
 impl From<BadOrigin> for &'static str {
 	fn from(_: BadOrigin) -> &'static str {
 		"Bad origin"
-	}
-}
-
-/// Error that can be returned by our impl of `StoredMap`.
-#[derive(Encode, Decode, RuntimeDebug)]
-pub enum StoredMapError {
-	/// Attempt to create map value when it is a consumer and there are no providers in place.
-	NoProviders,
-	/// Attempt to anull/remove value when it is the last provider and there is still at
-	/// least one consumer left.
-	ConsumerRemaining,
-}
-
-impl From<StoredMapError> for &'static str {
-	fn from(e: StoredMapError) -> &'static str {
-		match e {
-			StoredMapError::NoProviders => "No providers",
-			StoredMapError::ConsumerRemaining => "Consumer remaining",
-		}
 	}
 }
 
@@ -386,7 +367,7 @@ impl<T:
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode + MaxEncodedLen;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -1457,6 +1438,29 @@ pub trait BlockIdTo<Block: self::Block> {
 		&self,
 		block_id: &crate::generic::BlockId<Block>,
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
+}
+
+/// Get current block number
+pub trait BlockNumberProvider {
+	/// Type of `BlockNumber` to provide.
+	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32BitUnsigned;
+
+	/// Returns the current block number.
+	///
+	/// Provides an abstraction over an arbitrary way of providing the
+	/// current block number.
+	///
+	/// In case of using crate `sp_runtime` with the crate `frame-system`,
+	/// it is already implemented for
+	/// `frame_system::Pallet<T: Config>` as:
+	///
+	/// ```ignore
+	/// fn current_block_number() -> Self {
+	///     frame_system::Pallet<Config>::block_number()
+	/// }
+	/// ```
+	/// .
+	fn current_block_number() -> Self::BlockNumber;
 }
 
 #[cfg(test)]

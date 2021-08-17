@@ -131,7 +131,6 @@ pub fn apply<T: SubBountyMigration>( ) -> Weight {
 	let maybe_storage_version = crate_to_pallet_version!();
 
 	log::info!(
-		target: "runtime::pallet-bounties",
 		"Running migration for pallet-bounties with storage version {:?}",
 		maybe_storage_version,
 	);
@@ -158,7 +157,6 @@ fn migrate_bounty_to_support_subbounty<T: SubBountyMigration>() {
 	);
 
 	log::info!(
-		target: "runtime::pallet-bounties",
 		"migrated {} Bounties",
 		<Bounties<T>>::iter().count(),
 	);
