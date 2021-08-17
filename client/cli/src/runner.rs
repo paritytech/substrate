@@ -166,6 +166,22 @@ impl<C: SubstrateCli> Runner<C> {
 		Ok(res?)
 	}
 
+	pub fn run_node_until_signal<F, F2, E>(
+		mut self,
+		initialize: impl FnOnce(Configuration) -> F,
+	) -> std::result::Result<(), E>
+	where
+		F: Future<Output = std::result::Result<(TaskManager, F2), E>>,
+		F2: Future<Output = ()> + std::marker::Unpin + std::marker::Send,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
+	{
+		self.print_node_infos();
+		let (mut task_manager, f) = self.tokio_runtime.block_on(initialize(self.config))?;
+		let res = self.tokio_runtime.block_on(main(futures::future::select(task_manager.future(), f).boxed().fuse().map(|_| Ok(()))));
+		self.tokio_runtime.block_on(task_manager.clean_shutdown());
+		Ok(res?)
+	}
+
 	/// A helper function that runs a command with the configuration of this node.
 	pub fn sync_run<E>(
 		self,

@@ -418,8 +418,9 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| task_manager)
+pub fn new_full(config: Configuration) -> Result<(TaskManager, exit_future::Exit), ServiceError> {
+	let (signal, exit) = exit_future::signal();
+	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| (task_manager, exit))
 }
 
 pub fn new_light_base(
