@@ -20,8 +20,8 @@
 
 pub use sc_executor::NativeExecutor;
 
-// Declare an instance of the native executor named `ExecutorDispatch`. Include the wasm binary as the
-// equivalent wasm code.
+// Declare an instance of the native executor named `ExecutorDispatch`. Include the wasm binary as
+// the equivalent wasm code.
 pub struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
