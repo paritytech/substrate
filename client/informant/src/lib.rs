@@ -21,14 +21,14 @@
 use ansi_term::Colour;
 use futures::prelude::*;
 use futures_timer::Delay;
-use log::{info, trace, warn};
+use log::{debug, info, trace};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network::NetworkService;
+use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
-use sp_transaction_pool::TransactionPool;
-use std::{fmt::Display, sync::Arc, time::Duration, collections::VecDeque};
+use std::{collections::VecDeque, fmt::Display, sync::Arc, time::Duration};
 
 mod display;
 
@@ -48,17 +48,17 @@ pub struct OutputFormat {
 
 impl Default for OutputFormat {
 	fn default() -> Self {
-		Self {
-			enable_color: true,
-		}
+		Self { enable_color: true }
 	}
 }
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
+/// "unknown")`.
 #[cfg(target_os = "unknown")]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
+/// "unknown")`.
 #[cfg(not(target_os = "unknown"))]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
 
@@ -74,8 +74,7 @@ pub async fn build<B: BlockT, C>(
 	network: Arc<NetworkService<B, <B as BlockT>::Hash>>,
 	pool: Arc<impl TransactionPoolAndMaybeMallogSizeOf>,
 	format: OutputFormat,
-)
-where
+) where
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
 {
@@ -131,22 +130,22 @@ where
 	client.import_notification_stream().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
-			if n.header.parent_hash() != last_hash && n.is_new_best  {
-				let maybe_ancestor = sp_blockchain::lowest_common_ancestor(
-					&*client,
-					last_hash.clone(),
-					n.hash,
-				);
+			if n.header.parent_hash() != last_hash && n.is_new_best {
+				let maybe_ancestor =
+					sp_blockchain::lowest_common_ancestor(&*client, last_hash.clone(), n.hash);
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
 						"♻️  Reorg on #{},{} to #{},{}, common ancestor #{},{}",
-						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
-						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
-						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
+						Colour::Red.bold().paint(format!("{}", last_num)),
+						last_hash,
+						Colour::Green.bold().paint(format!("{}", n.header.number())),
+						n.hash,
+						Colour::White.bold().paint(format!("{}", ancestor.number)),
+						ancestor.hash,
 					),
 					Ok(_) => {},
-					Err(e) => warn!("Error computing tree route: {}", e),
+					Err(e) => debug!("Error computing tree route: {}", e),
 				}
 			}
 		}
@@ -154,7 +153,6 @@ where
 		if n.is_new_best {
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
-
 
 		// If we already printed a message for a given block recently,
 		// we should not print it again.
