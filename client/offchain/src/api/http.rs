@@ -219,7 +219,7 @@ impl HttpApi {
 					HttpApiRequest::Dispatched(Some(sender))
 				},
 
-				HttpApiRequest::Dispatched(Some(mut sender)) =>
+				HttpApiRequest::Dispatched(Some(mut sender)) => {
 					if !chunk.is_empty() {
 						match poll_sender(&mut sender) {
 							Err(HttpError::IoError) => return Err(HttpError::IoError),
@@ -234,11 +234,12 @@ impl HttpApi {
 						// the sender.
 						self.requests.insert(request_id, HttpApiRequest::Dispatched(None));
 						return Ok(())
-					},
+					}
+				},
 
 				HttpApiRequest::Response(
 					mut response @ HttpApiRequestRp { sending_body: Some(_), .. },
-				) =>
+				) => {
 					if !chunk.is_empty() {
 						match poll_sender(
 							response
@@ -264,7 +265,8 @@ impl HttpApi {
 							}),
 						);
 						return Ok(())
-					},
+					}
+				},
 
 				HttpApiRequest::Fail(_) =>
 				// If the request has already failed, return without putting back the request
@@ -368,7 +370,7 @@ impl HttpApi {
 
 			// Update internal state based on received message.
 			match next_message {
-				Some(WorkerToApi::Response { id, status_code, headers, body }) =>
+				Some(WorkerToApi::Response { id, status_code, headers, body }) => {
 					match self.requests.remove(&id) {
 						Some(HttpApiRequest::Dispatched(sending_body)) => {
 							self.requests.insert(
@@ -384,7 +386,8 @@ impl HttpApi {
 						},
 						None => {}, // can happen if we detected an IO error when sending the body
 						_ => error!("State mismatch between the API and worker"),
-					},
+					}
+				},
 
 				Some(WorkerToApi::Fail { id, error }) => match self.requests.remove(&id) {
 					Some(HttpApiRequest::Dispatched(_)) => {
