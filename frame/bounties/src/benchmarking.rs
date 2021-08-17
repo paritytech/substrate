@@ -106,7 +106,7 @@ struct BenchmarkSubBountyConfig<T: Config> {
 	reason: Vec<u8>,
 }
 
-fn setup_subbounty<T: Config>(u: u32, d: u32) -> BenchmarkSubBountyConfig::<T> {
+fn setup_subbounty<T: Config>(u: u32, d: u32) -> BenchmarkSubBountyConfig<T> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(u, d);
 	let subcurator = account("subcurator", u, SEED);
 	let _ = T::Currency::make_free_balance_be(&subcurator, fee / 2u32.into());
@@ -116,33 +116,30 @@ fn setup_subbounty<T: Config>(u: u32, d: u32) -> BenchmarkSubBountyConfig::<T> {
 	BenchmarkSubBountyConfig::<T> {
 		bounty_id: 0,
 		subbounty_id: 0,
-		caller: caller,
-		curator: curator,
-		subcurator: subcurator,
-		value: value,
-		fee: fee,
-		subbounty_value: subbounty_value,
-		subbounty_fee: subbounty_fee,
-		reason: reason,
+		caller,
+		curator,
+		subcurator,
+		value,
+		fee,
+		subbounty_value,
+		subbounty_fee,
+		reason,
 	}
 }
 
-fn create_subbounty_bounty<T: Config>(u: u32, d: u32) -> Result<
-	BenchmarkSubBountyConfig::<T>,
-	&'static str
-> {
+fn create_subbounty_bounty<T: Config>(
+	u: u32,
+	d: u32,
+) -> Result<BenchmarkSubBountyConfig<T>, &'static str> {
 	let mut bm_setup = setup_subbounty::<T>(u, d);
 	let curator_lookup = T::Lookup::unlookup(bm_setup.curator.clone());
 	Bounties::<T>::propose_bounty(
 		RawOrigin::Signed(bm_setup.caller.clone()).into(),
 		bm_setup.value,
-		bm_setup.reason.clone()
+		bm_setup.reason.clone(),
 	)?;
 	bm_setup.bounty_id = BountyCount::get() - 1;
-	Bounties::<T>::approve_bounty(
-		RawOrigin::Root.into(),
-		bm_setup.bounty_id,
-	)?;
+	Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bm_setup.bounty_id)?;
 	Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	Bounties::<T>::propose_curator(
 		RawOrigin::Root.into(),
@@ -158,15 +155,13 @@ fn create_subbounty_bounty<T: Config>(u: u32, d: u32) -> Result<
 	Ok(bm_setup)
 }
 
-fn create_subbounty<T: Config>(u: u32, d: u32) -> Result<
-	BenchmarkSubBountyConfig::<T>,
-	&'static str
-> {
+fn create_subbounty<T: Config>(
+	u: u32,
+	d: u32,
+) -> Result<BenchmarkSubBountyConfig<T>, &'static str> {
 	let mut bm_setup = create_subbounty_bounty::<T>(u, d)?;
 
-	let subcurator_lookup = T::Lookup::unlookup(
-		bm_setup.subcurator.clone()
-	);
+	let subcurator_lookup = T::Lookup::unlookup(bm_setup.subcurator.clone());
 
 	Bounties::<T>::add_subbounty(
 		RawOrigin::Signed(bm_setup.curator.clone()).into(),

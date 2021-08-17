@@ -18,13 +18,11 @@
 //! Migrations to version [`4.0.0`], as denoted by the changelog.
 
 use crate::Config;
-use codec::{Encode, Decode, FullCodec};
-use sp_std::prelude::*;
+use codec::{Decode, Encode, FullCodec};
 use frame_support::{
-	weights::Weight, Twox64Concat,
-	storage::types::{StorageMap},
-	traits::{StorageVersion},
+	storage::types::StorageMap, traits::StorageVersion, weights::Weight, Twox64Concat,
 };
+use sp_std::prelude::*;
 
 use sp_runtime::RuntimeDebug;
 
@@ -47,7 +45,8 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Approved,
 	/// The bounty is funded and waiting for curator assignment.
 	Funded,
-	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the curator.
+	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the
+	/// curator.
 	CuratorProposed {
 		/// The assigned curator of this bounty.
 		curator: AccountId,
@@ -106,7 +105,9 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 
 struct StorageMigrationBounties;
 impl frame_support::traits::StorageInstance for StorageMigrationBounties {
-	fn pallet_prefix() -> &'static str { "Treasury" }
+	fn pallet_prefix() -> &'static str {
+		"Treasury"
+	}
 	const STORAGE_PREFIX: &'static str = "Bounties";
 }
 #[allow(type_alias_bounds)]
@@ -114,7 +115,7 @@ type Bounties<T: Config + SubBountyMigration> = StorageMap<
 	StorageMigrationBounties,
 	Twox64Concat,
 	BountyIndex,
-	Bounty<T::AccountId, T::Balance, T::BlockNumber>
+	Bounty<T::AccountId, T::Balance, T::BlockNumber>,
 >;
 
 /// Apply all of the migrations for SubbountyExtn.
@@ -125,8 +126,7 @@ type Bounties<T: Config + SubBountyMigration> = StorageMap<
 ///
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
-pub fn apply<T: Config + SubBountyMigration>( ) -> Weight {
-
+pub fn apply<T: Config + SubBountyMigration>() -> Weight {
 	let maybe_storage_version = StorageVersion::get::<crate::Module<T>>();
 
 	log::info!(
@@ -140,7 +140,6 @@ pub fn apply<T: Config + SubBountyMigration>( ) -> Weight {
 
 /// Migrate to support subbounty extn
 fn migrate_bounty_to_support_subbounty<T: Config + SubBountyMigration>() {
-
 	<Bounties<T>>::translate::<OldBounty<T::AccountId, T::Balance, T::BlockNumber>, _>(
 		|_index, bounties| {
 			Some(Bounty {
@@ -155,8 +154,5 @@ fn migrate_bounty_to_support_subbounty<T: Config + SubBountyMigration>() {
 		},
 	);
 
-	log::info!(
-		"migrated {} Bounties",
-		<Bounties<T>>::iter().count(),
-	);
+	log::info!("migrated {} Bounties", <Bounties<T>>::iter().count(),);
 }

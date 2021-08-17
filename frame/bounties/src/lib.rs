@@ -39,59 +39,51 @@
 //! ### Terminology
 //!
 //! Bounty:
-//! - **Bounty spending proposal:** A proposal to reward a predefined body of
-//!   work upon completion by the Treasury.
-//! - **SubBounty:** A large chunk of bounty proposal can be subdivided into
-//!   small chunks as independent subbounties, for parallel execution,
-//!   minimise the workload on council governance & tracking spended funds.
+//! - **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion
+//!   by the Treasury.
+//! - **SubBounty:** A large chunk of bounty proposal can be subdivided into small chunks as
+//!   independent subbounties, for parallel execution, minimise the workload on council governance &
+//!   tracking spended funds.
 //! - **Proposer:** An account proposing a bounty spending.
-//! - **Curator or Master Curator or Sub Curator:** An account managing the
-//!   bounty or subbounty and assigning a payout address receiving the reward
-//!   for the completion of work.
-//! - **Deposit:** The amount held on deposit for placing a bounty proposal
-//!   plus the amount held on deposit per byte within the bounty description.
-//! - **Curator deposit:** The payment from a candidate willing to curate
-//!   an approved bounty. The deposit is returned when/if the bounty is completed.
-//! - **Bounty value:** The total amount that should be paid to the
-//!   Payout Address if the bounty is rewarded.
-//! - **Payout address:** The account to which the total or part of the
-//!   bounty is assigned to.
-//! - **Payout Delay:** The delay period for which a bounty beneficiary
-//!   needs to wait before claiming.
-//! - **Curator fee:** The reserved upfront payment for a curator for
-//!   work related to the bounty.
+//! - **Curator or Master Curator or Sub Curator:** An account managing the bounty or subbounty and
+//!   assigning a payout address receiving the reward for the completion of work.
+//! - **Deposit:** The amount held on deposit for placing a bounty proposal plus the amount held on
+//!   deposit per byte within the bounty description.
+//! - **Curator deposit:** The payment from a candidate willing to curate an approved bounty. The
+//!   deposit is returned when/if the bounty is completed.
+//! - **Bounty value:** The total amount that should be paid to the Payout Address if the bounty is
+//!   rewarded.
+//! - **Payout address:** The account to which the total or part of the bounty is assigned to.
+//! - **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before
+//!   claiming.
+//! - **Curator fee:** The reserved upfront payment for a curator for work related to the bounty.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
 //! Bounty protocol:
-//! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined
-//!    set of tasks and stake the required deposit.
-//! - `approve_bounty` - Accept a specific treasury amount to be earmarked for
-//!    a predefined body of work.
+//! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of
+//!   tasks and stake the required deposit.
+//! - `approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of
+//!   work.
 //! - `propose_curator` - Assign an account to a bounty as candidate curator.
-//! - `accept_curator` - Accept a bounty assignment from the Council, setting a
-//!    curator deposit.
-//! - `extend_bounty_expiry` - Extend the expiry block number of the bounty and
-//!    stay active.
+//! - `accept_curator` - Accept a bounty assignment from the Council, setting a curator deposit.
+//! - `extend_bounty_expiry` - Extend the expiry block number of the bounty and stay active.
 //! - `award_bounty` - Close and pay out the specified amount for the completed work.
 //! - `claim_bounty` - Claim a specific bounty amount from the Payout Address.
 //! - `unassign_curator` - Unassign an accepted curator from a specific earmark.
-//! - `close_bounty` - Cancel the earmark for a specific treasury amount
-//!    and close the bounty.
-//! - `add_subbounty` - Master curator may break or deligate the execution of
-//!    bounty, by adding new subbounty, with amount which can be deducted
-//!    from parent bounty.
-//! - `propose_subcurator` - Master curator may assign an account to a
-//!    subbouty as candidate subcurator.
-//! - `accept_subcurator` - Accept a subbounty assignment from the Master curator,
-//!    setting a subcurator deposit.
+//! - `close_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
+//! - `add_subbounty` - Master curator may break or deligate the execution of bounty, by adding new
+//!   subbounty, with amount which can be deducted from parent bounty.
+//! - `propose_subcurator` - Master curator may assign an account to a subbouty as candidate
+//!   subcurator.
+//! - `accept_subcurator` - Accept a subbounty assignment from the Master curator, setting a
+//!   subcurator deposit.
 //! - `unassign_subcurator` - Unassign an accepted subcurator from a specific earmark.
 //! - `award_subbounty` - Close and specify the subbouty payout beneficiary address.
 //! - `claim_subbounty` - Claim a payout amount & subcurator fee for specific subbounty.
-//! - `close_subbounty` - Cancel the earmark for a specific treasury amount
-//!    and close the bounty.
+//! - `close_subbounty` - Cancel the earmark for a specific treasury amount and close the bounty.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -102,12 +94,13 @@ pub mod weights;
 use sp_std::prelude::*;
 
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, ensure,
-	traits::{
-		Currency, ExistenceRequirement::AllowDeath, Get, Imbalance, OnUnbalanced,
-		ReservableCurrency, EnsureOrigin,
-	},
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
+	ensure,
+	traits::{
+		Currency, EnsureOrigin, ExistenceRequirement::AllowDeath, Get, Imbalance, OnUnbalanced,
+		ReservableCurrency,
+	},
 	weights::Weight,
 };
 
@@ -233,7 +226,8 @@ pub struct SubBounty<AccountId, Balance, BlockNumber> {
 pub enum SubBountyStatus<AccountId, BlockNumber> {
 	/// The Subbounty is added and waiting for curator assignment.
 	Added,
-	/// A Subcurator has been proposed by the `curator`. Waiting for acceptance from the subcurator.
+	/// A Subcurator has been proposed by the `curator`. Waiting for acceptance from the
+	/// subcurator.
 	SubCuratorProposed {
 		/// The assigned subcurator of this bounty.
 		subcurator: AccountId,
@@ -1532,7 +1526,6 @@ impl<T: Config> Module<T> {
 		bounty_id: BountyIndex,
 		is_reject_origin: bool,
 	) -> Result<Option<(T::AccountId, T::BlockNumber)>, DispatchError> {
-
 		let bounty = Self::bounties(&bounty_id).ok_or(Error::<T>::InvalidIndex)?;
 
 		if let BountyStatus::Active { curator, update_due } = bounty.status {
@@ -1549,12 +1542,7 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	fn create_subbounty(
-		bounty_id: BountyIndex,
-		subbounty_id: BountyIndex,
-		description: Vec<u8>,
-	) {
-
+	fn create_subbounty(bounty_id: BountyIndex, subbounty_id: BountyIndex, description: Vec<u8>) {
 		let subbounty = SubBounty {
 			fee: 0u32.into(),
 			curator_deposit: 0u32.into(),
@@ -1565,22 +1553,15 @@ impl<T: Config> Module<T> {
 		Self::deposit_event(RawEvent::SubBountyAdded(bounty_id, subbounty_id));
 	}
 
-	fn impl_close_subbounty(
-		bounty_id: BountyIndex,
-		subbounty_id: BountyIndex,
-	) -> DispatchResult {
+	fn impl_close_subbounty(bounty_id: BountyIndex, subbounty_id: BountyIndex) -> DispatchResult {
 		SubBounties::<T>::try_mutate_exists(
 			bounty_id,
 			subbounty_id,
 			|maybe_subbounty| -> DispatchResult {
-
-				let subbounty = maybe_subbounty
-					.as_mut()
-					.ok_or(Error::<T>::InvalidIndex)?;
+				let subbounty = maybe_subbounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 
 				match &subbounty.status {
-					SubBountyStatus::Added |
-					SubBountyStatus::SubCuratorProposed { .. } => {
+					SubBountyStatus::Added | SubBountyStatus::SubCuratorProposed { .. } => {
 						// Nothing extra to do besides the removal of the subbounty below.
 					},
 					SubBountyStatus::Active { subcurator } => {
@@ -1601,39 +1582,28 @@ impl<T: Config> Module<T> {
 
 				// revert the subcurator fee back to master curator &
 				// Reduce the active subbounty count.
-				Bounties::<T>::mutate_exists(
-					bounty_id,
-					|maybe_bounty| {
-						if let Some(bounty) = maybe_bounty.as_mut() {
-							bounty.fee = bounty
-								.fee
-								.saturating_add(subbounty.fee);
-							bounty.active_subbounty_count = bounty.active_subbounty_count
-								.saturating_sub(1);
-						}
+				Bounties::<T>::mutate_exists(bounty_id, |maybe_bounty| {
+					if let Some(bounty) = maybe_bounty.as_mut() {
+						bounty.fee = bounty.fee.saturating_add(subbounty.fee);
+						bounty.active_subbounty_count =
+							bounty.active_subbounty_count.saturating_sub(1);
 					}
-				);
+				});
 
 				// Transfer fund from subbounty to parent bounty.
 				let bounty_account = Self::bounty_account_id(bounty_id);
 				let subbounty_account = Self::bounty_account_id(subbounty_id);
 				let balance = T::Currency::free_balance(&subbounty_account);
-				let _ = T::Currency::transfer(
-					&subbounty_account,
-					&bounty_account,
-					balance,
-					AllowDeath
-				); // should not fail
+				let _ =
+					T::Currency::transfer(&subbounty_account, &bounty_account, balance, AllowDeath); // should not fail
 
 				// Remove the subbounty description
 				BountyDescriptions::remove(subbounty_id);
 				*maybe_subbounty = None;
 
-				Self::deposit_event(
-					Event::<T>::SubBountyCanceled(bounty_id, subbounty_id),
-				);
+				Self::deposit_event(Event::<T>::SubBountyCanceled(bounty_id, subbounty_id));
 				Ok(())
-			}
+			},
 		)
 	}
 }
