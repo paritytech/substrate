@@ -38,7 +38,7 @@ mod sourced;
 pub use sourced::{MetricSource, SourcedCounter, SourcedGauge, SourcedMetric};
 
 #[cfg(not(target_os = "unknown"))]
-pub use known_os::*;
+pub use known_os::init_prometheus;
 #[cfg(target_os = "unknown")]
 pub use unknown_os::init_prometheus;
 
@@ -158,7 +158,6 @@ mod known_os {
 
 			async move {
 				Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
-					eprintln!("{:?}", req);
 					request_metrics(req, registry.clone())
 				}))
 			}
@@ -198,18 +197,16 @@ mod tests {
 		)
 		.expect("Registers the test metric");
 
-		runtime.spawn(init_prometheus_with_listener(listener, registry));
+		runtime.spawn(known_os::init_prometheus_with_listener(listener, registry));
 
 		runtime.block_on(async {
 			let client = Client::new();
 
-			// Make a GET /ip to 'http://httpbin.org'
 			let res = client
 				.get(Uri::try_from(&format!("http://{}/metrics", local_addr)).expect("Parses URI"))
 				.await
 				.expect("Requests metrics");
 
-			// Concatenate the body stream into a single buffer...
 			let buf = hyper::body::to_bytes(res).await.expect("Converts body to bytes");
 
 			let body = String::from_utf8(buf.to_vec()).expect("Converts body to String");
