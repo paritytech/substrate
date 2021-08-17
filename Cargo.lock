@@ -4232,7 +4232,6 @@ version = "3.0.0-dev"
 dependencies = [
  "assert_cmd",
  "async-std",
- "exit-future",
  "frame-benchmarking-cli",
  "frame-system",
  "futures 0.3.16",

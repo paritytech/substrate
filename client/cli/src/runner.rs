@@ -166,18 +166,29 @@ impl<C: SubstrateCli> Runner<C> {
 		Ok(res?)
 	}
 
-	pub fn run_node_until_signal<F, F2, E>(
+	// Like `run_node_until_exit`, but a signalling future is passed alongside the task manager
+	// and is used to signal an early-exit of the node.
+	pub fn run_node_until_signal<F, SF, E>(
 		mut self,
 		initialize: impl FnOnce(Configuration) -> F,
 	) -> std::result::Result<(), E>
 	where
-		F: Future<Output = std::result::Result<(TaskManager, F2), E>>,
-		F2: Future<Output = ()> + std::marker::Unpin + std::marker::Send,
+		F: Future<Output = std::result::Result<(TaskManager, SF), E>>,
+		SF: Future<Output = ()> + Unpin + Send,
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
 		self.print_node_infos();
-		let (mut task_manager, f) = self.tokio_runtime.block_on(initialize(self.config))?;
-		let res = self.tokio_runtime.block_on(main(futures::future::select(task_manager.future(), f).boxed().fuse().map(|_| Ok(()))));
+		let (mut task_manager, signal_future) =
+			self.tokio_runtime.block_on(initialize(self.config))?;
+		let res = self.tokio_runtime.block_on(main(
+			async {
+				select!(
+					result = task_manager.future().fuse() => result,
+					_ = signal_future.fuse() => Ok(())
+				)
+			}
+			.fuse(),
+		));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		Ok(res?)
 	}
