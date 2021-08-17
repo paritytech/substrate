@@ -18,7 +18,6 @@ sp-arithmetic = { version = "4.0.0-dev", path = ".." }
 honggfuzz = "0.5.49"
 primitive-types = "0.10.0"
 num-bigint = "0.2"
-num-traits = "0.2"
 
 [[bin]]
 name = "biguint"

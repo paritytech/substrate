@@ -40,7 +40,6 @@ members = [
 	"client/executor/wasmi",
 	"client/executor/wasmtime",
 	"client/finality-grandpa",
-	"client/finality-grandpa-warp-sync",
 	"client/informant",
 	"client/keystore",
 	"client/light",
@@ -157,7 +156,7 @@ members = [
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
-	"primitives/npos-elections/compact",
+	"primitives/npos-elections/solution-type",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
@@ -222,8 +221,6 @@ members = [
 #
 # This list is ordered alphabetically.
 [profile.dev.package]
-aes-soft = { opt-level = 3 }
-aesni = { opt-level = 3 }
 blake2 = { opt-level = 3 }
 blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
@@ -239,7 +236,6 @@ ed25519-dalek = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }
-h2 = { opt-level = 3 }
 hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }

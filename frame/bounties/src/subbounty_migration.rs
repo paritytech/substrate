@@ -17,12 +17,13 @@
 
 //! Migrations to version [`4.0.0`], as denoted by the changelog.
 
+use crate::Config;
 use codec::{Encode, Decode, FullCodec};
 use sp_std::prelude::*;
 use frame_support::{
 	weights::Weight, Twox64Concat,
 	storage::types::{StorageMap},
-	crate_to_pallet_version,
+	traits::{StorageVersion},
 };
 
 use sp_runtime::RuntimeDebug;
@@ -34,8 +35,6 @@ pub type BountyIndex = u32;
 // we only duplicate them to make the migrations reusable.
 /// Trait to implement to give information about types used for migration
 pub trait SubBountyMigration {
-	type AccountId: 'static + FullCodec;
-	type BlockNumber: 'static + FullCodec;
 	type Balance: 'static + FullCodec + Copy;
 }
 
@@ -111,7 +110,7 @@ impl frame_support::traits::StorageInstance for StorageMigrationBounties {
 	const STORAGE_PREFIX: &'static str = "Bounties";
 }
 #[allow(type_alias_bounds)]
-type Bounties<T: SubBountyMigration> = StorageMap<
+type Bounties<T: Config + SubBountyMigration> = StorageMap<
 	StorageMigrationBounties,
 	Twox64Concat,
 	BountyIndex,
@@ -126,9 +125,9 @@ type Bounties<T: SubBountyMigration> = StorageMap<
 ///
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
-pub fn apply<T: SubBountyMigration>( ) -> Weight {
+pub fn apply<T: Config + SubBountyMigration>( ) -> Weight {
 
-	let maybe_storage_version = crate_to_pallet_version!();
+	let maybe_storage_version = StorageVersion::get::<crate::Module<T>>();
 
 	log::info!(
 		"Running migration for pallet-bounties with storage version {:?}",
@@ -140,7 +139,7 @@ pub fn apply<T: SubBountyMigration>( ) -> Weight {
 }
 
 /// Migrate to support subbounty extn
-fn migrate_bounty_to_support_subbounty<T: SubBountyMigration>() {
+fn migrate_bounty_to_support_subbounty<T: Config + SubBountyMigration>() {
 
 	<Bounties<T>>::translate::<OldBounty<T::AccountId, T::Balance, T::BlockNumber>, _>(
 		|_index, bounties| {

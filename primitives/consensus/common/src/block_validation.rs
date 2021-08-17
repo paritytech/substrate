@@ -18,9 +18,9 @@
 //! Block announcement validation.
 
 use crate::BlockStatus;
+use futures::FutureExt as _;
 use sp_runtime::{generic::BlockId, traits::Block};
 use std::{error::Error, future::Future, pin::Pin, sync::Arc};
-use futures::FutureExt as _;
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
@@ -60,9 +60,9 @@ pub trait BlockAnnounceValidator<B: Block> {
 	/// Returning [`Validation::Failure`] will lead to a decrease of the
 	/// peers reputation as it sent us invalid data.
 	///
-	/// The returned future should only resolve to an error iff there was an internal error validating
-	/// the block announcement. If the block announcement itself is invalid, this should *always*
-	/// return [`Validation::Failure`].
+	/// The returned future should only resolve to an error iff there was an internal error
+	/// validating the block announcement. If the block announcement itself is invalid, this should
+	/// *always* return [`Validation::Failure`].
 	fn validate(
 		&mut self,
 		header: &B::Header,
@@ -92,6 +92,7 @@ impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
 			} else {
 				Ok(Validation::Success { is_new_best: false })
 			}
-		}.boxed()
+		}
+		.boxed()
 	}
 }

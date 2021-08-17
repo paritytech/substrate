@@ -17,21 +17,24 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::PathBuf;
 use core::convert::TryInto;
+use std::{
+	collections::{HashMap, HashSet},
+	fs,
+	path::PathBuf,
+};
 
-use serde::Serialize;
 use inflector::Inflector;
+use serde::Serialize;
 
 use crate::BenchmarkCmd;
 use frame_benchmarking::{
-	BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel, BenchmarkResults,
+	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResults, BenchmarkSelector,
+	RegressionModel,
 };
+use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
-use frame_support::traits::StorageInfo;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
@@ -69,7 +72,7 @@ struct BenchmarkData {
 // This forwards some specific metadata from the `BenchmarkCmd`
 #[derive(Serialize, Default, Debug, Clone)]
 struct CmdData {
-	steps: Vec<u32>,
+	steps: u32,
 	repeat: u32,
 	lowest_range_values: Vec<u32>,
 	highest_range_values: Vec<u32>,
@@ -112,12 +115,14 @@ fn io_error(s: &str) -> std::io::Error {
 // p2 -> [b1, b2]
 // ```
 fn map_results(
-	batches: &[BenchmarkBatch],
+	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
-	if batches.is_empty() { return Err(io_error("empty batches")) }
+	if batches.is_empty() {
+		return Err(io_error("empty batches"))
+	}
 
 	let mut all_benchmarks = HashMap::new();
 	let mut pallet_benchmarks = Vec::new();
@@ -125,7 +130,9 @@ fn map_results(
 	let mut batches_iter = batches.iter().peekable();
 	while let Some(batch) = batches_iter.next() {
 		// Skip if there are no results
-		if batch.results.is_empty() { continue }
+		if batch.time_results.is_empty() {
+			continue
+		}
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
@@ -150,19 +157,17 @@ fn map_results(
 }
 
 // Get an iterator of errors from a model. If the model is `None` all errors are zero.
-fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item=u128> + '_ {
+fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128> + '_ {
 	let mut errors = model.as_ref().map(|m| m.se.regressor_values.iter());
-	std::iter::from_fn(move || {
-		match &mut errors {
-			Some(model) => model.next().map(|val| *val as u128),
-			_ => Some(0),
-		}
+	std::iter::from_fn(move || match &mut errors {
+		Some(model) => model.next().map(|val| *val as u128),
+		_ => Some(0),
 	})
 }
 
 // Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(
-	batch: &BenchmarkBatch,
+	batch: &BenchmarkBatchSplitResults,
 	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
@@ -176,25 +181,30 @@ fn get_benchmark_data(
 		AnalysisChoice::Max => Analysis::max,
 	};
 
-	let extrinsic_time = analysis_function(&batch.results, BenchmarkSelector::ExtrinsicTime)
+	let extrinsic_time = analysis_function(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 		.expect("analysis function should return an extrinsic time for valid inputs");
-	let reads = analysis_function(&batch.results, BenchmarkSelector::Reads)
+	let reads = analysis_function(&batch.db_results, BenchmarkSelector::Reads)
 		.expect("analysis function should return the number of reads for valid inputs");
-	let writes = analysis_function(&batch.results, BenchmarkSelector::Writes)
+	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
 
-	// Analysis data may include components that are not used, this filters out anything whose value is zero.
+	// Analysis data may include components that are not used, this filters out anything whose value
+	// is zero.
 	let mut used_components = Vec::new();
 	let mut used_extrinsic_time = Vec::new();
 	let mut used_reads = Vec::new();
 	let mut used_writes = Vec::new();
 
-	extrinsic_time.slopes.into_iter()
+	extrinsic_time
+		.slopes
+		.into_iter()
 		.zip(extrinsic_time.names.iter())
 		.zip(extract_errors(&extrinsic_time.model))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
+				if !used_components.contains(&name) {
+					used_components.push(name);
+				}
 				used_extrinsic_time.push(ComponentSlope {
 					name: name.clone(),
 					slope: slope.saturating_mul(1000),
@@ -202,35 +212,36 @@ fn get_benchmark_data(
 				});
 			}
 		});
-	reads.slopes.into_iter()
+	reads
+		.slopes
+		.into_iter()
 		.zip(reads.names.iter())
 		.zip(extract_errors(&reads.model))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_reads.push(ComponentSlope {
-					name: name.clone(),
-					slope,
-					error,
-				});
+				if !used_components.contains(&name) {
+					used_components.push(name);
+				}
+				used_reads.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
-	writes.slopes.into_iter()
+	writes
+		.slopes
+		.into_iter()
 		.zip(writes.names.iter())
 		.zip(extract_errors(&writes.model))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_writes.push(ComponentSlope {
-					name: name.clone(),
-					slope,
-					error,
-				});
+				if !used_components.contains(&name) {
+					used_components.push(name);
+				}
+				used_writes.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
-	let components = batch.results[0].components
+	let components = batch.time_results[0]
+		.components
 		.iter()
 		.map(|(name, _)| -> Component {
 			let name_string = name.to_string();
@@ -240,7 +251,7 @@ fn get_benchmark_data(
 		.collect::<Vec<_>>();
 
 	// We add additional comments showing which storage items were touched.
-	add_storage_comments(&mut comments, &batch.results, storage_info);
+	add_storage_comments(&mut comments, &batch.db_results, storage_info);
 
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
@@ -257,19 +268,15 @@ fn get_benchmark_data(
 
 // Create weight file from benchmark data and Handlebars template.
 pub fn write_results(
-	batches: &[BenchmarkBatch],
+	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	path: &PathBuf,
 	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
 	// Use custom template if provided.
 	let template: String = match &cmd.template {
-		Some(template_file) => {
-			fs::read_to_string(template_file)?
-		},
-		None => {
-			TEMPLATE.to_string()
-		},
+		Some(template_file) => fs::read_to_string(template_file)?,
+		None => TEMPLATE.to_string(),
 	};
 
 	// Use header if provided
@@ -288,9 +295,8 @@ pub fn write_results(
 	let args = std::env::args().collect::<Vec<String>>();
 
 	// Which analysis function should be used when outputting benchmarks
-	let analysis_choice: AnalysisChoice = cmd.output_analysis.clone()
-		.try_into()
-		.map_err(|e| io_error(e))?;
+	let analysis_choice: AnalysisChoice =
+		cmd.output_analysis.clone().try_into().map_err(|e| io_error(e))?;
 
 	// Capture individual args
 	let cmd_data = CmdData {
@@ -341,7 +347,8 @@ pub fn write_results(
 		};
 
 		let mut output_file = fs::File::create(file_path)?;
-		handlebars.render_template_to_write(&template, &hbs_data, &mut output_file)
+		handlebars
+			.render_template_to_write(&template, &hbs_data, &mut output_file)
 			.map_err(|e| io_error(&e.to_string()))?;
 	}
 	Ok(())
@@ -355,20 +362,35 @@ fn add_storage_comments(
 	results: &[BenchmarkResults],
 	storage_info: &[StorageInfo],
 ) {
-	let storage_info_map = storage_info.iter().map(|info| (info.prefix.clone(), info))
+	let mut storage_info_map = storage_info
+		.iter()
+		.map(|info| (info.prefix.clone(), info))
 		.collect::<HashMap<_, _>>();
+
+	// Special hack to show `Skipped Metadata`
+	let skip_storage_info = StorageInfo {
+		pallet_name: b"Skipped".to_vec(),
+		storage_name: b"Metadata".to_vec(),
+		prefix: b"Skipped Metadata".to_vec(),
+		max_values: None,
+		max_size: None,
+	};
+	storage_info_map.insert(skip_storage_info.prefix.clone(), &skip_storage_info);
+
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
 
 	for result in results.clone() {
 		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
-			if *whitelisted { continue; }
+			if *whitelisted {
+				continue
+			}
 			let prefix_length = key.len().min(32);
 			let prefix = key[0..prefix_length].to_vec();
 			if identified.contains(&prefix) {
 				// skip adding comments for keys we already identified
-				continue;
+				continue
 			} else {
 				// track newly identified keys
 				identified.insert(prefix.clone());
@@ -377,8 +399,10 @@ fn add_storage_comments(
 				Some(key_info) => {
 					let comment = format!(
 						"Storage: {} {} (r:{} w:{})",
-						String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
-						String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
+						String::from_utf8(key_info.pallet_name.clone())
+							.expect("encoded from string"),
+						String::from_utf8(key_info.storage_name.clone())
+							.expect("encoded from string"),
 						reads,
 						writes,
 					);
@@ -392,7 +416,7 @@ fn add_storage_comments(
 						writes,
 					);
 					comments.push(comment)
-				}
+				},
 			}
 		}
 	}
@@ -400,7 +424,8 @@ fn add_storage_comments(
 
 // Add an underscore after every 3rd character, i.e. a separator for large numbers.
 fn underscore<Number>(i: Number) -> String
-	where Number: std::string::ToString
+where
+	Number: std::string::ToString,
 {
 	let mut s = String::new();
 	let i_str = i.to_string();
@@ -420,11 +445,12 @@ fn underscore<Number>(i: Number) -> String
 struct UnderscoreHelper;
 impl handlebars::HelperDef for UnderscoreHelper {
 	fn call<'reg: 'rc, 'rc>(
-		&self, h: &handlebars::Helper,
+		&self,
+		h: &handlebars::Helper,
 		_: &handlebars::Handlebars,
 		_: &handlebars::Context,
 		_rc: &mut handlebars::RenderContext,
-		out: &mut dyn handlebars::Output
+		out: &mut dyn handlebars::Output,
 	) -> handlebars::HelperResult {
 		use handlebars::JsonRender;
 		let param = h.param(0).unwrap();
@@ -439,17 +465,20 @@ impl handlebars::HelperDef for UnderscoreHelper {
 struct JoinHelper;
 impl handlebars::HelperDef for JoinHelper {
 	fn call<'reg: 'rc, 'rc>(
-		&self, h: &handlebars::Helper,
+		&self,
+		h: &handlebars::Helper,
 		_: &handlebars::Handlebars,
 		_: &handlebars::Context,
 		_rc: &mut handlebars::RenderContext,
-		out: &mut dyn handlebars::Output
+		out: &mut dyn handlebars::Output,
 	) -> handlebars::HelperResult {
 		use handlebars::JsonRender;
 		let param = h.param(0).unwrap();
 		let value = param.value();
 		let joined = if value.is_array() {
-			value.as_array().unwrap()
+			value
+				.as_array()
+				.unwrap()
 				.iter()
 				.map(|v| v.render())
 				.collect::<Vec<String>>()
@@ -465,39 +494,44 @@ impl handlebars::HelperDef for JoinHelper {
 // u128 does not serialize well into JSON for `handlebars`, so we represent it as a string.
 fn string_serialize<S>(x: &u128, s: S) -> Result<S::Ok, S::Error>
 where
-    S: serde::Serializer,
+	S: serde::Serializer,
 {
-    s.serialize_str(&x.to_string())
+	s.serialize_str(&x.to_string())
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
-	use frame_benchmarking::{BenchmarkBatch, BenchmarkParameter, BenchmarkResults};
+	use frame_benchmarking::{BenchmarkBatchSplitResults, BenchmarkParameter, BenchmarkResults};
 
-	fn test_data(pallet: &[u8], benchmark: &[u8], param: BenchmarkParameter, base: u32, slope: u32) -> BenchmarkBatch {
+	fn test_data(
+		pallet: &[u8],
+		benchmark: &[u8],
+		param: BenchmarkParameter,
+		base: u32,
+		slope: u32,
+	) -> BenchmarkBatchSplitResults {
 		let mut results = Vec::new();
-		for i in 0 .. 5 {
-			results.push(
-				BenchmarkResults {
-					components: vec![(param, i), (BenchmarkParameter::z, 0)],
-					extrinsic_time: (base + slope * i).into(),
-					storage_root_time: (base + slope * i).into(),
-					reads: (base + slope * i).into(),
-					repeat_reads: 0,
-					writes: (base + slope * i).into(),
-					repeat_writes: 0,
-					proof_size: 0,
-					keys: vec![],
-				}
-			)
+		for i in 0..5 {
+			results.push(BenchmarkResults {
+				components: vec![(param, i), (BenchmarkParameter::z, 0)],
+				extrinsic_time: (base + slope * i).into(),
+				storage_root_time: (base + slope * i).into(),
+				reads: (base + slope * i).into(),
+				repeat_reads: 0,
+				writes: (base + slope * i).into(),
+				repeat_writes: 0,
+				proof_size: 0,
+				keys: vec![],
+			})
 		}
 
-		return BenchmarkBatch {
+		return BenchmarkBatchSplitResults {
 			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
 			instance: b"instance".to_vec(),
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
-			results,
+			time_results: results.clone(),
+			db_results: results,
 		}
 	}
 
@@ -506,37 +540,25 @@ mod test {
 			benchmark.components,
 			vec![
 				Component { name: component.to_string(), is_used: true },
-				Component { name: "z".to_string(), is_used: false},
+				Component { name: "z".to_string(), is_used: false },
 			],
 		);
 		// Weights multiplied by 1,000
 		assert_eq!(benchmark.base_weight, base * 1_000);
 		assert_eq!(
 			benchmark.component_weight,
-			vec![ComponentSlope {
-				name: component.to_string(),
-				slope: slope * 1_000,
-				error: 0,
-			}]
+			vec![ComponentSlope { name: component.to_string(), slope: slope * 1_000, error: 0 }]
 		);
 		// DB Reads/Writes are untouched
 		assert_eq!(benchmark.base_reads, base);
 		assert_eq!(
 			benchmark.component_reads,
-			vec![ComponentSlope {
-				name: component.to_string(),
-				slope,
-				error: 0,
-			}]
+			vec![ComponentSlope { name: component.to_string(), slope, error: 0 }]
 		);
 		assert_eq!(benchmark.base_writes, base);
 		assert_eq!(
 			benchmark.component_writes,
-			vec![ComponentSlope {
-				name: component.to_string(),
-				slope,
-				error: 0,
-			}]
+			vec![ComponentSlope { name: component.to_string(), slope, error: 0 }]
 		);
 	}
 
@@ -550,23 +572,24 @@ mod test {
 			],
 			&[],
 			&AnalysisChoice::default(),
-		).unwrap();
+		)
+		.unwrap();
 
-		let first_benchmark = &mapped_results.get(
-			&("first_pallet".to_string(), "instance".to_string())
-		).unwrap()[0];
+		let first_benchmark = &mapped_results
+			.get(&("first_pallet".to_string(), "instance".to_string()))
+			.unwrap()[0];
 		assert_eq!(first_benchmark.name, "first_benchmark");
 		check_data(first_benchmark, "a", 10, 3);
 
-		let second_benchmark = &mapped_results.get(
-			&("first_pallet".to_string(), "instance".to_string())
-		).unwrap()[1];
+		let second_benchmark = &mapped_results
+			.get(&("first_pallet".to_string(), "instance".to_string()))
+			.unwrap()[1];
 		assert_eq!(second_benchmark.name, "second_benchmark");
 		check_data(second_benchmark, "b", 9, 2);
 
-		let second_pallet_benchmark = &mapped_results.get(
-			&("second_pallet".to_string(), "instance".to_string())
-		).unwrap()[0];
+		let second_pallet_benchmark = &mapped_results
+			.get(&("second_pallet".to_string(), "instance".to_string()))
+			.unwrap()[0];
 		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
 		check_data(second_pallet_benchmark, "c", 3, 4);
 	}

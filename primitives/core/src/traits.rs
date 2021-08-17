@@ -99,11 +99,7 @@ impl<'a> RuntimeCode<'a> {
 	///
 	/// This is only useful for tests that don't want to execute any code.
 	pub fn empty() -> Self {
-		Self {
-			code_fetcher: &NoneFetchRuntimeCode,
-			hash: Vec::new(),
-			heap_pages: None,
-		}
+		Self { code_fetcher: &NoneFetchRuntimeCode, hash: Vec::new(), heap_pages: None }
 	}
 }
 
@@ -130,13 +126,13 @@ pub trait ReadRuntimeVersion: Send + Sync {
 	/// The version information may be embedded into the wasm binary itself. If it is not present,
 	/// then this function may fallback to the legacy way of reading the version.
 	///
-	/// The legacy mechanism involves instantiating the passed wasm runtime and calling `Core_version`
-	/// on it. This is a very expensive operation.
+	/// The legacy mechanism involves instantiating the passed wasm runtime and calling
+	/// `Core_version` on it. This is a very expensive operation.
 	///
 	/// `ext` is only needed in case the calling into runtime happens. Otherwise it is ignored.
 	///
-	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression fails,
-	/// the error is returned.
+	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression
+	/// fails, the error is returned.
 	///
 	/// # Errors
 	///
@@ -225,7 +221,11 @@ pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
-	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	);
 	/// Spawn the given non-blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
@@ -233,7 +233,11 @@ pub trait SpawnEssentialNamed: Clone + Send + Sync {
 }
 
 impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
-	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		(**self).spawn_essential_blocking(name, future)
 	}
 

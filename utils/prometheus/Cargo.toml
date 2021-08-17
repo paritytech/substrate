@@ -20,5 +20,5 @@ derive_more = "0.99"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 async-std = { version = "1.6.5", features = ["unstable"] }
-hyper = { version = "0.13.9", default-features = false, features = ["stream"] }
-tokio = "0.2"
+tokio = "1.10"
+hyper = { version = "0.14.11", default-features = false, features = ["http1", "server", "tcp"] }

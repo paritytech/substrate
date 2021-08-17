@@ -20,21 +20,16 @@
 
 pub mod error;
 
-use std::{
-	collections::HashMap,
-	hash::Hash,
-	sync::Arc,
-	pin::Pin,
-};
 use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
+pub use sp_runtime::transaction_validity::{
+	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
+};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
-pub use sp_runtime::transaction_validity::{
-	TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
-};
+use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 
 /// Transaction pool status.
 #[derive(Debug)]
@@ -63,20 +58,20 @@ impl PoolStatus {
 ///
 /// The status events can be grouped based on their kinds as:
 /// 1. Entering/Moving within the pool:
-///		- `Future`
-///		- `Ready`
+/// 		- `Future`
+/// 		- `Ready`
 /// 2. Inside `Ready` queue:
-///		- `Broadcast`
+/// 		- `Broadcast`
 /// 3. Leaving the pool:
-///		- `InBlock`
-///		- `Invalid`
-///		- `Usurped`
-///		- `Dropped`
-///	4. Re-entering the pool:
-///		- `Retracted`
-///	5. Block finalized:
-///		- `Finalized`
-///		- `FinalityTimeout`
+/// 		- `InBlock`
+/// 		- `Invalid`
+/// 		- `Usurped`
+/// 		- `Dropped`
+/// 	4. Re-entering the pool:
+/// 		- `Retracted`
+/// 	5. Block finalized:
+/// 		- `Finalized`
+/// 		- `FinalityTimeout`
 ///
 /// The events will always be received in the order described above, however
 /// there might be cases where transactions alternate between `Future` and `Ready`
@@ -130,7 +125,8 @@ pub enum TransactionStatus<Hash, BlockHash> {
 }
 
 /// The stream of transaction events.
-pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
+pub type TransactionStatusStream<Hash, BlockHash> =
+	dyn Stream<Item = TransactionStatus<Hash, BlockHash>> + Send;
 
 /// The import notification event stream.
 pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
@@ -147,7 +143,7 @@ pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, Bloc
 pub type LocalTransactionFor<P> = <<P as LocalTransactionPool>::Block as BlockT>::Extrinsic;
 
 /// Typical future type used in transaction pool api.
-pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
+pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 
 /// In-pool transaction interface.
 ///
@@ -184,7 +180,7 @@ pub trait TransactionPool: Send + Sync {
 	/// In-pool transaction type.
 	type InPoolTransaction: InPoolTransaction<
 		Transaction = TransactionFor<Self>,
-		Hash = TxHash<Self>
+		Hash = TxHash<Self>,
 	>;
 	/// Error type.
 	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
@@ -207,24 +203,32 @@ pub trait TransactionPool: Send + Sync {
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
-	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
+	/// Returns a future that import a single transaction and starts to watch their progress in the
+	/// pool.
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
 		xt: TransactionFor<Self>,
-	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
+	) -> PoolFuture<Pin<Box<TransactionStatusStreamFor<Self>>>, Self::Error>;
 
 	// *** Block production / Networking
 	/// Get an iterator for ready transactions ordered by priority.
 	///
 	/// Guarantees to return only when transaction pool got updated at `at` block.
 	/// Guarantees to return immediately when `None` is passed.
-	fn ready_at(&self, at: NumberFor<Self::Block>)
-		-> Pin<Box<dyn Future<Output=Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>> + Send>>;
+	fn ready_at(
+		&self,
+		at: NumberFor<Self::Block>,
+	) -> Pin<
+		Box<
+			dyn Future<Output = Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>>
+				+ Send,
+		>,
+	>;
 
 	/// Get an iterator for ready transactions ordered by priority.
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>;
+	fn ready(&self) -> Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
@@ -270,7 +274,7 @@ pub enum ChainEvent<B: BlockT> {
 /// Trait for transaction pool maintenance.
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
+	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
 /// Transaction pool interface for submitting local transactions that exposes a
@@ -306,11 +310,7 @@ pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
-	fn submit_at(
-		&self,
-		at: &BlockId<Block>,
-		extrinsic: Block::Extrinsic,
-	) -> Result<(), ()>;
+	fn submit_at(&self, at: &BlockId<Block>, extrinsic: Block::Extrinsic) -> Result<(), ()>;
 }
 
 impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
