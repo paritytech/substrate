@@ -25,4 +25,4 @@ hyper = { version = "0.14.11", default-features = false, features = ["http1", "s
 
 [dev-dependencies]
 hyper = { version = "0.14.11", features = ["client"] }
-tokio = { version = "1.10", features = [ "rt-multi-thread" ] }
+tokio = { version = "1.10", features = ["rt-multi-thread"] }
