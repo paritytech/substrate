@@ -302,7 +302,9 @@ impl TaskManager {
 	///
 	/// This is an issue in some cases as some of our dependencies do require that we drop all the
 	/// objects properly otherwise it triggers a SIGABRT on exit.
-	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+	pub fn clean_shutdown(
+		mut self,
+	) -> Pin<Box<dyn Future<Output = Box<dyn std::any::Any + Send>> + Send>> {
 		self.terminate();
 		let children_shutdowns = self.children.into_iter().map(|x| x.clean_shutdown());
 		let keep_alive = self.keep_alive;
@@ -311,7 +313,7 @@ impl TaskManager {
 		Box::pin(async move {
 			join_all(children_shutdowns).await;
 			completion_future.await;
-			drop(keep_alive);
+			keep_alive
 		})
 	}
 

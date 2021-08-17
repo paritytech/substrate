@@ -304,8 +304,8 @@ async fn build_network_future<
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
+#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 	impl Drop for HttpServer {

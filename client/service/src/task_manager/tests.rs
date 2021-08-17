@@ -65,7 +65,7 @@ fn ensure_drop_tester_working() {
 
 async fn run_background_task(_keep_alive: impl Any) {
 	loop {
-		tokio::time::delay_for(Duration::from_secs(1)).await;
+		tokio::time::sleep(Duration::from_secs(1)).await;
 	}
 }
 
@@ -74,7 +74,7 @@ async fn run_background_task_blocking(duration: Duration, _keep_alive: impl Any)
 		// block for X sec (not interruptible)
 		std::thread::sleep(duration);
 		// await for 1 sec (interruptible)
-		tokio::time::delay_for(Duration::from_secs(1)).await;
+		tokio::time::sleep(Duration::from_secs(1)).await;
 	}
 }
 
@@ -84,7 +84,7 @@ fn new_task_manager(task_executor: TaskExecutor) -> TaskManager {
 
 #[test]
 fn ensure_tasks_are_awaited_on_shutdown() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -95,7 +95,7 @@ fn ensure_tasks_are_awaited_on_shutdown() {
 	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
@@ -103,7 +103,7 @@ fn ensure_tasks_are_awaited_on_shutdown() {
 
 #[test]
 fn ensure_keep_alive_during_shutdown() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -114,7 +114,7 @@ fn ensure_keep_alive_during_shutdown() {
 	spawn_handle.spawn("task1", run_background_task(()));
 	assert_eq!(drop_tester, 1);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 1);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
@@ -122,7 +122,7 @@ fn ensure_keep_alive_during_shutdown() {
 
 #[test]
 fn ensure_blocking_futures_are_awaited_on_shutdown() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -139,7 +139,7 @@ fn ensure_blocking_futures_are_awaited_on_shutdown() {
 	);
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
@@ -147,7 +147,7 @@ fn ensure_blocking_futures_are_awaited_on_shutdown() {
 
 #[test]
 fn ensure_no_task_can_be_spawn_after_terminate() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -158,7 +158,7 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	task_manager.terminate();
 	spawn_handle.spawn("task3", run_background_task(drop_tester.new_ref()));
@@ -168,7 +168,7 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 
 #[test]
 fn ensure_task_manager_future_ends_when_task_manager_terminated() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -179,7 +179,7 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	task_manager.terminate();
 	runtime.block_on(task_manager.future()).expect("future has ended without error");
@@ -189,7 +189,7 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 
 #[test]
 fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -201,7 +201,7 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
 	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	spawn_essential_handle.spawn("task3", async { panic!("task failed") });
 	runtime
@@ -214,7 +214,7 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
 
 #[test]
 fn ensure_children_tasks_ends_when_task_manager_terminated() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -233,7 +233,7 @@ fn ensure_children_tasks_ends_when_task_manager_terminated() {
 	spawn_handle_child_2.spawn("task4", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 4);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 4);
 	task_manager.terminate();
 	runtime.block_on(task_manager.future()).expect("future has ended without error");
@@ -243,7 +243,7 @@ fn ensure_children_tasks_ends_when_task_manager_terminated() {
 
 #[test]
 fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -263,7 +263,7 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 	spawn_handle_child_2.spawn("task4", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 4);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 4);
 	spawn_essential_handle_child_1.spawn("task5", async { panic!("task failed") });
 	runtime
@@ -276,7 +276,7 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 
 #[test]
 fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -295,12 +295,12 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	spawn_handle_child_2.spawn("task4", run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 4);
 	// allow the tasks to even start
-	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 4);
 	spawn_handle_child_1.spawn("task5", async { panic!("task failed") });
 	runtime.block_on(async {
 		let t1 = task_manager.future().fuse();
-		let t2 = tokio::time::delay_for(Duration::from_secs(3)).fuse();
+		let t2 = tokio::time::sleep(Duration::from_secs(3)).fuse();
 
 		pin_mut!(t1, t2);
 
