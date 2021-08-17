@@ -185,7 +185,7 @@ mod tests {
 		let runtime = tokio::runtime::Runtime::new().expect("Creates the runtime");
 
 		let listener = runtime
-			.block_on(async_std::net::TcpListener::bind("0.0.0.0:0"))
+			.block_on(async_std::net::TcpListener::bind("127.0.0.1:0"))
 			.expect("Creates listener");
 
 		let local_addr = listener.local_addr().expect("Returns the local addr");
