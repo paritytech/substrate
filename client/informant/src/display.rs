@@ -25,8 +25,8 @@ use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zer
 use std::{
 	convert::{TryFrom, TryInto},
 	fmt,
+	time::Instant,
 };
-use wasm_timer::Instant;
 
 /// State of the informant display system.
 ///
