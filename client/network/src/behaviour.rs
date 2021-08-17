@@ -38,8 +38,8 @@ use libp2p::{
 use log::debug;
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
-use sp_consensus::BlockOrigin;
 use sc_peerset::PeersetHandle;
+use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
@@ -230,7 +230,8 @@ impl<B: BlockT> Behaviour<B> {
 			discovery: disco_config.finish(),
 			bitswap: bitswap.into(),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
-				request_response_protocols.into_iter(), peerset
+				request_response_protocols.into_iter(),
+				peerset,
 			)?,
 			light_client_request_sender,
 			events: VecDeque::new(),
