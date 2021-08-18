@@ -20,7 +20,7 @@ hash-db = { version = "0.15.2", default-features = false }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, optional = true, path = "../keystore" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
-libsecp256k1 = { version = "0.3.4", optional = true }
+libsecp256k1 = { version = "0.6", optional = true }
 sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../state-machine" }
 sp-wasm-interface = { version = "4.0.0-dev", path = "../wasm-interface", default-features = false }
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }

@@ -1413,7 +1413,8 @@ impl<T: Config> Pallet<T> {
 				// Check that assignment.who is actually a voter (defensive-only).
 				// NOTE: while using the index map from `voter_index` is better than a blind linear
 				// search, this *still* has room for optimization. Note that we had the index when
-				// we did `solution -> assignment` and we lost it. Ideal is to keep the index around.
+				// we did `solution -> assignment` and we lost it. Ideal is to keep the index
+				// around.
 
 				// Defensive-only: must exist in the snapshot.
 				let snapshot_index =

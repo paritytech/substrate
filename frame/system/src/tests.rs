@@ -391,6 +391,16 @@ fn set_code_checks_works() {
 			let res = System::set_code(RawOrigin::Root.into(), vec![1, 2, 3, 4]);
 
 			assert_eq!(expected.map_err(DispatchErrorWithPostInfo::from), res);
+
+			assert_eq!(
+				System::digest()
+					.logs
+					.into_iter()
+					.filter(|item| item == DigestItem::RuntimeUpdated)
+					.count(),
+				1,
+				"Incorrect number of Runtime Updated digest items",
+			);
 		});
 	}
 }
@@ -481,5 +491,9 @@ fn extrinsics_root_is_calculated_correctly() {
 
 #[test]
 fn runtime_updated_digest_emitted() {
-	assert_eq!(true, false);
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::set_code(vec![1, 2, 3, 4]);
+		System::set_code_checks_works
+	});
 }

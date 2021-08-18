@@ -24,11 +24,9 @@ mod state_light;
 #[cfg(test)]
 mod tests;
 
+use futures::FutureExt;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
-use rpc::{
-	futures::{future::result, Future},
-	Result as RpcResult,
-};
+use rpc::Result as RpcResult;
 use std::sync::Arc;
 
 use sc_client_api::light::{Fetcher, RemoteBlockchain};
@@ -192,6 +190,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
+	Block::Hash: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
 		+ StorageProvider<Block, BE>
@@ -227,6 +226,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
+	Block::Hash: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
 		+ StorageProvider<Block, BE>
@@ -287,7 +287,7 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(result(Err(err.into())))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		self.backend.storage_pairs(block, key_prefix)
@@ -301,10 +301,10 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-			return Box::new(result(Err(Error::InvalidCount {
-				value: count,
-				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			})))
+			return async move {
+				Err(Error::InvalidCount { value: count, max: STORAGE_KEYS_PAGED_MAX_COUNT })
+			}
+			.boxed()
 		}
 		self.backend.storage_keys_paged(block, prefix, count, start_key)
 	}
@@ -344,7 +344,7 @@ where
 		to: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(result(Err(err.into())))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		self.backend.query_storage(from, to, keys)
@@ -415,7 +415,7 @@ where
 		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(result(Err(err.into())))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		self.backend.trace_block(block, targets, storage_keys)
@@ -478,7 +478,9 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, storage_key, key).map(|x| x.map(|x| x.0.len() as u64)))
+		self.storage(block, storage_key, key)
+			.map(|x| x.map(|r| r.map(|v| v.0.len() as u64)))
+			.boxed()
 	}
 }
 

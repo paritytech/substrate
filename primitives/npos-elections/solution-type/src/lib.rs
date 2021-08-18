@@ -79,7 +79,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// 			(u8 /* first target*/, Perbill /* proportion for first target */ ),
 /// 			(u8 /* second target */, Perbill /* proportion for second target*/)
 /// 		], u8 /* last target */)
-///		],
+/// 		],
 /// 	voters4: ...,
 /// }
 ///

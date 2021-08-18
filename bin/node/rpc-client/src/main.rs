@@ -22,24 +22,21 @@
 //! This module shows how you can write a Rust RPC client that connects to a running
 //! substrate node and use statically typed RPC wrappers.
 
-use futures::Future;
-use hyper::rt;
+use futures::{Future, TryFutureExt};
 use jsonrpc_core_client::{transports::http, RpcError};
 use node_primitives::Hash;
 use sc_rpc::author::{hash::ExtrinsicOrHash, AuthorClient};
 
-fn main() {
+fn main() -> Result<(), RpcError> {
 	sp_tracing::try_init_simple();
 
-	rt::run(rt::lazy(|| {
+	futures::executor::block_on(async {
 		let uri = "http://localhost:9933";
 
 		http::connect(uri)
 			.and_then(|client: AuthorClient<Hash, Hash>| remove_all_extrinsics(client))
-			.map_err(|e| {
-				println!("Error: {:?}", e);
-			})
-	}))
+			.await
+	})
 }
 
 /// Remove all pending extrinsics from the node.
@@ -52,7 +49,7 @@ fn main() {
 /// to be removed and the extrinsics are going to be temporarily banned.
 fn remove_all_extrinsics(
 	client: AuthorClient<Hash, Hash>,
-) -> impl Future<Item = (), Error = RpcError> {
+) -> impl Future<Output = Result<(), RpcError>> {
 	client
 		.pending_extrinsics()
 		.and_then(move |pending| {
@@ -60,7 +57,7 @@ fn remove_all_extrinsics(
 				pending.into_iter().map(|tx| ExtrinsicOrHash::Extrinsic(tx.into())).collect(),
 			)
 		})
-		.map(|removed| {
+		.map_ok(|removed| {
 			println!("Removed extrinsics: {:?}", removed);
 		})
 }
