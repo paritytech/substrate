@@ -333,7 +333,7 @@ where
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.storage(block, key).await.map_err(call_err) }.boxed()
+			async move { state.backend.storage_hash(block, key).await.map_err(call_err) }.boxed()
 		})?;
 
 		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
