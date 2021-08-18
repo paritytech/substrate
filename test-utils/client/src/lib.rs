@@ -27,7 +27,7 @@ pub use sc_client_api::{
 	BadBlocks, ForkBlocks,
 };
 pub use sc_client_db::{self, Backend};
-pub use sc_executor::{self, NativeExecutor, WasmExecutionMethod};
+pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers, RpcSession};
 pub use sp_consensus;
 pub use sp_keyring::{
@@ -73,14 +73,14 @@ impl GenesisInit for () {
 }
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
+pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
 	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
-	_executor: std::marker::PhantomData<Executor>,
+	_executor: std::marker::PhantomData<ExecutorDispatch>,
 	keystore: Option<SyncCryptoStorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
@@ -88,16 +88,16 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	no_genesis: bool,
 }
 
-impl<Block: BlockT, Executor, G: GenesisInit> Default
-	for TestClientBuilder<Block, Executor, Backend<Block>, G>
+impl<Block: BlockT, ExecutorDispatch, G: GenesisInit> Default
+	for TestClientBuilder<Block, ExecutorDispatch, Backend<Block>, G>
 {
 	fn default() -> Self {
 		Self::with_default_backend()
 	}
 }
 
-impl<Block: BlockT, Executor, G: GenesisInit>
-	TestClientBuilder<Block, Executor, Backend<Block>, G>
+impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
+	TestClientBuilder<Block, ExecutorDispatch, Backend<Block>, G>
 {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
@@ -122,8 +122,8 @@ impl<Block: BlockT, Executor, G: GenesisInit>
 	}
 }
 
-impl<Block: BlockT, Executor, Backend, G: GenesisInit>
-	TestClientBuilder<Block, Executor, Backend, G>
+impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
+	TestClientBuilder<Block, ExecutorDispatch, Backend, G>
 {
 	/// Create a new instance of the test client builder.
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
@@ -210,13 +210,13 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 	/// Build the test client with the given native executor.
 	pub fn build_with_executor<RuntimeApi>(
 		self,
-		executor: Executor,
+		executor: ExecutorDispatch,
 	) -> (
-		client::Client<Backend, Executor, Block, RuntimeApi>,
+		client::Client<Backend, ExecutorDispatch, Block, RuntimeApi>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		Executor: sc_client_api::CallExecutor<Block> + 'static,
+		ExecutorDispatch: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -264,8 +264,13 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 	}
 }
 
-impl<Block: BlockT, E, Backend, G: GenesisInit>
-	TestClientBuilder<Block, client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>, Backend, G>
+impl<Block: BlockT, D, Backend, G: GenesisInit>
+	TestClientBuilder<
+		Block,
+		client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
+		Backend,
+		G,
+	>
 {
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<RuntimeApi, I>(
@@ -274,20 +279,20 @@ impl<Block: BlockT, E, Backend, G: GenesisInit>
 	) -> (
 		client::Client<
 			Backend,
-			client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
 			Block,
 			RuntimeApi,
 		>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		I: Into<Option<NativeExecutor<E>>>,
-		E: sc_executor::NativeExecutionDispatch + 'static,
+		I: Into<Option<NativeElseWasmExecutor<D>>>,
+		D: sc_executor::NativeExecutionDispatch + 'static,
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
-		let executor = executor
-			.into()
-			.unwrap_or_else(|| NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8));
+		let executor = executor.into().unwrap_or_else(|| {
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,

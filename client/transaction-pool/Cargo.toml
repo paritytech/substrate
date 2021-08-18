@@ -30,7 +30,6 @@ sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transact
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "./api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
-wasm-timer = "0.2"
 serde = { version = "1.0.126", features = ["derive"] }
 linked-hash-map = "0.5.4"
 retain_mut = "0.1.3"

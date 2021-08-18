@@ -22,6 +22,7 @@
 use grandpa::GrandpaBlockImport;
 use sc_consensus_babe::BabeBlockImport;
 use sc_consensus_manual_seal::consensus::babe::SlotTimestampProvider;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullClient};
 use sp_runtime::generic::Era;
 use test_runner::{ChainInfo, SignatureVerificationOverride};
@@ -30,9 +31,9 @@ type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B,
 
 /// A unit struct which implements `NativeExecutionDispatch` feeding in the
 /// hard-coded runtime.
-pub struct Executor;
+pub struct ExecutorDispatch;
 
-impl sc_executor::NativeExecutionDispatch for Executor {
+impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 	type ExtendHostFunctions =
 		(frame_benchmarking::benchmarking::HostFunctions, SignatureVerificationOverride);
 
@@ -50,14 +51,14 @@ struct NodeTemplateChainInfo;
 
 impl ChainInfo for NodeTemplateChainInfo {
 	type Block = node_primitives::Block;
-	type Executor = Executor;
+	type ExecutorDispatch = ExecutorDispatch;
 	type Runtime = node_runtime::Runtime;
 	type RuntimeApi = node_runtime::RuntimeApi;
 	type SelectChain = sc_consensus::LongestChain<TFullBackend<Self::Block>, Self::Block>;
 	type BlockImport = BlockImport<
 		Self::Block,
 		TFullBackend<Self::Block>,
-		TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
