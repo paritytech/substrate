@@ -349,10 +349,7 @@ impl<T: Config> Pallet<T> {
 	/// being called.
 	pub fn finalize_signed_phase() -> bool {
 		let (weight, found_solution) = Self::finalize_signed_phase_internal();
-		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
-			DispatchClass::Mandatory,
-		);
+		Self::register_weight(weight);
 		found_solution
 	}
 

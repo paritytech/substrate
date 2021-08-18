@@ -631,12 +631,12 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will use all on-chain nominators, and all the validators will inject a self vote.
 	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
+	///
 	/// ### Slashing
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
 	/// auto-chilled.
-	///
-	/// Note that this is VERY expensive. Use with care.
 	pub fn get_npos_voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
@@ -680,8 +680,9 @@ impl<T: Config> Pallet<T> {
 		all_voters
 	}
 
-	/// This is a very expensive function and result should be cached versus being called multiple
-	/// times.
+	/// Get the targets for an upcoming npos election.
+	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
 		let mut validator_count = 0u32;
 		let targets = Validators::<T>::iter()
@@ -771,9 +772,13 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 		let nominator_count = CounterForNominators::<T>::get();
 		let validator_count = CounterForValidators::<T>::get();
+
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
+
+		// register the extra 2 reads
+		Self::register_weight(T::DbWeight::get().reads(2));
 
 		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
 			return Err("Voter snapshot too big")
@@ -784,6 +789,9 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
 		let target_count = CounterForValidators::<T>::get() as usize;
+
+		// register the extra 1 read
+		Self::register_weight(T::DbWeight::get().reads(1));
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big")

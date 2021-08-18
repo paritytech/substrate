@@ -246,7 +246,7 @@ frame_benchmarking::benchmarks! {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
 		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
@@ -351,7 +351,7 @@ frame_benchmarking::benchmarks! {
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot must exist; qed.")?.encode();
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("missing snapshot")?.encode();
 		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
 	}: {
 		assert_ok!(
@@ -411,7 +411,7 @@ frame_benchmarking::benchmarks! {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::MINER_MAXIMUM_VOTERS;
 		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
 		set_up_data_provider::<T>(v, t);
 		let now = frame_system::Pallet::<T>::block_number();
@@ -433,7 +433,7 @@ frame_benchmarking::benchmarks! {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
 		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
 		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
