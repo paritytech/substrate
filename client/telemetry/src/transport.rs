@@ -22,30 +22,15 @@ use futures::{
 	ready,
 	task::{Context, Poll},
 };
-use libp2p::{
-	core::transport::{timeout::TransportTimeout, OptionalTransport},
-	wasm_ext, Transport,
-};
+use libp2p::{core::transport::timeout::TransportTimeout, Transport};
 use std::{io, pin::Pin, time::Duration};
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
-pub(crate) fn initialize_transport(
-	wasm_external_transport: Option<wasm_ext::ExtTransport>,
-) -> Result<WsTrans, io::Error> {
-	let transport = match wasm_external_transport.clone() {
-		Some(t) => OptionalTransport::some(t),
-		None => OptionalTransport::none(),
-	}
-	.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
-
-	// The main transport is the `wasm_external_transport`, but if we're on desktop we add
-	// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
-	// an external transport on desktop and the fallback is used all the time.
-	#[cfg(not(target_os = "unknown"))]
-	let transport = transport.or_transport({
+pub(crate) fn initialize_transport() -> Result<WsTrans, io::Error> {
+	let transport = {
 		let inner = block_on(libp2p::dns::DnsConfig::system(libp2p::tcp::TcpConfig::new()))?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
 			let connec = connec
@@ -57,7 +42,7 @@ pub(crate) fn initialize_transport(
 				.map_ok(|data| data.into_bytes());
 			future::ready(Ok::<_, io::Error>(connec))
 		})
-	});
+	};
 
 	Ok(TransportTimeout::new(
 		transport.map(|out, _| {
@@ -86,9 +71,6 @@ pub(crate) type WsTrans = libp2p::core::transport::Boxed<
 
 /// Wraps around an `AsyncWrite` and implements `Sink`. Guarantees that each item being sent maps
 /// to one call of `write`.
-///
-/// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
-/// that each telemetry message maps to one single call to `write` in the WASM FFI.
 #[pin_project::pin_project]
 pub(crate) struct StreamSink<T>(#[pin] T, Option<Vec<u8>>);
 
