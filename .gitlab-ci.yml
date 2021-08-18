@@ -762,4 +762,3 @@ simnet-tests:
   retry: 2
   tags:
     - parity-simnet
-
