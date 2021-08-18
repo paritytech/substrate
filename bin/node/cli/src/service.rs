@@ -441,12 +441,7 @@ pub fn new_light_base(
 		.clone()
 		.filter(|x| !x.is_empty())
 		.map(|endpoints| -> Result<_, sc_telemetry::Error> {
-			#[cfg(feature = "browser")]
-			let transport = Some(sc_telemetry::ExtTransport::new(libp2p_wasm_ext::ffi::websocket_transport()));
-			#[cfg(not(feature = "browser"))]
-			let transport = None;
-
-			let worker = TelemetryWorker::with_transport(16, transport)?;
+			let worker = TelemetryWorker::new(16)?;
 			let telemetry = worker.handle().new_telemetry(endpoints);
 			Ok((worker, telemetry))
 		})

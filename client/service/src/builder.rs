@@ -62,8 +62,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use std::{str::FromStr, sync::Arc};
-use wasm_timer::SystemTime;
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
