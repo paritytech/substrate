@@ -486,6 +486,7 @@ pub struct SolutionOrSnapshotSize {
 ///
 /// Note that this is different from [`pallet::Error`].
 #[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
 pub enum ElectionError {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
@@ -519,6 +520,7 @@ impl From<unsigned::MinerError> for ElectionError {
 
 /// Errors that can happen in the feasibility check.
 #[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,

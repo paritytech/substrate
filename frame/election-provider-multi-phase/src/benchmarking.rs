@@ -250,16 +250,16 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::targets(None).unwrap();
-		let voters = T::DataProvider::voters(None).unwrap();
-		let desired_targets = T::DataProvider::desired_targets().unwrap();
+		let targets = T::DataProvider::targets(None)?;
+		let voters = T::DataProvider::voters(None)?;
+		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
 		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.targets, t);
 	}
 
 	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.
@@ -278,7 +278,7 @@ frame_benchmarking::benchmarks! {
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d)?;
 		let ready_solution =
-			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed).unwrap();
+			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed)?;
 		<CurrentPhase<T>>::put(Phase::Signed);
 		// assume a queued solution is stored, regardless of where it comes from.
 		<QueuedSolution<T>>::put(ready_solution);
@@ -307,7 +307,7 @@ frame_benchmarking::benchmarks! {
 			..Default::default()
 		};
 
-		<MultiPhase<T>>::create_snapshot().unwrap();
+		<MultiPhase<T>>::create_snapshot()?;
 		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
@@ -351,7 +351,7 @@ frame_benchmarking::benchmarks! {
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot must exist; qed.")?.encode();
 		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
 	}: {
 		assert_ok!(
@@ -362,8 +362,8 @@ frame_benchmarking::benchmarks! {
 			)
 		);
 		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.unwrap();
-		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
+			.expect("decoding should not fail; qed.");
+		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).expect("decoding should not fail; qed.");
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
@@ -387,10 +387,11 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot missing")?.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.expect("decoding should not fail; qed.");
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
@@ -437,11 +438,11 @@ frame_benchmarking::benchmarks! {
 		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<MultiPhase::<T>>::create_snapshot().unwrap()
+		<MultiPhase::<T>>::create_snapshot()?
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.targets, t);
 	}
 
 	#[extra]
@@ -465,10 +466,10 @@ frame_benchmarking::benchmarks! {
 		// assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let RawSolution { solution, .. } = solution_with_size::<T>(witness, a, d)?;
-		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
+		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().ok_or("snapshot missing")?;
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
-		let mut assignments = solution.into_assignment(voter_at, target_at).unwrap();
+		let mut assignments = solution.into_assignment(voter_at, target_at).expect("solution generated by `solution_with_size` must be valid.");
 
 		// make a voter cache and some helper functions for access
 		let cache = helpers::generate_voter_cache::<T>(&voters);
