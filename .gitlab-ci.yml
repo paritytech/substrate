@@ -729,13 +729,14 @@ deploy-prometheus-alerting-rules:
         - .gitlab-ci.yml
         - .maintain/monitoring/**/*
 
-# Runs "quick" and "long" tests on nightly schedule.A Quick test is a smoke test
-# where basic check-expect tests run based on checking values from metrics
-# Long Test is the load testing where we send 50K transactions into the network
+# Runs "quick" and "long" tests on nightly schedule. 
+# A "quick" test is a smoke test where basic check-expect tests run by
+# checking values from metrics exposed by the app.
+# A "long" test is the load testing where we send 50K transactions into the 
+# network and check if all completed successfully
 simnet-tests:
   stage:                           deploy
-  # fixme: replace v8 with $SIMNET_REF on line below
-  image:                           docker.io/paritytech/simnet:v8
+  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
@@ -748,6 +749,10 @@ simnet-tests:
   # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
   # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   # ${SIMNET_REF} is a gitlab variable
+before_script:
+  - echo "Simnet Tests Config: 
+    docker.io/paritytech/simnet:${SIMNET_REF}
+    ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
   script:
     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
