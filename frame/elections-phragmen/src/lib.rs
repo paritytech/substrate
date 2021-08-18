@@ -679,8 +679,9 @@ pub mod pallet {
 					// election.
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
-							Ok(_) =>
-								panic!("Duplicate member in elections-phragmen genesis: {}", member),
+							Ok(_) => {
+								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+							},
 							Err(pos) => members.insert(
 								pos,
 								SeatHolder {

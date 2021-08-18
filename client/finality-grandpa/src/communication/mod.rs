@@ -684,18 +684,21 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
 	fn start_send(mut self: Pin<&mut Self>, mut msg: Message<Block>) -> Result<(), Self::Error> {
 		// if we've voted on this round previously under the same key, send that vote instead
 		match &mut msg {
-			finality_grandpa::Message::PrimaryPropose(ref mut vote) =>
+			finality_grandpa::Message::PrimaryPropose(ref mut vote) => {
 				if let Some(propose) = self.has_voted.propose() {
 					*vote = propose.clone();
-				},
-			finality_grandpa::Message::Prevote(ref mut vote) =>
+				}
+			},
+			finality_grandpa::Message::Prevote(ref mut vote) => {
 				if let Some(prevote) = self.has_voted.prevote() {
 					*vote = prevote.clone();
-				},
-			finality_grandpa::Message::Precommit(ref mut vote) =>
+				}
+			},
+			finality_grandpa::Message::Precommit(ref mut vote) => {
 				if let Some(precommit) = self.has_voted.precommit() {
 					*vote = precommit.clone();
-				},
+				}
+			},
 		}
 
 		// when locals exist, sign messages on import
