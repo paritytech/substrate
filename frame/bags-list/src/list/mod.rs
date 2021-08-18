@@ -592,7 +592,7 @@ impl<T: Config> Bag<T> {
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 #[cfg_attr(test, derive(PartialEq, Clone))]
-pub(crate) struct Node<T: Config> {
+pub struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
