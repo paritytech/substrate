@@ -58,10 +58,20 @@ pub mod prelude {
 	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
-sc_executor::native_executor_instance! {
-	pub LocalExecutor,
-	substrate_test_runtime::api::dispatch,
-	substrate_test_runtime::native_version,
+/// A unit struct which implements `NativeExecutionDispatch` feeding in the
+/// hard-coded runtime.
+pub struct LocalExecutor;
+
+impl sc_executor::NativeExecutionDispatch for LocalExecutor {
+	type ExtendHostFunctions = ();
+
+	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+		substrate_test_runtime::api::dispatch(method, data)
+	}
+
+	fn native_version() -> sc_executor::NativeVersion {
+		substrate_test_runtime::native_version()
+	}
 }
 
 /// Test client database backend.

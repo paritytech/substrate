@@ -300,8 +300,9 @@ impl offchain::Externalities for TestOffchainExt {
 
 		ids.iter()
 			.map(|id| match state.requests.get(id) {
-				Some(req) if req.response.is_none() =>
-					panic!("No `response` provided for request with id: {:?}", id),
+				Some(req) if req.response.is_none() => {
+					panic!("No `response` provided for request with id: {:?}", id)
+				},
 				None => RequestStatus::Invalid,
 				_ => RequestStatus::Finished(200),
 			})

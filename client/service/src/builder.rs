@@ -62,8 +62,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use std::{str::FromStr, sync::Arc};
-use wasm_timer::SystemTime;
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -561,6 +560,8 @@ where
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl: BlockT,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
 		+ MallocSizeOfWasm
@@ -762,6 +763,8 @@ where
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 {
 	use sc_rpc::{author, chain, offchain, state, system};
 

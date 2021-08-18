@@ -62,12 +62,19 @@
 //!
 //! type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 //!
-//! sc_executor::native_executor_instance!(
-//! 	pub Executor,
-//! 	node_runtime::api::dispatch,
-//! 	node_runtime::native_version,
-//! 	SignatureVerificationOverride,
-//! );
+//! pub struct Executor;
+//!
+//! impl sc_executor::NativeExecutionDispatch for Executor {
+//! 	type ExtendHostFunctions = SignatureVerificationOverride;
+//!
+//! 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+//! 		node_runtime::api::dispatch(method, data)
+//! 	}
+//!
+//! 	fn native_version() -> sc_executor::NativeVersion {
+//! 		node_runtime::native_version()
+//! 	}
+//! }
 //!
 //! struct Requirements;
 //!

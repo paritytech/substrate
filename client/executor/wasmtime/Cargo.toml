@@ -24,11 +24,12 @@ sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-in
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
-wasmtime = { version = "0.27.0", default-features = false, features = ["cache", "parallel-compilation"] }
-pwasm-utils = { version = "0.18" }
+wasmtime = { version = "0.27.0", default-features = false, features = [
+    "cache",
+    "parallel-compilation",
+] }
 
 [dev-dependencies]
-assert_matches = "1.3.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 wat = "1.0"
