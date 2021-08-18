@@ -191,6 +191,7 @@ pub mod pallet {
 			DispatchClass::Mandatory
 		))]
 		pub fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResult {
+			log::info!("in timestamp::set");
 			ensure_none(origin)?;
 			assert!(!DidUpdate::<T>::exists(), "Timestamp must be updated only once in the block");
 			let prev = Self::now();
