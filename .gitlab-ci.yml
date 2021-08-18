@@ -749,10 +749,10 @@ simnet-tests:
   # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
   # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   # ${SIMNET_REF} is a gitlab variable
-before_script:
-  - echo "Simnet Tests Config: 
-    docker.io/paritytech/simnet:${SIMNET_REF}
-    ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
+  before_script:
+    - echo "Simnet Tests Config
+      docker.io/paritytech/simnet:${SIMNET_REF}
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
   script:
     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
