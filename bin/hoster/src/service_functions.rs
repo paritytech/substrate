@@ -3,7 +3,7 @@ use futures::prelude::*;
 use num_traits::AsPrimitive;
 use sc_client_api::call_executor::ExecutorProvider;
 use sc_consensus_babe::SlotProportion;
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
 use sc_network::Event;
 use sc_service::error::Error as ServiceError;
 use sc_telemetry::TelemetryWorker;
@@ -14,7 +14,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use std::{marker::Unpin, str::FromStr, sync::Arc};
 
-pub fn new_full_babe<Block, RuntimeApi, Executor>(
+pub fn new_full_babe<Block, RuntimeApi, ExecutorDispatch>(
 	mut config: sc_service::Configuration,
 ) -> Result<sc_service::TaskManager, ServiceError>
 where
@@ -22,14 +22,16 @@ where
 	<Block as BlockT>::Hash: FromStr + Unpin,
 	<Block as BlockT>::Header: Unpin,
 	<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
-	Executor: NativeExecutionDispatch + 'static,
-	RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
-		+ Send
+	ExecutorDispatch: NativeExecutionDispatch + 'static,
+	RuntimeApi: ConstructRuntimeApi<
+			Block,
+			sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>,
+		> + Send
 		+ Sync
 		+ 'static,
 	<RuntimeApi as ConstructRuntimeApi<
 		Block,
-		sc_service::TFullClient<Block, RuntimeApi, Executor>,
+		sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>,
 	>>::RuntimeApi: TaggedTransactionQueue<Block>
 		+ sp_consensus_babe::BabeApi<Block>
 		+ sp_block_builder::BlockBuilder<Block>
@@ -51,10 +53,17 @@ where
 		})
 		.transpose()?;
 
+	let executor = NativeElseWasmExecutor::<ExecutorDispatch>::new(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+	);
+
 	let (client, backend, keystore_container, mut task_manager) =
-		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(
+		sc_service::new_full_parts::<Block, RuntimeApi, _>(
 			&config,
 			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
+			executor,
 		)?;
 	let client = Arc::new(client);
 
@@ -301,7 +310,7 @@ where
 	Ok(task_manager)
 }
 
-pub fn new_full_aura<Block, RuntimeApi, Executor>(
+pub fn new_full_aura<Block, RuntimeApi, ExecutorDispatch>(
 	mut config: sc_service::Configuration,
 ) -> Result<sc_service::TaskManager, ServiceError>
 where
@@ -309,14 +318,16 @@ where
 	<Block as BlockT>::Hash: FromStr + Unpin,
 	<Block as BlockT>::Header: Unpin,
 	<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
-	Executor: NativeExecutionDispatch + 'static,
-	RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
-		+ Send
+	ExecutorDispatch: NativeExecutionDispatch + 'static,
+	RuntimeApi: ConstructRuntimeApi<
+			Block,
+			sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>,
+		> + Send
 		+ Sync
 		+ 'static,
 	<RuntimeApi as ConstructRuntimeApi<
 		Block,
-		sc_service::TFullClient<Block, RuntimeApi, Executor>,
+		sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>,
 	>>::RuntimeApi: TaggedTransactionQueue<Block>
 		+ sp_consensus_aura::AuraApi<Block, AuraId>
 		+ sp_block_builder::BlockBuilder<Block>
@@ -338,10 +349,17 @@ where
 		})
 		.transpose()?;
 
+	let executor = NativeElseWasmExecutor::<ExecutorDispatch>::new(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+	);
+
 	let (client, backend, keystore_container, mut task_manager) =
-		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(
+		sc_service::new_full_parts::<Block, RuntimeApi, _>(
 			&config,
 			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
+			executor,
 		)?;
 	let client = Arc::new(client);
 

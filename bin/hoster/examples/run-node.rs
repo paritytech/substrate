@@ -2,7 +2,7 @@ fn main() {
 	substrate_runtime_hoster::Builder::<
 		node_runtime::Block,
 		node_runtime::RuntimeApi,
-		node_executor::Executor,
+		node_executor::ExecutorDispatch,
 		node_runtime::GenesisConfig,
 		node_cli::chain_spec::Extensions,
 	>::new()

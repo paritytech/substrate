@@ -1,6 +1,6 @@
 use num_traits::AsPrimitive;
 use sc_cli::SubstrateCli;
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
 use sp_api::ConstructRuntimeApi;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -73,12 +73,13 @@ where
 	}
 }
 
-pub struct Builder<Block, RuntimeApi, Executor, GenesisConfig, Extension> {
-	_phantom: std::marker::PhantomData<(Block, RuntimeApi, Executor, GenesisConfig, Extension)>,
+pub struct Builder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension> {
+	_phantom:
+		std::marker::PhantomData<(Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension)>,
 }
 
-impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
-	Builder<Block, RuntimeApi, Executor, GenesisConfig, Extension>
+impl<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension>
+	Builder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension>
 {
 	pub fn new() -> Self {
 		Self { _phantom: Default::default() }
@@ -86,23 +87,24 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 
 	pub fn with_babe_consensus(
 		self,
-	) -> BabeBuilder<Block, RuntimeApi, Executor, GenesisConfig, Extension> {
+	) -> BabeBuilder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension> {
 		BabeBuilder { _phantom: self._phantom }
 	}
 
 	pub fn with_aura_consensus(
 		self,
-	) -> AuraBuilder<Block, RuntimeApi, Executor, GenesisConfig, Extension> {
+	) -> AuraBuilder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension> {
 		AuraBuilder { _phantom: self._phantom }
 	}
 }
 
-pub struct BabeBuilder<Block, RuntimeApi, Executor, GenesisConfig, Extension> {
-	_phantom: std::marker::PhantomData<(Block, RuntimeApi, Executor, GenesisConfig, Extension)>,
+pub struct BabeBuilder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension> {
+	_phantom:
+		std::marker::PhantomData<(Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension)>,
 }
 
-impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
-	BabeBuilder<Block, RuntimeApi, Executor, GenesisConfig, Extension>
+impl<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension>
+	BabeBuilder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension>
 {
 	pub fn run(self) -> Result<(), sc_cli::Error>
 	where
@@ -110,14 +112,20 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 		<Block as BlockT>::Hash: FromStr + Unpin,
 		<Block as BlockT>::Header: Unpin,
 		<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
-		Executor: NativeExecutionDispatch + 'static,
-		RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
-			+ Send
+		ExecutorDispatch: NativeExecutionDispatch + 'static,
+		RuntimeApi: ConstructRuntimeApi<
+				Block,
+				sc_service::TFullClient<
+					Block,
+					RuntimeApi,
+					NativeElseWasmExecutor<ExecutorDispatch>,
+				>,
+			> + Send
 			+ Sync
 			+ 'static,
 		<RuntimeApi as ConstructRuntimeApi<
 			Block,
-			sc_service::TFullClient<Block, RuntimeApi, Executor>,
+			sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>,
 		>>::RuntimeApi: TaggedTransactionQueue<Block>
 			+ sp_consensus_babe::BabeApi<Block>
 			+ sp_block_builder::BlockBuilder<Block>
@@ -135,19 +143,20 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 
 		let runner = cli.create_runner(&cli.run)?;
 		runner.run_node_until_exit(|config| async move {
-			new_full_babe::<Block, RuntimeApi, Executor>(config)
+			new_full_babe::<Block, RuntimeApi, ExecutorDispatch>(config)
 		})?;
 
 		Ok(())
 	}
 }
 
-pub struct AuraBuilder<Block, RuntimeApi, Executor, GenesisConfig, Extension> {
-	_phantom: std::marker::PhantomData<(Block, RuntimeApi, Executor, GenesisConfig, Extension)>,
+pub struct AuraBuilder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension> {
+	_phantom:
+		std::marker::PhantomData<(Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension)>,
 }
 
-impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
-	AuraBuilder<Block, RuntimeApi, Executor, GenesisConfig, Extension>
+impl<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension>
+	AuraBuilder<Block, RuntimeApi, ExecutorDispatch, GenesisConfig, Extension>
 {
 	pub fn run(self) -> Result<(), sc_cli::Error>
 	where
@@ -155,14 +164,20 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 		<Block as BlockT>::Hash: FromStr + Unpin,
 		<Block as BlockT>::Header: Unpin,
 		<<Block as BlockT>::Header as HeaderT>::Number: AsPrimitive<usize>,
-		Executor: NativeExecutionDispatch + 'static,
-		RuntimeApi: ConstructRuntimeApi<Block, sc_service::TFullClient<Block, RuntimeApi, Executor>>
-			+ Send
+		ExecutorDispatch: NativeExecutionDispatch + 'static,
+		RuntimeApi: ConstructRuntimeApi<
+				Block,
+				sc_service::TFullClient<
+					Block,
+					RuntimeApi,
+					NativeElseWasmExecutor<ExecutorDispatch>,
+				>,
+			> + Send
 			+ Sync
 			+ 'static,
 		<RuntimeApi as ConstructRuntimeApi<
 			Block,
-			sc_service::TFullClient<Block, RuntimeApi, Executor>,
+			sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>,
 		>>::RuntimeApi: TaggedTransactionQueue<Block>
 			+ sp_consensus_aura::AuraApi<Block, AuraId>
 			+ sp_block_builder::BlockBuilder<Block>
@@ -180,7 +195,7 @@ impl<Block, RuntimeApi, Executor, GenesisConfig, Extension>
 
 		let runner = cli.create_runner(&cli.run)?;
 		runner.run_node_until_exit(|config| async move {
-			new_full_aura::<Block, RuntimeApi, Executor>(config)
+			new_full_aura::<Block, RuntimeApi, ExecutorDispatch>(config)
 		})?;
 
 		Ok(())
