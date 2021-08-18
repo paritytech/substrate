@@ -478,3 +478,8 @@ fn extrinsics_root_is_calculated_correctly() {
 		assert_eq!(ext_root, *header.extrinsics_root());
 	});
 }
+
+#[test]
+fn runtime_updated_digest_emitted() {
+	assert_eq!(true, false);
+}

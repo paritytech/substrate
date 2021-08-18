@@ -350,11 +350,13 @@ pub mod pallet {
 		/// - 1 storage write.
 		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
+		/// - 1 digest item
 		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+			Self::deposit_log(generic::DigestItem::RuntimeUpdated);
 			Ok(().into())
 		}
 
@@ -365,6 +367,7 @@ pub mod pallet {
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
 		///   expensive).
+		/// - 1 digest item.
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime, but generally this is very
 		/// expensive. We will treat this as a full block.
@@ -373,9 +376,7 @@ pub mod pallet {
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
-
-			T::OnSetCode::set_code(code)?;
-			Self::deposit_event(Event::CodeUpdated);
+			Self::do_set_code(code)?;
 			Ok(().into())
 		}
 
@@ -384,6 +385,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full
 		/// block. # </weight>
@@ -393,8 +395,7 @@ pub mod pallet {
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			T::OnSetCode::set_code(code)?;
-			Self::deposit_event(Event::CodeUpdated);
+			Self::do_set_code(code)?;
 			Ok(().into())
 		}
 
@@ -1068,6 +1069,13 @@ impl<T: Config> Pallet<T> {
 		Account::<T>::contains_key(who)
 	}
 
+	fn do_set_code(code: Vec<u8>) -> DispatchResult {
+		T::OnSetCode::set_code(code)?;
+		Self::deposit_log(generic::DigestItem::RuntimeUpdated);
+		Self::deposit_event(Event::CodeUpdated);
+		Ok(())
+	}
+
 	/// Increment the reference counter on an account.
 	#[deprecated = "Use `inc_consumers` instead"]
 	pub fn inc_ref(who: &T::AccountId) {
@@ -1128,18 +1136,18 @@ impl<T: Config> Pallet<T> {
 
 						Pallet::<T>::on_killed_account(who.clone());
 						Ok(DecRefStatus::Reaped)
-					},
+					}
 					(1, c, _) if c > 0 => {
 						// Cannot remove last provider if there are consumers.
 						Err(DispatchError::ConsumerRemaining)
-					},
+					}
 					(x, _, _) => {
 						// Account will continue to exist as there is either > 1 provider or
 						// > 0 sufficients.
 						account.providers = x - 1;
 						*maybe_account = Some(account);
 						Ok(DecRefStatus::Exists)
-					},
+					}
 				}
 			} else {
 				log::error!(
@@ -1183,12 +1191,12 @@ impl<T: Config> Pallet<T> {
 					(0, 0) | (1, 0) => {
 						Pallet::<T>::on_killed_account(who.clone());
 						DecRefStatus::Reaped
-					},
+					}
 					(x, _) => {
 						account.sufficients = x - 1;
 						*maybe_account = Some(account);
 						DecRefStatus::Exists
-					},
+					}
 				}
 			} else {
 				log::error!(
@@ -1280,7 +1288,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return
+			return;
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1534,7 +1542,7 @@ impl<T: Config> Pallet<T> {
 					err,
 				);
 				Event::ExtrinsicFailed(err.error, info)
-			},
+			}
 		});
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
@@ -1668,10 +1676,10 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 				DecRefStatus::Reaped => return Ok(result),
 				DecRefStatus::Exists => {
 					// Update value as normal...
-				},
+				}
 			}
 		} else if !was_providing && !is_providing {
-			return Ok(result)
+			return Ok(result);
 		}
 		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
@@ -1687,7 +1695,7 @@ pub fn split_inner<T, R, S>(
 		Some(inner) => {
 			let (r, s) = splitter(inner);
 			(Some(r), Some(s))
-		},
+		}
 		None => (None, None),
 	}
 }

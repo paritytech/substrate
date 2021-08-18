@@ -118,6 +118,14 @@ pub enum DigestItem<Hash> {
 
 	/// Some other thing. Unsupported and experimental.
 	Other(Vec<u8>),
+
+	/// An indication for the light clients that the runtime execution
+	/// environment is updated.
+	///
+	/// Currently this is triggered when:
+	/// 1. Runtime code blob is changed or
+	/// 2. `heap_pages` value is changed.
+	RuntimeUpdated,
 }
 
 /// Available changes trie signals.
@@ -184,6 +192,8 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 	ChangesTrieSignal(&'a ChangesTrieSignal),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(&'a Vec<u8>),
+	/// Runtime code or heap pages updated.
+	RuntimeUpdated,
 }
 
 /// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
@@ -199,6 +209,7 @@ pub enum DigestItemType {
 	Seal = 5,
 	PreRuntime = 6,
 	ChangesTrieSignal = 7,
+	RuntimeUpdated = 8,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -225,6 +236,7 @@ impl<Hash> DigestItem<Hash> {
 			Self::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
 			Self::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
 			Self::Other(ref v) => DigestItemRef::Other(v),
+			Self::RuntimeUpdated => DigestItemRef::RuntimeUpdated,
 		}
 	}
 
@@ -310,18 +322,20 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 			DigestItemType::PreRuntime => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::PreRuntime(vals.0, vals.1))
-			},
+			}
 			DigestItemType::Consensus => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::Consensus(vals.0, vals.1))
-			},
+			}
 			DigestItemType::Seal => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::Seal(vals.0, vals.1))
-			},
-			DigestItemType::ChangesTrieSignal =>
-				Ok(Self::ChangesTrieSignal(Decode::decode(input)?)),
+			}
+			DigestItemType::ChangesTrieSignal => {
+				Ok(Self::ChangesTrieSignal(Decode::decode(input)?))
+			}
 			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
+			DigestItemType::RuntimeUpdated => Ok(Self::RuntimeUpdated),
 		}
 	}
 }
@@ -379,11 +393,13 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// return the opaque data it contains.
 	pub fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&'a [u8]> {
 		match (id, self) {
-			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s)) |
-			(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) |
-			(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
+			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s))
+			| (OpaqueDigestItemId::Seal(w), &Self::Seal(v, s))
+			| (OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
 				if v == w =>
-				Some(&s[..]),
+			{
+				Some(&s[..])
+			}
 			(OpaqueDigestItemId::Other, &Self::Other(s)) => Some(&s[..]),
 			_ => None,
 		}
@@ -436,27 +452,30 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 			Self::ChangesTrieRoot(changes_trie_root) => {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
-			},
+			}
 			Self::Consensus(val, data) => {
 				DigestItemType::Consensus.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
-			},
+			}
 			Self::Seal(val, sig) => {
 				DigestItemType::Seal.encode_to(&mut v);
 				(val, sig).encode_to(&mut v);
-			},
+			}
 			Self::PreRuntime(val, data) => {
 				DigestItemType::PreRuntime.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
-			},
+			}
 			Self::ChangesTrieSignal(changes_trie_signal) => {
 				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
 				changes_trie_signal.encode_to(&mut v);
-			},
+			}
 			Self::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
-			},
+			}
+			Self::RuntimeUpdated => {
+				DigestItemType::RuntimeUpdated.encode_to(&mut v);
+			}
 		}
 
 		v
