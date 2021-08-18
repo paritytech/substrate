@@ -26,7 +26,6 @@ use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::DispatchClass,
 	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
