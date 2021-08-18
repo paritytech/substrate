@@ -19,7 +19,6 @@ futures = "0.3.9"
 log = "0.4.8"
 parking_lot = "0.11.1"
 serde = { version = "1.0.101", features = ["derive"] }
-wasm-timer = "0.2"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-utils = { version = "4.0.0-dev", path = "../../../primitives/utils" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }

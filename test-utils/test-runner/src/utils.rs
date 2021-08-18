@@ -101,7 +101,6 @@ pub fn default_config(
 		rpc_max_payload: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
-		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
