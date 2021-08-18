@@ -265,7 +265,7 @@ pub(crate) async fn import_single_block_metered<
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
-	let started = wasm_timer::Instant::now();
+	let started = std::time::Instant::now();
 
 	let mut import_block = BlockImportParams::new(block_origin, header);
 	import_block.body = block.body;

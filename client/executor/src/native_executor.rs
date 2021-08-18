@@ -311,7 +311,7 @@ impl RuntimeVersionOf for WasmExecutor {
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-pub struct NativeExecutor<D> {
+pub struct NativeElseWasmExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: std::marker::PhantomData<D>,
 	/// Native runtime version info.
@@ -320,7 +320,7 @@ pub struct NativeExecutor<D> {
 	wasm: WasmExecutor,
 }
 
-impl<D: NativeExecutionDispatch> NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	/// Create new instance.
 	///
 	/// # Parameters
@@ -356,7 +356,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			None,
 		);
 
-		NativeExecutor {
+		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
 			wasm: wasm_executor,
@@ -364,7 +364,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> {
 	fn runtime_version(
 		&self,
 		ext: &mut dyn Externalities,
@@ -377,7 +377,7 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> GetNativeVersion for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> GetNativeVersion for NativeElseWasmExecutor<D> {
 	fn native_version(&self) -> &NativeVersion {
 		&self.native_version
 	}
@@ -508,7 +508,7 @@ fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
 	});
 }
 
-impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecutor<D> {
 	type Error = Error;
 
 	fn call<
@@ -586,9 +586,9 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> Clone for NativeElseWasmExecutor<D> {
 	fn clone(&self) -> Self {
-		NativeExecutor {
+		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
 			wasm: self.wasm.clone(),
@@ -596,7 +596,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeElseWasmExecutor<D> {
 	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
@@ -618,9 +618,9 @@ mod tests {
 		}
 	}
 
-	pub struct MyExecutor;
+	pub struct MyExecutorDispatch;
 
-	impl NativeExecutionDispatch for MyExecutor {
+	impl NativeExecutionDispatch for MyExecutorDispatch {
 		type ExtendHostFunctions = (my_interface::HostFunctions, my_interface::HostFunctions);
 
 		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
@@ -634,7 +634,11 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
+		let executor = NativeElseWasmExecutor::<MyExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			None,
+			8,
+		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);
 		});

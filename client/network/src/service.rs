@@ -291,10 +291,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let (transport, bandwidth) = {
-				let (config_mem, config_wasm) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None),
-					TransportConfig::Normal { wasm_external_transport, .. } =>
-						(false, wasm_external_transport),
+				let config_mem = match params.network_config.transport {
+					TransportConfig::MemoryOnly => true,
+					TransportConfig::Normal { .. } => false,
 				};
 
 				// The yamux buffer size limit is configured to be equal to the maximum frame size
@@ -337,7 +336,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(
 					local_identity,
 					config_mem,
-					config_wasm,
 					params.network_config.yamux_window_size,
 					yamux_maximum_buffer_size,
 				)
