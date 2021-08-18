@@ -341,7 +341,7 @@ where
 			block,
 			header,
 			method: "TaggedTransactionQueue_validate_transaction".into(),
-			call_data: (source, uxt).encode(),
+			call_data: (source, uxt, block).encode(),
 			retry_count: None,
 		});
 		let remote_validation_request = remote_validation_request.then(move |result| {

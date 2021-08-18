@@ -100,7 +100,8 @@ where
 		let mut out = Vec::new();
 		let chain_info = self.inner.info();
 
-		// request justifications for all pending changes for which change blocks have already been imported
+		// request justifications for all pending changes for which change blocks have already been
+		// imported
 		let pending_changes: Vec<_> =
 			self.authority_set.inner().pending_changes().cloned().collect();
 

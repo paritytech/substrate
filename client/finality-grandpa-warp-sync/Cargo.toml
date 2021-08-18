@@ -16,8 +16,6 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 derive_more = "0.99.11"
 futures = "0.3.8"
 log = "0.4.11"
-num-traits = "0.2.14"
-parking_lot = "0.11.1"
 prost = "0.7"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../finality-grandpa" }

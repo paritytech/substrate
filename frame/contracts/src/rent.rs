@@ -96,8 +96,8 @@ where
 	///
 	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
 	/// of current block. E.g. if the contract is going to be evicted at the current block,
-	/// `handicap = 1` can defer the eviction for 1 block. This is useful to handicap certain snitchers
-	/// relative to others.
+	/// `handicap = 1` can defer the eviction for 1 block. This is useful to handicap certain
+	/// snitchers relative to others.
 	///
 	/// NOTE this function performs eviction eagerly. All changes are read and written directly to
 	/// storage.
@@ -148,12 +148,12 @@ where
 	/// accessed at the beginning of the current block. Returns `None` in case if the contract was
 	/// evicted before or as a result of the rent collection.
 	///
-	/// The returned value is only an estimation. It doesn't take into account any top ups, changing the
-	/// rent allowance, or any problems coming from withdrawing the dues.
+	/// The returned value is only an estimation. It doesn't take into account any top ups, changing
+	/// the rent allowance, or any problems coming from withdrawing the dues.
 	///
 	/// NOTE that this is not a side-effect free function! It will actually collect rent and then
-	/// compute the projection. This function is only used for implementation of an RPC method through
-	/// `RuntimeApi` meaning that the changes will be discarded anyway.
+	/// compute the projection. This function is only used for implementation of an RPC method
+	/// through `RuntimeApi` meaning that the changes will be discarded anyway.
 	pub fn compute_projection(account: &T::AccountId) -> RentProjectionResult<T::BlockNumber> {
 		use ContractAccessError::IsTombstone;
 
@@ -357,8 +357,8 @@ where
 
 	/// Returns amount of funds available to consume by rent mechanism.
 	///
-	/// Rent mechanism cannot consume more than `rent_allowance` set by the contract and it cannot make
-	/// the balance lower than [`subsistence_threshold`].
+	/// Rent mechanism cannot consume more than `rent_allowance` set by the contract and it cannot
+	/// make the balance lower than [`subsistence_threshold`].
 	///
 	/// In case the toal_balance is below the subsistence threshold, this function returns `None`.
 	fn rent_budget(
@@ -381,8 +381,8 @@ where
 
 	/// Consider the case for rent payment of the given account and returns a `Verdict`.
 	///
-	/// Use `handicap` in case you want to change the reference block number. (To get more details see
-	/// `try_eviction` ).
+	/// Use `handicap` in case you want to change the reference block number. (To get more details
+	/// see `try_eviction` ).
 	fn consider_case(
 		account: &T::AccountId,
 		current_block_number: T::BlockNumber,
@@ -435,8 +435,8 @@ where
 			.unwrap_or_else(|| <BalanceOf<T>>::max_value());
 		let insufficient_rent = rent_budget < dues;
 
-		// If the rent payment cannot be withdrawn due to locks on the account balance, then evict the
-		// account.
+		// If the rent payment cannot be withdrawn due to locks on the account balance, then evict
+		// the account.
 		//
 		// NOTE: This seems problematic because it provides a way to tombstone an account while
 		// avoiding the last rent payment. In effect, someone could retroactively set rent_allowance
@@ -566,8 +566,8 @@ impl<T: Config> OutstandingAmount<T> {
 enum Verdict<T: Config> {
 	/// The contract is exempted from paying rent.
 	///
-	/// For example, it already paid its rent in the current block, or it has enough deposit for not
-	/// paying rent at all.
+	/// For example, it already paid its rent in the current block, or it has enough deposit for
+	/// not paying rent at all.
 	Exempt,
 	/// The contract cannot afford payment within its rent budget so it gets evicted. However,
 	/// because its balance is greater than the subsistence threshold it leaves a tombstone.

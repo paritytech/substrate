@@ -27,7 +27,7 @@ mod tests;
 use futures::{future, StreamExt, TryStreamExt};
 use log::warn;
 use rpc::{
-	futures::{stream, Future, Sink, Stream},
+	futures::{stream, FutureExt, SinkExt, Stream},
 	Result as RpcResult,
 };
 use std::sync::Arc;
@@ -53,6 +53,7 @@ use sp_blockchain::HeaderBackend;
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	/// Get client reference.
@@ -120,8 +121,7 @@ where
 			|| {
 				self.client()
 					.import_notification_stream()
-					.map(|notification| Ok::<_, ()>(notification.header))
-					.compat()
+					.map(|notification| Ok::<_, rpc::Error>(notification.header))
 			},
 		)
 	}
@@ -150,8 +150,7 @@ where
 				self.client()
 					.import_notification_stream()
 					.filter(|notification| future::ready(notification.is_new_best))
-					.map(|notification| Ok::<_, ()>(notification.header))
-					.compat()
+					.map(|notification| Ok::<_, rpc::Error>(notification.header))
 			},
 		)
 	}
@@ -179,8 +178,7 @@ where
 			|| {
 				self.client()
 					.finality_notification_stream()
-					.map(|notification| Ok::<_, ()>(notification.header))
-					.compat()
+					.map(|notification| Ok::<_, rpc::Error>(notification.header))
 			},
 		)
 	}
@@ -202,6 +200,7 @@ pub fn new_full<Block: BlockT, Client>(
 ) -> Chain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain { backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)) }
@@ -216,6 +215,7 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 ) -> Chain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 	F: Send + Sync + 'static,
 {
@@ -238,6 +238,7 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 	for Chain<Block, Client>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	type Metadata = crate::Metadata;
@@ -312,7 +313,7 @@ where
 }
 
 /// Subscribe to new headers.
-fn subscribe_headers<Block, Client, F, G, S, ERR>(
+fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	subscriptions: &SubscriptionManager,
 	subscriber: Subscriber<Block::Header>,
@@ -320,27 +321,28 @@ fn subscribe_headers<Block, Client, F, G, S, ERR>(
 	stream: F,
 ) where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + 'static,
 	F: FnOnce() -> S,
 	G: FnOnce() -> Block::Hash,
-	ERR: ::std::fmt::Debug,
-	S: Stream<Item = Block::Header, Error = ERR> + Send + 'static,
+	S: Stream<Item = std::result::Result<Block::Header, rpc::Error>> + Send + 'static,
 {
 	subscriptions.add(subscriber, |sink| {
 		// send current head right at the start.
 		let header = client
 			.header(BlockId::Hash(best_block_hash()))
 			.map_err(client_err)
-			.and_then(|header| header.ok_or_else(|| "Best header missing.".to_owned().into()))
+			.and_then(|header| header.ok_or_else(|| "Best header missing.".to_string().into()))
 			.map_err(Into::into);
 
 		// send further subscriptions
 		let stream = stream()
-			.map(|res| Ok(res))
-			.map_err(|e| warn!("Block notification stream error: {:?}", e));
+			.inspect_err(|e| warn!("Block notification stream error: {:?}", e))
+			.map(|res| Ok(res));
 
-		sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-			.send_all(stream::iter_result(vec![Ok(header)]).chain(stream))
+		stream::iter(vec![Ok(header)])
+			.chain(stream)
+			.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 			// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 			.map(|_| ())
 	});

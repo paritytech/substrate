@@ -1571,6 +1571,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				}),
 			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
 				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
+			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
 		};
 
 		let outcome = match event {

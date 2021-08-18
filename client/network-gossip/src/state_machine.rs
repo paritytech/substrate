@@ -29,8 +29,8 @@ use std::{
 	iter,
 	sync::Arc,
 	time,
+	time::Instant,
 };
-use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
@@ -127,14 +127,15 @@ where
 					} else {
 						MessageIntent::Broadcast
 					},
-				MessageIntent::PeriodicRebroadcast =>
+				MessageIntent::PeriodicRebroadcast => {
 					if peer.known_messages.contains(&message_hash) {
 						MessageIntent::PeriodicRebroadcast
 					} else {
 						// peer doesn't know message, so the logic should treat it as an
 						// initial broadcast.
 						MessageIntent::Broadcast
-					},
+					}
+				},
 				other => other,
 			};
 
