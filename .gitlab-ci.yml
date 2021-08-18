@@ -342,7 +342,7 @@ test-linux-stable:                 &test-linux
     WASM_BUILD_NO_COLOR:           1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    - echo "FIXME: skipping this long test"
+    - echo 'FIXME skipping this long test'
     # FIXME: un-commnet lines below
     # - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
     # - time cargo test -p frame-support-test --features=conditional-storage --manifest-path frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
