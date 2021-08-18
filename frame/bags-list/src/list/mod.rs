@@ -465,7 +465,8 @@ impl<T: Config> Bag<T> {
 	}
 
 	/// Iterate over the nodes in this bag.
-	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
+	// TODO: we make this public for the remote-ext test.
+	pub fn iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
