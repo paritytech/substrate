@@ -751,8 +751,8 @@ simnet-tests:
   # ${SIMNET_REF} is a gitlab variable
   before_script:
     - echo "Simnet Tests Config
-      docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
+        docker.io/paritytech/simnet:${SIMNET_REF}
+        ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
   script:
     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
