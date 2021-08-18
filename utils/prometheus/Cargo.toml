@@ -22,3 +22,7 @@ derive_more = "0.99"
 async-std = { version = "1.6.5", features = ["unstable"] }
 tokio = "1.10"
 hyper = { version = "0.14.11", default-features = false, features = ["http1", "server", "tcp"] }
+
+[dev-dependencies]
+hyper = { version = "0.14.11", features = ["client"] }
+tokio = { version = "1.10", features = ["rt-multi-thread"] }

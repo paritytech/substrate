@@ -18,14 +18,20 @@
 //! A `CodeExecutor` specialization which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
-use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 
 // Declare an instance of the native executor named `Executor`. Include the wasm binary as the
 // equivalent wasm code.
-native_executor_instance!(
-	pub Executor,
-	node_runtime::api::dispatch,
-	node_runtime::native_version,
-	frame_benchmarking::benchmarking::HostFunctions,
-);
+pub struct Executor;
+
+impl sc_executor::NativeExecutionDispatch for Executor {
+	type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
+
+	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+		node_runtime::api::dispatch(method, data)
+	}
+
+	fn native_version() -> sc_executor::NativeVersion {
+		node_runtime::native_version()
+	}
+}

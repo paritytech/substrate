@@ -29,7 +29,7 @@ pub use crate::{
 	},
 	warp_request_handler::WarpSyncProvider,
 };
-pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
@@ -42,7 +42,7 @@ use core::{fmt, iter};
 use futures::future;
 use libp2p::{
 	identity::{ed25519, Keypair},
-	multiaddr, wasm_ext, Multiaddr, PeerId,
+	multiaddr, Multiaddr, PeerId,
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
@@ -490,11 +490,7 @@ impl NetworkConfiguration {
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal {
-				enable_mdns: false,
-				allow_private_ipv4: true,
-				wasm_external_transport: None,
-			},
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
 			max_parallel_downloads: 5,
 			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
@@ -628,14 +624,6 @@ pub enum TransportConfig {
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
 		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
-
-		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
-		/// need some binding between the networking provided by the operating system or
-		/// environment and libp2p.
-		///
-		/// This parameter exists whatever the target platform is, but it is expected to be set to
-		/// `Some` only when compiling for WASM.
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	},
 
 	/// Only allow connections within the same process.

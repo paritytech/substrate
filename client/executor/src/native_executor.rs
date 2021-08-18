@@ -83,9 +83,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	type ExtendHostFunctions: HostFunctions;
 
 	/// Dispatch a method in the runtime.
-	///
-	/// If the method with the specified name doesn't exist then `Err` is returned.
-	fn dispatch(ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>>;
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
@@ -577,7 +575,9 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						);
 
 						used_native = true;
-						Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
+						Ok(with_externalities_safe(&mut **ext, move || D::dispatch(method, data))?
+							.map(NativeOrEncoded::Encoded)
+							.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
 					},
 				}
 			},
@@ -606,79 +606,6 @@ impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeE
 	}
 }
 
-/// Implements a `NativeExecutionDispatch` for provided parameters.
-///
-/// # Example
-///
-/// ```
-/// sc_executor::native_executor_instance!(
-///     pub MyExecutor,
-///     substrate_test_runtime::api::dispatch,
-///     substrate_test_runtime::native_version,
-/// );
-/// ```
-///
-/// # With custom host functions
-///
-/// When you want to use custom runtime interfaces from within your runtime, you need to make the
-/// executor aware of the host functions for these interfaces.
-///
-/// ```
-/// # use sp_runtime_interface::runtime_interface;
-///
-/// #[runtime_interface]
-/// trait MyInterface {
-///     fn say_hello_world(data: &str) {
-///         println!("Hello world from: {}", data);
-///     }
-/// }
-///
-/// sc_executor::native_executor_instance!(
-///     pub MyExecutor,
-///     substrate_test_runtime::api::dispatch,
-///     substrate_test_runtime::native_version,
-///     my_interface::HostFunctions,
-/// );
-/// ```
-///
-/// When you have multiple interfaces, you can give the host functions as a tuple e.g.:
-/// `(my_interface::HostFunctions, my_interface2::HostFunctions)`
-#[macro_export]
-macro_rules! native_executor_instance {
-	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
-		/// A unit struct which implements `NativeExecutionDispatch` feeding in the
-		/// hard-coded runtime.
-		$pub struct $name;
-		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version, ());
-	};
-	( $pub:vis $name:ident, $dispatcher:path, $version:path, $custom_host_functions:ty $(,)?) => {
-		/// A unit struct which implements `NativeExecutionDispatch` feeding in the
-		/// hard-coded runtime.
-		$pub struct $name;
-		$crate::native_executor_instance!(
-			IMPL $name, $dispatcher, $version, $custom_host_functions
-		);
-	};
-	(IMPL $name:ident, $dispatcher:path, $version:path, $custom_host_functions:ty) => {
-		impl $crate::NativeExecutionDispatch for $name {
-			type ExtendHostFunctions = $custom_host_functions;
-
-			fn dispatch(
-				ext: &mut dyn $crate::Externalities,
-				method: &str,
-				data: &[u8]
-			) -> $crate::error::Result<Vec<u8>> {
-				$crate::with_externalities_safe(ext, move || $dispatcher(method, data))?
-					.ok_or_else(|| $crate::error::Error::MethodNotFound(method.to_owned()))
-			}
-
-			fn native_version() -> $crate::NativeVersion {
-				$version()
-			}
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -691,12 +618,19 @@ mod tests {
 		}
 	}
 
-	native_executor_instance!(
-		pub MyExecutor,
-		substrate_test_runtime::api::dispatch,
-		substrate_test_runtime::native_version,
-		(my_interface::HostFunctions, my_interface::HostFunctions),
-	);
+	pub struct MyExecutor;
+
+	impl NativeExecutionDispatch for MyExecutor {
+		type ExtendHostFunctions = (my_interface::HostFunctions, my_interface::HostFunctions);
+
+		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+			substrate_test_runtime::api::dispatch(method, data)
+		}
+
+		fn native_version() -> NativeVersion {
+			substrate_test_runtime::native_version()
+		}
+	}
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
