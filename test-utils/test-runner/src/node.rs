@@ -114,7 +114,8 @@ where
 	/// 		let response = node.rpc_handler()
 	/// 		.handle_request_sync(request, Default::default());
 	/// ```
-	// pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	// pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata,
+	// sc_rpc_server::RpcMiddleware>> {
 	pub fn rpc_handler(&self) {
 		todo!("not ported to jsonrpsee yet");
 	}

@@ -303,8 +303,8 @@ mod waiting {
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
-/// Once this is called, no more methods can be added to the server.
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive. Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
 async fn start_rpc_servers<R>(
 	config: &Configuration,

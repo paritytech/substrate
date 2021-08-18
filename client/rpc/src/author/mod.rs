@@ -82,7 +82,8 @@ where
 	P::Hash: Unpin,
 	<P::Block as BlockT>::Hash: Unpin,
 {
-	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
+	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the
+	/// RPC server.
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {
 		let mut module = RpcModule::new(self);
 

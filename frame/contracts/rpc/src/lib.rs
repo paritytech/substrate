@@ -142,7 +142,8 @@ where
 		}
 	}
 
-	/// Convert a [`ContractsRpc`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
+	/// Convert a [`ContractsRpc`] to an [`RpcModule`]. Registers all the RPC methods available with
+	/// the RPC server.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut module = RpcModule::new(self);
 
@@ -243,8 +244,8 @@ where
 
 		// Returns the projected time a given contract will be able to sustain paying its rent.
 		//
-		// The returned projection is relevant for the given block, i.e. it is as if the contract was
-		// accessed at the beginning of that block.
+		// The returned projection is relevant for the given block, i.e. it is as if the contract
+		// was accessed at the beginning of that block.
 		//
 		// Returns `None` if the contract is exempted from rent.
 		module.register_method(

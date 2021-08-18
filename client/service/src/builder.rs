@@ -585,7 +585,8 @@ where
 	};
 
 	// TODO(niklasad1): this will block the current thread until the servers have been started
-	// we could spawn it in the background but then the errors must be handled via a channel or something
+	// we could spawn it in the background but then the errors must be handled via a channel or
+	// something
 	let rpc = futures::executor::block_on(start_rpc_servers(&config, gen_rpc_module))?;
 
 	// Spawn informant task

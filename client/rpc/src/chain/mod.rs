@@ -164,7 +164,8 @@ where
 	Block: BlockT + 'static,
 	<Block as BlockT>::Header: Unpin,
 {
-	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
+	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the
+	/// RPC server.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut rpc_module = RpcModule::new(self);
 
@@ -214,10 +215,8 @@ where
 		rpc_module.register_alias("chain_subscribeNewHead", "chain_newHead")?;
 		rpc_module.register_alias("chain_subscribeNewHeads", "chain_newHead")?;
 		rpc_module.register_alias("chain_unsubscribeNewHeads", "chain_unsubscribeNewHead")?;
-		rpc_module
-			.register_alias("chain_subscribeFinalisedHeads", "chain_finalizedHead")?;
-		rpc_module
-			.register_alias("chain_subscribeFinalizedHeads", "chain_finalizedHead")?;
+		rpc_module.register_alias("chain_subscribeFinalisedHeads", "chain_finalizedHead")?;
+		rpc_module.register_alias("chain_subscribeFinalizedHeads", "chain_finalizedHead")?;
 		rpc_module
 			.register_alias("chain_unsubscribeFinalisedHeads", "chain_unsubscribeFinalizedHeads")?;
 

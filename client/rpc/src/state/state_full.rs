@@ -527,58 +527,62 @@ where
 		let executor = self.executor.clone();
 		let client = self.client.clone();
 
-		let initial = {
-			let block = client.info().best_hash;
-			let changes: Vec<(StorageKey, Option<StorageData>)> = keys
-				.as_ref()
-				.map(|keys| {
-					keys.iter()
-						.map(|storage_key| {
-							futures::executor::block_on(
-								StateBackend::storage(
-									self,
-									Some(block.clone()).into(),
-									storage_key.clone(),
-								)
-								.map(|val| (storage_key.clone(), val.unwrap_or(None))),
-							)
-						})
-						.collect()
-				})
-				.unwrap_or_default();
-			vec![StorageChangeSet { block, changes }]
-		};
-
-		if let Err(e) = sink.send(&initial) {
-			return Err(e.into())
-		}
-
 		let stream = client
 			.storage_changes_notification_stream(keys.as_ref().map(|keys| &**keys), None)
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
+		// initial values (keys might be empty)
+		let maybe_initial = {
+			let block = client.info().best_hash;
+			let changes: Vec<(StorageKey, Option<StorageData>)> = keys
+				.map(|keys| {
+					keys.into_iter()
+						.map(|storage_key| {
+							let v =
+								client.storage(&BlockId::Hash(block), &storage_key).ok().flatten();
+							(storage_key, v)
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			if changes.is_empty() {
+				None
+			} else {
+				Some(vec![StorageChangeSet { block, changes }])
+			}
+		};
+
+		if let Some(Err(e)) = maybe_initial.map(|changes| sink.send(&changes)) {
+			return Err(e.into())
+		}
+
 		let fut = async move {
 			stream
-				.map(|(block, changes)| {
-					StorageChangeSet {
-						block,
-						changes: changes
-							.iter()
-							.filter_map(|(o_sk, k, v)| {
-								// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
-								// for storage events stemming from child storage, `None` otherwise. This RPC only
-								// returns non-child storage.
-								if o_sk.is_none() {
-									Some((k.clone(), v.cloned()))
-								} else {
-									None
-								}
-							})
-							.collect(),
+				.filter_map(|(block, changes)| async move {
+					let changes: Vec<_> = changes
+						.iter()
+						.filter_map(|(o_sk, k, v)| {
+							// Note: the first `Option<&StorageKey>` seems to be the parent key,
+							// so it's set only for storage events stemming from child storage,
+							// `None` otherwise. This RPC only returns non-child storage.
+							if o_sk.is_none() {
+								Some((k.clone(), v.cloned()))
+							} else {
+								None
+							}
+						})
+						.collect();
+					if changes.is_empty() {
+						None
+					} else {
+						Some(StorageChangeSet {
+							block,
+							changes
+						})
 					}
 				})
-				.take_while(|changes| {
-					future::ready(sink.send(&changes).map_or_else(
+				.take_while(|storage| {
+					future::ready(sink.send(&storage).map_or_else(
 						|e| {
 							log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
 							false

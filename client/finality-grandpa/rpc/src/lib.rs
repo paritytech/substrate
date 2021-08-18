@@ -80,8 +80,8 @@ where
 				.map_err(to_jsonrpsee_call_error)
 		})?;
 
-		// Prove finality for the given block number by returning the [`Justification`] for the last block
-		// in the set and all the intermediary headers to link them together.
+		// Prove finality for the given block number by returning the [`Justification`] for the last
+		// block in the set and all the intermediary headers to link them together.
 		module.register_method("grandpa_proveFinality", |params, grandpa| {
 			let block: NumberFor<Block> = params.one()?;
 			grandpa
