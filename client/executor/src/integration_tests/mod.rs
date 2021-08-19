@@ -198,7 +198,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		],
 		children_default: map![],
 	};
-	let expected = TestExternalities::new_with_alt_hashing(storage);
+	let expected = TestExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)));
 	assert_eq!(ext, expected);
 }
 
@@ -230,7 +230,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 		children_default: map![],
 	};
 
-	let expected = TestExternalities::new_with_alt_hashing(storage);
+	let expected = TestExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)));
 	assert_eq!(expected, ext);
 }
 
@@ -661,53 +661,4 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 		call_in_wasm("test_panic_in_spawned", &[], wasm_method, &mut ext).unwrap_err();
 
 	assert!(format!("{}", error_result).contains("Spawned task"));
-}
-
-test_wasm_execution!(state_hashing_update);
-fn state_hashing_update(wasm_method: WasmExecutionMethod) {
-	// use externalities without storage flag.
-	let mut ext = TestExternalities::new(Default::default());
-
-	let root1 = {
-		let mut ext = ext.ext();
-		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-		let output =
-			call_in_wasm("test_data_in", &vec![1u8; 100].encode(), wasm_method, &mut ext).unwrap();
-
-		assert_eq!(output, b"all ok!".to_vec().encode());
-		ext.storage_root()
-	};
-
-	ext.commit_all().unwrap();
-	let root2 = {
-		let mut ext = ext.ext();
-		// flag state.
-		let _ =
-			call_in_wasm("test_switch_state", Default::default(), wasm_method, &mut ext).unwrap();
-		ext.storage_root()
-	};
-
-	assert!(root1 != root2);
-
-	ext.commit_all().unwrap();
-	let root3 = {
-		let mut ext = ext.ext();
-		let _ =
-			call_in_wasm("test_data_in", &vec![2u8; 100].to_vec().encode(), wasm_method, &mut ext)
-				.unwrap();
-		ext.storage_root()
-	};
-	assert!(root2 != root3);
-
-	ext.commit_all().unwrap();
-	let root3 = {
-		let mut ext = ext.ext();
-		// revert to root 2 state, but this time
-		// inner hashing should apply
-		let _ =
-			call_in_wasm("test_data_in", &vec![1u8; 100].to_vec().encode(), wasm_method, &mut ext)
-				.unwrap();
-		ext.storage_root()
-	};
-	assert!(root2 != root3);
 }

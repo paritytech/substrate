@@ -349,6 +349,16 @@ where
 			})
 			.collect::<Result<std::collections::HashMap<_, _>, Error>>()?;
 
+		let mut state_versions = Vec::new();
+		for (number, version) in config.chain_spec.state_versions().into_iter() {
+			let number = NumberFor::<TBl>::from_str(&number.to_string())
+				.map_err(|_| Error::Application(Box::from(format!(
+						"Failed to parse `{}` as block number for state versions.",
+						number,
+					))))?;
+			state_versions.push((number.into(), version));
+		}
+
 		let client = new_client(
 			backend.clone(),
 			executor,
@@ -368,6 +378,7 @@ where
 					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
 				),
 				wasm_runtime_substitutes,
+				state_versions,
 			},
 		)?;
 

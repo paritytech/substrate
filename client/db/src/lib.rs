@@ -2603,6 +2603,7 @@ pub(crate) mod tests {
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},
 			0,
+			vec![],
 		)
 		.unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
@@ -2617,7 +2618,13 @@ pub(crate) mod tests {
 		set_state_data_inner(false);
 	}
 	fn set_state_data_inner(alt_hashing: bool) {
-		let db = Backend::<Block>::new_test(2, 0);
+		let state_version = if alt_hashing {
+			Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))
+		} else {
+			None
+		};
+		let mut db = Backend::<Block>::new_test(2, 0);
+		db.alt_hashing.push((0, state_version));
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
 			let mut header = Header {
@@ -2628,16 +2635,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let mut storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
-
-			if alt_hashing {
-				storage.push((
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					),
-				));
-			}
+			let storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
 
 			header.state_root = op
 				.old_state

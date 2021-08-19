@@ -366,6 +366,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
+		let state_version = None;
 		let authorities = vec![
 			Sr25519Keyring::Alice.to_raw_public(),
 			Sr25519Keyring::Bob.to_raw_public(),
@@ -381,13 +382,10 @@ mod tests {
 					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 					},
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec() =>
-						sp_core::storage::trie_threshold_encode(
-							sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-						),
 				],
 				children_default: map![],
 			},
+			state_version,
 		)
 	}
 

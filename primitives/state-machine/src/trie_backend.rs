@@ -200,18 +200,13 @@ where
 	where
 		H::Out: Ord,
 	{
-		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
-			force.clone()
-		} else {
-			self.get_trie_alt_hashing_threshold()
-		};
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
-				let layout = if let Some(threshold) = use_inner_hash_value {
+				let layout = if let Some(Some(threshold)) = self.force_alt_hashing.clone() {
 					sp_trie::Layout::with_alt_hashing(threshold)
 				} else {
 					sp_trie::Layout::default()
@@ -236,16 +231,10 @@ where
 	where
 		H::Out: Ord,
 	{
-		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
-			force.clone()
-		} else {
-			self.get_trie_alt_hashing_threshold()
-		};
-
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
 		};
-		let layout = if let Some(threshold) = use_inner_hash_value {
+		let layout = if let Some(Some(threshold)) = self.force_alt_hashing.clone() {
 			sp_trie::Layout::with_alt_hashing(threshold)
 		} else {
 			sp_trie::Layout::default()
@@ -340,13 +329,6 @@ pub mod tests {
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
 			trie.insert(b":code", b"return 42").expect("insert failed");
-			if hashed_value {
-				trie.insert(
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG,
-					sp_core::storage::trie_threshold_encode(TRESHOLD).as_slice(),
-				)
-				.unwrap();
-			}
 			for i in 128u8..255u8 {
 				trie.insert(&[i], &[i]).unwrap();
 			}
@@ -358,7 +340,7 @@ pub mod tests {
 		hashed_value: bool,
 	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
-		TrieBackend::new(mdb, root)
+		TrieBackend::new(mdb, root, None)
 	}
 
 	#[test]
@@ -424,6 +406,7 @@ pub mod tests {
 		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
 			PrefixedMemoryDB::default(),
 			Default::default(),
+			None,
 		)
 		.pairs()
 		.is_empty());

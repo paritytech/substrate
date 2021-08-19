@@ -126,15 +126,16 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut t, state_version.clone())
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
-	t.into()
+	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t, state_version.clone()).unwrap();
+	(t, state_version).into()
 }
 
 #[test]
@@ -321,12 +322,13 @@ fn treasury_account_doesnt_get_deleted() {
 // This is useful for chain that will just update runtime.
 #[test]
 fn inexistent_account_works() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 	pallet_balances::GenesisConfig::<Test> { balances: vec![(0, 100), (1, 99), (2, 1)] }
-		.assimilate_storage(&mut t)
+		.assimilate_storage(&mut t, state_version.clone())
 		.unwrap();
 	// Treasury genesis config is not build thus treasury account does not exist
-	let mut t: sp_io::TestExternalities = t.into();
+	let mut t: sp_io::TestExternalities = (t, state_version).into();
 
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 0); // Account does not exist
@@ -353,16 +355,17 @@ fn inexistent_account_works() {
 
 #[test]
 fn genesis_funding_works() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 	let initial_funding = 100;
 	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut t, state_version.clone())
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
-	let mut t: sp_io::TestExternalities = t.into();
+	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t, state_version.clone()).unwrap();
+	let mut t: sp_io::TestExternalities = (t, state_version).into();
 
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);

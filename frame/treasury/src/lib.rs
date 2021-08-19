@@ -234,8 +234,9 @@ pub mod pallet {
 		pub fn assimilate_storage<T: Config<I>, I: 'static>(
 			&self,
 			storage: &mut sp_runtime::Storage,
+			alt_hashing: Option<Option<u32>>,
 		) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
+			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage, alt_hashing)
 		}
 	}
 

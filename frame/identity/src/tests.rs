@@ -118,13 +118,14 @@ impl pallet_identity::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (10, 100), (20, 100), (30, 100)],
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut t, None)
 	.unwrap();
-	t.into()
+	(t, state_version).into()
 }
 
 fn ten() -> IdentityInfo<MaxAdditionalFields> {

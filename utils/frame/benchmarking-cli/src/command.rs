@@ -96,6 +96,10 @@ impl BenchmarkCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
+		let state_version = config.chain_spec.state_versions()
+			.get(0)
+			.and_then(|(n, s)| (n == &0).then(|| s.clone()))
+			.unwrap_or(None);
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -122,7 +126,7 @@ impl BenchmarkCmd {
 		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
 		let extrinsic = extrinsic.as_bytes();
 
-		let genesis_storage = spec.build_storage()?;
+		let genesis_storage = spec.build_storage(state_version.clone())?;
 		let mut changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state_with_tracking = BenchmarkingState::<BB>::new(

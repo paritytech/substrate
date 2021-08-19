@@ -245,6 +245,7 @@ mod tests {
 
 	#[test]
 	fn authorities_returns_current_and_next_authority_set() {
+		let state_version = None;
 		// The whole authority discovery pallet ignores account ids, but we still need them for
 		// `pallet_session::OneSessionHandler::on_new_session`, thus its safe to use the same value
 		// everywhere.
@@ -281,16 +282,17 @@ mod tests {
 			.collect::<Vec<(&AuthorityId, AuthorityId)>>();
 
 		// Build genesis.
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 
 		GenesisBuild::<Test>::assimilate_storage(
 			&pallet_authority_discovery::GenesisConfig { keys: vec![] },
 			&mut t,
+			state_version.clone(),
 		)
 		.unwrap();
 
 		// Create externalities.
-		let mut externalities = TestExternalities::new(t);
+		let mut externalities = TestExternalities::new(t, state_version);
 
 		externalities.execute_with(|| {
 			use frame_support::traits::OneSessionHandler;

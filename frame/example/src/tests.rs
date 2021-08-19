@@ -107,6 +107,7 @@ impl Config for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
+	let state_version = None;
 	let t = GenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
 		system: Default::default(),
@@ -118,9 +119,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			foo: 24,
 		},
 	}
-	.build_storage()
+	.build_storage(state_version.clone())
 	.unwrap();
-	t.into()
+	(t, state_version).into()
 }
 
 #[test]

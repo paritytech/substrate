@@ -105,8 +105,9 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	t.into()
+	let state_version = None;
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version.clone()).unwrap();
+	(t, state_version).into()
 }
 
 parameter_types! {

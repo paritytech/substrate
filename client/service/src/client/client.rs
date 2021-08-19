@@ -199,6 +199,8 @@ pub struct ClientConfig<Block: BlockT> {
 	/// Map of WASM runtime substitute starting at the child of the given block until the runtime
 	/// version doesn't match anymore.
 	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
+	/// State version to use with chain.
+	pub state_versions: Vec<(NumberFor<Block>, Option<Option<u32>>)>,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {
@@ -209,6 +211,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 			wasm_runtime_overrides: None,
 			no_genesis: false,
 			wasm_runtime_substitutes: HashMap::new(),
+			state_versions: Vec::new(), // TODO check usage or remove default impl
 		}
 	}
 }
@@ -334,9 +337,13 @@ where
 		config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
 		let info = backend.blockchain().info();
+		let state_version = config.state_versions.get(0)
+			.and_then(|(n, s)| n.is_zero().then(|| s.clone()))
+			.unwrap_or(None);
+
 		if info.finalized_state.is_none() {
 			let genesis_storage =
-				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
+				build_genesis_storage.build_storage(state_version).map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
 			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());

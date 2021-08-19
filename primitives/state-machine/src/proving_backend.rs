@@ -457,7 +457,7 @@ mod tests {
 		use sp_core::H256;
 		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
-			StorageProof::empty(),
+			StorageProof::empty(None),
 		);
 		assert!(result.is_err());
 	}
@@ -487,23 +487,16 @@ mod tests {
 	fn proof_recorded_and_checked_inner(flagged: bool) {
 		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
-		let contents = value_range
+
+		let contents = vec![(None, value_range
 			.clone()
 			.map(|i| (vec![i], Some(vec![i; size_content])))
-			.collect::<Vec<_>>();
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		if flagged {
-			in_memory = in_memory.update(vec![(
-				None,
-				vec![(
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					Some(sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					)),
-				)],
-			)]);
-		}
-		let mut in_memory = in_memory.update(vec![(None, contents)]);
+			.collect::<Vec<_>>())];
+		let mut in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
+			(contents, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))).into()
+		} else {
+			(contents, None).into()
+		};
 		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
 		value_range.clone().for_each(|i| {
 			assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content])
@@ -541,19 +534,11 @@ mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		if flagged {
-			in_memory = in_memory.update(vec![(
-				None,
-				vec![(
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					Some(sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					)),
-				)],
-			)]);
-		}
-		in_memory = in_memory.update(contents);
+		let mut in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
+			(contents, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))).into()
+		} else {
+			(contents, None).into()
+		};
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
 			.full_storage_root(

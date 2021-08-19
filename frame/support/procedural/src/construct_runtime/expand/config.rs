@@ -78,10 +78,11 @@ pub fn expand_outer_config(
 			fn assimilate_storage(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,
+				alt_hashing: Option<Option<u32>>,
 			) -> std::result::Result<(), String> {
 				#build_storage_calls
 
-				#scrate::BasicExternalities::execute_with_storage(storage, || {
+				#scrate::BasicExternalities::execute_with_storage(storage, alt_hashing, || {
 					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
 				});
 
@@ -130,6 +131,6 @@ fn expand_config_build_storage_call(
 
 	quote! {
 		#scrate::sp_runtime::BuildModuleGenesisStorage::
-			<#runtime, #instance>::build_module_genesis_storage(&self.#field_name, storage)?;
+			<#runtime, #instance>::build_module_genesis_storage(&self.#field_name, storage, alt_hashing)?;
 	}
 }

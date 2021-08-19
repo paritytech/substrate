@@ -263,15 +263,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		unimplemented!()
 	}
 
-	/// Read current trie hashing threshold.
-	/// Please do not change default implementation when implementing this trait.
-	fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
-		self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG)
-			.ok()
-			.flatten()
-			.and_then(|encoded| sp_core::storage::trie_threshold_decode(&mut encoded.as_slice()))
-	}
-
 	/// Extend storage info for benchmarking db
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()

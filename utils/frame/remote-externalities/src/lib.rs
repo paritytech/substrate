@@ -485,7 +485,7 @@ impl<B: BlockT> Builder<B> {
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		let kv = self.pre_build().await?;
-		let mut ext = TestExternalities::new_empty();
+		let mut ext = TestExternalities::new_empty(None);
 
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {

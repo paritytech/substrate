@@ -154,19 +154,20 @@ impl EnvBuilder {
 	}
 
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let state_version = None;
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
-			.assimilate_storage(&mut t)
+			.assimilate_storage(&mut t, state_version.clone())
 			.unwrap();
 		pallet_society::GenesisConfig::<Test> {
 			members: self.members,
 			pot: self.pot,
 			max_members: self.max_members,
 		}
-		.assimilate_storage(&mut t)
+		.assimilate_storage(&mut t, state_version.clone())
 		.unwrap();
-		let mut ext: sp_io::TestExternalities = t.into();
+		let mut ext: sp_io::TestExternalities = (t, state_version).into();
 		ext.execute_with(f)
 	}
 	#[allow(dead_code)]

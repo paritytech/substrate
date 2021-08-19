@@ -50,9 +50,14 @@ pub fn default_config(
 	let base_path = base_path();
 	let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
 
+	let state_version = chain_spec.state_versions()
+		.get(0)
+		.and_then(|(n, s)| (n == &0).then(|| s.clone()))
+		.unwrap_or(None);
+
 	let storage = chain_spec
 		.as_storage_builder()
-		.build_storage()
+		.build_storage(state_version)
 		.expect("could not build storage");
 
 	chain_spec.set_storage(storage);

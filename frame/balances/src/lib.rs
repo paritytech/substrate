@@ -586,15 +586,15 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T, I>>::build_storage(self)
+	pub fn build_storage(&self, alt_hashing: Option<Option<u32>>) -> Result<sp_runtime::Storage, String> {
+		<Self as GenesisBuild<T, I>>::build_storage(self, alt_hashing)
 	}
 
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-		<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
+	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage, alt_hashing: Option<Option<u32>>) -> Result<(), String> {
+		<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage, alt_hashing)
 	}
 }
 

@@ -350,7 +350,7 @@ pub mod pallet {
 			target += addition;
 
 			#[cfg(any(feature = "std", test))]
-			sp_io::TestExternalities::new_empty().execute_with(|| {
+			sp_io::TestExternalities::new_empty(None).execute_with(|| {
 				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(
@@ -858,8 +858,9 @@ mod tests {
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
 		pub fn build(self) -> sp_io::TestExternalities {
+			let state_version = None;
 			self.set_constants();
-			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version.clone()).unwrap();
 			pallet_balances::GenesisConfig::<Runtime> {
 				balances: if self.balance_factor > 0 {
 					vec![
@@ -874,9 +875,9 @@ mod tests {
 					vec![]
 				},
 			}
-			.assimilate_storage(&mut t)
+			.assimilate_storage(&mut t, state_version.clone())
 			.unwrap();
-			t.into()
+		(t, state_version).into()
 		}
 	}
 

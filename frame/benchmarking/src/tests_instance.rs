@@ -128,7 +128,9 @@ impl pallet_test::OtherConfig for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	let state_version = None;
+	let storage = GenesisConfig::default().build_storage(state_version.clone()).unwrap();
+	(storage, state_version).into()
 }
 
 mod benchmarks {

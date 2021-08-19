@@ -37,6 +37,7 @@ pub struct GenesisConfig {
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: Storage,
+	state_version: Option<Option<u32>>,
 }
 
 impl GenesisConfig {
@@ -47,6 +48,7 @@ impl GenesisConfig {
 		balance: u64,
 		heap_pages_override: Option<u64>,
 		extra_storage: Storage,
+		state_version: Option<Option<u32>>,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config,
@@ -54,6 +56,7 @@ impl GenesisConfig {
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
+			state_version,
 		}
 	}
 
@@ -90,7 +93,7 @@ impl GenesisConfig {
 		let mut config = system::GenesisConfig::default();
 		config.authorities = self.authorities.clone();
 		config
-			.assimilate_storage(&mut storage)
+			.assimilate_storage(&mut storage, self.state_version.clone())
 			.expect("Adding `system::GensisConfig` to the genesis");
 
 		storage

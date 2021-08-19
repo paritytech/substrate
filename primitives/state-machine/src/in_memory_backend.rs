@@ -189,7 +189,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = new_in_mem::<BlakeTwo256>();
+		let storage = new_in_mem::<BlakeTwo256>(None);
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let mut storage = storage
@@ -202,7 +202,7 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let mut storage = new_in_mem::<BlakeTwo256>();
+		let mut storage = new_in_mem::<BlakeTwo256>(None);
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage

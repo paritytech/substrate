@@ -135,7 +135,8 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
 			(5, 500_000),
@@ -147,16 +148,16 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(99, 1),
 		],
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut t, state_version.clone())
 	.unwrap();
 	pallet_scored_pool::GenesisConfig::<Test> {
 		pool: vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
 		member_count: 2,
 		..Default::default()
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut t, state_version.clone())
 	.unwrap();
-	t.into()
+	(t, state_version).into()
 }
 
 /// Fetch an entity from the pool, if existent.

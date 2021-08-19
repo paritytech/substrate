@@ -380,12 +380,13 @@ pub fn new_test_ext_with_pairs(
 }
 
 pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 
 	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 
 	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
+		.assimilate_storage(&mut t, state_version.clone())
 		.unwrap();
 
 	// stashes are the index.
@@ -400,7 +401,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 	// NOTE: this will initialize the babe authorities
 	// through OneSessionHandler::on_genesis_session
 	pallet_session::GenesisConfig::<Test> { keys: session_keys }
-		.assimilate_storage(&mut t)
+		.assimilate_storage(&mut t, state_version.clone())
 		.unwrap();
 
 	// controllers are the index + 1000
@@ -419,9 +420,9 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		..Default::default()
 	};
 
-	staking_config.assimilate_storage(&mut t).unwrap();
+	staking_config.assimilate_storage(&mut t, state_version.clone()).unwrap();
 
-	t.into()
+	(t, state_version).into()
 }
 
 /// Creates an equivocation at the current block, by generating two headers.

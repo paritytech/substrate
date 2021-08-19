@@ -33,7 +33,6 @@ use sp_trie::{empty_child_trie_root, Layout, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
-	iter::FromIterator,
 	ops::Bound,
 };
 
@@ -42,19 +41,18 @@ use std::{
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	alt_hashing: Option<u32>, // TODO same alt hashing type as all
+	alt_hashing: Option<Option<u32>>, // TODO same alt hashing type as all
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
-	pub fn new(inner: Storage) -> Self {
-		let alt_hashing = inner.get_trie_alt_hashing_threshold();
+	pub fn new(inner: Storage, alt_hashing: Option<Option<u32>>) -> Self {
 		BasicExternalities { inner, extensions: Default::default(), alt_hashing }
 	}
 
 	/// New basic externalities with empty storage.
-	pub fn new_empty() -> Self {
-		Self::new(Storage::default())
+	pub fn new_empty(alt_hashing: Option<Option<u32>>) -> Self {
+		Self::new(Storage::default(), alt_hashing)
 	}
 
 	/// Insert key/value
@@ -72,9 +70,9 @@ impl BasicExternalities {
 	/// Returns the result of the closure and updates `storage` with all changes.
 	pub fn execute_with_storage<R>(
 		storage: &mut sp_core::storage::Storage,
+		alt_hashing: Option<Option<u32>>,
 		f: impl FnOnce() -> R,
 	) -> R {
-		let alt_hashing = storage.get_trie_alt_hashing_threshold();
 		let mut ext = Self {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
@@ -116,6 +114,7 @@ impl PartialEq for BasicExternalities {
 	}
 }
 
+/*
 impl FromIterator<(StorageKey, StorageValue)> for BasicExternalities {
 	fn from_iter<I: IntoIterator<Item = (StorageKey, StorageValue)>>(iter: I) -> Self {
 		let mut t = Self::default();
@@ -123,16 +122,16 @@ impl FromIterator<(StorageKey, StorageValue)> for BasicExternalities {
 		t
 	}
 }
+*/
 
-impl Default for BasicExternalities {
-	fn default() -> Self {
-		Self::new(Default::default())
+impl From<Option<Option<u32>>> for BasicExternalities {
+	fn from(alt_hashing: Option<Option<u32>>) -> Self {
+		Self::new(Default::default(), alt_hashing)
 	}
 }
 
-impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
-	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
-		let alt_hashing = sp_core::storage::alt_hashing::get_trie_alt_hashing_threshold(&hashmap);
+impl From<(BTreeMap<StorageKey, StorageValue>, Option<Option<u32>>)> for BasicExternalities {
+	fn from((hashmap, alt_hashing): (BTreeMap<StorageKey, StorageValue>, Option<Option<u32>>)) -> Self {
 		BasicExternalities {
 			inner: Storage { top: hashmap, children_default: Default::default() },
 			extensions: Default::default(),
@@ -300,7 +299,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if let Some(threshold) = self.alt_hashing.as_ref() {
+		let layout = if let Some(Some(threshold)) = self.alt_hashing.as_ref() {
 			Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
 		} else {
 			Layout::<Blake2Hasher>::default()
@@ -311,7 +310,7 @@ impl Externalities for BasicExternalities {
 	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(Some(self.alt_hashing.clone()));
+			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(self.alt_hashing.clone());
 			in_mem.child_storage_root(&child.child_info, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
@@ -396,7 +395,7 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: BasicExternalities = None.into();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -408,7 +407,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: BasicExternalities = None.into();
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
@@ -428,7 +427,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		});
+		}, None);
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
 
@@ -458,7 +457,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		});
+		}, None);
 
 		let res = ext.kill_child_storage(child_info, None);
 		assert_eq!(res, (true, 3));
@@ -467,7 +466,7 @@ mod tests {
 	#[test]
 	fn basic_externalities_is_empty() {
 		// Make sure no values are set by default in `BasicExternalities`.
-		let storage = BasicExternalities::new_empty().into_storages();
+		let storage = BasicExternalities::new_empty(None).into_storages();
 		assert!(storage.top.is_empty());
 		assert!(storage.children_default.is_empty());
 	}

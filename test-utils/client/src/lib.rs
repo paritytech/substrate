@@ -85,7 +85,7 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
-	state_hashed_value: bool,
+	state_hashed_value: bool, // TODO useless ?
 	no_genesis: bool,
 }
 
@@ -230,12 +230,6 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
-			if self.state_hashed_value {
-				storage.modify_trie_alt_hashing_threshold(Some(
-					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-				));
-			}
-
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(

@@ -733,8 +733,8 @@ impl GenesisConfig {
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T>>::build_storage(self)
+	pub fn build_storage<T: Config>(&self, alt_hashing: Option<Option<u32>>) -> Result<sp_runtime::Storage, String> {
+		<Self as GenesisBuild<T>>::build_storage(self, alt_hashing)
 	}
 
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
@@ -743,8 +743,9 @@ impl GenesisConfig {
 	pub fn assimilate_storage<T: Config>(
 		&self,
 		storage: &mut sp_runtime::Storage,
+		alt_hashing: Option<Option<u32>>,
 	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
+		<Self as GenesisBuild<T>>::assimilate_storage(self, storage, alt_hashing)
 	}
 }
 
@@ -1438,7 +1439,7 @@ impl<T: Config> Pallet<T> {
 	/// Get the basic externalities for this pallet, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
-		let mut storage = sp_core::storage::Storage {
+		let storage = sp_core::storage::Storage {
 			top: map![
 				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
@@ -1446,10 +1447,7 @@ impl<T: Config> Pallet<T> {
 			],
 			children_default: map![],
 		};
-		storage.modify_trie_alt_hashing_threshold(Some(
-			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-		));
-		TestExternalities::new(storage)
+		TestExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to

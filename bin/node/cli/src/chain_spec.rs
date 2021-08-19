@@ -489,16 +489,23 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_create_development_chain_spec() {
-		development_config().build_storage().unwrap();
+		let spec = development_config();
+		let state_version = spec.genesis_state_version();
+		spec.build_storage(state_version).unwrap();
+	
 	}
 
 	#[test]
 	fn test_create_local_testnet_chain_spec() {
-		local_testnet_config().build_storage().unwrap();
+		let spec = local_testnet_config();
+		let state_version = spec.genesis_state_version();
+		spec.build_storage(state_version).unwrap();
 	}
 
 	#[test]
 	fn test_staging_test_net_chain_spec() {
-		staging_testnet_config().build_storage().unwrap();
+		let spec = staging_testnet_config();
+		let state_version = spec.genesis_state_version();
+		spec.build_storage(state_version).unwrap();
 	}
 }

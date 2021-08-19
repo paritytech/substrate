@@ -477,7 +477,7 @@ pub trait Misc {
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
 		use sp_core::traits::ReadRuntimeVersionExt;
 
-		let mut ext = sp_state_machine::BasicExternalities::default();
+		let mut ext: sp_state_machine::BasicExternalities = None.into();
 
 		match self
 			.extension::<ReadRuntimeVersionExt>()
@@ -1475,7 +1475,7 @@ mod tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = BasicExternalities::default();
+		let mut t: BasicExternalities = None.into();
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			storage::set(b"hello", b"world");
@@ -1487,7 +1487,7 @@ mod tests {
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
 			children_default: map![],
-		});
+		}, None);
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
@@ -1495,12 +1495,9 @@ mod tests {
 		});
 
 		let value = vec![7u8; 35];
-		let mut storage =
+		let storage =
 			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
-		storage.modify_trie_alt_hashing_threshold(Some(
-			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-		));
-		t = BasicExternalities::new(storage);
+		t = BasicExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)));
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
@@ -1514,7 +1511,7 @@ mod tests {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
-		});
+		}, None);
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
@@ -1536,7 +1533,7 @@ mod tests {
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
 			children_default: map![],
-		});
+		}, None);
 
 		t.execute_with(|| {
 			assert!(matches!(
@@ -1553,7 +1550,7 @@ mod tests {
 
 	#[test]
 	fn batch_verify_start_finish_works() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: sp_state_machine::BasicExternalities = None.into();
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 
 		ext.execute_with(|| {
@@ -1571,7 +1568,7 @@ mod tests {
 
 	#[test]
 	fn long_sr25519_batching() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: sp_state_machine::BasicExternalities = None.into();
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
@@ -1598,7 +1595,7 @@ mod tests {
 
 	#[test]
 	fn batching_works() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: sp_state_machine::BasicExternalities = None.into();
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			// invalid ed25519 signature

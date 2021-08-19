@@ -463,7 +463,14 @@ impl CliConfiguration for TryRuntimeCmd {
 /// Extract `:code` from the given chain spec and return as `StorageData` along with the
 /// corresponding `StorageKey`.
 fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
-	let genesis_storage = spec.build_storage()?;
+	let mut state_version = None;
+	if let Some((number, version)) = spec.state_versions().get(0) {
+		if number == &0 {
+			state_version = version.clone();
+		}
+	}
+
+	let genesis_storage = spec.build_storage(state_version)?;
 	let code = StorageData(
 		genesis_storage
 			.top

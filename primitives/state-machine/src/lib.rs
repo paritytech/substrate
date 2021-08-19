@@ -1222,7 +1222,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let mut state = InMemoryBackend::<BlakeTwo256>::from((initial, None));
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1303,7 +1303,7 @@ mod tests {
 				b"d".to_vec() => b"3".to_vec()
 			],
 		];
-		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, None));
 
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(&child_info, b"1".to_vec(), Some(b"1312".to_vec()));
@@ -1351,7 +1351,7 @@ mod tests {
 				b"d".to_vec() => b"3".to_vec()
 			],
 		];
-		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, None));
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
@@ -1375,7 +1375,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let mut state = new_in_mem::<BlakeTwo256>(None);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1397,7 +1397,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let mut state = new_in_mem::<BlakeTwo256>(None);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1452,7 +1452,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let mut state = new_in_mem::<BlakeTwo256>(None);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1641,6 +1641,7 @@ mod tests {
 		assert_eq!(completed, true);
 	}
 
+	// TODO test does not make lot of sense with migration.
 	#[test]
 	fn inner_state_hashing_switch_proofs() {
 		let mut layout = Layout::default();
@@ -1656,8 +1657,8 @@ mod tests {
 				.expect("insert failed");
 		}
 
-		let check_proof = |mdb, root| -> StorageProof {
-			let remote_backend = TrieBackend::new(mdb, root);
+		let check_proof = |mdb, root, state_version| -> StorageProof {
+			let remote_backend = TrieBackend::new(mdb, root, state_version);
 			let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
@@ -1672,7 +1673,7 @@ mod tests {
 			remote_proof
 		};
 
-		let remote_proof = check_proof(mdb.clone(), root.clone());
+		let remote_proof = check_proof(mdb.clone(), root.clone(), None);
 		// check full values in proof
 		assert!(remote_proof.encode().len() > 1_100);
 		assert!(remote_proof.encoded_size() > 1_100);
@@ -1703,7 +1704,7 @@ mod tests {
 		}
 		let root3 = root.clone();
 		assert!(root1 != root3);
-		let remote_proof = check_proof(mdb.clone(), root.clone());
+		let remote_proof = check_proof(mdb.clone(), root.clone(), Some(Some(TRESHOLD)));
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
 		assert!(remote_proof.encoded_size() < 1000);
@@ -1811,7 +1812,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let mut state = InMemoryBackend::<BlakeTwo256>::from((initial, None));
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();

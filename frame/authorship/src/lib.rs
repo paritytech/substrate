@@ -533,8 +533,9 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		t.into()
+		let state_version = None;
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		(t, state_version).into()
 	}
 
 	#[test]

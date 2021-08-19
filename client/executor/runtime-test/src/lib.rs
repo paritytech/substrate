@@ -54,19 +54,9 @@ static mut MUTABLE_STATIC: u64 = 32;
 static mut MUTABLE_STATIC_BSS: u64 = 0;
 
 sp_core::wasm_export_functions! {
-	fn test_switch_state() {
-		print("switch_state");
-		storage::set(
-			sp_storage::well_known_keys::TRIE_HASHING_CONFIG,
-			sp_storage::trie_threshold_encode(sp_storage::TEST_DEFAULT_ALT_HASH_THRESHOLD).as_slice(),
-		);
-		print("switched!");
-	}
-
    fn test_calling_missing_external() {
 	   unsafe { missing_external() }
    }
-
 
    fn test_calling_yet_another_missing_external() {
 	   unsafe { yet_another_missing_external() }

@@ -86,27 +86,17 @@ where
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: Storage) -> Self {
-		Self::new_with_code(&[], storage)
-	}
-
-	/// Create a new instance of `TestExternalities` with storage
-	/// on a backend containing defined default alt hashing threshold.
-	pub fn new_with_alt_hashing(storage: Storage) -> Self {
-		Self::new_with_code_inner(&[], storage, true)
+	pub fn new(storage: Storage, alt_hashing: Option<Option<u32>>) -> Self {
+		Self::new_with_code(&[], storage, alt_hashing)
 	}
 
 	/// New empty test externalities.
-	pub fn new_empty() -> Self {
-		Self::new_with_code(&[], Storage::default())
+	pub fn new_empty(alt_hashing: Option<Option<u32>>) -> Self {
+		Self::new_with_code(&[], Storage::default(), alt_hashing)
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
-		Self::new_with_code_inner(code, storage, false)
-	}
-
-	fn new_with_code_inner(code: &[u8], mut storage: Storage, force_alt_hashing: bool) -> Self {
+	pub fn new_with_code(code: &[u8], mut storage: Storage, alt_hashing: Option<Option<u32>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage
 			.top
@@ -124,11 +114,7 @@ where
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
-		let backend = if force_alt_hashing {
-			(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))).into()
-		} else {
-			(storage, None).into()
-		};
+		let backend = (storage, alt_hashing).into();
 
 		TestExternalities {
 			overlay,
@@ -257,21 +243,17 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	fn default() -> Self {
-		// default to inner hashed.
-		let mut storage = Storage::default();
-		storage.modify_trie_alt_hashing_threshold(Some(
-			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-		));
-		Self::new(storage)
+		// default to default version.
+		Self::new(Storage::default(), Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<(Storage, Option<Option<u32>>)> for TestExternalities<H, N>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
-	fn from(storage: Storage) -> Self {
-		Self::new(storage)
+	fn from((storage, alt_hashing): (Storage, Option<Option<u32>>)) -> Self {
+		Self::new(storage, alt_hashing)
 	}
 }
 
@@ -334,7 +316,7 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let storage = Storage::default(); // avoid adding the trie threshold.
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::from(storage);
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::from((storage, None));
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());

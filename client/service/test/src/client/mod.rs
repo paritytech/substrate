@@ -243,6 +243,7 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 
 #[test]
 fn construct_genesis_should_work_with_native() {
+	let state_version = None;
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -250,11 +251,12 @@ fn construct_genesis_should_work_with_native() {
 		1000,
 		None,
 		Default::default(),
+		state_version.clone(),
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, state_version));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -278,6 +280,7 @@ fn construct_genesis_should_work_with_native() {
 
 #[test]
 fn construct_genesis_should_work_with_wasm() {
+	let state_version = None;
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -285,11 +288,12 @@ fn construct_genesis_should_work_with_wasm() {
 		1000,
 		None,
 		Default::default(),
+		state_version,
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, state_version));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -313,6 +317,7 @@ fn construct_genesis_should_work_with_wasm() {
 
 #[test]
 fn construct_genesis_with_bad_transaction_should_panic() {
+	let state_version = None;
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -320,11 +325,12 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		68,
 		None,
 		Default::default(),
+		state_version.clone(),
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, state_version));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -1445,6 +1451,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
+			vec![],
 		)
 		.unwrap(),
 	);
@@ -1660,6 +1667,7 @@ fn returns_status_for_pruned_blocks() {
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
+			vec![],
 		)
 		.unwrap(),
 	);
@@ -2057,16 +2065,6 @@ fn storage_keys_iter_works_inner(hashed_value: bool) {
 		.take(3)
 		.map(|x| x.0)
 		.collect();
-	if hashed_value {
-		assert_eq!(
-			res,
-			[
-				hex!("3a686561707061676573").to_vec(),
-				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-				hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-			]
-		);
-	} else {
 		assert_eq!(
 			res,
 			[
@@ -2075,7 +2073,6 @@ fn storage_keys_iter_works_inner(hashed_value: bool) {
 				hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
 			]
 		);
-	}
 
 	let res: Vec<_> = client
 		.storage_keys_iter(

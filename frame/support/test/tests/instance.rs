@@ -318,7 +318,9 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig {
+	let state_version = None;
+
+	(GenesisConfig {
 		module_1_1: module1::GenesisConfig { value: 3, test: 2 },
 		module_1_2: module1::GenesisConfig { value: 4, test: 5 },
 		module_2: module2::GenesisConfig {
@@ -334,20 +336,18 @@ fn new_test_ext() -> sp_io::TestExternalities {
 		module_2_2: Default::default(),
 		module_2_3: Default::default(),
 	}
-	.build_storage()
-	.unwrap()
-	.into()
+	.build_storage(state_version.clone())
+	.unwrap(), state_version).into()
 }
 
 #[test]
 fn storage_instance_independence() {
+	let state_version = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
 	let mut storage = sp_core::storage::Storage {
 		top: std::collections::BTreeMap::new(),
 		children_default: std::collections::HashMap::new(),
 	};
-	storage
-		.modify_trie_alt_hashing_threshold(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
-	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
+	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, state_version, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
 		module2::Value::<Runtime, module2::Instance2>::put(0);

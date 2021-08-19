@@ -117,13 +117,14 @@ impl Config for Test {
 use pallet_balances::{Call as BalancesCall, Error as BalancesError};
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let state_version = None;
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut t, state_version.clone())
 	.unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
+	let mut ext = sp_io::TestExternalities::new(t, state_version);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

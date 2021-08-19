@@ -382,7 +382,7 @@ mod test {
 	) {
 		let child_info_1 = ChildInfo::new_default(b"storage_key1");
 		let child_info_2 = ChildInfo::new_default(b"storage_key2");
-		let backend: InMemoryBackend<_> = vec![
+		let backend: InMemoryBackend<_> = (vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
 			(vec![102], vec![255]),
@@ -391,7 +391,7 @@ mod test {
 			(vec![105], vec![255]),
 		]
 		.into_iter()
-		.collect::<std::collections::BTreeMap<_, _>>()
+		.collect::<std::collections::BTreeMap<_, _>>(), None)
 		.into();
 		let prefixed_child_trie_key1 = child_info_1.prefixed_storage_key();
 		let storage = InMemoryStorage::with_inputs(

@@ -283,7 +283,7 @@ pub fn take_storage_item<K: Encode + Sized, T: Decode + Sized, H: StorageHasher>
 /// "my_new_example_name", a migration can be:
 /// ```
 /// # use frame_support::storage::migration::move_storage_from_pallet;
-/// # sp_io::TestExternalities::new_empty().execute_with(|| {
+/// # sp_io::TestExternalities::new_empty(None).execute_with(|| {
 /// move_storage_from_pallet(b"Foo", b"my_example", b"my_new_example_name");
 /// move_storage_from_pallet(b"Bar", b"my_example", b"my_new_example_name");
 /// # })
@@ -325,7 +325,7 @@ pub fn move_storage_from_pallet(
 /// "my_new_example_name", a migration can be:
 /// ```
 /// # use frame_support::storage::migration::move_pallet;
-/// # sp_io::TestExternalities::new_empty().execute_with(|| {
+/// # sp_io::TestExternalities::new_empty(None).execute_with(|| {
 /// move_pallet(b"my_example", b"my_new_example_name");
 /// # })
 /// ```
@@ -406,7 +406,7 @@ mod tests {
 
 	#[test]
 	fn test_move_prefix() {
-		TestExternalities::new_empty().execute_with(|| {
+		TestExternalities::new_empty(None).execute_with(|| {
 			OldStorageValue::put(3);
 			OldStorageMap::insert(1, 2);
 			OldStorageMap::insert(3, 4);
@@ -422,7 +422,7 @@ mod tests {
 
 	#[test]
 	fn test_move_storage() {
-		TestExternalities::new_empty().execute_with(|| {
+		TestExternalities::new_empty(None).execute_with(|| {
 			OldStorageValue::put(3);
 			OldStorageMap::insert(1, 2);
 			OldStorageMap::insert(3, 4);
@@ -445,7 +445,7 @@ mod tests {
 
 	#[test]
 	fn test_move_pallet() {
-		TestExternalities::new_empty().execute_with(|| {
+		TestExternalities::new_empty(None).execute_with(|| {
 			OldStorageValue::put(3);
 			OldStorageMap::insert(1, 2);
 			OldStorageMap::insert(3, 4);
@@ -461,7 +461,7 @@ mod tests {
 
 	#[test]
 	fn test_storage_iter() {
-		TestExternalities::new_empty().execute_with(|| {
+		TestExternalities::new_empty(None).execute_with(|| {
 			OldStorageValue::put(3);
 			OldStorageMap::insert(1, 2);
 			OldStorageMap::insert(3, 4);

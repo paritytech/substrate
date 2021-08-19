@@ -99,9 +99,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
-	fn build_storage(&self) -> Result<Storage, String> {
+	fn build_storage(&self, alt_hashing: Option<Option<u32>>) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
-			Genesis::Runtime(gc) => gc.build_storage(),
+			Genesis::Runtime(gc) => gc.build_storage(alt_hashing),
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children_default: children_map
@@ -121,7 +121,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 		}
 	}
 
-	fn assimilate_storage(&self, _: &mut Storage) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut Storage, _: Option<Option<u32>>) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -279,6 +279,13 @@ impl<G, E> ChainSpec<G, E> {
 	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)> {
 		self.client_spec.state_versions.clone()
 	}
+
+	/// Defined state version for the chain.
+	pub fn genesis_state_version(&self) -> Option<Option<u32>> {
+		self.client_spec.state_versions.get(0)
+			.and_then(|(n, s)| (n == &0).then(|| s.clone()))
+			.unwrap_or(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+	}
 }
 
 impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
@@ -310,7 +317,10 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<JsonContainer<G, E>, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?;
+				let state_version = self.state_versions().get(0)
+					.and_then(|(n, s)| (n == &0).then(|| s.clone()))
+					.unwrap_or(None);
+				let storage = g.build_storage(state_version)?;
 				let top =
 					storage.top.into_iter().map(|(k, v)| (StorageKey(k), StorageData(v))).collect();
 				let children_default = storage
@@ -424,7 +434,7 @@ mod tests {
 	struct Genesis(HashMap<String, String>);
 
 	impl BuildStorage for Genesis {
-		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
+		fn assimilate_storage(&self, storage: &mut Storage, _alt_hashing: Option<Option<u32>>) -> Result<(), String> {
 			storage.top.extend(
 				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
 			);

@@ -1303,7 +1303,8 @@ mod tests {
 				*m.borrow_mut() =
 					self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>()
 			});
-			let mut ext: sp_io::TestExternalities = GenesisConfig {
+			let state_version = None;
+			let mut ext: sp_io::TestExternalities = (GenesisConfig {
 				balances: pallet_balances::GenesisConfig::<Test> {
 					balances: vec![
 						(1, 10 * self.balance_factor),
@@ -1318,8 +1319,8 @@ mod tests {
 					members: self.genesis_members,
 				},
 			}
-			.build_storage()
-			.unwrap()
+			.build_storage(state_version)
+			.unwrap(), state_version)
 			.into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);

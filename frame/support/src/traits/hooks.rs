@@ -307,15 +307,15 @@ pub trait GenesisBuild<T, I = ()>: Default + MaybeSerializeDeserialize {
 	fn build(&self);
 
 	/// Build the storage using `build` inside default storage.
-	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
+	fn build_storage(&self, alt_hashing: Option<Option<u32>>) -> Result<sp_runtime::Storage, String> {
 		let mut storage = Default::default();
-		self.assimilate_storage(&mut storage)?;
+		self.assimilate_storage(&mut storage, alt_hashing)?;
 		Ok(storage)
 	}
 
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
+	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage, alt_hashing: Option<Option<u32>>) -> Result<(), String> {
+		sp_state_machine::BasicExternalities::execute_with_storage(storage, alt_hashing, || {
 			self.build();
 			Ok(())
 		})

@@ -162,22 +162,23 @@ mod tests {
 	type Historical = Module<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
+		let state_version = None;
 		let mut t = frame_system::GenesisConfig::default()
-			.build_storage::<Test>()
+			.build_storage::<Test>(state_version.clone())
 			.expect("Failed to create test externalities.");
 
 		let keys: Vec<_> = NEXT_VALIDATORS.with(|l| {
 			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
 		});
-		BasicExternalities::execute_with_storage(&mut t, || {
+		BasicExternalities::execute_with_storage(&mut t, state_version.clone(), || {
 			for (ref k, ..) in &keys {
 				frame_system::Pallet::<Test>::inc_providers(k);
 			}
 		});
 
-		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
+		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t, state_version.clone()).unwrap();
 
-		let mut ext = sp_io::TestExternalities::new(t);
+		let mut ext = sp_io::TestExternalities::new(t, state_version);
 
 		let (offchain, offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
 

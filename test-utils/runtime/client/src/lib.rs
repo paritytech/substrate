@@ -116,6 +116,7 @@ impl GenesisParameters {
 			1000,
 			self.heap_pages_override,
 			self.extra_storage.clone(),
+			Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)),
 		)
 	}
 

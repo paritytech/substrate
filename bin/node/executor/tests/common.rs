@@ -125,11 +125,13 @@ pub fn executor_call<
 }
 
 pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<BlakeTwo256> {
+	let state_version = None;
 	let mut ext = TestExternalities::new_with_code(
 		code,
 		node_testing::genesis::config(support_changes_trie, Some(code))
-			.build_storage()
+			.build_storage(state_version.clone())
 			.unwrap(),
+		state_version
 	);
 	ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 	ext
