@@ -32,7 +32,7 @@ sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = true }
 parking_lot = "0.11.1"
 log = "0.4.8"
-libsecp256k1 = "0.3.4"
+libsecp256k1 = "0.6"
 
 [dev-dependencies]
 wat = "1.0"
@@ -55,3 +55,4 @@ std = []
 wasm-extern-trace = []
 wasmtime = ["sc-executor-wasmtime"]
 wasmi-errno = ["wasmi/errno"]
+wasmer-sandbox = ["sc-executor-common/wasmer-sandbox"]

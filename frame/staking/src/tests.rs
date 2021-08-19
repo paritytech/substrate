@@ -1903,7 +1903,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
+			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
 			assert_eq!(
 				supports,
 				vec![
@@ -1947,7 +1947,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21]));
 
 			// winners should be 21 and 11.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
+			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
 			assert_eq!(
 				supports,
 				vec![
@@ -3826,7 +3826,6 @@ mod election_data_provider {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
 				.unwrap()
-				.0
 				.into_iter()
 				.find(|(w, _, t)| { v == *w && t[0] == *w })
 				.is_some()))
@@ -3840,7 +3839,6 @@ mod election_data_provider {
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
 					.unwrap()
-					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -3856,7 +3854,6 @@ mod election_data_provider {
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
 					.unwrap()
-					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -3869,7 +3866,6 @@ mod election_data_provider {
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
 					.unwrap()
-					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
