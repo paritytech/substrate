@@ -356,7 +356,7 @@ pub mod pallet {
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
-			Self::deposit_log(generic::DigestItem::RuntimeUpdated);
+			Self::deposit_log(generic::DigestItem::RuntimeCodeOrHeapPagesUpdated);
 			Ok(().into())
 		}
 
@@ -1071,7 +1071,7 @@ impl<T: Config> Pallet<T> {
 
 	fn do_set_code(code: Vec<u8>) -> DispatchResult {
 		T::OnSetCode::set_code(code)?;
-		Self::deposit_log(generic::DigestItem::RuntimeUpdated);
+		Self::deposit_log(generic::DigestItem::RuntimeCodeOrHeapPagesUpdated);
 		Self::deposit_event(Event::CodeUpdated);
 		Ok(())
 	}

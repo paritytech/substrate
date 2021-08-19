@@ -125,7 +125,7 @@ pub enum DigestItem<Hash> {
 	/// Currently this is triggered when:
 	/// 1. Runtime code blob is changed or
 	/// 2. `heap_pages` value is changed.
-	RuntimeUpdated,
+	RuntimeCodeOrHeapPagesUpdated,
 }
 
 /// Available changes trie signals.
@@ -193,7 +193,7 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(&'a Vec<u8>),
 	/// Runtime code or heap pages updated.
-	RuntimeUpdated,
+	RuntimeCodeOrHeapPagesUpdated,
 }
 
 /// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
@@ -209,7 +209,7 @@ pub enum DigestItemType {
 	Seal = 5,
 	PreRuntime = 6,
 	ChangesTrieSignal = 7,
-	RuntimeUpdated = 8,
+	RuntimeCodeOrHeapPagesUpdated = 8,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -236,7 +236,7 @@ impl<Hash> DigestItem<Hash> {
 			Self::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
 			Self::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
 			Self::Other(ref v) => DigestItemRef::Other(v),
-			Self::RuntimeUpdated => DigestItemRef::RuntimeUpdated,
+			Self::RuntimeCodeOrHeapPagesUpdated => DigestItemRef::RuntimeCodeOrHeapPagesUpdated,
 		}
 	}
 
@@ -334,7 +334,8 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 			DigestItemType::ChangesTrieSignal =>
 				Ok(Self::ChangesTrieSignal(Decode::decode(input)?)),
 			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
-			DigestItemType::RuntimeUpdated => Ok(Self::RuntimeUpdated),
+			DigestItemType::RuntimeCodeOrHeapPagesUpdated =>
+				Ok(Self::RuntimeCodeOrHeapPagesUpdated),
 		}
 	}
 }
@@ -470,8 +471,8 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
 			},
-			Self::RuntimeUpdated => {
-				DigestItemType::RuntimeUpdated.encode_to(&mut v);
+			Self::RuntimeCodeOrHeapPagesUpdated => {
+				DigestItemType::RuntimeCodeOrHeapPagesUpdated.encode_to(&mut v);
 			},
 		}
 
