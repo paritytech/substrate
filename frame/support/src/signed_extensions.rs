@@ -39,11 +39,36 @@ use sp_std::{fmt::Debug, marker::PhantomData, vec::Vec};
 /// Each of them add to `priority`, but the weight is much less important
 /// than the fee payment, so we adjust the fee payment by given factor,
 /// by multiplying the priority returned by the second extension.
-#[derive(sp_runtime::RuntimeDebug, Default, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub struct AdjustPriority<S, V> {
 	ext: S,
 	adjuster: PhantomData<V>,
 }
+
+impl<S: Debug, V: Get<TransactionPriority>> Debug for AdjustPriority<S, V> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		write!(f, "{:?}::priority_adjustment({})", self.ext, V::get())
+	}
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
+impl<S: Clone, V> Clone for AdjustPriority<S, V> {
+	fn clone(&self) -> Self {
+		Self { ext: self.ext.clone(), adjuster: self.adjuster.clone() }
+	}
+}
+
+impl<S: PartialEq, V> PartialEq for AdjustPriority<S, V> {
+	fn eq(&self, other: &Self) -> bool {
+		self.ext == other.ext && self.adjuster == other.adjuster
+	}
+}
+
+impl<S: Eq, V> Eq for AdjustPriority<S, V> {}
 
 impl<S: Encode, V> Encode for AdjustPriority<S, V> {
 	fn encode(&self) -> Vec<u8> {
@@ -80,7 +105,7 @@ impl<S, V> SignedExtension for AdjustPriority<S, V>
 where
 	S: SignedExtension,
 	V: Get<TransactionPriority>,
-	V: Send + Sync + Debug + Clone + PartialEq + Eq,
+	V: Send + Sync,
 {
 	type AccountId = S::AccountId;
 	type AdditionalSigned = S::AdditionalSigned;
@@ -193,8 +218,9 @@ mod tests {
 		}
 	}
 
-	#[derive(Default, PartialEq, Eq, Clone, Debug)]
+	#[derive(Default)]
 	struct Adjustment;
+
 	impl Get<TransactionPriority> for Adjustment {
 		fn get() -> TransactionPriority {
 			10

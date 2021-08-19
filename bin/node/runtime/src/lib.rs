@@ -25,6 +25,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
+	signed_extensions::AdjustPriority,
 	traits::{
 		Currency, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier,
 		Nothing, OnUnbalanced, U128CurrencyToVote,
@@ -275,17 +276,18 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::NonTransfer => !matches!(
 				c,
-				Call::Balances(..) |
-					Call::Assets(..) | Call::Uniques(..) |
-					Call::Vesting(pallet_vesting::Call::vested_transfer(..)) |
-					Call::Indices(pallet_indices::Call::transfer(..))
+				Call::Balances(..)
+					| Call::Assets(..) | Call::Uniques(..)
+					| Call::Vesting(pallet_vesting::Call::vested_transfer(..))
+					| Call::Indices(pallet_indices::Call::transfer(..))
 			),
 			ProxyType::Governance => matches!(
 				c,
-				Call::Democracy(..) |
-					Call::Council(..) | Call::Society(..) |
-					Call::TechnicalCommittee(..) |
-					Call::Elections(..) | Call::Treasury(..)
+				Call::Democracy(..)
+					| Call::Council(..) | Call::Society(..)
+					| Call::TechnicalCommittee(..)
+					| Call::Elections(..)
+					| Call::Treasury(..)
 			),
 			ProxyType::Staking => matches!(c, Call::Staking(..)),
 		}
@@ -1248,7 +1250,10 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	AdjustPriority<
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+		PaymentPriorityAdjustment,
+	>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
@@ -1274,6 +1279,25 @@ mod mmr {
 	pub type Leaf = <<Runtime as pallet_mmr::Config>::LeafData as LeafDataProvider>::LeafData;
 	pub type Hash = <Runtime as pallet_mmr::Config>::Hash;
 	pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
+}
+
+parameter_types! {
+	/// There are two extnsions returning the priority:
+	/// 1. The `CheckWeight` extension.
+	/// 2. The `TransactionPayment` extension.
+	///
+	/// The first one gives a significant bump to `Operational` transactions, but for `Normal`
+	/// it's within `[0..MAXIMUM_BLOCK_WEIGHT]` range.
+	///
+	/// The second one roughly represents the amount of fees being paid (and the tip) with
+	/// size-adjustment coefficient. I.e. we are interested to maximize `fee/consumed_weight` or
+	/// `fee/size_limit`. The returned value is potentially unbounded though.
+	///
+	/// The idea for the adjustment is that the second priority is at least `1_000` hence to make
+	/// sure that the second priority is always dwarfing the first one (in case of `Normal`) we
+	/// multiply by `MAXIMUM_BLOCK_WEIGHT / 1_000`.
+	const PaymentPriorityAdjustment: u64 =
+		MAXIMUM_BLOCK_WEIGHT / 1_000;
 }
 
 impl_runtime_apis! {
