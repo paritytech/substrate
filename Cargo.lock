@@ -9408,6 +9408,7 @@ name = "sp-sandbox"
 version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
+ "log 0.4.14",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
@@ -11361,6 +11362,7 @@ dependencies = [
  "downcast-rs",
  "errno",
  "libc",
+ "libm",
  "memory_units",
  "num-rational 0.2.4",
  "num-traits",
