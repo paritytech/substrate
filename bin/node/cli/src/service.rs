@@ -815,7 +815,7 @@ mod tests {
 				let check_genesis = frame_system::CheckGenesis::new();
 				let check_era = frame_system::CheckEra::from(Era::Immortal);
 				let check_nonce = frame_system::CheckNonce::from(index);
-				let check_weight = frame_system::CheckWeight::new();
+				let check_weight = frame_system::CheckWeight::new().into();
 				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
 				let extra = (
 					check_spec_version,

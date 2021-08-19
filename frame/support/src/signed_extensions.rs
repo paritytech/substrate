@@ -45,6 +45,12 @@ pub struct AdjustPriority<S, M, V> {
 	adjuster: PhantomData<(M, V)>,
 }
 
+impl<S, M, V> From<S> for AdjustPriority<S, M, V> {
+	fn from(ext: S) -> Self {
+		Self { ext, adjuster: Default::default() }
+	}
+}
+
 impl<S: Debug, M, V: Get<TransactionPriority>> Debug for AdjustPriority<S, M, V> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {

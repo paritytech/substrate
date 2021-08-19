@@ -25,7 +25,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
-	signed_extensions::AdjustPriority,
+	signed_extensions::{AdjustPriority, Divide},
 	traits::{
 		Currency, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier,
 		Nothing, OnUnbalanced, U128CurrencyToVote,
@@ -276,17 +276,18 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::NonTransfer => !matches!(
 				c,
-				Call::Balances(..) |
-					Call::Assets(..) | Call::Uniques(..) |
-					Call::Vesting(pallet_vesting::Call::vested_transfer(..)) |
-					Call::Indices(pallet_indices::Call::transfer(..))
+				Call::Balances(..)
+					| Call::Assets(..) | Call::Uniques(..)
+					| Call::Vesting(pallet_vesting::Call::vested_transfer(..))
+					| Call::Indices(pallet_indices::Call::transfer(..))
 			),
 			ProxyType::Governance => matches!(
 				c,
-				Call::Democracy(..) |
-					Call::Council(..) | Call::Society(..) |
-					Call::TechnicalCommittee(..) |
-					Call::Elections(..) | Call::Treasury(..)
+				Call::Democracy(..)
+					| Call::Council(..) | Call::Society(..)
+					| Call::TechnicalCommittee(..)
+					| Call::Elections(..)
+					| Call::Treasury(..)
 			),
 			ProxyType::Staking => matches!(c, Call::Staking(..)),
 		}
@@ -912,7 +913,7 @@ where
 			frame_system::CheckGenesis::<Runtime>::new(),
 			frame_system::CheckEra::<Runtime>::from(era),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
-			frame_system::CheckWeight::<Runtime>::new(),
+			frame_system::CheckWeight::<Runtime>::new().into(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
 		let raw_payload = SignedPayload::new(call, extra)
@@ -1248,11 +1249,8 @@ pub type SignedExtra = (
 	frame_system::CheckGenesis<Runtime>,
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
-	frame_system::CheckWeight<Runtime>,
-	AdjustPriority<
-		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-		PaymentPriorityAdjustment,
-	>,
+	AdjustPriority<frame_system::CheckWeight<Runtime>, Divide, WeightPriorityAdjustment>,
+	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
@@ -1292,11 +1290,9 @@ parameter_types! {
 	/// size-adjustment coefficient. I.e. we are interested to maximize `fee/consumed_weight` or
 	/// `fee/size_limit`. The returned value is potentially unbounded though.
 	///
-	/// The idea for the adjustment is that the second priority is at least `1_000` hence to make
-	/// sure that the second priority is always dwarfing the first one (in case of `Normal`) we
-	/// multiply by `MAXIMUM_BLOCK_WEIGHT / 1_000`.
-	const PaymentPriorityAdjustment: u64 =
-		MAXIMUM_BLOCK_WEIGHT / 1_000;
+	/// The idea for the adjustment is to scale down the priority from the first extension to be
+	/// in `[0..10]` range.
+	pub const WeightPriorityAdjustment: u64 = MAXIMUM_BLOCK_WEIGHT / 10;
 }
 
 impl_runtime_apis! {
