@@ -19,7 +19,7 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{
 	Analysis, BenchmarkBatch, BenchmarkBatchSplitResults, BenchmarkList, BenchmarkParameter,
-	BenchmarkResults, BenchmarkSelector,
+	BenchmarkResult, BenchmarkSelector,
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
@@ -48,7 +48,7 @@ fn combine_batches(
 	}
 
 	let mut all_benchmarks =
-		LinkedHashMap::<_, (Vec<BenchmarkResults>, Vec<BenchmarkResults>)>::new();
+		LinkedHashMap::<_, (Vec<BenchmarkResult>, Vec<BenchmarkResult>)>::new();
 
 	db_batches
 		.into_iter()
