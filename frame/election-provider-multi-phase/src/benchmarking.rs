@@ -151,8 +151,6 @@ fn solution_with_size<T: Config>(
 }
 
 fn set_up_data_provider<T: Config>(v: u32, t: u32) {
-	// number of votes in snapshot.
-
 	T::DataProvider::clear();
 	log!(
 		info,
@@ -192,37 +190,22 @@ frame_benchmarking::benchmarks! {
 	}
 
 	on_initialize_open_signed {
-		// NOTE: this benchmark currently doesn't have any components because the length of a db
-		// read/write is not captured. Otherwise, it is quite influenced by how much data
-		// `T::ElectionDataProvider` is reading and passing on.
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
+		<MultiPhase<T>>::on_initialize_open_signed();
 	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
 	}
 
-	on_initialize_open_unsigned_with_snapshot {
+	on_initialize_open_unsigned {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into()).unwrap();
+		<MultiPhase<T>>::on_initialize_open_unsigned(true, 1u32.into())
 	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
-	}
-
-	on_initialize_open_unsigned_without_snapshot {
-		// need to assume signed phase was open before
-		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert!(<MultiPhase<T>>::current_phase().is_signed());
-	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
-	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
@@ -259,30 +242,51 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
+	create_snapshot_internal {
+		// number of votes in snapshot. Fixed to maximum.
+		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
+		// number of targets in snapshot. Fixed to maximum.
+		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+
+		// we don't directly need the data-provider to be populated, but it is just easy to use it.
+		set_up_data_provider::<T>(v, t);
+		let targets = T::DataProvider::targets(None)?;
+		let voters = T::DataProvider::voters(None)?;
+		let desired_targets = T::DataProvider::desired_targets()?;
+		assert!(<MultiPhase<T>>::snapshot().is_none());
+	}: {
+		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
+	} verify {
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.targets, t);
+	}
+
 	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.
 	elect_queued {
-		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
-		// number of targets in snapshot.
-		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
-		// a subset of `v` component.
+		// a subset of `v`.
 		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
-		// number of desired targets. Must be a subset of `t` component.
+		// number of desired targets. Must be a subset of `t`.
 		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+
+		// number of votes in snapshot. Not dominant.
+		let v  = T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot. Not dominant.
+		let t = T::BenchmarkingConfig::TARGETS[1];
 
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d)?;
 		let ready_solution =
-			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed).unwrap();
+			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed)?;
+		<CurrentPhase<T>>::put(Phase::Signed);
+		// assume a queued solution is stored, regardless of where it comes from.
+		<QueuedSolution<T>>::put(ready_solution);
 
 		// these are set by the `solution_with_size` function.
 		assert!(<DesiredTargets<T>>::get().is_some());
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
-		<CurrentPhase<T>>::put(Phase::Signed);
-		// assume a queued solution is stored, regardless of where it comes from.
-		<QueuedSolution<T>>::put(ready_solution);
 	}: {
 		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
 	} verify {
@@ -303,7 +307,8 @@ frame_benchmarking::benchmarks! {
 			..Default::default()
 		};
 
-		MultiPhase::<T>::on_initialize_open_signed().expect("should be ok to start signed phase");
+		<MultiPhase<T>>::create_snapshot()?;
+		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
@@ -346,7 +351,7 @@ frame_benchmarking::benchmarks! {
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("missing snapshot")?.encode();
 		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
 	}: {
 		assert_ok!(
@@ -357,8 +362,8 @@ frame_benchmarking::benchmarks! {
 			)
 		);
 		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.unwrap();
-		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
+			.expect("decoding should not fail; qed.");
+		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).expect("decoding should not fail; qed.");
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
@@ -382,10 +387,11 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot missing")?.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.expect("decoding should not fail; qed.");
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
@@ -405,9 +411,8 @@ frame_benchmarking::benchmarks! {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::MINER_MAXIMUM_VOTERS;
 		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		T::DataProvider::clear();
 		set_up_data_provider::<T>(v, t);
 		let now = frame_system::Pallet::<T>::block_number();
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
@@ -428,17 +433,16 @@ frame_benchmarking::benchmarks! {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
 		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		T::DataProvider::clear();
 		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<MultiPhase::<T>>::create_snapshot().unwrap()
+		<MultiPhase::<T>>::create_snapshot()?
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.targets, t);
 	}
 
 	#[extra]
@@ -462,10 +466,10 @@ frame_benchmarking::benchmarks! {
 		// assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let RawSolution { solution, .. } = solution_with_size::<T>(witness, a, d)?;
-		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
+		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().ok_or("snapshot missing")?;
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
-		let mut assignments = solution.into_assignment(voter_at, target_at).unwrap();
+		let mut assignments = solution.into_assignment(voter_at, target_at).expect("solution generated by `solution_with_size` must be valid.");
 
 		// make a voter cache and some helper functions for access
 		let cache = helpers::generate_voter_cache::<T>(&voters);

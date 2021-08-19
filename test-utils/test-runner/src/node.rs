@@ -29,6 +29,7 @@ use sc_client_api::{
 	backend::{self, Backend},
 	CallExecutor, ExecutorProvider,
 };
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{OverlayedChanges, StorageTransactionCache};
@@ -52,7 +53,7 @@ pub struct Node<T: ChainInfo> {
 	/// handle to the running node.
 	task_manager: Option<TaskManager>,
 	/// client instance
-	client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+	client: Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>>,
 	/// transaction pool
 	pool: Arc<
 		dyn TransactionPool<
@@ -89,7 +90,9 @@ where
 			MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware<sc_rpc::Metadata>>,
 		>,
 		task_manager: TaskManager,
-		client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+		client: Arc<
+			TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
+		>,
 		pool: Arc<
 			dyn TransactionPool<
 				Block = <T as ChainInfo>::Block,
@@ -129,7 +132,9 @@ where
 	}
 
 	/// Return a reference to the Client
-	pub fn client(&self) -> Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>> {
+	pub fn client(
+		&self,
+	) -> Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>> {
 		self.client.clone()
 	}
 
@@ -153,7 +158,7 @@ where
 	/// Executes closure in an externalities provided environment.
 	pub fn with_state<R>(&self, closure: impl FnOnce() -> R) -> R
 	where
-		<TFullCallExecutor<T::Block, T::Executor> as CallExecutor<T::Block>>::Error:
+		<TFullCallExecutor<T::Block, NativeElseWasmExecutor<T::ExecutorDispatch>> as CallExecutor<T::Block>>::Error:
 			std::fmt::Debug,
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
