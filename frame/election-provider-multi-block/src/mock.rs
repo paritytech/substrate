@@ -16,11 +16,10 @@
 // limitations under the License.
 
 use super::*;
-use crate::{self as multi_phase, unsigned::Assignment};
-use frame_election_provider_support::{data_provider, ElectionDataProvider};
+use crate::{self as multi_phase, unsigned as unsigned_pallet, verifier as verifier_pallet};
+use frame_election_provider_support::{data_provider, ElectionDataProvider, Support};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
-use multi_phase::unsigned::IndexAssignmentOf;
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -52,6 +51,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		VerifierPallet: verifier_pallet::{Pallet},
+		UnsignedPallet: unsigned_pallet::{Pallet, Call, ValidateUnsigned},
 		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
 );
@@ -94,62 +95,62 @@ pub fn roll_to_with_ocw(n: u64) {
 	}
 }
 
-pub struct TrimHelpers {
-	pub voters: Vec<Voter<Runtime>>,
-	pub assignments: Vec<IndexAssignmentOf<Runtime>>,
-	pub encoded_size_of:
-		Box<dyn Fn(&[IndexAssignmentOf<Runtime>]) -> Result<usize, sp_npos_elections::Error>>,
-	pub voter_index: Box<
-		dyn Fn(
-			&<Runtime as frame_system::Config>::AccountId,
-		) -> Option<SolutionVoterIndexOf<Runtime>>,
-	>,
-}
+// pub struct TrimHelpers {
+// 	pub voters: Vec<Voter<Runtime>>,
+// 	pub assignments: Vec<IndexAssignmentOf<Runtime>>,
+// 	pub encoded_size_of:
+// 		Box<dyn Fn(&[IndexAssignmentOf<Runtime>]) -> Result<usize, sp_npos_elections::Error>>,
+// 	pub voter_index: Box<
+// 		dyn Fn(
+// 			&<Runtime as frame_system::Config>::AccountId,
+// 		) -> Option<SolutionVoterIndexOf<Runtime>>,
+// 	>,
+// }
 
 /// Helpers for setting up trimming tests.
 ///
 /// Assignments are pre-sorted in reverse order of stake.
-pub fn trim_helpers() -> TrimHelpers {
-	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
-	let stakes: std::collections::HashMap<_, _> =
-		voters.iter().map(|(id, stake, _)| (*id, *stake)).collect();
+// pub fn trim_helpers() -> TrimHelpers {
+// 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
+// 	let stakes: std::collections::HashMap<_, _> =
+// 		voters.iter().map(|(id, stake, _)| (*id, *stake)).collect();
 
-	// Compute the size of a solution comprised of the selected arguments.
-	//
-	// This function completes in `O(edges)`; it's expensive, but linear.
-	let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
-		SolutionOf::<Runtime>::try_from(assignments).map(|s| s.encoded_size())
-	});
-	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
-	let voter_index = helpers::voter_index_fn_owned::<Runtime>(cache);
-	let target_index = helpers::target_index_fn::<Runtime>(&targets);
+// 	// Compute the size of a solution comprised of the selected arguments.
+// 	//
+// 	// This function completes in `O(edges)`; it's expensive, but linear.
+// 	let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
+// 		SolutionOf::<Runtime>::try_from(assignments).map(|s| s.encoded_size())
+// 	});
+// 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
+// 	let voter_index = helpers::voter_index_fn_owned::<Runtime>(cache);
+// 	let target_index = helpers::target_index_fn::<Runtime>(&targets);
 
-	let desired_targets = MultiPhase::desired_targets().unwrap();
+// 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-		desired_targets as usize,
-		targets.clone(),
-		voters.clone(),
-		None,
-	)
-	.unwrap();
+// 	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
+// 		desired_targets as usize,
+// 		targets.clone(),
+// 		voters.clone(),
+// 		None,
+// 	)
+// 	.unwrap();
 
-	// sort by decreasing order of stake
-	assignments.sort_unstable_by_key(|assignment| {
-		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
-	});
+// 	// sort by decreasing order of stake
+// 	assignments.sort_unstable_by_key(|assignment| {
+// 		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
+// 	});
 
-	// convert to IndexAssignment
-	let assignments = assignments
-		.iter()
-		.map(|assignment| {
-			IndexAssignmentOf::<Runtime>::new(assignment, &voter_index, &target_index)
-		})
-		.collect::<Result<Vec<_>, _>>()
-		.expect("test assignments don't contain any voters with too many votes");
+// 	// convert to IndexAssignment
+// 	let assignments = assignments
+// 		.iter()
+// 		.map(|assignment| {
+// 			IndexAssignmentOf::<Runtime>::new(assignment, &voter_index, &target_index)
+// 		})
+// 		.collect::<Result<Vec<_>, _>>()
+// 		.expect("test assignments don't contain any voters with too many votes");
 
-	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
-}
+// 	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
+// }
 
 /// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
 fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
@@ -164,9 +165,12 @@ fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 }
 
 pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
+	// ensure snapshot exists.
+	assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
+	assert!(<PagedVoterSnapshot<Runtime>>::iter().count() > 0);
+
 	// read all voter snapshots
 	let voter_snapshot = nested_voter_snapshot();
-	assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
 	let target_snapshot = MultiPhase::paged_target_snapshot(0).unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
@@ -204,7 +208,7 @@ pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 			.unwrap()
 	};
 
-	let mut paged_assignments: Vec<Vec<Assignment<Runtime>>> =
+	let mut paged_assignments: Vec<Vec<AssignmentOf<Runtime>>> =
 		Vec::with_capacity(Pages::get() as usize);
 	paged_assignments.resize(Pages::get() as usize, vec![]);
 	for assignment in assignments {
@@ -227,50 +231,6 @@ pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 	let round = MultiPhase::round();
 
 	PagedRawSolution { solution_pages, round, score }
-}
-
-/// Spit out a verifiable raw solution.
-///
-/// This is a good example of what an offchain miner would do.
-#[deprecated]
-pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
-	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
-	let desired_targets = MultiPhase::desired_targets().unwrap();
-
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-		desired_targets as usize,
-		targets.clone(),
-		voters.clone(),
-		None,
-	)
-	.unwrap();
-
-	// closures
-	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
-	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
-	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
-	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
-
-	let winners = to_without_backing(winners);
-
-	let score = {
-		let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of).unwrap();
-		to_supports(&winners, &staked).unwrap().evaluate()
-	};
-	let solution =
-		<SolutionOf<Runtime>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
-
-	let round = MultiPhase::round();
-	RawSolution { solution, score, round }
-}
-
-pub fn witness() -> SolutionOrSnapshotSize {
-	MultiPhase::snapshot()
-		.map(|snap| SolutionOrSnapshotSize {
-			voters: snap.voters.len() as u32,
-			targets: snap.targets.len() as u32,
-		})
-		.unwrap_or_default()
 }
 
 impl frame_system::Config for Runtime {
@@ -337,7 +297,7 @@ parameter_types! {
 	];
 	pub static LastIteratedVoterIndex: Option<usize> = None;
 
-	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
+	pub static OnChianFallback: bool = true; // TODO: this should be false by default.
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: u64 = 10;
 	pub static UnsignedPhase: u64 = 5;
@@ -439,18 +399,26 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 	}
 }
 
+impl crate::verifier::Config for Runtime {
+	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+}
+
+impl crate::unsigned::Config for Runtime {
+	type OffchainRepeat = OffchainRepeat;
+	type MinerMaxIterations = MinerMaxIterations;
+	type MinerMaxWeight = MinerMaxWeight;
+	type MinerMaxLength = MinerMaxLength;
+	type MinerTxPriority = MinerTxPriority;
+	type WeightInfo = ();
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
-	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxIterations = MinerMaxIterations;
-	type MinerMaxWeight = MinerMaxWeight;
-	type MinerMaxLength = MinerMaxLength;
-	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
@@ -459,14 +427,13 @@ impl crate::Config for Runtime {
 	type SignedMaxSubmissions = SignedMaxSubmissions;
 	type SlashHandler = ();
 	type RewardHandler = ();
-	type DataProvider = StakingMock;
+	type DataProvider = MockStaking;
 	type BenchmarkingConfig = ();
-	type OnChainAccuracy = Perbill;
-	type Fallback = Fallback;
-	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+	type Fallback = MockFallback;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 	type Solution = TestNposSolution;
 	type WeightInfo = DualMockWeightInfo;
+	type Verifier = VerifierPallet;
 	type Pages = Pages;
 }
 
@@ -478,8 +445,34 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-pub struct StakingMock;
-impl ElectionDataProvider<AccountId, u64> for StakingMock {
+pub struct OnChainConfig;
+impl onchain::Config for OnChainConfig {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
+	type BlockWeights = BlockWeights;
+	type Accuracy = sp_runtime::Perbill;
+	type DataProvider = MockStaking;
+	type TargetsPageSize = ();
+	type VoterPageSize = ();
+}
+
+pub struct MockFallback;
+impl ElectionProvider<AccountId, u64> for MockFallback {
+	type Error = ElectionError;
+	type DataProvider = MockStaking;
+
+	fn elect(remaining: PageIndex) -> Result<(Supports<AccountId>, Weight), Self::Error> {
+		if OnChianFallback::get() {
+			onchain::OnChainSequentialPhragmen::<OnChainConfig>::elect(remaining)
+				.map_err(Into::into)
+		} else {
+			InitiateEmergencyPhase::<Runtime>::elect(remaining)
+		}
+	}
+}
+
+pub struct MockStaking;
+impl ElectionDataProvider<AccountId, u64> for MockStaking {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 	fn targets(
 		maybe_max_len: Option<usize>,
@@ -675,18 +668,30 @@ pub(crate) fn balances(who: &u64) -> (u64, u64) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
 
+pub(crate) fn create_all_snapshots() {
+	let _ = (0..Pages::get())
+		.rev()
+		.map(|p| MultiPhase::create_voters_snapshot_paged(p))
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+	let _ = MultiPhase::create_targets_snapshot().unwrap();
+}
+
+pub(crate) fn witness() -> SolutionOrSnapshotSize {
+	let voters = <PagedVoterSnapshot<Runtime>>::iter()
+		.map(|(_, voters)| voters)
+		.fold(0u32, |acc, next| acc.saturating_add(next.len() as u32));
+	let targets = <PagedTargetSnapshot<Runtime>>::get(0)
+		.map(|t| t.len() as u32)
+		.unwrap_or_default();
+	SolutionOrSnapshotSize { voters, targets }
+}
+
 #[test]
 fn raw_paged_solution_works() {
+	// TODO: do a 3 page version of this as well, helps a lot with understanding.
 	ExtBuilder::default().pages(2).voter_per_page(4).build_and_execute(|| {
-		// get voter snapshot
-		(0..Pages::get())
-			.rev()
-			.map(|p| MultiPhase::create_voters_snapshot_paged(p))
-			.collect::<Result<Vec<_>, _>>()
-			.unwrap();
-
-		// get target snapshot.
-		assert_eq!(MultiPhase::create_targets_snapshot(), Ok(4));
+		create_all_snapshots();
 
 		// 2 pages of 8 voters
 		assert_eq!(<PagedVoterSnapshot<Runtime>>::iter().count(), 2);
@@ -695,9 +700,9 @@ fn raw_paged_solution_works() {
 		assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
 		assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().map(|(_p, x)| x).flatten().count(), 4);
 
-		let solution = raw_paged_solution();
+		let paged = raw_paged_solution();
 		assert_eq!(
-			solution.solution_pages,
+			paged.solution_pages,
 			vec![
 				// in page 0 of the snapshot.
 				TestNposSolution {
@@ -714,18 +719,45 @@ fn raw_paged_solution_works() {
 			]
 		);
 
-		assert_eq!(solution.score, [30, 70, 2500]);
+		// this solution must be feasible.
+		let supports = paged
+			.solution_pages
+			.iter()
+			.enumerate()
+			.map(|(i, p)| {
+				let page_index = i as PageIndex;
+				VerifierPallet::feasibility_check_page(p.clone(), page_index).unwrap()
+			})
+			.collect::<Vec<_>>();
+
+		assert_eq!(
+			supports,
+			vec![
+				// page0, supports from voters 5, 6, 7, 8
+				vec![
+					(10, Support { total: 15, voters: vec![(8, 10), (5, 5)] }),
+					(40, Support { total: 15, voters: vec![(6, 10), (5, 5)] })
+				],
+				// page1 supports from voters 1, 2, 3, 4
+				vec![
+					(10, Support { total: 15, voters: vec![(1, 10), (4, 5)] }),
+					(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
+				]
+			]
+		);
+
+		assert_eq!(paged.score, [30, 70, 2500]);
 	})
 }
 
 #[test]
 fn staking_mock_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(StakingMock::voters(None, 0).unwrap().0.len(), 12);
+		assert_eq!(MockStaking::voters(None, 0).unwrap().0.len(), 12);
 		assert!(LastIteratedVoterIndex::get().is_none());
 
 		assert_eq!(
-			StakingMock::voters(Some(4), 0)
+			MockStaking::voters(Some(4), 0)
 				.unwrap()
 				.0
 				.into_iter()
@@ -736,7 +768,7 @@ fn staking_mock_works() {
 		assert!(LastIteratedVoterIndex::get().is_none());
 
 		assert_eq!(
-			StakingMock::voters(Some(4), 2)
+			MockStaking::voters(Some(4), 2)
 				.unwrap()
 				.0
 				.into_iter()
@@ -746,7 +778,7 @@ fn staking_mock_works() {
 		);
 		assert_eq!(LastIteratedVoterIndex::get().unwrap(), 4);
 		assert_eq!(
-			StakingMock::voters(Some(4), 1)
+			MockStaking::voters(Some(4), 1)
 				.unwrap()
 				.0
 				.into_iter()
@@ -756,7 +788,7 @@ fn staking_mock_works() {
 		);
 		assert_eq!(LastIteratedVoterIndex::get().unwrap(), 8);
 		assert_eq!(
-			StakingMock::voters(Some(4), 0)
+			MockStaking::voters(Some(4), 0)
 				.unwrap()
 				.0
 				.into_iter()

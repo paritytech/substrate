@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{ElectionDataProvider, ElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider, PageIndex};
 use frame_support::{traits::Get, weights::Weight};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -29,6 +29,9 @@ pub enum Error {
 	NposElections(sp_npos_elections::Error),
 	/// Errors from the data provider.
 	DataProvider(&'static str),
+	/// The remaining pages expected are more than one, and the onchain seq-phragmen does not
+	/// support that.
+	NoMoreThenSinglePageExpected,
 }
 
 impl From<sp_npos_elections::Error> for Error {
@@ -75,7 +78,10 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+	fn elect(remaining: PageIndex) -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+		if remaining != 0 {
+			return Err(Error::NoMoreThenSinglePageExpected)
+		}
 		let (voters, _) = Self::DataProvider::voters(T::TargetsPageSize::get(), 0)
 			.map_err(Error::DataProvider)?;
 		let (targets, _) =

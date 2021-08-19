@@ -188,8 +188,8 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
-	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
+	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v`
+	/// items long.
 	///
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
@@ -203,8 +203,8 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
-	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
+	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v`
+	/// items long.
 	///
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
@@ -288,7 +288,7 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// Elect a new set of winners.
 	///
 	/// The result is returned in a target major format, namely as vector of supports.
-	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error>;
+	fn elect(remaining: PageIndex) -> Result<(Supports<AccountId>, Weight), Self::Error>;
 }
 
 #[cfg(feature = "std")]
@@ -296,7 +296,7 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	type Error = &'static str;
 	type DataProvider = ();
 
-	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
+	fn elect(_: PageIndex) -> Result<(Supports<AccountId>, Weight), Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")
 	}
 }

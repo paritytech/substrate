@@ -1,18 +1,18 @@
-// only expose the Pallet.
-pub use pallet::{FeasibilityError, Pallet};
+// Only these items are public from this pallet.
+pub use pallet::{Config, FeasibilityError, Pallet, Verifier};
 
 /// This pallet does one thing: Once a solution is given to it, it will store it
 /// `VerifyingSolution`, and it will start verifying it in the coming blocks.
 #[frame_support::pallet]
 mod pallet {
-	use std::collections::BTreeMap;
+	use std::{collections::BTreeMap, fmt::Debug};
 
-	use super::*;
-	use frame_election_provider_support::{ExtendedBalance, Support};
+	use crate::{helpers, ReadySolutionPage, SolutionOf};
+	use frame_election_provider_support::{ExtendedBalance, PageIndex, Support, Supports};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_npos_elections::EvaluateSupport;
-	use sp_runtime::traits::{CheckedSub, One};
+	use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
+	use sp_runtime::traits::{CheckedSub, One, SaturatedConversion};
 
 	/// Errors that can happen in the feasibility check.
 	#[derive(Debug, Eq, PartialEq)]
@@ -36,8 +36,8 @@ mod pallet {
 		InvalidScore,
 		/// The provided round is incorrect.
 		InvalidRound,
-		/// Comparison against `MinimumUntrustedScore` failed.
-		UntrustedScoreTooLow,
+		/// Solution does not have a good enough score.
+		ScoreTooLow,
 	}
 
 	impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -48,7 +48,64 @@ mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: crate::Config {}
+	pub trait Config: crate::Config {
+		/// Origin that can control this pallet. Note that any action taken by this origin (such)
+		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
+		/// The minimum amount of improvement to the solution score that defines a solution as
+		/// "better".
+		#[pallet::constant]
+		type SolutionImprovementThreshold: Get<sp_runtime::Perbill>;
+	}
+
+	/// The interface of something that cna be the verifier.
+	pub trait Verifier {
+		type Solution;
+		type AccountId;
+		/// This is the solution that we want to verify next, store it.
+		///
+		/// Can only accept a new solution if an ongoing verification is not ongoing. Use [`status`]
+		/// to query this.
+		fn store_unverified_solution(
+			solution_pages: Vec<Self::Solution>,
+			claimed_score: ElectionScore,
+		) -> Result<(), ()>;
+
+		/// Tell me if you have some queued solution read for use, with what score.
+		fn queued_solution() -> Option<ElectionScore>;
+
+		/// Check if this solution would have been sufficiently good, if it were to be a correct
+		/// one.
+		fn check_claimed_score(claimed_score: ElectionScore) -> bool;
+
+		/// Tell me your status.
+		///
+		/// Returns `Some(x)` if there's a verification ongoing, and `x` more blocks are needed to
+		/// finish it.
+		/// Return `None` if there isn't a verification ongoing.
+		fn verification_status() -> Option<PageIndex>;
+
+		/// Clear everything, there's nothing else for you to do until further notice.
+		fn kill();
+
+		/// Get the best verified solution, if any.
+		///
+		/// It is the responsibility of the call site to call this function with all appropriate
+		/// `page` arguments.
+		fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<Self::AccountId>>;
+
+		/// Perform the feasibility check of the given solution page.
+		///
+		/// This will not check the score and winner-count, since they can only be checked in
+		/// context.
+		///
+		/// Corresponding snapshots are assumed to be available.
+		fn feasibility_check_page(
+			partial_solution: Self::Solution,
+			page: PageIndex,
+		) -> Result<Supports<Self::AccountId>, FeasibilityError>;
+	}
 
 	#[derive(Encode, Decode, Clone, Copy)]
 	enum ValidSolution {
@@ -143,6 +200,8 @@ mod pallet {
 	// ---- All storage items about the verifying solution.
 	struct QueuedSolution<T: Config>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> QueuedSolution<T> {
+		/// Return the `score` and `winner_count` of verifying solution.
+		///
 		/// Assumes that all the corresponding pages of `QueuedSolutionBackings` exist, then it
 		/// computes the final score of the solution that is currently at the end of its
 		/// verification process.
@@ -150,9 +209,10 @@ mod pallet {
 		/// This solution corresponds to whatever is stored in the INVALID variant of
 		/// `QueuedSolution`. Recall that the score of this solution is not yet verified, so it
 		/// should never become `valid`.
-		fn final_score() -> ElectionScore {
+		fn final_score() -> (ElectionScore, u32) {
 			// TODO: this could be made into a proper error.
 			debug_assert_eq!(QueuedSolutionBackings::<T>::iter().count() as u8, T::Pages::get());
+
 			let mut total_supports: BTreeMap<T::AccountId, ExtendedBalance> = Default::default();
 			QueuedSolutionBackings::<T>::iter()
 				.map(|(_page, backings)| backings)
@@ -165,7 +225,9 @@ mod pallet {
 				.into_iter()
 				.map(|(who, total)| (who, total.into()))
 				.map(|(who, total)| (who, Support { total, ..Default::default() }));
-			mock_supports.evaluate()
+			let count = mock_supports.len() as u32;
+
+			(mock_supports.evaluate(), count)
 		}
 
 		/// Finalize a correct solution.
@@ -204,15 +266,41 @@ mod pallet {
 		/// This should only be called once we are sure that this particular page is 100% correct.
 		fn write_valid_page(page: PageIndex, supports: Supports<T::AccountId>) {
 			let valid = QueuedValidVariant::<T>::get();
-			let invalid = valid.other();
 
 			let backings = supports.iter().map(|(x, s)| (x, s.total)).collect::<Vec<_>>();
 			QueuedSolutionBackings::<T>::insert(page, backings);
 
-			match invalid {
+			match valid {
 				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
 				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
 			}
+		}
+
+		/// Clear all storage items.
+		///
+		/// Should only be called once everything is done.
+		fn kill() {
+			QueuedSolutionX::<T>::remove_all(None);
+			QueuedSolutionY::<T>::remove_all(None);
+			QueuedValidVariant::<T>::kill();
+			QueuedSolutionBackings::<T>::remove_all(None);
+			QueuedSolutionScore::<T>::kill();
+		}
+
+		/// The score of the current best solution, if any.
+		fn queued_solution() -> Option<ElectionScore> {
+			QueuedSolutionScore::<T>::get()
+		}
+
+		fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<T::AccountId>> {
+			let valid = QueuedValidVariant::<T>::get();
+
+			match valid {
+				ValidSolution::X => QueuedSolutionX::<T>::get(page),
+				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
+			}
+			.map(|supports| ReadySolutionPage { supports, ..Default::default() })
+			// TODO: seemingly there's no point in storing this score, dissolve ReadySolutionPage.
 		}
 	}
 
@@ -242,49 +330,104 @@ mod pallet {
 	#[pallet::storage]
 	type QueuedSolutionScore<T: Config> = StorageValue<_, ElectionScore>;
 
+	/// The minimum score that each 'untrusted' solution must attain in order to be considered
+	/// feasible.
+	///
+	/// Can be set via `set_minimum_untrusted_score`.
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_untrusted_score)]
+	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	use crate::*;
-	// public interface of this pallet.
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// This is the solution that we want to verify next, store it.
+		/// Set a new value for `MinimumUntrustedScore`.
 		///
-		/// Can only accept a new solution if an ongoing verification is not ongoing. Use [`status`]
-		/// to query this.
-		pub fn store_unverified_solution(
-			solution_pages: Vec<SolutionOf<T>>,
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_minimum_untrusted_score(
+			origin: OriginFor<T>,
+			maybe_next_score: Option<ElectionScore>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+			Ok(())
+		}
+
+		/// Set a solution in the queue, to be handed out to the client of this pallet in the next
+		/// call to [`Verifier::get_verified_solution`].
+		///
+		/// This can only be set by `T::ForceOrigin`, and only when the phase is `Emergency`.
+		///
+		/// The solution is not checked for any feasibility and is assumed to be trustworthy, as any
+		/// feasibility check itself can in principle cause the election process to fail (due to
+		/// memory/weight constrains).
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn set_emergency_solution(
+			origin: OriginFor<T>,
+			paged_supports: Vec<Supports<T::AccountId>>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			ensure!(
+				crate::Pallet::<T>::current_phase().is_emergency(),
+				<crate::Error<T>>::CallNotAllowed
+			);
+			ensure!(
+				paged_supports.len().saturated_into::<PageIndex>() == T::Pages::get(),
+				<crate::Error<T>>::WrongPageCount,
+			);
+
+			// TODO: something like enumerate for Vec<T> that pagify it.
+			for (page_index, supports) in paged_supports.iter().enumerate() {
+				QueuedSolution::<T>::write_valid_page(page_index as PageIndex, supports.to_vec());
+			}
+
+			Ok(())
+		}
+	}
+
+	impl<T: Config> Verifier for Pallet<T> {
+		type Solution = SolutionOf<T>;
+		type AccountId = T::AccountId;
+
+		fn store_unverified_solution(
+			solution_pages: Vec<Self::Solution>,
 			claimed_score: ElectionScore,
 		) -> Result<(), ()> {
 			VerifyingSolution::<T>::put(solution_pages, claimed_score)
 		}
 
-		/// Tell me if you have some queued solution read for use, with what score.
-		pub fn queued_solution() -> Option<ElectionScore> {
+		fn check_claimed_score(claimed_score: ElectionScore) -> bool {
+			Self::ensure_correct_final_score_quality(claimed_score).is_ok()
+		}
+
+		fn queued_solution() -> Option<ElectionScore> {
+			QueuedSolution::<T>::queued_solution()
+		}
+
+		fn verification_status() -> Option<PageIndex> {
 			todo!()
 		}
 
-		/// Tell me your status.
-		///
-		/// Returns `Some(x)` if there's a verification ongoing, and `x` more blocks are needed to
-		/// finish it.
-		/// Return `None` if there isn't a verification ongoing.
-		pub fn verification_status() -> Option<PageIndex> {
-			todo!()
-		}
-
-		/// Clear everything, there's nothing else for you to do until further notice.
-		pub fn kill() {
+		fn kill() {
 			VerifyingSolution::<T>::kill();
-			todo!()
+			QueuedSolution::<T>::kill();
 		}
 
-		/// Get the best verified solution, if any.
-		///
-		/// It is the responsibility of the call site to call this function with all appropriate
-		/// `page` arguments.
-		pub fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<T::AccountId>> {
-			todo!()
+		fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<Self::AccountId>> {
+			QueuedSolution::<T>::get_verified_solution(page)
+		}
+
+		fn feasibility_check_page(
+			partial_solution: Self::Solution,
+			page: PageIndex,
+		) -> Result<Supports<Self::AccountId>, FeasibilityError> {
+			Self::feasibility_check_page(partial_solution, page)
 		}
 	}
 
@@ -302,9 +445,13 @@ mod pallet {
 
 					if !has_more_pages {
 						// this was the last page, we can't gp any further.
-						let final_score = QueuedSolution::<T>::final_score();
+						let (final_score, winner_count) = QueuedSolution::<T>::final_score();
 						let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
-						if final_score == claimed_score {
+						let desired_targets = crate::Pallet::<T>::desired_targets().unwrap();
+						if final_score == claimed_score &&
+							Self::ensure_correct_final_score_quality(final_score).is_ok() &&
+							winner_count == desired_targets
+						{
 							// all good, finalize this solution
 							VerifyingSolution::<T>::kill();
 							QueuedSolution::<T>::finalize_correct(final_score);
@@ -325,6 +472,38 @@ mod pallet {
 
 	// private functions
 	impl<T: Config> Pallet<T> {
+		/// Once we know that a claimed score is correct, now we check it further to be:
+		///
+		/// 1. more than a potentially queued solution
+		/// 2. more than the minimum untrusted score
+		fn ensure_correct_final_score_quality(
+			correct_score: ElectionScore,
+		) -> Result<(), FeasibilityError> {
+			ensure!(
+				<Self as Verifier>::queued_solution().map_or(true, |best_score| {
+					sp_npos_elections::is_score_better::<sp_runtime::Perbill>(
+						correct_score,
+						best_score,
+						T::SolutionImprovementThreshold::get(),
+					)
+				}),
+				FeasibilityError::ScoreTooLow,
+			);
+
+			ensure!(
+				Self::minimum_untrusted_score().map_or(true, |min_score| {
+					sp_npos_elections::is_score_better(
+						correct_score,
+						min_score,
+						sp_runtime::Perbill::zero(),
+					)
+				}),
+				FeasibilityError::ScoreTooLow
+			);
+
+			Ok(())
+		}
+
 		fn feasibility_check_page(
 			partial_solution: SolutionOf<T>,
 			page: PageIndex,
@@ -384,8 +563,9 @@ mod pallet {
 			let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);
 
 			// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
-			let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
-				.map_err::<FeasibilityError, _>(Into::into)?;
+			let staked_assignments =
+				sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, stake_of)
+					.map_err::<FeasibilityError, _>(Into::into)?;
 
 			// This might fail if one of the voter edges is pointing to a non-winner, which is not
 			// really possible anymore because all the winners come from the same
@@ -398,85 +578,84 @@ mod pallet {
 	}
 }
 
-/*
 #[cfg(test)]
 mod feasibility_check {
 	use super::*;
 	use crate::mock::{
-		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
-		TargetIndex, UnsignedPhase, VoterIndex,
+		create_all_snapshots, raw_paged_solution, roll_to, EpochLength, ExtBuilder, MultiPhase,
+		Runtime, SignedPhase, TargetIndex, UnsignedPhase, VerifierPallet, VoterIndex,
 	};
-	use frame_support::assert_noop;
+	use frame_support::{assert_noop, assert_ok};
 
 	#[test]
 	fn missing_snapshot() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-			let solution = raw_solution();
+			// create snapshot just so that we can create a solution..
+			create_all_snapshots();
+			let paged = raw_paged_solution();
 
-			// For whatever reason it might be:
-			<crate::Snapshot<Runtime>>::kill();
+			// ..remove the only page of the target snapshot.
+			<crate::PagedTargetSnapshot<Runtime>>::remove(0);
 
 			assert_noop!(
-				MultiPhase::feasibility_check_page(solution, 0),
+				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
 				FeasibilityError::SnapshotUnavailable
 			);
-		})
-	}
+		});
 
-	#[test]
-	fn round() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
+		ExtBuilder::default().pages(2).build_and_execute(|| {
+			// create snapshot just so that we can create a solution..
+			create_all_snapshots();
+			let paged = raw_paged_solution();
 
-			let mut solution = raw_solution();
-			solution.round += 1;
-			assert_noop!(
-				MultiPhase::feasibility_check_page(solution, 0),
-				FeasibilityError::InvalidRound
-			);
-		})
-	}
-
-	#[test]
-	fn desired_targets() {
-		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let raw = raw_solution();
-
-			assert_eq!(raw.solution.unique_targets().len(), 4);
-			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
+			// ..remove just one of the pages of voter snapshot that is relevant.
+			<crate::PagedVoterSnapshot<Runtime>>::remove(0);
 
 			assert_noop!(
-				MultiPhase::feasibility_check_page(raw, 0),
-				FeasibilityError::WrongWinnerCount,
+				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
+				FeasibilityError::SnapshotUnavailable
 			);
-		})
+		});
+
+		ExtBuilder::default().pages(2).build_and_execute(|| {
+			// create snapshot just so that we can create a solution..
+			create_all_snapshots();
+			let paged = raw_paged_solution();
+
+			// ..removing this page is not important.
+			<crate::PagedVoterSnapshot<Runtime>>::remove(1);
+
+			assert_ok!(VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0));
+		});
+
+		ExtBuilder::default().pages(2).build_and_execute(|| {
+			// create snapshot just so that we can create a solution..
+			create_all_snapshots();
+			let paged = raw_paged_solution();
+
+			// `DesiredTargets` is not checked here.
+			<crate::DesiredTargets<Runtime>>::kill();
+
+			assert_ok!(VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0));
+		});
 	}
 
 	#[test]
-	fn winner_indices() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut raw = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().targets.len(), 4);
+	fn winner_indices_single_page() {
+		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
+			create_all_snapshots();
+			let mut paged = raw_paged_solution();
+			assert_eq!(MultiPhase::paged_target_snapshot(0).unwrap().len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
-			// Swap all votes from 3 to 4. This will ensure that the number of unique winners will
-			// still be 4, but one of the indices will be gibberish. Requirement is to make sure 3 a
-			// winner, which we don't do here.
-			raw.solution
+			dbg!(&paged);
+			// Swap all votes from 3 to 4.
+			paged.solution_pages[0]
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
 				.for_each(|(_, t)| *t += 1);
-			raw.solution.votes2.iter_mut().for_each(|(_, [(t0, _)], t1)| {
+			paged.solution_pages[0].votes2.iter_mut().for_each(|(_, [(t0, _)], t1)| {
 				if *t0 == TargetIndex::from(3u16) {
 					*t0 += 1
 				};
@@ -485,35 +664,33 @@ mod feasibility_check {
 				};
 			});
 			assert_noop!(
-				MultiPhase::feasibility_check_page(raw, 0),
+				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
 				FeasibilityError::InvalidWinner
 			);
 		})
 	}
 
 	#[test]
-	fn voter_indices() {
-		// Should be caught in `solution.into_assignment`.
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
+	fn voter_indices_per_page() {
+		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
+			create_all_snapshots();
+			let mut paged = raw_paged_solution();
 
-			let mut solution = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
-			// ----------------------------------------------------^^ valid range is [0..7].
+			assert_eq!(MultiPhase::paged_voter_snapshot(0).unwrap().len(), 12);
+			// ------------------------------------------------^^ valid range is [0..11] in page 0.
 
-			// Check that there is an index 7 in votes1, and flip to 8.
+			dbg!(&paged);
+			// Check that there is an index 11 in votes1, and flip to 12.
 			assert!(
-				solution
-					.solution
+				paged.solution_pages[0]
 					.votes1
 					.iter_mut()
-					.filter(|(v, _)| *v == VoterIndex::from(7u32))
-					.map(|(v, _)| *v = 8)
+					.filter(|(v, _)| *v == VoterIndex::from(11u32))
+					.map(|(v, _)| *v = 12)
 					.count() > 0
 			);
 			assert_noop!(
-				MultiPhase::feasibility_check_page(solution, 0),
+				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
 				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex),
 			);
 		})
@@ -522,50 +699,43 @@ mod feasibility_check {
 	#[test]
 	fn voter_votes() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
+			create_all_snapshots();
+			let mut paged = raw_paged_solution();
 
-			let mut solution = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
-			// ----------------------------------------------------^^ valid range is [0..7].
-
-			// First, check that voter at index 7 (40) actually voted for 3 (40) -- this is self
+			// First, check that voter at index 11 (40) actually voted for 3 (40) -- this is self
 			// vote. Then, change the vote to 2 (30).
+
 			assert_eq!(
-				solution
-					.solution
+				paged.solution_pages[0]
 					.votes1
 					.iter_mut()
-					.filter(|(v, t)| *v == 7 && *t == 3)
+					.filter(|(v, t)| *v == 11 && *t == 3)
 					.map(|(_, t)| *t = 2)
 					.count(),
 				1,
 			);
 			assert_noop!(
-				MultiPhase::feasibility_check_page(solution, 0),
+				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
 				FeasibilityError::InvalidVote,
 			);
 		})
 	}
 
 	#[test]
+	fn desired_targets() {
+		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
+			create_all_snapshots();
+			let raw = raw_paged_solution();
+			todo!()
+		})
+	}
+
+	#[test]
 	fn score() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let mut solution = raw_solution();
-			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
-
-			// Simply faff with the score.
-			solution.score[0] += 1;
-
-			assert_noop!(
-				MultiPhase::feasibility_check_page(solution, 0),
-				FeasibilityError::InvalidScore,
-			);
+			create_all_snapshots();
+			let raw = raw_paged_solution();
+			todo!()
 		})
 	}
 }
-
-*/

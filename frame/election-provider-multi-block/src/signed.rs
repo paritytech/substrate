@@ -18,9 +18,9 @@
 //! The signed phase implementation.
 
 use crate::{
-	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
-	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
-	SolutionOrSnapshotSize, Weight, WeightInfo,
+	Config, ElectionCompute, PagedRawSolution, Pallet, SignedSubmissionIndices,
+	SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf, SolutionOrSnapshotSize, Weight,
+	WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::PageIndex;
@@ -41,50 +41,6 @@ use sp_std::{
 	ops::Deref,
 };
 
-/// A raw, unchecked signed submission.
-///
-/// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
-	/// Who submitted this solution.
-	pub who: AccountId,
-	/// The deposit reserved for storing this solution.
-	pub deposit: Balance,
-	/// The raw solution itself.
-	pub raw_solution: RawSolution<Solution>,
-	/// The reward that should potentially be paid for this solution, if accepted.
-	pub reward: Balance,
-}
-
-impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
-where
-	AccountId: Ord,
-	Balance: Ord + HasCompact,
-	Solution: Ord,
-	RawSolution<Solution>: Ord,
-{
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.raw_solution
-			.score
-			.cmp(&other.raw_solution.score)
-			.then_with(|| self.raw_solution.cmp(&other.raw_solution))
-			.then_with(|| self.deposit.cmp(&other.deposit))
-			.then_with(|| self.who.cmp(&other.who))
-	}
-}
-
-impl<AccountId, Balance, Solution> PartialOrd for SignedSubmission<AccountId, Balance, Solution>
-where
-	AccountId: Ord,
-	Balance: Ord + HasCompact,
-	Solution: Ord,
-	RawSolution<Solution>: Ord,
-{
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
@@ -98,6 +54,50 @@ pub type SignedSubmissionOf<T> =
 
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
+
+/// A raw, unchecked signed submission.
+///
+/// This is just a wrapper around [`RawSolution`] and some additional info.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
+	/// Who submitted this solution.
+	pub who: AccountId,
+	/// The deposit reserved for storing this solution.
+	pub deposit: Balance,
+	/// The raw solution itself.
+	pub raw_solution: PagedRawSolution<Solution>,
+	/// The reward that should potentially be paid for this solution, if accepted.
+	pub reward: Balance,
+}
+
+impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
+where
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	Solution: Ord,
+	PagedRawSolution<Solution>: Ord,
+{
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.raw_solution
+			.score
+			.cmp(&other.raw_solution.score)
+			.then_with(|| self.raw_solution.cmp(&other.raw_solution)) // TODO:
+			.then_with(|| self.deposit.cmp(&other.deposit))
+			.then_with(|| self.who.cmp(&other.who))
+	}
+}
+
+impl<AccountId, Balance, Solution> PartialOrd for SignedSubmission<AccountId, Balance, Solution>
+where
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	Solution: Ord,
+	PagedRawSolution<Solution>: Ord,
+{
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {
@@ -292,12 +292,12 @@ impl<T: Config> SignedSubmissions<T> {
 					None => return InsertResult::NotInserted,
 					Some((score, _)) => *score,
 				};
-				let threshold = T::SolutionImprovementThreshold::get();
-
-				// if we haven't improved on the weakest score, don't change anything.
-				if !is_score_better(insert_score, weakest_score, threshold) {
-					return InsertResult::NotInserted
-				}
+				// TODO: check score with T::check_claimed_score;
+				// let threshold = T::SolutionImprovementThreshold::get();
+				// // if we haven't improved on the weakest score, don't change anything.
+				// if !is_score_better(insert_score, weakest_score, threshold) {
+				// 	return InsertResult::NotInserted
+				// }
 
 				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
 			},
@@ -351,15 +351,17 @@ impl<T: Config> Pallet<T> {
 
 	/// The feasibility weight of the given raw solution.
 	fn feasibility_weight_of(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+		paged_solution: &PagedRawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
-		T::WeightInfo::feasibility_check(
-			size.voters,
-			size.targets,
-			raw_solution.solution.voter_count() as u32,
-			raw_solution.solution.unique_targets().len() as u32,
-		)
+		paged_solution.solution_pages.iter().fold(Weight::zero(), |acc, next| {
+			acc.saturating_add(T::WeightInfo::feasibility_check(
+				size.voters,
+				size.targets,
+				next.voter_count() as u32,
+				next.unique_targets().len() as u32,
+			))
+		})
 	}
 
 	/// Collect a sufficient deposit to store this solution.
@@ -370,12 +372,12 @@ impl<T: Config> Pallet<T> {
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+		paged_solution: &PagedRawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
-		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
+		let encoded_len: u32 = paged_solution.encoded_size().saturated_into();
 		let encoded_len: BalanceOf<T> = encoded_len.into();
-		let feasibility_weight = Self::feasibility_weight_of(raw_solution, size);
+		let feasibility_weight = Self::feasibility_weight_of(paged_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
 		let weight_deposit =
