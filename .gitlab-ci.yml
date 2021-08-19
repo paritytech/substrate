@@ -756,6 +756,34 @@ simnet-tests:
       when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
+  needs:
+    - job:                         publish-docker-substrate
+  # variables:
+  # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
+  # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
+  # ${SIMNET_REF} is a gitlab variable
+  before_script:
+    - echo "Simnet Tests Config
+      docker.io/paritytech/simnet:${SIMNET_REF}
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
+  script:
+    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
+        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
+        --config="simnet_tests/configs/default_local_testnet.toml"
+        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+  retry: 2
+  tags:
+    - parity-simnet
+
+
+# Runs "quick" test on commit on PRs
+simnet-tests-pr:
+  stage:                           deploy
+  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
+  <<:                              *kubernetes-env
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   needs:
     - job:                         publish-docker-substrate
@@ -772,6 +800,7 @@ simnet-tests:
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
         --config="simnet_tests/configs/default_local_testnet.toml"
         --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+        ----features="simnet_tests/tests/quick"
   retry: 2
   tags:
     - parity-simnet
