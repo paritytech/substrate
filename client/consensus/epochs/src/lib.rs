@@ -322,7 +322,7 @@ impl<E: Epoch> AsRef<E> for IncrementedEpoch<E> {
 #[derive(Clone, Encode, Decode, Debug)]
 pub struct GapEpochs<Hash, Number, E: Epoch> {
 	current: (Hash, Number, PersistedEpoch<E>),
-	next: Option<(Hash, Number, PersistedEpoch<E>)>,
+	next: Option<(Hash, Number, E)>,
 }
 
 impl<Hash, Number, E> GapEpochs<Hash, Number, E>
@@ -365,14 +365,7 @@ where
 			_ => {},
 		};
 		match &self.next {
-			Some((h, n, PersistedEpoch::Genesis(epoch_0, _)))
-				if slot >= epoch_0.start_slot() && slot < epoch_0.end_slot() =>
-				Some((*h, *n, epoch_0.into(), EpochIdentifierPosition::Genesis0)),
-			Some((h, n, PersistedEpoch::Genesis(_, epoch_1)))
-				if slot >= epoch_1.start_slot() && slot < epoch_1.end_slot() =>
-				Some((*h, *n, epoch_1.into(), EpochIdentifierPosition::Genesis1)),
-			Some((h, n, PersistedEpoch::Regular(epoch_n)))
-				if slot >= epoch_n.start_slot() && slot < epoch_n.end_slot() =>
+			Some((h, n, epoch_n)) if slot >= epoch_n.start_slot() && slot < epoch_n.end_slot() =>
 				Some((*h, *n, epoch_n.into(), EpochIdentifierPosition::Regular)),
 			_ => None,
 		}
@@ -380,40 +373,38 @@ where
 
 	/// Returns epoch data if it matches given identifier.
 	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
-		let persistent = match (&self.current, &self.next) {
-			((h, n, e), _) if h == &id.hash && n == &id.number => Some(e),
-			(_, Some((h, n, e))) if h == &id.hash && n == &id.number => Some(e),
+		match (&self.current, &self.next) {
+			((h, n, e), _) if h == &id.hash && n == &id.number => match e {
+				PersistedEpoch::Genesis(ref epoch_0, _)
+					if id.position == EpochIdentifierPosition::Genesis0 =>
+					Some(epoch_0),
+				PersistedEpoch::Genesis(_, ref epoch_1)
+					if id.position == EpochIdentifierPosition::Genesis1 =>
+					Some(epoch_1),
+				PersistedEpoch::Regular(ref epoch_n)
+					if id.position == EpochIdentifierPosition::Regular =>
+					Some(epoch_n),
+				_ => None,
+			},
+			(_, Some((h, n, e)))
+				if h == &id.hash &&
+					n == &id.number && id.position == EpochIdentifierPosition::Regular =>
+				Some(e),
 			_ => None,
-		};
-		persistent.and_then(|v| match v {
-			PersistedEpoch::Genesis(ref epoch_0, _)
-				if id.position == EpochIdentifierPosition::Genesis0 =>
-				Some(epoch_0),
-			PersistedEpoch::Genesis(_, ref epoch_1)
-				if id.position == EpochIdentifierPosition::Genesis1 =>
-				Some(epoch_1),
-			PersistedEpoch::Regular(ref epoch_n)
-				if id.position == EpochIdentifierPosition::Regular =>
-				Some(epoch_n),
-			_ => None,
-		})
+		}
 	}
 
 	/// Import a new gap epoch, potentially replacing an old epoch.
-	fn import(
-		&mut self,
-		slot: E::Slot,
-		hash: Hash,
-		number: Number,
-		epoch: PersistedEpoch<E>,
-	) -> Result<(), PersistedEpoch<E>> {
+	fn import(&mut self, slot: E::Slot, hash: Hash, number: Number, epoch: E) -> Result<(), E> {
 		match (&mut self.current, &mut self.next) {
 			((_, _, PersistedEpoch::Genesis(_, epoch_1)), _) if slot == epoch_1.end_slot() => {
 				self.next = Some((hash, number, epoch));
 				Ok(())
 			},
-			(_, Some((_, _, PersistedEpoch::Regular(epoch_n)))) if slot == epoch_n.end_slot() => {
-				self.current = self.next.take().unwrap();
+			(_, Some((_, _, epoch_n))) if slot == epoch_n.end_slot() => {
+				let (cur_h, cur_n, cur_epoch) =
+					self.next.take().expect("Already matched as `Some`");
+				self.current = (cur_h, cur_n, PersistedEpoch::Regular(cur_epoch));
 				self.next = Some((hash, number, epoch));
 				Ok(())
 			},
@@ -497,7 +488,7 @@ where
 			inner: self.inner.map(&mut |_, _, header: PersistedEpochHeader<E>| header.map()),
 			gap: self.gap.map(|GapEpochs { current: (h, n, header), next }| GapEpochs {
 				current: (h, n, header.map(&h, &n, &mut f)),
-				next: next.map(|(h, n, header)| (h, n, header.map(&h, &n, &mut f))),
+				next: next.map(|(h, n, e)| (h, n, f(&h, &n, e))),
 			}),
 			epochs: self
 				.epochs
@@ -751,9 +742,11 @@ where
 		let header = PersistedEpochHeader::<E>::from(&epoch);
 
 		if let Some(gap) = &mut self.gap {
-			epoch = match gap.import(slot, hash.clone(), number.clone(), epoch) {
-				Ok(()) => return Ok(()),
-				Err(e) => e,
+			if let PersistedEpoch::Regular(e) = epoch {
+				epoch = match gap.import(slot, hash.clone(), number.clone(), e) {
+					Ok(()) => return Ok(()),
+					Err(e) => PersistedEpoch::Regular(e),
+				}
 			}
 		} else if !self.epochs.is_empty() && matches!(epoch, PersistedEpoch::Genesis(_, _)) {
 			// There's a genesis epoch imported when we already have an active epoch.

@@ -225,8 +225,8 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 					current_authorities = scheduled_change.next_authorities;
 					current_set_id += 1;
 				} else if fragment_num != self.proofs.len() - 1 || !self.is_finished {
-					// Only the last fragment of the last proof message is allowed to be missing the authority
-					// set change.
+					// Only the last fragment of the last proof message is allowed to be missing the
+					// authority set change.
 					return Err(Error::InvalidProof(
 						"Header is missing authority set change digest".to_string(),
 					))
