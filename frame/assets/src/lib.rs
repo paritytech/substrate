@@ -43,8 +43,8 @@
 //!   account that issues the asset. This is a privileged operation.
 //! * **Asset transfer**: The reduction of the balance of an asset of one account with the
 //!   corresponding increase in the balance of another.
-//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is
-//!   a privileged operation.
+//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is a
+//!   privileged operation.
 //! * **Fungible asset**: An asset whose units are interchangeable.
 //! * **Issuer**: An account ID uniquely privileged to be able to mint a particular class of assets.
 //! * **Freezer**: An account ID uniquely privileged to be able to freeze an account from
@@ -54,8 +54,8 @@
 //! * **Non-fungible asset**: An asset for which each unit has unique characteristics.
 //! * **Owner**: An account ID uniquely privileged to be able to destroy a particular asset class,
 //!   or to set the Issuer, Freezer or Admin of that asset class.
-//! * **Approval**: The act of allowing an account the permission to transfer some
-//!   balance of asset from the approving account into some third-party destination account.
+//! * **Approval**: The act of allowing an account the permission to transfer some balance of asset
+//!   from the approving account into some third-party destination account.
 //! * **Sufficiency**: The idea of a minimum-balance of an asset being sufficient to allow the
 //!   account's existence on the system without requiring any other existential-deposit.
 //!
@@ -104,7 +104,8 @@
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
 //!
-//! Please refer to the [`Call`] enum and its associated variants for documentation on each function.
+//! Please refer to the [`Call`] enum and its associated variants for documentation on each
+//! function.
 //!
 //! ### Public Functions
 //! <!-- Original author of descriptions: @gavofyork -->
@@ -339,7 +340,8 @@ pub mod pallet {
 		BadWitness,
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
-		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient asset.
+		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient
+		/// asset.
 		NoProvider,
 		/// Invalid metadata given.
 		BadMetadata,
@@ -418,8 +420,8 @@ pub mod pallet {
 		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
 		/// an existing asset.
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
-		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
-		/// and `set_team`.
+		/// over this asset, but may later change and configure the permissions using
+		/// `transfer_ownership` and `set_team`.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///

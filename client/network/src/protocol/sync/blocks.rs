@@ -98,7 +98,8 @@ impl<B: BlockT> BlockCollection<B> {
 		);
 	}
 
-	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
+	/// Returns a set of block hashes that require a header download. The returned set is marked as
+	/// being downloaded.
 	pub fn needed_blocks(
 		&mut self,
 		who: PeerId,
@@ -171,7 +172,8 @@ impl<B: BlockT> BlockCollection<B> {
 		Some(range)
 	}
 
-	/// Get a valid chain of blocks ordered in descending order and ready for importing into blockchain.
+	/// Get a valid chain of blocks ordered in descending order and ready for importing into
+	/// blockchain.
 	pub fn drain(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
 		let mut drained = Vec::new();
 		let mut ranges = Vec::new();

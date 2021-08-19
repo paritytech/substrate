@@ -60,7 +60,7 @@
 //! #### Staking
 //!
 //! Almost any interaction with the Staking pallet requires a process of _**bonding**_ (also known
-//! as being a _staker_). To become *bonded*, a fund-holding account known as the _stash account_,
+//! as being a _staker_). To become *bonded*, a fund-holding register known as the _stash account_,
 //! which holds some or all of the funds that become frozen in place as part of the staking process,
 //! is paired with an active **controller** account, which issues instructions on how they shall be
 //! used.
@@ -267,7 +267,7 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
+#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 #[cfg(test)]
 mod mock;

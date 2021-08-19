@@ -29,7 +29,7 @@ use sc_network::{
 };
 use sc_service::{
 	client::Client,
-	config::{BasePath, DatabaseConfig, KeystoreConfig},
+	config::{BasePath, DatabaseSource, KeystoreConfig},
 	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
 	SpawnTaskHandle, TaskExecutor, TaskManager, TransactionStorageMode,
 };
@@ -221,11 +221,8 @@ fn node_config<
 			.collect(),
 	);
 
-	network_config.transport = TransportConfig::Normal {
-		enable_mdns: false,
-		allow_private_ipv4: true,
-		wasm_external_transport: None,
-	};
+	network_config.transport =
+		TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),
@@ -236,7 +233,7 @@ fn node_config<
 		network: network_config,
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
-		database: DatabaseConfig::RocksDb { path: root.join("db"), cache_size: 128 },
+		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),
@@ -256,7 +253,6 @@ fn node_config<
 		rpc_max_payload: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
-		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,

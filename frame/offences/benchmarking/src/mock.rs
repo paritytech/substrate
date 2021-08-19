@@ -40,7 +40,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -152,7 +152,6 @@ pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
-	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }

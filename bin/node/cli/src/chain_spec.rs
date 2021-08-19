@@ -57,6 +57,8 @@ pub struct Extensions {
 	pub fork_blocks: sc_client_api::ForkBlocks<Block>,
 	/// Known bad block hashes.
 	pub bad_blocks: sc_client_api::BadBlocks<Block>,
+	/// The light sync state extension used by the sync-state rpc.
+	pub light_sync_state: sc_sync_state_rpc::LightSyncStateExtension,
 }
 
 /// Specialized `ChainSpec`.
@@ -76,10 +78,13 @@ fn session_keys(
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
+	#[rustfmt::skip]
 	// stash, controller, session-key
 	// generated with secret:
 	// for i in 1 2 3 4 ; do for j in stash controller; do subkey inspect "$secret"/fir/$j/$i; done; done
+	//
 	// and
+	//
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
 	let initial_authorities: Vec<(

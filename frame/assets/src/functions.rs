@@ -439,7 +439,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Burn any dust if needed.
 			if let Some(burn) = maybe_burn {
-				// Debit dust from supply; this will not saturate since it's already checked in prep.
+				// Debit dust from supply; this will not saturate since it's already checked in
+				// prep.
 				debug_assert!(details.supply >= burn, "checked in prep; qed");
 				details.supply = details.supply.saturating_sub(burn);
 			}

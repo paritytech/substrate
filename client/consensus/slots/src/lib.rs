@@ -36,12 +36,11 @@ use codec::{Decode, Encode};
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
 use log::{debug, error, info, warn};
+use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{
-	BlockImport, CanAuthorWith, JustificationSyncLink, Proposer, SelectChain, SlotData, SyncOracle,
-};
+use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
 use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
@@ -160,7 +159,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				Self::Claim,
 				Self::EpochData,
 			) -> Result<
-				sp_consensus::BlockImportParams<
+				sc_consensus::BlockImportParams<
 					B,
 					<Self::BlockImport as BlockImport<B>>::Transaction,
 				>,
@@ -429,7 +428,8 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the [`InherentData`](`sp_inherents::InherentData`).
+	/// The current timestamp that will be found in the
+	/// [`InherentData`](`sp_inherents::InherentData`).
 	fn timestamp(&self) -> Timestamp;
 
 	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
@@ -1060,7 +1060,8 @@ mod test {
 			})
 			.collect();
 
-		// Should always be true after a short while, since the chain is advancing but finality is stalled
+		// Should always be true after a short while, since the chain is advancing but finality is
+		// stalled
 		let expected: Vec<bool> = (slot_now..300).map(|s| s > 8).collect();
 		assert_eq!(should_backoff, expected);
 	}
