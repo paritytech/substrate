@@ -63,7 +63,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{AtLeast32Bit, Block as BlockT, Extrinsic, Header as HeaderT, NumberFor, Zero},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
