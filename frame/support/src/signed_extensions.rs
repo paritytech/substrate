@@ -201,6 +201,22 @@ impl Mode for Multiply {
 	}
 }
 
+/// Divisive mode for the adjuster.
+///
+/// The priorities are divided without an overflow.
+/// In case the divisor is 0 we return 0.
+#[derive(Default)]
+pub struct Divide;
+impl Mode for Divide {
+	fn combine(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
+		if b == 0 {
+			0
+		} else {
+			a / b
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -211,7 +227,7 @@ mod tests {
 
 	impl Default for TestExtension {
 		fn default() -> Self {
-			Self(5)
+			Self(50)
 		}
 	}
 
@@ -238,7 +254,7 @@ mod tests {
 			_info: &DispatchInfoOf<Self::Call>,
 			_len: usize,
 		) -> TransactionValidity {
-			Ok(ValidTransaction { priority: 3, ..Default::default() })
+			Ok(ValidTransaction { priority: 30, ..Default::default() })
 		}
 
 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -256,22 +272,22 @@ mod tests {
 	}
 
 	#[test]
-	fn should_adjust_priority_of_signed_transaction() {
+	fn should_mul_priority_of_signed_transaction() {
 		type Adjusted = AdjustPriority<TestExtension, Multiply, Adjustment>;
 		let adj = Adjusted::default();
 
 		let got = adj.validate(&(), &(), &(), 5).unwrap();
 
-		assert_eq!(got.priority, 50);
+		assert_eq!(got.priority, 500);
 	}
 
 	#[test]
-	fn should_adjust_priority_of_unsigned_transaction() {
+	fn should_mul_priority_of_unsigned_transaction() {
 		type Adjusted = AdjustPriority<TestExtension, Multiply, Adjustment>;
 
 		let got = Adjusted::validate_unsigned(&(), &(), 0).unwrap();
 
-		assert_eq!(got.priority, 30);
+		assert_eq!(got.priority, 300);
 	}
 
 	#[test]
@@ -281,7 +297,7 @@ mod tests {
 
 		let got = adj.validate(&(), &(), &(), 5).unwrap();
 
-		assert_eq!(got.priority, 15);
+		assert_eq!(got.priority, 60);
 	}
 
 	#[test]
@@ -290,6 +306,25 @@ mod tests {
 
 		let got = Adjusted::validate_unsigned(&(), &(), 0).unwrap();
 
-		assert_eq!(got.priority, 13);
+		assert_eq!(got.priority, 40);
+	}
+
+	#[test]
+	fn should_div_priority_of_signed_transaction() {
+		type Adjusted = AdjustPriority<TestExtension, Divide, Adjustment>;
+		let adj = Adjusted::default();
+
+		let got = adj.validate(&(), &(), &(), 5).unwrap();
+
+		assert_eq!(got.priority, 5);
+	}
+
+	#[test]
+	fn should_div_priority_of_unsigned_transaction() {
+		type Adjusted = AdjustPriority<TestExtension, Divide, Adjustment>;
+
+		let got = Adjusted::validate_unsigned(&(), &(), 0).unwrap();
+
+		assert_eq!(got.priority, 3);
 	}
 }
