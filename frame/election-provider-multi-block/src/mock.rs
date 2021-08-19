@@ -35,7 +35,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	PerU16,
+	PerU16, Perbill,
 };
 use std::{convert::TryFrom, sync::Arc};
 
@@ -449,7 +449,6 @@ pub struct OnChainConfig;
 impl onchain::Config for OnChainConfig {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
-	type BlockWeights = BlockWeights;
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = MockStaking;
 	type TargetsPageSize = ();
@@ -461,7 +460,7 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 	type Error = ElectionError;
 	type DataProvider = MockStaking;
 
-	fn elect(remaining: PageIndex) -> Result<(Supports<AccountId>, Weight), Self::Error> {
+	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
 		if OnChianFallback::get() {
 			onchain::OnChainSequentialPhragmen::<OnChainConfig>::elect(remaining)
 				.map_err(Into::into)
@@ -477,7 +476,7 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 	fn targets(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+	) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if remaining != 0 {
@@ -487,13 +486,13 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 			return Err("Targets too big")
 		}
 
-		Ok((targets, 0))
+		Ok(targets)
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		let mut voters = Voters::get();
 
 		// jump to the first non-iterated, if this is a follow up.
@@ -507,7 +506,7 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 		}
 
 		if voters.is_empty() {
-			return Ok((vec![], 0))
+			return Ok(vec![])
 		}
 
 		if remaining > 0 {
@@ -519,10 +518,10 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 			LastIteratedVoterIndex::set(None)
 		}
 
-		Ok((voters, 0))
+		Ok(voters)
 	}
-	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
-		Ok((DesiredTargets::get(), 0))
+	fn desired_targets() -> data_provider::Result<u32> {
+		Ok(DesiredTargets::get())
 	}
 
 	fn next_election_prediction(now: u64) -> u64 {
@@ -753,13 +752,12 @@ fn raw_paged_solution_works() {
 #[test]
 fn staking_mock_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(MockStaking::voters(None, 0).unwrap().0.len(), 12);
+		assert_eq!(MockStaking::voters(None, 0).unwrap().len(), 12);
 		assert!(LastIteratedVoterIndex::get().is_none());
 
 		assert_eq!(
 			MockStaking::voters(Some(4), 0)
 				.unwrap()
-				.0
 				.into_iter()
 				.map(|(x, _, _)| x)
 				.collect::<Vec<_>>(),
@@ -770,7 +768,6 @@ fn staking_mock_works() {
 		assert_eq!(
 			MockStaking::voters(Some(4), 2)
 				.unwrap()
-				.0
 				.into_iter()
 				.map(|(x, _, _)| x)
 				.collect::<Vec<_>>(),
@@ -780,7 +777,6 @@ fn staking_mock_works() {
 		assert_eq!(
 			MockStaking::voters(Some(4), 1)
 				.unwrap()
-				.0
 				.into_iter()
 				.map(|(x, _, _)| x)
 				.collect::<Vec<_>>(),
@@ -790,7 +786,6 @@ fn staking_mock_works() {
 		assert_eq!(
 			MockStaking::voters(Some(4), 0)
 				.unwrap()
-				.0
 				.into_iter()
 				.map(|(x, _, _)| x)
 				.collect::<Vec<_>>(),

@@ -7,7 +7,7 @@ pub use pallet::{Config, FeasibilityError, Pallet, Verifier};
 mod pallet {
 	use std::{collections::BTreeMap, fmt::Debug};
 
-	use crate::{helpers, ReadySolutionPage, SolutionOf};
+	use crate::{helpers, SolutionOf};
 	use frame_election_provider_support::{ExtendedBalance, PageIndex, Support, Supports};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
@@ -93,7 +93,7 @@ mod pallet {
 		///
 		/// It is the responsibility of the call site to call this function with all appropriate
 		/// `page` arguments.
-		fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<Self::AccountId>>;
+		fn get_verified_solution(page: PageIndex) -> Option<Supports<Self::AccountId>>;
 
 		/// Perform the feasibility check of the given solution page.
 		///
@@ -292,15 +292,13 @@ mod pallet {
 			QueuedSolutionScore::<T>::get()
 		}
 
-		fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<T::AccountId>> {
+		fn get_verified_solution(page: PageIndex) -> Option<Supports<T::AccountId>> {
 			let valid = QueuedValidVariant::<T>::get();
 
 			match valid {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
 				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
 			}
-			.map(|supports| ReadySolutionPage { supports, ..Default::default() })
-			// TODO: seemingly there's no point in storing this score, dissolve ReadySolutionPage.
 		}
 	}
 
@@ -419,7 +417,7 @@ mod pallet {
 			QueuedSolution::<T>::kill();
 		}
 
-		fn get_verified_solution(page: PageIndex) -> Option<ReadySolutionPage<Self::AccountId>> {
+		fn get_verified_solution(page: PageIndex) -> Option<Supports<Self::AccountId>> {
 			QueuedSolution::<T>::get_verified_solution(page)
 		}
 

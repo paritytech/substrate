@@ -142,8 +142,8 @@ pub mod pallet {
 		///   the procedure given above, then the constant ratio is equal to 2.
 		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined according to
 		///   the procedure given above, then the constant ratio is approximately equal to 1.248.
-		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will
-		///   fall into bag 0, an id with weight 2 will fall into bag 1, etc.
+		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will fall
+		///   into bag 0, an id with weight 2 will fall into bag 1, etc.
 		///
 		/// # Migration
 		///
@@ -163,8 +163,10 @@ pub mod pallet {
 
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
+	// TODO: we make this public for now only for the sake of the remote-ext tests, find another way
+	// around it.
 	#[pallet::storage]
-	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]

@@ -1899,10 +1899,10 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
+			let supports = <Test as Config>::ElectionProvider::elect(0).unwrap();
 			assert_eq!(
-				&supports,
-				&vec![
+				supports,
+				vec![
 					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
 					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
 				],
@@ -1943,7 +1943,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21]));
 
 			// winners should be 21 and 11.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
+			let supports = <Test as Config>::ElectionProvider::elect(0).unwrap();
 			assert_eq!(
 				supports,
 				vec![
@@ -3822,7 +3822,6 @@ mod election_data_provider {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None, 0)
 				.unwrap()
-				.0
 				.into_iter()
 				.find(|(w, _, t)| { v == *w && t[0] == *w })
 				.is_some()))
@@ -3836,7 +3835,6 @@ mod election_data_provider {
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None, 0)
 					.unwrap()
-					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -3852,7 +3850,6 @@ mod election_data_provider {
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None, 0)
 					.unwrap()
-					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -3865,7 +3862,6 @@ mod election_data_provider {
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None, 0)
 					.unwrap()
-					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -3891,7 +3887,7 @@ mod election_data_provider {
 
 				// we have 6 voters in total, get them over two pages, each 4 max.
 				assert_eq!(
-					Staking::voters(Some(4), 1).unwrap().0,
+					Staking::voters(Some(4), 1).unwrap(),
 					vec![
 						// first come the validators and the self votes.
 						(21, 1000, vec![21]),
@@ -3904,8 +3900,8 @@ mod election_data_provider {
 
 				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
 				assert_eq!(
-					Staking::voters(Some(4), 0).unwrap().0,
-					vec![(71, 500, vec![11]), (81, 500, vec![11]), (91, 500, vec![11]),]
+					Staking::voters(Some(4), 0).unwrap(),
+					vec![(71, 500, vec![11]), (81, 500, vec![11]), (91, 500, vec![11])]
 				);
 				assert_eq!(LastIteratedNominator::<Test>::get(), None);
 			});
@@ -3913,26 +3909,32 @@ mod election_data_provider {
 
 	#[test]
 	fn respects_snapshot_len_limits() {
-		ExtBuilder::default().build_and_execute(|| {
-			// sum of all nominators who'd be voters, plus the self votes.
-			assert_eq!(
-				<Test as Config>::SortedListProvider::count() +
-					<Validators<Test>>::iter().count() as u32,
-				5
-			);
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.build_and_execute(|| {
+				// sum of all nominators who'd be voters (1), plus the self-votes (4).
+				assert_eq!(
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
+					5
+				);
 
-			// if limits is less, but enough to get validators and self votes.
-			assert_eq!(Staking::voters(Some(2), 0).unwrap().0.len(), 2);
+				// if limits is less..
+				assert_eq!(Staking::voters(Some(1), 0).unwrap().len(), 1);
 
-			// if limit is equal..
-			assert_eq!(Staking::voters(Some(5), 0).unwrap().0.len(), 5);
+				// if limit is equal..
+				assert_eq!(Staking::voters(Some(5), 0).unwrap().len(), 5);
 
-			// if limit is more.
-			assert_eq!(Staking::voters(Some(55), 0).unwrap().0.len(), 5);
+				// if limit is more.
+				assert_eq!(Staking::voters(Some(55), 0).unwrap().len(), 5);
 
-			// if target limit is less, then we return an error.
-			assert_eq!(Staking::targets(Some(1), 0).unwrap_err(), "Target snapshot too big");
-		});
+				// if target limit is more..
+				assert_eq!(Staking::targets(Some(6), 0).unwrap().len(), 4);
+				assert_eq!(Staking::targets(Some(4), 0).unwrap().len(), 4);
+
+				// if target limit is less, then we return an error.
+				assert_eq!(Staking::targets(Some(1), 0).unwrap_err(), "Target snapshot too big");
+			});
 	}
 
 	#[test]

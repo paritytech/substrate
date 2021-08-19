@@ -227,7 +227,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider, PageIndex};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -235,27 +235,14 @@ use frame_support::{
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 };
-use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_arithmetic::{
 	traits::{CheckedAdd, Saturating, Zero},
 	UpperOf,
 };
-use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, NposSolution,
-	PerThing128, Supports, VoteWeight,
-};
-use sp_runtime::{
-	traits::Bounded,
-	transaction_validity::{
-		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
-		TransactionValidityError, ValidTransaction,
-	},
-	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
-};
+use sp_npos_elections::{NposSolution, VoteWeight};
+use sp_runtime::{traits::Bounded, PerThing, SaturatedConversion};
 use sp_std::{convert::TryInto, prelude::*};
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[macro_use]
@@ -312,7 +299,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmerg
 	type DataProvider = T::DataProvider;
 	type Error = ElectionError;
 
-	fn elect(remaining: PageIndex) -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
 		ensure!(remaining == 0, ElectionError::Fallback("fallback should only have 1 page"));
 		log!(warn, "Entering emergency phase.");
 		CurrentPhase::<T>::put(Phase::Emergency);
@@ -844,13 +831,13 @@ impl<T: Config> Pallet<T> {
 	pub fn create_targets_snapshot() -> Result<u32, ElectionError> {
 		log!(trace, "creating target snapshot");
 		// if requested, get the targets as well.
-		let (desired_targets, _) =
+		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 		<DesiredTargets<T>>::put(desired_targets);
 
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 
-		let (targets, _) =
+		let targets =
 			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
 
 		let length = targets.len();
@@ -885,7 +872,7 @@ impl<T: Config> Pallet<T> {
 		log!(trace, "creating paged snapshot, {} pages remaining", remaining);
 
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
-		let (voters, _) = T::DataProvider::voters(Some(voter_limit), remaining)
+		let voters = T::DataProvider::voters(Some(voter_limit), remaining)
 			.map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
@@ -953,25 +940,26 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
 
-	fn elect(remaining: PageIndex) -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
-		let ready_page = T::Verifier::get_verified_solution(remaining)
+	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+		T::Verifier::get_verified_solution(remaining)
 			.ok_or(ElectionError::SupportPageNotAvailable)
 			.or_else(|err| {
 				// if this is the last page, we might use the fallback to do something.
 				if remaining.is_zero() {
-					T::Fallback::elect(remaining).map(|(x, _)| x)
+					T::Fallback::elect(remaining)
 				} else {
-					err
+					Err(err)
 				}
 			})
-			.map(|ready_page| {
-				// only if this returns `Ok` and it is the last round we clear our data
+			.map(|supports| {
+				// if either of `Verifier` or `Fallback` was okay, and if this is the last page,
+				// then clear everything.
 				if remaining.is_zero() {
 					Self::rotate_round()
 				}
-			})?;
 
-		Ok((ready_page.supports, 0))
+				supports
+			})
 	}
 }
 

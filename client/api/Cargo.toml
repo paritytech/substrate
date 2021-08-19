@@ -14,25 +14,21 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+    "derive",
+] }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-derive_more = "0.99.2"
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }
 fnv = "1.0.6"
 futures = "0.3.1"
 hash-db = { version = "0.15.2", default-features = false }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-kvdb = "0.10.0"
 log = "0.4.8"
 parking_lot = "0.11.1"
-lazy_static =  "1.4.0"
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
@@ -43,7 +39,6 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-kvdb-memorydb = "0.10.0"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime"  }
+substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 thiserror = "1.0.21"

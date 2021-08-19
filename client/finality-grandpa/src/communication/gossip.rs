@@ -101,9 +101,8 @@ use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -1194,19 +1193,21 @@ impl<Block: BlockT> Inner<Block> {
 		catch_up_request: &CatchUpRequestMessage,
 	) -> (bool, Option<Report>) {
 		let report = match &self.pending_catch_up {
-			PendingCatchUp::Requesting { who: peer, instant, .. } =>
+			PendingCatchUp::Requesting { who: peer, instant, .. } => {
 				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
 					return (false, None)
 				} else {
 					// report peer for timeout
 					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
-				},
-			PendingCatchUp::Processing { instant, .. } =>
+				}
+			},
+			PendingCatchUp::Processing { instant, .. } => {
 				if instant.elapsed() < CATCH_UP_PROCESS_TIMEOUT {
 					return (false, None)
 				} else {
 					None
-				},
+				}
+			},
 			_ => None,
 		};
 

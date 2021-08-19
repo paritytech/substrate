@@ -415,26 +415,21 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
-		let (election_result, weight) = if is_genesis {
-			T::GenesisElectionProvider::elect().map_err(|e| {
+		let election_result = if is_genesis {
+			// TODO: all of this should become paged as well.
+			T::GenesisElectionProvider::elect(0).map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
 			})
 		} else {
-			T::ElectionProvider::elect().map_err(|e| {
+			T::ElectionProvider::elect(0).map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
 			})
 		}
 		.ok()?;
 
-		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
-			frame_support::weights::DispatchClass::Mandatory,
-		);
-
 		let exposures = Self::collect_exposures(election_result);
-
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
 			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
 			match CurrentEra::<T>::get() {
@@ -676,6 +671,8 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
+		// TODO: register weight.
+
 		round_voters
 	}
 
@@ -685,6 +682,8 @@ impl<T: Config> Pallet<T> {
 	/// that it is accurate.
 	///
 	/// This will use on-chain nominators, and all the validators will inject a self vote.
+	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
 	/// ### Slashing
 	///
@@ -698,6 +697,8 @@ impl<T: Config> Pallet<T> {
 		let nominator_count = CounterForNominators::<T>::get() as usize;
 		let validator_count = CounterForValidators::<T>::get() as usize;
 		let all_voter_count = validator_count.saturating_add(nominator_count);
+		drop(validator_count);
+		drop(nominator_count);
 
 		let max_allowed_len = maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count);
 		drop(all_voter_count);
@@ -708,16 +709,19 @@ impl<T: Config> Pallet<T> {
 		assert!(maybe_max_len.map_or(true, |m| validator_count < m));
 
 		// first, grab all validators, capped by the maximum allowed length.
+		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
 			let self_vote =
 				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
+			validators_taken.saturating_inc();
 		}
 
 		// .. and grab whatever we have left from nominators.
-		let nominators_quota = max_allowed_len.saturating_sub(validator_count);
+		let nominators_quota = max_allowed_len.saturating_sub(validators_taken as usize);
 		let mut all_nominators = Vec::with_capacity(nominators_quota);
+		let mut nominators_taken = 0u32;
 		for nominator in T::SortedListProvider::iter().take(nominators_quota) {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
@@ -728,7 +732,8 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_nominators.push((nominator.clone(), Self::weight_of(&nominator), targets))
+					all_nominators.push((nominator.clone(), Self::weight_of(&nominator), targets));
+					nominators_taken.saturating_inc();
 				}
 			} else {
 				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
@@ -748,22 +753,38 @@ impl<T: Config> Pallet<T> {
 		// all_voters should have never re-allocated.
 		debug_assert_eq!(all_voters.capacity(), all_voters.len());
 
+		Self::register_weight(T::WeightInfo::get_npos_voters(
+			validators_taken,
+			nominators_taken,
+			slashing_spans.len() as u32,
+		));
+
 		log!(
 			debug,
 			"generated {} npos voters, {} from validators and {} nominators, leftover calls: {}",
 			all_voters.len(),
-			validator_count,
-			nominators_quota,
+			validators_taken,
+			nominators_taken,
 			remaining,
 		);
 		all_voters
 	}
 
-	/// This is a very expensive function and result should be cached versus being called multiple
-	/// times.
+	/// Get the targets for an upcoming npos election.
+	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		// all current validators to be included
-		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+		let mut validator_count = 0u32;
+		let targets = Validators::<T>::iter()
+			.map(|(v, _)| {
+				validator_count.saturating_inc();
+				v
+			})
+			.collect::<Vec<_>>();
+
+		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
+
+		targets
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
@@ -844,18 +865,30 @@ impl<T: Config> Pallet<T> {
 			false
 		}
 	}
+
+	/// Register some amount of weight directly with the system pallet.
+	///
+	/// This is always mandatory weight.
+	fn register_weight(weight: Weight) {
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
+	}
 }
 
 impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
-	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
-		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
+
+	fn desired_targets() -> data_provider::Result<u32> {
+		Self::register_weight(T::DbWeight::get().reads(1));
+		Ok(Self::validator_count())
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 		// check a few counters one last time...
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
@@ -867,28 +900,28 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 		if let Some(last) = LastIteratedNominator::<T>::get() {
-			Ok((Self::get_npos_voters_continue(maybe_max_len, remaining, last, &slashing_spans), 0))
+			Ok(Self::get_npos_voters_continue(maybe_max_len, remaining, last, &slashing_spans))
 		} else {
-			Ok((Self::get_npos_voters_init(maybe_max_len, remaining, &slashing_spans), 0))
+			Ok(Self::get_npos_voters_init(maybe_max_len, remaining, &slashing_spans))
 		}
 	}
 
 	fn targets(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+	) -> data_provider::Result<Vec<T::AccountId>> {
 		if remaining > 0u8 {
 			return Err("Targets must only have page size 0.")
 		}
 
 		let target_count = CounterForValidators::<T>::get() as usize;
 
+		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big")
 		}
 
-		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
-		Ok((Self::get_npos_targets(), weight))
+		Ok(Self::get_npos_targets())
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
@@ -924,7 +957,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
 		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
@@ -944,7 +977,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_target(target: T::AccountId) {
 		let stake = MinValidatorBond::<T>::get() * 100u32.into();
 		<Bonded<T>>::insert(target.clone(), target.clone());
@@ -964,7 +997,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
 		<Bonded<T>>::remove_all(None);
 		<Ledger<T>>::remove_all(None);
@@ -972,7 +1005,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Nominators<T>>::remove_all(None);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,

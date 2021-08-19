@@ -363,8 +363,7 @@ mod tests {
 			roll_to, roll_to_with_ocw, BlockNumber, Call as OuterCall, ExtBuilder, Extrinsic,
 			MinerMaxWeight, MultiPhase, Origin, Runtime, System, TestNposSolution, UnsignedPhase,
 		},
-		AssignmentOf, CurrentPhase, InvalidTransaction, Phase, TransactionSource,
-		TransactionValidityError,
+		AssignmentOf, CurrentPhase, Phase,
 	};
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};

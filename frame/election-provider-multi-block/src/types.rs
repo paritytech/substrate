@@ -30,12 +30,6 @@ impl<S: Default> Default for PagedRawSolution<S> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, codec::Encode, codec::Decode, sp_runtime::RuntimeDebug, Default)]
-pub struct ReadySolutionPage<AccountId> {
-	pub supports: Supports<AccountId>,
-	pub score: ElectionScore,
-}
-
 /// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
 /// voted.
 pub type Voter<T> = (

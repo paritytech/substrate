@@ -249,8 +249,9 @@ impl fmt::Display for OpenDbError {
 		match self {
 			OpenDbError::Internal(e) => write!(f, "{}", e.to_string()),
 			OpenDbError::DoesNotExist => write!(f, "Database does not exist at given location"),
-			OpenDbError::NotEnabled(feat) =>
-				write!(f, "`{}` feature not enabled, database can not be opened", feat),
+			OpenDbError::NotEnabled(feat) => {
+				write!(f, "`{}` feature not enabled, database can not be opened", feat)
+			},
 		}
 	}
 }

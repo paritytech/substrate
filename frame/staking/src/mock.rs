@@ -36,6 +36,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
+use substrate_test_utils::assert_eq_uvec;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -259,7 +260,6 @@ impl pallet_bags_list::Config for Test {
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
-	type BlockWeights = BlockWeights;
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 	type TargetsPageSize = ();
@@ -875,14 +875,13 @@ pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
 
-/// ensure that the given staking ledger has `total`, `own`, and is being only backed by `others`.
 pub(crate) fn assert_eq_exposure(
-	exposure: Exposure<AccountId, Balance>,
+	expo: Exposure<AccountId, Balance>,
 	total: Balance,
 	own: Balance,
-	others: Vec<IndividualExposure<AccountId, Balance>>,
+	individual: Vec<IndividualExposure<AccountId, Balance>>,
 ) {
-	assert_eq!(exposure.total, total);
-	assert_eq!(exposure.own, own);
-	substrate_test_utils::assert_eq_uvec!(exposure.others, others);
+	assert_eq!(expo.total, total);
+	assert_eq!(expo.own, own);
+	assert_eq_uvec!(expo.others, individual);
 }
