@@ -183,7 +183,7 @@ where
 			}
 		};
 
-		match self.runtime.block_on(time::timeout(MAX_WAIT_TIME, future)) {
+		match self.runtime.block_on(async move { time::timeout(MAX_WAIT_TIME, future).await }) {
 			Ok(Ok(())) => (),
 			Ok(Err(())) => unreachable!("future never fails; qed"),
 			Err(_) => panic!("Waited for too long"),
