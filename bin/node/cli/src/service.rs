@@ -28,10 +28,7 @@ use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::{Event, NetworkService};
-use sc_service::{
-	config::Configuration, error::Error as ServiceError, CustomMiddleware, NoopCustomMiddleware,
-	RpcHandlers, RpcMetadata, TaskManager,
-};
+use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
@@ -278,23 +275,21 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let _rpc_handlers = sc_service::spawn_tasks::<_, _, _, _, _, NoopCustomMiddleware>(
-		sc_service::SpawnTasksParams {
-			config,
-			backend: backend.clone(),
-			client: client.clone(),
-			keystore: keystore_container.sync_keystore(),
-			network: network.clone(),
-			rpc_extensions_builder: Box::new(rpc_extensions_builder),
-			transaction_pool: transaction_pool.clone(),
-			task_manager: &mut task_manager,
-			on_demand: None,
-			remote_blockchain: None,
-			system_rpc_tx,
-			telemetry: telemetry.as_mut(),
-			optional: Default::default(),
-		},
-	)?;
+	let _rpc_handlers: RpcHandlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+		config,
+		backend: backend.clone(),
+		client: client.clone(),
+		keystore: keystore_container.sync_keystore(),
+		network: network.clone(),
+		rpc_extensions_builder: Box::new(rpc_extensions_builder),
+		transaction_pool: transaction_pool.clone(),
+		task_manager: &mut task_manager,
+		on_demand: None,
+		remote_blockchain: None,
+		system_rpc_tx,
+		telemetry: telemetry.as_mut(),
+		optional: Default::default(),
+	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
 
@@ -439,29 +434,11 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 }
 
 pub fn new_light_base(
-	config: Configuration,
-) -> Result<
-	(
-		TaskManager,
-		RpcHandlers<NoopCustomMiddleware>,
-		Arc<LightClient>,
-		Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-		Arc<
-			sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>,
-		>,
-	),
-	ServiceError,
-> {
-	new_light_base_with_rpc_middleware(config, NoopCustomMiddleware::default())
-}
-
-pub fn new_light_base_with_rpc_middleware<CM: CustomMiddleware<RpcMetadata>>(
 	mut config: Configuration,
-	rpc_middleware: CM,
 ) -> Result<
 	(
 		TaskManager,
-		RpcHandlers<CM>,
+		RpcHandlers<()>,
 		Arc<LightClient>,
 		Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 		Arc<
@@ -607,22 +584,21 @@ pub fn new_light_base_with_rpc_middleware<CM: CustomMiddleware<RpcMetadata>>(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let rpc_handlers =
-		sc_service::spawn_tasks::<_, _, _, _, _, CM>(sc_service::SpawnTasksParams {
-			on_demand: Some(on_demand),
-			remote_blockchain: Some(backend.remote_blockchain()),
-			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
-			client: client.clone(),
-			transaction_pool: transaction_pool.clone(),
-			keystore: keystore_container.sync_keystore(),
-			config,
-			backend,
-			system_rpc_tx,
-			network: network.clone(),
-			task_manager: &mut task_manager,
-			telemetry: telemetry.as_mut(),
-			optional: sc_service::OptionalSpawnTasksParams { rpc_middleware },
-		})?;
+	let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+		on_demand: Some(on_demand),
+		remote_blockchain: Some(backend.remote_blockchain()),
+		rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
+		client: client.clone(),
+		transaction_pool: transaction_pool.clone(),
+		keystore: keystore_container.sync_keystore(),
+		config,
+		backend,
+		system_rpc_tx,
+		network: network.clone(),
+		task_manager: &mut task_manager,
+		telemetry: telemetry.as_mut(),
+		optional: Default::default(),
+	})?;
 
 	network_starter.start_network();
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))

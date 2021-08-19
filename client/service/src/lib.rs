@@ -72,7 +72,7 @@ pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
 pub use sc_rpc::Metadata as RpcMetadata;
-pub use sc_rpc_server::{CustomMiddleware, NoopCustomMiddleware};
+pub use sc_rpc_server::CustomMiddleware;
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
@@ -96,7 +96,7 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers<CM: CustomMiddleware<RpcMetadata>>(
+pub struct RpcHandlers<CM: CustomMiddleware<RpcMetadata> = ()>(
 	Arc<jsonrpc_core::MetaIoHandler<RpcMetadata, RpcMiddleware<CM>>>,
 );
 

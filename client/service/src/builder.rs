@@ -47,7 +47,7 @@ use sc_network::{
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
-use sc_rpc_server::{CustomMiddleware, NoopCustomMiddleware};
+use sc_rpc_server::CustomMiddleware;
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -465,7 +465,7 @@ where
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl, TCl, TExPool, TRpc, Backend, TCm = NoopCustomMiddleware>
+pub struct SpawnTasksParams<'a, TBl, TCl, TExPool, TRpc, Backend, TCm = ()>
 where
 	TBl: BlockT,
 	TCm: CustomMiddleware<sc_rpc::Metadata>,
@@ -502,12 +502,13 @@ where
 
 /// Optional parameters
 #[derive(Default)]
-pub struct OptionalSpawnTasksParams<TCm = NoopCustomMiddleware>
+pub struct OptionalSpawnTasksParams<TCm = ()>
 where
 	TCm: CustomMiddleware<sc_rpc::Metadata>,
 	RpcHandlers<TCm>: Clone,
 {
-	pub rpc_middleware: TCm,
+	/// RPC middleware
+	pub rpc_middleware: Option<TCm>,
 }
 
 /// Build a shared offchain workers instance.
@@ -667,7 +668,7 @@ where
 			RpcMiddleware::<TCm>::new_with_custom_middleware(
 				rpc_metrics,
 				"inbrowser",
-				rpc_middleware,
+				rpc_middleware.unwrap_or_default(),
 			),
 		)?
 		.into(),

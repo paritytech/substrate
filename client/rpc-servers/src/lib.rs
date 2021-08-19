@@ -42,7 +42,7 @@ const HTTP_THREADS: usize = 4;
 pub type RpcHandler<T, CM> = pubsub::PubSubHandler<T, RpcMiddleware<T, CM>>;
 
 pub use self::inner::*;
-pub use middleware::{CustomMiddleware, NoopCustomMiddleware, RpcMetrics, RpcMiddleware};
+pub use middleware::{CustomMiddleware, RpcMetrics, RpcMiddleware};
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<M: PubSubMetadata + Sync, CM: CustomMiddleware<M>>(
