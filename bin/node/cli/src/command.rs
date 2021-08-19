@@ -21,6 +21,7 @@ use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{ChainSpec, Result, Role, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+use futures::FutureExt;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -76,10 +77,10 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_signal(|config| async move {
+			runner.async_run(|config| {
 				match config.role {
 					// Role::Light => service::new_light(config),
-					_ => service::new_full(config),
+					_ => service::new_full(config).map(|v| (v.1.map(Ok), v.0)),
 				}
 				.map_err(sc_cli::Error::Service)
 			})

@@ -39,17 +39,17 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
-struct BailingVerifier<Client, V>{
-	client: Client,
+struct BailingVerifier<V>{
+	client: Arc<FullClient>,
 	verifier: V,
-	signal_shutdown: exit_future::Signal,
+	signal_shutdown: Option<exit_future::Signal>,
 }
 
-impl<Client, V> BailingVerifier<Client, V>
+impl<V> BailingVerifier<V>
 {
-	fn new(verifier: V, client: Client, signal_shutdown: exit_future::Signal) -> Self
+	fn new(verifier: V, client: Arc<FullClient>, signal_shutdown: exit_future::Signal) -> Self
 	{
-		Self { verifier, client, signal_shutdown }
+		Self { verifier, client, signal_shutdown: Some(signal_shutdown) }
 	}
 }
 
@@ -66,19 +66,9 @@ type BlockVerificationResult<Block> =
 	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 
 #[async_trait::async_trait]
-impl<Block, Client, V> Verifier<Block>
-	for BailingVerifier<Client, V>
+impl<V> Verifier<Block>
+	for BailingVerifier<V>
 where
-	Block: BlockT,
-	Client: ProvideRuntimeApi<Block>
-		+ sp_blockchain::ProvideCache<Block>
-		+ HeaderBackend<Block>
-		+ sp_blockchain::HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ AuxStore
-		+ Send
-		+ Sync
-		+ 'static,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	V: Verifier<Block>,
 {
 	async fn verify(
@@ -95,7 +85,7 @@ where
 			.has_api::<dyn BabeApi<Block>>(&block_id)
 			.unwrap_or(false) {
 			log::debug!("shutting down!");
-			self.signal_shutdown.fire();
+			self.signal_shutdown.take().map(|s| s.fire());
 			Ok((block_import, None))
 		} else {
 			self.verifier.verify(block_import).await
@@ -111,7 +101,7 @@ pub fn new_partial(
 		FullClient,
 		FullBackend,
 		FullSelectChain,
-		sc_consensus::DefaultImportQueue<Block, FullClient>,
+		impl sc_consensus::ImportQueue<Block>,
 		sc_transaction_pool::FullPool<Block, FullClient>,
 		(
 			impl Fn(
