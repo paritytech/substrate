@@ -30,7 +30,7 @@ use sc_client_api::{
 	RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
 	RemoteReadChildRequest, RemoteReadRequest, Storage, StorageProof, StorageProvider,
 };
-use sc_executor::{NativeExecutor, RuntimeVersion, WasmExecutionMethod};
+use sc_executor::{NativeElseWasmExecutor, RuntimeVersion, WasmExecutionMethod};
 use sc_light::{
 	backend::{Backend, GenesisOrUnavailableState},
 	blockchain::{Blockchain, BlockchainCache},
@@ -258,8 +258,9 @@ impl CallExecutor<Block> for DummyCallExecutor {
 	}
 }
 
-fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+fn local_executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch>
+{
+	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
 #[test]
@@ -446,7 +447,7 @@ fn code_is_executed_at_genesis_only() {
 }
 
 type TestChecker = LightDataChecker<
-	NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
+	NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch>,
 	Block,
 	DummyStorage,
 >;

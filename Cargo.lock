@@ -4250,6 +4250,7 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
+ "sc-executor",
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
@@ -4322,6 +4323,7 @@ dependencies = [
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
+ "sc-executor",
  "sc-service",
  "sp-blockchain",
  "sp-core",
@@ -5084,6 +5086,8 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "static_assertions",
+ "strum 0.21.0",
+ "strum_macros 0.21.1",
 ]
 
 [[package]]
@@ -5577,7 +5581,6 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
- "rand 0.8.4",
  "rand_chacha 0.2.2",
  "serde",
  "sp-application-crypto",
@@ -9110,7 +9113,7 @@ dependencies = [
  "lazy_static",
  "sp-core",
  "sp-runtime",
- "strum",
+ "strum 0.20.0",
 ]
 
 [[package]]
@@ -9595,14 +9598,32 @@ version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
 dependencies = [
- "strum_macros",
+ "strum_macros 0.20.1",
 ]
+
+[[package]]
+name = "strum"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
 
 [[package]]
 name = "strum_macros"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d06aaeeee809dbc59eb4556183dd927df67db1540de5be8d3ec0b6636358a5ec"
 dependencies = [
  "heck",
  "proc-macro2",

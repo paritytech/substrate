@@ -55,8 +55,7 @@ pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/rewar
 pallet-bags-list = { version = "4.0.0-dev",  path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
-frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
-rand = "0.8.4"
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 rand_chacha = { version = "0.2" }
 
 [features]
