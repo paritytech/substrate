@@ -202,7 +202,7 @@ impl<E, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, B, S> {
 					}
 
 					// check proof for single changes trie root
-					let proving_backend = TrieBackend::new(storage, local_cht_root);
+					let proving_backend = TrieBackend::new(storage, local_cht_root, None);
 					let remote_changes_trie_root = remote_roots[&block];
 					cht::check_proof_on_proving_backend::<B::Header, HashFor<B>>(
 						local_cht_root,

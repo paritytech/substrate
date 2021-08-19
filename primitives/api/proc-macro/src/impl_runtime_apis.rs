@@ -279,10 +279,10 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				self.recorder.clone()
 			}
 
-			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
+			fn extract_proof(&mut self, alt_hashing: Option<Option<u32>>) -> Option<#crate_::StorageProof> {
 				self.recorder
 					.take()
-					.map(|recorder| recorder.to_storage_proof::<#crate_::HashFor<Block>>())
+					.map(|recorder| recorder.to_storage_proof::<#crate_::HashFor<Block>>(alt_hashing))
 			}
 
 			fn into_storage_changes(

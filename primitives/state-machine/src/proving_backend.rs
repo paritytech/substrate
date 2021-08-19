@@ -389,6 +389,10 @@ where
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
 	}
+
+	fn alt_hashing(&self) -> Option<Option<u32>> {
+		self.0.force_alt_hashing.clone()
+	}
 }
 
 /// Create proof check backend.

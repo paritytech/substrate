@@ -34,7 +34,7 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use futures::executor;
-use node_primitives::Block;
+use node_primitives::{Block, BlockNumber};
 use node_runtime::{
 	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
 	Signature, SystemCall, UncheckedExtrinsic,
@@ -387,7 +387,8 @@ impl BenchDb {
 		};
 		let task_executor = TaskExecutor::new();
 
-		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
+		let state_versions = vec![(BlockNumber::zero(), None)]; // TODO switch to default (more recent).
+		let backend = sc_service::new_db_backend(db_config, state_versions).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
 			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),

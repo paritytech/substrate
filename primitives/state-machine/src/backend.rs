@@ -276,6 +276,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()
 	}
+
+	/// Get current state version in use.
+	fn alt_hashing(&self) -> Option<Option<u32>>;
 }
 
 /// Trait that allows consolidate two transactions together.

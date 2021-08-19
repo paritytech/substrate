@@ -59,9 +59,12 @@ const IN_MEMORY_EXPECT_PROOF: &str =
 	"InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, H: Hasher> {
+pub struct Backend<S, Block: BlockT> {
 	blockchain: Arc<Blockchain<S>>,
-	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
+	genesis_state: RwLock<Option<InMemoryBackend<HashFor<Block>>>>,
+	alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>, // TODO have specific type for history of versions 
+	// Also TODO consider moving this alt_hashing into BlockChain (and add N to type) -> would make
+	// better api
 	import_lock: RwLock<()>,
 }
 
@@ -75,6 +78,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
+	alt_hashing: Option<Option<u32>>,
 	_phantom: std::marker::PhantomData<S>,
 }
 
@@ -87,10 +91,10 @@ pub enum GenesisOrUnavailableState<H: Hasher> {
 	Unavailable,
 }
 
-impl<S, H: Hasher> Backend<S, H> {
+impl<S, B: BlockT> Backend<S, B> {
 	/// Create new light backend.
-	pub fn new(blockchain: Arc<Blockchain<S>>) -> Self {
-		Self { blockchain, genesis_state: RwLock::new(None), import_lock: Default::default() }
+	pub fn new(blockchain: Arc<Blockchain<S>>, alt_hashing: Vec<(NumberFor<B>, Option<Option<u32>>)>) -> Self {
+		Self { blockchain, genesis_state: RwLock::new(None), import_lock: Default::default(), alt_hashing }
 	}
 
 	/// Get shared blockchain reference.
@@ -99,7 +103,7 @@ impl<S, H: Hasher> Backend<S, H> {
 	}
 }
 
-impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
+impl<S: AuxStore, B: BlockT> AuxStore for Backend<S, B> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -119,7 +123,7 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 	}
 }
 
-impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
+impl<S, Block> ClientBackend<Block> for Backend<S, Block>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
@@ -140,15 +144,28 @@ where
 			set_head: None,
 			storage_update: None,
 			changes_trie_config_update: None,
+			alt_hashing: None, // TODO this needs to be undefined with versioning (Option<StateVersion>).
 			_phantom: Default::default(),
 		})
 	}
 
 	fn begin_state_operation(
 		&self,
-		_operation: &mut Self::BlockImportOperation,
-		_block: BlockId<Block>,
+		operation: &mut Self::BlockImportOperation,
+		block: BlockId<Block>,
 	) -> ClientResult<()> {
+
+		if let Some(number) = self.blockchain.storage().block_number_from_id(&block)? {
+			let mut version = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
+			// TODO from utils of Version history
+			for (change_state, state) in self.alt_hashing.iter() {
+				if &number > change_state {
+					break
+				}
+				version = *state;
+			}
+			operation.alt_hashing = version;
+		}
 		Ok(())
 	}
 
@@ -261,7 +278,7 @@ where
 	}
 }
 
-impl<S, Block> RemoteBackend<Block> for Backend<S, HashFor<Block>>
+impl<S, Block> RemoteBackend<Block> for Backend<S, Block>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block> + 'static,
@@ -355,7 +372,7 @@ where
 			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
-		let storage_update = InMemoryBackend::from(storage);
+		let storage_update = InMemoryBackend::from((storage, self.alt_hashing.clone()));
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		if commit {
 			self.storage_update = Some(storage_update);
@@ -573,6 +590,13 @@ where
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
+		}
+	}
+
+	fn alt_hashing(&self) -> Option<Option<u32>> {
+		match self {
+			GenesisOrUnavailableState::Genesis(state) => state.force_alt_hashing.clone(),
+			GenesisOrUnavailableState::Unavailable => Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)),
 		}
 	}
 }

@@ -52,7 +52,7 @@ impl StorageProof {
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
 	pub fn empty(alt_hashing: Option<Option<u32>>) -> Self {
-		// TODO consider alt_hashing default value.
+		// TODO consider alt_hashing default value. ++
 		StorageProof { trie_nodes: Vec::new(), alt_hashing }
 	}
 

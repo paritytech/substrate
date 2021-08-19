@@ -296,6 +296,10 @@ where
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
+
+	fn alt_hashing(&self) -> Option<Option<u32>> {
+		self.force_alt_hashing.clone()
+	}
 }
 
 #[cfg(test)]

@@ -19,7 +19,7 @@
 //! Light client components.
 
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_runtime::traits::{Block as BlockT, HashFor};
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 use std::sync::Arc;
 
 pub mod backend;
@@ -50,10 +50,10 @@ pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> A
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HashFor<B>>>
+pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>, alt_hashing: Vec<(NumberFor<B>, Option<Option<u32>>)>) -> Arc<Backend<S, B>>
 where
 	B: BlockT,
 	S: BlockchainStorage<B>,
 {
-	Arc::new(Backend::new(blockchain))
+	Arc::new(Backend::new(blockchain, alt_hashing))
 }

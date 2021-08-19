@@ -170,6 +170,9 @@ struct ClientSpec<E> {
 	/// block hash onwards.
 	#[serde(default)]
 	code_substitutes: HashMap<String, Bytes>,
+	/// Ordered sequence of block number and their associated state version.
+	#[serde(default)]
+	state_versions: Vec<(u64, Option<Option<u32>>)>,
 }
 
 /// A type denoting empty extensions.
@@ -261,6 +264,7 @@ impl<G, E> ChainSpec<G, E> {
 			consensus_engine: (),
 			genesis: Default::default(),
 			code_substitutes: HashMap::new(),
+			state_versions: vec![(0, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))],
 		};
 
 		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }
@@ -269,6 +273,11 @@ impl<G, E> ChainSpec<G, E> {
 	/// Type of the chain.
 	fn chain_type(&self) -> ChainType {
 		self.client_spec.chain_type.clone()
+	}
+
+	/// Defined state version for the chain.
+	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)> {
+		self.client_spec.state_versions.clone()
 	}
 }
 
@@ -400,6 +409,10 @@ where
 			.iter()
 			.map(|(h, c)| (h.clone(), c.0.clone()))
 			.collect()
+	}
+
+	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)> {
+		ChainSpec::state_versions(self)
 	}
 }
 

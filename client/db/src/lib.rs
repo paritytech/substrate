@@ -286,6 +286,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
 	}
+
+	fn alt_hashing(&self) -> Option<Option<u32>> {
+		self.state.alt_hashing()
+	}
 }
 
 /// Database settings.
@@ -1114,15 +1118,30 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
+	alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>, // TODO have specific type for history of versions 
+	// Also TODO consider moving this alt_hashing into BlockChainBb
 }
 
 impl<Block: BlockT> Backend<Block> {
+	// TODO util of StateVersionHistory
+	fn alt_hashing_at(&self, at: &NumberFor<Block>) -> Option<Option<u32>> {
+		// Default
+		let mut result = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
+		for (start, alt) in self.alt_hashing.iter() {
+			if start > at {
+				break;
+			}
+			result = alt.clone();
+		}
+		result
+	}
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64, alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>) -> ClientResult<Self> {
+		// TODO alt_hashing could also be part of database settings
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
-		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
+		Self::from_database(db as Arc<_>, canonicalization_delay, &config, alt_hashing)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1152,14 +1171,16 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 			transaction_storage,
 		};
+		let alt_hashing = Vec::new();
 
-		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+		Self::new(db_setting, canonicalization_delay, alt_hashing).expect("failed to create test-db")
 	}
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
+		alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>, // TODO could also be part of database settings
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
@@ -1203,6 +1224,7 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
 			genesis_state: RwLock::new(None),
+			alt_hashing,
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1870,7 +1892,18 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+		// alt_hashing for genesis in empty state.
+		let mut alt_hashing = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)); // Default
+		// TODO replace by inner search for number
+		if let Some((first, alt)) = self.alt_hashing.get(0) {
+			// chain should always define their state
+			// otherwhise uses latest state, but will need definition
+			// when default may change.
+			if first.is_zero() {
+				alt_hashing = alt.clone();
+			}
+		}
+		let db_state = DbState::<Block>::new(self.storage.clone(), root, alt_hashing);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 		Ok(SyncingCachingState::new(
@@ -2335,15 +2368,23 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		let is_genesis = match &block {
-			BlockId::Number(n) if n.is_zero() => true,
-			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => true,
-			_ => false,
+		let (is_genesis, number) = match &block {
+			BlockId::Number(n) => (n.is_zero(), *n),
+			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => {
+				(true, NumberFor::<Block>::zero())
+			},
+			BlockId::Hash(h) => {
+				let n = self.blockchain.number(*h)?.ok_or_else(|| {
+					sp_blockchain::Error::UnknownBlock(format!("Unknown number for block hash {}", h))
+				})?;
+				(false, n)
+			},
 		};
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
 				let root = genesis_state.root.clone();
-				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
+				let alt_hashing = self.alt_hashing_at(&number);
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root, alt_hashing);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 				let mut state = SyncingCachingState::new(
@@ -2374,7 +2415,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = DbState::<Block>::new(self.storage.clone(), root);
+					let alt_hashing = self.alt_hashing_at(&number);
+					let db_state = DbState::<Block>::new(self.storage.clone(), root, alt_hashing);
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					let caching_state =

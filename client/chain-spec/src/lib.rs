@@ -187,6 +187,9 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	fn set_storage(&mut self, storage: Storage);
 	/// Returns code substitutes that should be used for the on chain wasm.
 	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>>;
+	/// State versions for the chain.
+	/// Uses default state version when no definition from block 0.
+	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)>;
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

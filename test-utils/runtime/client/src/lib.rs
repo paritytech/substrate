@@ -39,7 +39,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage, StorageChild},
 	ChangesTrieConfiguration,
 };
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 
 /// A prelude to import in tests.
@@ -84,7 +84,7 @@ pub type LightExecutor = sc_light::GenesisCallExecutor<
 		substrate_test_runtime::Block,
 		sc_light::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
-			HashFor<substrate_test_runtime::Block>,
+			substrate_test_runtime::Block,
 		>,
 		NativeExecutor<LocalExecutor>,
 	>,
@@ -407,7 +407,8 @@ pub fn new_light(
 ) {
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
-	let backend = Arc::new(LightBackend::new(blockchain));
+	let state_versions = vec![(0, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))];
+	let backend = Arc::new(LightBackend::new(blockchain, state_versions));
 	let executor = new_native_executor();
 	let local_call_executor = client::LocalCallExecutor::new(
 		backend.clone(),

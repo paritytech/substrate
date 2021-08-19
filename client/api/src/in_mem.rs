@@ -112,6 +112,13 @@ struct BlockchainStorage<Block: BlockT> {
 	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
+	// TODO rename to state_versions and replace Option<Option<u32>> to StateVersionEnum.
+	alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>,
+	/*
+	// TODO not sure if migration support. TODO replace () by StateMigration.
+	state_migration: Vec<(NumberFor<Block>, ())>,
+	* Probably not (client/api).
+	*/
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -141,6 +148,29 @@ impl<Block: BlockT> Blockchain<Block> {
 		}
 	}
 
+	/// Get version of state.
+	pub fn state_version(&self, id: BlockId<Block>) -> Option<Option<u32>> {
+		let default = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
+		let number = match id {
+			BlockId::Hash(h) => {
+				if let Ok(Some(header)) = self.header(BlockId::Hash(h)) {
+					header.number().clone()
+				} else {
+					return default // Default to latest version TODO a latest version default with StateVersion.
+				}
+			},
+			BlockId::Number(n) => n,
+		};
+		let mut result = default;
+		for (change_state, state) in self.storage.read().alt_hashing.iter() {
+			if &number > change_state {
+				break
+			}
+			result = *state;
+		}
+		result
+	}
+
 	/// Create new in-memory blockchain storage.
 	pub fn new() -> Blockchain<Block> {
 		let storage = Arc::new(RwLock::new(BlockchainStorage {
@@ -155,6 +185,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			changes_trie_cht_roots: HashMap::new(),
 			leaves: LeafSet::new(),
 			aux: HashMap::new(),
+			alt_hashing: Vec::new(),
 		}));
 		Blockchain { storage }
 	}
@@ -855,7 +886,8 @@ where
 
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
-			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),
+			BlockId::Hash(h) if h == Default::default() =>
+				return Ok(self.blockchain.state_version(BlockId::Hash(h)).into()),
 			_ => {},
 		}
 

@@ -58,7 +58,7 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, HashFor, Zero},
+	traits::{Block as BlockT, BlockIdTo, Zero, NumberFor},
 	BuildStorage,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -145,14 +145,14 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> =
 
 /// Light client backend type.
 pub type TLightBackend<TBl> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>;
+	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>;
 
 /// Light call executor type.
 pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
+	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>,
 	crate::client::LocalCallExecutor<
 		TBl,
-		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
+		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>,
 		NativeExecutor<TExecDisp>,
 	>,
 >;
@@ -317,7 +317,16 @@ where
 			transaction_storage: config.transaction_storage.clone(),
 		};
 
-		let backend = new_db_backend(db_config)?;
+		let mut state_versions = Vec::new();
+		for (number, version) in config.chain_spec.state_versions().into_iter() {
+			let number = NumberFor::<TBl>::from_str(&number.to_string())
+				.map_err(|_| Error::Application(Box::from(format!(
+						"Failed to parse `{}` as block number for state versions.",
+						number,
+					))))?;
+			state_versions.push((number.into(), version));
+		}
+		let backend = new_db_backend(db_config, state_versions)?;
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
@@ -407,7 +416,17 @@ where
 		Box::new(task_manager.spawn_handle()),
 	));
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-	let backend = sc_light::new_light_backend(light_blockchain);
+	let mut state_versions = Vec::new();
+	for (number, version) in config.chain_spec.state_versions().into_iter() {
+		let number = NumberFor::<TBl>::from_str(&number.to_string())
+			.map_err(|_| Error::Application(Box::from(format!(
+					"Failed to parse `{}` as block number for state versions.",
+					number,
+				))))?;
+		state_versions.push((number.into(), version));
+	}
+
+	let backend = sc_light::new_light_backend(light_blockchain, state_versions);
 	let client = Arc::new(light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),
@@ -423,13 +442,14 @@ where
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
+	state_versions: Vec<(NumberFor<Block>, Option<Option<u32>>)>,
 ) -> Result<Arc<Backend<Block>>, sp_blockchain::Error>
 where
 	Block: BlockT,
 {
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
-	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?))
+	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY, state_versions)?))
 }
 
 /// Create an instance of client backed by given backend.
