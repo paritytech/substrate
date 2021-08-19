@@ -67,8 +67,8 @@ pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	pub delegate: AccountId,
 	/// A value defining the subset of calls that it is allowed to make.
 	pub proxy_type: ProxyType,
-	/// The number of blocks that an announcement must be in place for before the corresponding call
-	/// may be dispatched. If zero, then no announcement is needed.
+	/// The number of blocks that an announcement must be in place for before the corresponding
+	/// call may be dispatched. If zero, then no announcement is needed.
 	pub delay: BlockNumber,
 }
 
@@ -132,9 +132,9 @@ pub mod pallet {
 
 		/// The amount of currency needed per proxy added.
 		///
-		/// This is held for adding 32 bytes plus an instance of `ProxyType` more into a pre-existing
-		/// storage value. Thus, when configuring `ProxyDepositFactor` one should take into account
-		/// `32 + proxy_type.encode().len()` bytes of data.
+		/// This is held for adding 32 bytes plus an instance of `ProxyType` more into a
+		/// pre-existing storage value. Thus, when configuring `ProxyDepositFactor` one should take
+		/// into account `32 + proxy_type.encode().len()` bytes of data.
 		#[pallet::constant]
 		type ProxyDepositFactor: Get<BalanceOf<Self>>;
 
@@ -154,7 +154,8 @@ pub mod pallet {
 
 		/// The base amount of currency needed to reserve for creating an announcement.
 		///
-		/// This is held when a new storage item holding a `Balance` is created (typically 16 bytes).
+		/// This is held when a new storage item holding a `Balance` is created (typically 16
+		/// bytes).
 		#[pallet::constant]
 		type AnnouncementDepositBase: Get<BalanceOf<Self>>;
 
@@ -539,7 +540,8 @@ pub mod pallet {
 		/// A proxy was executed correctly, with the given \[result\].
 		ProxyExecuted(DispatchResult),
 		/// Anonymous account has been created by new proxy with given
-		/// disambiguation index and proxy type. \[anonymous, who, proxy_type, disambiguation_index\]
+		/// disambiguation index and proxy type. \[anonymous, who, proxy_type,
+		/// disambiguation_index\]
 		AnonymousCreated(T::AccountId, T::AccountId, T::ProxyType, u16),
 		/// An announcement was placed to make a call in the future. \[real, proxy, call_hash\]
 		Announced(T::AccountId, T::AccountId, CallHashOf<T>),
@@ -761,11 +763,13 @@ impl<T: Config> Pallet<T> {
 			let c = <T as Config>::Call::from_ref(c);
 			// We make sure the proxy call does access this pallet to change modify proxies.
 			match c.is_sub_type() {
-				// Proxy call cannot add or remove a proxy with more permissions than it already has.
+				// Proxy call cannot add or remove a proxy with more permissions than it already
+				// has.
 				Some(Call::add_proxy(_, ref pt, _)) | Some(Call::remove_proxy(_, ref pt, _))
 					if !def.proxy_type.is_superset(&pt) =>
 					false,
-				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full permissions.
+				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full
+				// permissions.
 				Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
 					if def.proxy_type != T::ProxyType::default() =>
 					false,

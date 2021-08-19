@@ -28,7 +28,7 @@
 //! actively calling any function.
 
 use crate::api::timestamp;
-use bytes::buf::ext::{BufExt, Reader};
+use bytes::buf::{Buf, Reader};
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
@@ -51,7 +51,7 @@ pub struct SharedClient(Arc<HyperClient<HttpsConnector<client::HttpConnector>, B
 
 impl SharedClient {
 	pub fn new() -> Self {
-		Self(Arc::new(HyperClient::builder().build(HttpsConnector::new())))
+		Self(Arc::new(HyperClient::builder().build(HttpsConnector::with_native_roots())))
 	}
 }
 
@@ -219,7 +219,7 @@ impl HttpApi {
 					HttpApiRequest::Dispatched(Some(sender))
 				},
 
-				HttpApiRequest::Dispatched(Some(mut sender)) =>
+				HttpApiRequest::Dispatched(Some(mut sender)) => {
 					if !chunk.is_empty() {
 						match poll_sender(&mut sender) {
 							Err(HttpError::IoError) => return Err(HttpError::IoError),
@@ -234,11 +234,12 @@ impl HttpApi {
 						// the sender.
 						self.requests.insert(request_id, HttpApiRequest::Dispatched(None));
 						return Ok(())
-					},
+					}
+				},
 
 				HttpApiRequest::Response(
 					mut response @ HttpApiRequestRp { sending_body: Some(_), .. },
-				) =>
+				) => {
 					if !chunk.is_empty() {
 						match poll_sender(
 							response
@@ -264,7 +265,8 @@ impl HttpApi {
 							}),
 						);
 						return Ok(())
-					},
+					}
+				},
 
 				HttpApiRequest::Fail(_) =>
 				// If the request has already failed, return without putting back the request
@@ -368,7 +370,7 @@ impl HttpApi {
 
 			// Update internal state based on received message.
 			match next_message {
-				Some(WorkerToApi::Response { id, status_code, headers, body }) =>
+				Some(WorkerToApi::Response { id, status_code, headers, body }) => {
 					match self.requests.remove(&id) {
 						Some(HttpApiRequest::Dispatched(sending_body)) => {
 							self.requests.insert(
@@ -384,7 +386,8 @@ impl HttpApi {
 						},
 						None => {}, // can happen if we detected an IO error when sending the body
 						_ => error!("State mismatch between the API and worker"),
-					},
+					}
+				},
 
 				Some(WorkerToApi::Fail { id, error }) => match self.requests.remove(&id) {
 					Some(HttpApiRequest::Dispatched(_)) => {
@@ -716,7 +719,7 @@ mod tests {
 
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
 			std::thread::spawn(move || {
-				let mut rt = tokio::runtime::Runtime::new().unwrap();
+				let rt = tokio::runtime::Runtime::new().unwrap();
 				let worker = rt.spawn(worker);
 				let server = rt.spawn(async move {
 					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap()).serve(

@@ -31,9 +31,11 @@ pub use tokens::{
 };
 
 mod members;
+#[allow(deprecated)]
+pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
-	All, AsContains, ChangeMembers, Contains, ContainsLengthBound, InitializeMembers, IsInVec,
-	SortedMembers,
+	AsContains, ChangeMembers, Contains, ContainsLengthBound, Everything, InitializeMembers,
+	IsInVec, Nothing, SortedMembers,
 };
 
 mod validation;
@@ -44,10 +46,7 @@ pub use validation::{
 };
 
 mod filter;
-pub use filter::{
-	AllowAll, ClearFilterGuard, DenyAll, Filter, FilterStack, FilterStackGuard, InstanceFilter,
-	IntegrityTest,
-};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
 
 mod misc;
 pub use misc::{
