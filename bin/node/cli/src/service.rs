@@ -39,8 +39,73 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
+struct BailingVerifier<Client, V>{
+	client: Client,
+	verifier: V,
+	signal_shutdown: exit_future::Signal,
+}
+
+impl<Client, V> BailingVerifier<Client, V>
+{
+	fn new(verifier: V, client: Client, signal_shutdown: exit_future::Signal) -> Self
+	{
+		Self { verifier, client, signal_shutdown }
+	}
+}
+
+use sc_consensus::{BlockImportParams, Verifier};
+use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_consensus::CacheKeyId;
+use sc_consensus_babe::BabeApi;
+use sc_client_api::AuxStore;
+use sc_client_api::HeaderBackend;
+use sp_api::ApiExt;
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+
+type BlockVerificationResult<Block> =
+	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+
+#[async_trait::async_trait]
+impl<Block, Client, V> Verifier<Block>
+	for BailingVerifier<Client, V>
+where
+	Block: BlockT,
+	Client: ProvideRuntimeApi<Block>
+		+ sp_blockchain::ProvideCache<Block>
+		+ HeaderBackend<Block>
+		+ sp_blockchain::HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ AuxStore
+		+ Send
+		+ Sync
+		+ 'static,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
+	V: Verifier<Block>,
+{
+	async fn verify(
+		&mut self,
+		mut block_import: BlockImportParams<Block, ()>,
+	) -> BlockVerificationResult<Block> {
+		use sp_runtime::traits::Header;
+		use sp_api::ApiExt;
+
+		let block_id = BlockId::hash(*block_import.header.parent_hash());
+		if self
+			.client
+			.runtime_api()
+			.has_api::<dyn BabeApi<Block>>(&block_id)
+			.unwrap_or(false) {
+			log::debug!("shutting down!");
+			self.signal_shutdown.fire();
+			Ok((block_import, None))
+		} else {
+			self.verifier.verify(block_import).await
+		}
+	}
+}
+
 pub fn new_partial(
 	config: &Configuration,
+	signal_shutdown: Option<exit_future::Signal>,
 ) -> Result<
 	sc_service::PartialComponents<
 		FullClient,
@@ -112,13 +177,9 @@ pub fn new_partial(
 	)?;
 
 	let slot_duration = babe_link.config().slot_duration();
-	let import_queue = sc_consensus_babe::import_queue(
-		babe_link.clone(),
-		block_import.clone(),
-		Some(Box::new(justification_import)),
-		client.clone(),
-		select_chain.clone(),
-		move |_, ()| async move {
+	let babe_verifier = sc_consensus_babe::BabeVerifier {
+		select_chain: select_chain.clone(),
+		create_inherent_data_providers: move |_, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
@@ -132,10 +193,21 @@ pub fn new_partial(
 
 			Ok((timestamp, slot, uncles))
 		},
+		config: babe_link.config().clone(),
+		epoch_changes: babe_link.epoch_changes().clone(),
+		can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		telemetry: telemetry.as_ref().map(|x| x.handle()),
+		client: client.clone(),
+	};
+
+	let bailing_verifier = BailingVerifier::new(babe_verifier, client.clone(), signal_shutdown.unwrap());
+
+	let import_queue = sc_consensus_babe::import_queue_with_verifier(
+		bailing_verifier,
+		block_import.clone(),
+		Some(Box::new(justification_import)),
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
-		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
-		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
 	let import_setup = (block_import, grandpa_link, babe_link);
@@ -215,6 +287,7 @@ pub fn new_full_base(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
 	),
+	signal_shutdown: exit_future::Signal
 ) -> Result<NewFullBase, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
@@ -225,7 +298,7 @@ pub fn new_full_base(
 		select_chain,
 		transaction_pool,
 		other: (rpc_extensions_builder, import_setup, rpc_setup, mut telemetry),
-	} = new_partial(&config)?;
+	} = new_partial(&config, Some(signal_shutdown))?;
 
 	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
@@ -418,8 +491,9 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| task_manager)
+pub fn new_full(config: Configuration) -> Result<(TaskManager, exit_future::Exit), ServiceError> {
+	let (signal, exit) = exit_future::signal();
+	new_full_base(config, |_, _| (), signal).map(|NewFullBase { task_manager, .. }| (task_manager, exit))
 }
 
 pub fn new_light_base(

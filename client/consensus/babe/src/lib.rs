@@ -1773,3 +1773,32 @@ where
 
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
 }
+
+pub fn import_queue_with_verifier<Block: BlockT, Client, SelectChain, Inner, V>(
+	verifier: V,
+	block_import: Inner,
+	justification_import: Option<BoxJustificationImport<Block>>,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
+	registry: Option<&Registry>,
+) -> ClientResult<DefaultImportQueue<Block, Client>>
+where
+	Inner: BlockImport<
+			Block,
+			Error = ConsensusError,
+			Transaction = sp_api::TransactionFor<Client, Block>,
+		> + Send
+		+ Sync
+		+ 'static,
+	Client: ProvideRuntimeApi<Block>
+		+ ProvideCache<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ AuxStore
+		+ Send
+		+ Sync
+		+ 'static,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
+	V: Verifier<Block> + 'static,
+{
+	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+}

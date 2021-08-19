@@ -33,6 +33,12 @@ required-features = ["cli"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+exit-future = "*"
+async-trait = "*"
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = { version = "1.0.126", features = ["derive"] }
