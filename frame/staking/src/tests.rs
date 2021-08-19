@@ -542,8 +542,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 800,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 3, value: 400 },
 						IndividualExposure { who: 1, value: 400 },
+						IndividualExposure { who: 3, value: 400 },
 					]
 				},
 			);
@@ -553,8 +553,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 1200,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 3, value: 600 },
 						IndividualExposure { who: 1, value: 600 },
+						IndividualExposure { who: 3, value: 600 },
 					]
 				},
 			);
@@ -1907,8 +1907,8 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			assert_eq!(
 				supports,
 				vec![
-					(21, Support { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
-					(31, Support { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] })
+					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
+					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
 				],
 			);
 		});
@@ -1952,7 +1952,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 				supports,
 				vec![
 					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
-					(21, Support { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] })
+					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
 				],
 			);
 		});
@@ -3877,26 +3877,32 @@ mod election_data_provider {
 
 	#[test]
 	fn respects_snapshot_len_limits() {
-		ExtBuilder::default().build_and_execute(|| {
-			// sum of all nominators who'd be voters, plus the self votes.
-			assert_eq!(
-				<Test as Config>::SortedListProvider::count() +
-					<Validators<Test>>::iter().count() as u32,
-				5
-			);
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.build_and_execute(|| {
+				// sum of all nominators who'd be voters (1), plus the self-votes (4).
+				assert_eq!(
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
+					5
+				);
 
-			// if limits is less..
-			assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
+				// if limits is less..
+				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
 
-			// if limit is equal..
-			assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
+				// if limit is equal..
+				assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
 
-			// if limit is more.
-			assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
+				// if limit is more.
+				assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
 
-			// if target limit is less, then we return an error.
-			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
-		});
+				// if target limit is more..
+				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
+				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
+
+				// if target limit is less, then we return an error.
+				assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+			});
 	}
 
 	#[test]
