@@ -60,6 +60,7 @@ pub mod inherent;
 pub mod error;
 pub mod instances;
 pub mod migrations;
+pub mod signed_extensions;
 pub mod traits;
 pub mod weights;
 
@@ -672,7 +673,7 @@ pub use frame_support_procedural::require_transactional;
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y.into())
+		return Err($y.into());
 	}};
 }
 
