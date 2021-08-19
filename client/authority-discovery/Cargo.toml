@@ -26,7 +26,7 @@ ip_network = "0.4.0"
 libp2p = { version = "0.39.1", default-features = false, features = ["kad"] }
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
-prost = "0.7"
+prost = "0.8"
 rand = "0.7.2"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
