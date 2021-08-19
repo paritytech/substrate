@@ -531,29 +531,19 @@ where
 			.storage_changes_notification_stream(keys.as_ref().map(|keys| &**keys), None)
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
-		// initial values (keys might be empty)
-		let maybe_initial = {
-			let block = client.info().best_hash;
-			let changes: Vec<(StorageKey, Option<StorageData>)> = keys
-				.map(|keys| {
-					keys.into_iter()
-						.map(|storage_key| {
-							let v =
-								client.storage(&BlockId::Hash(block), &storage_key).ok().flatten();
-							(storage_key, v)
-						})
-						.collect()
-				})
-				.unwrap_or_default();
-			if changes.is_empty() {
-				None
-			} else {
-				Some(vec![StorageChangeSet { block, changes }])
-			}
-		};
-
-		if let Some(Err(e)) = maybe_initial.map(|changes| sink.send(&changes)) {
-			return Err(e.into())
+		let block = client.info().best_hash;
+		let changes: Vec<(StorageKey, Option<StorageData>)> = keys
+			.map(|keys| {
+				keys.into_iter()
+					.map(|storage_key| {
+						let v = client.storage(&BlockId::Hash(block), &storage_key).ok().flatten();
+						(storage_key, v)
+					})
+					.collect()
+			})
+			.unwrap_or_default();
+		if !changes.is_empty() {
+			sink.send(&StorageChangeSet { block, changes })?;
 		}
 
 		let fut = async move {
@@ -575,10 +565,7 @@ where
 					if changes.is_empty() {
 						None
 					} else {
-						Some(StorageChangeSet {
-							block,
-							changes
-						})
+						Some(StorageChangeSet { block, changes })
 					}
 				})
 				.take_while(|storage| {
