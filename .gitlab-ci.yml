@@ -125,11 +125,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      variables:
-        DOCKER_USER:             ${PARITYPR_USER}
-        DOCKER_PASS:             ${PARITYPR_PASS}
-        DOCKER_ORG:              "paritypr"
 
 .nightly-pipeline:                 &nightly-pipeline
   rules:
@@ -402,11 +397,17 @@ test-linux-stable-int:
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
-check-tracing:
+check-web-wasm:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
   script:
+    # WASM support is in progress. As more and more crates support WASM, we
+    # should add entries here. See https://github.com/paritytech/substrate/issues/2416
+    # Note: we don't need to test crates imported in `bin/node/cli`
+    - time cargo build --manifest-path=client/consensus/aura/Cargo.toml --target=wasm32-unknown-unknown --features getrandom
+    # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
@@ -463,6 +464,21 @@ check-polkadot-companion-build:
   after_script:
     - cd polkadot && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
+
+test-browser-node:
+  stage:                           build
+  <<:                              *docker-env
+  <<:                              *test-refs
+  needs:
+    - job:                         check-web-wasm
+      artifacts:                   false
+  variables:
+    <<:                                         *default-vars
+    CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
+    CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
+    WASM_BINDGEN_TEST_TIMEOUT:                  120
+  script:
+    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing
 
 build-linux-substrate:             &build-binary
   stage:                           build
@@ -552,8 +568,8 @@ build-rustdoc:
   variables:                       &docker-build-vars
     <<:                            *default-vars
     GIT_STRATEGY:                  none
-    DOCKERFILE:                    "${PRODUCT}.Dockerfile"
-    IMAGE_NAME:                    "docker.io/${DOCKER_ORG}/${PRODUCT}"
+    DOCKERFILE:                    ${PRODUCT}.Dockerfile
+    IMAGE_NAME:                    docker.io/${DOCKER_ORG}/${PRODUCT}
   before_script:
     - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
@@ -593,6 +609,12 @@ publish-docker-substrate:
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+      variables:
+        DOCKER_USER:             ${PARITYPR_USER}
+        DOCKER_PASS:             ${PARITYPR_PASS}
+        DOCKER_ORG:              "paritypr"
   artifacts:
     reports:
       # this artifact is used in trigger-simnet job
