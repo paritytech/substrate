@@ -221,11 +221,8 @@ fn node_config<
 			.collect(),
 	);
 
-	network_config.transport = TransportConfig::Normal {
-		enable_mdns: false,
-		allow_private_ipv4: true,
-		wasm_external_transport: None,
-	};
+	network_config.transport =
+		TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),
@@ -256,7 +253,6 @@ fn node_config<
 		rpc_max_payload: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
-		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
