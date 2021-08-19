@@ -673,7 +673,7 @@ pub use frame_support_procedural::require_transactional;
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y.into());
+		return Err($y.into())
 	}};
 }
 

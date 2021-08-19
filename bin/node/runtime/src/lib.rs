@@ -276,18 +276,17 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::NonTransfer => !matches!(
 				c,
-				Call::Balances(..)
-					| Call::Assets(..) | Call::Uniques(..)
-					| Call::Vesting(pallet_vesting::Call::vested_transfer(..))
-					| Call::Indices(pallet_indices::Call::transfer(..))
+				Call::Balances(..) |
+					Call::Assets(..) | Call::Uniques(..) |
+					Call::Vesting(pallet_vesting::Call::vested_transfer(..)) |
+					Call::Indices(pallet_indices::Call::transfer(..))
 			),
 			ProxyType::Governance => matches!(
 				c,
-				Call::Democracy(..)
-					| Call::Council(..) | Call::Society(..)
-					| Call::TechnicalCommittee(..)
-					| Call::Elections(..)
-					| Call::Treasury(..)
+				Call::Democracy(..) |
+					Call::Council(..) | Call::Society(..) |
+					Call::TechnicalCommittee(..) |
+					Call::Elections(..) | Call::Treasury(..)
 			),
 			ProxyType::Staking => matches!(c, Call::Staking(..)),
 		}
