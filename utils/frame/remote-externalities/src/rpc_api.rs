@@ -89,7 +89,7 @@ async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
 		.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
 }
 
-/// Get the runtime of a given chain.
+/// Get the runtime version of a given chain.
 pub async fn get_runtime_version<Block, S>(
 	from: S,
 	at: Option<Block::Hash>,
