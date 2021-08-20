@@ -30,11 +30,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use futures::FutureExt;
-use jsonrpsee::{
-	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
-	ws_server::SubscriptionSink,
-	RpcModule,
-};
+use jsonrpsee::{types::error::Error as JsonRpseeError, ws_server::SubscriptionSink, RpcModule};
 use sc_client_api::{
 	light::{Fetcher, RemoteBlockchain},
 	BlockchainEvents,
@@ -171,23 +167,25 @@ where
 
 		rpc_module.register_async_method("chain_getHeader", |params, chain| {
 			let hash = params.one().ok();
-			async move { chain.header(hash).await.map_err(rpc_err) }.boxed()
+			async move { chain.header(hash).await.map_err(|e| JsonRpseeError::to_call_error(e)) }
+				.boxed()
 		})?;
 
 		rpc_module.register_async_method("chain_getBlock", |params, chain| {
 			let hash = params.one().ok();
-			async move { chain.block(hash).await.map_err(rpc_err) }.boxed()
+			async move { chain.block(hash).await.map_err(|e| JsonRpseeError::to_call_error(e)) }
+				.boxed()
 		})?;
 
 		rpc_module.register_method("chain_getBlockHash", |params, chain| {
 			let hash = params.one().ok();
-			chain.block_hash(hash).map_err(rpc_err)
+			chain.block_hash(hash).map_err(|e| JsonRpseeError::to_call_error(e))
 		})?;
 
 		rpc_module.register_alias("chain_getHead", "chain_getBlockHash")?;
 
 		rpc_module.register_method("chain_getFinalizedHead", |_, chain| {
-			chain.finalized_head().map_err(rpc_err)
+			chain.finalized_head().map_err(|e| JsonRpseeError::to_call_error(e))
 		})?;
 
 		rpc_module.register_alias("chain_getFinalisedHead", "chain_getFinalizedHead")?;
@@ -258,8 +256,4 @@ where
 
 fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
-}
-
-fn rpc_err(err: Error) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(err))
 }

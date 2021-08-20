@@ -27,10 +27,7 @@ use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
 use futures::{FutureExt, StreamExt};
-use jsonrpsee::{
-	types::error::{CallError as RpseeCallError, Error as JsonRpseeError},
-	RpcModule,
-};
+use jsonrpsee::{types::error::Error as JsonRpseeError, RpcModule};
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, InPoolTransaction, TransactionFor, TransactionPool, TransactionSource,
@@ -120,7 +117,7 @@ where
 					&generic::BlockId::Hash(best_block_hash),
 					session_keys.to_vec(),
 				)
-				.map_err(|e| RpseeCallError::Failed(Box::new(e)))?
+				.map_err(|e| JsonRpseeError::to_call_error(e))?
 				.ok_or_else(|| Error::InvalidSessionKeys)?;
 
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
@@ -139,12 +136,12 @@ where
 			|params, author| {
 				let ext: Bytes = match params.one() {
 					Ok(ext) => ext,
-					Err(e) => return Box::pin(futures::future::err(e)),
+					Err(e) => return Box::pin(futures::future::err(e.into())),
 				};
 				async move {
 					let xt = match Decode::decode(&mut &ext[..]) {
 						Ok(xt) => xt,
-						Err(err) => return Err(RpseeCallError::Failed(err.into())),
+						Err(err) => return Err(JsonRpseeError::to_call_error(err)),
 					};
 					let best_block_hash = author.client.info().best_hash;
 					author
@@ -153,8 +150,8 @@ where
 						.await
 						.map_err(|e| {
 							e.into_pool_error()
-								.map(|e| RpseeCallError::Failed(Box::new(e)))
-								.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e)))
+								.map(|e| JsonRpseeError::to_call_error(e))
+								.unwrap_or_else(|e| JsonRpseeError::to_call_error(e))
 						})
 				}
 				.boxed()

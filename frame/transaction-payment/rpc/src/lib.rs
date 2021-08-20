@@ -70,9 +70,9 @@ where
 				let encoded_len = encoded_xt.len() as u32;
 
 				let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-					.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
+					.map_err(|codec_err| CallError::from_std_error(codec_err))?;
 				api.query_info(&at, uxt, encoded_len)
-					.map_err(|api_err| CallError::Failed(Box::new(api_err)))
+					.map_err(|api_err| JsonRpseeError::to_call_error(api_err))
 			},
 		)?;
 
@@ -85,10 +85,10 @@ where
 			let encoded_len = encoded_xt.len() as u32;
 
 			let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-				.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
+				.map_err(|codec_err| CallError::from_std_error(codec_err))?;
 			let fee_details = api
 				.query_fee_details(&at, uxt, encoded_len)
-				.map_err(|api_err| CallError::Failed(Box::new(api_err)))?;
+				.map_err(|api_err| CallError::from_std_error(api_err))?;
 
 			let try_into_rpc_balance =
 				|value: Balance| value.try_into().map_err(|_try_err| CallError::InvalidParams);

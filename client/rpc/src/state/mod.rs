@@ -29,11 +29,7 @@ use std::sync::Arc;
 use crate::{unwrap_or_fut_err, SubscriptionTaskExecutor};
 
 use futures::{future, FutureExt};
-use jsonrpsee::{
-	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
-	ws_server::SubscriptionSink,
-	RpcModule,
-};
+use jsonrpsee::{types::error::Error as JsonRpseeError, ws_server::SubscriptionSink, RpcModule};
 
 use sc_client_api::light::{Fetcher, RemoteBlockchain};
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
@@ -262,7 +258,14 @@ where
 			let data = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.call(block, method, data).await.map_err(call_err) }.boxed()
+			async move {
+				state
+					.backend
+					.call(block, method, data)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("state_callAt", "state_call")?;
@@ -273,8 +276,14 @@ where
 			let key_prefix = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.storage_keys(block, key_prefix).await.map_err(call_err) }
-				.boxed()
+			async move {
+				state
+					.backend
+					.storage_keys(block, key_prefix)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		module.register_async_method("state_getPairs", |params, state| {
@@ -285,7 +294,11 @@ where
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.storage_pairs(block, key).await.map_err(call_err)
+				state
+					.backend
+					.storage_pairs(block, key)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -300,16 +313,16 @@ where
 
 			async move {
 				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-					return Err(JsonRpseeCallError::Failed(Box::new(Error::InvalidCount {
+					return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
 						value: count,
 						max: STORAGE_KEYS_PAGED_MAX_COUNT,
-					})))
+					}))
 				}
 				state
 					.backend
 					.storage_keys_paged(block, prefix, count, start_key)
 					.await
-					.map_err(call_err)
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -322,7 +335,14 @@ where
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.storage(block, key).await.map_err(call_err) }.boxed()
+			async move {
+				state
+					.backend
+					.storage(block, key)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("state_getStorageAt", "state_getStorage")?;
@@ -333,7 +353,14 @@ where
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.storage_hash(block, key).await.map_err(call_err) }.boxed()
+			async move {
+				state
+					.backend
+					.storage_hash(block, key)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
@@ -344,21 +371,39 @@ where
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.storage_size(block, key).await.map_err(call_err) }.boxed()
+			async move {
+				state
+					.backend
+					.storage_size(block, key)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		module.register_alias("state_getStorageSizeAt", "state_getStorageSize")?;
 
 		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
-			async move { state.backend.metadata(maybe_block).await.map_err(call_err) }.boxed()
+			async move {
+				state
+					.backend
+					.metadata(maybe_block)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		module.register_async_method("state_getRuntimeVersion", |params, state| {
 			let at = params.one().ok();
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.runtime_version(at).await.map_err(call_err)
+				state
+					.backend
+					.runtime_version(at)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -374,7 +419,11 @@ where
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.query_storage(from, to, keys).await.map_err(call_err)
+				state
+					.backend
+					.query_storage(from, to, keys)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -387,7 +436,11 @@ where
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.query_storage_at(keys, at).await.map_err(call_err)
+				state
+					.backend
+					.query_storage_at(keys, at)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -400,7 +453,11 @@ where
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.read_proof(block, keys).await.map_err(call_err)
+				state
+					.backend
+					.read_proof(block, keys)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -414,7 +471,11 @@ where
 
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.trace_block(block, targets, storage_keys).await.map_err(call_err)
+				state
+					.backend
+					.trace_block(block, targets, storage_keys)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -530,10 +591,13 @@ where
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
-				state.backend.storage_keys(block, storage_key, key)
+				state
+					.backend
+					.storage_keys(block, storage_key, key)
 					.await
-					.map_err(call_err)
-			}.boxed()
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		// Returns the keys with prefix from a child storage with pagination support.
@@ -554,7 +618,7 @@ where
 					.backend
 					.storage_keys_paged(block, storage_key, prefix, count, start_key)
 					.await
-					.map_err(call_err)
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -569,8 +633,14 @@ where
 			let key = unwrap_or_fut_err!(seq.next());
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
-			async move { state.backend.storage(block, storage_key, key).await.map_err(call_err) }
-				.boxed()
+			async move {
+				state
+					.backend
+					.storage(block, storage_key, key)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		// Returns the hash of a child storage entry at a block's state.
@@ -582,10 +652,13 @@ where
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
-				state.backend.storage_hash(block, storage_key, key)
+				state
+					.backend
+					.storage_hash(block, storage_key, key)
 					.await
-					.map_err(call_err)
-			}.boxed()
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		// Returns the size of a child storage entry at a block's state.
@@ -597,10 +670,13 @@ where
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
-				state.backend.storage_size(block, storage_key, key)
+				state
+					.backend
+					.storage_size(block, storage_key, key)
 					.await
-					.map_err(call_err)
-			}.boxed()
+					.map_err(|e| JsonRpseeError::to_call_error(e))
+			}
+			.boxed()
 		})?;
 
 		// Returns proof of storage for child key entries at a specific block's state.
@@ -612,7 +688,11 @@ where
 			let block = unwrap_or_fut_err!(seq.optional_next());
 
 			async move {
-				state.backend.read_child_proof(block, storage_key, keys).await.map_err(call_err)
+				state
+					.backend
+					.read_child_proof(block, storage_key, keys)
+					.await
+					.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -625,8 +705,4 @@ where
 
 fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
-}
-
-fn call_err(err: Error) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(err))
 }

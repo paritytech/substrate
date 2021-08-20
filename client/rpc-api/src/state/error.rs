@@ -63,27 +63,16 @@ impl std::error::Error for Error {
 /// Base code for all state errors.
 const BASE_ERROR: i32 = 4000;
 
-impl From<Error> for CallError {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
 			Error::InvalidBlockRange { .. } =>
-				Self::Custom { code: BASE_ERROR + 1, message: e.to_string(), data: None },
+				CallError::Custom { code: BASE_ERROR + 1, message: e.to_string(), data: None }
+					.into(),
 			Error::InvalidCount { .. } =>
-				Self::Custom { code: BASE_ERROR + 2, message: e.to_string(), data: None },
-			e => Self::Failed(Box::new(e)),
+				CallError::Custom { code: BASE_ERROR + 2, message: e.to_string(), data: None }
+					.into(),
+			e => e.into(),
 		}
-	}
-}
-
-/// TODO(niklasad1): better errors
-impl From<Error> for JsonRpseeError {
-	fn from(e: Error) -> Self {
-		Self::Custom(e.to_string())
-	}
-}
-
-impl From<JsonRpseeError> for Error {
-	fn from(e: JsonRpseeError) -> Self {
-		Self::Client(Box::new(e))
 	}
 }

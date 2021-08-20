@@ -65,20 +65,22 @@ const GAS_LIMIT: Weight = 5 * GAS_PER_SECOND;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
 struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
-impl From<ContractAccessError> for CallError {
-	fn from(e: ContractAccessError) -> CallError {
+impl From<ContractAccessError> for JsonRpseeError {
+	fn from(e: ContractAccessError) -> Self {
 		use pallet_contracts_primitives::ContractAccessError::*;
 		match e.0 {
 			DoesntExist => CallError::Custom {
 				code: CONTRACT_DOESNT_EXIST,
 				message: "The specified contract doesn't exist.".into(),
 				data: None,
-			},
+			}
+			.into(),
 			IsTombstone => CallError::Custom {
 				code: CONTRACT_IS_A_TOMBSTONE,
 				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
-			},
+			}
+			.into(),
 		}
 	}
 }
@@ -155,7 +157,7 @@ where
 		// This method is useful for calling getter-like methods on contracts.
 		module.register_method(
 			"contracts_call",
-			|params, contracts| -> Result<ContractExecResult, CallError> {
+			|params, contracts| -> Result<ContractExecResult, JsonRpseeError> {
 				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) =
 					params.parse()?;
 				let api = contracts.client.runtime_api();
@@ -190,7 +192,7 @@ where
 					AccountId,
 					<<Block as BlockT>::Header as HeaderT>::Number,
 				>,
-				CallError,
+				JsonRpseeError,
 			> {
 				let (instantiate_request, at): (
 					InstantiateRequest<AccountId, Hash>,
@@ -226,7 +228,7 @@ where
 		// or `None` if it is not set.
 		module.register_method(
 			"contracts_getStorage",
-			|params, contracts| -> Result<Option<Bytes>, CallError> {
+			|params, contracts| -> Result<Option<Bytes>, JsonRpseeError> {
 				let (address, key, at): (AccountId, H256, Option<<Block as BlockT>::Hash>) =
 					params.parse()?;
 
@@ -252,7 +254,7 @@ where
 			"contracts_rentProjection",
 			|params,
 			 contracts|
-			 -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>, CallError> {
+			 -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>, JsonRpseeError> {
 				let (address, at): (AccountId, Option<<Block as BlockT>::Hash>) = params.parse()?;
 
 				let api = contracts.client.runtime_api();
@@ -275,26 +277,30 @@ where
 }
 
 /// Converts a runtime trap into an RPC error.
-fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> CallError {
+fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> JsonRpseeError {
 	CallError::Custom {
 		code: RUNTIME_ERROR,
 		message: "Runtime error".into(),
 		data: to_raw_value(&format!("{:?}", err)).ok(),
 	}
+	.into()
 }
 
 fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(
 	from: H,
 	name: &str,
-) -> Result<T, CallError> {
-	from.try_into().map_err(|_| CallError::Custom {
-		code: -32602, // TODO: was `ErrorCode::InvalidParams`
-		message: format!("{:?} does not fit into the {} type", from, name),
-		data: None,
+) -> Result<T, JsonRpseeError> {
+	from.try_into().map_err(|_| {
+		CallError::Custom {
+			code: -32602, // TODO: was `ErrorCode::InvalidParams`
+			message: format!("{:?} does not fit into the {} type", from, name),
+			data: None,
+		}
+		.into()
 	})
 }
 
-fn limit_gas(gas_limit: Weight) -> Result<(), CallError> {
+fn limit_gas(gas_limit: Weight) -> Result<(), JsonRpseeError> {
 	if gas_limit > GAS_LIMIT {
 		Err(CallError::Custom {
 			code: -32602, // TODO: was `ErrorCode::InvalidParams,`
@@ -303,7 +309,8 @@ fn limit_gas(gas_limit: Weight) -> Result<(), CallError> {
 				gas_limit, GAS_LIMIT
 			),
 			data: None,
-		})
+		}
+		.into())
 	} else {
 		Ok(())
 	}

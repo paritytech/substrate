@@ -2702,10 +2702,10 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
  "jsonrpsee-http-server",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "jsonrpsee-utils",
  "jsonrpsee-ws-server",
 ]
@@ -2713,13 +2713,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
  "futures-channel",
  "futures-util",
  "globset",
  "hyper",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "jsonrpsee-utils",
  "lazy_static",
  "log",
@@ -2766,8 +2766,9 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
+ "anyhow",
  "async-trait",
  "beef",
  "futures-channel",
@@ -2783,13 +2784,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
  "beef",
  "futures-channel",
  "futures-util",
  "hyper",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "log",
  "parking_lot 0.11.1",
  "rand 0.8.4",
@@ -2827,11 +2828,11 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "jsonrpsee-utils",
  "log",
  "rustc-hash",

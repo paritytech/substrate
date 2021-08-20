@@ -60,7 +60,8 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 				params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
 			let prefix = match kind {
 				StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-				StorageKind::LOCAL => return Err(to_jsonrpsee_error(Error::UnavailableStorageKind)),
+				StorageKind::LOCAL =>
+					return Err(JsonRpseeError::to_call_error(Error::UnavailableStorageKind)),
 			};
 			offchain.storage.write().set(prefix, &*key, &*value);
 			Ok(())
@@ -73,7 +74,8 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 
 			let prefix = match kind {
 				StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-				StorageKind::LOCAL => return Err(to_jsonrpsee_error(Error::UnavailableStorageKind)),
+				StorageKind::LOCAL =>
+					return Err(JsonRpseeError::to_call_error(Error::UnavailableStorageKind)),
 			};
 
 			let bytes: Option<Bytes> = offchain.storage.read().get(prefix, &*key).map(Into::into);
@@ -82,8 +84,4 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 
 		Ok(ctx)
 	}
-}
-
-fn to_jsonrpsee_error(err: Error) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(err))
 }

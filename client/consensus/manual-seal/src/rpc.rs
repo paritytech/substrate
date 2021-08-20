@@ -18,7 +18,7 @@
 
 //! RPC interface for the `ManualSeal` Engine.
 
-use crate::error::{to_call_error, Error};
+use crate::error::Error;
 use futures::{
 	channel::{mpsc, oneshot},
 	FutureExt, SinkExt,
@@ -35,7 +35,7 @@ macro_rules! unwrap_or_fut_err {
 	( $e:expr ) => {
 		match $e {
 			Ok(x) => x,
-			Err(e) => return Box::pin(futures::future::err(e)),
+			Err(e) => return Box::pin(futures::future::err(e.into())),
 		}
 	};
 }
@@ -121,12 +121,12 @@ impl<Hash: Send + Sync + DeserializeOwned + Serialize + 'static> ManualSeal<Hash
 						sender: Some(sender),
 					};
 
-					sink.send(command).await.map_err(|e| to_call_error(e))?;
+					sink.send(command).await?;
 
 					match receiver.await {
 						Ok(Ok(rx)) => Ok(rx),
-						Ok(Err(e)) => Err(to_call_error(e)),
-						Err(e) => Err(to_call_error(e)),
+						Ok(Err(e)) => Err(e.into()),
+						Err(e) => Err(JsonRpseeError::to_call_error(e)),
 					}
 				}
 				.boxed()
@@ -144,8 +144,8 @@ impl<Hash: Send + Sync + DeserializeOwned + Serialize + 'static> ManualSeal<Hash
 				let (sender, receiver) = oneshot::channel();
 				let command =
 					EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification };
-				sink.send(command).await.map_err(|e| to_call_error(e))?;
-				receiver.await.map(|_| true).map_err(|e| to_call_error(e))
+				sink.send(command).await?;
+				receiver.await.map(|_| true).map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;

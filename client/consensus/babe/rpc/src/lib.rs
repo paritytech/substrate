@@ -19,10 +19,7 @@
 //! RPC api for babe.
 
 use futures::{FutureExt as _, TryFutureExt as _};
-use jsonrpsee::{
-	types::error::{CallError, Error as JsonRpseeError},
-	RpcModule,
-};
+use jsonrpsee::{types::error::Error as JsonRpseeError, RpcModule};
 
 use sc_consensus_babe::{authorship, Config, Epoch};
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
@@ -172,9 +169,9 @@ pub enum Error {
 
 impl std::error::Error for Error {}
 
-impl From<Error> for CallError {
+impl From<Error> for JsonRpseeError {
 	fn from(error: Error) -> Self {
-		CallError::Failed(Box::new(error))
+		JsonRpseeError::to_call_error(error)
 	}
 }
 

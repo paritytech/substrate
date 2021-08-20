@@ -18,7 +18,7 @@
 
 //! Error helpers for Chain RPC module.
 
-use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
 
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -45,20 +45,12 @@ impl std::error::Error for Error {
 /// Base error code for all chain errors.
 const BASE_ERROR: i32 = 3000;
 
-impl From<Error> for CallError {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::Other(message) => Self::Custom { code: BASE_ERROR + 1, message, data: None },
-			e => Self::Failed(Box::new(e)),
-		}
-	}
-}
-
-impl From<Error> for jsonrpsee::types::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error::Other(msg) => Self::Custom(msg),
-			Error::Client(e) => Self::Custom(e.to_string()),
+			Error::Other(message) =>
+				CallError::Custom { code: BASE_ERROR + 1, message, data: None }.into(),
+			e => e.into(),
 		}
 	}
 }

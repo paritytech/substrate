@@ -23,10 +23,7 @@ use futures::{future, FutureExt, StreamExt};
 use log::warn;
 use std::sync::Arc;
 
-use jsonrpsee::{
-	types::error::{CallError, Error as JsonRpseeError},
-	RpcModule, SubscriptionSink,
-};
+use jsonrpsee::{types::error::Error as JsonRpseeError, RpcModule, SubscriptionSink};
 
 mod error;
 mod finality;
@@ -77,7 +74,7 @@ where
 		// ongoing background rounds.
 		module.register_method("grandpa_roundState", |_params, grandpa| {
 			ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state)
-				.map_err(to_jsonrpsee_call_error)
+				.map_err(|e| JsonRpseeError::to_call_error(e))
 		})?;
 
 		// Prove finality for the given block number by returning the [`Justification`] for the last
@@ -88,7 +85,7 @@ where
 				.finality_proof_provider
 				.rpc_prove_finality(block)
 				.map_err(|finality_err| error::Error::ProveFinalityFailed(finality_err))
-				.map_err(to_jsonrpsee_call_error)
+				.map_err(|e| JsonRpseeError::to_call_error(e))
 		})?;
 
 		// Returns the block most recently finalized by Grandpa, alongside its justification.
@@ -126,11 +123,6 @@ where
 
 		Ok(module)
 	}
-}
-
-// TODO: (dp) make available to other code?
-fn to_jsonrpsee_call_error(err: error::Error) -> CallError {
-	CallError::Failed(Box::new(err))
 }
 
 #[cfg(test)]

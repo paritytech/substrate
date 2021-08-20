@@ -113,7 +113,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::Health(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -123,7 +123,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::LocalPeerId(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -136,7 +136,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::LocalListenAddresses(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -147,7 +147,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::Peers(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -163,7 +163,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkState(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -176,7 +176,7 @@ impl<B: traits::Block> System<B> {
 		rpc_module.register_async_method("system_addReservedPeer", |param, system| {
 			let peer = match param.one() {
 				Ok(peer) => peer,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(futures::future::err(e.into())),
 			};
 			async move {
 				system.deny_unsafe.check_if_safe()?;
@@ -184,8 +184,8 @@ impl<B: traits::Block> System<B> {
 				let _ = system.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
 				match rx.await {
 					Ok(Ok(())) => Ok(()),
-					Ok(Err(e)) => Err(to_call_error(e)),
-					Err(e) => Err(to_call_error(e)),
+					Ok(Err(e)) => Err(JsonRpseeError::to_call_error(e)),
+					Err(e) => Err(JsonRpseeError::to_call_error(e)),
 				}
 			}
 			.boxed()
@@ -198,7 +198,7 @@ impl<B: traits::Block> System<B> {
 			|param, system| {
 				let peer = match param.one() {
 					Ok(peer) => peer,
-					Err(e) => return Box::pin(futures::future::err(e)),
+					Err(e) => return Box::pin(futures::future::err(e.into())),
 				};
 
 				async move {
@@ -209,8 +209,8 @@ impl<B: traits::Block> System<B> {
 						.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
 					match rx.await {
 						Ok(Ok(())) => Ok(()),
-						Ok(Err(e)) => Err(to_call_error(e)),
-						Err(e) => Err(to_call_error(e)),
+						Ok(Err(e)) => Err(JsonRpseeError::to_call_error(e)),
+						Err(e) => Err(JsonRpseeError::to_call_error(e)),
 					}
 				}
 				.boxed()
@@ -222,7 +222,7 @@ impl<B: traits::Block> System<B> {
 			async move {
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -233,7 +233,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::NodeRoles(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -245,7 +245,7 @@ impl<B: traits::Block> System<B> {
 				system.deny_unsafe.check_if_safe()?;
 				let (tx, rx) = oneshot::channel();
 				let _ = system.send_back.unbounded_send(Request::SyncState(tx));
-				rx.await.map_err(to_call_error)
+				rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 			}
 			.boxed()
 		})?;
@@ -260,21 +260,15 @@ impl<B: traits::Block> System<B> {
 
 			let directives = param.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
 			logging::add_directives(directives);
-			logging::reload_filter()
-				.map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
+			logging::reload_filter().map_err(|e| anyhow::anyhow!("{:?}", e).into())
 		})?;
 
 		// Resets the log filter to Substrate defaults
 		rpc_module.register_method("system_resetLogFilter", |_, system| {
 			system.deny_unsafe.check_if_safe()?;
-			logging::reset_log_filter()
-				.map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
+			logging::reset_log_filter().map_err(|e| anyhow::anyhow!("{:?}", e).into())
 		})?;
 
 		Ok(rpc_module)
 	}
-}
-
-fn to_call_error<E: std::error::Error + Send + Sync + 'static>(err: E) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(err))
 }

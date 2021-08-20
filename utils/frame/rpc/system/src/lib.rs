@@ -69,7 +69,7 @@ where
 		module.register_async_method("system_accountNextIndex", |params, system| {
 			let account = match params.one() {
 				Ok(a) => a,
-				Err(e) => return Box::pin(future::err(e)),
+				Err(e) => return Box::pin(future::err(e.into())),
 			};
 
 			async move { system.backend.nonce(account).await }.boxed()
@@ -81,12 +81,12 @@ where
 
 			let extrinsic = match seq.next() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
+				Err(e) => return Box::pin(future::err(e.into())),
 			};
 
 			let at = match seq.optional_next() {
 				Ok(at) => at,
-				Err(e) => return Box::pin(future::err(e)),
+				Err(e) => return Box::pin(future::err(e.into())),
 			};
 
 			async move { system.backend.dry_run(extrinsic, at).await }.boxed()
@@ -106,8 +106,12 @@ where
 	AccountId: Clone + Display + Codec,
 	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, CallError>;
-	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> Result<Bytes, CallError>;
+	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError>;
+	async fn dry_run(
+		&self,
+		extrinsic: Bytes,
+		at: Option<BlockHash>,
+	) -> Result<Bytes, JsonRpseeError>;
 }
 
 /// A full-client backend for [`SystemRpc`].
@@ -160,13 +164,13 @@ where
 	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
 	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, CallError> {
+	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError> {
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
 		let at = BlockId::hash(best);
 		let nonce = api
 			.account_nonce(&at, account.clone())
-			.map_err(|api_err| CallError::Failed(Box::new(api_err)))?;
+			.map_err(|api_err| CallError::from_std_error(api_err))?;
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
 
@@ -174,7 +178,7 @@ where
 		&self,
 		extrinsic: Bytes,
 		at: Option<<Block as traits::Block>::Hash>,
-	) -> Result<Bytes, CallError> {
+	) -> Result<Bytes, JsonRpseeError> {
 		self.deny_unsafe.check_if_safe()?;
 		let api = self.client.runtime_api();
 		let at = BlockId::<Block>::hash(at.unwrap_or_else(|| self.client.info().best_hash));
@@ -206,14 +210,14 @@ where
 	AccountId: Clone + Display + Codec + Send + 'static,
 	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, CallError> {
+	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError> {
 		let best_hash = self.client.info().best_hash;
 		let best_id = BlockId::hash(best_hash);
 		let best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id)
 			.await
-			.map_err(|blockchain_err| CallError::Failed(Box::new(blockchain_err)))?
+			.map_err(|blockchain_err| CallError::from_std_error(blockchain_err))?
 			.ok_or_else(|| ClientError::UnknownBlock(format!("{}", best_hash)))
-			.map_err(|client_err| CallError::Failed(Box::new(client_err)))?;
+			.map_err(|client_err| CallError::from_std_error(client_err))?;
 		let call_data = account.encode();
 		let nonce = self
 			.fetcher
@@ -225,10 +229,10 @@ where
 				retry_count: None,
 			})
 			.await
-			.map_err(|blockchain_err| CallError::Failed(Box::new(blockchain_err)))?;
+			.map_err(|blockchain_err| CallError::from_std_error(blockchain_err))?;
 
 		let nonce: Index = Decode::decode(&mut &nonce[..])
-			.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
+			.map_err(|codec_err| CallError::from_std_error(codec_err))?;
 
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
@@ -237,13 +241,14 @@ where
 		&self,
 		_extrinsic: Bytes,
 		_at: Option<<Block as traits::Block>::Hash>,
-	) -> Result<Bytes, CallError> {
+	) -> Result<Bytes, JsonRpseeError> {
 		Err(CallError::Custom {
 			code: -32601, /* TODO: (dp) We have this in jsonrpsee too somewhere. This is
 			               * jsonrpsee::ErrorCode::MethodNotFound */
 			message: "Not implemented for light clients".into(),
 			data: None,
-		})
+		}
+		.into())
 	}
 }
 

@@ -33,7 +33,7 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, FutureExt, StreamExt};
-use jsonrpsee::ws_server::SubscriptionSink;
+use jsonrpsee::SubscriptionSink;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -543,7 +543,8 @@ where
 			})
 			.unwrap_or_default();
 		if !changes.is_empty() {
-			sink.send(&StorageChangeSet { block, changes })?;
+			sink.send(&StorageChangeSet { block, changes })
+				.map_err(|e| Error::Client(Box::new(e)))?;
 		}
 
 		let fut = async move {

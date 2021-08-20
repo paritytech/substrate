@@ -41,10 +41,7 @@
 
 #![deny(unused_crate_dependencies)]
 
-use jsonrpsee::{
-	types::error::{CallError, Error as JsonRpseeError},
-	RpcModule,
-};
+use jsonrpsee::{types::error::Error as JsonRpseeError, RpcModule};
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -150,25 +147,23 @@ where
 
 			let raw = params.one()?;
 			let current_sync_state =
-				sync_state.build_sync_state().map_err(|e| CallError::Failed(Box::new(e)))?;
+				sync_state.build_sync_state().map_err(|e| JsonRpseeError::to_call_error(e))?;
 			let mut chain_spec = sync_state.chain_spec.cloned_box();
 
 			let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(
 				chain_spec.extensions_mut(),
 			)
 			.ok_or_else(|| {
-				CallError::Failed(
-					anyhow::anyhow!("Could not find `LightSyncState` chain-spec extension!").into(),
-				)
+				JsonRpseeError::from(anyhow::anyhow!(
+					"Could not find `LightSyncState` chain-spec extension!"
+				))
 			})?;
 
 			let val = serde_json::to_value(&current_sync_state)
-				.map_err(|e| CallError::Failed(Box::new(e)))?;
+				.map_err(|e| JsonRpseeError::to_call_error(e))?;
 			*extension = Some(val);
 
-			chain_spec
-				.as_json(raw)
-				.map_err(|e| CallError::Failed(anyhow::anyhow!(e).into()))
+			chain_spec.as_json(raw).map_err(|e| anyhow::anyhow!(e).into())
 		})?;
 		Ok(module)
 	}
