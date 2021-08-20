@@ -105,7 +105,7 @@ pub fn sign(
 				signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 				function: payload.0,
 			}
-		}
+		},
 		None => UncheckedExtrinsic { signature: None, function: xt.function },
 	}
 }
