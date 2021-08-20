@@ -19,15 +19,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{
-	BaseArithmetic, Bounded, One, SaturatedConversion, Saturating, UniqueSaturatedInto, Unsigned,
-	Zero,
+	BaseArithmetic, Bounded, CheckedAdd, CheckedSub, One, SaturatedConversion, Saturating,
+	UniqueSaturatedInto, Unsigned, Zero,
 };
 use codec::{CompactAs, Encode};
-use num_traits::Pow;
+use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_debug_derive::RuntimeDebug;
 use sp_std::{
 	convert::{TryFrom, TryInto},
 	fmt, ops,
+	ops::{Add, Sub},
 	prelude::*,
 };
 
@@ -1443,4 +1444,151 @@ implement_per_thing_with_perthousand!(
 	u64,
 	u128,
 	"_Parts per Quintillion_",
+);
+
+macro_rules! implement_checked_arithmetic {
+	(
+		$name:ident,
+		$test_mod:ident,
+		$type:ty,
+		$max:tt,
+	) => {
+		impl Add<Self> for $name {
+			type Output = $name;
+
+			#[inline]
+			fn add(self, rhs: Self) -> Self::Output {
+				$name::from_parts(self.deconstruct().add(rhs.deconstruct()))
+			}
+		}
+
+		impl CheckedAdd for $name {
+			#[inline]
+			fn checked_add(&self, rhs: &Self) -> Option<Self> {
+				self.deconstruct()
+					.checked_add(rhs.deconstruct())
+					.map(|inner| if inner >= $max { None } else { Some($name::from_parts(inner)) })
+					.flatten()
+			}
+		}
+
+		impl Sub<Self> for $name {
+			type Output = $name;
+
+			#[inline]
+			fn sub(self, rhs: Self) -> Self::Output {
+				$name::from_parts(self.deconstruct().sub(rhs.deconstruct()))
+			}
+		}
+
+		impl CheckedSub for $name {
+			#[inline]
+			fn checked_sub(&self, v: &Self) -> Option<Self> {
+				self.deconstruct().checked_sub(v.deconstruct()).map($name::from_parts)
+			}
+		}
+
+		impl SaturatingAdd for $name {
+			#[inline]
+			fn saturating_add(&self, v: &Self) -> Self {
+				$name::from_parts(self.deconstruct().saturating_add(v.deconstruct()))
+			}
+		}
+
+		impl SaturatingSub for $name {
+			#[inline]
+			fn saturating_sub(&self, v: &Self) -> Self {
+				$name::from_parts(self.deconstruct().saturating_sub(v.deconstruct()))
+			}
+		}
+
+		mod $test_mod {
+			#[allow(unused_imports)]
+			use super::*;
+
+			#[test]
+			fn test_add_basic() {
+				assert_eq!($name::from_parts(1) + $name::from_parts(1), $name::from_parts(2));
+				assert_eq!($name::from_parts(10) + $name::from_parts(10), $name::from_parts(20));
+			}
+
+			#[test]
+			fn test_basic_checked_add() {
+				assert_eq!(
+					$name::from_parts(1).checked_add(&$name::from_parts(1)),
+					Some($name::from_parts(2))
+				);
+				assert_eq!(
+					$name::from_parts(10).checked_add(&$name::from_parts(10)),
+					Some($name::from_parts(20))
+				);
+				assert_eq!(
+					$name::from_parts(<$type>::MAX).checked_add(&$name::from_parts(<$type>::MAX)),
+					None
+				);
+			}
+
+			#[test]
+			fn test_basic_saturating_add() {
+				assert_eq!(
+					$name::from_parts(1).saturating_add($name::from_parts(1)),
+					$name::from_parts(2)
+				);
+				assert_eq!(
+					$name::from_parts(10).saturating_add($name::from_parts(10)),
+					$name::from_parts(20)
+				);
+				assert_eq!(
+					$name::from_parts(<$type>::MAX).saturating_add($name::from_parts(<$type>::MAX)),
+					$name::from_parts(<$type>::MAX)
+				);
+			}
+
+			#[test]
+			fn test_basic_sub() {
+				assert_eq!($name::from_parts(2) - $name::from_parts(1), $name::from_parts(1));
+				assert_eq!($name::from_parts(20) - $name::from_parts(10), $name::from_parts(10));
+			}
+
+			#[test]
+			fn test_basic_checked_sub() {
+				assert_eq!(
+					$name::from_parts(2).checked_sub(&$name::from_parts(1)),
+					Some($name::from_parts(1))
+				);
+				assert_eq!(
+					$name::from_parts(20).checked_sub(&$name::from_parts(10)),
+					Some($name::from_parts(10))
+				);
+				assert_eq!($name::from_parts(0).checked_sub(&$name::from_parts(1)), None);
+			}
+
+			#[test]
+			fn test_basic_saturating_sub() {
+				assert_eq!(
+					$name::from_parts(2).saturating_sub($name::from_parts(1)),
+					$name::from_parts(1)
+				);
+				assert_eq!(
+					$name::from_parts(20).saturating_sub($name::from_parts(10)),
+					$name::from_parts(10)
+				);
+				assert_eq!(
+					$name::from_parts(0).saturating_sub($name::from_parts(1)),
+					$name::from_parts(0)
+				);
+			}
+		}
+	};
+}
+
+implement_checked_arithmetic!(Percent, test_checked_arithmetic_percent, u8, 1_00_u8,);
+implement_checked_arithmetic!(PerU16, test_checked_arithmetic_peru16, u16, 65535_u16,);
+implement_checked_arithmetic!(Permill, test_checked_arithmetic_permill, u32, 1_000_000u32,);
+implement_checked_arithmetic!(Perbill, test_checked_arithmetic_perbill, u32, 1_000_000_000u32,);
+implement_checked_arithmetic!(
+	Perquintill,
+	test_checked_arithmetic_perquintill,
+	u64,
+	1_000_000_000_000u64,
 );
