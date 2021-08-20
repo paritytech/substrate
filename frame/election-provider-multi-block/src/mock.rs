@@ -686,6 +686,26 @@ pub(crate) fn witness() -> SolutionOrSnapshotSize {
 	SolutionOrSnapshotSize { voters, targets }
 }
 
+// TODO: post-condition check that the metadata storage items are consistent: they must all
+// exist at the same time.
+pub(crate) fn ensure_snapshot(exists: bool, up_to_page: PageIndex) {
+	assert!(up_to_page > 0);
+
+	assert!(exists ^ !MultiPhase::desired_targets().is_some());
+	assert!(exists ^ !MultiPhase::snapshot_metadata().is_some());
+	assert!(exists ^ !<PagedTargetSnapshot<Runtime>>::contains_key(0));
+
+	// TODO: snapshot is created from top to bottom..
+	(Pages::get() - 1..=0).take(up_to_page.into()).for_each(|p| {
+		assert!(
+			exists ^ !<PagedVoterSnapshot<Runtime>>::contains_key(p),
+			"voter page {} not {}",
+			p,
+			exists
+		);
+	});
+}
+
 #[test]
 fn raw_paged_solution_works() {
 	// TODO: do a 3 page version of this as well, helps a lot with understanding.

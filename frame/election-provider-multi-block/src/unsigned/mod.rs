@@ -27,12 +27,17 @@ pub mod miner;
 
 #[frame_support::pallet]
 mod pallet {
-	use crate::{types::*, unsigned::miner};
+	use crate::{
+		types::*,
+		unsigned::miner::{self, BaseMiner},
+		Verifier,
+	};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	use frame_support::weights::Weight;
-	use sp_runtime::traits::SaturatedConversion;
+	use sp_npos_elections::EvaluateSupport;
+	use sp_runtime::traits::{One, SaturatedConversion};
 
 	pub trait WeightInfo {
 		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
@@ -99,29 +104,43 @@ mod pallet {
 		#[pallet::weight((0, DispatchClass::Operational))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			paged_solution: Box<PagedRawSolution<SolutionOf<T>>>,
+			mut paged_solution: Box<PagedRawSolution<SolutionOf<T>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 				 deprive validator from their authoring reward.";
 
-			// ensure right number of pages
-			let solution_paged =
-				(*paged_solution).solution_pages.len().saturated_into::<PageIndex>();
-			assert!(solution_paged == T::Pages::get());
-
-			assert!(crate::Pallet::<T>::current_phase().is_unsigned_open());
+			// phase, round, claimed score, page-count and hash are checked in pre-dispatch. we
+			// don't check them here anymore.
+			debug_assert!(Self::pre_dispatch_checks(&paged_solution).is_ok());
 
 			// TODO: ensure correct witness
 			// TODO: NOT GOOD, we start everything from high index to low, which means that we first
-			// process our least staked nominators.
-			// TODO: fundamental problem: validators could make someone else's block invalid, we
-			// should have a way to punish bad validators in here.
+			// process our least staked nominators. we MUST change this to such that the index 0 of
+			// the snapshot is the most important one, and is the one that is filled at first.
 
-			todo!();
+			let only_page = paged_solution
+				.solution_pages
+				.pop()
+				.expect("length of solution_pages is checked to be 1, can be popped, qed;");
+			let supports = <T::Verifier as Verifier>::feasibility_check_page(
+				only_page,
+				crate::Pallet::<T>::msp(),
+			)
+			.expect(error_message);
 
-			log!(info, "started verification of an unsigned solution.");
+			// we know that the claimed score is better then what we currently have because of the
+			// pre-dispatch checks, now we only check if the claimed score was *valid*.
+
+			// TODO: make `evaluate` not consume self, I really dk why I initially wrote it as such.
+
+			let valid_score = supports.clone().evaluate();
+			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
+
+			// all good, now we write this to the verifier directly.
+			T::Verifier::force_set_single_page_verified_solution(supports, valid_score);
+
 			Ok(None.into())
 		}
 	}
@@ -130,14 +149,14 @@ mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned(solution, _) = call {
-				// Discard solution not coming from the local OCW.
+			if let Call::submit_unsigned(paged_solution, _) = call {
+				// Discard a paged_solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => return InvalidTransaction::Call.into(),
 				}
 
-				let _ = Self::snapshot_independent_checks(solution.as_ref())
+				let _ = Self::pre_dispatch_checks(paged_solution.as_ref())
 					.map_err(|err| {
 						log!(debug, "unsigned transaction validation failed due to {:?}", err);
 						err
@@ -145,14 +164,14 @@ mod pallet {
 					.map_err(dispatch_error_to_invalid)?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
-					// The higher the score[0], the better a solution is.
+					// The higher the score[0], the better a paged_solution is.
 					.priority(
 						T::MinerTxPriority::get()
-							.saturating_add(solution.score[0].saturated_into()),
+							.saturating_add(paged_solution.score[0].saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
-					// solution per round at most, and solutions are not propagate.
-					.and_provides(solution.round)
+					// paged_solution per round at most, and solutions are not propagate.
+					.and_provides(paged_solution.round)
 					// Transaction should stay in the pool for the duration of the unsigned phase.
 					.longevity(T::UnsignedPhase::get().saturated_into::<u64>())
 					// We don't propagate this. This can never be validated at a remote node.
@@ -165,7 +184,7 @@ mod pallet {
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			if let Call::submit_unsigned(solution, _) = call {
-				Self::snapshot_independent_checks(solution.as_ref())
+				Self::pre_dispatch_checks(solution.as_ref())
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
@@ -184,7 +203,7 @@ mod pallet {
 			// guard will be dropped upon successful execution.
 			let mut lock =
 				StorageLock::<BlockAndTime<frame_system::Pallet<T>>>::with_block_deadline(
-					miner::OFFCHAIN_LOCK,
+					miner::OffchainWorkerMiner::<T>::OFFCHAIN_LOCK,
 					T::UnsignedPhase::get().saturated_into(),
 				);
 
@@ -216,21 +235,25 @@ mod pallet {
 		/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 		/// acquired with success.
 		fn do_synchronized_offchain_worker(now: T::BlockNumber) {
-			use miner::Miner;
+			use miner::OffchainWorkerMiner;
+
 			let current_phase = crate::Pallet::<T>::current_phase();
 			log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
 			match current_phase {
 				Phase::Unsigned((true, opened)) if opened == now => {
 					// Mine a new solution, cache it, and attempt to submit it
-					let initial_output = Miner::<T>::ensure_offchain_repeat_frequency(now)
-						.and_then(|_| Miner::<T>::mine_check_save_submit());
+					let initial_output =
+						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now)
+							.and_then(|_| OffchainWorkerMiner::<T>::mine_check_save_submit());
 					log!(debug, "initial offchain thread output: {:?}", initial_output);
 				},
 				Phase::Unsigned((true, opened)) if opened < now => {
 					// Try and resubmit the cached solution, and recompute ONLY if it is not
 					// feasible.
-					let resubmit_output = Miner::<T>::ensure_offchain_repeat_frequency(now)
-						.and_then(|_| Miner::<T>::restore_or_compute_then_maybe_submit());
+					let resubmit_output =
+						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now).and_then(
+							|_| OffchainWorkerMiner::<T>::restore_or_compute_then_maybe_submit(),
+						);
 					log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
 				},
 				_ => {},
@@ -250,15 +273,26 @@ mod pallet {
 			// }
 		}
 
+		pub(crate) fn pre_dispatch_checks(
+			paged_solution: &PagedRawSolution<SolutionOf<T>>,
+		) -> DispatchResult {
+			Self::unsigned_specific_checks(paged_solution)
+				.and(Self::snapshot_independent_checks(paged_solution))
+		}
+
+		pub fn unsigned_specific_checks(
+			paged_solution: &PagedRawSolution<SolutionOf<T>>,
+		) -> DispatchResult {
+			// ensure solution is timely, and it has only 1 page..
+			(crate::Pallet::<T>::current_phase().is_unsigned_open() &&
+				paged_solution.solution_pages.len() == 1)
+				.then(|| ())
+				.ok_or(Error::<T>::EarlySubmission.into())
+		}
+
 		pub fn snapshot_independent_checks(
 			paged_solution: &PagedRawSolution<SolutionOf<T>>,
 		) -> DispatchResult {
-			// ensure solution is timely. Don't panic yet. This is a cheap check.
-			ensure!(
-				crate::Pallet::<T>::current_phase().is_unsigned_open(),
-				Error::<T>::EarlySubmission
-			);
-
 			// ensure round is current
 			ensure!(crate::Pallet::<T>::round() == paged_solution.round, Error::<T>::WrongRound);
 
@@ -288,7 +322,27 @@ mod validate_unsigned {
 	use crate::{mock::*, types::*, PagedRawSolution};
 
 	#[test]
-	fn validate_unsigned_retracts_wrong_phase() {
+	fn retracts_weak_score() {
+		todo!()
+	}
+
+	#[test]
+	fn retracts_wrong_round() {
+		todo!()
+	}
+
+	#[test]
+	fn retracts_wrong_snapshot_hash() {
+		todo!()
+	}
+
+	#[test]
+	fn retracts_too_many_pages() {
+		todo!()
+	}
+
+	#[test]
+	fn retracts_wrong_phase() {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution =
 				PagedRawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };

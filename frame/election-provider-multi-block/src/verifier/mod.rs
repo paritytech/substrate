@@ -67,7 +67,7 @@ mod pallet {
 		///
 		/// Can only accept a new solution if an ongoing verification is not ongoing. Use [`status`]
 		/// to query this.
-		fn store_unverified_solution(
+		fn set_unverified_solution(
 			solution_pages: Vec<Self::Solution>,
 			claimed_score: ElectionScore,
 		) -> Result<(), ()>;
@@ -105,6 +105,18 @@ mod pallet {
 			partial_solution: Self::Solution,
 			page: PageIndex,
 		) -> Result<Supports<Self::AccountId>, FeasibilityError>;
+
+		/// Forcibly write this solution into the current valid variant.
+		///
+		/// This typically should only be called when you know that this solution is better than we
+		/// we have currently queued. The provided score is assumed to be correct.
+		///
+		/// For now this is only needed for single page solution, thus the api will only support
+		/// that.
+		fn force_set_single_page_verified_solution(
+			partial_solution: Supports<Self::AccountId>,
+			verified_score: ElectionScore,
+		);
 	}
 
 	#[derive(Encode, Decode, Clone, Copy)]
@@ -247,7 +259,7 @@ mod pallet {
 		///
 		/// Should be called at any step, if we encounter an issue which makes the solution
 		/// infeasible.
-		fn clear_incorrect() {
+		fn clear_invalid() {
 			let valid = QueuedValidVariant::<T>::get();
 			let invalid = valid.other();
 			match invalid {
@@ -255,25 +267,82 @@ mod pallet {
 				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
 			};
 			QueuedSolutionBackings::<T>::remove_all(None);
-			// defensive-only: this should have not existed anyway.
-			debug_assert!(!QueuedSolutionScore::<T>::exists());
-			QueuedSolutionScore::<T>::kill();
 			// NOTE: we don't flip the variant, this is still the empty slot.
 		}
 
-		/// Write a single page of a valid solution into the `valid` variant of the storage.
+		/// Clear all relevant information of the valid solution.
+		///
+		/// This should only be used when we intend to replace the valid solution with something
+		/// else (either better, or when being forced).
+		fn clear_valid() {
+			let valid = QueuedValidVariant::<T>::get();
+			match valid {
+				ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
+				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
+			};
+			QueuedSolutionScore::<T>::kill();
+		}
+
+		/// Write a single page of a valid solution into the `invalid` variant of the storage.
 		///
 		/// This should only be called once we are sure that this particular page is 100% correct.
-		fn write_valid_page(page: PageIndex, supports: Supports<T::AccountId>) {
+		///
+		/// This is called after *a page* has been validated, but the entire solution is not yet
+		/// known to be valid. At this stage, we write to the invalid variant. Once all pages are
+		/// verified, a call to [`finalize_correct`] will seal the correct pages.
+		fn set_invalid_page(page: PageIndex, supports: Supports<T::AccountId>) {
 			let valid = QueuedValidVariant::<T>::get();
+			let invalid = valid.other();
 
 			let backings = supports.iter().map(|(x, s)| (x, s.total)).collect::<Vec<_>>();
 			QueuedSolutionBackings::<T>::insert(page, backings);
 
+			match invalid {
+				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
+				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
+			}
+		}
+
+		/// Forcibly set a valid solution.
+		///
+		/// Writes all the given pages, and the provided score blindly.
+		fn force_set_valid(paged_supports: Vec<Supports<T::AccountId>>, score: ElectionScore) {
+			let valid = QueuedValidVariant::<T>::get();
+			// TODO: something like enumerate for Vec<T> that pagify it.
+			for (page_index, supports) in
+				paged_supports.into_iter().enumerate().map(|(p, s)| (p as PageIndex, s))
+			{
+				match valid {
+					ValidSolution::X => QueuedSolutionX::<T>::insert(page_index, supports),
+					ValidSolution::Y => QueuedSolutionY::<T>::insert(page_index, supports),
+				}
+			}
+			QueuedSolutionScore::<T>::put(score);
+		}
+
+		/// Write a single page to the valid variant directly.
+		///
+		/// This is not the normal flow of writing, and the solution is not checked.
+		///
+		/// This is only useful to override the valid solution with a single (mostly backup)
+		/// solution.
+		fn force_set_single_page_valid(
+			page: PageIndex,
+			supports: Supports<T::AccountId>,
+			score: ElectionScore,
+		) {
+			// clear everything about valid solutions.
+			Self::clear_valid();
+
+			// write a single new page.
+			let valid = QueuedValidVariant::<T>::get();
 			match valid {
 				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
 				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
 			}
+
+			// write the score.
+			QueuedSolutionScore::<T>::put(score);
 		}
 
 		/// Clear all storage items.
@@ -368,6 +437,7 @@ mod pallet {
 		pub fn set_emergency_solution(
 			origin: OriginFor<T>,
 			paged_supports: Vec<Supports<T::AccountId>>,
+			claimed_score: ElectionScore,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -380,10 +450,7 @@ mod pallet {
 				<crate::Error<T>>::WrongPageCount,
 			);
 
-			// TODO: something like enumerate for Vec<T> that pagify it.
-			for (page_index, supports) in paged_supports.iter().enumerate() {
-				QueuedSolution::<T>::write_valid_page(page_index as PageIndex, supports.to_vec());
-			}
+			QueuedSolution::<T>::force_set_valid(paged_supports, claimed_score);
 
 			Ok(())
 		}
@@ -393,7 +460,7 @@ mod pallet {
 		type Solution = SolutionOf<T>;
 		type AccountId = T::AccountId;
 
-		fn store_unverified_solution(
+		fn set_unverified_solution(
 			solution_pages: Vec<Self::Solution>,
 			claimed_score: ElectionScore,
 		) -> Result<(), ()> {
@@ -427,6 +494,13 @@ mod pallet {
 		) -> Result<Supports<Self::AccountId>, FeasibilityError> {
 			Self::feasibility_check_page(partial_solution, page)
 		}
+
+		fn force_set_single_page_verified_solution(
+			partial_supports: Supports<Self::AccountId>,
+			verified_score: ElectionScore,
+		) {
+			QueuedSolution::<T>::force_set_single_page_valid(0, partial_supports, verified_score);
+		}
 	}
 
 	#[pallet::hooks]
@@ -438,11 +512,11 @@ mod pallet {
 
 				if let Ok(ready) = maybe_ready {
 					// this page was noice; write it and check-in the next page.
-					QueuedSolution::<T>::write_valid_page(current_page, ready);
+					QueuedSolution::<T>::set_invalid_page(current_page, ready);
 					let has_more_pages = VerifyingSolution::<T>::proceed_page();
 
 					if !has_more_pages {
-						// this was the last page, we can't gp any further.
+						// this was the last page, we can't go any further.
 						let (final_score, winner_count) = QueuedSolution::<T>::final_score();
 						let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
 						let desired_targets = crate::Pallet::<T>::desired_targets().unwrap();
@@ -455,12 +529,12 @@ mod pallet {
 							QueuedSolution::<T>::finalize_correct(final_score);
 						} else {
 							VerifyingSolution::<T>::kill();
-							QueuedSolution::<T>::clear_incorrect();
+							QueuedSolution::<T>::clear_invalid();
 						}
 					}
 				} else {
 					VerifyingSolution::<T>::kill();
-					QueuedSolution::<T>::clear_incorrect();
+					QueuedSolution::<T>::clear_invalid();
 				}
 			}
 

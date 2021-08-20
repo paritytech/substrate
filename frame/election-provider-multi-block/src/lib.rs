@@ -488,7 +488,7 @@ pub mod pallet {
 				// from Off to snapshot
 				Phase::Off if remaining_blocks <= snapshot_deadline => {
 					let remaining_pages = T::Pages::get().saturating_sub(One::one());
-					log!(info, "starting snapshot creation[{}]", remaining_pages);
+					log!(info, "starting snapshot creation [{}]", remaining_pages);
 					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
 					let _ = Self::create_targets_snapshot();
 					Self::create_voters_snapshot_paged(remaining_pages).unwrap();
@@ -499,8 +499,8 @@ pub mod pallet {
 				Phase::Snapshot(x) if x > 0 => {
 					// we don't check block numbers here, snapshot creation is mandatory.
 					let remaining_pages = x.saturating_sub(1);
-					log!(info, "continuing snapshot creation[{}]", remaining_pages);
-					CurrentPhase::<T>::put(Phase::Snapshot(x));
+					log!(info, "continuing snapshot creation [{}]", remaining_pages);
+					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
 					Self::create_voters_snapshot_paged(remaining_pages);
 					0
 				},
@@ -821,6 +821,24 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Returns the most significant page of the snapshot.
+	///
+	/// Based on the contract of `ElectionDataProvider`, this is the first page that is filled.
+	fn msp() -> PageIndex {
+		T::Pages::get().checked_sub(1).unwrap_or_else(|| {
+			debug_assert!(false, "Integrity check must ensure that T::Pages is greater than 1");
+			log!(warn, "Integrity check must ensure that T::Pages is greater than 1");
+			Default::default()
+		})
+	}
+
+	/// Returns the least significant page of the snapshot.
+	///
+	/// Based on the contract of `ElectionDataProvider`, this is the last page that is filled.
+	fn lsp() -> PageIndex {
+		Zero::zero()
+	}
+
 	/// Creates the target snapshot. Writes new data to:
 	///
 	/// 1. [`SnapshotMetadata`]
@@ -829,7 +847,6 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(num_created)` if operation is okay.
 	pub fn create_targets_snapshot() -> Result<u32, ElectionError> {
-		log!(trace, "creating target snapshot");
 		// if requested, get the targets as well.
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
@@ -858,6 +875,8 @@ impl<T: Config> Pallet<T> {
 			*m = Some(new_metadata);
 		});
 
+		log!(trace, "created target snapshot.");
+
 		Ok(length as u32)
 	}
 
@@ -869,8 +888,6 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(num_created)` if operation is okay.
 	pub fn create_voters_snapshot_paged(remaining: PageIndex) -> Result<u32, ElectionError> {
-		log!(trace, "creating paged snapshot, {} pages remaining", remaining);
-
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
 		let voters = T::DataProvider::voters(Some(voter_limit), remaining)
 			.map_err(ElectionError::DataProvider)?;
@@ -897,6 +914,7 @@ impl<T: Config> Pallet<T> {
 			voters,
 		);
 
+		log!(trace, "created paged voters snapshot, {} more pages needed", remaining);
 		Ok(count)
 	}
 
@@ -968,8 +986,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiPhase,
-			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			ensure_snapshot, multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo,
+			MultiPhase, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -977,40 +995,37 @@ mod tests {
 	use frame_support::{assert_noop, assert_ok};
 	use sp_npos_elections::Support;
 
-	// TODO: post-condition check that the metadata storage items are consistent: they must all
-	// exist at the same time.
-	fn ensure_snapshot(exists: bool) {
-		assert!(exists ^ !MultiPhase::desired_targets().is_some());
-		assert!(exists ^ !<PagedVoterSnapshot<Runtime>>::contains_key(0));
-		assert!(exists ^ !<PagedTargetSnapshot<Runtime>>::contains_key(0));
-		assert!(exists ^ !MultiPhase::snapshot_metadata().is_some());
-	}
-
 	#[test]
 	fn phase_rotation_single_page() {
 		ExtBuilder::default().build_and_execute(|| {
-			// 0 ------- 15 ------- 25 ------- 30 ------- ------- 45 ------- 55 ------- 60
-			//           |           |          |                 |           |          |
-			//         Signed      Unsigned   Elect             Signed     Unsigned    Elect
+			// 0 ------- 14 15 ------- 25 ------- 30 -------------- 44 45 ------- 55 ------- 60
+			//              |           |          |                 |   |           |          |
+			//            Signed      Unsigned   Elect        Snapshot  Signed     Unsigned    Elect
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-			ensure_snapshot(false);
+			ensure_snapshot(false, 1);
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(4);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert_eq!(MultiPhase::round(), 1);
 
+			roll_to(13);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(0));
+
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
-			ensure_snapshot(true);
+			ensure_snapshot(true, 1);
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(24);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-			ensure_snapshot(true);
+			ensure_snapshot(true, 1);
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(25);
@@ -1019,29 +1034,32 @@ mod tests {
 				multi_phase_events(),
 				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
 			);
-			ensure_snapshot(true);
+			ensure_snapshot(true, 1);
 
 			roll_to(29);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true);
+			ensure_snapshot(true, 1);
 
 			roll_to(30);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true);
+			ensure_snapshot(true, 1);
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true);
+			ensure_snapshot(true, 1);
 
 			MultiPhase::elect(0).unwrap();
 
 			assert!(MultiPhase::current_phase().is_off());
-			ensure_snapshot(false);
+			ensure_snapshot(false, 1);
 			assert_eq!(MultiPhase::round(), 2);
 
+			roll_to(43);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
 			roll_to(44);
-			assert!(MultiPhase::current_phase().is_off());
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(0));
 
 			roll_to(45);
 			assert!(MultiPhase::current_phase().is_signed());
@@ -1052,8 +1070,187 @@ mod tests {
 	}
 
 	#[test]
-	fn phase_rotation_multi_page() {
-		ExtBuilder::default().build_and_execute(|| {})
+	fn phase_rotation_multi_page_2() {
+		ExtBuilder::default().pages(2).build_and_execute(|| {
+			// 0 -------13 14 15 ------- 25 ------- 30 -------------- 43 44 45 ------- 55 ------- 60
+			//           |     |          |          |                 |     |          |          |
+			//    Snapshot    Signed    Unsigned   Elect        Snapshot    Signed    Unsigned
+
+			assert_eq!(System::block_number(), 0);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			ensure_snapshot(false, 2);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(4);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(12);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(13);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(1));
+			ensure_snapshot(true, 1);
+
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(0));
+			ensure_snapshot(true, 2);
+
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			ensure_snapshot(true, 2);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(24);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			ensure_snapshot(true, 2);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+			);
+			ensure_snapshot(true, 2);
+
+			roll_to(29);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			ensure_snapshot(true, 2);
+
+			roll_to(30);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			ensure_snapshot(true, 2);
+
+			// We close when upstream tells us to elect.
+			roll_to(32);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// we fast track to the last elect call with page 0 -- this should clear everything.
+			MultiPhase::elect(0).unwrap();
+
+			assert!(MultiPhase::current_phase().is_off());
+			// all snapshots are gone.
+			ensure_snapshot(false, 2);
+			assert_eq!(MultiPhase::round(), 2);
+
+			roll_to(42);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(43);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(1));
+
+			roll_to(44);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(0));
+
+			roll_to(45);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			roll_to(55);
+			assert!(MultiPhase::current_phase().is_unsigned_open_at(55));
+		})
+	}
+
+	#[test]
+	fn phase_rotation_multi_page_3() {
+		ExtBuilder::default().pages(3).build_and_execute(|| {
+			#[rustfmt::skip]
+			// 0 ------- 12 13 14 15 ------- 25 ------- 30 -------------- 42 43 44 45 ------- 55 ------- 60
+			//            |     |             |          |                |        |          |           |
+			//     Snapshot    Signed    Unsigned   Elect         Snapshot       Signed    Unsigned      Elect
+
+			assert_eq!(System::block_number(), 0);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			ensure_snapshot(false, 2);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(4);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(11);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(12);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(2));
+			ensure_snapshot(true, 1);
+
+			roll_to(13);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(1));
+			ensure_snapshot(true, 2);
+
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(0));
+			ensure_snapshot(true, 3);
+
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			ensure_snapshot(true, 3);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(24);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			ensure_snapshot(true, 3);
+			assert_eq!(MultiPhase::round(), 1);
+
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+			);
+			ensure_snapshot(true, 3);
+
+			roll_to(29);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			ensure_snapshot(true, 3);
+
+			roll_to(30);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			ensure_snapshot(true, 3);
+
+			// We close when upstream tells us to elect.
+			roll_to(32);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// we fast track to the last elect call with page 0 -- this should clear everything.
+			MultiPhase::elect(0).unwrap();
+
+			assert!(MultiPhase::current_phase().is_off());
+			// all snapshots are gone.
+			ensure_snapshot(false, 3);
+			assert_eq!(MultiPhase::round(), 2);
+
+			roll_to(41);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(42);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(2));
+
+			roll_to(43);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(1));
+
+			roll_to(44);
+			assert_eq!(MultiPhase::current_phase(), Phase::Snapshot(0));
+
+			roll_to(45);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			roll_to(55);
+			assert!(MultiPhase::current_phase().is_unsigned_open_at(55));
+		})
+	}
+
+	#[test]
+	fn multi_page_elect_works() {
+		todo!()
+	}
+
+	#[test]
+	fn multi_page_elect_fast_track() {
+		todo!("we expect 3 pages, but we suddenly receive a call to elect(0)");
 	}
 
 	/*
