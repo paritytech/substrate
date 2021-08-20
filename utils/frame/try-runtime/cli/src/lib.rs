@@ -32,10 +32,7 @@ use sp_core::{
 	storage::{well_known_keys, StorageData, StorageKey},
 };
 use sp_keystore::{testing::KeyStore, KeystoreExt};
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
-	RuntimeString,
-};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
 use std::{fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
 
