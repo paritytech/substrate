@@ -391,7 +391,7 @@ mod test {
 			(vec![105], vec![255]),
 		]
 		.into_iter()
-		.collect::<std::collections::BTreeMap<_, _>>(), None)
+		.collect::<std::collections::BTreeMap<_, _>>(), sp_core::state_version::StateVersion::V0)
 		.into();
 		let prefixed_child_trie_key1 = child_info_1.prefixed_storage_key();
 		let storage = InMemoryStorage::with_inputs(

@@ -112,7 +112,7 @@ struct BlockchainStorage<Block: BlockT> {
 	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
-	state_versions: StateVersions,
+	state_versions: StateVersions<Block>,
 	/*
 	// TODO not sure if migration support. TODO replace () by StateMigration.
 	state_migration: Vec<(NumberFor<Block>, ())>,
@@ -154,12 +154,12 @@ impl<Block: BlockT> Blockchain<Block> {
 				if let Ok(Some(header)) = self.header(BlockId::Hash(h)) {
 					header.number().clone()
 				} else {
-					return default // Default to latest version TODO a latest version default with StateVersion.
+					0u32.into()
 				}
 			},
 			BlockId::Number(n) => n,
 		};
-		self.storage.read().state_versions.version_at(number)
+		self.storage.read().state_versions.state_version_at(number)
 	}
 
 	/// Create new in-memory blockchain storage.
@@ -176,7 +176,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			changes_trie_cht_roots: HashMap::new(),
 			leaves: LeafSet::new(),
 			aux: HashMap::new(),
-			state_versions: Default::default(),
+			state_versions: StateVersions::default(),
 		}));
 		Blockchain { storage }
 	}

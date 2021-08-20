@@ -17,6 +17,8 @@
 
 //! Substrate state versioning core types.
 
+use codec::{Decode, Encode};
+
 /// Default state version to use with a new substrate chain.
 ///
 /// When this value change, old chain will require to force their
@@ -26,7 +28,7 @@
 pub const DEFAULT_STATE_VERSION: StateVersion = StateVersion::V1 { threshold: 33 };
 
 /// Supported version with substrate chain.
-#[derive(Clone, Copy, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum StateVersion {
 	/// Patricia trie Radix 16 without extension node.

@@ -647,8 +647,7 @@ pub mod pallet {
 
 		fn integrity_test() {
 			sp_std::if_std! {
-				let state_version = None;
-				sp_io::TestExternalities::new_empty(state_version).execute_with(||
+				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(
 						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
 						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",

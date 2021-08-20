@@ -70,7 +70,7 @@ where
 	pub fn update_backend(&self, root: H::Out, changes: MemoryDB<H>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
-		Self::new(clone, root, self.state_version)
+		Self::new(clone, root, self.state_version())
 	}
 
 	/// Apply the given transaction to this backend and set the root to the given value.
@@ -90,20 +90,18 @@ where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(self.backend_storage().clone(), self.root().clone(), self.state_version)
+		TrieBackend::new(self.backend_storage().clone(), self.root().clone(), self.state_version())
 	}
 }
 
-/*
 impl<H: Hasher> Default for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
-		new_in_mem() // TODO try removing this default
+		new_in_mem(Default::default())
 	}
 }
-*/
 
 impl<H: Hasher> From<StateVersion>
 	for TrieBackend<MemoryDB<H>, H>
@@ -185,7 +183,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = new_in_mem::<BlakeTwo256>(None);
+		let storage = new_in_mem::<BlakeTwo256>(StateVersion::default());
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let mut storage = storage
@@ -198,7 +196,7 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let mut storage = new_in_mem::<BlakeTwo256>(None);
+		let mut storage = new_in_mem::<BlakeTwo256>(StateVersion::default());
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage

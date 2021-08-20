@@ -45,7 +45,7 @@ pub struct CompactProof {
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
 	pub fn new(trie_nodes: Vec<Vec<u8>>, state_version: StateVersion) -> Self {
-		StorageProof { trie_nodes, alt_hashing }
+		StorageProof { trie_nodes, state_version }
 	}
 
 	/// Returns a new empty proof.
@@ -53,12 +53,17 @@ impl StorageProof {
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
 	pub fn empty() -> Self {
-		StorageProof { trie_nodes: Vec::new(), state_version: StateVersion::Default() }
+		StorageProof { trie_nodes: Vec::new(), state_version: StateVersion::default() }
 	}
 
 	/// Returns whether this is an empty proof.
 	pub fn is_empty(&self) -> bool {
 		self.trie_nodes.is_empty()
+	}
+
+	/// State version used in the proof.
+	pub fn state_version(&self) -> StateVersion {
+		self.state_version
 	}
 
 	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
@@ -187,7 +192,7 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
 		for item in proof.trie_nodes.iter() {
-			let mut meta = Meta::default();
+			let mut meta = crate::Meta::default();
 			meta.try_inner_hashing = match proof.state_version {
 				StateVersion::V0 => None,
 				StateVersion::V1 { threshold, .. } => Some(threshold),

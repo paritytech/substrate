@@ -175,7 +175,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof<H: Hasher>(&self, state_version: StateVersion) -> StorageProof {
 		// TODO consider state_version as inner field
-		let try_inner_hashing = match proof.state_version {
+		let try_inner_hashing = match state_version {
 			StateVersion::V0 => None,
 			StateVersion::V1 { threshold } => Some(threshold),
 		};
@@ -224,7 +224,7 @@ pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hashe
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 where
-	H::Out: Codec,
+	H::Out: Codec + Ord,
 {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
@@ -240,12 +240,12 @@ where
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend { backend: essence.backend_storage(), proof_recorder };
-		ProvingBackend(TrieBackend::new(recorder, root, backend.state_version))
+		ProvingBackend(TrieBackend::new(recorder, root, backend.state_version()))
 	}
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		let state_version = self.0.state_version;
+		let state_version = self.0.state_version();
 		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>(state_version)
 	}
 
@@ -397,7 +397,7 @@ where
 	}
 
 	fn state_version(&self) -> StateVersion {
-		self.0.state_version
+		self.0.state_version()
 	}
 }
 
@@ -410,7 +410,7 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
-	let state_version = proof.state_version.clone();
+	let state_version = proof.state_version();
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
@@ -463,7 +463,7 @@ mod tests {
 		use sp_core::H256;
 		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
-			StorageProof::empty(None),
+			StorageProof::empty(),
 		);
 		assert!(result.is_err());
 	}
@@ -499,9 +499,9 @@ mod tests {
 			.map(|i| (vec![i], Some(vec![i; size_content])))
 			.collect::<Vec<_>>())];
 		let mut in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
-			(contents, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))).into()
+			(contents, StateVersion::V1 { threshold: 33 }).into()
 		} else {
-			(contents, None).into()
+			(contents, StateVersion::V0).into()
 		};
 		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
 		value_range.clone().for_each(|i| {
@@ -541,9 +541,9 @@ mod tests {
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let mut in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
-			(contents, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))).into()
+			(contents, StateVersion::V1 { threshold: 33 }).into()
 		} else {
-			(contents, None).into()
+			(contents, StateVersion::V0).into()
 		};
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory

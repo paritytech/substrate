@@ -200,7 +200,7 @@ pub struct ClientConfig<Block: BlockT> {
 	/// version doesn't match anymore.
 	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
 	/// State version to use with chain.
-	pub state_versions: Vec<(NumberFor<Block>, Option<Option<u32>>)>,
+	pub state_versions: sp_runtime::StateVersions,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {

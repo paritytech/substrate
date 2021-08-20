@@ -950,7 +950,7 @@ mod tests {
 	use hex_literal::hex;
 	use num_traits::Zero;
 	use sp_core::{
-		map,
+		map, state_version::StateVersion,
 		storage::{well_known_keys::EXTRINSIC_INDEX, Storage, StorageChild},
 		Blake2Hasher, H256,
 	};
@@ -977,7 +977,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_storage_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
-		let backend: TestBackend = None.into();
+		let backend: TestBackend = StateVersion::default().into();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
@@ -986,7 +986,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_state_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
-		let backend: TestBackend = None.into();
+		let backend: TestBackend = StateVersion::default().into();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 		assert_eq!(ext.storage_changes_root(&H256::default().encode()).unwrap(), None);
 	}
@@ -997,7 +997,7 @@ mod tests {
 		let mut cache = StorageTransactionCache::default();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
-		let backend: TestBackend = None.into();
+		let backend: TestBackend = StateVersion::default().into();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, state, None);
 		assert_eq!(
 			ext.storage_changes_root(&H256::default().encode()).unwrap(),
@@ -1013,7 +1013,7 @@ mod tests {
 		overlay.set_storage(vec![1], None);
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
-		let backend: TestBackend = None.into();
+		let backend: TestBackend = StateVersion::default().into();
 		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, state, None);
 		assert_eq!(
 			ext.storage_changes_root(&H256::default().encode()).unwrap(),
@@ -1034,7 +1034,7 @@ mod tests {
 				vec![40] => vec![40]
 			],
 			children_default: map![],
-		}, None)
+		}, Default::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1078,7 +1078,7 @@ mod tests {
 				vec![30] => vec![30]
 			],
 			children_default: map![],
-		}, None)
+		}, Default::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1109,7 +1109,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, None)
+		}, Default::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1154,7 +1154,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, None)
+		}, Default::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1191,7 +1191,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, None)
+		}, Default::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);

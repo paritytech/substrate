@@ -343,7 +343,7 @@ pub mod tests {
 		hashed_value: bool,
 	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
-		TrieBackend::new(mdb, root, None)
+		TrieBackend::new(mdb, root, Default::default())
 	}
 
 	#[test]
@@ -409,7 +409,7 @@ pub mod tests {
 		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
 			PrefixedMemoryDB::default(),
 			Default::default(),
-			None,
+			Default::default(),
 		)
 		.pairs()
 		.is_empty());

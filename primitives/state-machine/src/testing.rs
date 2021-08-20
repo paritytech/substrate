@@ -92,8 +92,8 @@ where
 	}
 
 	/// New empty test externalities.
-	pub fn new_empty(state_version: StateVersion) -> Self {
-		Self::new_with_code(&[], Storage::default(), state_version)
+	pub fn new_empty() -> Self {
+		Self::new_with_code(&[], Storage::default(), Default::default())
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
@@ -245,7 +245,7 @@ where
 {
 	fn default() -> Self {
 		// default to default version.
-		Self::new(Storage::default(), Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+		Self::new(Storage::default(), Default::default())
 	}
 }
 
@@ -317,7 +317,7 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let storage = Storage::default(); // avoid adding the trie threshold.
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::from((storage, None));
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::from((storage, Default::default()));
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());

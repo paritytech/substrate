@@ -50,7 +50,7 @@ pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> A
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>, state_versions: sp_runtime::StateVersions -> Arc<Backend<S, B>>
+pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>, state_versions: sp_runtime::StateVersions) -> Arc<Backend<S, B>>
 where
 	B: BlockT,
 	S: BlockchainStorage<B>,

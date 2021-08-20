@@ -295,7 +295,7 @@ impl Externalities for BasicExternalities {
 				Layout::<Blake2Hasher>::default()
 			},
 			StateVersion::V1 { threshold } => {
-				Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
+				Layout::<Blake2Hasher>::with_alt_hashing(threshold)
 			},
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
@@ -389,7 +389,7 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext: BasicExternalities = None.into();
+		let mut ext: BasicExternalities = StateVersion::default().into();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -401,7 +401,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext: BasicExternalities = None.into();
+		let mut ext: BasicExternalities = StateVersion::default().into();
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
@@ -421,7 +421,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, None);
+		}, StateVersion::default());
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
 
@@ -451,7 +451,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, None);
+		}, StateVersion::default());
 
 		let res = ext.kill_child_storage(child_info, None);
 		assert_eq!(res, (true, 3));
@@ -460,7 +460,7 @@ mod tests {
 	#[test]
 	fn basic_externalities_is_empty() {
 		// Make sure no values are set by default in `BasicExternalities`.
-		let storage = BasicExternalities::new_empty(None).into_storages();
+		let storage = BasicExternalities::new_empty(StateVersion::default()).into_storages();
 		assert!(storage.top.is_empty());
 		assert!(storage.children_default.is_empty());
 	}

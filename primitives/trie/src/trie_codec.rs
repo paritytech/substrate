@@ -202,7 +202,7 @@ pub fn encode_compact<L>(proof: StorageProof, root: TrieHash<L>) -> Result<Compa
 where
 	L: TrieConfiguration,
 {
-	let state_version = proof.state_version;
+	let state_version = proof.state_version();
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {

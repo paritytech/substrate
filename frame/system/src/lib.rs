@@ -1447,7 +1447,7 @@ impl<T: Config> Pallet<T> {
 			],
 			children_default: map![],
 		};
-		TestExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+		TestExternalities::new(storage, Default::default())
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
