@@ -42,6 +42,7 @@ use sp_core::{
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
+	state_version::StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 
@@ -86,17 +87,17 @@ where
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: Storage, alt_hashing: Option<Option<u32>>) -> Self {
-		Self::new_with_code(&[], storage, alt_hashing)
+	pub fn new(storage: Storage, state_version: StateVersion) -> Self {
+		Self::new_with_code(&[], storage, state_version)
 	}
 
 	/// New empty test externalities.
-	pub fn new_empty(alt_hashing: Option<Option<u32>>) -> Self {
-		Self::new_with_code(&[], Storage::default(), alt_hashing)
+	pub fn new_empty(state_version: StateVersion) -> Self {
+		Self::new_with_code(&[], Storage::default(), state_version)
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], mut storage: Storage, alt_hashing: Option<Option<u32>>) -> Self {
+	pub fn new_with_code(code: &[u8], mut storage: Storage, state_version: StateVersion) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage
 			.top
@@ -114,7 +115,7 @@ where
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
-		let backend = (storage, alt_hashing).into();
+		let backend = (storage, state_version).into();
 
 		TestExternalities {
 			overlay,
@@ -248,12 +249,12 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<(Storage, Option<Option<u32>>)> for TestExternalities<H, N>
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<(Storage, StateVersion)> for TestExternalities<H, N>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
-	fn from((storage, alt_hashing): (Storage, Option<Option<u32>>)) -> Self {
-		Self::new(storage, alt_hashing)
+	fn from((storage, state_version): (Storage, StateVersion)) -> Self {
+		Self::new(storage, state_version)
 	}
 }
 

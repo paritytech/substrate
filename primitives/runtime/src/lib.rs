@@ -94,6 +94,8 @@ pub use sp_arithmetic::{
 
 pub use either::Either;
 
+pub use state_version::{StateVersion, StateVersions};
+
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
 /// Essentially a finality proof. The exact formulation will vary between consensus
@@ -171,13 +173,13 @@ pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[cfg(feature = "std")]
 pub trait BuildStorage {
 	/// Build the storage out of this builder.
-	fn build_storage(&self, alt_hashing: Option<Option<u32>>) -> Result<sp_core::storage::Storage, String> {
+	fn build_storage(&self, state_version: StateVersion) -> Result<sp_core::storage::Storage, String> {
 		let mut storage = Default::default();
-		self.assimilate_storage(&mut storage, alt_hashing)?;
+		self.assimilate_storage(&mut storage, state_version)?;
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage, alt_hashing: Option<Option<u32>>) -> Result<(), String>;
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage, state_version: StateVersion) -> Result<(), String>;
 }
 
 /// Something that can build the genesis storage of a module.
@@ -187,13 +189,13 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	fn build_module_genesis_storage(
 		&self,
 		storage: &mut sp_core::storage::Storage,
-		alt_hashing: Option<Option<u32>>,
+		state_version: StateVersion,
 	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for sp_core::storage::Storage {
-	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage, _alt_hashing: Option<Option<u32>>) -> Result<(), String> {
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage, _state_version: StateVersion) -> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
@@ -212,7 +214,7 @@ impl BuildStorage for sp_core::storage::Storage {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
-	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage, _: Option<Option<u32>>) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage, _: StateVersion) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }

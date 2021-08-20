@@ -60,6 +60,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, BlockIdTo, Zero, NumberFor},
 	BuildStorage,
+	StateVersions,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{str::FromStr, sync::Arc};
@@ -317,16 +318,10 @@ where
 			transaction_storage: config.transaction_storage.clone(),
 		};
 
-		let mut state_versions = Vec::new();
-		for (number, version) in config.chain_spec.state_versions().into_iter() {
-			let number = NumberFor::<TBl>::from_str(&number.to_string())
-				.map_err(|_| Error::Application(Box::from(format!(
-						"Failed to parse `{}` as block number for state versions.",
-						number,
-					))))?;
-			state_versions.push((number.into(), version));
-		}
-		let backend = new_db_backend(db_config, state_versions)?;
+		let state_versions = config.chain_spec.state_versions()
+			.ok_or_else(|| Error::Application(Box::from("Invalid state versions for chain spec".to_string())))?;
+
+		let backend = new_db_backend(db_config, state_versions.clone())?;
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
@@ -348,16 +343,6 @@ where
 				Ok((hash, c))
 			})
 			.collect::<Result<std::collections::HashMap<_, _>, Error>>()?;
-
-		let mut state_versions = Vec::new();
-		for (number, version) in config.chain_spec.state_versions().into_iter() {
-			let number = NumberFor::<TBl>::from_str(&number.to_string())
-				.map_err(|_| Error::Application(Box::from(format!(
-						"Failed to parse `{}` as block number for state versions.",
-						number,
-					))))?;
-			state_versions.push((number.into(), version));
-		}
 
 		let client = new_client(
 			backend.clone(),
@@ -427,15 +412,8 @@ where
 		Box::new(task_manager.spawn_handle()),
 	));
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-	let mut state_versions = Vec::new();
-	for (number, version) in config.chain_spec.state_versions().into_iter() {
-		let number = NumberFor::<TBl>::from_str(&number.to_string())
-			.map_err(|_| Error::Application(Box::from(format!(
-					"Failed to parse `{}` as block number for state versions.",
-					number,
-				))))?;
-		state_versions.push((number.into(), version));
-	}
+	let state_versions = config.chain_spec.state_versions()
+		.ok_or_else(|| Error::Application(Box::from("Invalid state versions for chain spec".to_string())))?;
 
 	let backend = sc_light::new_light_backend(light_blockchain, state_versions);
 	let client = Arc::new(light::new_light(
@@ -453,7 +431,7 @@ where
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
-	state_versions: Vec<(NumberFor<Block>, Option<Option<u32>>)>,
+	state_versions: StateVersions<Block>,
 ) -> Result<Arc<Backend<Block>>, sp_blockchain::Error>
 where
 	Block: BlockT,

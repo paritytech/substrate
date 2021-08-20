@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 use sp_arithmetic::traits::Zero;
 
 /// Multiple versions of state in use for a chain.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StateVersions<B: Block> {
 	canonical_states: Vec<(NumberFor<B>, StateVersion)>,
 }
@@ -52,6 +52,27 @@ impl<B: Block> StateVersions<B> {
 			version = *state;
 		}
 		version
+	}
+
+	/// Modify configuration, mostly for testing.
+	pub fn add(&mut self, (at, conf): (NumberFor<B>, StateVersion)) -> StateVersion {
+		let mut insert = Some(0);
+		let mut replace = None;
+		for (i, (number, _)) in self.canonical_states.iter() {
+			if number == &at {
+				replace = Some(i);
+				break;
+			}
+			if number > &at {
+				break;
+			}
+			insert = i + 1;
+		}
+		if let Some(i) = replace {
+			self.canonical_states[i] = (at, conf);
+		} else if let Some(i) = insert {
+			self.canonical_states.insert(i, (at, conf));
+		}
 	}
 
 	/// Convert from chainspec conf.

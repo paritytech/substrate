@@ -26,7 +26,7 @@
 pub const DEFAULT_STATE_VERSION: StateVersion = StateVersion::V1 { threshold: 33 };
 
 /// Supported version with substrate chain.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum StateVersion {
 	/// Patricia trie Radix 16 without extension node.

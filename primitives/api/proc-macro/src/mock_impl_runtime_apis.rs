@@ -105,7 +105,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`record_proof` not implemented for runtime api mocks")
 			}
 
-			fn extract_proof(&mut self, alt_hashing: Option<Option<u32>>) -> Option<#crate_::StorageProof> {
+			fn extract_proof(&mut self, state_version: sp_runtime::StateVersion) -> Option<#crate_::StorageProof> {
 				unimplemented!("`extract_proof` not implemented for runtime api mocks")
 			}
 

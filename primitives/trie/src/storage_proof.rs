@@ -20,6 +20,7 @@ use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use sp_std::vec::Vec;
 use trie_db::NodeCodec;
+use sp_core::state_version::StateVersion;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -31,19 +32,19 @@ use trie_db::NodeCodec;
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
-	pub alt_hashing: Option<Option<u32>>, // TODO non public
+	state_version: StateVersion,
 }
 
 /// Storage proof in compact form.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
-	pub alt_hashing: Option<Option<u32>>,
+	pub state_version: StateVersion,
 }
 
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>, alt_hashing: Option<Option<u32>>) -> Self {
+	pub fn new(trie_nodes: Vec<Vec<u8>>, state_version: StateVersion) -> Self {
 		StorageProof { trie_nodes, alt_hashing }
 	}
 
@@ -51,9 +52,8 @@ impl StorageProof {
 	///
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
-	pub fn empty(alt_hashing: Option<Option<u32>>) -> Self {
-		// TODO consider alt_hashing default value. ++
-		StorageProof { trie_nodes: Vec::new(), alt_hashing }
+	pub fn empty() -> Self {
+		StorageProof { trie_nodes: Vec::new(), state_version: StateVersion::Default() }
 	}
 
 	/// Returns whether this is an empty proof.
@@ -93,20 +93,20 @@ impl StorageProof {
 	where
 		I: IntoIterator<Item = Self>,
 	{
-		let mut alt_hashing = None;
-		let alt_hashing = &mut alt_hashing;
+		let mut state_version = StateVersion::default();
+		let state_version = &mut state_version;
 		let trie_nodes = proofs
 			.into_iter()
 			.flat_map(|proof| {
-				debug_assert!(alt_hashing == &None || alt_hashing == &proof.alt_hashing);
-				*alt_hashing = proof.alt_hashing.clone();
+				debug_assert!(state_version == &StateVersion::default() || state_version == &proof.state_version);
+				*state_version = proof.state_version;
 				proof.iter_nodes()
 			})
 			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
 			.into_iter()
 			.collect();
 
-		Self { trie_nodes, alt_hashing: *alt_hashing }
+		Self { trie_nodes, state_version: *state_version }
 	}
 
 	/// Encode as a compact proof with default
@@ -143,7 +143,7 @@ impl CompactProof {
 		&self,
 		expected_root: Option<&H::Out>,
 	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
-		let alt_hashing = self.alt_hashing.clone();
+		let state_version = self.state_version;
 		let mut db = crate::MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
@@ -156,7 +156,7 @@ impl CompactProof {
 					.into_iter()
 					.filter_map(|kv| if (kv.1).1 > 0 { Some((kv.1).0) } else { None })
 					.collect(),
-				alt_hashing,
+				state_version,
 			),
 			root,
 		))
@@ -187,7 +187,11 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
 		for item in proof.trie_nodes.iter() {
-			let mut meta = Default::default();
+			let mut meta = Meta::default();
+			meta.try_inner_hashing = match proof.state_version {
+				StateVersion::V0 => None,
+				StateVersion::V1 { threshold, .. } => Some(threshold),
+			};
 			// Read meta from state (required for value layout).
 			let _ = <Layout<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
 			db.alt_insert(

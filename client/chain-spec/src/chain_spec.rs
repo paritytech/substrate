@@ -28,7 +28,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::BuildStorage;
+use sp_runtime::{BuildStorage, StateVersions, StateVersion};
 use std::{borrow::Cow, collections::HashMap, fs::File, path::PathBuf, sync::Arc};
 
 enum GenesisSource<G> {
@@ -99,9 +99,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
-	fn build_storage(&self, alt_hashing: Option<Option<u32>>) -> Result<Storage, String> {
+	fn build_storage(&self, state_version: StateVersion) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
-			Genesis::Runtime(gc) => gc.build_storage(alt_hashing),
+			Genesis::Runtime(gc) => gc.build_storage(state_version),
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children_default: children_map
@@ -121,7 +121,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 		}
 	}
 
-	fn assimilate_storage(&self, _: &mut Storage, _: Option<Option<u32>>) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut Storage, _: StateVersion) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -172,7 +172,7 @@ struct ClientSpec<E> {
 	code_substitutes: HashMap<String, Bytes>,
 	/// Ordered sequence of block number and their associated state version.
 	#[serde(default)]
-	state_versions: Vec<(u64, Option<Option<u32>>)>,
+	state_versions: Vec<(String, StateVersion)>,
 }
 
 /// A type denoting empty extensions.
@@ -264,7 +264,7 @@ impl<G, E> ChainSpec<G, E> {
 			consensus_engine: (),
 			genesis: Default::default(),
 			code_substitutes: HashMap::new(),
-			state_versions: vec![(0, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))],
+			state_versions: vec![("0".to_string(), Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))],
 		};
 
 		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }
@@ -276,15 +276,10 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Defined state version for the chain.
-	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)> {
-		self.client_spec.state_versions.clone()
-	}
-
-	/// Defined state version for the chain.
-	pub fn genesis_state_version(&self) -> Option<Option<u32>> {
-		self.client_spec.state_versions.get(0)
-			.and_then(|(n, s)| (n == &0).then(|| s.clone()))
-			.unwrap_or(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+	/// Return None on invalid definition.
+	fn state_versions(&self) -> Option<StateVersions> {
+		StateVersions::from_conf(self.client_spec.state_versions
+			.iter().map(|(number, version)| (number.as_str(), *version)))
 	}
 }
 
@@ -421,7 +416,7 @@ where
 			.collect()
 	}
 
-	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)> {
+	fn state_versions(&self) -> Vec<(u64, StateVersion)> {
 		ChainSpec::state_versions(self)
 	}
 }
@@ -434,7 +429,7 @@ mod tests {
 	struct Genesis(HashMap<String, String>);
 
 	impl BuildStorage for Genesis {
-		fn assimilate_storage(&self, storage: &mut Storage, _alt_hashing: Option<Option<u32>>) -> Result<(), String> {
+		fn assimilate_storage(&self, storage: &mut Storage, _state_version: StateVersion) -> Result<(), String> {
 			storage.top.extend(
 				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
 			);

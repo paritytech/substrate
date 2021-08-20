@@ -27,6 +27,7 @@ use sp_core::{
 	},
 	traits::Externalities,
 	Blake2Hasher,
+	state_version::StateVersion,
 };
 use sp_externalities::{Extension, Extensions};
 use sp_trie::{empty_child_trie_root, Layout, TrieConfiguration};
@@ -41,18 +42,18 @@ use std::{
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	alt_hashing: Option<Option<u32>>, // TODO same alt hashing type as all
+	state_version: StateVersion, // TODO same alt hashing type as all
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
-	pub fn new(inner: Storage, alt_hashing: Option<Option<u32>>) -> Self {
-		BasicExternalities { inner, extensions: Default::default(), alt_hashing }
+	pub fn new(inner: Storage, state_version: StateVersion) -> Self {
+		BasicExternalities { inner, extensions: Default::default(), state_version }
 	}
 
 	/// New basic externalities with empty storage.
-	pub fn new_empty(alt_hashing: Option<Option<u32>>) -> Self {
-		Self::new(Storage::default(), alt_hashing)
+	pub fn new_empty(state_version: StateVersion) -> Self {
+		Self::new(Storage::default(), state_version)
 	}
 
 	/// Insert key/value
@@ -70,7 +71,7 @@ impl BasicExternalities {
 	/// Returns the result of the closure and updates `storage` with all changes.
 	pub fn execute_with_storage<R>(
 		storage: &mut sp_core::storage::Storage,
-		alt_hashing: Option<Option<u32>>,
+		state_version: StateVersion,
 		f: impl FnOnce() -> R,
 	) -> R {
 		let mut ext = Self {
@@ -79,7 +80,7 @@ impl BasicExternalities {
 				children_default: std::mem::take(&mut storage.children_default),
 			},
 			extensions: Default::default(),
-			alt_hashing,
+			state_version,
 		};
 
 		let r = ext.execute_with(f);
@@ -114,28 +115,18 @@ impl PartialEq for BasicExternalities {
 	}
 }
 
-/*
-impl FromIterator<(StorageKey, StorageValue)> for BasicExternalities {
-	fn from_iter<I: IntoIterator<Item = (StorageKey, StorageValue)>>(iter: I) -> Self {
-		let mut t = Self::default();
-		t.inner.top.extend(iter);
-		t
-	}
-}
-*/
-
-impl From<Option<Option<u32>>> for BasicExternalities {
-	fn from(alt_hashing: Option<Option<u32>>) -> Self {
-		Self::new(Default::default(), alt_hashing)
+impl From<StateVersion> for BasicExternalities {
+	fn from(state_version: StateVersion) -> Self {
+		Self::new(Default::default(), state_version)
 	}
 }
 
-impl From<(BTreeMap<StorageKey, StorageValue>, Option<Option<u32>>)> for BasicExternalities {
-	fn from((hashmap, alt_hashing): (BTreeMap<StorageKey, StorageValue>, Option<Option<u32>>)) -> Self {
+impl From<(BTreeMap<StorageKey, StorageValue>, StateVersion)> for BasicExternalities {
+	fn from((hashmap, state_version): (BTreeMap<StorageKey, StorageValue>, StateVersion)) -> Self {
 		BasicExternalities {
 			inner: Storage { top: hashmap, children_default: Default::default() },
 			extensions: Default::default(),
-			alt_hashing,
+			state_version,
 		}
 	}
 }
@@ -299,10 +290,13 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if let Some(Some(threshold)) = self.alt_hashing.as_ref() {
-			Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
-		} else {
-			Layout::<Blake2Hasher>::default()
+		let layout = match self.state_version {
+			StateVersion::V0 => {
+				Layout::<Blake2Hasher>::default()
+			},
+			StateVersion::V1 { threshold } => {
+				Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
+			},
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
@@ -310,7 +304,7 @@ impl Externalities for BasicExternalities {
 	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(self.alt_hashing.clone());
+			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(self.state_version.clone());
 			in_mem.child_storage_root(&child.child_info, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()

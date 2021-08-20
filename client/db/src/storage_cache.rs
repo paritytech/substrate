@@ -25,7 +25,7 @@ use hash_db::Hasher;
 use linked_hash_map::{Entry, LinkedHashMap};
 use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
+use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo, state_version::StateVersion};
 use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, StorageCollection, StorageKey,
@@ -717,8 +717,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		info
 	}
 
-	fn alt_hashing(&self) -> Option<Option<u32>> {
-		self.state.alt_hashing()
+	fn state_version(&self) -> StateVersion {
+		self.state.state_version()
 	}
 }
 
@@ -920,8 +920,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		self.caching_state().usage_info()
 	}
 
-	fn alt_hashing(&self) -> Option<Option<u32>> {
-		self.caching_state().alt_hashing()
+	fn state_version(&self) -> StateVersion {
+		self.caching_state().state_version()
 	}
 }
 

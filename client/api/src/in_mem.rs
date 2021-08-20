@@ -24,7 +24,7 @@ use sp_core::{
 	offchain::storage::InMemOffchainStorage as OffchainStorage, storage::well_known_keys,
 };
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, StateVersions, StateVersion,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications, Storage,
 };
@@ -112,8 +112,7 @@ struct BlockchainStorage<Block: BlockT> {
 	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
-	// TODO rename to state_versions and replace Option<Option<u32>> to StateVersionEnum.
-	alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>,
+	state_versions: StateVersions,
 	/*
 	// TODO not sure if migration support. TODO replace () by StateMigration.
 	state_migration: Vec<(NumberFor<Block>, ())>,
@@ -149,8 +148,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Get version of state.
-	pub fn state_version(&self, id: BlockId<Block>) -> Option<Option<u32>> {
-		let default = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
+	pub fn state_version(&self, id: BlockId<Block>) -> StateVersion {
 		let number = match id {
 			BlockId::Hash(h) => {
 				if let Ok(Some(header)) = self.header(BlockId::Hash(h)) {
@@ -161,14 +159,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			},
 			BlockId::Number(n) => n,
 		};
-		let mut result = default;
-		for (change_state, state) in self.storage.read().alt_hashing.iter() {
-			if &number > change_state {
-				break
-			}
-			result = *state;
-		}
-		result
+		self.storage.read().state_versions.version_at(number)
 	}
 
 	/// Create new in-memory blockchain storage.
@@ -185,7 +176,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			changes_trie_cht_roots: HashMap::new(),
 			leaves: LeafSet::new(),
 			aux: HashMap::new(),
-			alt_hashing: Vec::new(),
+			state_versions: Default::default(),
 		}));
 		Blockchain { storage }
 	}

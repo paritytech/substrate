@@ -82,7 +82,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
-	alt_hashing: Cell<Option<Option<u32>>>,
+	state_version: Cell<StateVersion>,
 	genesis_root: B::Hash,
 	state: RefCell<Option<State<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
@@ -122,7 +122,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			root: Cell::new(root.clone()),
 			// use old state for now to keep similar benches.
 			// will need update to heavier of both world before migrating.
-			alt_hashing: Cell::new(None),
+			state_version: Cell::new(None),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -173,7 +173,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			_block: Default::default(),
 		});
 		*self.state.borrow_mut() = Some(State::new(
-			DbState::<B>::new(storage_db, self.root.get(), self.alt_hashing.get()),
+			DbState::<B>::new(storage_db, self.root.get(), self.state_version.get()),
 			self.shared_cache.clone(),
 			None,
 		));
@@ -618,7 +618,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| {
 			let proof_size = recorder.estimate_encoded_size() as u32;
-			let proof = recorder.to_storage_proof::<HashFor<B>>(self.alt_hashing.get());
+			let proof = recorder.to_storage_proof::<HashFor<B>>(self.state_version.get());
 			let proof_recorder_root = self.proof_recorder_root.get();
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie
@@ -639,8 +639,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		})
 	}
 
-	fn alt_hashing(&self) -> Option<Option<u32>> {
-		self.alt_hashing.get()
+	fn state_version(&self) -> StateVersion {
+		self.state_version.get()
 	}
 }
 

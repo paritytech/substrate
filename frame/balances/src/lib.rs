@@ -183,6 +183,7 @@ use sp_runtime::{
 		Saturating, StaticLookup, Zero,
 	},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
+	StateVersion,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -586,15 +587,15 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn build_storage(&self, alt_hashing: Option<Option<u32>>) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T, I>>::build_storage(self, alt_hashing)
+	pub fn build_storage(&self, state_version: StateVersion) -> Result<sp_runtime::Storage, String> {
+		<Self as GenesisBuild<T, I>>::build_storage(self, state_version)
 	}
 
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage, alt_hashing: Option<Option<u32>>) -> Result<(), String> {
-		<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage, alt_hashing)
+	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage, state_version: StateVersion) -> Result<(), String> {
+		<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage, state_version)
 	}
 }
 

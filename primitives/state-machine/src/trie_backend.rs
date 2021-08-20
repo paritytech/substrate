@@ -25,6 +25,7 @@ use crate::{
 use codec::{Codec, Decode};
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::state_version::StateVersion;
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
@@ -35,11 +36,7 @@ use sp_trie::{
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub(crate) essence: TrieBackendEssence<S, H>,
-	/// TODO remove pub
-	// Allows setting alt hashing at start for testing only
-	// (mainly for in_memory_backend when it cannot read it from
-	// state). TODO rename alt_hashing TODO accessor and no public.
-	pub force_alt_hashing: Option<Option<u32>>,
+	state_version: StateVersion,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
@@ -47,8 +44,8 @@ where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out, alt_hashing: Option<Option<u32>>) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root), force_alt_hashing: alt_hashing }
+	pub fn new(storage: S, root: H::Out, state_version: StateVersion) -> Self {
+		TrieBackend { essence: TrieBackendEssence::new(storage, root), state_version: state_version }
 	}
 
 	/// Get backend essence reference.
@@ -206,10 +203,13 @@ where
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
-				let layout = if let Some(Some(threshold)) = self.force_alt_hashing.clone() {
-					sp_trie::Layout::with_alt_hashing(threshold)
-				} else {
-					sp_trie::Layout::default()
+				let layout = match self.state_version {
+					StateVersion::V0 => {
+						sp_trie::Layout::default()
+					},
+					StateVersion::V1{ threshold } => {
+						sp_trie::Layout::with_alt_hashing(threshold)
+					},
 				};
 				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
 			};
@@ -234,10 +234,13 @@ where
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
 		};
-		let layout = if let Some(Some(threshold)) = self.force_alt_hashing.clone() {
-			sp_trie::Layout::with_alt_hashing(threshold)
-		} else {
-			sp_trie::Layout::default()
+		let layout = match self.state_version {
+			StateVersion::V0 => {
+				sp_trie::Layout::default()
+			},
+			StateVersion::V1{ threshold } => {
+				sp_trie::Layout::with_alt_hashing(threshold)
+			},
 		};
 
 		let mut write_overlay = S::Overlay::default();
@@ -286,8 +289,8 @@ where
 		Ok(())
 	}
 
-	fn alt_hashing(&self) -> Option<Option<u32>> {
-		self.force_alt_hashing.clone()
+	fn state_version(&self) -> StateVersion {
+		self.state_version.clone()
 	}
 }
 

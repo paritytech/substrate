@@ -23,16 +23,17 @@ use crate::{
 use codec::Codec;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, Storage};
+use sp_core::state_version::StateVersion;
 use sp_trie::{empty_trie_root, Layout, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H: Hasher>(alt_hashing: Option<Option<u32>>) -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem<H: Hasher>(state_version: StateVersion) -> TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	TrieBackend::new(db, empty_trie_root::<Layout<H>>(), alt_hashing)
+	TrieBackend::new(db, empty_trie_root::<Layout<H>>(), state_version)
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
@@ -69,7 +70,7 @@ where
 	pub fn update_backend(&self, root: H::Out, changes: MemoryDB<H>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
-		Self::new(clone, root, self.force_alt_hashing.clone())
+		Self::new(clone, root, self.state_version)
 	}
 
 	/// Apply the given transaction to this backend and set the root to the given value.
@@ -82,11 +83,6 @@ where
 	pub fn eq(&self, other: &Self) -> bool {
 		self.root() == other.root()
 	}
-
-	/// Setting a alternate hashing threshold at start. TODO remove (on construct).
-	pub fn force_alt_hashing(&mut self, threshold: Option<u32>) {
-		self.force_alt_hashing = Some(threshold);
-	}
 }
 
 impl<H: Hasher> Clone for TrieBackend<MemoryDB<H>, H>
@@ -94,7 +90,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(self.backend_storage().clone(), self.root().clone(), self.force_alt_hashing.clone())
+		TrieBackend::new(self.backend_storage().clone(), self.root().clone(), self.state_version)
 	}
 }
 
@@ -109,23 +105,23 @@ where
 }
 */
 
-impl<H: Hasher> From<Option<Option<u32>>>
+impl<H: Hasher> From<StateVersion>
 	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from(alt_hashing: Option<Option<u32>>) -> Self {
-		new_in_mem(alt_hashing)
+	fn from(state_version: StateVersion) -> Self {
+		new_in_mem(state_version)
 	}
 }
 	
-impl<H: Hasher> From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, Option<Option<u32>>)>
+impl<H: Hasher> From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)>
 	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inner, alt_hashing): (HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, Option<Option<u32>>)) -> Self {
-		let mut backend = new_in_mem(alt_hashing);
+	fn from((inner, state_version): (HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)) -> Self {
+		let mut backend = new_in_mem(state_version);
 		backend.insert(
 			inner
 				.into_iter()
@@ -135,37 +131,37 @@ where
 	}
 }
 
-impl<H: Hasher> From<(Storage, Option<Option<u32>>)> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inners, alt_hashing): (Storage, Option<Option<u32>>)) -> Self {
+	fn from((inners, state_version): (Storage, StateVersion)) -> Self {
 		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = inners
 			.children_default
 			.into_iter()
 			.map(|(_k, c)| (Some(c.child_info), c.data))
 			.collect();
 		inner.insert(None, inners.top);
-		(inner, alt_hashing).into()
+		(inner, state_version).into()
 	}
 }
 
-impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, Option<Option<u32>>)> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inner, alt_hashing): (BTreeMap<StorageKey, StorageValue>, Option<Option<u32>>)) -> Self {
+	fn from((inner, state_version): (BTreeMap<StorageKey, StorageValue>, StateVersion)) -> Self {
 		let mut expanded = HashMap::new();
 		expanded.insert(None, inner);
-		(expanded, alt_hashing).into()
+		(expanded, state_version).into()
 	}
 }
 
-impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, Option<Option<u32>>)> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inner, alt_hashing): (Vec<(Option<ChildInfo>, StorageCollection)>, Option<Option<u32>>)) -> Self {
+	fn from((inner, state_version): (Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)) -> Self {
 		let mut expanded: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
 			HashMap::new();
 		for (child_info, key_values) in inner {
@@ -176,7 +172,7 @@ where
 				}
 			}
 		}
-		(expanded, alt_hashing).into()
+		(expanded, state_version).into()
 	}
 }
 

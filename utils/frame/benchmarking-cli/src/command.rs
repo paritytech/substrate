@@ -97,9 +97,9 @@ impl BenchmarkCmd {
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		let state_version = config.chain_spec.state_versions()
-			.get(0)
-			.and_then(|(n, s)| (n == &0).then(|| s.clone()))
-			.unwrap_or(None);
+			.ok_or_else(|| Err("Invalid state versions for chain spec".into()))?
+			.genesis_state_version();
+
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())

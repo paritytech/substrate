@@ -136,8 +136,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	/// `alt_hashing` indicate if trie state should apply alternate hashing
-	/// scheme (inner value hashed).
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
@@ -269,7 +267,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Get current state version in use.
-	fn alt_hashing(&self) -> Option<Option<u32>>;
+	fn state_version(&self) -> sp_core::state_version::StateVersion;
 }
 
 /// Trait that allows consolidate two transactions together.

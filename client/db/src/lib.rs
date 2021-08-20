@@ -287,8 +287,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.usage_info()
 	}
 
-	fn alt_hashing(&self) -> Option<Option<u32>> {
-		self.state.alt_hashing()
+	fn state_version(&self) -> StateVersion {
+		self.state.state_version()
 	}
 }
 
@@ -1118,30 +1118,18 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
-	alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>, // TODO have specific type for history of versions 
-	// Also TODO consider moving this alt_hashing into BlockChainBb
+	// TODO consider moving this state_version into BlockChainBb
+	state_versions: StateVersions,
 }
 
 impl<Block: BlockT> Backend<Block> {
-	// TODO util of StateVersionHistory
-	fn alt_hashing_at(&self, at: &NumberFor<Block>) -> Option<Option<u32>> {
-		// Default
-		let mut result = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
-		for (start, alt) in self.alt_hashing.iter() {
-			if start > at {
-				break;
-			}
-			result = alt.clone();
-		}
-		result
-	}
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64, alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>) -> ClientResult<Self> {
-		// TODO alt_hashing could also be part of database settings
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64, state_versions: StateVersions) -> ClientResult<Self> {
+		// TODO state_versions could also be part of database settings
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
-		Self::from_database(db as Arc<_>, canonicalization_delay, &config, alt_hashing)
+		Self::from_database(db as Arc<_>, canonicalization_delay, &config, state_versions)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1171,16 +1159,16 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 			transaction_storage,
 		};
-		let alt_hashing = Vec::new();
+		let state_versions = Default::default();
 
-		Self::new(db_setting, canonicalization_delay, alt_hashing).expect("failed to create test-db")
+		Self::new(db_setting, canonicalization_delay, state_versions).expect("failed to create test-db")
 	}
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
-		alt_hashing: Vec<(NumberFor<Block>, Option<Option<u32>>)>, // TODO could also be part of database settings
+		state_versions: StateVersions, // TODO could also be part of database settings
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
@@ -1224,7 +1212,7 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
 			genesis_state: RwLock::new(None),
-			alt_hashing,
+			state_versions,
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1892,18 +1880,9 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		// alt_hashing for genesis in empty state.
-		let mut alt_hashing = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)); // Default
-		// TODO replace by inner search for number
-		if let Some((first, alt)) = self.alt_hashing.get(0) {
-			// chain should always define their state
-			// otherwhise uses latest state, but will need definition
-			// when default may change.
-			if first.is_zero() {
-				alt_hashing = alt.clone();
-			}
-		}
-		let db_state = DbState::<Block>::new(self.storage.clone(), root, alt_hashing);
+		// state_version for genesis in empty state.
+		let state_version = self.state_versions.genesis_state_version();
+		let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 		Ok(SyncingCachingState::new(
@@ -2383,8 +2362,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
 				let root = genesis_state.root.clone();
-				let alt_hashing = self.alt_hashing_at(&number);
-				let db_state = DbState::<Block>::new(genesis_state.clone(), root, alt_hashing);
+				let state_version = self.state_versions.genesis_state_version();
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root, state_version);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 				let mut state = SyncingCachingState::new(
@@ -2415,8 +2394,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let alt_hashing = self.alt_hashing_at(&number);
-					let db_state = DbState::<Block>::new(self.storage.clone(), root, alt_hashing);
+					let state_version = self.state_versions.state_version_at(number);
+					let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					let caching_state =
@@ -2619,12 +2598,14 @@ pub(crate) mod tests {
 	}
 	fn set_state_data_inner(alt_hashing: bool) {
 		let state_version = if alt_hashing {
-			Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))
+			StateVersion::V1 {
+				threshold: 33,
+			}
 		} else {
-			None
+			StateVersion::V0
 		};
 		let mut db = Backend::<Block>::new_test(2, 0);
-		db.alt_hashing.push((0, state_version));
+		db.state_versions.add((0, state_version));
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
 			let mut header = Header {

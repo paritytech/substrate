@@ -27,6 +27,7 @@ use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
+use sp_core::state_version::StateVersion;
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
@@ -172,8 +173,12 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	}
 
 	/// Convert into a [`StorageProof`].
-	pub fn to_storage_proof<H: Hasher>(&self, alt_hashing: Option<Option<u32>>) -> StorageProof {
-		// TODO consider alt_hashing as inner field
+	pub fn to_storage_proof<H: Hasher>(&self, state_version: StateVersion) -> StorageProof {
+		// TODO consider state_version as inner field
+		let try_inner_hashing = match proof.state_version {
+			StateVersion::V0 => None,
+			StateVersion::V1 { threshold } => Some(threshold),
+		};
 		let trie_nodes = self
 			.inner
 			.read()
@@ -182,6 +187,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 			.filter_map(|(_k, v)| {
 				v.as_ref().map(|v| {
 					let mut meta = v.1.clone();
+					meta.try_inner_hashing = try_inner_hashing.clone();
 					if let Some(hashed) =
 						sp_trie::to_hashed_variant::<H>(v.0.as_slice(), &mut meta, v.2)
 					{
@@ -193,7 +199,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 			})
 			.collect();
 
-		StorageProof::new(trie_nodes, alt_hashing)
+		StorageProof::new(trie_nodes, state_version)
 	}
 
 	/// Reset the internal state.
@@ -234,13 +240,13 @@ where
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend { backend: essence.backend_storage(), proof_recorder };
-		ProvingBackend(TrieBackend::new(recorder, root, backend.force_alt_hashing.clone()))
+		ProvingBackend(TrieBackend::new(recorder, root, backend.state_version))
 	}
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		let alt_hashing = self.0.force_alt_hashing.clone();
-		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>(alt_hashing)
+		let state_version = self.0.state_version;
+		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>(state_version)
 	}
 
 	/// Returns the estimated encoded size of the proof.
@@ -390,8 +396,8 @@ where
 		self.0.usage_info()
 	}
 
-	fn alt_hashing(&self) -> Option<Option<u32>> {
-		self.0.force_alt_hashing.clone()
+	fn state_version(&self) -> StateVersion {
+		self.0.state_version
 	}
 }
 
@@ -404,11 +410,11 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
-	let alt_hashing = proof.alt_hashing.clone();
+	let state_version = proof.state_version.clone();
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root, alt_hashing))
+		Ok(TrieBackend::new(db, root, state_version))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}

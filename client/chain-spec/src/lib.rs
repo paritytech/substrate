@@ -120,7 +120,7 @@ use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;
-use sp_runtime::BuildStorage;
+use sp_runtime::{BuildStorage, StateVersions};
 
 /// The type of a chain.
 ///
@@ -189,7 +189,7 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>>;
 	/// State versions for the chain.
 	/// Uses default state version when no definition from block 0.
-	fn state_versions(&self) -> Vec<(u64, Option<Option<u32>>)>;
+	fn state_versions(&self) -> StateVersions;
 }
 
 impl std::fmt::Debug for dyn ChainSpec {
