@@ -10,14 +10,14 @@ description = "Bag threshold generation script for pallet-bag-list and node-runt
 readme = "README.md"
 
 [dependencies]
-node-runtime = { version = "3.0.0-dev", path = "../../../bin/node/runtime" }
-
-# FRAME
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+node-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
 generate-bags = { version = "3.0.0", path = "../" }
 
+# FRAME
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/support" }
+
 # primitives
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../../../primitives/io" }
 
 # third-party
 structopt = "0.3.21"
