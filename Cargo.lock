@@ -7101,6 +7101,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-version",
  "tokio 0.2.25",
 ]
 
