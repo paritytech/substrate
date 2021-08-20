@@ -501,19 +501,21 @@ async fn check_spec_name<Block: BlockT + serde::de::DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
 ) {
+	let expected_spec_name = expected_spec_name.to_lowercase();
 	// let expected_runtime_str: sp_runtime::RuntimeString = expected_spec_name.into();
-	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None).await {
-		Ok(version)
-			if <RuntimeString as Into<String>>::into(version.spec_name.clone()).to_lowercase() ==
-				expected_spec_name.to_lowercase() =>
-		{
-			log::debug!("found matching spec: {:?}", version);
-		}
-		Ok(version) => {
+	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
+		.await
+		.map(|version| <RuntimeString as Into<String>>::into(version.spec_name.clone()))
+		.map(|spec_name| spec_name.to_lowercase())
+	{
+		Ok(spec) if spec == expected_spec_name => {
+			log::debug!("found matching spec name: {:?}", spec);
+		},
+		Ok(spec) => {
 			log::warn!(
-				"version mismatch: remote spec name: {}, expected (local chain spec, aka. `--chain`): {}",
-				version.spec_name.to_lowercase(),
-				expected_spec_name.to_lowercase(),
+				"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
+				spec,
+				expected_spec_name,
 			);
 		},
 		Err(why) => {
