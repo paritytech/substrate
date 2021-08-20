@@ -282,7 +282,7 @@ impl<B: BlockT> Builder<B> {
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
-		info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
+		debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyPair> = vec![];
 		let client = self.as_online().rpc_client();
@@ -338,7 +338,7 @@ impl<B: BlockT> Builder<B> {
 impl<B: BlockT> Builder<B> {
 	/// Save the given data as state snapshot.
 	fn save_state_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
-		info!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
+		debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
 		fs::write(path, data.encode()).map_err(|_| "fs::write failed.")?;
 		Ok(())
 	}
@@ -403,7 +403,7 @@ impl<B: BlockT> Builder<B> {
 
 	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
 		let mut online = self.as_online_mut();
-		info!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
+		debug!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
 
 		// First, initialize the ws client.
 		let ws_client = WsClientBuilder::default()
@@ -435,7 +435,7 @@ impl<B: BlockT> Builder<B> {
 			},
 		};
 
-		info!(
+		debug!(
 			target: LOG_TARGET,
 			"extending externalities with {} manually injected key-values",
 			self.inject.len()
@@ -487,7 +487,7 @@ impl<B: BlockT> Builder<B> {
 		let kv = self.pre_build().await?;
 		let mut ext = TestExternalities::new_empty();
 
-		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
+		debug!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
 			// Insert the key,value pair into the test trie backend

@@ -21,7 +21,7 @@ use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{rpc_api, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig};
 use sc_chain_spec::ChainSpec;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
-use sc_executor::NativeExecutor;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
 	hashing::twox_128,
@@ -192,8 +192,11 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
 
 	let ext = {
 		let builder = match command.state {
@@ -265,8 +268,11 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
 
 	let mode = match command.state {
 		State::Live { snapshot_path, modules } => {
@@ -346,8 +352,11 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
 
 	let block_hash = shared.block_at::<Block>()?;
 	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;

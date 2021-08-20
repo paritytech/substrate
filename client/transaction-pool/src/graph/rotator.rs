@@ -22,8 +22,11 @@
 //! Discarded extrinsics are banned so that they don't get re-imported again.
 
 use parking_lot::RwLock;
-use std::{collections::HashMap, hash, iter, time::Duration};
-use wasm_timer::Instant;
+use std::{
+	collections::HashMap,
+	hash, iter,
+	time::{Duration, Instant},
+};
 
 use super::base_pool::Transaction;
 

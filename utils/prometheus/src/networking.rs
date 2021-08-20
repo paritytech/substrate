@@ -47,8 +47,8 @@ impl tokio::io::AsyncRead for TcpStream {
 		buf: &mut tokio::io::ReadBuf<'_>,
 	) -> Poll<Result<(), std::io::Error>> {
 		Pin::new(&mut Pin::into_inner(self).0)
-			.poll_read(cx, buf.initialized_mut())
-			.map_ok(drop)
+			.poll_read(cx, buf.initialize_unfilled())
+			.map_ok(|s| buf.set_filled(s))
 	}
 }
 

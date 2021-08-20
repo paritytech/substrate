@@ -45,7 +45,7 @@ impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingM
 
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
