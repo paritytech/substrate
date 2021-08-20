@@ -243,11 +243,6 @@ pub mod pallet {
 		BountyExtended(BountyIndex),
 	}
 
-	// Note :: For backward compatibility reasons,
-	// pallet-bounties uses Treasury for storage.
-	// This is temporary solution, soon will get replaced with
-	// Own storage identifier.
-
 	/// Number of bounty proposals that have been made.
 	#[pallet::storage]
 	#[pallet::getter(fn bounty_count)]
