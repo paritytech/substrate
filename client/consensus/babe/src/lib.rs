@@ -982,13 +982,13 @@ impl<Block: BlockT> BabeLink<Block> {
 
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
-	client: Arc<Client>,
-	select_chain: SelectChain,
-	create_inherent_data_providers: CIDP,
-	config: Config,
-	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	can_author_with: CAW,
-	telemetry: Option<TelemetryHandle>,
+	pub client: Arc<Client>,
+	pub select_chain: SelectChain,
+	pub create_inherent_data_providers: CIDP,
+	pub config: Config,
+	pub epoch_changes: SharedEpochChanges<Block, Epoch>,
+	pub can_author_with: CAW,
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block, Client, SelectChain, CAW, CIDP> BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
