@@ -502,7 +502,6 @@ async fn check_spec_name<Block: BlockT + serde::de::DeserializeOwned>(
 	expected_spec_name: String,
 ) {
 	let expected_spec_name = expected_spec_name.to_lowercase();
-	// let expected_runtime_str: sp_runtime::RuntimeString = expected_spec_name.into();
 	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
 		.await
 		.map(|version| String::from(version.spec_name.clone()))
