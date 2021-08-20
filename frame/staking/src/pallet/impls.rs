@@ -296,7 +296,7 @@ impl<T: Config> Pallet<T> {
 		// disable all offending validators that have been disabled for the whole era
 		for (index, disabled) in <OffendingValidators<T>>::get() {
 			if disabled {
-				T::SessionInterface::disable_validator(index as usize);
+				T::SessionInterface::disable_validator(index);
 			}
 		}
 	}
@@ -373,7 +373,7 @@ impl<T: Config> Pallet<T> {
 			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
 
 			// Clear offending validators.
-			<OffendingValidators<T>>::take();
+			<OffendingValidators<T>>::kill();
 		}
 	}
 

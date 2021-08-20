@@ -59,14 +59,14 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 	{
 	}
 
-	fn on_new_session<'a, I: 'a>(_: bool, _validators: I, _: I)
+	fn on_new_session<'a, I: 'a>(_: bool, _: I, _: I)
 	where
 		I: Iterator<Item = (&'a AccountId, Self::Key)>,
 		AccountId: 'a,
 	{
 	}
 
-	fn on_disabled(_validator_index: usize) {}
+	fn on_disabled(_validator_index: u32) {}
 }
 
 impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {

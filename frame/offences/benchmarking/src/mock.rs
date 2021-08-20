@@ -112,7 +112,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	) {
 	}
 
-	fn on_disabled(_: usize) {}
+	fn on_disabled(_: u32) {}
 }
 
 parameter_types! {

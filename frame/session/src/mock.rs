@@ -140,7 +140,7 @@ impl SessionHandler<u64> for TestSessionHandler {
 				.collect()
 		});
 	}
-	fn on_disabled(_validator_index: usize) {
+	fn on_disabled(_validator_index: u32) {
 		DISABLED.with(|l| *l.borrow_mut() = true)
 	}
 	fn on_before_session_ending() {

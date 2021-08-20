@@ -435,7 +435,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
-	/// Indices of validators that have offended in the current era and whether they are currently
+	/// Indices of validators that have offended in the active era and whether they are currently
 	/// disabled.
 	///
 	/// This value should be a superset of disabled validators since not all offences lead to the

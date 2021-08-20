@@ -336,7 +336,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 }
 
 #[test]
-fn disable_index_returns_true_if_already_disabled() {
+fn disable_index_returns_false_if_already_disabled() {
 	new_test_ext().execute_with(|| {
 		set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
 		force_new_session();

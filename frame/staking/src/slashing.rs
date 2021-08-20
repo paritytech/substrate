@@ -325,11 +325,11 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 /// a new era will be forced.
 fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 	<Pallet<T> as Store>::OffendingValidators::mutate(|offending| {
-		let validator_index =
-			match T::SessionInterface::validators().iter().position(|i| i == stash) {
-				Some(index) => index,
-				None => return,
-			};
+		let validators = T::SessionInterface::validators();
+		let validator_index = match validators.iter().position(|i| i == stash) {
+			Some(index) => index,
+			None => return,
+		};
 
 		let validator_index_u32 = validator_index as u32;
 
@@ -338,8 +338,8 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 			Err(index) => {
 				offending.insert(index, (validator_index_u32, disable));
 
-				let offending_threshold = T::OffendingValidatorsThreshold::get() *
-					T::SessionInterface::validators_len() as u32;
+				let offending_threshold =
+					T::OffendingValidatorsThreshold::get() * validators.len() as u32;
 
 				if offending.len() >= offending_threshold as usize {
 					// force a new era, to select a new validator set
@@ -347,18 +347,17 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 				}
 
 				if disable {
-					T::SessionInterface::disable_validator(validator_index);
+					T::SessionInterface::disable_validator(validator_index_u32);
 				}
 			},
-			Ok(index) if disable => {
-				// the validator had previously offended without being disabled,
-				// let's make sure we disable it now
-				if !offending[index].1 {
+			Ok(index) => {
+				if disable && !offending[index].1 {
+					// the validator had previously offended without being disabled,
+					// let's make sure we disable it now
 					offending[index].1 = true;
-					T::SessionInterface::disable_validator(validator_index);
+					T::SessionInterface::disable_validator(validator_index_u32);
 				}
 			},
-			_ => {},
 		}
 	});
 }

@@ -2944,8 +2944,7 @@ fn non_slashable_offence_doesnt_disable_validator() {
 fn offence_threshold_triggers_new_era() {
 	ExtBuilder::default()
 		.validator_count(4)
-		.num_validators(4)
-		.validator_pool(true)
+		.set_status(41, StakerStatus::Validator)
 		.build_and_execute(|| {
 			mock::start_active_era(1);
 			assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
@@ -2989,8 +2988,7 @@ fn offence_threshold_triggers_new_era() {
 fn disabled_validators_are_kept_disabled_for_whole_era() {
 	ExtBuilder::default()
 		.validator_count(4)
-		.num_validators(4)
-		.validator_pool(true)
+		.set_status(41, StakerStatus::Validator)
 		.build_and_execute(|| {
 			mock::start_active_era(1);
 			assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);

@@ -297,7 +297,7 @@ pub trait SessionHandler<ValidatorId> {
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(validator_index: usize);
+	fn on_disabled(validator_index: u32);
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
@@ -341,7 +341,7 @@ impl<AId> SessionHandler<AId> for Tuple {
 		for_tuples!( #( Tuple::on_before_session_ending(); )* )
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		for_tuples!( #( Tuple::on_disabled(i); )* )
 	}
 }
@@ -353,7 +353,7 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
 	fn on_before_session_ending() {}
-	fn on_disabled(_: usize) {}
+	fn on_disabled(_: u32) {}
 }
 
 impl<T: Config> ValidatorRegistration<T::ValidatorId> for Module<T> {
@@ -573,11 +573,6 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	/// Get the number of validators in the current session.
-	pub fn validators_len() -> usize {
-		<Validators<T>>::decode_len().unwrap_or(0)
-	}
-
 	/// Move on to next session. Register new validator set and session keys. Changes to the
 	/// validator set have a session of delay to take effect. This allows for equivocation
 	/// punishment after a fork.
@@ -664,11 +659,14 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
-	pub fn disable_index(i: usize) -> bool {
+	pub fn disable_index(i: u32) -> bool {
+		if i >= Validators::<T>::decode_len().unwrap_or(0) as u32 {
+			return false
+		}
+
 		DisabledValidators::mutate(|disabled| {
-			let i_u32 = i as u32;
-			if let Err(index) = disabled.binary_search(&i_u32) {
-				disabled.insert(index, i_u32);
+			if let Err(index) = disabled.binary_search(&i) {
+				disabled.insert(index, i);
 				T::SessionHandler::on_disabled(i);
 				return true
 			}
@@ -686,7 +684,7 @@ impl<T: Config> Module<T> {
 		Self::validators()
 			.iter()
 			.position(|i| i == c)
-			.map(Self::disable_index)
+			.map(|i| Self::disable_index(i as u32))
 			.unwrap_or(false)
 	}
 
