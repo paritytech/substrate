@@ -276,7 +276,7 @@ benchmarks_instance_pallet! {
 	verify {
 		// All proposals exist and the last proposal has just been updated.
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
-		let voting = Collective::<T, I>::voting(&last_hash).ok_or(Error::<T, I>::ProposalMissing)?;
+		let voting = Collective::<T, I>::voting(&last_hash).ok_or("Proposal Missing")?;
 		assert_eq!(voting.ayes.len(), (m - 3) as usize);
 		assert_eq!(voting.nays.len(), 1);
 	}

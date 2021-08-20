@@ -255,7 +255,9 @@ impl MissingHostFuncHandler {
 fn wasmtime_func_sig(func: &dyn Function) -> wasmtime::FuncType {
 	let signature = func.signature();
 	let params = signature.args.iter().cloned().map(into_wasmtime_val_type);
+
 	let results = signature.return_value.iter().cloned().map(into_wasmtime_val_type);
+
 	wasmtime::FuncType::new(params, results)
 }
 

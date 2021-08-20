@@ -333,8 +333,8 @@ pub mod pallet {
 		///
 		/// - `new_members`: The new member list. Be nice to the chain and provide it sorted.
 		/// - `prime`: The prime member whose vote sets the default.
-		/// - `old_count`: The upper bound for the previous number of members in storage.
-		///                Used for weight estimation.
+		/// - `old_count`: The upper bound for the previous number of members in storage. Used for
+		///   weight estimation.
 		///
 		/// Requires root origin.
 		///
@@ -348,7 +348,8 @@ pub mod pallet {
 		///   - `N` new-members-count (code- and governance-bounded)
 		///   - `P` proposals-count (code-bounded)
 		/// - DB:
-		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the members
+		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the
+		///     members
 		///   - 1 storage read (codec `O(P)`) for reading the proposals
 		///   - `P` storage mutations (codec `O(M)`) for updating the votes for each proposal
 		///   - 1 storage write (codec `O(1)`) for deleting the old `prime` and setting the new one
@@ -405,7 +406,8 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// ## Weight
-		/// - `O(M + P)` where `M` members-count (code-bounded) and `P` complexity of dispatching `proposal`
+		/// - `O(M + P)` where `M` members-count (code-bounded) and `P` complexity of dispatching
+		///   `proposal`
 		/// - DB: 1 read (codec `O(M)`) + DB access of `proposal`
 		/// - 1 event
 		/// # </weight>
@@ -555,7 +557,8 @@ pub mod pallet {
 		/// Requires the sender to be a member.
 		///
 		/// Transaction fees will be waived if the member is voting on any particular proposal
-		/// for the first time and the call is successful. Subsequent vote changes will charge a fee.
+		/// for the first time and the call is successful. Subsequent vote changes will charge a
+		/// fee.
 		/// # <weight>
 		/// ## Weight
 		/// - `O(M)` where `M` is members-count (code- and governance-bounded)
@@ -630,9 +633,10 @@ pub mod pallet {
 		/// If the close operation completes successfully with disapproval, the transaction fee will
 		/// be waived. Otherwise execution of the approved operation will be charged to the caller.
 		///
-		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed proposal.
+		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed
+		/// proposal.
 		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
-		///                   `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
+		/// `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
 		///
 		/// # <weight>
 		/// ## Weight
@@ -643,7 +647,8 @@ pub mod pallet {
 		///   - `P2` is proposal-count (code-bounded)
 		/// - DB:
 		///  - 2 storage reads (`Members`: codec `O(M)`, `Prime`: codec `O(1)`)
-		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec `O(P2)`)
+		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec
+		///    `O(P2)`)
 		///  - any mutations done while executing `proposal` (`P1`)
 		/// - up to 3 events
 		/// # </weight>
@@ -748,7 +753,8 @@ pub mod pallet {
 			}
 		}
 
-		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
+		/// Disapprove a proposal, close, and remove it from the system, regardless of its current
+		/// state.
 		///
 		/// Must be called by the Root origin.
 		///
