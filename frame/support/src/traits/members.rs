@@ -56,7 +56,7 @@ impl<T, C: Contains<T>> Filter<T> for C {
 	}
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 impl<T> Contains<T> for Tuple {
 	fn contains(t: &T) -> bool {
 		for_tuples!( #(
