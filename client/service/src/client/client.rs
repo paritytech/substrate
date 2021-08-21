@@ -200,7 +200,7 @@ pub struct ClientConfig<Block: BlockT> {
 	/// version doesn't match anymore.
 	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
 	/// State version to use with chain.
-	pub state_versions: sp_runtime::StateVersions,
+	pub state_versions: sp_runtime::StateVersions<Block>,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {
@@ -211,7 +211,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 			wasm_runtime_overrides: None,
 			no_genesis: false,
 			wasm_runtime_substitutes: HashMap::new(),
-			state_versions: Vec::new(), // TODO check usage or remove default impl
+			state_versions: Default::default(), // TODO check usage or remove default impl
 		}
 	}
 }
@@ -337,9 +337,7 @@ where
 		config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
 		let info = backend.blockchain().info();
-		let state_version = config.state_versions.get(0)
-			.and_then(|(n, s)| n.is_zero().then(|| s.clone()))
-			.unwrap_or(None);
+		let state_version = config.state_versions.genesis_state_version();
 
 		if info.finalized_state.is_none() {
 			let genesis_storage =

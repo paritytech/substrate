@@ -968,11 +968,12 @@ mod tests {
 		let h3b = H256::random();
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
+		let state_version = StateVersion::default();
 
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
 		// state   [ 5     5     4  3  2     2 ]
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None), // TODO replace all test new in mem by default (restoring implementation in state-machine/in_memory_backend.rs)
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -987,11 +988,11 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h0));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h0));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), true);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h0));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h0));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1003,7 +1004,7 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1b));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1b));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1015,7 +1016,7 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1a));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1027,29 +1028,29 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2a));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), true);
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h3a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1a));
 		assert!(s.storage(&key).unwrap().is_none());
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2b));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
 		assert!(s.storage(&key).unwrap().is_none());
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1b));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1b));
 		assert!(s.storage(&key).unwrap().is_none());
 
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2b));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
 			&[h1b, h2b, h3b],
 			&[h1a, h2a, h3a],
@@ -1060,7 +1061,7 @@ mod tests {
 			true,
 		);
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h3a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h3a));
 		assert!(s.storage(&key).unwrap().is_none());
 	}
 
@@ -1076,9 +1077,10 @@ mod tests {
 		let h3b = H256::random();
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
+		let state_version = StateVersion::default();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None),
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -1093,11 +1095,11 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1109,7 +1111,7 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2b));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1121,7 +1123,7 @@ mod tests {
 		);
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
@@ -1136,20 +1138,21 @@ mod tests {
 		let h3b = H256::random();
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
+		let state_version = StateVersion::default();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None),
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
 			shared.clone(),
 			Some(root_parent),
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2a));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1161,11 +1164,11 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), false);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h2b));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1177,7 +1180,7 @@ mod tests {
 		);
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h3a));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
@@ -1189,7 +1192,7 @@ mod tests {
 		let h1b = H256::random();
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
-		let mut backend = InMemoryBackend::<BlakeTwo256>::from(None);
+		let mut backend = InMemoryBackend::<BlakeTwo256>::from(StateVersion::default());
 		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
 
 		let mut s = CachingState::new(backend.clone(), shared.clone(), Some(root_parent));
@@ -1217,7 +1220,7 @@ mod tests {
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None),
+			InMemoryBackend::<BlakeTwo256>::from(StateVersion::default()),
 			shared.clone(),
 			Some(root_parent.clone()),
 		);
@@ -1257,7 +1260,7 @@ mod tests {
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None),
+			InMemoryBackend::<BlakeTwo256>::from(StateVersion::default()),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -1300,8 +1303,9 @@ mod tests {
 		let h1 = H256::random();
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
+		let state_version = StateVersion::default();
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None),
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
 			shared.clone(),
 			Some(root_parent.clone()),
 		);
@@ -1316,7 +1320,7 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h0));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h0));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1328,7 +1332,7 @@ mod tests {
 		);
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
 
 		// Restart (or unknown block?), clear caches.
@@ -1348,7 +1352,7 @@ mod tests {
 		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, true);
 
 		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 		assert_eq!(s.storage(&key).unwrap(), None);
 	}
 
@@ -1362,9 +1366,10 @@ mod tests {
 		let h2 = H256::random();
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
+		let state_version = StateVersion::default();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::from(None),
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
 			shared.clone(),
 			Some(root_parent),
 		);
@@ -1380,7 +1385,7 @@ mod tests {
 		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 
 		// commit as non-best
 		s.cache.sync_cache(
@@ -1396,7 +1401,7 @@ mod tests {
 		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
 		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(None), shared.clone(), Some(h1));
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
 
 		// commit again as best with no changes
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2), Some(2), true);
@@ -1527,8 +1532,9 @@ mod qc {
 		}
 
 		fn head_state(&self, hash: H256) -> CachingState<InMemoryBackend<BlakeTwo256>, Block> {
+			let state_version = StateVersion::default();
 			CachingState::new(
-				InMemoryBackend::<BlakeTwo256>::from(None),
+				InMemoryBackend::<BlakeTwo256>::from(state_version),
 				self.shared.clone(),
 				Some(hash),
 			)
@@ -1562,6 +1568,7 @@ mod qc {
 			&mut self,
 			action: Action,
 		) -> Result<CachingState<InMemoryBackend<BlakeTwo256>, Block>, ()> {
+			let state_version = StateVersion::default();
 			let state = match action {
 				Action::Fork { depth, hash, changes } => {
 					let pos = self.canon.len() as isize - depth as isize;
@@ -1599,7 +1606,7 @@ mod qc {
 					};
 
 					let mut state = CachingState::new(
-						InMemoryBackend::<BlakeTwo256>::from(None),
+						InMemoryBackend::<BlakeTwo256>::from(state_version),
 						self.shared.clone(),
 						Some(parent),
 					);
@@ -1636,7 +1643,7 @@ mod qc {
 					}
 
 					let mut state = CachingState::new(
-						InMemoryBackend::<BlakeTwo256>::from(None),
+						InMemoryBackend::<BlakeTwo256>::from(state_version),
 						self.shared.clone(),
 						Some(parent_hash),
 					);
@@ -1687,7 +1694,7 @@ mod qc {
 							self.canon.push(node);
 
 							let mut state = CachingState::new(
-								InMemoryBackend::<BlakeTwo256>::from(None),
+								InMemoryBackend::<BlakeTwo256>::from(state_version),
 								self.shared.clone(),
 								Some(fork_at),
 							);

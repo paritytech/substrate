@@ -66,10 +66,10 @@ fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 }
 
 fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256> {
-	let state_version = None;
+	let state_version = Default::default();
 	let mut test_ext = TestExternalities::new_with_code(
 		compact_code_unwrap(),
-		genesis_config.build_storage(state_version.clone()).unwrap(),
+		genesis_config.build_storage(state_version).unwrap(),
 		state_version,
 	);
 	test_ext

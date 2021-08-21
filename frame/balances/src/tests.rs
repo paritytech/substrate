@@ -629,9 +629,9 @@ macro_rules! decl_tests {
 		#[test]
 		#[should_panic = "the balance of any account should always be at least the existential deposit."]
 		fn cannot_set_genesis_value_below_ed() {
-			let state_version = None;
+			let state_version = Default::default();
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
-			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>(state_version.clone()).unwrap();
+			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>(state_version).unwrap();
 			let _ = pallet_balances::GenesisConfig::<$test> {
 				balances: vec![(1, 10)],
 			}.assimilate_storage(&mut t, state_version).unwrap();
@@ -640,8 +640,8 @@ macro_rules! decl_tests {
 		#[test]
 		#[should_panic = "duplicate balances in genesis."]
 		fn cannot_set_genesis_value_twice() {
-			let state_version = None;
-			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>(state_version.clone()).unwrap();
+			let state_version = Default::default();
+			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>(state_version).unwrap();
 			let _ = pallet_balances::GenesisConfig::<$test> {
 				balances: vec![(1, 10), (2, 20), (1, 15)],
 			}.assimilate_storage(&mut t, state_version).unwrap();

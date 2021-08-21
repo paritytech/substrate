@@ -198,7 +198,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		],
 		children_default: map![],
 	};
-	let expected = TestExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)));
+	let expected = TestExternalities::new(storage, Default::default());
 	assert_eq!(ext, expected);
 }
 
@@ -230,7 +230,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 		children_default: map![],
 	};
 
-	let expected = TestExternalities::new(storage, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)));
+	let expected = TestExternalities::new(storage, Default::default());
 	assert_eq!(expected, ext);
 }
 

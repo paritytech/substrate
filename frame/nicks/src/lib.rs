@@ -339,10 +339,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = None;
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		let state_version = Default::default();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 10)] }
-			.assimilate_storage(&mut t, state_version.clone())
+			.assimilate_storage(&mut t, state_version)
 			.unwrap();
 		(t, state_version).into()
 	}

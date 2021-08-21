@@ -985,8 +985,8 @@ mod tests {
 	pub type LoggerCall = logger::Call<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = None;
-		let t = system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		let state_version = Default::default();
+		let t = system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 		(t, state_version).into()
 	}
 

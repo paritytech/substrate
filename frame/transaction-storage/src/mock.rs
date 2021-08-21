@@ -104,7 +104,7 @@ impl pallet_transaction_storage::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = None;
+	let state_version = Default::default();
 	let t = GenesisConfig {
 		system: Default::default(),
 		balances: pallet_balances::GenesisConfig::<Test> {
@@ -118,7 +118,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			max_transaction_size: crate::DEFAULT_MAX_TRANSACTION_SIZE,
 		},
 	}
-	.build_storage(state_version.clone())
+	.build_storage(state_version)
 	.unwrap();
 	(t, state_version).into()
 }

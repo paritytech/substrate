@@ -668,9 +668,9 @@ mod tests {
 
 	#[test]
 	fn check_builder_config() {
-		let state_version = None;
+		let state_version = Default::default();
 		let config = GenesisConfig::default();
-		let storage = config.build_storage(state_version.clone()).unwrap();
+		let storage = config.build_storage(state_version).unwrap();
 		TestExternalities::from((storage, state_version)).execute_with(|| {
 			assert_eq!(Module::<TraitImpl>::u32_with_builder(), 1);
 			assert_eq!(Module::<TraitImpl>::opt_u32_with_builder_some(), Some(1));

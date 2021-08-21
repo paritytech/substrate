@@ -395,8 +395,8 @@ impl ExtBuilder {
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let state_version = None;
-		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		let state_version = Default::default();
+		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
@@ -430,7 +430,7 @@ impl ExtBuilder {
 				(999, 1_000_000_000_000),
 			],
 		}
-		.assimilate_storage(&mut storage, state_version.clone());
+		.assimilate_storage(&mut storage, state_version);
 
 		let mut stakers = vec![];
 		if self.has_stakers {
@@ -483,7 +483,7 @@ impl ExtBuilder {
 			min_validator_bond: self.min_validator_bond,
 			..Default::default()
 		}
-		.assimilate_storage(&mut storage, state_version.clone());
+		.assimilate_storage(&mut storage, state_version);
 
 		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: if self.has_stakers {
@@ -496,7 +496,7 @@ impl ExtBuilder {
 					.collect()
 			},
 		}
-		.assimilate_storage(&mut storage, state_version.clone());
+		.assimilate_storage(&mut storage, state_version);
 
 		let mut ext = sp_io::TestExternalities::from((storage, state_version));
 		ext.execute_with(|| {

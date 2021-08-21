@@ -116,7 +116,7 @@ impl GenesisParameters {
 			1000,
 			self.heap_pages_override,
 			self.extra_storage.clone(),
-			Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)),
+			Default::default(),
 		)
 	}
 
@@ -408,7 +408,7 @@ pub fn new_light(
 ) {
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
-	let state_versions = vec![(0, Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))];
+	let state_versions = Default::default();
 	let backend = Arc::new(LightBackend::new(blockchain, state_versions));
 	let executor = new_native_executor();
 	let local_call_executor = client::LocalCallExecutor::new(

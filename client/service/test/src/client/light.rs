@@ -269,7 +269,7 @@ fn local_state_is_created_when_genesis_state_is_available() {
 		substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 
 	let backend: Backend<_, Block> =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), vec![]);
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = backend.begin_operation().unwrap();
 	op.set_block_data(header0, None, None, None, NewBlockState::Final).unwrap();
 	op.set_genesis_state(Default::default(), true).unwrap();
@@ -284,7 +284,7 @@ fn local_state_is_created_when_genesis_state_is_available() {
 #[test]
 fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 	let backend: Backend<_, Block> =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), vec![]);
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 
 	match backend.state_at(BlockId::Number(0)).unwrap() {
 		GenesisOrUnavailableState::Unavailable => (),
@@ -294,7 +294,7 @@ fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 
 #[test]
 fn light_aux_store_is_updated_via_non_importing_op() {
-	let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), vec![]);
+	let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
 	BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
 	ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
@@ -891,7 +891,7 @@ fn check_changes_proof_fails_if_proof_is_wrong() {
 				max_block: remote_proof.max_block,
 				proof: remote_proof.proof.clone(),
 				roots: vec![(begin - 1, Default::default())].into_iter().collect(),
-				roots_proof: StorageProof::empty(None),
+				roots_proof: StorageProof::empty(),
 			}
 		)
 		.is_err());
@@ -902,7 +902,7 @@ fn check_changes_proof_fails_if_proof_is_wrong() {
 				max_block: remote_proof.max_block,
 				proof: remote_proof.proof.clone(),
 				roots: vec![(end + 1, Default::default())].into_iter().collect(),
-				roots_proof: StorageProof::empty(None),
+				roots_proof: StorageProof::empty(),
 			}
 		)
 		.is_err());
@@ -952,7 +952,7 @@ fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 		Box::new(TaskExecutor::new()),
 	);
 	let result =
-		local_checker.check_changes_tries_proof(4, &remote_proof.roots, StorageProof::empty(None));
+		local_checker.check_changes_tries_proof(4, &remote_proof.roots, StorageProof::empty());
 	assert!(result.is_err());
 }
 

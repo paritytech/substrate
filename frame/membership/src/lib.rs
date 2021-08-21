@@ -573,14 +573,14 @@ mod tests {
 	}
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = None;
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		let state_version = Default::default();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_membership::GenesisConfig::<Test> {
 			members: vec![10, 20, 30],
 			..Default::default()
 		}
-		.assimilate_storage(&mut t, state_version.clone())
+		.assimilate_storage(&mut t, state_version)
 		.unwrap();
 		(t, state_version).into()
 	}
@@ -739,7 +739,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
 	fn genesis_build_panics_with_duplicate_members() {
-		let state_version = None;
+		let state_version = Default::default();
 		pallet_membership::GenesisConfig::<Test> {
 			members: vec![1, 2, 3, 1],
 			phantom: Default::default(),

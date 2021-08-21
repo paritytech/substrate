@@ -96,9 +96,12 @@ impl BenchmarkCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-		let state_version = config.chain_spec.state_versions()
-			.ok_or_else(|| Err("Invalid state versions for chain spec".into()))?
-			.genesis_state_version();
+		let state_version = if let Some(versions) = sp_runtime::StateVersions::<BB>::from_conf(config.chain_spec.state_versions()
+			.iter().map(|(number, version)| (number.as_str(), *version))) {
+			versions.genesis_state_version()
+		} else {
+			return Err("Invalid state versions for chain spec".into())
+		};
 
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
@@ -126,7 +129,7 @@ impl BenchmarkCmd {
 		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
 		let extrinsic = extrinsic.as_bytes();
 
-		let genesis_storage = spec.build_storage(state_version.clone())?;
+		let genesis_storage = spec.build_storage(state_version)?;
 		let mut changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state_with_tracking = BenchmarkingState::<BB>::new(

@@ -162,21 +162,21 @@ mod tests {
 	type Historical = Module<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = None;
+		let state_version = Default::default();
 		let mut t = frame_system::GenesisConfig::default()
-			.build_storage::<Test>(state_version.clone())
+			.build_storage::<Test>(state_version)
 			.expect("Failed to create test externalities.");
 
 		let keys: Vec<_> = NEXT_VALIDATORS.with(|l| {
 			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
 		});
-		BasicExternalities::execute_with_storage(&mut t, state_version.clone(), || {
+		BasicExternalities::execute_with_storage(&mut t, state_version, || {
 			for (ref k, ..) in &keys {
 				frame_system::Pallet::<Test>::inc_providers(k);
 			}
 		});
 
-		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t, state_version.clone()).unwrap();
+		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t, state_version).unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t, state_version);
 

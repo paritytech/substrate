@@ -181,7 +181,7 @@ where
 		code: &WasmBlob,
 		heap_pages: Option<u64>,
 	) -> Result<RuntimeVersion> {
-		let mut ext: BasicExternalities = None.into();
+		let mut ext: BasicExternalities = sp_runtime::StateVersion::default().into();
 		executor
 			.runtime_version(&mut ext, &code.runtime_code(heap_pages))
 			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())

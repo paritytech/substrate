@@ -88,7 +88,7 @@ use sp_runtime::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
-	Justification, Justifications, Storage,
+	Justification, Justifications, Storage, StateVersion, StateVersions,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
@@ -1119,14 +1119,14 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 	// TODO consider moving this state_version into BlockChainBb
-	state_versions: StateVersions,
+	state_versions: StateVersions<Block>,
 }
 
 impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64, state_versions: StateVersions) -> ClientResult<Self> {
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64, state_versions: StateVersions<Block>) -> ClientResult<Self> {
 		// TODO state_versions could also be part of database settings
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
 		Self::from_database(db as Arc<_>, canonicalization_delay, &config, state_versions)
@@ -1168,7 +1168,7 @@ impl<Block: BlockT> Backend<Block> {
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
-		state_versions: StateVersions, // TODO could also be part of database settings
+		state_versions: StateVersions<Block>, // TODO could also be part of database settings
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
@@ -2582,7 +2582,7 @@ pub(crate) mod tests {
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},
 			0,
-			vec![],
+			Default::default(),
 		)
 		.unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);

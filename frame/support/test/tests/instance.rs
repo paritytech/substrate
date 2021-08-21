@@ -318,7 +318,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = None;
+	let state_version = Default::default();
 
 	(GenesisConfig {
 		module_1_1: module1::GenesisConfig { value: 3, test: 2 },
@@ -336,13 +336,13 @@ fn new_test_ext() -> sp_io::TestExternalities {
 		module_2_2: Default::default(),
 		module_2_3: Default::default(),
 	}
-	.build_storage(state_version.clone())
+	.build_storage(state_version)
 	.unwrap(), state_version).into()
 }
 
 #[test]
 fn storage_instance_independence() {
-	let state_version = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
+	let state_version = Default::default();
 	let mut storage = sp_core::storage::Storage {
 		top: std::collections::BTreeMap::new(),
 		children_default: std::collections::HashMap::new(),

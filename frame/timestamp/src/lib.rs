@@ -316,8 +316,8 @@ mod tests {
 	};
 
 	pub fn new_test_ext() -> TestExternalities {
-		let state_version = None;
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		let state_version = Default::default();
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 		TestExternalities::new(t, state_version)
 	}
 

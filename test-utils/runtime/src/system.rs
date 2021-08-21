@@ -366,7 +366,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		let state_version = None;
+		let state_version = Default::default();
 		let authorities = vec![
 			Sr25519Keyring::Alice.to_raw_public(),
 			Sr25519Keyring::Bob.to_raw_public(),

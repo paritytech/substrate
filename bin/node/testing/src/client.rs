@@ -48,7 +48,7 @@ pub struct GenesisParameters {
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		let state_version = Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
+		let state_version = Default::default();
 		crate::genesis::config(self.support_changes_trie, None).build_storage(state_version).unwrap()
 	}
 }

@@ -96,9 +96,9 @@ mod multiplier_tests {
 	where
 		F: Fn() -> (),
 	{
-		let state_version = None;
+		let state_version = Default::default();
 		let mut t: sp_io::TestExternalities = (frame_system::GenesisConfig::default()
-			.build_storage::<Runtime>(state_version.clone())
+			.build_storage::<Runtime>(state_version)
 			.unwrap(), state_version)
 			.into();
 		t.execute_with(|| {

@@ -130,11 +130,11 @@ impl ExtBuilder {
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
-		let state_version = None;
+		let state_version = Default::default();
 		self.set_associated_consts();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![] }
-			.assimilate_storage(&mut t, state_version.clone())
+			.assimilate_storage(&mut t, state_version)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t, state_version);
 		ext.execute_with(|| System::set_block_number(1));

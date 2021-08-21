@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 use sp_arithmetic::traits::Zero;
 
 /// Multiple versions of state in use for a chain.
-#[derive(Clone)]
+#[derive(Clone, crate::RuntimeDebug)]
 pub struct StateVersions<B: Block> {
 	canonical_states: Vec<(NumberFor<B>, StateVersion)>,
 }

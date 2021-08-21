@@ -28,7 +28,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::{BuildStorage, StateVersions, StateVersion};
+use sp_runtime::{BuildStorage, StateVersion};
 use std::{borrow::Cow, collections::HashMap, fs::File, path::PathBuf, sync::Arc};
 
 enum GenesisSource<G> {
@@ -264,7 +264,7 @@ impl<G, E> ChainSpec<G, E> {
 			consensus_engine: (),
 			genesis: Default::default(),
 			code_substitutes: HashMap::new(),
-			state_versions: vec![("0".to_string(), Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))],
+			state_versions: vec![("0".to_string(), StateVersion::default())],
 		};
 
 		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }
@@ -277,9 +277,8 @@ impl<G, E> ChainSpec<G, E> {
 
 	/// Defined state version for the chain.
 	/// Return None on invalid definition.
-	fn state_versions(&self) -> Option<StateVersions> {
-		StateVersions::from_conf(self.client_spec.state_versions
-			.iter().map(|(number, version)| (number.as_str(), *version)))
+	fn state_versions(&self) -> &Vec<(String, StateVersion)> {
+		&self.client_spec.state_versions
 	}
 }
 
@@ -312,9 +311,13 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<JsonContainer<G, E>, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
+				use std::str::FromStr;
 				let state_version = self.state_versions().get(0)
-					.and_then(|(n, s)| (n == &0).then(|| s.clone()))
-					.unwrap_or(None);
+					// This is incorrect (can have number representation not compatible with u64
+					.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
+					.and_then(|(n, s)| (n == 0).then(|| s.clone()))
+					.unwrap_or_default();
+				// TODO remove param from build storage and make it part of caller.
 				let storage = g.build_storage(state_version)?;
 				let top =
 					storage.top.into_iter().map(|(k, v)| (StorageKey(k), StorageData(v))).collect();
@@ -416,7 +419,7 @@ where
 			.collect()
 	}
 
-	fn state_versions(&self) -> Vec<(u64, StateVersion)> {
+	fn state_versions(&self) -> &Vec<(String, StateVersion)> {
 		ChainSpec::state_versions(self)
 	}
 }

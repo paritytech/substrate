@@ -181,7 +181,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 						request.block,
 						e,
 					);
-					StorageProof::empty(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+					StorageProof::empty()
 				},
 			};
 
@@ -225,7 +225,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					request.block,
 					error,
 				);
-				StorageProof::empty(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+				StorageProof::empty()
 			},
 		};
 
@@ -279,7 +279,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					request.block,
 					error,
 				);
-				StorageProof::empty(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD)))
+				StorageProof::empty()
 			},
 		};
 
@@ -308,7 +308,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					request.block,
 					error
 				);
-				(Default::default(), StorageProof::empty(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))))
+				(Default::default(), StorageProof::empty())
 			},
 		};
 
@@ -369,7 +369,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 						max_block: Zero::zero(),
 						proof: Vec::new(),
 						roots: BTreeMap::new(),
-						roots_proof: StorageProof::empty(Some(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD))),
+						roots_proof: StorageProof::empty(),
 					}
 				},
 			};

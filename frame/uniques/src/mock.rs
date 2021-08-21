@@ -117,8 +117,8 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = None;
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+	let state_version = Default::default();
+	let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t, state_version);
 	ext.execute_with(|| System::set_block_number(1));

@@ -34,7 +34,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	traits::{Block as BlockT, HashFor},
-	Storage,
+	Storage, StateVersion,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
@@ -121,8 +121,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 			db: Cell::new(None),
 			root: Cell::new(root.clone()),
 			// use old state for now to keep similar benches.
-			// will need update to heavier of both world before migrating.
-			state_version: Cell::new(None),
+			// TODO will need update to heavier of both world before migrating.
+			state_version: Cell::new(StateVersion::V0),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),

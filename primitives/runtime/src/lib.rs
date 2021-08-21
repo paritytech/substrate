@@ -996,7 +996,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::new_empty(None);
+		let mut ext = sp_state_machine::BasicExternalities::new_empty(Default::default());
 		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
 			sp_core::testing::TaskExecutor::new(),
 		));
@@ -1010,7 +1010,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Hey, I'm an error")]
 	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::new_empty(None);
+		let mut ext = sp_state_machine::BasicExternalities::new_empty(Default::default());
 		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
 			sp_core::testing::TaskExecutor::new(),
 		));

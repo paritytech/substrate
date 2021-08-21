@@ -830,7 +830,7 @@ mod tests {
 	use std::{collections::HashSet, iter::FromIterator};
 
 	fn empty_proof() -> Vec<u8> {
-		StorageProof::empty(None).encode()
+		StorageProof::empty().encode()
 	}
 
 	#[test]

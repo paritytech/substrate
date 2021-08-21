@@ -99,12 +99,12 @@ pub fn test_node(id: u8) -> PeerId {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = None;
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+	let state_version = Default::default();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 	pallet_node_authorization::GenesisConfig::<Test> {
 		nodes: vec![(test_node(10), 10), (test_node(20), 20), (test_node(30), 30)],
 	}
-	.assimilate_storage(&mut t, state_version.clone())
+	.assimilate_storage(&mut t, state_version)
 	.unwrap();
 	(t, state_version).into()
 }

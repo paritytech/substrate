@@ -58,7 +58,7 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, Zero, NumberFor},
+	traits::{Block as BlockT, BlockIdTo, Zero},
 	BuildStorage,
 	StateVersions,
 };
@@ -318,7 +318,8 @@ where
 			transaction_storage: config.transaction_storage.clone(),
 		};
 
-		let state_versions = config.chain_spec.state_versions()
+		let state_versions = StateVersions::from_conf(config.chain_spec.state_versions()
+			.iter().map(|(number, version)| (number.as_str(), *version)))
 			.ok_or_else(|| Error::Application(Box::from("Invalid state versions for chain spec".to_string())))?;
 
 		let backend = new_db_backend(db_config, state_versions.clone())?;
@@ -412,7 +413,9 @@ where
 		Box::new(task_manager.spawn_handle()),
 	));
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-	let state_versions = config.chain_spec.state_versions()
+
+	let state_versions = StateVersions::from_conf(config.chain_spec.state_versions()
+		.iter().map(|(number, version)| (number.as_str(), *version)))
 		.ok_or_else(|| Error::Application(Box::from("Invalid state versions for chain spec".to_string())))?;
 
 	let backend = sc_light::new_light_backend(light_blockchain, state_versions);

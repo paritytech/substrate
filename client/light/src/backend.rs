@@ -62,7 +62,7 @@ const IN_MEMORY_EXPECT_PROOF: &str =
 pub struct Backend<S, Block: BlockT> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryBackend<HashFor<Block>>>>,
-	state_versions: StateVersions,
+	state_versions: StateVersions<Block>,
 	// TODO consider moving this state_versions into BlockChain (and add N to type) -> would make
 	// better api
 	import_lock: RwLock<()>,
@@ -79,6 +79,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	state_version: Option<StateVersion>,
+	genesis_state_version: StateVersion,
 	_phantom: std::marker::PhantomData<S>,
 }
 
@@ -93,7 +94,7 @@ pub enum GenesisOrUnavailableState<H: Hasher> {
 
 impl<S, B: BlockT> Backend<S, B> {
 	/// Create new light backend.
-	pub fn new(blockchain: Arc<Blockchain<S>>, state_versions: StateVersions) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S>>, state_versions: StateVersions<B>) -> Self {
 		Self { blockchain, genesis_state: RwLock::new(None), import_lock: Default::default(), state_versions }
 	}
 
@@ -145,6 +146,7 @@ where
 			storage_update: None,
 			changes_trie_config_update: None,
 			state_version: None,
+			genesis_state_version: self.state_versions.genesis_state_version(),
 			_phantom: Default::default(),
 		})
 	}
@@ -156,7 +158,7 @@ where
 	) -> ClientResult<()> {
 
 		if let Some(number) = self.blockchain.storage().block_number_from_id(&block)? {
-			operation.state_version = self.state_versions.state_version_at(number);
+			operation.state_version = Some(self.state_versions.state_version_at(number));
 		}
 		Ok(())
 	}
@@ -364,7 +366,7 @@ where
 			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
-		let storage_update = InMemoryBackend::from((storage, self.state_version));
+		let storage_update = InMemoryBackend::from((storage, self.genesis_state_version));
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		if commit {
 			self.storage_update = Some(storage_update);
@@ -588,7 +590,7 @@ where
 	fn state_version(&self) -> StateVersion {
 		match self {
 			GenesisOrUnavailableState::Genesis(state) => state.state_version(),
-			GenesisOrUnavailableState::Unavailable => StateVersion::Default(),
+			GenesisOrUnavailableState::Unavailable => StateVersion::default(),
 		}
 	}
 }

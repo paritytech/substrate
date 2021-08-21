@@ -193,7 +193,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		let state_version = None;
+		let state_version = Default::default();
 		VOTING_BOND.with(|v| *v.borrow_mut() = self.voting_bond);
 		VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
@@ -216,7 +216,7 @@ impl ExtBuilder {
 				term_duration: 5,
 			},
 		}
-		.build_storage(state_version.clone())
+		.build_storage(state_version)
 		.unwrap(), state_version)
 		.into();
 		ext.execute_with(|| System::set_block_number(1));

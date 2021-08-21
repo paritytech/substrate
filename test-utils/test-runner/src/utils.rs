@@ -50,9 +50,12 @@ pub fn default_config(
 	let base_path = base_path();
 	let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
 
-	let state_version = chain_spec.state_versions()
-		.expect("Invalid state versions for chain spec")
-		.genesis_state_version();
+	use std::str::FromStr;
+	let state_version = chain_spec.state_versions().get(0)
+		// This is incorrect (can have genesis state version as different element in chain_spec).
+		.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
+		.and_then(|(n, s)| (n == 0).then(|| s.clone()))
+		.expect("Invalid state versions for chain spec");
 
 	let storage = chain_spec
 		.as_storage_builder()

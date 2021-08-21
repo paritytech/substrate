@@ -101,8 +101,8 @@ impl module::Config for Runtime {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = None;
-	(system::GenesisConfig::default().build_storage::<Runtime>(state_version.clone()).unwrap(), state_version).into()
+	let state_version = Default::default();
+	(system::GenesisConfig::default().build_storage::<Runtime>(state_version).unwrap(), state_version).into()
 }
 
 fn deposit_events(n: usize) {

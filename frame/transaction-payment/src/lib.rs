@@ -858,9 +858,9 @@ mod tests {
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
 		pub fn build(self) -> sp_io::TestExternalities {
-			let state_version = None;
+			let state_version = Default::default();
 			self.set_constants();
-			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version.clone()).unwrap();
+			let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version).unwrap();
 			pallet_balances::GenesisConfig::<Runtime> {
 				balances: if self.balance_factor > 0 {
 					vec![
@@ -875,7 +875,7 @@ mod tests {
 					vec![]
 				},
 			}
-			.assimilate_storage(&mut t, state_version.clone())
+			.assimilate_storage(&mut t, state_version)
 			.unwrap();
 		(t, state_version).into()
 		}

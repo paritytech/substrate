@@ -162,15 +162,15 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = None;
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+	let state_version = Default::default();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}
-	.assimilate_storage(&mut t, state_version.clone())
+	.assimilate_storage(&mut t, state_version)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t, state_version.clone()).unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t, state_version).unwrap();
 	(t, state_version).into()
 }
 
@@ -404,7 +404,7 @@ fn tip_changing_works() {
 fn test_last_reward_migration() {
 	use sp_storage::Storage;
 
-	let state_version = None;
+	let state_version = Default::default();
 	let mut s = Storage::default();
 
 	#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -492,16 +492,16 @@ fn test_last_reward_migration() {
 
 #[test]
 fn genesis_funding_works() {
-	let state_version = None;
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version.clone()).unwrap();
+	let state_version = Default::default();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
 	let initial_funding = 100;
 	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}
-	.assimilate_storage(&mut t, state_version.clone())
+	.assimilate_storage(&mut t, state_version)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t, state_version.clone()).unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t, state_version).unwrap();
 	let mut t: sp_io::TestExternalities = (t, state_version).into();
 
 	t.execute_with(|| {

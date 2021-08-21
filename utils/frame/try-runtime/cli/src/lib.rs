@@ -211,7 +211,7 @@ where
 				})),
 		};
 
-		let (code_key, code) = extract_code(config.chain_spec)?;
+		let (code_key, code) = extract_code::<Block>(config.chain_spec)?;
 		builder
 			.inject_key_value(&[(code_key, code)])
 			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat())
@@ -292,7 +292,7 @@ where
 		.mode(mode)
 		.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
 	let mut ext = if shared.overwrite_code {
-		let (code_key, code) = extract_code(config.chain_spec)?;
+		let (code_key, code) = extract_code::<Block>(config.chain_spec)?;
 		builder.inject_key_value(&[(code_key, code)]).build().await?
 	} else {
 		builder.inject_hashed_key(well_known_keys::CODE).build().await?
@@ -379,7 +379,7 @@ where
 			.mode(mode)
 			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
 		let mut ext = if shared.overwrite_code {
-			let (code_key, code) = extract_code(config.chain_spec)?;
+			let (code_key, code) = extract_code::<Block>(config.chain_spec)?;
 			builder.inject_key_value(&[(code_key, code)]).build().await?
 		} else {
 			builder.inject_hashed_key(well_known_keys::CODE).build().await?
@@ -462,9 +462,10 @@ impl CliConfiguration for TryRuntimeCmd {
 
 /// Extract `:code` from the given chain spec and return as `StorageData` along with the
 /// corresponding `StorageKey`.
-fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
-	let state_version = spec.state_versions()
-		.ok_or_else(|| "Invalid state versions for chain spec".into())?
+fn extract_code<Block: BlockT>(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
+	let state_version = sp_runtime::StateVersions::<Block>::from_conf(spec.state_versions()
+		.iter().map(|(number, version)| (number.as_str(), *version)))
+		.ok_or_else(|| "Invalid state versions for chain spec".to_string())?
 		.genesis_state_version();
 
 	let genesis_storage = spec.build_storage(state_version)?;

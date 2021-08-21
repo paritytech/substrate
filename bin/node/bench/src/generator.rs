@@ -23,7 +23,7 @@ use node_primitives::Hash;
 use sp_trie::{trie_types::TrieDBMut, TrieMut};
 
 use crate::simple_trie::SimpleTrie;
-use sp_core::StateVersion;
+use sp_core::state_version::StateVersion;
 
 /// Generate trie from given `key_values`.
 ///
@@ -45,11 +45,11 @@ pub fn generate_trie(
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };
 		{
-			let mut trie_db = match StateVersion {
-				V0 => {
+			let mut trie_db = match state_version {
+				StateVersion::V0 => {
 					TrieDBMut::new(&mut trie, &mut root)
 				},
-				V1 { threshold } => {
+				StateVersion::V1 { threshold } => {
 					let layout = sp_trie::Layout::with_alt_hashing(threshold);
 					TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(
 						&mut trie, &mut root, layout,

@@ -178,7 +178,7 @@ where
 		executor: &Executor,
 		code: &WasmSubstitute<Block>,
 	) -> Result<RuntimeVersion> {
-		let mut ext: BasicExternalities = None.into();
+		let mut ext: BasicExternalities = sp_runtime::StateVersion::default().into();
 		executor
 			.runtime_version(&mut ext, &code.runtime_code(None))
 			.map_err(|e| WasmSubstituteError::VersionInvalid(format!("{:?}", e)).into())

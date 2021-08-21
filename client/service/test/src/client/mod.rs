@@ -243,7 +243,7 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 
 #[test]
 fn construct_genesis_should_work_with_native() {
-	let state_version = None;
+	let state_version = Default::default();
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -251,7 +251,7 @@ fn construct_genesis_should_work_with_native() {
 		1000,
 		None,
 		Default::default(),
-		state_version.clone(),
+		state_version,
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
@@ -280,7 +280,7 @@ fn construct_genesis_should_work_with_native() {
 
 #[test]
 fn construct_genesis_should_work_with_wasm() {
-	let state_version = None;
+	let state_version = Default::default();
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -317,7 +317,7 @@ fn construct_genesis_should_work_with_wasm() {
 
 #[test]
 fn construct_genesis_with_bad_transaction_should_panic() {
-	let state_version = None;
+	let state_version = Default::default();
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -325,7 +325,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		68,
 		None,
 		Default::default(),
-		state_version.clone(),
+		state_version,
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
@@ -1451,7 +1451,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
-			vec![],
+			Default::default(),
 		)
 		.unwrap(),
 	);
@@ -1667,7 +1667,7 @@ fn returns_status_for_pruned_blocks() {
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
-			vec![],
+			Default::default(),
 		)
 		.unwrap(),
 	);
