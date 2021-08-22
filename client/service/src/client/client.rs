@@ -337,11 +337,10 @@ where
 		config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
 		let info = backend.blockchain().info();
-		let state_version = config.state_versions.genesis_state_version();
 
 		if info.finalized_state.is_none() {
 			let genesis_storage =
-				build_genesis_storage.build_storage(state_version).map_err(sp_blockchain::Error::Storage)?;
+				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
 			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());

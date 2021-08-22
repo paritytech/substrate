@@ -197,6 +197,10 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 
 #[cfg(feature = "std")]
 impl BuildStorage for (sp_core::storage::Storage, StateVersion) {
+	fn state_version(&self) -> StateVersion {
+		self.1
+	}
+
 	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
 		storage.top.extend(self.0.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.0.children_default.iter() {
@@ -216,6 +220,11 @@ impl BuildStorage for (sp_core::storage::Storage, StateVersion) {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
+	fn state_version(&self) -> StateVersion {
+		// Warning just a stub implementation, should not be use.
+		StateVersion::default()
+	}
+
 	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}

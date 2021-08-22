@@ -730,11 +730,16 @@ pub mod migrations {
 
 #[cfg(feature = "std")]
 impl GenesisConfig {
+	/// State version to use for genesis build.
+	pub fn genesis_state_version<T: Config>(&self) -> StateVersion {
+		<Self as GenesisBuild<T>>::genesis_state_version(self)
+	}
+
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn build_storage<T: Config>(&self, state_version: sp_runtime::StateVersion) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T>>::build_storage(self, state_version)
+	pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
+		<Self as GenesisBuild<T>>::build_storage(self)
 	}
 
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
@@ -743,9 +748,8 @@ impl GenesisConfig {
 	pub fn assimilate_storage<T: Config>(
 		&self,
 		storage: &mut sp_runtime::Storage,
-		state_version: sp_runtime::StateVersion,
 	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage, state_version)
+		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
 	}
 }
 

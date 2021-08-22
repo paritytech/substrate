@@ -99,9 +99,13 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
+	fn state_version(&self) -> StateVersion {
+		self.genesis_state_version()
+	}
+
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
-			Genesis::Runtime(gc) => gc.build_storage(state_version),
+			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children_default: children_map
@@ -284,11 +288,11 @@ impl<G, E> ChainSpec<G, E> {
 	/// Return genesis state version.
 	fn genesis_state_version(&self) -> StateVersion {
 		use std::str::FromStr;
-		let state_version = self.state_versions().get(0)
+		self.state_versions().get(0)
 			// This is incorrect (can have number representation not compatible with u64
 			.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
 			.and_then(|(n, s)| (n == 0).then(|| s.clone()))
-			.unwrap_or_default();
+			.unwrap_or_default()
 	}
 }
 
@@ -435,7 +439,7 @@ mod tests {
 	struct Genesis(HashMap<String, String>);
 
 	impl BuildStorage for Genesis {
-		fn assimilate_storage(&self, storage: &mut Storage, _state_version: StateVersion) -> Result<(), String> {
+		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
 			storage.top.extend(
 				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
 			);
