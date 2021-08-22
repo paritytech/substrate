@@ -560,7 +560,7 @@ where
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.lock().on_major_syncing();
-				return
+				continue
 			}
 
 			let best_header = match select_chain.best_chain().await {
@@ -572,7 +572,7 @@ where
 						 Select best chain error: {:?}",
 						err
 					);
-					return
+					continue
 				},
 			};
 			let best_hash = best_header.hash();
@@ -584,11 +584,11 @@ where
 					 Probably a node update is required!",
 					err,
 				);
-				return
+				continue
 			}
 
 			if worker.lock().best_hash() == Some(best_hash) {
-				return
+				continue
 			}
 
 			// The worker is locked for the duration of the whole proposing period. Within this
@@ -603,7 +603,7 @@ where
 						 Fetch difficulty failed: {:?}",
 						err,
 					);
-					return
+					continue
 				},
 			};
 
@@ -619,7 +619,7 @@ where
 						 Creating inherent data providers failed: {:?}",
 						err,
 					);
-					return
+					continue
 				},
 			};
 
@@ -632,7 +632,7 @@ where
 						 Creating inherent data failed: {:?}",
 						e,
 					);
-					return
+					continue
 				},
 			};
 
@@ -652,7 +652,7 @@ where
 						 Creating proposer failed: {:?}",
 						err,
 					);
-					return
+					continue
 				},
 			};
 
@@ -668,7 +668,7 @@ where
 						 Creating proposal failed: {:?}",
 						err,
 					);
-					return
+					continue
 				},
 			};
 
