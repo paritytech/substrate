@@ -23,7 +23,7 @@ pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, Transa
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_network::{
 	config::{
-		ExtTransport, IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
+		IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
 		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
 		TransportConfig,
 	},
@@ -107,9 +107,6 @@ pub struct Configuration {
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
-	/// endpoint, this transport will be tried in priority before all others.
-	pub telemetry_external_transport: Option<ExtTransport>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -120,7 +117,8 @@ pub struct Configuration {
 	pub disable_grandpa: bool,
 	/// Development key seed.
 	///
-	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
+	/// When running in development mode, the seed will be used to generate authority keys by the
+	/// keystore.
 	///
 	/// Should only be set when `node` is running development mode.
 	pub dev_key_seed: Option<String>,

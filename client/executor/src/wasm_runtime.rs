@@ -304,8 +304,8 @@ pub fn create_wasm_runtime_with_code(
 		WasmExecutionMethod::Interpreted => {
 			// Wasmi doesn't have any need in a cache directory.
 			//
-			// We drop the cache_path here to silence warnings that cache_path is not used if compiling
-			// without the `wasmtime` flag.
+			// We drop the cache_path here to silence warnings that cache_path is not used if
+			// compiling without the `wasmtime` flag.
 			drop(cache_path);
 
 			sc_executor_wasmi::create_runtime(
@@ -361,8 +361,8 @@ fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 
 	apis.chunks(RUNTIME_API_INFO_SIZE)
 		.map(|chunk| {
-			// `chunk` can be less than `RUNTIME_API_INFO_SIZE` if the total length of `apis` doesn't
-			// completely divide by `RUNTIME_API_INFO_SIZE`.
+			// `chunk` can be less than `RUNTIME_API_INFO_SIZE` if the total length of `apis`
+			// doesn't completely divide by `RUNTIME_API_INFO_SIZE`.
 			<[u8; RUNTIME_API_INFO_SIZE]>::try_from(chunk)
 				.map(sp_api::deserialize_runtime_api_info)
 				.map_err(|_| WasmError::Other("a clipped runtime api info declaration".to_owned()))
@@ -370,8 +370,8 @@ fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 		.collect::<Result<Vec<_>, WasmError>>()
 }
 
-/// Take the runtime blob and scan it for the custom wasm sections containing the version information
-/// and construct the `RuntimeVersion` from them.
+/// Take the runtime blob and scan it for the custom wasm sections containing the version
+/// information and construct the `RuntimeVersion` from them.
 ///
 /// If there are no such sections, it returns `None`. If there is an error during decoding those
 /// sections, `Err` will be returned.
@@ -380,8 +380,8 @@ pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion
 		// We do not use `decode_version` here because the runtime_version section is not supposed
 		// to ever contain a legacy version. Apart from that `decode_version` relies on presence
 		// of a special API in the `apis` field to treat the input as a non-legacy version. However
-		// the structure found in the `runtime_version` always contain an empty `apis` field. Therefore
-		// the version read will be mistakenly treated as an legacy one.
+		// the structure found in the `runtime_version` always contain an empty `apis` field.
+		// Therefore the version read will be mistakenly treated as an legacy one.
 		let mut decoded_version = sp_api::RuntimeVersion::decode(&mut version_section)
 			.map_err(|_| WasmError::Instantiation("failed to decode version section".into()))?;
 
@@ -411,8 +411,9 @@ fn create_versioned_wasm_runtime(
 	// the uncompressed code from now on.
 	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&code)?;
 
-	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary pertaining
-	// to runtime version. We do it before consuming the runtime blob for creating the runtime.
+	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary
+	// pertaining to runtime version. We do it before consuming the runtime blob for creating the
+	// runtime.
 	let mut version: Option<_> = read_embedded_version(&blob)?;
 
 	let runtime = create_wasm_runtime_with_code(
@@ -429,7 +430,8 @@ fn create_versioned_wasm_runtime(
 	if version.is_none() {
 		// Call to determine runtime version.
 		let version_result = {
-			// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
+			// `ext` is already implicitly handled as unwind safe, as we store it in a global
+			// variable.
 			let mut ext = AssertUnwindSafe(ext);
 
 			// The following unwind safety assertion is OK because if the method call panics, the

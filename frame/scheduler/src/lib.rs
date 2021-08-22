@@ -40,12 +40,11 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a
-//!   specified block and with a specified priority.
-//! * `cancel` - cancel a scheduled dispatch, specified by block number and
-//!   index.
-//! * `schedule_named` - augments the `schedule` interface with an additional
-//!   `Vec<u8>` parameter that can be used for identification.
+//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a specified block and
+//!   with a specified priority.
+//! * `cancel` - cancel a scheduled dispatch, specified by block number and index.
+//! * `schedule_named` - augments the `schedule` interface with an additional `Vec<u8>` parameter
+//!   that can be used for identification.
 //! * `cancel_named` - the named complement to the cancel function.
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -152,8 +151,8 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ From<system::Call<Self>>;
 
-		/// The maximum weight that may be scheduled per block for any dispatchables of less priority
-		/// than `schedule::HARD_DEADLINE`.
+		/// The maximum weight that may be scheduled per block for any dispatchables of less
+		/// priority than `schedule::HARD_DEADLINE`.
 		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
@@ -1321,7 +1320,8 @@ mod tests {
 				root(),
 				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
 			));
-			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
+			// With base weights, 69 and 42 should not fit together, but do because of hard
+			// deadlines
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 		});

@@ -29,7 +29,7 @@ use serde::Serialize;
 
 use crate::BenchmarkCmd;
 use frame_benchmarking::{
-	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResults, BenchmarkSelector,
+	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 	RegressionModel,
 };
 use frame_support::traits::StorageInfo;
@@ -188,7 +188,8 @@ fn get_benchmark_data(
 	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
 
-	// Analysis data may include components that are not used, this filters out anything whose value is zero.
+	// Analysis data may include components that are not used, this filters out anything whose value
+	// is zero.
 	let mut used_components = Vec::new();
 	let mut used_extrinsic_time = Vec::new();
 	let mut used_reads = Vec::new();
@@ -356,9 +357,9 @@ pub fn write_results(
 // This function looks at the keys touched during the benchmark, and the storage info we collected
 // from the pallets, and creates comments with information about the storage keys touched during
 // each benchmark.
-fn add_storage_comments(
+pub(crate) fn add_storage_comments(
 	comments: &mut Vec<String>,
-	results: &[BenchmarkResults],
+	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
 ) {
 	let mut storage_info_map = storage_info
@@ -375,6 +376,16 @@ fn add_storage_comments(
 		max_size: None,
 	};
 	storage_info_map.insert(skip_storage_info.prefix.clone(), &skip_storage_info);
+
+	// Special hack to show `Benchmark Override`
+	let benchmark_override = StorageInfo {
+		pallet_name: b"Benchmark".to_vec(),
+		storage_name: b"Override".to_vec(),
+		prefix: b"Benchmark Override".to_vec(),
+		max_values: None,
+		max_size: None,
+	};
+	storage_info_map.insert(benchmark_override.prefix.clone(), &benchmark_override);
 
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
@@ -501,7 +512,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use frame_benchmarking::{BenchmarkBatchSplitResults, BenchmarkParameter, BenchmarkResults};
+	use frame_benchmarking::{BenchmarkBatchSplitResults, BenchmarkParameter, BenchmarkResult};
 
 	fn test_data(
 		pallet: &[u8],
@@ -512,7 +523,7 @@ mod test {
 	) -> BenchmarkBatchSplitResults {
 		let mut results = Vec::new();
 		for i in 0..5 {
-			results.push(BenchmarkResults {
+			results.push(BenchmarkResult {
 				components: vec![(param, i), (BenchmarkParameter::z, 0)],
 				extrinsic_time: (base + slope * i).into(),
 				storage_root_time: (base + slope * i).into(),

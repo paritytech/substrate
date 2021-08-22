@@ -253,7 +253,6 @@ where
 				)
 				.set_parent_hash(at_hash);
 				// TODO: https://github.com/paritytech/substrate/issues/4455
-				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
 					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
@@ -361,17 +360,20 @@ where
 mod tests {
 	use super::*;
 	use sc_client_api::in_mem;
-	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
 	};
-	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutor};
+	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutorDispatch};
 
 	#[test]
 	fn should_get_override_if_exists() {
-		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
 
 		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());
