@@ -382,7 +382,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities().to_vec()
+			Aura::authorities()
 		}
 	}
 

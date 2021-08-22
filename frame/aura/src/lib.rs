@@ -39,7 +39,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use core::convert::TryFrom;
 use frame_support::{
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	ConsensusEngineId, Parameter,
@@ -80,7 +79,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::hooks]
@@ -115,8 +113,7 @@ pub mod pallet {
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> =
-		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
+	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -133,7 +130,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { authorities: Vec::<T::AuthorityId>::new() }
+			Self { authorities: Vec::new() }
 		}
 	}
 
@@ -146,25 +143,18 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
-			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new.to_vec()).encode(),
-		);
+		let log: DigestItem<T::Hash> =
+			DigestItem::Consensus(AURA_ENGINE_ID, ConsensusLog::AuthoritiesChange(new).encode());
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &Vec<T::AuthorityId>) {
+	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-
-			let bounded_authorities =
-				BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from((*authorities).clone())
-					.expect("authorities vec too big");
-
-			<Authorities<T>>::put(bounded_authorities);
+			<Authorities<T>>::put(authorities);
 		}
 	}
 
@@ -210,25 +200,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		// instant changes
 		if changed {
-			let mut next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-
-			if next_authorities.len() >= T::MaxAuthorities::get() as usize {
-				// Truncate to MaxAuthorities, to not fail the conversion
-				next_authorities.truncate(T::MaxAuthorities::get() as usize);
-
-				log::warn!(
-					"Provided validators vec size {} is too large (max size {})",
-					next_authorities.len(),
-					T::MaxAuthorities::get()
-				);
-			}
-
+			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
-			if next_authorities != last_authorities.into_inner() {
-				let bounded_authorities =
-					BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from(next_authorities)
-						.expect("We truncate, so this should never fail");
-				Self::change_authorities(bounded_authorities);
+			if next_authorities != last_authorities {
+				Self::change_authorities(next_authorities);
 			}
 		}
 	}
