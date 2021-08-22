@@ -27,9 +27,9 @@ use sc_consensus::{
 	import_queue::{BasicQueue, BoxBlockImport, Verifier},
 };
 use sp_blockchain::HeaderBackend;
-use sp_consensus::{BlockOrigin, CacheKeyId, Environment, Proposer, SelectChain};
+use sp_consensus::{CacheKeyId, Environment, Proposer, SelectChain};
 use sp_inherents::CreateInherentDataProviders;
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId, Justifications};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{marker::PhantomData, sync::Arc};
 
 mod error;
@@ -59,18 +59,11 @@ struct ManualSealVerifier;
 impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 	async fn verify(
 		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justifications: Option<Justifications>,
-		body: Option<Vec<B::Extrinsic>>,
+		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let mut import_params = BlockImportParams::new(origin, header);
-		import_params.justifications = justifications;
-		import_params.body = body;
-		import_params.finalized = false;
-		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-
-		Ok((import_params, None))
+		block.finalized = false;
+		block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		Ok((block, None))
 	}
 }
 
@@ -101,8 +94,8 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, C
 	/// Shared reference to the transaction pool.
 	pub pool: Arc<TP>,
 
-	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
-	/// the authorship task.
+	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending
+	/// commands to the authorship task.
 	pub commands_stream: CS,
 
 	/// SelectChain strategy.
@@ -288,7 +281,8 @@ mod tests {
 			0,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
-		// this test checks that blocks are created as soon as transactions are imported into the pool.
+		// this test checks that blocks are created as soon as transactions are imported into the
+		// pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
 		let mut sender = Arc::new(Some(sender));
 		let commands_stream =
@@ -357,7 +351,8 @@ mod tests {
 			0,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
-		// this test checks that blocks are created as soon as an engine command is sent over the stream.
+		// this test checks that blocks are created as soon as an engine command is sent over the
+		// stream.
 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(ManualSealParams {
 			block_import: client.clone(),
@@ -434,7 +429,8 @@ mod tests {
 			0,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
-		// this test checks that blocks are created as soon as an engine command is sent over the stream.
+		// this test checks that blocks are created as soon as an engine command is sent over the
+		// stream.
 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(ManualSealParams {
 			block_import: client.clone(),

@@ -289,7 +289,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 		number: NumberFor<B>,
 		justification: Justification,
 	) {
-		let started = wasm_timer::Instant::now();
+		let started = std::time::Instant::now();
 
 		let success = match self.justification_import.as_mut() {
 			Some(justification_import) => justification_import
@@ -455,12 +455,9 @@ mod tests {
 	impl Verifier<Block> for () {
 		async fn verify(
 			&mut self,
-			origin: BlockOrigin,
-			header: Header,
-			_justifications: Option<Justifications>,
-			_body: Option<Vec<Extrinsic>>,
+			block: BlockImportParams<Block, ()>,
 		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-			Ok((BlockImportParams::new(origin, header), None))
+			Ok((BlockImportParams::new(block.origin, block.header), None))
 		}
 	}
 

@@ -428,7 +428,8 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the [`InherentData`](`sp_inherents::InherentData`).
+	/// The current timestamp that will be found in the
+	/// [`InherentData`](`sp_inherents::InherentData`).
 	fn timestamp(&self) -> Timestamp;
 
 	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
@@ -1059,7 +1060,8 @@ mod test {
 			})
 			.collect();
 
-		// Should always be true after a short while, since the chain is advancing but finality is stalled
+		// Should always be true after a short while, since the chain is advancing but finality is
+		// stalled
 		let expected: Vec<bool> = (slot_now..300).map(|s| s > 8).collect();
 		assert_eq!(should_backoff, expected);
 	}

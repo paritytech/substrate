@@ -75,6 +75,16 @@ pub enum BlockOrigin {
 	File,
 }
 
+impl From<BlockOrigin> for sp_core::ExecutionContext {
+	fn from(origin: BlockOrigin) -> Self {
+		if origin == BlockOrigin::NetworkInitialSync {
+			sp_core::ExecutionContext::Syncing
+		} else {
+			sp_core::ExecutionContext::Importing
+		}
+	}
+}
+
 /// Environment for a Consensus instance.
 ///
 /// Creates proposer instance.
@@ -284,8 +294,8 @@ impl<T> CanAuthorWithNativeVersion<T> {
 	}
 }
 
-impl<T: sp_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
-	for CanAuthorWithNativeVersion<T>
+impl<T: sp_version::GetRuntimeVersionAt<Block> + sp_version::GetNativeVersion, Block: BlockT>
+	CanAuthorWith<Block> for CanAuthorWithNativeVersion<T>
 {
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
 		match self.0.runtime_version(at) {

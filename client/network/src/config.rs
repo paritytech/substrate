@@ -27,8 +27,9 @@ pub use crate::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	warp_request_handler::WarpSyncProvider,
 };
-pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
@@ -41,7 +42,7 @@ use core::{fmt, iter};
 use futures::future;
 use libp2p::{
 	identity::{ed25519, Keypair},
-	multiaddr, wasm_ext, Multiaddr, PeerId,
+	multiaddr, Multiaddr, PeerId,
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
@@ -111,8 +112,8 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// Request response configuration for the block request protocol.
 	///
 	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
-	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
-	/// requests, if enabled.
+	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
+	/// block requests, if enabled.
 	///
 	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
 	/// allowing outgoing but not incoming requests, or constructed via
@@ -137,6 +138,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
+
+	/// Optional warp sync protocol support. Include protocol config and sync provider.
+	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
 }
 
 /// Role of the local node.
@@ -391,6 +395,8 @@ pub enum SyncMode {
 		/// Download indexed transactions for recent blocks.
 		storage_chain_mode: bool,
 	},
+	/// Warp sync - verify authority set transitions and the latest state.
+	Warp,
 }
 
 impl Default for SyncMode {
@@ -484,11 +490,7 @@ impl NetworkConfiguration {
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal {
-				enable_mdns: false,
-				allow_private_ipv4: true,
-				wasm_external_transport: None,
-			},
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
 			max_parallel_downloads: 5,
 			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
@@ -499,7 +501,8 @@ impl NetworkConfiguration {
 		}
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config =
 			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
@@ -513,7 +516,8 @@ impl NetworkConfiguration {
 		config
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
 	pub fn new_memory() -> NetworkConfiguration {
 		let mut config =
 			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
@@ -620,14 +624,6 @@ pub enum TransportConfig {
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
 		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
-
-		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
-		/// need some binding between the networking provided by the operating system or environment
-		/// and libp2p.
-		///
-		/// This parameter exists whatever the target platform is, but it is expected to be set to
-		/// `Some` only when compiling for WASM.
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	},
 
 	/// Only allow connections within the same process.
@@ -703,12 +699,12 @@ impl NodeKeyConfig {
 	///
 	///  * If the secret is configured as input, the corresponding keypair is returned.
 	///
-	///  * If the secret is configured as a file, it is read from that file, if it exists.
-	///    Otherwise a new secret is generated and stored. In either case, the
-	///    keypair obtained from the secret is returned.
+	///  * If the secret is configured as a file, it is read from that file, if it exists. Otherwise
+	///    a new secret is generated and stored. In either case, the keypair obtained from the
+	///    secret is returned.
 	///
-	///  * If the secret is configured to be new, it is generated and the corresponding
-	///    keypair is returned.
+	///  * If the secret is configured to be new, it is generated and the corresponding keypair is
+	///    returned.
 	pub fn into_keypair(self) -> io::Result<Keypair> {
 		use NodeKeyConfig::*;
 		match self {

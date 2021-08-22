@@ -28,7 +28,8 @@
 //!
 //! ### Public Functions
 //!
-//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
+//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module
+//!   configuration.
 //!
 //! ## Related Modules
 //!
@@ -40,9 +41,8 @@
 use codec::{Decode, Encode};
 use core::convert::TryFrom;
 use frame_support::{
-	log,
-	traits::{FindAuthor, Get, OnTimestampSet, OneSessionHandler},
-	BoundedVec, ConsensusEngineId, Parameter,
+	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
+	ConsensusEngineId, Parameter,
 };
 use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
@@ -71,11 +71,12 @@ pub mod pallet {
 			+ Parameter
 			+ RuntimeAppPublic
 			+ Default
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen;
+			+ MaybeSerializeDeserialize;
 
-		/// The maximum number of authorities that can be added.
-		type MaxAuthorities: Get<u32>;
+		/// A way to check whether a given validator is disabled and should not be authoring blocks.
+		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
+		/// initialization.
+		type DisabledValidators: DisabledValidators;
 	}
 
 	#[pallet::pallet]
@@ -91,7 +92,18 @@ pub mod pallet {
 				assert!(current_slot < new_slot, "Slot must increase");
 				CurrentSlot::<T>::put(new_slot);
 
-				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+				if let Some(n_authorities) = <Authorities<T>>::decode_len() {
+					let authority_index = *new_slot % n_authorities as u64;
+					if T::DisabledValidators::is_disabled(authority_index as u32) {
+						panic!(
+							"Validator with index {:?} is disabled and should not be attempting to author blocks.",
+							authority_index,
+						);
+					}
+				}
+
+				// TODO [#3398] Generate offence report for all authorities that skipped their
+				// slots.
 
 				T::DbWeight::get().reads_writes(2, 1)
 			} else {

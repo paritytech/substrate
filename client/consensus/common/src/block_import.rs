@@ -112,6 +112,8 @@ pub struct BlockCheckParams<Block: BlockT> {
 	pub parent_hash: Block::Hash,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Allow importing the block if parent block is missing.
+	pub allow_missing_parent: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
 }
@@ -248,8 +250,8 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Auxiliary function for "converting" the transaction type.
 	///
-	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that `Self` now
-	/// uses a different transaction type.
+	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that
+	/// `Self` now uses a different transaction type.
 	pub fn clear_storage_changes_and_mutate<Transaction2>(
 		self,
 	) -> BlockImportParams<Block, Transaction2> {
@@ -305,6 +307,11 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			.ok_or(Error::NoIntermediate)?
 			.downcast_mut::<T>()
 			.ok_or(Error::InvalidIntermediate)
+	}
+
+	/// Check if this block contains state import action
+	pub fn with_state(&self) -> bool {
+		matches!(self.state_action, StateAction::ApplyChanges(StorageChanges::Import(_)))
 	}
 }
 
