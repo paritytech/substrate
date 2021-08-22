@@ -46,7 +46,7 @@ use sc_network::{
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
-use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor, chain::ChainApiServer};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -721,8 +721,7 @@ where
 				remote_blockchain.clone(),
 				on_demand.clone(),
 			)
-			.into_rpc_module()
-			.expect(UNIQUE_METHOD_NAMES_PROOF);
+			.into_rpc();
 			let (state, child_state) = sc_rpc::state::new_light(
 				client.clone(),
 				task_executor.clone(),
@@ -737,9 +736,7 @@ where
 			)
 		} else {
 			// Full nodes
-			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
-				.into_rpc_module()
-				.expect(UNIQUE_METHOD_NAMES_PROOF);
+			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
 
 			let (state, child_state) = sc_rpc::state::new_full(
 				client.clone(),

@@ -2704,10 +2704,33 @@ name = "jsonrpsee"
 version = "0.3.0"
 source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
+ "jsonrpsee-http-client",
  "jsonrpsee-http-server",
+ "jsonrpsee-proc-macros 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "jsonrpsee-utils",
+ "jsonrpsee-ws-client 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
  "jsonrpsee-ws-server",
+]
+
+[[package]]
+name = "jsonrpsee-http-client"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+dependencies = [
+ "async-trait",
+ "fnv",
+ "futures 0.3.16",
+ "hyper",
+ "hyper-rustls",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
+ "jsonrpsee-utils",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio 1.10.0",
+ "url",
 ]
 
 [[package]]
@@ -2736,6 +2759,19 @@ name = "jsonrpsee-proc-macros"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f37924e16300e249a52a22cabb5632f846dc9760b39355f5e8bc70cd23dc6300"
+dependencies = [
+ "Inflector",
+ "bae",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
 dependencies = [
  "Inflector",
  "bae",
@@ -2822,6 +2858,29 @@ dependencies = [
  "tokio 0.2.25",
  "tokio-rustls 0.15.0",
  "tokio-util 0.3.1",
+ "url",
+]
+
+[[package]]
+name = "jsonrpsee-ws-client"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+dependencies = [
+ "async-trait",
+ "fnv",
+ "futures 0.3.16",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics)",
+ "log",
+ "pin-project 1.0.5",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "soketto 0.6.0",
+ "thiserror",
+ "tokio 1.10.0",
+ "tokio-rustls 0.22.0",
+ "tokio-util 0.6.7",
  "url",
 ]
 
@@ -6559,8 +6618,8 @@ name = "remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
  "env_logger 0.9.0",
- "jsonrpsee-proc-macros",
- "jsonrpsee-ws-client",
+ "jsonrpsee-proc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-ws-client 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",

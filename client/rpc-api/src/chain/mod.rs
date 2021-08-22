@@ -18,4 +18,43 @@
 
 //! Substrate blockchain API.
 
+use jsonrpsee::{proc_macros::rpc, types::JsonRpcResult};
+use sp_rpc::{list::ListOrValue, number::NumberOrHex};
+
 pub mod error;
+
+#[rpc(client, server, namespace = "chain")]
+pub trait ChainApi<Number, Hash, Header, SignedBlock> {
+	/// Get header.
+	#[method(name = "getHeader")]
+	async fn header(&self, hash: Option<Hash>) -> JsonRpcResult<Option<Header>>;
+
+	/// Get header and body of a relay chain block.
+	#[method(name = "getBlock")]
+	async fn block(&self, hash: Option<Hash>) -> JsonRpcResult<Option<SignedBlock>>;
+
+	/// Get hash of the n-th block in the canon chain.
+	///
+	/// By default returns latest block hash.
+	#[method(name = "getBlockHash")]
+	fn block_hash(&self, hash: Option<ListOrValue<NumberOrHex>>) -> JsonRpcResult<ListOrValue<Option<Hash>>>;
+
+	/// Get hash of the last finalized block in the canon chain.
+	#[method(name = "getFinalizedHead")]
+	fn finalized_head(&self) -> JsonRpcResult<Hash>;
+
+	/// All head subscription
+	// TODO(): support alias: subscribeAllHeads.
+	#[subscription(name = "allHead", unsub = "unsubscribeAllHeads", item = Header)]
+	fn subscribe_all_heads(&self);
+
+	/// New head subscription
+	// TODO(): support alias in jsonrpsee subscribeNewHeads.
+	#[subscription(name = "newHead", unsub = "unsubscribeNewHeads", item = Header)]
+	fn subscribe_new_heads(&self);
+
+	/// Finalized head subscription
+	// TODO(): support alias in jsonrpsee subscribeFinalizedHeads/subscribeFinalisedHeads
+	#[subscription(name = "finalizedHead", unsub = "unsubscribeFinalizedHeads", item = Header)]
+	fn subscribe_finalized_heads(&self);
+}

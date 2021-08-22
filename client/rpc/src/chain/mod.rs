@@ -29,8 +29,10 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use futures::FutureExt;
-use jsonrpsee::{types::error::Error as JsonRpseeError, ws_server::SubscriptionSink, RpcModule};
+use jsonrpsee::{
+	types::{async_trait, DeserializeOwned, Error as JsonRpseeError, JsonRpcResult},
+	SubscriptionSink,
+};
 use sc_client_api::{
 	light::{Fetcher, RemoteBlockchain},
 	BlockchainEvents,
@@ -154,92 +156,28 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-impl<Block: BlockT, Client> Chain<Block, Client>
+// TODO(niklasad1): check if those DeserializeOwned bounds are really required.
+#[async_trait]
+impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
+	for Chain<Block, Client>
 where
-	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-	Block: BlockT + 'static,
-	<Block as BlockT>::Header: Unpin,
+	Block: BlockT + 'static + DeserializeOwned,
+	Block::Header: Unpin + DeserializeOwned,
+	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the
-	/// RPC server.
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut rpc_module = RpcModule::new(self);
-
-		rpc_module.register_async_method("chain_getHeader", |params, chain| {
-			let hash = params.one().ok();
-			async move { chain.header(hash).await.map_err(|e| JsonRpseeError::to_call_error(e)) }
-				.boxed()
-		})?;
-
-		rpc_module.register_async_method("chain_getBlock", |params, chain| {
-			let hash = params.one().ok();
-			async move { chain.block(hash).await.map_err(|e| JsonRpseeError::to_call_error(e)) }
-				.boxed()
-		})?;
-
-		rpc_module.register_method("chain_getBlockHash", |params, chain| {
-			let hash = params.one().ok();
-			chain.block_hash(hash).map_err(|e| JsonRpseeError::to_call_error(e))
-		})?;
-
-		rpc_module.register_alias("chain_getHead", "chain_getBlockHash")?;
-
-		rpc_module.register_method("chain_getFinalizedHead", |_, chain| {
-			chain.finalized_head().map_err(|e| JsonRpseeError::to_call_error(e))
-		})?;
-
-		rpc_module.register_alias("chain_getFinalisedHead", "chain_getFinalizedHead")?;
-
-		rpc_module.register_subscription(
-			"chain_allHead",
-			"chain_unsubscribeAllHeads",
-			|_params, sink, ctx| ctx.backend.subscribe_all_heads(sink).map_err(Into::into),
-		)?;
-
-		rpc_module.register_alias("chain_subscribeAllHeads", "chain_allHead")?;
-
-		rpc_module.register_subscription(
-			"chain_newHead",
-			"chain_unsubscribeNewHead",
-			|_params, sink, ctx| ctx.backend.subscribe_new_heads(sink).map_err(Into::into),
-		)?;
-
-		rpc_module.register_subscription(
-			"chain_finalizedHead",
-			"chain_unsubscribeFinalizedHeads",
-			|_params, sink, ctx| ctx.backend.subscribe_finalized_heads(sink).map_err(Into::into),
-		)?;
-
-		rpc_module.register_alias("chain_subscribeNewHead", "chain_newHead")?;
-		rpc_module.register_alias("chain_subscribeNewHeads", "chain_newHead")?;
-		rpc_module.register_alias("chain_unsubscribeNewHeads", "chain_unsubscribeNewHead")?;
-		rpc_module.register_alias("chain_subscribeFinalisedHeads", "chain_finalizedHead")?;
-		rpc_module.register_alias("chain_subscribeFinalizedHeads", "chain_finalizedHead")?;
-		rpc_module
-			.register_alias("chain_unsubscribeFinalisedHeads", "chain_unsubscribeFinalizedHeads")?;
-
-		Ok(rpc_module)
+	async fn header(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<Block::Header>> {
+		self.backend.header(hash).await.map_err(Into::into)
 	}
 
-	/// TODO: document this
-	pub async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
-		self.backend.header(hash).await
+	async fn block(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<SignedBlock<Block>>> {
+		self.backend.block(hash).await.map_err(Into::into)
 	}
 
-	/// TODO: document this
-	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
-		self.backend.block(hash).await
-	}
-
-	/// TODO: document this
-	fn block_hash(
-		&self,
-		number: Option<ListOrValue<NumberOrHex>>,
-	) -> Result<ListOrValue<Option<Block::Hash>>, Error> {
+	fn block_hash(&self, number: Option<ListOrValue<NumberOrHex>>) -> JsonRpcResult<ListOrValue<Option<Block::Hash>>> {
 		match number {
-			None => self.backend.block_hash(None).map(ListOrValue::Value),
+			None => self.backend.block_hash(None).map(ListOrValue::Value).map_err(Into::into),
 			Some(ListOrValue::Value(number)) =>
-				self.backend.block_hash(Some(number)).map(ListOrValue::Value),
+				self.backend.block_hash(Some(number)).map(ListOrValue::Value).map_err(Into::into),
 			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(
 				list.into_iter()
 					.map(|number| self.backend.block_hash(Some(number)))
@@ -248,9 +186,20 @@ where
 		}
 	}
 
-	/// TODO: document this
-	fn finalized_head(&self) -> Result<Block::Hash, Error> {
-		self.backend.finalized_head()
+	fn finalized_head(&self) -> JsonRpcResult<Block::Hash> {
+		self.backend.finalized_head().map_err(Into::into)
+	}
+
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
+		let _ = self.backend.subscribe_all_heads(sink);
+	}
+
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
+		let _ = self.backend.subscribe_new_heads(sink);
+	}
+
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
+		let _ = self.backend.subscribe_finalized_heads(sink);
 	}
 }
 
