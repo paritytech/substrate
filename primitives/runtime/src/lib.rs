@@ -172,14 +172,16 @@ pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
+	/// State version to use with storage.
+	fn state_version(&self) -> StateVersion;
 	/// Build the storage out of this builder.
-	fn build_storage(&self, state_version: StateVersion) -> Result<sp_core::storage::Storage, String> {
+	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
 		let mut storage = Default::default();
-		self.assimilate_storage(&mut storage, state_version)?;
+		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage, state_version: StateVersion) -> Result<(), String>;
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String>;
 }
 
 /// Something that can build the genesis storage of a module.
@@ -194,10 +196,10 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for sp_core::storage::Storage {
-	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage, _state_version: StateVersion) -> Result<(), String> {
-		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.children_default.iter() {
+impl BuildStorage for (sp_core::storage::Storage, StateVersion) {
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
+		storage.top.extend(self.0.top.iter().map(|(k, v)| (k.clone(), v.clone())));
+		for (k, other_map) in self.0.children_default.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -214,7 +216,7 @@ impl BuildStorage for sp_core::storage::Storage {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
-	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage, _: StateVersion) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }

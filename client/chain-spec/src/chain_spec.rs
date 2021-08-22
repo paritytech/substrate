@@ -99,7 +99,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
-	fn build_storage(&self, state_version: StateVersion) -> Result<Storage, String> {
+	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(state_version),
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
@@ -121,7 +121,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 		}
 	}
 
-	fn assimilate_storage(&self, _: &mut Storage, _: StateVersion) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -280,6 +280,16 @@ impl<G, E> ChainSpec<G, E> {
 	fn state_versions(&self) -> &Vec<(String, StateVersion)> {
 		&self.client_spec.state_versions
 	}
+
+	/// Return genesis state version.
+	fn genesis_state_version(&self) -> StateVersion {
+		use std::str::FromStr;
+		let state_version = self.state_versions().get(0)
+			// This is incorrect (can have number representation not compatible with u64
+			.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
+			.and_then(|(n, s)| (n == 0).then(|| s.clone()))
+			.unwrap_or_default();
+	}
 }
 
 impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
@@ -311,14 +321,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<JsonContainer<G, E>, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				use std::str::FromStr;
-				let state_version = self.state_versions().get(0)
-					// This is incorrect (can have number representation not compatible with u64
-					.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
-					.and_then(|(n, s)| (n == 0).then(|| s.clone()))
-					.unwrap_or_default();
-				// TODO remove param from build storage and make it part of caller.
-				let storage = g.build_storage(state_version)?;
+				let storage = g.build_storage()?;
 				let top =
 					storage.top.into_iter().map(|(k, v)| (StorageKey(k), StorageData(v))).collect();
 				let children_default = storage

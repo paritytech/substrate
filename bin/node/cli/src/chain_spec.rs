@@ -490,7 +490,6 @@ pub(crate) mod tests {
 	#[test]
 	fn test_create_development_chain_spec() {
 		development_config().build_storage(Default::default()).unwrap();
-	
 	}
 
 	#[test]
