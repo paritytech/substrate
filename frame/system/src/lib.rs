@@ -138,13 +138,13 @@ pub type ConsumedWeight = PerDispatchClass<Weight>;
 pub use pallet::*;
 
 /// Do something when we should be setting the code.
-pub trait SetCode {
+pub trait SetCode<T: Config> {
 	/// Set the code to the given blob.
-	fn set_code<T: Config>(code: Vec<u8>) -> DispatchResult;
+	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
-impl SetCode for () {
-	fn set_code<T: Config>(code: Vec<u8>) -> DispatchResult {
+impl<T: Config> SetCode<T> for () {
+	fn set_code(code: Vec<u8>) -> DispatchResult {
 		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
 	}
@@ -298,7 +298,7 @@ pub mod pallet {
 
 		/// What to do if the user wants the code set to something. Just use `()` unless you are in
 		/// cumulus.
-		type OnSetCode: SetCode;
+		type OnSetCode: SetCode<Self>;
 	}
 
 	#[pallet::pallet]
@@ -376,7 +376,7 @@ pub mod pallet {
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
-			T::OnSetCode::set_code::<T>(code)?;
+			T::OnSetCode::set_code(code)?;
 			Ok(().into())
 		}
 
@@ -395,7 +395,7 @@ pub mod pallet {
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			T::OnSetCode::set_code::<T>(code)?;
+			T::OnSetCode::set_code(code)?;
 			Ok(().into())
 		}
 
