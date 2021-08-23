@@ -7044,8 +7044,8 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "tokio",
  "sp-version",
+ "tokio",
 ]
 
 [[package]]
@@ -11122,7 +11122,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "indexmap",
  "libc",
- "memoffset 0.6.1",
+ "memoffset",
  "more-asserts",
  "region",
  "serde",
