@@ -1463,11 +1463,13 @@ macro_rules! implement_checked_arithmetic {
 		}
 
 		impl CheckedAdd for $name {
+			// For PerU16, $max == u16::MAX, so we need this `allow`.
+			#[allow(unused_comparisons)]
 			#[inline]
 			fn checked_add(&self, rhs: &Self) -> Option<Self> {
 				self.deconstruct()
 					.checked_add(rhs.deconstruct())
-					.map(|inner| if inner >= $max { None } else { Some($name::from_parts(inner)) })
+					.map(|inner| if inner > $max { None } else { Some($name::from_parts(inner)) })
 					.flatten()
 			}
 		}
@@ -1524,6 +1526,10 @@ macro_rules! implement_checked_arithmetic {
 				);
 				assert_eq!(
 					$name::from_parts(<$type>::MAX).checked_add(&$name::from_parts(<$type>::MAX)),
+					None
+				);
+				assert_eq!(
+					$name::from_parts($max).checked_add(&$name::from_parts(1)),
 					None
 				);
 			}
