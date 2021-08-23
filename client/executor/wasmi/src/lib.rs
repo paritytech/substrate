@@ -24,6 +24,7 @@ use sc_executor_common::{
 	error::{Error, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
 	sandbox,
+	util::MemoryTransfer,
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_core::sandbox as sandbox_primitives;
@@ -31,7 +32,7 @@ use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{
 	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
 };
-use std::{cell::RefCell, str, sync::Arc};
+use std::{cell::RefCell, rc::Rc, str, sync::Arc};
 use wasmi::{
 	memory_units::Pages,
 	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
@@ -39,38 +40,45 @@ use wasmi::{
 	TableRef,
 };
 
-struct FunctionExecutor<'a> {
-	sandbox_store: sandbox::Store<wasmi::FuncRef>,
-	heap: sc_allocator::FreeingBumpHeapAllocator,
-	memory: MemoryRef,
-	table: Option<TableRef>,
-	host_functions: &'a [&'static dyn Function],
-	allow_missing_func_imports: bool,
-	missing_functions: &'a [String],
+#[derive(Clone)]
+struct FunctionExecutor {
+	inner: Rc<Inner>,
 }
 
-impl<'a> FunctionExecutor<'a> {
+struct Inner {
+	sandbox_store: RefCell<sandbox::Store<wasmi::FuncRef>>,
+	heap: RefCell<sc_allocator::FreeingBumpHeapAllocator>,
+	memory: MemoryRef,
+	table: Option<TableRef>,
+	host_functions: Arc<Vec<&'static dyn Function>>,
+	allow_missing_func_imports: bool,
+	missing_functions: Arc<Vec<String>>,
+}
+
+impl FunctionExecutor {
 	fn new(
 		m: MemoryRef,
 		heap_base: u32,
 		t: Option<TableRef>,
-		host_functions: &'a [&'static dyn Function],
+		host_functions: Arc<Vec<&'static dyn Function>>,
 		allow_missing_func_imports: bool,
-		missing_functions: &'a [String],
+		missing_functions: Arc<Vec<String>>,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
-			sandbox_store: sandbox::Store::new(),
-			heap: sc_allocator::FreeingBumpHeapAllocator::new(heap_base),
-			memory: m,
-			table: t,
-			host_functions,
-			allow_missing_func_imports,
-			missing_functions,
+			inner: Rc::new(Inner {
+				sandbox_store: RefCell::new(sandbox::Store::new(sandbox::SandboxBackend::Wasmi)),
+				heap: RefCell::new(sc_allocator::FreeingBumpHeapAllocator::new(heap_base)),
+				memory: m,
+				table: t,
+				host_functions,
+				allow_missing_func_imports,
+				missing_functions,
+			}),
 		})
 	}
 }
 
-impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
+impl sandbox::SandboxCapabilities for FunctionExecutor {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
 	fn invoke(
@@ -99,24 +107,26 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	}
 }
 
-impl<'a> FunctionContext for FunctionExecutor<'a> {
+impl FunctionContext for FunctionExecutor {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
-		self.memory.get_into(address.into(), dest).map_err(|e| e.to_string())
+		self.inner.memory.get_into(address.into(), dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> WResult<()> {
-		self.memory.set(address.into(), data).map_err(|e| e.to_string())
+		self.inner.memory.set(address.into(), data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		let heap = &mut self.heap;
-		self.memory
+		let heap = &mut self.inner.heap.borrow_mut();
+		self.inner
+			.memory
 			.with_direct_access_mut(|mem| heap.allocate(mem, size).map_err(|e| e.to_string()))
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		let heap = &mut self.heap;
-		self.memory
+		let heap = &mut self.inner.heap.borrow_mut();
+		self.inner
+			.memory
 			.with_direct_access_mut(|mem| heap.deallocate(mem, ptr).map_err(|e| e.to_string()))
 	}
 
@@ -125,7 +135,7 @@ impl<'a> FunctionContext for FunctionExecutor<'a> {
 	}
 }
 
-impl<'a> Sandbox for FunctionExecutor<'a> {
+impl Sandbox for FunctionExecutor {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -133,18 +143,21 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
-		match MemoryInstance::transfer(
-			&sandboxed_memory,
-			offset as usize,
-			&self.memory,
-			buf_ptr.into(),
-			buf_len as usize,
-		) {
-			Ok(()) => Ok(sandbox_primitives::ERR_OK),
-			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		let len = buf_len as usize;
+
+		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
+
+		if let Err(_) = self.inner.memory.set(buf_ptr.into(), &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_set(
@@ -154,26 +167,37 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
-		match MemoryInstance::transfer(
-			&self.memory,
-			val_ptr.into(),
-			&sandboxed_memory,
-			offset as usize,
-			val_len as usize,
-		) {
-			Ok(()) => Ok(sandbox_primitives::ERR_OK),
-			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		let len = val_len as usize;
+
+		let buffer = match self.inner.memory.get(val_ptr.into(), len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
+
+		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
-		self.sandbox_store.memory_teardown(memory_id).map_err(|e| e.to_string())
+		self.inner
+			.sandbox_store
+			.borrow_mut()
+			.memory_teardown(memory_id)
+			.map_err(|e| e.to_string())
 	}
 
 	fn memory_new(&mut self, initial: u32, maximum: u32) -> WResult<MemoryId> {
-		self.sandbox_store.new_memory(initial, maximum).map_err(|e| e.to_string())
+		self.inner
+			.sandbox_store
+			.borrow_mut()
+			.new_memory(initial, maximum)
+			.map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -194,8 +218,15 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self.sandbox_store.instance(instance_id).map_err(|e| e.to_string())?;
-		let result = instance.invoke(export_name, &args, self, state);
+		let instance = self
+			.inner
+			.sandbox_store
+			.borrow()
+			.instance(instance_id)
+			.map_err(|e| e.to_string())?;
+
+		let result = EXECUTOR
+			.set(self, || instance.invoke::<_, CapsHolder, ThunkHolder>(export_name, &args, state));
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -214,7 +245,11 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_store.instance_teardown(instance_id).map_err(|e| e.to_string())
+		self.inner
+			.sandbox_store
+			.borrow_mut()
+			.instance_teardown(instance_id)
+			.map_err(|e| e.to_string())
 	}
 
 	fn instance_new(
@@ -227,6 +262,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		// Extract a dispatch thunk from instance's table by the specified index.
 		let dispatch_thunk = {
 			let table = self
+				.inner
 				.table
 				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
@@ -236,19 +272,26 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 				.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
 		};
 
-		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {
+		let guest_env = match sandbox::GuestEnvironment::decode(
+			&*self.inner.sandbox_store.borrow(),
+			raw_env_def,
+		) {
 			Ok(guest_env) => guest_env,
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
-		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
-				.map(|i| i.register(&mut self.sandbox_store))
-			{
-				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
-			};
+		let store = &mut *self.inner.sandbox_store.borrow_mut();
+		let result = EXECUTOR.set(self, || {
+			DISPATCH_THUNK.set(&dispatch_thunk, || {
+				store.instantiate::<_, CapsHolder, ThunkHolder>(wasm, guest_env, state)
+			})
+		});
+
+		let instance_idx_or_err_code: u32 = match result.map(|i| i.register(store)) {
+			Ok(instance_idx) => instance_idx,
+			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+			Err(_) => sandbox_primitives::ERR_MODULE,
+		};
 
 		Ok(instance_idx_or_err_code as u32)
 	}
@@ -258,10 +301,54 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		instance_idx: u32,
 		name: &str,
 	) -> WResult<Option<sp_wasm_interface::Value>> {
-		self.sandbox_store
+		self.inner
+			.sandbox_store
+			.borrow()
 			.instance(instance_idx)
 			.map(|i| i.get_global_val(name))
 			.map_err(|e| e.to_string())
+	}
+}
+
+/// Wasmi specific implementation of `SandboxCapabilitiesHolder` that provides
+/// sandbox with a scoped thread local access to a function executor.
+/// This is a way to calm down the borrow checker since host function closures
+/// require exclusive access to it.
+struct CapsHolder;
+
+scoped_tls::scoped_thread_local!(static EXECUTOR: FunctionExecutor);
+
+impl sandbox::SandboxCapabilitiesHolder for CapsHolder {
+	type SupervisorFuncRef = wasmi::FuncRef;
+	type SC = FunctionExecutor;
+
+	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
+		assert!(EXECUTOR.is_set(), "wasmi executor is not set");
+		EXECUTOR.with(|executor| f(&mut executor.clone()))
+	}
+}
+
+/// Wasmi specific implementation of `DispatchThunkHolder` that provides
+/// sandbox with a scoped thread local access to a dispatch thunk.
+/// This is a way to calm down the borrow checker since host function closures
+/// require exclusive access to it.
+struct ThunkHolder;
+
+scoped_tls::scoped_thread_local!(static DISPATCH_THUNK: wasmi::FuncRef);
+
+impl sandbox::DispatchThunkHolder for ThunkHolder {
+	type DispatchThunk = wasmi::FuncRef;
+
+	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R {
+		assert!(DISPATCH_THUNK.is_set(), "dispatch thunk is not set");
+		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
+	}
+
+	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R
+	where
+		F: FnOnce() -> R,
+	{
+		DISPATCH_THUNK.set(s, f)
 	}
 }
 
@@ -375,7 +462,7 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	}
 }
 
-impl<'a> wasmi::Externals for FunctionExecutor<'a> {
+impl wasmi::Externals for FunctionExecutor {
 	fn invoke_index(
 		&mut self,
 		index: usize,
@@ -383,19 +470,19 @@ impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 	) -> Result<Option<wasmi::RuntimeValue>, wasmi::Trap> {
 		let mut args = args.as_ref().iter().copied().map(Into::into);
 
-		if let Some(function) = self.host_functions.get(index) {
+		if let Some(function) = self.inner.host_functions.clone().get(index) {
 			function
 				.execute(self, &mut args)
 				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
-		} else if self.allow_missing_func_imports &&
-			index >= self.host_functions.len() &&
-			index < self.host_functions.len() + self.missing_functions.len()
+		} else if self.inner.allow_missing_func_imports &&
+			index >= self.inner.host_functions.len() &&
+			index < self.inner.host_functions.len() + self.inner.missing_functions.len()
 		{
 			Err(Error::from(format!(
 				"Function `{}` is only a stub. Calling a stub is not allowed.",
-				self.missing_functions[index - self.host_functions.len()],
+				self.inner.missing_functions[index - self.inner.host_functions.len()],
 			))
 			.into())
 		} else {
@@ -435,9 +522,9 @@ fn call_in_wasm_module(
 	memory: &MemoryRef,
 	method: InvokeMethod,
 	data: &[u8],
-	host_functions: &[&'static dyn Function],
+	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
-	missing_functions: &Vec<String>,
+	missing_functions: Arc<Vec<String>>,
 ) -> Result<Vec<u8>, Error> {
 	// Initialize FunctionExecutor.
 	let table: Option<TableRef> = module_instance
@@ -628,7 +715,7 @@ impl WasmModule for WasmiRuntime {
 			data_segments_snapshot: self.data_segments_snapshot.clone(),
 			host_functions: self.host_functions.clone(),
 			allow_missing_func_imports: self.allow_missing_func_imports,
-			missing_functions,
+			missing_functions: Arc::new(missing_functions),
 		}))
 	}
 }
@@ -684,7 +771,7 @@ pub struct WasmiInstance {
 	/// These stubs will error when the wasm blob trie to call them.
 	allow_missing_func_imports: bool,
 	/// List of missing functions detected during function resolution
-	missing_functions: Vec<String>,
+	missing_functions: Arc<Vec<String>>,
 }
 
 // This is safe because `WasmiInstance` does not leak any references to `self.memory` and
@@ -717,9 +804,9 @@ impl WasmInstance for WasmiInstance {
 			&self.memory,
 			method,
 			data,
-			self.host_functions.as_ref(),
+			self.host_functions.clone(),
 			self.allow_missing_func_imports,
-			self.missing_functions.as_ref(),
+			self.missing_functions.clone(),
 		)
 	}
 

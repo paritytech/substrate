@@ -343,7 +343,17 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
-	pub fn finalize_signed_phase() -> (bool, Weight) {
+	///
+	/// This is a *self-weighing* function, it automatically registers its weight internally when
+	/// being called.
+	pub fn finalize_signed_phase() -> bool {
+		let (weight, found_solution) = Self::finalize_signed_phase_internal();
+		Self::register_weight(weight);
+		found_solution
+	}
+
+	/// The guts of [`finalized_signed_phase`], that does everything except registering its weight.
+	pub(crate) fn finalize_signed_phase_internal() -> (Weight, bool) {
 		let mut all_submissions = Self::signed_submissions();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
@@ -402,9 +412,9 @@ impl<T: Config> Pallet<T> {
 			found_solution,
 			discarded
 		);
-		(found_solution, weight)
-	}
 
+		(weight, found_solution)
+	}
 	/// Helper function for the case where a solution is accepted in the signed phase.
 	///
 	/// Extracted to facilitate with weight calculation.
@@ -568,7 +578,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 		})
 	}
@@ -589,7 +599,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
-			assert!(!MultiPhase::finalize_signed_phase().0);
+			assert!(!MultiPhase::finalize_signed_phase());
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
 		})
@@ -615,7 +625,7 @@ mod tests {
 			assert_eq!(balances(&999), (95, 5));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -806,7 +816,7 @@ mod tests {
 			);
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -906,7 +916,7 @@ mod tests {
 				roll_to(block_number);
 
 				assert_eq!(SignedSubmissions::<Runtime>::decode_len().unwrap_or_default(), 0);
-				assert_storage_noop!(MultiPhase::finalize_signed_phase());
+				assert_storage_noop!(MultiPhase::finalize_signed_phase_internal());
 			}
 		})
 	}
@@ -923,7 +933,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// calling it again doesn't change anything
 			assert_storage_noop!(MultiPhase::finalize_signed_phase());
