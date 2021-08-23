@@ -779,7 +779,7 @@ mod tests {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call =
-				Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: witness() };
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -850,7 +850,7 @@ mod tests {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call =
-				Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: witness() };
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -888,7 +888,7 @@ mod tests {
 
 			let raw = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call =
-				Call::submit_unsigned { solution: Box::new(raw.clone()), witness: witness() };
+				Call::submit_unsigned { raw_solution: Box::new(raw.clone()), witness: witness() };
 			assert_eq!(raw.solution.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -945,7 +945,7 @@ mod tests {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 			let call =
-				Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: witness() };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -967,7 +967,7 @@ mod tests {
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
 			let call =
-				Call::submit_unsigned { solution: Box::new(solution.clone()), correct_witness };
+				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), correct_witness };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
