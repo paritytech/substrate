@@ -1304,21 +1304,12 @@ pub fn show_benchmark_debug_info(
 ///
 /// At the end of `dispatch_benchmark`, you should return this batches object.
 ///
-/// In the case where you have multiple instances of a pallet that you need to separately benchmark,
-/// the name of your module struct will be used as a suffix to your outputted weight file. For
-/// example:
+/// In the case where you have multiple instances of a pallet that you need to benchmark, then you
+/// must use unique names. For example:
 ///
 /// ```ignore
-/// add_benchmark!(params, batches, pallet_balances, Balances); // pallet_balances.rs
-/// add_benchmark!(params, batches, pallet_collective, Council); // pallet_collective_council.rs
-/// add_benchmark!(params, batches, pallet_collective, TechnicalCommittee); // pallet_collective_technical_committee.rs
-/// ```
-///
-/// You can manipulate this suffixed string by using a type alias if needed. For example:
-///
-/// ```ignore
-/// type Council2 = TechnicalCommittee;
-/// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
+/// add_benchmark!(params, batches, pallet_collective_council, Council); // instance of pallet_collective
+/// add_benchmark!(params, batches, pallet_collective_technical_committee, TechnicalCommittee); // instance of pallet_collective
 /// ```
 
 #[macro_export]
@@ -1405,6 +1396,13 @@ macro_rules! list_benchmark {
 			instance: instance_string.to_vec(),
 			benchmarks: benchmarks.to_vec(),
 		};
+		if $list.iter().any(|b| b.pallet == pallet_string) {
+			panic!(
+				"Invalid list of benchmarks: conflicting pallet names `{}`, the pallet name is used
+				by multiple benchmarks, each pallet name must be unique",
+				pallet_string,
+			);
+		}
 		$list.push(pallet_benchmarks)
 	)
 }
