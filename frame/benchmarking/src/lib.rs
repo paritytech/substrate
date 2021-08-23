@@ -1308,8 +1308,10 @@ pub fn show_benchmark_debug_info(
 /// must use unique names. For example:
 ///
 /// ```ignore
-/// add_benchmark!(params, batches, pallet_collective_council, Council); // instance of pallet_collective
-/// add_benchmark!(params, batches, pallet_collective_technical_committee, TechnicalCommittee); // instance of pallet_collective
+/// // Instance of pallet collective.
+/// add_benchmark!(params, batches, pallet_collective_council, Council);
+/// // Another instance of pallet collective.
+/// add_benchmark!(params, batches, pallet_collective_technical_committee, TechnicalCommittee);
 /// ```
 
 #[macro_export]
