@@ -255,6 +255,7 @@ impl<G, E> ChainSpec<G, E> {
 		protocol_id: Option<&str>,
 		properties: Option<Properties>,
 		extensions: E,
+		state_version: StateVersion,
 	) -> Self {
 		let client_spec = ClientSpec {
 			name: name.to_owned(),
@@ -268,7 +269,7 @@ impl<G, E> ChainSpec<G, E> {
 			consensus_engine: (),
 			genesis: Default::default(),
 			code_substitutes: HashMap::new(),
-			state_versions: vec![("0".to_string(), StateVersion::default())],
+			state_versions: vec![("0".to_string(), state_version)],
 		};
 
 		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }

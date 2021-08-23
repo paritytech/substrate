@@ -63,32 +63,6 @@ pub fn expand_outer_config(
 		#types
 
 		#[cfg(any(feature = "std", test))]
-		pub struct GenesisConfigWithStateVersion {
-			pub genesis_config: GenesisConfig,
-			pub genesis_state_version: #scrate::sp_runtime::StateVersion,
-		}
-
-		#[cfg(any(feature = "std", test))]
-		impl #scrate::sp_runtime::BuildStorage for GenesisConfigWithStateVersion {
-			fn state_version(&self) -> #scrate::sp_runtime::StateVersion {
-				self.genesis_state_version
-			}
-
-			fn assimilate_storage(
-				&self,
-				storage: &mut #scrate::sp_runtime::Storage,
-			) -> std::result::Result<(), String> {
-				#build_storage_calls
-
-				#scrate::BasicExternalities::execute_with_storage_and_state(storage, self.genesis_state_version, || {
-					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
-				});
-
-				Ok(())
-			}
-		}
-
-		#[cfg(any(feature = "std", test))]
 		use #scrate::serde as __genesis_config_serde_import__;
 		#[cfg(any(feature = "std", test))]
 		#[derive(#scrate::serde::Serialize, #scrate::serde::Deserialize, Default)]
@@ -97,6 +71,26 @@ pub fn expand_outer_config(
 		#[serde(crate = "__genesis_config_serde_import__")]
 		pub struct GenesisConfig {
 			#fields
+		}
+
+		#[cfg(any(feature = "std", test))]
+		impl #scrate::sp_runtime::BuildStorage for GenesisConfig {
+			fn state_version(&self) -> #scrate::sp_runtime::StateVersion {
+				unimplemented!("Genesis build storage do not support state version");
+			}
+
+			fn assimilate_storage(
+				&self,
+				storage: &mut #scrate::sp_runtime::Storage,
+			) -> std::result::Result<(), String> {
+				#build_storage_calls
+
+				#scrate::BasicExternalities::execute_with_storage(storage, || {
+					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
+				});
+
+				Ok(())
+			}
 		}
 	}
 }
@@ -140,6 +134,6 @@ fn expand_config_build_storage_call(
 
 	quote! {
 		#scrate::sp_runtime::BuildModuleGenesisStorage::
-			<#runtime, #instance>::build_module_genesis_storage(&self.genesis_config.#field_name, storage)?;
+			<#runtime, #instance>::build_module_genesis_storage(&self.#field_name, storage)?;
 	}
 }

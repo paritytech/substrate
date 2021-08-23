@@ -156,6 +156,7 @@ fn generate_chain_spec(
 		None,
 		None,
 		Default::default(),
+		Default::default(),
 	);
 
 	chain_spec.as_json(false).map_err(|err| err)

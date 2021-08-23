@@ -21,7 +21,7 @@ use super::{system, wasm_binary_unwrap, AccountId, AuthorityId};
 use codec::{Encode, Joiner, KeyedVec};
 use sc_service::client::genesis;
 use sp_core::{
-	map, state_version::StateVersion,
+	map,
 	storage::{well_known_keys, Storage},
 	ChangesTrieConfiguration,
 };
@@ -37,7 +37,6 @@ pub struct GenesisConfig {
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: Storage,
-	state_version: StateVersion, // TODO check if in use
 }
 
 impl GenesisConfig {
@@ -48,7 +47,6 @@ impl GenesisConfig {
 		balance: u64,
 		heap_pages_override: Option<u64>,
 		extra_storage: Storage,
-		state_version: StateVersion,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config,
@@ -56,7 +54,6 @@ impl GenesisConfig {
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
-			state_version,
 		}
 	}
 

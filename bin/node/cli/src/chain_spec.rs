@@ -197,6 +197,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		None,
 		None,
 		Default::default(),
+		Default::default(),
 	)
 }
 
@@ -387,6 +388,7 @@ pub fn development_config() -> ChainSpec {
 		None,
 		None,
 		Default::default(),
+		Default::default(),
 	)
 }
 
@@ -410,6 +412,7 @@ pub fn local_testnet_config() -> ChainSpec {
 		None,
 		None,
 		None,
+		Default::default(),
 		Default::default(),
 	)
 }

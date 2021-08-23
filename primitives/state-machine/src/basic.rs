@@ -70,7 +70,7 @@ impl BasicExternalities {
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
 	///
-	/// Do not support runtime transaction.
+	/// Do not support runtime transaction. TODO useless??
 	pub fn execute_with_storage_and_state<R>(
 		storage: &mut sp_core::storage::Storage,
 		state_version: StateVersion,

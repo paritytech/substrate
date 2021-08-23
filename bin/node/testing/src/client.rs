@@ -48,8 +48,7 @@ pub struct GenesisParameters {
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		let state_version = Default::default();
-		crate::genesis::config(self.support_changes_trie, None).build_storage(state_version).unwrap()
+		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
 	}
 }
 
