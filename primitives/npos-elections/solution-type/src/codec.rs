@@ -179,7 +179,7 @@ fn scale_info_impl(
 	count: usize,
 ) -> TokenStream2 {
 	let scale_info_impl_single = {
-		let name = format!("{}", field_name_for(1));
+		let name = format!("{}", vote_field(1));
 		quote! {
 			.field(|f|
 				f.ty::<_npos::sp_std::prelude::Vec<
@@ -191,7 +191,7 @@ fn scale_info_impl(
 	};
 
 	let scale_info_impl_double = {
-		let name = format!("{}", field_name_for(2));
+		let name = format!("{}", vote_field(2));
 		quote! {
 			.field(|f|
 				f.ty::<_npos::sp_std::prelude::Vec<(
@@ -206,7 +206,7 @@ fn scale_info_impl(
 
 	let scale_info_impl_rest = (3..=count)
 		.map(|c| {
-			let name = format!("{}", field_name_for(c));
+			let name = format!("{}", vote_field(c));
 			quote! {
 				.field(|f|
 					f.ty::<_npos::sp_std::prelude::Vec<(
