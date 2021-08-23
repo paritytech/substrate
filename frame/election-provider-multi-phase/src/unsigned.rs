@@ -155,9 +155,9 @@ impl<T: Config> Pallet<T> {
 		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned { solution, .. } = &call {
+				if let Call::submit_unsigned { raw_solution, .. } = &call {
 					// prevent errors arising from state changes in a forkful chain
-					Self::basic_checks(solution, "restored")?;
+					Self::basic_checks(raw_solution, "restored")?;
 					Ok(call)
 				} else {
 					Err(MinerError::SolutionCallInvalid)
@@ -208,9 +208,9 @@ impl<T: Config> Pallet<T> {
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (solution, witness) = Self::mine_and_check(iters)?;
 
-		let score = raw_solution.score.clone();
+		let score = solution.score.clone();
 		let call: Call<T> =
-			Call::submit_unsigned { solution: Box::new(raw_solution), witness }.into();
+			Call::submit_unsigned { raw_solution: Box::new(solution), witness }.into();
 
 		log!(
 			debug,

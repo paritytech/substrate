@@ -977,7 +977,7 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call = Call::submit { solution: raw_solution.clone(), num_signed_submissions };
+				let call = Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
@@ -1069,14 +1069,14 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned { solution, .. } = call {
+			if let Call::submit_unsigned { raw_solution, .. } = call {
 				// Discard solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => return InvalidTransaction::Call.into(),
 				}
 
-				let _ = Self::unsigned_pre_dispatch_checks(solution)
+				let _ = Self::unsigned_pre_dispatch_checks(raw_solution)
 					.map_err(|err| {
 						log!(debug, "unsigned transaction validation failed due to {:?}", err);
 						err
@@ -1087,11 +1087,11 @@ pub mod pallet {
 					// The higher the score[0], the better a solution is.
 					.priority(
 						T::MinerTxPriority::get()
-							.saturating_add(solution.score[0].saturated_into()),
+							.saturating_add(raw_solution.score[0].saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
-					.and_provides(solution.round)
+					.and_provides(raw_solution.round)
 					// Transaction should stay in the pool for the duration of the unsigned phase.
 					.longevity(T::UnsignedPhase::get().saturated_into::<u64>())
 					// We don't propagate this. This can never be validated at a remote node.
@@ -1103,8 +1103,8 @@ pub mod pallet {
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::submit_unsigned { solution, .. } = call {
-				Self::unsigned_pre_dispatch_checks(solution)
+			if let Call::submit_unsigned { raw_solution, .. } = call {
+				Self::unsigned_pre_dispatch_checks(raw_solution)
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
