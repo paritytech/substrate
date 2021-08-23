@@ -19,8 +19,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{
-	BaseArithmetic, Bounded, CheckedAdd, CheckedSub, One, SaturatedConversion, Saturating,
-	UniqueSaturatedInto, Unsigned, Zero,
+	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
+	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
 use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
@@ -820,6 +820,18 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl CheckedMul for $name {
+			#[inline]
+			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
+				let a = self.0 as $upper_type;
+				let b = rhs.0 as $upper_type;
+				let m = <$upper_type>::from($max);
+				let d = a.checked_mul(b)?;
+				let parts = d.checked_div(m)?;
+				Some(Self::from_parts(parts as $type))
+			}
+		}
+
 
 		#[cfg(test)]
 		mod $test_mod {
@@ -1485,6 +1497,26 @@ macro_rules! implement_per_thing {
 				assert_eq!(
 					$name::from_parts(0).saturating_sub($name::from_parts(1)),
 					$name::from_parts(0)
+				);
+			}
+
+			#[test]
+			fn test_basic_checked_mul() {
+				assert_eq!(
+					$name::from_parts($max).checked_mul(&$name::from_parts($max)),
+					Some($name::from_percent(100))
+				);
+				assert_eq!(
+					$name::from_percent(100).checked_mul(&$name::from_percent(100)),
+					Some($name::from_percent(100))
+				);
+				assert_eq!(
+					$name::from_percent(50).checked_mul(&$name::from_percent(26)),
+					Some($name::from_percent(13))
+				);
+				assert_eq!(
+					$name::from_percent(0).checked_mul(&$name::from_percent(0)),
+					Some($name::from_percent(0))
 				);
 			}
 		}
