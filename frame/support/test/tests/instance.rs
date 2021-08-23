@@ -360,7 +360,7 @@ fn storage_instance_independence() {
 		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
 	// 12 storage values and threshold.
-	assert_eq!(storage.top.len(), 13);
+	assert_eq!(storage.top.len(), 12);
 }
 
 #[test]
