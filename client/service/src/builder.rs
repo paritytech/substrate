@@ -1026,7 +1026,6 @@ where
 	// future using `spawn_blocking`.
 	spawn_handle.spawn_blocking("network-worker", async move {
 		if network_start_rx.await.is_err() {
-			debug_assert!(false);
 			log::warn!(
 				"The NetworkStart returned as part of `build_network` has been silently dropped"
 			);
