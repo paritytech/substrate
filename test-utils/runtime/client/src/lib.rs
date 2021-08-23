@@ -51,8 +51,8 @@ pub mod prelude {
 	};
 	// Client structs
 	pub use super::{
-		Backend, Executor, LightBackend, LightExecutor, LocalExecutor, NativeExecutor, TestClient,
-		TestClientBuilder, WasmExecutionMethod,
+		Backend, ExecutorDispatch, LightBackend, LightExecutor, LocalExecutorDispatch,
+		NativeElseWasmExecutor, TestClient, TestClientBuilder, WasmExecutionMethod,
 	};
 	// Keyring
 	pub use super::{AccountKeyring, Sr25519Keyring};
@@ -60,9 +60,9 @@ pub mod prelude {
 
 /// A unit struct which implements `NativeExecutionDispatch` feeding in the
 /// hard-coded runtime.
-pub struct LocalExecutor;
+pub struct LocalExecutorDispatch;
 
-impl sc_executor::NativeExecutionDispatch for LocalExecutor {
+impl sc_executor::NativeExecutionDispatch for LocalExecutorDispatch {
 	type ExtendHostFunctions = ();
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
@@ -78,10 +78,10 @@ impl sc_executor::NativeExecutionDispatch for LocalExecutor {
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
 
 /// Test client executor.
-pub type Executor = client::LocalCallExecutor<
+pub type ExecutorDispatch = client::LocalCallExecutor<
 	substrate_test_runtime::Block,
 	Backend,
-	NativeExecutor<LocalExecutor>,
+	NativeElseWasmExecutor<LocalExecutorDispatch>,
 >;
 
 /// Test client light database backend.
@@ -96,7 +96,7 @@ pub type LightExecutor = sc_light::GenesisCallExecutor<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>,
 		>,
-		NativeExecutor<LocalExecutor>,
+		NativeElseWasmExecutor<LocalExecutorDispatch>,
 	>,
 >;
 
@@ -174,13 +174,13 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
 	GenesisParameters,
 >;
 
-/// Test client type with `LocalExecutor` and generic Backend.
+/// Test client type with `LocalExecutorDispatch` and generic Backend.
 pub type Client<B> = client::Client<
 	B,
 	client::LocalCallExecutor<
 		substrate_test_runtime::Block,
 		B,
-		sc_executor::NativeExecutor<LocalExecutor>,
+		sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 	>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
@@ -195,7 +195,7 @@ pub trait DefaultTestClientBuilderExt: Sized {
 	fn new() -> Self;
 }
 
-impl DefaultTestClientBuilderExt for TestClientBuilder<Executor, Backend> {
+impl DefaultTestClientBuilderExt for TestClientBuilder<ExecutorDispatch, Backend> {
 	fn new() -> Self {
 		Self::with_default_backend()
 	}
@@ -277,7 +277,7 @@ impl<B> TestClientBuilderExt<B>
 		client::LocalCallExecutor<
 			substrate_test_runtime::Block,
 			B,
-			sc_executor::NativeExecutor<LocalExecutor>,
+			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 		>,
 		B,
 	> where
@@ -436,6 +436,6 @@ pub fn new_light_fetcher() -> LightFetcher {
 }
 
 /// Create a new native executor.
-pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+pub fn new_native_executor() -> sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch> {
+	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }
