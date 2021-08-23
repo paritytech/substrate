@@ -72,6 +72,8 @@ impl std::fmt::Display for BenchmarkParameter {
 pub struct BenchmarkBatch {
 	/// The pallet containing this benchmark.
 	pub pallet: Vec<u8>,
+	/// The name of the instance of the pallet containing this benchmark.
+	pub pallet_instance_name: Vec<u8>,
 	/// The instance of this pallet being benchmarked.
 	pub instance: Vec<u8>,
 	/// The extrinsic (or benchmark name) of this benchmark.
