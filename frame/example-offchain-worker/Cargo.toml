@@ -1,6 +1,6 @@
 [package]
 name = "pallet-example-offchain-worker"
-version = "3.0.0-dev"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Unlicense"

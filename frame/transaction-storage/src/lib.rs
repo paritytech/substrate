@@ -169,9 +169,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is `MaxTransactionSize`.
-		/// Data will be removed after `STORAGE_PERIOD` blocks, unless `renew` is called.
-		/// # <weight>
+		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is
+		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
+		/// is called. # <weight>
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
 		/// Additionally contains a DB write.
 		/// # </weight>
@@ -258,7 +258,8 @@ pub mod pallet {
 		/// Check storage proof for block number `block_number() - StoragePeriod`.
 		/// If such block does not exist the proof is expected to be `None`.
 		/// # <weight>
-		/// - Linear w.r.t the number of indexed transactions in the proved block for random probing.
+		/// - Linear w.r.t the number of indexed transactions in the proved block for random
+		///   probing.
 		/// There's a DB read for each transaction.
 		/// Here we assume a maximum of 100 probed transactions.
 		/// # </weight>

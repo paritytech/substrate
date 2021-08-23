@@ -33,7 +33,7 @@ use frame_support::{
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
-	traits::{Currency, Filter, OnInitialize, ReservableCurrency},
+	traits::{Contains, Currency, OnInitialize, ReservableCurrency},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
@@ -197,7 +197,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
@@ -282,8 +282,8 @@ impl TestFilter {
 	}
 }
 
-impl Filter<Call> for TestFilter {
-	fn filter(call: &Call) -> bool {
+impl Contains<Call> for TestFilter {
+	fn contains(call: &Call) -> bool {
 		CALL_FILTER.with(|fltr| fltr.borrow()(call))
 	}
 }
@@ -1644,10 +1644,28 @@ fn self_destruct_works() {
 
 		// The call triggers rent collection that reduces the amount of balance
 		// that remains for the beneficiary.
-		let balance_after_rent = 93_078;
+		let mut events = System::events();
+		let balance_after_rent = 99_000;
+
+		// The actual figure will bounce about with wasm compiler updates as the rent depends on
+		// the compiled wasm size, so we replace it with a fixed value
+		// as rent isn't what we're testing for in this test.
+		let mut actual_balance_after_rent = 99_000;
+		if let Event::Balances(pallet_balances::Event::Transfer(_, _, ref mut actual_bal)) =
+			&mut events[1].event
+		{
+			std::mem::swap(&mut actual_balance_after_rent, actual_bal);
+			assert!(
+				(90_000..99_000).contains(&actual_balance_after_rent),
+				"expected less than 100_000: {}",
+				actual_balance_after_rent
+			);
+		} else {
+			assert!(false);
+		}
 
 		pretty_assertions::assert_eq!(
-			System::events(),
+			events,
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1673,7 +1691,7 @@ fn self_destruct_works() {
 					event: Event::Contracts(crate::Event::Terminated(addr.clone(), DJANGO)),
 					topics: vec![],
 				},
-			]
+			],
 		);
 
 		// Check that account is gone
@@ -1681,7 +1699,7 @@ fn self_destruct_works() {
 
 		// check that the beneficiary (django) got remaining balance
 		// some rent was deducted before termination
-		assert_eq!(Balances::free_balance(DJANGO), 1_000_000 + balance_after_rent);
+		assert_eq!(Balances::free_balance(DJANGO), 1_000_000 + actual_balance_after_rent);
 	});
 }
 
@@ -2615,7 +2633,6 @@ fn reinstrument_does_charge() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn debug_message_works() {
 	let (wasm, code_hash) = compile_module::<Test>("debug_message_works").unwrap();
 
@@ -2638,7 +2655,6 @@ fn debug_message_works() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn debug_message_logging_disabled() {
 	let (wasm, code_hash) = compile_module::<Test>("debug_message_logging_disabled").unwrap();
 
@@ -2663,7 +2679,6 @@ fn debug_message_logging_disabled() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn debug_message_invalid_utf8() {
 	let (wasm, code_hash) = compile_module::<Test>("debug_message_invalid_utf8").unwrap();
 

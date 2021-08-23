@@ -18,6 +18,7 @@
 use crate::pallet::Def;
 use frame_support_procedural_tools::get_doc_literals;
 
+///
 /// * impl various trait on Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let error = if let Some(error) = &def.error { error } else { return Default::default() };

@@ -50,7 +50,8 @@ pub fn bloaty_code_unwrap() -> &'static [u8] {
 	)
 }
 
-/// Default transfer fee. This will use the same logic that is implemented in transaction-payment module.
+/// Default transfer fee. This will use the same logic that is implemented in transaction-payment
+/// module.
 ///
 /// Note that reads the multiplier from storage directly, hence to get the fee of `extrinsic`
 /// at block `n`, it must be called prior to executing block `n` to do the calculation with the
@@ -721,7 +722,8 @@ fn native_big_block_import_succeeds() {
 fn native_big_block_import_fails_on_fallback() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 
-	// We set the heap pages to 8 because we know that should give an OOM in WASM with the given block.
+	// We set the heap pages to 8 because we know that should give an OOM in WASM with the given
+	// block.
 	set_heap_pages(&mut t.ext(), 8);
 
 	assert!(executor_call::<NeverNativeValue, fn() -> _>(

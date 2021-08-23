@@ -22,11 +22,11 @@
 //! A subsystem to allow for an agile "tipping" process, whereby a reward may be given without first
 //! having a pre-determined stakeholder group come to consensus on how much should be paid.
 //!
-//! A group of `Tippers` is determined through the config `Config`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countdown period is
-//! entered where any remaining members can declare their tip amounts also. After the close of the
-//! countdown period, the median of all declared tips is paid to the reported beneficiary, along
-//! with any finders fee, in case of a public (and bonded) original report.
+//! A group of `Tippers` is determined through the config `Config`. After half of these have
+//! declared some amount that they believe a particular reported reason deserves, then a countdown
+//! period is entered where any remaining members can declare their tip amounts also. After the
+//! close of the countdown period, the median of all declared tips is paid to the reported
+//! beneficiary, along with any finders fee, in case of a public (and bonded) original report.
 //!
 //!
 //! ### Terminology
@@ -114,8 +114,8 @@ pub struct OpenTip<
 	BlockNumber: Parameter,
 	Hash: Parameter,
 > {
-	/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
-	/// sensible.
+	/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded
+	/// string. A URL would be sensible.
 	reason: Hash,
 	/// The account to be tipped.
 	who: AccountId,
@@ -530,8 +530,8 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn migrate_retract_tip_for_tip_new() {
-		/// An open tipping "motion". Retains all details of a tip including information on the finder
-		/// and the members who have voted.
+		/// An open tipping "motion". Retains all details of a tip including information on the
+		/// finder and the members who have voted.
 		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 		pub struct OldOpenTip<
 			AccountId: Parameter,
@@ -539,15 +539,15 @@ impl<T: Config> Module<T> {
 			BlockNumber: Parameter,
 			Hash: Parameter,
 		> {
-			/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
-			/// sensible.
+			/// The hash of the reason for the tip. The reason should be a human-readable UTF-8
+			/// encoded string. A URL would be sensible.
 			reason: Hash,
 			/// The account to be tipped.
 			who: AccountId,
 			/// The account who began this tip and the amount held on deposit.
 			finder: Option<(AccountId, Balance)>,
-			/// The block number at which this tip will close if `Some`. If `None`, then no closing is
-			/// scheduled.
+			/// The block number at which this tip will close if `Some`. If `None`, then no closing
+			/// is scheduled.
 			closes: Option<BlockNumber>,
 			/// The members who have voted for this tip. Sorted by AccountId.
 			tips: Vec<(AccountId, Balance)>,

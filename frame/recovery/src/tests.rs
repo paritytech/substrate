@@ -64,7 +64,8 @@ fn recovery_life_cycle_works() {
 		run_to_block(10);
 		// Using account 1, the user begins the recovery process to recover the lost account
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
-		// Off chain, the user contacts their friends and asks them to vouch for the recovery attempt
+		// Off chain, the user contacts their friends and asks them to vouch for the recovery
+		// attempt
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));

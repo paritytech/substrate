@@ -408,7 +408,8 @@ pub mod pallet {
 
 				Self::deposit_event(Event::Destroyed(class));
 
-				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
+				// NOTE: could use postinfo to reflect the actual number of
+				// accounts/sufficient/approvals
 				Ok(())
 			})
 		}

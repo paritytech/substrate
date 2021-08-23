@@ -148,7 +148,7 @@
 //!
 //! The accuracy of the election is configured via two trait parameters. namely,
 //! [`OnChainAccuracyOf`] dictates the accuracy used to compute the on-chain fallback election and
-//! [`CompactAccuracyOf`] is the accuracy that the submitted solutions must adhere to.
+//! [`SolutionAccuracyOf`] is the accuracy that the submitted solutions must adhere to.
 //!
 //! Note that both accuracies are of great importance. The offchain solution should be as small as
 //! possible, reducing solutions size/weight. The on-chain solution can use more space for accuracy,
@@ -212,7 +212,7 @@
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 //!
 //! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
-//! dependency from staking and the compact solution type. It should be generated at runtime, there
+//! dependency from staking and the solution type. It should be generated at runtime, there
 //! it should be encoded how many votes each nominators have. Essentially translate
 //! <https://github.com/paritytech/substrate/pull/7929> to this pallet.
 //!
@@ -233,7 +233,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::Weight,
+	weights::{DispatchClass, Weight},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -242,7 +242,7 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore, EvaluateSupport,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, NposSolution,
 	PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
@@ -255,7 +255,7 @@ use sp_runtime::{
 };
 use sp_std::{convert::TryInto, prelude::*};
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
 mod mock;
@@ -267,22 +267,22 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
+pub use weights::WeightInfo;
 
 pub use signed::{
 	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
 	SignedSubmissions, SubmissionIndicesOf,
 };
-pub use weights::WeightInfo;
 
-/// The compact solution type used by this crate.
-pub type CompactOf<T> = <T as Config>::CompactSolution;
+/// The solution type used by this crate.
+pub type SolutionOf<T> = <T as Config>::Solution;
 
-/// The voter index. Derived from [`CompactOf`].
-pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
-/// The target index. Derived from [`CompactOf`].
-pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
-/// The accuracy of the election, when submitted from offchain. Derived from [`CompactOf`].
-pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
+/// The voter index. Derived from [`SolutionOf`].
+pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as NposSolution>::VoterIndex;
+/// The target index. Derived from [`SolutionOf`].
+pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex;
+/// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
+pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
@@ -291,7 +291,6 @@ pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
 impl<T: Config> onchain::Config for OnChainConfig<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
-	type BlockWeights = T::BlockWeights;
 	type Accuracy = T::OnChainAccuracy;
 	type DataProvider = T::DataProvider;
 }
@@ -335,8 +334,8 @@ pub enum Phase<Bn> {
 	/// number.
 	///
 	/// We do not yet check whether the unsigned phase is active or passive. The intent is for the
-	/// blockchain to be able to declare: "I believe that there exists an adequate signed solution,"
-	/// advising validators not to bother running the unsigned offchain worker.
+	/// blockchain to be able to declare: "I believe that there exists an adequate signed
+	/// solution," advising validators not to bother running the unsigned offchain worker.
 	///
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
 	/// and always compute their own solution. However, by default, when the unsigned phase is
@@ -424,11 +423,11 @@ impl Default for ElectionCompute {
 /// This is what will get submitted to the chain.
 ///
 /// Such a solution should never become effective in anyway before being checked by the
-/// `Pallet::feasibility_check`
+/// `Pallet::feasibility_check`.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord, TypeInfo)]
-pub struct RawSolution<C> {
-	/// Compact election edges.
-	pub compact: C,
+pub struct RawSolution<S> {
+	/// the solution itself.
+	pub solution: S,
 	/// The _claimed_ score of the solution.
 	pub score: ElectionScore,
 	/// The round at which this solution should be submitted.
@@ -438,7 +437,7 @@ pub struct RawSolution<C> {
 impl<C: Default> Default for RawSolution<C> {
 	fn default() -> Self {
 		// Round 0 is always invalid, only set this to 1.
-		Self { round: 1, compact: Default::default(), score: Default::default() }
+		Self { round: 1, solution: Default::default(), score: Default::default() }
 	}
 }
 
@@ -489,6 +488,7 @@ pub struct SolutionOrSnapshotSize {
 ///
 /// Note that this is different from [`pallet::Error`].
 #[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
 pub enum ElectionError {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
@@ -522,6 +522,7 @@ impl From<unsigned::MinerError> for ElectionError {
 
 /// Errors that can happen in the feasibility check.
 #[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,
@@ -653,15 +654,15 @@ pub mod pallet {
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
-		/// The compact solution type
-		type CompactSolution: codec::Codec
+		/// The solution type.
+		type Solution: codec::Codec
 			+ Default
 			+ PartialEq
 			+ Eq
 			+ Clone
 			+ sp_std::fmt::Debug
 			+ Ord
-			+ CompactSolution
+			+ NposSolution
 			+ TypeInfo;
 
 		/// Accuracy used for fallback on-chain election.
@@ -702,62 +703,58 @@ pub mod pallet {
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
-					match Self::on_initialize_open_signed() {
-						Ok(snap_weight) => {
-							log!(info, "Starting signed phase round {}.", Self::round());
-							T::WeightInfo::on_initialize_open_signed().saturating_add(snap_weight)
+					match Self::create_snapshot() {
+						Ok(_) => {
+							Self::on_initialize_open_signed();
+							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
-							// NOTE: ^^ The trait specifies that this is a noop in terms of weight
-							// in case of error.
 						},
 					}
 				},
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// our needs vary according to whether or not the unsigned phase follows a signed phase
-					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed
-					{
-						// there was previously a signed phase: close the signed phase, no need for snapshot.
+					// our needs vary according to whether or not the unsigned phase follows a
+					// signed phase
+					let (need_snapshot, enabled) = if current_phase == Phase::Signed {
+						// there was previously a signed phase: close the signed phase, no need for
+						// snapshot.
 						//
 						// Notes:
 						//
-						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is
-						//     a guard against the case that `elect` is called prematurely. This adds
-						//     a small amount of overhead, but that is unfortunately unavoidable.
-						let (_success, weight) = Self::finalize_signed_phase();
+						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This
+						//     is a guard against the case that `elect` is called prematurely. This
+						//     adds a small amount of overhead, but that is unfortunately
+						//     unavoidable.
+						let _ = Self::finalize_signed_phase();
 						// In the future we can consider disabling the unsigned phase if the signed
-						// phase completes successfully, but for now we're enabling it unconditionally
-						// as a defensive measure.
-						(false, true, weight)
+						// phase completes successfully, but for now we're enabling it
+						// unconditionally as a defensive measure.
+						(false, true)
 					} else {
 						// No signed phase: create a new snapshot, definitely `enable` the unsigned
 						// phase.
-						(true, true, Weight::zero())
+						(true, true)
 					};
 
-					match Self::on_initialize_open_unsigned(need_snapshot, enabled, now) {
-						Ok(snap_weight) => {
-							log!(info, "Starting unsigned phase({}).", enabled);
-							let base_weight = if need_snapshot {
-								T::WeightInfo::on_initialize_open_unsigned_with_snapshot()
-							} else {
-								T::WeightInfo::on_initialize_open_unsigned_without_snapshot()
-							};
-
-							base_weight.saturating_add(snap_weight).saturating_add(signed_weight)
-						},
-						Err(why) => {
-							// Not much we can do about this at this point.
-							log!(warn, "failed to open unsigned phase due to {:?}", why);
-							T::WeightInfo::on_initialize_nothing()
-							// NOTE: ^^ The trait specifies that this is a noop in terms of weight
-							// in case of error.
-						},
+					if need_snapshot {
+						match Self::create_snapshot() {
+							Ok(_) => {
+								Self::on_initialize_open_unsigned(enabled, now);
+								T::WeightInfo::on_initialize_open_unsigned()
+							},
+							Err(why) => {
+								log!(warn, "failed to open unsigned phase due to {:?}", why);
+								T::WeightInfo::on_initialize_nothing()
+							},
+						}
+					} else {
+						Self::on_initialize_open_unsigned(enabled, now);
+						T::WeightInfo::on_initialize_open_unsigned()
 					}
 				}
 				_ => T::WeightInfo::on_initialize_nothing(),
@@ -790,12 +787,12 @@ pub mod pallet {
 			use sp_std::mem::size_of;
 			// The index type of both voters and targets need to be smaller than that of usize (very
 			// unlikely to be the case, but anyhow).
-			assert!(size_of::<CompactVoterIndexOf<T>>() <= size_of::<usize>());
-			assert!(size_of::<CompactTargetIndexOf<T>>() <= size_of::<usize>());
+			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<usize>());
+			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<usize>());
 
 			// ----------------------------
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
-			let max_vote: usize = <CompactOf<T> as CompactSolution>::LIMIT;
+			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
 
 			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
 			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
@@ -809,26 +806,26 @@ pub mod pallet {
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 
-			// 2. Maximum sum of [CompactAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
-			let maximum_chain_accuracy: Vec<UpperOf<CompactAccuracyOf<T>>> = (0..max_vote)
+			// 2. Maximum sum of [SolutionAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
+			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T>>> = (0..max_vote)
 				.map(|_| {
-					<UpperOf<CompactAccuracyOf<T>>>::from(
-						<CompactAccuracyOf<T>>::one().deconstruct(),
+					<UpperOf<SolutionAccuracyOf<T>>>::from(
+						<SolutionAccuracyOf<T>>::one().deconstruct(),
 					)
 				})
 				.collect();
-			let _: UpperOf<CompactAccuracyOf<T>> = maximum_chain_accuracy
+			let _: UpperOf<SolutionAccuracyOf<T>> = maximum_chain_accuracy
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 
 			// We only accept data provider who's maximum votes per voter matches our
-			// `T::CompactSolution`'s `LIMIT`.
+			// `T::Solution`'s `LIMIT`.
 			//
-			// NOTE that this pallet does not really need to enforce this in runtime. The compact
+			// NOTE that this pallet does not really need to enforce this in runtime. The
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
 				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MAXIMUM_VOTES_PER_VOTER,
-				<CompactOf<T> as CompactSolution>::LIMIT as u32,
+				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}
 	}
@@ -853,14 +850,14 @@ pub mod pallet {
 			T::WeightInfo::submit_unsigned(
 				witness.voters,
 				witness.targets,
-				solution.compact.voter_count() as u32,
-				solution.compact.unique_targets().len() as u32
+				raw_solution.solution.voter_count() as u32,
+				raw_solution.solution.unique_targets().len() as u32
 			),
 			DispatchClass::Operational,
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			raw_solution: Box<RawSolution<SolutionOf<T>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -868,7 +865,7 @@ pub mod pallet {
 				 deprive validator from their authoring reward.";
 
 			// Check score being an improvement, phase, and desired targets.
-			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
+			Self::unsigned_pre_dispatch_checks(&raw_solution).expect(error_message);
 
 			// Ensure witness was correct.
 			let SolutionOrSnapshotSize { voters, targets } =
@@ -878,8 +875,8 @@ pub mod pallet {
 			assert!(voters as u32 == witness.voters, "{}", error_message);
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
-			let ready =
-				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
+			let ready = Self::feasibility_check(*raw_solution, ElectionCompute::Unsigned)
+				.expect(error_message);
 
 			// Store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
@@ -950,7 +947,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			raw_solution: Box<RawSolution<SolutionOf<T>>>,
 			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -973,19 +970,20 @@ pub mod pallet {
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
-				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
+				Self::feasibility_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
 			// create the submission
-			let deposit = Self::deposit_for(&solution, size);
+			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call = Call::submit { solution: solution.clone(), num_signed_submissions };
+				let call = Call::submit { solution: raw_solution.clone(), num_signed_submissions };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
 
-			let submission = SignedSubmission { who: who.clone(), deposit, solution, reward };
+			let submission =
+				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1066,6 +1064,7 @@ pub mod pallet {
 
 	#[pallet::origin]
 	pub struct Origin<T>(PhantomData<T>);
+
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -1249,79 +1248,41 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
-	///
-	/// This is decoupled for easy weight calculation.
-	///
-	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
-	/// needs to recorded for the creation of snapshot.
-	pub fn on_initialize_open_signed() -> Result<Weight, ElectionError> {
-		let weight = Self::create_snapshot()?;
+	pub fn on_initialize_open_signed() {
+		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
-		Ok(weight.saturating_add(T::DbWeight::get().writes(1)))
 	}
 
 	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
-	///
-	/// This is decoupled for easy weight calculation.
-	///
-	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
-	/// needs to recorded for the creation of snapshot.
-	pub fn on_initialize_open_unsigned(
-		need_snapshot: bool,
-		enabled: bool,
-		now: T::BlockNumber,
-	) -> Result<Weight, ElectionError> {
-		let weight = if need_snapshot {
-			// If not being followed by a signed phase, then create the snapshots.
-			debug_assert!(Self::snapshot().is_none());
-			Self::create_snapshot()?
-		} else {
-			0
-		};
-
+	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
+		let round = Self::round();
+		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
-		Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
-		Ok(weight.saturating_add(T::DbWeight::get().writes(1)))
+		Self::deposit_event(Event::UnsignedPhaseStarted(round));
 	}
 
-	/// Creates the snapshot. Writes new data to:
+	/// Parts of [`create_snapshot`] that happen inside of this pallet.
 	///
-	/// 1. [`SnapshotMetadata`]
-	/// 2. [`RoundSnapshot`]
-	/// 3. [`DesiredTargets`]
-	///
-	/// Returns `Ok(consumed_weight)` if operation is okay.
-	pub fn create_snapshot() -> Result<Weight, ElectionError> {
-		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
-
-		let (targets, w1) =
-			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
-		let (voters, w2) =
-			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
-		let (desired_targets, w3) =
-			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
-
-		// Defensive-only.
-		if targets.len() > target_limit || voters.len() > voter_limit {
-			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
-		}
-
-		// Only write snapshot if all existed.
+	/// Extracted for easier weight calculation.
+	fn create_snapshot_internal(
+		targets: Vec<T::AccountId>,
+		voters: Vec<crate::unsigned::Voter<T>>,
+		desired_targets: u32,
+	) {
 		let metadata =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
-		log!(debug, "creating a snapshot with metadata {:?}", metadata);
+		log!(info, "creating a snapshot with metadata {:?}", metadata);
 
 		<SnapshotMetadata<T>>::put(metadata);
 		<DesiredTargets<T>>::put(desired_targets);
 
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
-		// `encoded_size` encodes it without storing it anywhere, this should not cause any allocation.
+		// `encoded_size` encodes it without storing it anywhere, this should not cause any
+		// allocation.
 		let snapshot = RoundSnapshot { voters, targets };
 		let size = snapshot.encoded_size();
-		log!(info, "snapshot pre-calculated size {:?}", size);
+		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
 		snapshot.encode_to(&mut buffer);
 
@@ -1331,10 +1292,60 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(buffer.len() == size && size == buffer.capacity());
 
 		sp_io::storage::set(&<Snapshot<T>>::hashed_key(), &buffer);
-		Ok(w1
-			.saturating_add(w2)
-			.saturating_add(w3)
-			.saturating_add(T::DbWeight::get().writes(3)))
+	}
+
+	/// Parts of [`create_snapshot`] that happen outside of this pallet.
+	///
+	/// Extracted for easier weight calculation.
+	fn create_snapshot_external(
+	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError> {
+		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
+		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
+
+		let targets =
+			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
+		let voters =
+			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
+		let desired_targets =
+			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
+
+		// Defensive-only.
+		if targets.len() > target_limit || voters.len() > voter_limit {
+			debug_assert!(false, "Snapshot limit has not been respected.");
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+		}
+
+		Ok((targets, voters, desired_targets))
+	}
+
+	/// Creates the snapshot. Writes new data to:
+	///
+	/// 1. [`SnapshotMetadata`]
+	/// 2. [`RoundSnapshot`]
+	/// 3. [`DesiredTargets`]
+	///
+	/// Returns `Ok(())` if operation is okay.
+	///
+	/// This is a *self-weighing* function, it will register its own extra weight as
+	/// [`DispatchClass::Mandatory`] with the system pallet.
+	pub fn create_snapshot() -> Result<(), ElectionError> {
+		// this is self-weighing itself..
+		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
+
+		// ..therefore we only measure the weight of this and add it.
+		Self::create_snapshot_internal(targets, voters, desired_targets);
+		Self::register_weight(T::WeightInfo::create_snapshot_internal());
+		Ok(())
+	}
+
+	/// Register some amount of weight directly with the system pallet.
+	///
+	/// This is always mandatory weight.
+	fn register_weight(weight: Weight) {
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
@@ -1346,16 +1357,16 @@ impl<T: Config> Pallet<T> {
 
 	/// Checks the feasibility of a solution.
 	pub fn feasibility_check(
-		solution: RawSolution<CompactOf<T>>,
+		raw_solution: RawSolution<SolutionOf<T>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
-		let RawSolution { compact, score, round } = solution;
+		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
 		ensure!(Self::round() == round, FeasibilityError::InvalidRound);
 
 		// Winners are not directly encoded in the solution.
-		let winners = compact.unique_targets();
+		let winners = solution.unique_targets();
 
 		let desired_targets =
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
@@ -1366,7 +1377,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// Ensure that the solution's score can pass absolute min-score.
-		let submitted_score = solution.score.clone();
+		let submitted_score = raw_solution.score.clone();
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
 				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
@@ -1387,15 +1398,15 @@ impl<T: Config> Pallet<T> {
 		// First, make sure that all the winners are sane.
 		// OPTIMIZATION: we could first build the assignments, and then extract the winners directly
 		// from that, as that would eliminate a little bit of duplicate work. For now, we keep them
-		// separate: First extract winners separately from compact, and then assignments. This is
+		// separate: First extract winners separately from solution, and then assignments. This is
 		// also better, because we can reject solutions that don't meet `desired_targets` early on.
 		let winners = winners
 			.into_iter()
 			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
 			.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
 
-		// Then convert compact -> assignment. This will fail if any of the indices are gibberish.
-		let assignments = compact
+		// Then convert solution -> assignment. This will fail if any of the indices are gibberish.
+		let assignments = solution
 			.into_assignment(voter_at, target_at)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
@@ -1406,7 +1417,8 @@ impl<T: Config> Pallet<T> {
 				// Check that assignment.who is actually a voter (defensive-only).
 				// NOTE: while using the index map from `voter_index` is better than a blind linear
 				// search, this *still* has room for optimization. Note that we had the index when
-				// we did `compact -> assignment` and we lost it. Ideal is to keep the index around.
+				// we did `solution -> assignment` and we lost it. Ideal is to keep the index
+				// around.
 
 				// Defensive-only: must exist in the snapshot.
 				let snapshot_index =
@@ -1431,7 +1443,7 @@ impl<T: Config> Pallet<T> {
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// This might fail if one of the voter edges is pointing to a non-winner, which is not
-		// really possible anymore because all the winners come from the same `compact`.
+		// really possible anymore because all the winners come from the same `solution`.
 		let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
@@ -1459,7 +1471,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError> {
 		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
@@ -1467,48 +1479,35 @@ impl<T: Config> Pallet<T> {
 		.map_err(Into::into)
 	}
 
-	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
+	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
-		// - signed phase was open, in which case this is essential for correct functioning of the system
+		// - signed phase was open, in which case this is essential for correct functioning of the
+		//   system
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
-		let (_, signed_finalize_weight) = Self::finalize_signed_phase();
+		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
 					FallbackStrategy::OnChain => Self::onchain_fallback()
-						.map(|(s, w)| (s, w, ElectionCompute::OnChain))
+						.map(|s| {
+							// onchain election incurs maximum block weight
+							Self::register_weight(T::BlockWeights::get().max_block);
+							(s, ElectionCompute::OnChain)
+						})
 						.map_err(Into::into),
 					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
 				},
-				|ReadySolution { supports, compute, .. }| {
-					// defensive-only: snapshot must always exist by this point.
-					let metadata = Self::snapshot_metadata().unwrap_or_default();
-					let desired = supports.len() as u32;
-					let active_voters = supports
-						.iter()
-						.map(|(_, x)| x)
-						.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
-					Ok((
-						supports,
-						T::WeightInfo::elect_queued(
-							metadata.voters,
-							metadata.targets,
-							active_voters,
-							desired,
-						),
-						compute,
-					))
-				},
+				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
-			.map(|(supports, weight, compute)| {
+			.map(|(supports, compute)| {
 				Self::deposit_event(Event::ElectionFinalized(Some(compute)));
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
-				(supports, weight.saturating_add(signed_finalize_weight))
+				supports
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
@@ -1518,18 +1517,29 @@ impl<T: Config> Pallet<T> {
 				err
 			})
 	}
+
+	/// record the weight of the given `supports`.
+	fn weigh_supports(supports: &Supports<T::AccountId>) {
+		let active_voters = supports
+			.iter()
+			.map(|(_, x)| x)
+			.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
+		let desired_targets = supports.len() as u32;
+		Self::register_weight(T::WeightInfo::elect_queued(active_voters, desired_targets));
+	}
 }
 
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
-			Ok((supports, weight)) => {
-				// All went okay, put sign to be Off, clean snapshot, etc.
+			Ok(supports) => {
+				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
+				Self::weigh_supports(&supports);
 				Self::rotate_round();
-				Ok((supports, weight))
+				Ok(supports)
 			},
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
@@ -1603,13 +1613,13 @@ mod feasibility_check {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let solution = raw_solution();
+			let raw = raw_solution();
 
-			assert_eq!(solution.compact.unique_targets().len(), 4);
+			assert_eq!(raw.solution.unique_targets().len(), 4);
 			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
 
 			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::WrongWinnerCount,
 			);
 		})
@@ -1621,20 +1631,19 @@ mod feasibility_check {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let mut solution = raw_solution();
+			let mut raw = raw_solution();
 			assert_eq!(MultiPhase::snapshot().unwrap().targets.len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
-			// Swap all votes from 3 to 4. This will ensure that the number of unique winners
-			// will still be 4, but one of the indices will be gibberish. Requirement is to make
-			// sure 3 a winner, which we don't do here.
-			solution
-				.compact
+			// Swap all votes from 3 to 4. This will ensure that the number of unique winners will
+			// still be 4, but one of the indices will be gibberish. Requirement is to make sure 3 a
+			// winner, which we don't do here.
+			raw.solution
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
 				.for_each(|(_, t)| *t += 1);
-			solution.compact.votes2.iter_mut().for_each(|(_, (t0, _), t1)| {
+			raw.solution.votes2.iter_mut().for_each(|(_, [(t0, _)], t1)| {
 				if *t0 == TargetIndex::from(3u16) {
 					*t0 += 1
 				};
@@ -1643,7 +1652,7 @@ mod feasibility_check {
 				};
 			});
 			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::InvalidWinner
 			);
 		})
@@ -1651,7 +1660,7 @@ mod feasibility_check {
 
 	#[test]
 	fn voter_indices() {
-		// Should be caught in `compact.into_assignment`.
+		// Should be caught in `solution.into_assignment`.
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
@@ -1663,7 +1672,7 @@ mod feasibility_check {
 			// Check that there is an index 7 in votes1, and flip to 8.
 			assert!(
 				solution
-					.compact
+					.solution
 					.votes1
 					.iter_mut()
 					.filter(|(v, _)| *v == VoterIndex::from(7u32))
@@ -1672,7 +1681,7 @@ mod feasibility_check {
 			);
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::NposElection(sp_npos_elections::Error::CompactInvalidIndex),
+				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex),
 			);
 		})
 	}
@@ -1691,7 +1700,7 @@ mod feasibility_check {
 			// vote. Then, change the vote to 2 (30).
 			assert_eq!(
 				solution
-					.compact
+					.solution
 					.votes1
 					.iter_mut()
 					.filter(|(v, t)| *v == 7 && *t == 3)
@@ -1788,7 +1797,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
-			MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1821,7 +1830,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
-			MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1888,7 +1897,7 @@ mod tests {
 
 			// An unexpected call to elect.
 			roll_to(20);
-			MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(
@@ -1926,14 +1935,14 @@ mod tests {
 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
-					solution,
+					Box::new(solution),
 					MultiPhase::signed_submissions().len() as u32
 				));
 			}
 
 			// an unexpected call to elect.
 			roll_to(20);
-			assert!(MultiPhase::elect().is_ok());
+			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
 			assert_eq!(MultiPhase::round(), 2);
@@ -1955,7 +1964,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.
-			let (supports, _) = MultiPhase::elect().unwrap();
+			let supports = MultiPhase::elect().unwrap();
 
 			assert_eq!(
 				supports,
@@ -1993,7 +2002,7 @@ mod tests {
 
 			// On-chain backup works though.
 			roll_to(29);
-			let (supports, _) = MultiPhase::elect().unwrap();
+			let supports = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
 		})
 	}

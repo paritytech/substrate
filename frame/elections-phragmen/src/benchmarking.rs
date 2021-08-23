@@ -21,7 +21,9 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist};
+use frame_benchmarking::{
+	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
+};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
 
@@ -332,9 +334,16 @@ benchmarks! {
 		}
 	}
 
+	// We use the max block weight for this extrinsic for now. See below.
+	remove_member_without_replacement {}: {
+		Err(BenchmarkError::Override(
+			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
+		))?;
+	}
+
 	// -- Root ones
 	#[extra] // this calls into phragmen and consumes a full block for now.
-	remove_member_without_replacement {
+	remove_member_without_replacement_extra {
 		// worse case is when we remove a member and we have no runner as a replacement. This
 		// triggers phragmen again. The only parameter is how many candidates will compete for the
 		// new slot.

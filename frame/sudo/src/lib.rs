@@ -41,9 +41,9 @@
 //! ### Executing Privileged Functions
 //!
 //! The Sudo pallet itself is not intended to be used within other pallets.
-//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other pallets.
-//! You can execute these privileged functions by calling `sudo` with the sudo key account.
-//! Privileged functions cannot be directly executed via an extrinsic.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in
+//! other pallets. You can execute these privileged functions by calling `sudo` with the sudo key
+//! account. Privileged functions cannot be directly executed via an extrinsic.
 //!
 //! Learn more about privileged functions and `Root` origin in the [`Origin`] type documentation.
 //!
@@ -52,7 +52,7 @@
 //! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//!
+//! 
 //! #[frame_support::pallet]
 //! pub mod logger {
 //! 	use frame_support::pallet_prelude::*;
@@ -181,7 +181,8 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
+		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo
+		/// key.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///

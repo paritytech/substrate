@@ -27,7 +27,8 @@
 //! and `UnboundedReceiver<T>` to register every `send`/`received`/`dropped` action happened on
 //! the channel.
 //!
-//! Also this feature creates and registers a prometheus vector with name `unbounded_channel_len` and labels:
+//! Also this feature creates and registers a prometheus vector with name `unbounded_channel_len`
+//! and labels:
 //!
 //! | Label        | Description                                   |
 //! | ------------ | --------------------------------------------- |
