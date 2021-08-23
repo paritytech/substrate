@@ -582,7 +582,7 @@ fn batch_all_does_not_nest() {
 		assert_eq!(Balances::free_balance(2), 10);
 	});
 }
-r
+
 #[test]
 fn batch_limit() {
 	new_test_ext().execute_with(|| {
