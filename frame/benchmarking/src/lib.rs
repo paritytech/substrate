@@ -1355,6 +1355,15 @@ macro_rules! add_benchmark {
 				},
 			};
 
+			if !$batches.is_empty() {
+				panic!(
+					"Invalid benchmark execution: `batches` already contains some result. This can \
+					be due to conflicting pallet name `{}`. If the pallet name is used in multiple \
+					benchmarks then it is invalid and each pallet name must be made unique."
+					name_string,
+				);
+			}
+
 			$batches.push($crate::BenchmarkBatch {
 				pallet: name_string.to_vec(),
 				instance: instance_string.to_vec(),
@@ -1398,7 +1407,7 @@ macro_rules! list_benchmark {
 		};
 		if $list.iter().any(|b| b.pallet == pallet_string) {
 			panic!(
-				"Invalid list of benchmarks: conflicting pallet names `{}`, the pallet name is used
+				"Invalid list of benchmarks: conflicting pallet name `{}`, the pallet name is used
 				by multiple benchmarks, each pallet name must be unique",
 				pallet_string,
 			);
