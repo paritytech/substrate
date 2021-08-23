@@ -977,7 +977,8 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call = Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
+				let call =
+					Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
