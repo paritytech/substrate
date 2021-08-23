@@ -209,7 +209,8 @@ impl<T: Config> Pallet<T> {
 		let (solution, witness) = Self::mine_and_check(iters)?;
 
 		let score = raw_solution.score.clone();
-		let call: Call<T> = Call::submit_unsigned { solution: Box::new(raw_solution), witness }.into();
+		let call: Call<T> =
+			Call::submit_unsigned { solution: Box::new(raw_solution), witness }.into();
 
 		log!(
 			debug,
@@ -777,7 +778,8 @@ mod tests {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+			let call =
+				Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -845,8 +847,10 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let solution = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+			let solution =
+				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let call =
+				Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -883,7 +887,8 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let raw = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned { solution: Box::new(raw.clone()), witness: witness() };
+			let call =
+				Call::submit_unsigned { solution: Box::new(raw.clone()), witness: witness() };
 			assert_eq!(raw.solution.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -909,7 +914,10 @@ mod tests {
 
 				let solution =
 					RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-				let call = Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+				let call = Call::submit_unsigned {
+					solution: Box::new(solution.clone()),
+					witness: witness(),
+				};
 
 				assert_eq!(
 					<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -936,7 +944,8 @@ mod tests {
 			// This is in itself an invalid BS solution.
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
+			let call =
+				Call::submit_unsigned { solution: Box::new(solution.clone()), witness: witness() };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -957,7 +966,8 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned { solution: Box::new(solution.clone()), correct_witness };
+			let call =
+				Call::submit_unsigned { solution: Box::new(solution.clone()), correct_witness };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
