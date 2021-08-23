@@ -2702,7 +2702,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
@@ -2716,7 +2716,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "async-trait",
  "fnv",
@@ -2736,7 +2736,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2771,7 +2771,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "Inflector",
  "bae",
@@ -2802,7 +2802,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2820,7 +2820,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "beef",
  "futures-channel",
@@ -2864,7 +2864,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "async-trait",
  "fnv",
@@ -2887,7 +2887,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#1f91aac5d9ec81f06039c9d4947e3f2b3a6431f1"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-proc-macros-generics#230613ee672198293cb133a3cc473ca976667159"
 dependencies = [
  "futures-channel",
  "futures-util",

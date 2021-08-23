@@ -30,7 +30,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	types::{async_trait, DeserializeOwned, Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, JsonRpcResult},
 	SubscriptionSink,
 };
 use sc_client_api::{
@@ -161,8 +161,8 @@ pub struct Chain<Block: BlockT, Client> {
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
-	Block: BlockT + 'static + DeserializeOwned,
-	Block::Header: Unpin + DeserializeOwned,
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	async fn header(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<Block::Header>> {
