@@ -73,7 +73,7 @@ use sp_runtime::{
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Either, Perbill, RuntimeDebug, StateVersion,
+	DispatchError, Either, Perbill, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -658,22 +658,17 @@ pub mod pallet {
 		pub changes_trie_config: Option<ChangesTrieConfiguration>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
-		pub genesis_state_version: StateVersion, // TODO this requires to eventually rewrite to V0 for existing chain.
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self { changes_trie_config: Default::default(), code: Default::default(), genesis_state_version: Default::default() }
+			Self { changes_trie_config: Default::default(), code: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn genesis_state_version(&self) -> sp_runtime::StateVersion {
-			self.genesis_state_version
-		}
-
 		fn build(&self) {
 			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
@@ -735,11 +730,6 @@ pub mod migrations {
 
 #[cfg(feature = "std")]
 impl GenesisConfig {
-	/// State version to use for genesis build.
-	pub fn genesis_state_version<T: Config>(&self) -> sp_runtime::StateVersion {
-		<Self as GenesisBuild<T>>::genesis_state_version(self)
-	}
-
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.

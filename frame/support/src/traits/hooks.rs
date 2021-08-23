@@ -20,7 +20,6 @@
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize};
-use sp_runtime::StateVersion;
 
 /// The block initialization trait.
 ///
@@ -307,9 +306,6 @@ pub trait GenesisBuild<T, I = ()>: Default + MaybeSerializeDeserialize {
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);
 
-	/// State version for genesis.
-	fn genesis_state_version(&self) -> StateVersion;
-
 	/// Build the storage using `build` inside default storage.
 	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
 		let mut storage = Default::default();
@@ -319,8 +315,7 @@ pub trait GenesisBuild<T, I = ()>: Default + MaybeSerializeDeserialize {
 
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-		let state_version = self.genesis_state_version();
-		sp_state_machine::BasicExternalities::execute_with_storage(storage, state_version, || {
+		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
 			self.build();
 			Ok(())
 		})

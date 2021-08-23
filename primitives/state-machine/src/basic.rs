@@ -42,13 +42,13 @@ use std::{
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	state_version: StateVersion, // TODO same alt hashing type as all
+	state_version: Option<StateVersion>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage, state_version: StateVersion) -> Self {
-		BasicExternalities { inner, extensions: Default::default(), state_version }
+		BasicExternalities { inner, extensions: Default::default(), state_version: Some(state_version) }
 	}
 
 	/// New basic externalities with empty storage.
@@ -69,9 +69,32 @@ impl BasicExternalities {
 	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
-	pub fn execute_with_storage<R>(
+	///
+	/// Do not support runtime transaction.
+	pub fn execute_with_storage_and_state<R>(
 		storage: &mut sp_core::storage::Storage,
 		state_version: StateVersion,
+		f: impl FnOnce() -> R,
+	) -> R {
+		Self::execute_with_storage_inner(storage, Some(state_version), f)
+	}
+	
+	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
+	///
+	/// Returns the result of the closure and updates `storage` with all changes.
+	///
+	/// Do not support runtime transaction and root calculation.
+	/// This limitation is fine for most genesis runtime storage initialization.
+	pub fn execute_with_storage<R>(
+		storage: &mut sp_core::storage::Storage,
+		f: impl FnOnce() -> R,
+	) -> R {
+		Self::execute_with_storage_inner(storage, None, f)
+	}
+
+	fn execute_with_storage_inner<R>(
+		storage: &mut sp_core::storage::Storage,
+		state_version: Option<StateVersion>,
 		f: impl FnOnce() -> R,
 	) -> R {
 		let mut ext = Self {
@@ -126,7 +149,7 @@ impl From<(BTreeMap<StorageKey, StorageValue>, StateVersion)> for BasicExternali
 		BasicExternalities {
 			inner: Storage { top: hashmap, children_default: Default::default() },
 			extensions: Default::default(),
-			state_version,
+			state_version: Some(state_version),
 		}
 	}
 }
@@ -290,7 +313,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = match self.state_version {
+		let layout = match self.state_version.expect("Unsupported state calculation for genesis storage build.") {
 			StateVersion::V0 => {
 				Layout::<Blake2Hasher>::default()
 			},
@@ -302,9 +325,10 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
+		let state_version = self.state_version.expect("Unsupported state calculation for genesis storage build.");
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(self.state_version.clone());
+			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(state_version);
 			in_mem.child_storage_root(&child.child_info, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()

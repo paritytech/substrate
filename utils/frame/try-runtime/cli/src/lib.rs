@@ -463,12 +463,7 @@ impl CliConfiguration for TryRuntimeCmd {
 /// Extract `:code` from the given chain spec and return as `StorageData` along with the
 /// corresponding `StorageKey`.
 fn extract_code<Block: BlockT>(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
-	let state_version = sp_runtime::StateVersions::<Block>::from_conf(spec.state_versions()
-		.iter().map(|(number, version)| (number.as_str(), *version)))
-		.ok_or_else(|| "Invalid state versions for chain spec".to_string())?
-		.genesis_state_version();
-
-	let genesis_storage = spec.build_storage(state_version)?;
+	let genesis_storage = spec.build_storage()?;
 	let code = StorageData(
 		genesis_storage
 			.top

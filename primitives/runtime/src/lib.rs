@@ -191,7 +191,6 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	fn build_module_genesis_storage(
 		&self,
 		storage: &mut sp_core::storage::Storage,
-		state_version: StateVersion,
 	) -> Result<(), String>;
 }
 

@@ -241,7 +241,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 				);
 			}
 
-			storage
+			(storage, sp_runtime::StateVersion::default())
 		};
 
 		let client = client::Client::new(

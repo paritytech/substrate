@@ -183,7 +183,6 @@ use sp_runtime::{
 		Saturating, StaticLookup, Zero,
 	},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
-	StateVersion,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -584,11 +583,6 @@ pub mod pallet {
 
 #[cfg(feature = "std")]
 impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
-	/// State version for genesis.
-	pub fn genesis_state_version(&self) -> StateVersion {
-		<Self as GenesisBuild<T, I>>::genesis_state_version(self)
-	}
-
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.

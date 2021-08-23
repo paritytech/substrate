@@ -305,7 +305,6 @@ pub mod pallet {
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn genesis_config(&self) {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
 		}

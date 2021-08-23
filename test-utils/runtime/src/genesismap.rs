@@ -37,7 +37,7 @@ pub struct GenesisConfig {
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: Storage,
-	state_version: StateVersion,
+	state_version: StateVersion, // TODO check if in use
 }
 
 impl GenesisConfig {
@@ -93,7 +93,7 @@ impl GenesisConfig {
 		let mut config = system::GenesisConfig::default();
 		config.authorities = self.authorities.clone();
 		config
-			.assimilate_storage(&mut storage, self.state_version.clone())
+			.assimilate_storage(&mut storage)
 			.expect("Adding `system::GensisConfig` to the genesis");
 
 		storage

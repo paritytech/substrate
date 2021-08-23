@@ -61,10 +61,8 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 			fn build_module_genesis_storage(
 				&self,
 				storage: &mut #frame_support::sp_runtime::Storage,
-				state_version: #frame_support::sp_runtime::StateVersion,
-
 			) -> std::result::Result<(), std::string::String> {
-				#frame_support::BasicExternalities::execute_with_storage(storage, state_version, || {
+				#frame_support::BasicExternalities::execute_with_storage(storage, || {
 					<Self as #frame_support::traits::GenesisBuild<#type_use_gen>>::build(self);
 					Ok(())
 				})
