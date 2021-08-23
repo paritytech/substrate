@@ -778,8 +778,10 @@ mod tests {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call =
-				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: witness() };
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -849,8 +851,10 @@ mod tests {
 
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call =
-				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: witness() };
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -944,8 +948,10 @@ mod tests {
 			// This is in itself an invalid BS solution.
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call =
-				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: witness() };
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
