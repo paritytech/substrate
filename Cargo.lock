@@ -5705,6 +5705,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "rand 0.7.3",
+ "scale-info",
  "sp-core",
  "sp-io",
  "sp-runtime",
