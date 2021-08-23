@@ -973,7 +973,7 @@ mod tests {
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
 			let call =
-				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), correct_witness };
+				Call::submit_unsigned { raw_solution: Box::new(solution.clone()), witness: correct_witness };
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
