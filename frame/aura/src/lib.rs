@@ -28,7 +28,8 @@
 //!
 //! ### Public Functions
 //!
-//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
+//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module
+//!   configuration.
 //!
 //! ## Related Modules
 //!
@@ -99,7 +100,8 @@ pub mod pallet {
 					}
 				}
 
-				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+				// TODO [#3398] Generate offence report for all authorities that skipped their
+				// slots.
 
 				T::DbWeight::get().reads_writes(2, 1)
 			} else {

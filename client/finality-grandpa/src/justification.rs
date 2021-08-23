@@ -171,7 +171,8 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 
 			match ancestry_chain.ancestry(self.commit.target_hash, signed.precommit.target_hash) {
 				Ok(route) => {
-					// ancestry starts from parent hash but the precommit target hash has been visited
+					// ancestry starts from parent hash but the precommit target hash has been
+					// visited
 					visited_hashes.insert(signed.precommit.target_hash);
 					for hash in route {
 						visited_hashes.insert(hash);

@@ -150,8 +150,7 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
 /// - `AllPallets`: Tuple that contains all modules. Will be used to call e.g. `on_initialize`.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
-///                       already called by `AllPallets`. It will be called before all modules will
-///                       be called.
+///   already called by `AllPallets`. It will be called before all modules will be called.
 pub struct Executive<System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade = ()>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade)>,
 );
@@ -479,7 +478,8 @@ where
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
-	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
+	/// side-effects; it merely checks whether the transaction would panic if it were included or
+	/// not.
 	///
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(

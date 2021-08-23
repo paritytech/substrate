@@ -125,7 +125,8 @@ where
 		}
 	}
 
-	/// Remove a key from the map, returning the value at the key if the key was previously in the map.
+	/// Remove a key from the map, returning the value at the key if the key was previously in the
+	/// map.
 	///
 	/// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
 	/// form _must_ match the ordering on the key type.
@@ -137,7 +138,8 @@ where
 		self.0.remove(key)
 	}
 
-	/// Remove a key from the map, returning the value at the key if the key was previously in the map.
+	/// Remove a key from the map, returning the value at the key if the key was previously in the
+	/// map.
 	///
 	/// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
 	/// form _must_ match the ordering on the key type.

@@ -94,8 +94,8 @@ fn main() {
 					iterations, unbalanced_score, balanced_score, enhance,
 				);
 
-				// The only guarantee of balancing is such that the first and third element of the score
-				// cannot decrease.
+				// The only guarantee of balancing is such that the first and third element of the
+				// score cannot decrease.
 				assert!(
 					balanced_score[0] >= unbalanced_score[0] &&
 						balanced_score[1] == unbalanced_score[1] &&

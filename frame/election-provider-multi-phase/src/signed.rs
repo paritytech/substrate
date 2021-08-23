@@ -18,8 +18,8 @@
 //! The signed phase implementation.
 
 use crate::{
-	CompactOf, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
-	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
+	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
 	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
@@ -29,7 +29,7 @@ use frame_support::{
 	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{is_score_better, CompactSolution, ElectionScore};
+use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
@@ -44,42 +44,40 @@ use sp_std::{
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
+pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	/// Who submitted this solution.
 	pub who: AccountId,
 	/// The deposit reserved for storing this solution.
 	pub deposit: Balance,
 	/// The raw solution itself.
-	pub solution: RawSolution<CompactSolution>,
+	pub raw_solution: RawSolution<Solution>,
 	/// The reward that should potentially be paid for this solution, if accepted.
 	pub reward: Balance,
 }
 
-impl<AccountId, Balance, CompactSolution> Ord
-	for SignedSubmission<AccountId, Balance, CompactSolution>
+impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
 where
 	AccountId: Ord,
 	Balance: Ord + HasCompact,
-	CompactSolution: Ord,
-	RawSolution<CompactSolution>: Ord,
+	Solution: Ord,
+	RawSolution<Solution>: Ord,
 {
 	fn cmp(&self, other: &Self) -> Ordering {
-		self.solution
+		self.raw_solution
 			.score
-			.cmp(&other.solution.score)
-			.then_with(|| self.solution.cmp(&other.solution))
+			.cmp(&other.raw_solution.score)
+			.then_with(|| self.raw_solution.cmp(&other.raw_solution))
 			.then_with(|| self.deposit.cmp(&other.deposit))
 			.then_with(|| self.who.cmp(&other.who))
 	}
 }
 
-impl<AccountId, Balance, CompactSolution> PartialOrd
-	for SignedSubmission<AccountId, Balance, CompactSolution>
+impl<AccountId, Balance, Solution> PartialOrd for SignedSubmission<AccountId, Balance, Solution>
 where
 	AccountId: Ord,
 	Balance: Ord + HasCompact,
-	CompactSolution: Ord,
-	RawSolution<CompactSolution>: Ord,
+	Solution: Ord,
+	RawSolution<Solution>: Ord,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
@@ -95,7 +93,7 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 pub type SignedSubmissionOf<T> =
-	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, CompactOf<T>>;
+	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, SolutionOf<T>>;
 
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
@@ -270,13 +268,13 @@ impl<T: Config> SignedSubmissions<T> {
 		// verify the expectation that we never reuse an index
 		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
 
-		let weakest = match self.indices.try_insert(submission.solution.score, self.next_idx) {
+		let weakest = match self.indices.try_insert(submission.raw_solution.score, self.next_idx) {
 			Ok(Some(prev_idx)) => {
 				// a submission of equal score was already present in the set;
 				// no point editing the actual backing map as we know that the newer solution can't
 				// be better than the old. However, we do need to put the old value back.
 				self.indices
-					.try_insert(submission.solution.score, prev_idx)
+					.try_insert(submission.raw_solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
 				return InsertResult::NotInserted
 			},
@@ -345,7 +343,17 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
-	pub fn finalize_signed_phase() -> (bool, Weight) {
+	///
+	/// This is a *self-weighing* function, it automatically registers its weight internally when
+	/// being called.
+	pub fn finalize_signed_phase() -> bool {
+		let (weight, found_solution) = Self::finalize_signed_phase_internal();
+		Self::register_weight(weight);
+		found_solution
+	}
+
+	/// The guts of [`finalized_signed_phase`], that does everything except registering its weight.
+	pub(crate) fn finalize_signed_phase_internal() -> (Weight, bool) {
 		let mut all_submissions = Self::signed_submissions();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
@@ -354,8 +362,8 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot_metadata().unwrap_or_default();
 
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { solution, who, deposit, reward } = best;
-			let active_voters = solution.compact.voter_count() as u32;
+			let SignedSubmission { raw_solution, who, deposit, reward } = best;
+			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
 				let desired_targets = Self::desired_targets().unwrap_or_default();
@@ -363,7 +371,7 @@ impl<T: Config> Pallet<T> {
 			};
 			// the feasibility check itself has some weight
 			weight = weight.saturating_add(feasibility_weight);
-			match Self::feasibility_check(solution, ElectionCompute::Signed) {
+			match Self::feasibility_check(raw_solution, ElectionCompute::Signed) {
 				Ok(ready_solution) => {
 					Self::finalize_signed_phase_accept_solution(
 						ready_solution,
@@ -404,9 +412,9 @@ impl<T: Config> Pallet<T> {
 			found_solution,
 			discarded
 		);
-		(found_solution, weight)
-	}
 
+		(weight, found_solution)
+	}
 	/// Helper function for the case where a solution is accepted in the signed phase.
 	///
 	/// Extracted to facilitate with weight calculation.
@@ -447,14 +455,14 @@ impl<T: Config> Pallet<T> {
 
 	/// The feasibility weight of the given raw solution.
 	pub fn feasibility_weight_of(
-		solution: &RawSolution<CompactOf<T>>,
+		raw_solution: &RawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
 		T::WeightInfo::feasibility_check(
 			size.voters,
 			size.targets,
-			solution.compact.voter_count() as u32,
-			solution.compact.unique_targets().len() as u32,
+			raw_solution.solution.voter_count() as u32,
+			raw_solution.solution.unique_targets().len() as u32,
 		)
 	}
 
@@ -466,12 +474,12 @@ impl<T: Config> Pallet<T> {
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(
-		solution: &RawSolution<CompactOf<T>>,
+		raw_solution: &RawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
-		let encoded_len: u32 = solution.encoded_size().saturated_into();
+		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
 		let encoded_len: BalanceOf<T> = encoded_len.into();
-		let feasibility_weight = Self::feasibility_weight_of(solution, size);
+		let feasibility_weight = Self::feasibility_weight_of(raw_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
 		let weight_deposit =
@@ -497,7 +505,7 @@ mod tests {
 
 	fn submit_with_witness(
 		origin: Origin,
-		solution: RawSolution<CompactOf<Runtime>>,
+		solution: RawSolution<SolutionOf<Runtime>>,
 	) -> DispatchResult {
 		MultiPhase::submit(
 			origin,
@@ -570,7 +578,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 		})
 	}
@@ -591,7 +599,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
-			assert!(!MultiPhase::finalize_signed_phase().0);
+			assert!(!MultiPhase::finalize_signed_phase());
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
 		})
@@ -617,7 +625,7 @@ mod tests {
 			assert_eq!(balances(&999), (95, 5));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -663,7 +671,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.solution.score[0])
+					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8, 9]
 			);
@@ -676,7 +684,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.solution.score[0])
+					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![6, 7, 8, 9, 20]
 			);
@@ -701,7 +709,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.solution.score[0])
+					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![4, 6, 7, 8, 9],
 			);
@@ -714,7 +722,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.solution.score[0])
+					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8, 9],
 			);
@@ -759,7 +767,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.solution.score[0])
+					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7]
 			);
@@ -808,7 +816,7 @@ mod tests {
 			);
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -828,33 +836,33 @@ mod tests {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
+				let (raw, witness) = MultiPhase::mine_solution(2).unwrap();
 				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
 					witness.voters,
 					witness.targets,
-					solution.compact.voter_count() as u32,
-					solution.compact.unique_targets().len() as u32,
+					raw.solution.voter_count() as u32,
+					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, 35);
-				assert_eq!(solution.compact.voter_count(), 5);
+				assert_eq!(raw.solution.voter_count(), 5);
 				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
 
-				assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+				assert_ok!(submit_with_witness(Origin::signed(99), raw.clone()));
 
 				<SignedMaxWeight>::set(30);
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.
 				assert_noop!(
-					submit_with_witness(Origin::signed(99), solution),
+					submit_with_witness(Origin::signed(99), raw),
 					Error::<Runtime>::SignedTooMuchWeight,
 				);
 			})
 	}
 
 	#[test]
-	fn insufficient_deposit_doesnt_store_submission() {
+	fn insufficient_deposit_does_not_store_submission() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
@@ -908,7 +916,7 @@ mod tests {
 				roll_to(block_number);
 
 				assert_eq!(SignedSubmissions::<Runtime>::decode_len().unwrap_or_default(), 0);
-				assert_storage_noop!(MultiPhase::finalize_signed_phase());
+				assert_storage_noop!(MultiPhase::finalize_signed_phase_internal());
 			}
 		})
 	}
@@ -925,7 +933,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// calling it again doesn't change anything
 			assert_storage_noop!(MultiPhase::finalize_signed_phase());
