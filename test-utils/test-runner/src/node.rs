@@ -18,32 +18,40 @@
 
 use std::sync::Arc;
 
-use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
+use futures::{
+	channel::{mpsc, oneshot},
+	FutureExt, SinkExt,
+};
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams};
 use sc_cli::build_runtime;
 use sc_client_api::{
-	backend::{self, Backend}, CallExecutor, ExecutorProvider,
+	backend::{self, Backend},
+	CallExecutor, ExecutorProvider,
 };
 use sc_service::{
-	build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams,
-	TFullBackend, TFullCallExecutor, TFullClient, TaskManager, TaskType,
+	build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams, TFullBackend,
+	TFullCallExecutor, TFullClient, TaskManager, TaskType,
 };
 use sc_transaction_pool::BasicPool;
-use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata, OverlayedChanges, StorageTransactionCache};
+use sp_api::{
+	ApiExt, ConstructRuntimeApi, Core, Metadata, OverlayedChanges, StorageTransactionCache,
+};
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::HeaderBackend;
 use sp_core::ExecutionContext;
 use sp_offchain::OffchainWorkerApi;
-use sp_runtime::traits::{Block as BlockT, Extrinsic};
-use sp_runtime::{generic::BlockId, transaction_validity::TransactionSource, MultiSignature, MultiAddress};
-use sp_runtime::{generic::UncheckedExtrinsic, traits::NumberFor};
+use sp_runtime::{
+	generic::{BlockId, UncheckedExtrinsic},
+	traits::{Block as BlockT, Extrinsic, NumberFor},
+	transaction_validity::TransactionSource,
+	MultiAddress, MultiSignature,
+};
 use sp_session::SessionKeys;
 use sp_state_machine::Ext;
-use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_transaction_pool::TransactionPool;
+use sp_transaction_pool::{runtime_api::TaggedTransactionQueue, TransactionPool};
 
-use crate::{ChainInfo, utils::logger};
+use crate::{utils::logger, ChainInfo};
 use log::LevelFilter;
 
 /// This holds a reference to a running node on another thread,
@@ -77,7 +85,7 @@ pub struct Node<T: ChainInfo> {
 	/// backend type.
 	backend: Arc<TFullBackend<T::Block>>,
 	/// Block number at initialization of this Node.
-	initial_block_number: NumberFor<T::Block>
+	initial_block_number: NumberFor<T::Block>,
 }
 
 /// Configuration options for the node.
@@ -86,22 +94,27 @@ pub struct NodeConfig {
 	pub log_targets: Vec<(&'static str, LevelFilter)>,
 }
 
-type EventRecord<T> = frame_system::EventRecord<<T as frame_system::Config>::Event, <T as frame_system::Config>::Hash>;
+type EventRecord<T> = frame_system::EventRecord<
+	<T as frame_system::Config>::Event,
+	<T as frame_system::Config>::Hash,
+>;
 
 impl<T: ChainInfo> Node<T> {
 	/// Starts a node with the manual-seal authorship.
 	pub fn new(node_config: NodeConfig) -> Result<Self, sc_service::Error>
 	where
-		<T::RuntimeApi as ConstructRuntimeApi<T::Block, TFullClient<T::Block, T::RuntimeApi, T::Executor>>>::RuntimeApi:
-			Core<T::Block>
-				+ Metadata<T::Block>
-				+ OffchainWorkerApi<T::Block>
-				+ SessionKeys<T::Block>
-				+ TaggedTransactionQueue<T::Block>
-				+ BlockBuilder<T::Block>
-				+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
+		<T::RuntimeApi as ConstructRuntimeApi<
+			T::Block,
+			TFullClient<T::Block, T::RuntimeApi, T::Executor>,
+		>>::RuntimeApi: Core<T::Block>
+			+ Metadata<T::Block>
+			+ OffchainWorkerApi<T::Block>
+			+ SessionKeys<T::Block>
+			+ TaggedTransactionQueue<T::Block>
+			+ BlockBuilder<T::Block>
+			+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
 	{
-		let NodeConfig { log_targets, } = node_config;
+		let NodeConfig { log_targets } = node_config;
 		let tokio_runtime = build_runtime().unwrap();
 		let runtime_handle = tokio_runtime.handle().clone();
 		let task_executor = move |fut, task_type| match task_type {
@@ -127,8 +140,11 @@ impl<T: ChainInfo> Node<T> {
 			block_import,
 		) = T::create_client_parts(&config)?;
 
-		let import_queue =
-			manual_seal::import_queue(Box::new(block_import.clone()), &task_manager.spawn_essential_handle(), None);
+		let import_queue = manual_seal::import_queue(
+			Box::new(block_import.clone()),
+			&task_manager.spawn_essential_handle(),
+			None,
+		);
 
 		let transaction_pool = BasicPool::new_full(
 			config.transaction_pool.clone(),
@@ -164,7 +180,7 @@ impl<T: ChainInfo> Node<T> {
 			client.clone(),
 			transaction_pool.clone(),
 			config.prometheus_registry(),
-			None
+			None,
 		);
 
 		// Channel for the rpc handler to communicate with the authorship task.
@@ -183,7 +199,7 @@ impl<T: ChainInfo> Node<T> {
 				remote_blockchain: None,
 				network,
 				system_rpc_tx,
-				telemetry: None
+				telemetry: None,
 			};
 			spawn_tasks(params)?
 		};
@@ -201,9 +217,7 @@ impl<T: ChainInfo> Node<T> {
 		});
 
 		// spawn the authorship task as an essential task.
-		task_manager
-			.spawn_essential_handle()
-			.spawn("manual-seal", authorship_future);
+		task_manager.spawn_essential_handle().spawn("manual-seal", authorship_future);
 
 		network_starter.start_network();
 		let rpc_handler = rpc_handlers.io_handler();
@@ -223,7 +237,9 @@ impl<T: ChainInfo> Node<T> {
 	}
 
 	/// Returns a reference to the rpc handlers.
-	pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	pub fn rpc_handler(
+		&self,
+	) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
 		self.rpc_handler.clone()
 	}
 
@@ -235,13 +251,18 @@ impl<T: ChainInfo> Node<T> {
 	/// Executes closure in an externalities provided environment.
 	pub fn with_state<R>(&self, closure: impl FnOnce() -> R) -> R
 	where
-		<TFullCallExecutor<T::Block, T::Executor> as CallExecutor<T::Block>>::Error: std::fmt::Debug,
+		<TFullCallExecutor<T::Block, T::Executor> as CallExecutor<T::Block>>::Error:
+			std::fmt::Debug,
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
 		let mut overlay = OverlayedChanges::default();
-		let changes_trie = backend::changes_tries_state_at_block(&id, self.backend.changes_trie_storage()).unwrap();
-		let mut cache =
-			StorageTransactionCache::<T::Block, <TFullBackend<T::Block> as Backend<T::Block>>::State>::default();
+		let changes_trie =
+			backend::changes_tries_state_at_block(&id, self.backend.changes_trie_storage())
+				.unwrap();
+		let mut cache = StorageTransactionCache::<
+			T::Block,
+			<TFullBackend<T::Block> as Backend<T::Block>>::State,
+		>::default();
 		let mut extensions = self
 			.client
 			.execution_extensions()
@@ -295,9 +316,11 @@ impl<T: ChainInfo> Node<T> {
 		let at = self.client.info().best_hash;
 
 		self._runtime
-			.block_on(
-				self.pool.submit_one(&BlockId::Hash(at), TransactionSource::Local, ext.into()),
-			)
+			.block_on(self.pool.submit_one(
+				&BlockId::Hash(at),
+				TransactionSource::Local,
+				ext.into(),
+			))
 			.unwrap()
 	}
 
@@ -313,7 +336,7 @@ impl<T: ChainInfo> Node<T> {
 
 			while let Some(log_line) = self.log_stream.next().await {
 				if log_line.contains(content) {
-					return;
+					return
 				}
 			}
 
@@ -339,8 +362,14 @@ impl<T: ChainInfo> Node<T> {
 				future.await.expect(ERROR);
 
 				match future_block.await.expect(ERROR) {
-					Ok(block) => log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
-					Err(err) => log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err),
+					Ok(block) =>
+						log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
+					Err(err) => log::error!(
+						"failed to seal block {} of {}, error: {:?}",
+						count + 1,
+						num,
+						err
+					),
 				}
 			});
 		}
@@ -362,8 +391,8 @@ impl<T: ChainInfo> Node<T> {
 
 	/// Performs a runtime upgrade given a wasm blob.
 	pub fn upgrade_runtime(&mut self, wasm: Vec<u8>)
-		where
-			<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>
+	where
+		<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
 	{
 		let call = frame_system::Call::set_code(wasm);
 		T::dispatch_with_root(call.into(), self);

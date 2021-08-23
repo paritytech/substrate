@@ -17,13 +17,10 @@
 
 use super::*;
 use crate as multi_phase;
-use multi_phase::unsigned::{IndexAssignmentOf, Voter};
+use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{
-	parameter_types,
-	traits::{Hooks},
-	weights::Weight,
-};
+use frame_support::{parameter_types, traits::Hooks, weights::Weight};
+use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -32,7 +29,6 @@ use sp_core::{
 	},
 	H256,
 };
-use frame_election_provider_support::{ElectionDataProvider, data_provider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -405,7 +401,7 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
-			return Err("Targets too big");
+			return Err("Targets too big")
 		}
 
 		Ok((targets, 0))
@@ -416,7 +412,7 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
 		let voters = Voters::get();
 		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
-			return Err("Voters too big");
+			return Err("Voters too big")
 		}
 
 		Ok((voters, 0))

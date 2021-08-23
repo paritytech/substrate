@@ -19,8 +19,8 @@
 
 #![cfg(feature = "derive")]
 
-use max_encoded_len::MaxEncodedLen;
 use codec::{Compact, Encode};
+use max_encoded_len::MaxEncodedLen;
 
 // These structs won't even compile if the macro isn't working right.
 

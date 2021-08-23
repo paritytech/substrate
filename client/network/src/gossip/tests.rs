@@ -16,11 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::block_request_handler::BlockRequestHandler;
-use crate::state_request_handler::StateRequestHandler;
-use crate::light_client_requests::handler::LightClientRequestHandler;
-use crate::gossip::QueuedSender;
-use crate::{config,  Event, NetworkService, NetworkWorker};
+use crate::{
+	block_request_handler::BlockRequestHandler, config, gossip::QueuedSender,
+	light_client_requests::handler::LightClientRequestHandler,
+	state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
+};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -37,14 +37,10 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(network_config: config::NetworkConfiguration)
-	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
-{
-	let client = Arc::new(
-		TestClientBuilder::with_default_backend()
-			.build_with_longest_chain()
-			.0,
-	);
+fn build_test_full_node(
+	network_config: config::NetworkConfiguration,
+) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
+	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
 	#[derive(Clone)]
 	struct PassThroughVerifier(bool);
@@ -69,14 +65,13 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 				.log(|l| {
 					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
 						.or_else(|| {
-							l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"babe"))
+							l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(
+								b"babe",
+							))
 						})
 				})
 				.map(|blob| {
-					vec![(
-						sp_blockchain::well_known_cache_keys::AUTHORITIES,
-						blob.to_vec(),
-					)]
+					vec![(sp_blockchain::well_known_cache_keys::AUTHORITIES, blob.to_vec())]
 				});
 
 			let mut import = sp_consensus::BlockImportParams::new(origin, header);
@@ -99,30 +94,20 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	let protocol_id = config::ProtocolId::from("/test-protocol-name");
 
 	let block_request_protocol_config = {
-		let (handler, protocol_config) = BlockRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-			50,
-		);
+		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let state_request_protocol_config = {
-		let (handler, protocol_config) = StateRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-			50,
-		);
+		let (handler, protocol_config) = StateRequestHandler::new(&protocol_id, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let light_client_request_protocol_config = {
-		let (handler, protocol_config) = LightClientRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-		);
+		let (handler, protocol_config) =
+			LightClientRequestHandler::new(&protocol_id, client.clone());
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
@@ -130,7 +115,9 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
+		transactions_handler_executor: Box::new(|task| {
+			async_std::task::spawn(task);
+		}),
 		network_config,
 		chain: client.clone(),
 		on_demand: None,
@@ -162,43 +149,42 @@ const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
-fn build_nodes_one_proto()
-	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
-{
+fn build_nodes_one_proto() -> (
+	Arc<TestNetworkService>,
+	impl Stream<Item = Event>,
+	Arc<TestNetworkService>,
+	impl Stream<Item = Event>,
+) {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: Default::default()
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME,
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			set_config: Default::default(),
+		}],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![],
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: config::SetConfig {
-					reserved_nodes: vec![config::MultiaddrWithPeerId {
-						multiaddr: listen_addr,
-						peer_id: node1.local_peer_id().clone(),
-					}],
-					.. Default::default()
-				},
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME,
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			set_config: config::SetConfig {
+				reserved_nodes: vec![config::MultiaddrWithPeerId {
+					multiaddr: listen_addr,
+					peer_id: node1.local_peer_id().clone(),
+				}],
+				..Default::default()
+			},
+		}],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	(node1, events_stream1, node2, events_stream2)
@@ -217,14 +203,13 @@ fn basic_works() {
 		while received_notifications < NUM_NOTIFS {
 			match events_stream2.next().await.unwrap() {
 				Event::NotificationStreamClosed { .. } => panic!(),
-				Event::NotificationsReceived { messages, .. } => {
+				Event::NotificationsReceived { messages, .. } =>
 					for message in messages {
 						assert_eq!(message.0, PROTOCOL_NAME);
 						assert_eq!(message.1, &b"message"[..]);
 						received_notifications += 1;
-					}
-				}
-				_ => {}
+					},
+				_ => {},
 			};
 
 			if rand::random::<u8>() < 2 {
@@ -242,7 +227,7 @@ fn basic_works() {
 		loop {
 			match events_stream1.next().await.unwrap() {
 				Event::NotificationStreamOpened { .. } => break,
-				_ => {}
+				_ => {},
 			};
 		}
 

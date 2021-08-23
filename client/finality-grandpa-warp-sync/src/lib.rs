@@ -17,17 +17,20 @@
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
 use codec::{Decode, Encode};
-use sc_network::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
-use sc_client_api::Backend;
-use sp_runtime::traits::NumberFor;
-use futures::channel::{mpsc, oneshot};
-use futures::stream::StreamExt;
+use futures::{
+	channel::{mpsc, oneshot},
+	stream::StreamExt,
+};
 use log::debug;
-use sp_runtime::traits::Block as BlockT;
-use std::time::Duration;
-use std::sync::Arc;
-use sc_service::{SpawnTaskHandle, config::{Configuration, Role}};
+use sc_client_api::Backend;
 use sc_finality_grandpa::SharedAuthoritySet;
+use sc_network::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
+use sc_service::{
+	config::{Configuration, Role},
+	SpawnTaskHandle,
+};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::{sync::Arc, time::Duration};
 
 mod proof;
 
@@ -50,11 +53,8 @@ where
 		generate_request_response_config(protocol_id.clone())
 	} else {
 		// Allow both outgoing and incoming requests.
-		let (handler, request_response_config) = GrandpaWarpSyncRequestHandler::new(
-			protocol_id.clone(),
-			backend.clone(),
-			authority_set,
-		);
+		let (handler, request_response_config) =
+			GrandpaWarpSyncRequestHandler::new(protocol_id.clone(), backend.clone(), authority_set);
 		spawn_handle.spawn("grandpa-warp-sync", handler.run());
 		request_response_config
 	}
@@ -62,7 +62,8 @@ where
 
 const LOG_TARGET: &str = "finality-grandpa-warp-sync-request-handler";
 
-/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing incoming requests.
+/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing
+/// incoming requests.
 pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
 	RequestResponseConfig {
 		name: generate_protocol_name(protocol_id).into(),
@@ -108,12 +109,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		request_response_config.inbound_queue = Some(tx);
 
 		(
-			Self {
-				backend,
-				request_receiver,
-				_phantom: std::marker::PhantomData,
-				authority_set,
-			},
+			Self { backend, request_receiver, _phantom: std::marker::PhantomData, authority_set },
 			request_response_config,
 		)
 	}
@@ -123,7 +119,8 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		payload: Vec<u8>,
 		pending_response: oneshot::Sender<OutgoingResponse>,
 	) -> Result<(), HandleRequestError>
-		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
+	where
+		NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
@@ -133,26 +130,29 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 			&self.authority_set.authority_set_changes(),
 		)?;
 
-		pending_response.send(OutgoingResponse {
-			result: Ok(proof.encode()),
-			reputation_changes: Vec::new(),
-			sent_feedback: None,
-		}).map_err(|_| HandleRequestError::SendResponse)
+		pending_response
+			.send(OutgoingResponse {
+				result: Ok(proof.encode()),
+				reputation_changes: Vec::new(),
+				sent_feedback: None,
+			})
+			.map_err(|_| HandleRequestError::SendResponse)
 	}
 
 	/// Run [`GrandpaWarpSyncRequestHandler`].
 	pub async fn run(mut self)
-		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
+	where
+		NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
 		while let Some(request) = self.request_receiver.next().await {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
 			match self.handle_request(payload, pending_response) {
-				Ok(()) => debug!(target: LOG_TARGET, "Handled grandpa warp sync request from {}.", peer),
+				Ok(()) =>
+					debug!(target: LOG_TARGET, "Handled grandpa warp sync request from {}.", peer),
 				Err(e) => debug!(
 					target: LOG_TARGET,
-					"Failed to handle grandpa warp sync request from {}: {}",
-					peer, e,
+					"Failed to handle grandpa warp sync request from {}: {}", peer, e,
 				),
 			}
 		}

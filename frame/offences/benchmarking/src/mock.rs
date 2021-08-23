@@ -20,17 +20,14 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{
-	parameter_types,
-	weights::constants::WEIGHT_PER_SECOND,
-};
-use frame_system as system;
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::{Header, UintAuthorityId},
-};
 use frame_election_provider_support::onchain;
+use frame_support::{parameter_types, weights::constants::WEIGHT_PER_SECOND};
+use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
+use sp_runtime::{
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+};
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -112,7 +109,8 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
 	fn on_disabled(_: usize) {}
 }
@@ -198,7 +196,10 @@ impl pallet_offences::Config for Test {
 	type OnOffenceHandler = Staking;
 }
 
-impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {
+impl<T> frame_system::offchain::SendTransactionTypes<T> for Test
+where
+	Call: From<T>,
+{
 	type Extrinsic = Extrinsic;
 	type OverarchingCall = Call;
 }

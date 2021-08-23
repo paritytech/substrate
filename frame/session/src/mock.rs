@@ -18,18 +18,19 @@
 //! Mock helpers for Session.
 
 use super::*;
-use std::cell::RefCell;
-use frame_support::{parameter_types, BasicExternalities};
-use sp_core::{crypto::key_types::DUMMY, H256};
-use sp_runtime::{
-	Perbill, impl_opaque_keys,
-	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
-	testing::{Header, UintAuthorityId},
-};
-use sp_staking::SessionIndex;
 use crate as pallet_session;
 #[cfg(feature = "historical")]
 use crate::historical as pallet_session_historical;
+use frame_support::{parameter_types, BasicExternalities};
+use sp_core::{crypto::key_types::DUMMY, H256};
+use sp_runtime::{
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill,
+};
+use sp_staking::SessionIndex;
+use std::cell::RefCell;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -114,7 +115,12 @@ pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SESSION_LENGTH.with(|l| *l.borrow());
-		now % l == 0 || FORCE_SESSION_END.with(|l| { let r = *l.borrow(); *l.borrow_mut() = false; r })
+		now % l == 0 ||
+			FORCE_SESSION_END.with(|l| {
+				let r = *l.borrow();
+				*l.borrow_mut() = false;
+				r
+			})
 	}
 }
 
@@ -128,11 +134,12 @@ impl SessionHandler<u64> for TestSessionHandler {
 		_queued_validators: &[(u64, T)],
 	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-		AUTHORITIES.with(|l|
-			*l.borrow_mut() = validators.iter()
+		AUTHORITIES.with(|l| {
+			*l.borrow_mut() = validators
+				.iter()
 				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
 				.collect()
-		);
+		});
 	}
 	fn on_disabled(_validator_index: usize) {
 		DISABLED.with(|l| *l.borrow_mut() = true)
@@ -167,9 +174,7 @@ impl SessionManager<u64> for TestSessionManager {
 impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
-	fn new_session(new_index: SessionIndex)
-		-> Option<Vec<(u64, u64)>>
-	{
+	fn new_session(new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
 		<Self as SessionManager<_>>::new_session(new_index)
 			.map(|vals| vals.into_iter().map(|val| (val, val)).collect())
 	}
@@ -180,11 +185,11 @@ pub fn authorities() -> Vec<UintAuthorityId> {
 }
 
 pub fn force_new_session() {
-	FORCE_SESSION_END.with(|l| *l.borrow_mut() = true )
+	FORCE_SESSION_END.with(|l| *l.borrow_mut() = true)
 }
 
 pub fn set_session_length(x: u64) {
-	SESSION_LENGTH.with(|l| *l.borrow_mut() = x )
+	SESSION_LENGTH.with(|l| *l.borrow_mut() = x)
 }
 
 pub fn session_changed() -> bool {
@@ -205,9 +210,8 @@ pub fn reset_before_session_end_called() {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
-		l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-	);
+	let keys: Vec<_> = NEXT_VALIDATORS
+		.with(|l| l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect());
 	BasicExternalities::execute_with_storage(&mut t, || {
 		for (ref k, ..) in &keys {
 			frame_system::Pallet::<Test>::inc_providers(k);
@@ -216,7 +220,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// An additional identity that we use.
 		frame_system::Pallet::<Test>::inc_providers(&69);
 	});
-	pallet_session::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
+	pallet_session::GenesisConfig::<Test> { keys }
+		.assimilate_storage(&mut t)
+		.unwrap();
 	sp_io::TestExternalities::new(t)
 }
 

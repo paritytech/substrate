@@ -19,10 +19,10 @@
 
 #![cfg(test)]
 
-use sp_runtime::testing::Header;
-use sp_core::H256;
-use frame_support::parameter_types;
 use crate::{self as pallet_indices, Config};
+use frame_support::parameter_types;
+use sp_core::H256;
+use sp_runtime::testing::Header;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -101,8 +101,10 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }

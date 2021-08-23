@@ -34,18 +34,18 @@ macro_rules! assert_eq_error_rate {
 }
 
 pub mod biguint;
-pub mod helpers_128bit;
-pub mod traits;
-pub mod per_things;
 pub mod fixed_point;
+pub mod helpers_128bit;
+pub mod per_things;
 pub mod rational;
+pub mod traits;
 
-pub use fixed_point::{FixedPointNumber, FixedPointOperand, FixedI64, FixedI128, FixedU128};
-pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbill, Perquintill};
+pub use fixed_point::{FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128};
+pub use per_things::{InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, UpperOf};
 pub use rational::{Rational128, RationalInfinite};
 
-use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
-use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned};
+use sp_std::{cmp::Ordering, convert::TryInto, fmt::Debug, prelude::*};
+use traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};
 
 /// Trait for comparing two numbers with an threshold.
 ///
@@ -82,7 +82,6 @@ where
 				_ => Ordering::Equal,
 			}
 		}
-
 	}
 }
 
@@ -114,8 +113,10 @@ impl_normalize_for_numeric!(u8, u16, u32, u64, u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
 	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
-		let uppers =
-			self.iter().map(|p| <UpperOf<P>>::from(p.clone().deconstruct())).collect::<Vec<_>>();
+		let uppers = self
+			.iter()
+			.map(|p| <UpperOf<P>>::from(p.clone().deconstruct()))
+			.collect::<Vec<_>>();
 
 		let normalized =
 			normalize(uppers.as_ref(), <UpperOf<P>>::from(targeted_sum.deconstruct()))?;
@@ -157,7 +158,8 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 ///
 /// * This proof is used in the implementation as well.
 pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str>
-	where T: Clone + Copy + Ord + BaseArithmetic + Unsigned + Debug,
+where
+	T: Clone + Copy + Ord + BaseArithmetic + Unsigned + Debug,
 {
 	// compute sum and return error if failed.
 	let mut sum = T::zero();
@@ -171,12 +173,12 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 
 	// Nothing to do here.
 	if count.is_zero() {
-		return Ok(Vec::<T>::new());
+		return Ok(Vec::<T>::new())
 	}
 
 	let diff = targeted_sum.max(sum) - targeted_sum.min(sum);
 	if diff.is_zero() {
-		return Ok(input.to_vec());
+		return Ok(input.to_vec())
 	}
 
 	let needs_bump = targeted_sum > sum;
@@ -198,7 +200,8 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 
 		if !per_round.is_zero() {
 			for _ in 0..count {
-				output_with_idx[min_index].1 = output_with_idx[min_index].1
+				output_with_idx[min_index].1 = output_with_idx[min_index]
+					.1
 					.checked_add(&per_round)
 					.expect("Proof provided in the module doc; qed.");
 				if output_with_idx[min_index].1 >= threshold {
@@ -210,7 +213,8 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 
 		// continue with the previous min_index
 		while !leftover.is_zero() {
-			output_with_idx[min_index].1 = output_with_idx[min_index].1
+			output_with_idx[min_index].1 = output_with_idx[min_index]
+				.1
 				.checked_add(&T::one())
 				.expect("Proof provided in the module doc; qed.");
 			if output_with_idx[min_index].1 >= threshold {
@@ -232,9 +236,8 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 
 		if !per_round.is_zero() {
 			for _ in 0..count {
-				output_with_idx[max_index].1 = output_with_idx[max_index].1
-					.checked_sub(&per_round)
-					.unwrap_or_else(|| {
+				output_with_idx[max_index].1 =
+					output_with_idx[max_index].1.checked_sub(&per_round).unwrap_or_else(|| {
 						let remainder = per_round - output_with_idx[max_index].1;
 						leftover += remainder;
 						output_with_idx[max_index].1.saturating_sub(per_round)
@@ -284,7 +287,7 @@ mod normalize_tests {
 					normalize(vec![8 as $type, 9, 7, 10].as_ref(), 40).unwrap(),
 					vec![10, 10, 10, 10],
 				);
-			}
+			};
 		}
 		// it should work for all types as long as the length of vector can be converted to T.
 		test_for!(u128);
@@ -297,22 +300,13 @@ mod normalize_tests {
 	#[test]
 	fn fails_on_if_input_sum_large() {
 		assert!(normalize(vec![1u8; 255].as_ref(), 10).is_ok());
-		assert_eq!(
-			normalize(vec![1u8; 256].as_ref(), 10),
-			Err("sum of input cannot fit in `T`"),
-		);
+		assert_eq!(normalize(vec![1u8; 256].as_ref(), 10), Err("sum of input cannot fit in `T`"),);
 	}
 
 	#[test]
 	fn does_not_fail_on_subtraction_overflow() {
-		assert_eq!(
-			normalize(vec![1u8, 100, 100].as_ref(), 10).unwrap(),
-			vec![1, 9, 0],
-		);
-		assert_eq!(
-			normalize(vec![1u8, 8, 9].as_ref(), 1).unwrap(),
-			vec![0, 1, 0],
-		);
+		assert_eq!(normalize(vec![1u8, 100, 100].as_ref(), 10).unwrap(), vec![1, 9, 0],);
+		assert_eq!(normalize(vec![1u8, 8, 9].as_ref(), 1).unwrap(), vec![0, 1, 0],);
 	}
 
 	#[test]
@@ -323,11 +317,9 @@ mod normalize_tests {
 	#[test]
 	fn works_for_per_thing() {
 		assert_eq!(
-			vec![
-				Perbill::from_percent(33),
-				Perbill::from_percent(33),
-				Perbill::from_percent(33)
-			].normalize(Perbill::one()).unwrap(),
+			vec![Perbill::from_percent(33), Perbill::from_percent(33), Perbill::from_percent(33)]
+				.normalize(Perbill::one())
+				.unwrap(),
 			vec![
 				Perbill::from_parts(333333334),
 				Perbill::from_parts(333333333),
@@ -336,11 +328,9 @@ mod normalize_tests {
 		);
 
 		assert_eq!(
-			vec![
-				Perbill::from_percent(20),
-				Perbill::from_percent(15),
-				Perbill::from_percent(30)
-			].normalize(Perbill::one()).unwrap(),
+			vec![Perbill::from_percent(20), Perbill::from_percent(15), Perbill::from_percent(30)]
+				.normalize(Perbill::one())
+				.unwrap(),
 			vec![
 				Perbill::from_parts(316666668),
 				Perbill::from_parts(383333332),
@@ -355,11 +345,9 @@ mod normalize_tests {
 		// could have a situation where the sum cannot be calculated in the inner type. Calculating
 		// using the upper type of the per_thing should assure this to be okay.
 		assert_eq!(
-			vec![
-				PerU16::from_percent(40),
-				PerU16::from_percent(40),
-				PerU16::from_percent(40),
-			].normalize(PerU16::one()).unwrap(),
+			vec![PerU16::from_percent(40), PerU16::from_percent(40), PerU16::from_percent(40),]
+				.normalize(PerU16::one())
+				.unwrap(),
 			vec![
 				PerU16::from_parts(21845), // 33%
 				PerU16::from_parts(21845), // 33%
@@ -370,82 +358,40 @@ mod normalize_tests {
 
 	#[test]
 	fn normalize_works_all_le() {
-		assert_eq!(
-			normalize(vec![8u32, 9, 7, 10].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
+		assert_eq!(normalize(vec![8u32, 9, 7, 10].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
 
-		assert_eq!(
-			normalize(vec![7u32, 7, 7, 7].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
+		assert_eq!(normalize(vec![7u32, 7, 7, 7].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
 
-		assert_eq!(
-			normalize(vec![7u32, 7, 7, 10].as_ref(), 40).unwrap(),
-			vec![11, 11, 8, 10],
-		);
+		assert_eq!(normalize(vec![7u32, 7, 7, 10].as_ref(), 40).unwrap(), vec![11, 11, 8, 10],);
 
-		assert_eq!(
-			normalize(vec![7u32, 8, 7, 10].as_ref(), 40).unwrap(),
-			vec![11, 8, 11, 10],
-		);
+		assert_eq!(normalize(vec![7u32, 8, 7, 10].as_ref(), 40).unwrap(), vec![11, 8, 11, 10],);
 
-		assert_eq!(
-			normalize(vec![7u32, 7, 8, 10].as_ref(), 40).unwrap(),
-			vec![11, 11, 8, 10],
-		);
+		assert_eq!(normalize(vec![7u32, 7, 8, 10].as_ref(), 40).unwrap(), vec![11, 11, 8, 10],);
 	}
 
 	#[test]
 	fn normalize_works_some_ge() {
-		assert_eq!(
-			normalize(vec![8u32, 11, 9, 10].as_ref(), 40).unwrap(),
-			vec![10, 11, 9, 10],
-		);
+		assert_eq!(normalize(vec![8u32, 11, 9, 10].as_ref(), 40).unwrap(), vec![10, 11, 9, 10],);
 	}
 
 	#[test]
 	fn always_inc_min() {
-		assert_eq!(
-			normalize(vec![10u32, 7, 10, 10].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
-		assert_eq!(
-			normalize(vec![10u32, 10, 7, 10].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
-		assert_eq!(
-			normalize(vec![10u32, 10, 10, 7].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
+		assert_eq!(normalize(vec![10u32, 7, 10, 10].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
+		assert_eq!(normalize(vec![10u32, 10, 7, 10].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
+		assert_eq!(normalize(vec![10u32, 10, 10, 7].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
 	}
 
 	#[test]
 	fn normalize_works_all_ge() {
-		assert_eq!(
-			normalize(vec![12u32, 11, 13, 10].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
+		assert_eq!(normalize(vec![12u32, 11, 13, 10].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
 
-		assert_eq!(
-			normalize(vec![13u32, 13, 13, 13].as_ref(), 40).unwrap(),
-			vec![10, 10, 10, 10],
-		);
+		assert_eq!(normalize(vec![13u32, 13, 13, 13].as_ref(), 40).unwrap(), vec![10, 10, 10, 10],);
 
-		assert_eq!(
-			normalize(vec![13u32, 13, 13, 10].as_ref(), 40).unwrap(),
-			vec![12, 9, 9, 10],
-		);
+		assert_eq!(normalize(vec![13u32, 13, 13, 10].as_ref(), 40).unwrap(), vec![12, 9, 9, 10],);
 
-		assert_eq!(
-			normalize(vec![13u32, 12, 13, 10].as_ref(), 40).unwrap(),
-			vec![9, 12, 9, 10],
-		);
+		assert_eq!(normalize(vec![13u32, 12, 13, 10].as_ref(), 40).unwrap(), vec![9, 12, 9, 10],);
 
-		assert_eq!(
-			normalize(vec![13u32, 13, 12, 10].as_ref(), 40).unwrap(),
-			vec![9, 9, 12, 10],
-		);
+		assert_eq!(normalize(vec![13u32, 13, 12, 10].as_ref(), 40).unwrap(), vec![9, 9, 12, 10],);
 	}
 }
 

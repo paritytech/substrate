@@ -22,15 +22,15 @@
 //! Allows you to test
 //! <br />
 //!
-//! -   Migrations
-//! -   Runtime Upgrades
-//! -   Pallets and general runtime functionality.
+//! - Migrations
+//! - Runtime Upgrades
+//! - Pallets and general runtime functionality.
 //!
 //! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
-//! The running node has no signature verification, which allows us author extrinsics for any account on chain.
-//!     <br/>
+//! The running node has no signature verification, which allows us author extrinsics for any
+//! account on chain.     <br/>
 //!     <br/>
 //!
 //! <h2>How do I Use this?</h2>
@@ -186,12 +186,12 @@
 //! fn simple_balances_test() {
 //! 	// given
 //! 	let config = NodeConfig {
-//!			execution_strategies: ExecutionStrategies {
-//!				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 			execution_strategies: ExecutionStrategies {
+//! 				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 //! 		},
 //! 		chain_spec: Box::new(development_config()),
 //! 		log_targets: vec![],
@@ -228,7 +228,7 @@
 
 use manual_seal::consensus::ConsensusDataProvider;
 use sc_executor::NativeExecutionDispatch;
-use sc_service::{Configuration, TFullBackend, TFullClient, TaskManager, TaskExecutor};
+use sc_service::{Configuration, TFullBackend, TFullClient, TaskExecutor, TaskManager};
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::{BlockImport, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
@@ -236,9 +236,9 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::{Block as BlockT, SignedExtension};
 use std::sync::Arc;
 
+mod host_functions;
 mod node;
 mod utils;
-mod host_functions;
 
 pub use host_functions::*;
 pub use node::*;
@@ -271,7 +271,10 @@ pub trait ChainInfo: Sized {
 		+ BlockImport<
 			Self::Block,
 			Error = sp_consensus::Error,
-			Transaction = TransactionFor<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>, Self::Block>,
+			Transaction = TransactionFor<
+				TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+				Self::Block,
+			>,
 		> + 'static;
 
 	/// The signed extras required by the runtime
@@ -281,7 +284,9 @@ pub trait ChainInfo: Sized {
 	type InherentDataProviders: InherentDataProvider + 'static;
 
 	/// Signed extras, this function is caled in an externalities provided environment.
-	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras;
+	fn signed_extras(
+		from: <Self::Runtime as frame_system::Config>::AccountId,
+	) -> Self::SignedExtras;
 
 	/// config factory
 	fn config(task_executor: TaskExecutor) -> Configuration;
@@ -300,8 +305,8 @@ pub trait ChainInfo: Sized {
 				dyn CreateInherentDataProviders<
 					Self::Block,
 					(),
-					InherentDataProviders = Self::InherentDataProviders
-				>
+					InherentDataProviders = Self::InherentDataProviders,
+				>,
 			>,
 			Option<
 				Box<
@@ -321,5 +326,8 @@ pub trait ChainInfo: Sized {
 	>;
 
 	/// Given a call and a handle to the node, execute the call with root privileges.
-	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>);
+	fn dispatch_with_root(
+		call: <Self::Runtime as frame_system::Config>::Call,
+		node: &mut Node<Self>,
+	);
 }

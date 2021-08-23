@@ -17,27 +17,31 @@
 
 //! Test utilities
 
-use codec::Encode;
 use crate::{self as pallet_babe, Config, CurrentSlot};
-use sp_runtime::{
-	Perbill, impl_opaque_keys,
-	curve::PiecewiseLinear,
-	testing::{Digest, DigestItem, Header, TestXt,},
-	traits::{Header as _, IdentityLookup, OpaqueKeys},
-};
-use frame_system::InitKind;
+use codec::Encode;
+use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
-	traits::{KeyOwnerProofSystem, OnInitialize, GenesisBuild},
+	traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
-use sp_io;
-use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};
+use frame_system::InitKind;
+use pallet_session::historical as pallet_session_historical;
+use pallet_staking::EraIndex;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
+use sp_core::{
+	crypto::{IsWrappedBy, KeyTypeId, Pair},
+	H256, U256,
+};
+use sp_io;
+use sp_runtime::{
+	curve::PiecewiseLinear,
+	impl_opaque_keys,
+	testing::{Digest, DigestItem, Header, TestXt},
+	traits::{Header as _, IdentityLookup, OpaqueKeys},
+	Perbill,
+};
 use sp_staking::SessionIndex;
-use pallet_staking::EraIndex;
-use frame_election_provider_support::onchain;
-use pallet_session::historical as pallet_session_historical;
 
 type DummyValidatorId = u64;
 
@@ -277,7 +281,7 @@ pub fn go_to_block(n: u64, s: u64) {
 /// Slots will grow accordingly to blocks
 pub fn progress_to_block(n: u64) {
 	let mut slot = u64::from(Babe::current_slot()) + 1;
-	for i in System::block_number() + 1 ..= n {
+	for i in System::block_number() + 1..=n {
 		go_to_block(i, slot);
 		slot += 1;
 	}
@@ -308,7 +312,7 @@ pub fn make_primary_pre_digest(
 			slot,
 			vrf_output,
 			vrf_proof,
-		}
+		},
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
@@ -319,10 +323,7 @@ pub fn make_secondary_plain_pre_digest(
 	slot: sp_consensus_babe::Slot,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryPlain(
-		sp_consensus_babe::digests::SecondaryPlainPreDigest {
-			authority_index,
-			slot,
-		}
+		sp_consensus_babe::digests::SecondaryPlainPreDigest { authority_index, slot },
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
@@ -340,7 +341,7 @@ pub fn make_secondary_vrf_pre_digest(
 			slot,
 			vrf_output,
 			vrf_proof,
-		}
+		},
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
@@ -348,13 +349,13 @@ pub fn make_secondary_vrf_pre_digest(
 
 pub fn make_vrf_output(
 	slot: Slot,
-	pair: &sp_consensus_babe::AuthorityPair
+	pair: &sp_consensus_babe::AuthorityPair,
 ) -> (VRFOutput, VRFProof, [u8; 32]) {
 	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
 	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
 	let vrf_inout = pair.vrf_sign(transcript);
-	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
-		.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
+	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness =
+		vrf_inout.0.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
 	let vrf_output = VRFOutput(vrf_inout.0.to_output());
 	let vrf_proof = VRFProof(vrf_inout.1);
 
@@ -365,10 +366,12 @@ pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 	new_test_ext_with_pairs(authorities_len).1
 }
 
-pub fn new_test_ext_with_pairs(authorities_len: usize) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
-	let pairs = (0..authorities_len).map(|i| {
-		AuthorityPair::from_seed(&U256::from(i).into())
-	}).collect::<Vec<_>>();
+pub fn new_test_ext_with_pairs(
+	authorities_len: usize,
+) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
+	let pairs = (0..authorities_len)
+		.map(|i| AuthorityPair::from_seed(&U256::from(i).into()))
+		.collect::<Vec<_>>();
 
 	let public = pairs.iter().map(|p| p.public()).collect();
 
@@ -376,13 +379,9 @@ pub fn new_test_ext_with_pairs(authorities_len: usize) -> (Vec<AuthorityPair>, s
 }
 
 pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let balances: Vec<_> = (0..authorities.len())
-		.map(|i| (i as u64, 10_000_000))
-		.collect();
+	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 
 	pallet_balances::GenesisConfig::<Test> { balances }
 		.assimilate_storage(&mut t)
@@ -393,13 +392,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		.iter()
 		.enumerate()
 		.map(|(i, k)| {
-			(
-				i as u64,
-				i as u64,
-				MockSessionKeys {
-					babe_authority: AuthorityId::from(k.clone()),
-				},
-			)
+			(i as u64, i as u64, MockSessionKeys { babe_authority: AuthorityId::from(k.clone()) })
 		})
 		.collect();
 
@@ -412,12 +405,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
 		.map(|i| {
-			(
-				i as u64,
-				i as u64 + 1000,
-				10_000,
-				pallet_staking::StakerStatus::<u64>::Validator,
-			)
+			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
 		})
 		.collect();
 

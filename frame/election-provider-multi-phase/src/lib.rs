@@ -191,8 +191,8 @@
 //! portion of the bond).
 //!
 //! **Conditionally open unsigned phase**: Currently, the unsigned phase is always opened. This is
-//! useful because an honest validator will run substrate OCW code, which should be good enough to trump
-//! a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
+//! useful because an honest validator will run substrate OCW code, which should be good enough to
+//! trump a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
 //! If there are signed submissions, they can be checked against an absolute measure (e.g. PJR),
 //! then we can only open the unsigned phase in extreme conditions (i.e. "no good signed solution
 //! received") to spare some work for the active validators.
@@ -228,34 +228,31 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{Currency, Get, ReservableCurrency, OnUnbalanced},
+	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
+use sp_arithmetic::{
+	traits::{CheckedAdd, Zero},
+	UpperOf,
+};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore,
-	EvaluateSupport, PerThing128, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore, EvaluateSupport,
+	PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
+	traits::Bounded,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
-	traits::Bounded,
 };
-use sp_std::{
-	convert::TryInto,
-	prelude::*,
-};
-use sp_arithmetic::{
-	UpperOf,
-	traits::{Zero, CheckedAdd},
-};
+use sp_std::{convert::TryInto, prelude::*};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -328,8 +325,8 @@ pub enum Phase<Bn> {
 	/// number.
 	///
 	/// We do not yet check whether the unsigned phase is active or passive. The intent is for the
-	/// blockchain to be able to declare: "I believe that there exists an adequate signed solution,"
-	/// advising validators not to bother running the unsigned offchain worker.
+	/// blockchain to be able to declare: "I believe that there exists an adequate signed
+	/// solution," advising validators not to bother running the unsigned offchain worker.
 	///
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
 	/// and always compute their own solution. However, by default, when the unsigned phase is
@@ -551,7 +548,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event> + TryInto<Event<Self>>;
+		type Event: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::Event>
+			+ TryInto<Event<Self>>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -686,32 +685,36 @@ pub mod pallet {
 						Ok(snap_weight) => {
 							log!(info, "Starting signed phase round {}.", Self::round());
 							T::WeightInfo::on_initialize_open_signed().saturating_add(snap_weight)
-						}
+						},
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
 							// NOTE: ^^ The trait specifies that this is a noop in terms of weight
 							// in case of error.
-						}
+						},
 					}
-				}
+				},
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// our needs vary according to whether or not the unsigned phase follows a signed phase
-					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed {
-						// there was previously a signed phase: close the signed phase, no need for snapshot.
+					// our needs vary according to whether or not the unsigned phase follows a
+					// signed phase
+					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed
+					{
+						// there was previously a signed phase: close the signed phase, no need for
+						// snapshot.
 						//
 						// Notes:
 						//
-						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is
-						//     a guard against the case that `elect` is called prematurely. This adds
-						//     a small amount of overhead, but that is unfortunately unavoidable.
+						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This
+						//     is a guard against the case that `elect` is called prematurely. This
+						//     adds a small amount of overhead, but that is unfortunately
+						//     unavoidable.
 						let (_success, weight) = Self::finalize_signed_phase();
 						// In the future we can consider disabling the unsigned phase if the signed
-						// phase completes successfully, but for now we're enabling it unconditionally
-						// as a defensive measure.
+						// phase completes successfully, but for now we're enabling it
+						// unconditionally as a defensive measure.
 						(false, true, weight)
 					} else {
 						// No signed phase: create a new snapshot, definitely `enable` the unsigned
@@ -729,14 +732,14 @@ pub mod pallet {
 							};
 
 							base_weight.saturating_add(snap_weight).saturating_add(signed_weight)
-						}
+						},
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open unsigned phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
 							// NOTE: ^^ The trait specifies that this is a noop in terms of weight
 							// in case of error.
-						}
+						},
 					}
 				}
 				_ => T::WeightInfo::on_initialize_nothing(),
@@ -744,15 +747,16 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
+			use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
 			// This should only come useful in an **abrupt** termination of execution, otherwise the
 			// guard will be dropped upon successful execution.
-			let mut lock = StorageLock::<BlockAndTime<frame_system::Pallet::<T>>>::with_block_deadline(
-				unsigned::OFFCHAIN_LOCK,
-				T::UnsignedPhase::get().saturated_into(),
-			);
+			let mut lock =
+				StorageLock::<BlockAndTime<frame_system::Pallet<T>>>::with_block_deadline(
+					unsigned::OFFCHAIN_LOCK,
+					T::UnsignedPhase::get().saturated_into(),
+				);
 
 			match lock.try_lock() {
 				Ok(_guard) => {
@@ -760,7 +764,7 @@ pub mod pallet {
 				},
 				Err(deadline) => {
 					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
-				}
+				},
 			};
 		}
 
@@ -839,8 +843,7 @@ pub mod pallet {
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			let error_message =
-				"Invalid unsigned submission must produce invalid block and \
+			let error_message = "Invalid unsigned submission must produce invalid block and \
 				 deprive validator from their authoring reward.";
 
 			// Check score being an improvement, phase, and desired targets.
@@ -930,7 +933,8 @@ pub mod pallet {
 
 			// ensure witness data is correct.
 			ensure!(
-				num_signed_submissions >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				num_signed_submissions >=
+					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
 				Error::<T>::SignedInvalidWitness,
 			);
 
@@ -965,8 +969,7 @@ pub mod pallet {
 			};
 
 			// collect deposit. Thereafter, the function cannot fail.
-			T::Currency::reserve(&who, deposit)
-				.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
 			let ejected_a_solution = maybe_removed.is_some();
 			// if we had to remove the weakest solution, unreserve its deposit
@@ -1041,10 +1044,10 @@ pub mod pallet {
 			if let Call::submit_unsigned(solution, _) = call {
 				// Discard solution not coming from the local OCW.
 				match source {
-					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => {
-						return InvalidTransaction::Call.into();
-					}
+						return InvalidTransaction::Call.into()
+					},
 				}
 
 				let _ = Self::unsigned_pre_dispatch_checks(solution)
@@ -1057,9 +1060,8 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("OffchainElection")
 					// The higher the score[0], the better a solution is.
 					.priority(
-						T::MinerTxPriority::get().saturating_add(
-							solution.score[0].saturated_into()
-						),
+						T::MinerTxPriority::get()
+							.saturating_add(solution.score[0].saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
@@ -1191,20 +1193,18 @@ impl<T: Config> Pallet<T> {
 		match Self::current_phase() {
 			Phase::Unsigned((true, opened)) if opened == now => {
 				// Mine a new solution, cache it, and attempt to submit it
-				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
-					Self::mine_check_save_submit()
-				});
+				let initial_output = Self::ensure_offchain_repeat_frequency(now)
+					.and_then(|_| Self::mine_check_save_submit());
 				log!(debug, "initial offchain thread output: {:?}", initial_output);
-			}
+			},
 			Phase::Unsigned((true, opened)) if opened < now => {
 				// Try and resubmit the cached solution, and recompute ONLY if it is not
 				// feasible.
-				let resubmit_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
-					Self::restore_or_compute_then_maybe_submit()
-				});
+				let resubmit_output = Self::ensure_offchain_repeat_frequency(now)
+					.and_then(|_| Self::restore_or_compute_then_maybe_submit());
 				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 
 		// After election finalization, clear OCW solution storage.
@@ -1214,9 +1214,7 @@ impl<T: Config> Pallet<T> {
 				let local_event = <T as Config>::Event::from(event_record.event);
 				local_event.try_into().ok()
 			})
-			.any(|event| {
-				matches!(event, Event::ElectionFinalized(_))
-			})
+			.any(|event| matches!(event, Event::ElectionFinalized(_)))
 		{
 			unsigned::kill_ocw_solution::<T>();
 		}
@@ -1280,7 +1278,7 @@ impl<T: Config> Pallet<T> {
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
 		// Only write snapshot if all existed.
@@ -1290,7 +1288,10 @@ impl<T: Config> Pallet<T> {
 		});
 		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
-		Ok(w1.saturating_add(w2).saturating_add(w3).saturating_add(T::DbWeight::get().writes(3)))
+		Ok(w1
+			.saturating_add(w2)
+			.saturating_add(w3)
+			.saturating_add(T::DbWeight::get().writes(3)))
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
@@ -1324,9 +1325,9 @@ impl<T: Config> Pallet<T> {
 		// Ensure that the solution's score can pass absolute min-score.
 		let submitted_score = solution.score.clone();
 		ensure!(
-			Self::minimum_untrusted_score().map_or(true, |min_score|
+			Self::minimum_untrusted_score().map_or(true, |min_score| {
 				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
-			),
+			}),
 			FeasibilityError::UntrustedScoreTooLow
 		);
 
@@ -1373,7 +1374,7 @@ impl<T: Config> Pallet<T> {
 
 				// Check that all of the targets are valid based on the snapshot.
 				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote);
+					return Err(FeasibilityError::InvalidVote)
 				}
 				Ok(())
 			})
@@ -1427,7 +1428,8 @@ impl<T: Config> Pallet<T> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
-		// - signed phase was open, in which case this is essential for correct functioning of the system
+		// - signed phase was open, in which case this is essential for correct functioning of the
+		//   system
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let (_, signed_finalize_weight) = Self::finalize_signed_phase();
@@ -1439,11 +1441,9 @@ impl<T: Config> Pallet<T> {
 						.map_err(Into::into),
 					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
 				},
-				|ReadySolution { supports, compute, .. }| Ok((
-					supports,
-					T::WeightInfo::elect_queued(),
-					compute
-				)),
+				|ReadySolution { supports, compute, .. }| {
+					Ok((supports, T::WeightInfo::elect_queued(), compute))
+				},
 			)
 			.map(|(supports, weight, compute)| {
 				Self::deposit_event(Event::ElectionFinalized(Some(compute)));
@@ -1472,12 +1472,12 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				// All went okay, put sign to be Off, clean snapshot, etc.
 				Self::rotate_round();
 				Ok((supports, weight))
-			}
+			},
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
 				<CurrentPhase<T>>::put(Phase::Emergency);
 				Err(why)
-			}
+			},
 		}
 	}
 }
@@ -1499,11 +1499,9 @@ mod feasibility_check {
 	//! that is invalid, but gets through the system as valid.
 
 	use super::*;
-	use crate::{
-		mock::{
-			MultiPhase, Runtime, roll_to, TargetIndex, raw_solution, EpochLength, UnsignedPhase,
-			SignedPhase, VoterIndex, ExtBuilder,
-		},
+	use crate::mock::{
+		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
+		TargetIndex, UnsignedPhase, VoterIndex,
 	};
 	use frame_support::assert_noop;
 
@@ -1674,11 +1672,11 @@ mod feasibility_check {
 mod tests {
 	use super::*;
 	use crate::{
-		Phase,
 		mock::{
-			ExtBuilder, MultiPhase, Runtime, roll_to, MockWeightInfo, AccountId, TargetIndex,
-			Targets, multi_phase_events, System, SignedMaxSubmissions,
+			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiPhase,
+			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
+		Phase,
 	};
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
@@ -1948,7 +1946,6 @@ mod tests {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
-
 			let (solution, _) = MultiPhase::mine_solution(2).unwrap();
 			// Default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
@@ -1958,10 +1955,7 @@ mod tests {
 
 			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
 			assert_noop!(
-				MultiPhase::feasibility_check(
-					solution,
-					ElectionCompute::Signed
-				),
+				MultiPhase::feasibility_check(solution, ElectionCompute::Signed),
 				FeasibilityError::UntrustedScoreTooLow,
 			);
 		})
@@ -1985,9 +1979,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active)
-			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
-			|| active == all_voters
+		while weight_with(active) <=
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+			active == all_voters
 		{
 			active += 1;
 		}

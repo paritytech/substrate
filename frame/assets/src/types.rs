@@ -24,11 +24,7 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
-pub struct AssetDetails<
-	Balance,
-	AccountId,
-	DepositBalance,
-> {
+pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
 	/// Can mint tokens.
@@ -140,7 +136,9 @@ pub trait FrozenBalance<AssetId, AccountId, Balance> {
 }
 
 impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for () {
-	fn frozen_balance(_: AssetId, _: &AccountId) -> Option<Balance> { None }
+	fn frozen_balance(_: AssetId, _: &AccountId) -> Option<Balance> {
+		None
+	}
 	fn died(_: AssetId, _: &AccountId) {}
 }
 
@@ -171,9 +169,6 @@ pub(super) struct DebitFlags {
 
 impl From<TransferFlags> for DebitFlags {
 	fn from(f: TransferFlags) -> Self {
-		Self {
-			keep_alive: f.keep_alive,
-			best_effort: f.best_effort,
-		}
+		Self { keep_alive: f.keep_alive, best_effort: f.best_effort }
 	}
 }

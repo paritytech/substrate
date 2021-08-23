@@ -18,20 +18,23 @@
 
 //! Basic example of end to end runtime tests.
 
-use test_runner::{Node, ChainInfo, SignatureVerificationOverride, default_config};
 use grandpa::GrandpaBlockImport;
-use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, TaskExecutor};
-use std::sync::Arc;
-use sp_inherents::CreateInherentDataProviders;
-use sc_consensus_babe::BabeBlockImport;
-use sp_keystore::SyncCryptoStorePtr;
-use sp_keyring::sr25519::Keyring::Alice;
-use sp_consensus_babe::AuthorityId;
-use sc_consensus_manual_seal::{
-	ConsensusDataProvider, consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
-};
-use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
 use node_cli::chain_spec::development_config;
+use sc_consensus_babe::BabeBlockImport;
+use sc_consensus_manual_seal::{
+	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
+	ConsensusDataProvider,
+};
+use sc_service::{
+	new_full_parts, Configuration, TFullBackend, TFullClient, TaskExecutor, TaskManager,
+};
+use sp_consensus_babe::AuthorityId;
+use sp_inherents::CreateInherentDataProviders;
+use sp_keyring::sr25519::Keyring::Alice;
+use sp_keystore::SyncCryptoStorePtr;
+use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSigner};
+use std::sync::Arc;
+use test_runner::{default_config, ChainInfo, Node, SignatureVerificationOverride};
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -61,15 +64,20 @@ impl ChainInfo for NodeTemplateChainInfo {
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
-	type InherentDataProviders = (SlotTimestampProvider, sp_consensus_babe::inherents::InherentDataProvider);
+	type InherentDataProviders =
+		(SlotTimestampProvider, sp_consensus_babe::inherents::InherentDataProvider);
 
-	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras {
+	fn signed_extras(
+		from: <Self::Runtime as frame_system::Config>::AccountId,
+	) -> Self::SignedExtras {
 		(
 			frame_system::CheckSpecVersion::<Self::Runtime>::new(),
 			frame_system::CheckTxVersion::<Self::Runtime>::new(),
 			frame_system::CheckGenesis::<Self::Runtime>::new(),
 			frame_system::CheckMortality::<Self::Runtime>::from(Era::Immortal),
-			frame_system::CheckNonce::<Self::Runtime>::from(frame_system::Pallet::<Self::Runtime>::account_nonce(from)),
+			frame_system::CheckNonce::<Self::Runtime>::from(
+				frame_system::Pallet::<Self::Runtime>::account_nonce(from),
+			),
 			frame_system::CheckWeight::<Self::Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
 		)
@@ -87,11 +95,13 @@ impl ChainInfo for NodeTemplateChainInfo {
 			Arc<TFullBackend<Self::Block>>,
 			SyncCryptoStorePtr,
 			TaskManager,
-			Box<dyn CreateInherentDataProviders<
-				Self::Block,
-				(),
-				InherentDataProviders = Self::InherentDataProviders
-			>>,
+			Box<
+				dyn CreateInherentDataProviders<
+					Self::Block,
+					(),
+					InherentDataProviders = Self::InherentDataProviders,
+				>,
+			>,
 			Option<
 				Box<
 					dyn ConsensusDataProvider<
@@ -114,13 +124,12 @@ impl ChainInfo for NodeTemplateChainInfo {
 
 		let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-		let (grandpa_block_import, ..) =
-			grandpa::block_import(
-				client.clone(),
-				&(client.clone() as Arc<_>),
-				select_chain.clone(),
-				None
-			)?;
+		let (grandpa_block_import, ..) = grandpa::block_import(
+			client.clone(),
+			&(client.clone() as Arc<_>),
+			select_chain.clone(),
+			None,
+		)?;
 
 		let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
 		let (block_import, babe_link) = sc_consensus_babe::block_import(
@@ -135,7 +144,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 			babe_link.epoch_changes().clone(),
 			vec![(AuthorityId::from(Alice.public()), 1000)],
 		)
-			.expect("failed to create ConsensusDataProvider");
+		.expect("failed to create ConsensusDataProvider");
 
 		Ok((
 			client.clone(),
@@ -145,8 +154,11 @@ impl ChainInfo for NodeTemplateChainInfo {
 			Box::new(move |_, _| {
 				let client = client.clone();
 				async move {
-					let timestamp = SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
-					let babe = sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
+					let timestamp = SlotTimestampProvider::new(client.clone())
+						.map_err(|err| format!("{:?}", err))?;
+					let babe = sp_consensus_babe::inherents::InherentDataProvider::new(
+						timestamp.slot().into(),
+					);
 					Ok((timestamp, babe))
 				}
 			}),
@@ -156,7 +168,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 		))
 	}
 
-	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>) {
+	fn dispatch_with_root(
+		call: <Self::Runtime as frame_system::Config>::Call,
+		node: &mut Node<Self>,
+	) {
 		let alice = MultiSigner::from(Alice.public()).into_account();
 		let call = pallet_sudo::Call::sudo(Box::new(call));
 		node.submit_extrinsic(call, alice);
@@ -167,8 +182,8 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_runner::NodeConfig;
 	use log::LevelFilter;
+	use test_runner::NodeConfig;
 
 	#[test]
 	fn test_runner() {
@@ -192,7 +207,7 @@ mod tests {
 				("sc_peerset", LevelFilter::Off),
 				("rpc", LevelFilter::Off),
 				("runtime", LevelFilter::Trace),
-				("babe", LevelFilter::Debug)
+				("babe", LevelFilter::Debug),
 			],
 		};
 		let mut node = Node::<NodeTemplateChainInfo>::new(config).unwrap();

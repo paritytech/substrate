@@ -19,9 +19,8 @@
 pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
-	TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
+	TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-
 
 /// Implement `ValidateUnsigned` for `Runtime`.
 /// All given modules need to implement `ValidateUnsigned`.
@@ -118,7 +117,7 @@ mod test_partial_and_full_call {
 
 			fn validate_unsigned(
 				_source: super::super::TransactionSource,
-				_call: &Self::Call
+				_call: &Self::Call,
 			) -> super::super::TransactionValidity {
 				unimplemented!();
 			}

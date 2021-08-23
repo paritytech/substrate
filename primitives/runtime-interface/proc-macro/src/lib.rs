@@ -22,12 +22,15 @@
 //!
 //! 1. The [`#[runtime_interface]`](attr.runtime_interface.html) attribute macro for generating the
 //!    runtime interfaces.
-//! 2. The [`PassByCodec`](derive.PassByCodec.html) derive macro for implementing `PassBy` with `Codec`.
-//! 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Enum`.
-//! 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Inner`.
+//! 2. The [`PassByCodec`](derive.PassByCodec.html) derive macro for implementing `PassBy` with
+//! `Codec`. 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy`
+//! with `Enum`. 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing
+//! `PassBy` with `Inner`.
 
-use syn::{parse_macro_input, ItemTrait, DeriveInput, Result, Token};
-use syn::parse::{Parse, ParseStream};
+use syn::{
+	parse::{Parse, ParseStream},
+	parse_macro_input, DeriveInput, ItemTrait, Result, Token,
+};
 
 mod pass_by;
 mod runtime_interface;
@@ -35,7 +38,7 @@ mod utils;
 
 struct Options {
 	wasm_only: bool,
-	tracing: bool
+	tracing: bool,
 }
 
 impl Options {
@@ -86,13 +89,17 @@ pub fn runtime_interface(
 #[proc_macro_derive(PassByCodec)]
 pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::codec_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+	pass_by::codec_derive_impl(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 #[proc_macro_derive(PassByInner)]
 pub fn pass_by_inner(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::inner_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+	pass_by::inner_derive_impl(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 #[proc_macro_derive(PassByEnum)]

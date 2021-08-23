@@ -19,22 +19,27 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
+use crate as offences;
 use crate::Config;
 use codec::Encode;
-use sp_runtime::Perbill;
-use sp_staking::{
-	SessionIndex,
-	offence::{self, Kind, OffenceDetails},
-};
-use sp_runtime::testing::Header;
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
-use sp_core::H256;
 use frame_support::{
 	parameter_types,
-	weights::{Weight, constants::{WEIGHT_PER_SECOND, RocksDbWeight}},
+	weights::{
+		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
+		Weight,
+	},
 };
-use crate as offences;
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
+use sp_staking::{
+	offence::{self, Kind, OffenceDetails},
+	SessionIndex,
+};
+use std::cell::RefCell;
 
 pub struct OnOffenceHandler;
 
@@ -43,8 +48,8 @@ thread_local! {
 	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
-impl<Reporter, Offender>
-	offence::OnOffenceHandler<Reporter, Offender, Weight> for OnOffenceHandler
+impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
+	for OnOffenceHandler
 {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
@@ -60,9 +65,7 @@ impl<Reporter, Offender>
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	ON_OFFENCE_PERBILL.with(|fractions| {
-		f(&mut *fractions.borrow_mut())
-	})
+	ON_OFFENCE_PERBILL.with(|fractions| f(&mut *fractions.borrow_mut()))
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -163,10 +166,7 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 		1
 	}
 
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		Perbill::from_percent(5 + offenders_count * 100 / validator_set_count)
 	}
 }

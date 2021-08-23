@@ -19,16 +19,17 @@
 
 #![cfg(test)]
 
+use crate as elections;
 use frame_support::{
-	parameter_types, assert_ok,
+	assert_ok, parameter_types,
 	traits::{ChangeMembers, Currency, LockIdentifier},
 };
 use sp_core::H256;
 use sp_runtime::{
-	BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
-use crate as elections;
-
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -104,7 +105,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 	}
 }
 
-parameter_types!{
+parameter_types! {
 	pub const ElectionPalletId: LockIdentifier = *b"py/elect";
 }
 
@@ -197,56 +198,55 @@ impl ExtBuilder {
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			balances: pallet_balances::GenesisConfig::<Test>{
+			balances: pallet_balances::GenesisConfig::<Test> {
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),
 					(3, 30 * self.balance_factor),
 					(4, 40 * self.balance_factor),
 					(5, 50 * self.balance_factor),
-					(6, 60 * self.balance_factor)
+					(6, 60 * self.balance_factor),
 				],
 			},
-			elections: elections::GenesisConfig::<Test>{
+			elections: elections::GenesisConfig::<Test> {
 				members: vec![],
 				desired_seats: self.desired_seats,
 				presentation_duration: 2,
 				term_duration: 5,
 			},
-		}.build_storage().unwrap().into();
+		}
+		.build_storage()
+		.unwrap()
+		.into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
 }
 
 pub(crate) fn voter_ids() -> Vec<u64> {
-	Elections::all_voters().iter().map(|v| v.unwrap_or(0) ).collect::<Vec<u64>>()
+	Elections::all_voters().iter().map(|v| v.unwrap_or(0)).collect::<Vec<u64>>()
 }
 
 pub(crate) fn vote(i: u64, l: usize) {
 	let _ = Balances::make_free_balance_be(&i, 20);
-	assert_ok!(
-		Elections::set_approvals(
-			Origin::signed(i),
-			(0..l).map(|_| true).collect::<Vec<bool>>(),
-			0,
-			0,
-			20,
-		)
-	);
+	assert_ok!(Elections::set_approvals(
+		Origin::signed(i),
+		(0..l).map(|_| true).collect::<Vec<bool>>(),
+		0,
+		0,
+		20,
+	));
 }
 
 pub(crate) fn vote_at(i: u64, l: usize, index: elections::VoteIndex) {
 	let _ = Balances::make_free_balance_be(&i, 20);
-	assert_ok!(
-		Elections::set_approvals(
-			Origin::signed(i),
-			(0..l).map(|_| true).collect::<Vec<bool>>(),
-			0,
-			index,
-			20,
-		)
-	);
+	assert_ok!(Elections::set_approvals(
+		Origin::signed(i),
+		(0..l).map(|_| true).collect::<Vec<bool>>(),
+		0,
+		index,
+		20,
+	));
 }
 
 pub(crate) fn create_candidate(i: u64, index: u32) {

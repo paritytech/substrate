@@ -20,8 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Compact, Encode};
+use core::{marker::PhantomData, mem};
 use impl_trait_for_tuples::impl_for_tuples;
-use core::{mem, marker::PhantomData};
 use primitive_types::{H160, H256, H512};
 
 /// Derive macro for `MaxEncodedLen`.
@@ -98,7 +98,8 @@ impl_compact!(
 	u128 => 17;
 );
 
-// impl_for_tuples for values 19 and higher fails because that's where the WrapperTypeEncode impl stops.
+// impl_for_tuples for values 19 and higher fails because that's where the WrapperTypeEncode impl
+// stops.
 #[impl_for_tuples(18)]
 impl MaxEncodedLen for Tuple {
 	fn max_encoded_len() -> usize {

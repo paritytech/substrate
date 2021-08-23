@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use proc_macro2::{Ident, Span};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{quote, quote_spanned};
 use syn::{
-	Data, DeriveInput, Error, Fields, GenericParam, Generics, Meta, TraitBound, Type,
-	TypeParamBound, parse_quote, spanned::Spanned,
+	parse_quote, spanned::Spanned, Data, DeriveInput, Error, Fields, GenericParam, Generics, Meta,
+	TraitBound, Type, TypeParamBound,
 };
-use proc_macro_crate::{crate_name, FoundCrate};
-use proc_macro2::{Ident, Span};
 
 /// Generate the crate access for the crate using 2018 syntax.
 fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
@@ -30,12 +30,8 @@ fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
 			let name = def_crate.to_string().replace("-", "_");
 			Ok(syn::Ident::new(&name, Span::call_site()))
 		},
-		Ok(FoundCrate::Name(name)) => {
-			Ok(Ident::new(&name, Span::call_site()))
-		},
-		Err(e) => {
-			Err(Error::new(Span::call_site(), e))
-		}
+		Ok(FoundCrate::Name(name)) => Ok(Ident::new(&name, Span::call_site())),
+		Err(e) => Err(Error::new(Span::call_site(), e)),
 	}
 }
 
@@ -82,36 +78,38 @@ fn max_encoded_len_trait(input: &DeriveInput) -> syn::Result<TraitBound> {
 		}
 
 		let mut mel_crates = Vec::with_capacity(2);
-		mel_crates.extend(input
-			.attrs
-			.iter()
-			.filter(|attr| attr.path == parse_quote!(max_encoded_len_crate))
-			.take(2)
-			.map(|attr| {
-				let meta_list = match attr.parse_meta()? {
-					Meta::List(meta_list) => meta_list,
-					Meta::Path(wrong_style) => return_err!(wrong_style, EXPECT_LIST),
-					Meta::NameValue(wrong_style) => return_err!(wrong_style, EXPECT_LIST),
-				};
-				if meta_list.nested.len() != 1 {
-					return_err!(meta_list, "expected exactly 1 item");
-				}
-				let first_nested =
-					meta_list.nested.into_iter().next().expect("length checked above");
-				let meta = match first_nested {
-					syn::NestedMeta::Lit(l) => {
-						return_err!(l, "expected a path item, not a literal")
+		mel_crates.extend(
+			input
+				.attrs
+				.iter()
+				.filter(|attr| attr.path == parse_quote!(max_encoded_len_crate))
+				.take(2)
+				.map(|attr| {
+					let meta_list = match attr.parse_meta()? {
+						Meta::List(meta_list) => meta_list,
+						Meta::Path(wrong_style) => return_err!(wrong_style, EXPECT_LIST),
+						Meta::NameValue(wrong_style) => return_err!(wrong_style, EXPECT_LIST),
+					};
+					if meta_list.nested.len() != 1 {
+						return_err!(meta_list, "expected exactly 1 item");
 					}
-					syn::NestedMeta::Meta(meta) => meta,
-				};
-				let path = match meta {
-					Meta::Path(path) => path,
-					Meta::List(ref wrong_style) => return_err!(wrong_style, EXPECT_PATH),
-					Meta::NameValue(ref wrong_style) => return_err!(wrong_style, EXPECT_PATH),
-				};
-				Ok(path)
-			})
-			.collect::<Result<Vec<_>, _>>()?);
+					let first_nested =
+						meta_list.nested.into_iter().next().expect("length checked above");
+					let meta = match first_nested {
+						syn::NestedMeta::Lit(l) => {
+							return_err!(l, "expected a path item, not a literal")
+						},
+						syn::NestedMeta::Meta(meta) => meta,
+					};
+					let path = match meta {
+						Meta::Path(path) => path,
+						Meta::List(ref wrong_style) => return_err!(wrong_style, EXPECT_PATH),
+						Meta::NameValue(ref wrong_style) => return_err!(wrong_style, EXPECT_PATH),
+					};
+					Ok(path)
+				})
+				.collect::<Result<Vec<_>, _>>()?,
+		);
 
 		// we have to return `Result<Ident, Error>` here in order to satisfy the trait
 		// bounds for `.or_else` for `generate_crate_access_2018`, even though `Option<Ident>`
@@ -194,11 +192,11 @@ fn data_length_expr(data: &Data) -> proc_macro2::TokenStream {
 			quote! {
 				0_usize #( #expansion )* .saturating_add(1)
 			}
-		}
+		},
 		Data::Union(ref data) => {
 			// https://github.com/paritytech/parity-scale-codec/
 			//   blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L290-L293
 			Error::new(data.union_token.span(), "Union types are not supported").to_compile_error()
-		}
+		},
 	}
 }

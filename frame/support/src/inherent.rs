@@ -16,12 +16,12 @@
 // limitations under the License.
 
 #[doc(hidden)]
-pub use crate::sp_std::vec::Vec;
-#[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
+#[doc(hidden)]
+pub use crate::sp_std::vec::Vec;
 
 pub use sp_inherents::{
-	InherentData, CheckInherentsResult, IsFatalError, InherentIdentifier, MakeFatalError,
+	CheckInherentsResult, InherentData, InherentIdentifier, IsFatalError, MakeFatalError,
 };
 
 /// A pallet that provides or verifies an inherent extrinsic.
@@ -53,7 +53,9 @@ pub trait ProvideInherent {
 	/// one inherent for which:
 	/// * type is [`Self::Call`],
 	/// * [`Self::is_inherent`] returns true.
-	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
+	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
+		Ok(None)
+	}
 
 	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
 	/// omitted by using the default implementation.
@@ -270,7 +272,10 @@ macro_rules! impl_outer_inherent {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::{traits, testing::{Header, self}};
+	use sp_runtime::{
+		testing::{self, Header},
+		traits,
+	};
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum Call {
@@ -374,10 +379,7 @@ mod tests {
 		type SignaturePayload = ();
 
 		fn new(function: Call, signed_data: Option<()>) -> Option<Self> {
-			Some(Self {
-				function,
-				signed: signed_data.is_some(),
-			})
+			Some(Self { function, signed: signed_data.is_some() })
 		}
 
 		fn is_signed(&self) -> Option<bool> {
@@ -433,7 +435,10 @@ mod tests {
 			Header::new_from_number(1),
 			vec![
 				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
-				Extrinsic { function: Call::Test(CallTest::OptionalInherent(false)), signed: false },
+				Extrinsic {
+					function: Call::Test(CallTest::OptionalInherent(false)),
+					signed: false,
+				},
 			],
 		);
 
@@ -444,9 +449,10 @@ mod tests {
 	fn required_inherents_enforced() {
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![
-				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false }
-			],
+			vec![Extrinsic {
+				function: Call::Test(CallTest::OptionalInherent(true)),
+				signed: false,
+			}],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).fatal_error());

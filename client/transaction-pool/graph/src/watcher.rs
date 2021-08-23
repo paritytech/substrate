@@ -20,7 +20,7 @@
 
 use futures::Stream;
 use sp_transaction_pool::TransactionStatus;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 /// Extrinsic watcher.
 ///
@@ -40,7 +40,7 @@ impl<H, BH> Watcher<H, BH> {
 	/// Pipe the notifications to given sink.
 	///
 	/// Make sure to drive the future to completion.
-	pub fn into_stream(self) -> impl Stream<Item=TransactionStatus<H, BH>> {
+	pub fn into_stream(self) -> impl Stream<Item = TransactionStatus<H, BH>> {
 		self.receiver
 	}
 }
@@ -54,10 +54,7 @@ pub struct Sender<H, BH> {
 
 impl<H, BH> Default for Sender<H, BH> {
 	fn default() -> Self {
-		Sender {
-			receivers: Default::default(),
-			is_finalized: false,
-		}
+		Sender { receivers: Default::default(), is_finalized: false }
 	}
 }
 
@@ -66,10 +63,7 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, BH> {
 		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher");
 		self.receivers.push(tx);
-		Watcher {
-			receiver,
-			hash,
-		}
+		Watcher { receiver, hash }
 	}
 
 	/// Transaction became ready.

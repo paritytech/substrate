@@ -45,21 +45,17 @@
 //! However, if multiple instances of [`QueuedSender`] exist for the same peer and protocol, or
 //! if some other code uses the [`NetworkService`] to send notifications to this combination or
 //! peer and protocol, then the notifications will be interleaved in an unpredictable way.
-//!
 
 use crate::{ExHashT, NetworkService};
 
 use async_std::sync::{Mutex, MutexGuard};
-use futures::prelude::*;
-use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::{
+	channel::mpsc::{channel, Receiver, Sender},
+	prelude::*,
+};
 use libp2p::PeerId;
 use sp_runtime::traits::Block as BlockT;
-use std::{
-	borrow::Cow,
-	collections::VecDeque,
-	fmt,
-	sync::Arc,
-};
+use std::{borrow::Cow, collections::VecDeque, fmt, sync::Arc};
 
 #[cfg(test)]
 mod tests;
@@ -85,7 +81,7 @@ impl<M> QueuedSender<M> {
 		peer_id: PeerId,
 		protocol: Cow<'static, str>,
 		queue_size_limit: usize,
-		messages_encode: F
+		messages_encode: F,
 	) -> (Self, impl Future<Output = ()> + Send + 'static)
 	where
 		M: Send + 'static,
@@ -95,9 +91,7 @@ impl<M> QueuedSender<M> {
 	{
 		let (notify_background_future, wait_for_sender) = channel(0);
 
-		let shared_message_queue = Arc::new(Mutex::new(
-			VecDeque::with_capacity(queue_size_limit),
-		));
+		let shared_message_queue = Arc::new(Mutex::new(VecDeque::with_capacity(queue_size_limit)));
 
 		let background_future = create_background_future(
 			wait_for_sender,
@@ -105,14 +99,11 @@ impl<M> QueuedSender<M> {
 			peer_id,
 			protocol,
 			shared_message_queue.clone(),
-			messages_encode
+			messages_encode,
 		);
 
-		let sender = QueuedSender {
-			shared_message_queue,
-			notify_background_future,
-			queue_size_limit,
-		};
+		let sender =
+			QueuedSender { shared_message_queue, notify_background_future, queue_size_limit };
 
 		(sender, background_future)
 	}
@@ -133,7 +124,7 @@ impl<M> QueuedSender<M> {
 	/// The returned `Future` is expected to be ready quite quickly.
 	pub async fn queue_or_discard(&mut self, message: M)
 	where
-		M: Send + 'static
+		M: Send + 'static,
 	{
 		self.lock_queue().await.push_or_discard(message);
 	}

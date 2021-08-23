@@ -69,9 +69,9 @@
 use safe_mix::TripletMix;
 
 use codec::Encode;
-use sp_std::{prelude::*, convert::TryInto};
-use sp_runtime::traits::{Hash, Saturating};
 use frame_support::traits::Randomness;
+use sp_runtime::traits::{Hash, Saturating};
+use sp_std::{convert::TryInto, prelude::*};
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
@@ -85,9 +85,9 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -101,11 +101,13 @@ pub mod pallet {
 		fn on_initialize(block_number: T::BlockNumber) -> Weight {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
-			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
-				values.push(parent_hash)
-			} else {
-				let index = block_number_to_index::<T>(block_number);
-				values[index] = parent_hash;
+			<RandomMaterial<T>>::mutate(|ref mut values| {
+				if values.len() < RANDOM_MATERIAL_LEN as usize {
+					values.push(parent_hash)
+				} else {
+					let index = block_number_to_index::<T>(block_number);
+					values[index] = parent_hash;
+				}
 			});
 
 			T::DbWeight::get().reads_writes(1, 1)
@@ -117,8 +119,7 @@ pub mod pallet {
 	/// the oldest hash.
 	#[pallet::storage]
 	#[pallet::getter(fn random_material)]
-	pub(super) type RandomMaterial<T: Config> =
-		StorageValue<_, Vec<T::Hash>, ValueQuery>;
+	pub(super) type RandomMaterial<T: Config> = StorageValue<_, Vec<T::Hash>, ValueQuery>;
 }
 
 impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
@@ -151,17 +152,14 @@ impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
 			T::Hash::default()
 		};
 
-		(
-			seed,
-			block_number.saturating_sub(RANDOM_MATERIAL_LEN.into()),
-		)
+		(seed, block_number.saturating_sub(RANDOM_MATERIAL_LEN.into()))
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate as pallet_randomness_collective_flip;
 	use super::*;
+	use crate as pallet_randomness_collective_flip;
 
 	use sp_core::H256;
 	use sp_runtime::{
@@ -169,7 +167,10 @@ mod tests {
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
 
-	use frame_support::{parameter_types, traits::{Randomness, OnInitialize}};
+	use frame_support::{
+		parameter_types,
+		traits::{OnInitialize, Randomness},
+	};
 	use frame_system::limits;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -229,7 +230,7 @@ mod tests {
 
 	#[test]
 	fn test_block_number_to_index() {
-		for i in 1 .. 1000 {
+		for i in 1..1000 {
 			assert_eq!((i - 1) as usize % 81, block_number_to_index::<Test>(i));
 		}
 	}
@@ -237,13 +238,8 @@ mod tests {
 	fn setup_blocks(blocks: u64) {
 		let mut parent_hash = System::parent_hash();
 
-		for i in 1 .. (blocks + 1) {
-			System::initialize(
-				&i,
-				&parent_hash,
-				&Default::default(),
-				frame_system::InitKind::Full,
-			);
+		for i in 1..(blocks + 1) {
+			System::initialize(&i, &parent_hash, &Default::default(), frame_system::InitKind::Full);
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

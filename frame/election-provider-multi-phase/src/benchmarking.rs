@@ -18,12 +18,12 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::{Pallet as MultiPhase, unsigned::IndexAssignmentOf};
+use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::{account, impl_benchmark_test_suite};
+use frame_election_provider_support::Assignment;
 use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
-use frame_election_provider_support::Assignment;
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
@@ -54,8 +54,9 @@ fn solution_with_size<T: Config>(
 	let stake: VoteWeight = ed.max(One::one()).saturating_mul(100);
 
 	// first generates random targets.
-	let targets: Vec<T::AccountId> =
-		(0..size.targets).map(|i| frame_benchmarking::account("Targets", i, SEED)).collect();
+	let targets: Vec<T::AccountId> = (0..size.targets)
+		.map(|i| frame_benchmarking::account("Targets", i, SEED))
+		.collect();
 
 	let mut rng = SmallRng::seed_from_u64(SEED.into());
 
@@ -81,8 +82,11 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<_>>();
 
 	// rest of the voters. They can only vote for non-winners.
-	let non_winners =
-		targets.iter().filter(|t| !winners.contains(t)).cloned().collect::<Vec<T::AccountId>>();
+	let non_winners = targets
+		.iter()
+		.filter(|t| !winners.contains(t))
+		.cloned()
+		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
 			let votes = (&non_winners)

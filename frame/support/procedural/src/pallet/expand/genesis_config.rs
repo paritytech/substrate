@@ -15,10 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, parse::helper::get_doc_literals};
-use crate::COUNTER;
-use syn::{Ident, spanned::Spanned};
+use crate::{
+	pallet::{parse::helper::get_doc_literals, Def},
+	COUNTER,
+};
+use syn::{spanned::Spanned, Ident};
 
+/// 
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
@@ -30,10 +33,8 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		);
 		(genesis_config, ident)
 	} else {
-		let macro_ident = Ident::new(
-			&format!("__is_genesis_config_defined_{}", count),
-			def.item.span(),
-		);
+		let macro_ident =
+			Ident::new(&format!("__is_genesis_config_defined_{}", count), def.item.span());
 
 		return quote::quote! {
 			#[doc(hidden)]
@@ -50,21 +51,21 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 						));
 					}
 				}
-	
+
 				#[doc(hidden)]
 				pub use #macro_ident as is_genesis_config_defined;
 			}
-		};
+		}
 	};
 	let frame_support = &def.frame_support;
 
-	let genesis_config_item = &mut def.item.content.as_mut()
-		.expect("Checked by def parser").1[genesis_config.index];
+	let genesis_config_item =
+		&mut def.item.content.as_mut().expect("Checked by def parser").1[genesis_config.index];
 
 	let serde_crate = format!("{}::serde", frame_support);
 
 	match genesis_config_item {
-		syn::Item::Enum(syn::ItemEnum { attrs, ..}) |
+		syn::Item::Enum(syn::ItemEnum { attrs, .. }) |
 		syn::Item::Struct(syn::ItemStruct { attrs, .. }) |
 		syn::Item::Type(syn::ItemType { attrs, .. }) => {
 			if get_doc_literals(&attrs).is_empty() {
@@ -97,7 +98,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 			macro_rules! #macro_ident {
 				($pallet_name:ident) => {};
 			}
-	
+
 			#[doc(hidden)]
 			pub use #macro_ident as is_genesis_config_defined;
 		}

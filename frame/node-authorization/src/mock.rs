@@ -20,13 +20,13 @@
 use super::*;
 use crate as pallet_node_authorization;
 
-use frame_support::{
-	parameter_types, ord_parameter_types,
-	traits::GenesisBuild,
-};
+use frame_support::{ord_parameter_types, parameter_types, traits::GenesisBuild};
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -102,6 +102,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_node_authorization::GenesisConfig::<Test> {
 		nodes: vec![(test_node(10), 10), (test_node(20), 20), (test_node(30), 30)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }

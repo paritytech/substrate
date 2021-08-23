@@ -17,15 +17,22 @@
 
 //! Tests related to the pallet version.
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 use codec::{Decode, Encode};
-use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, BuildStorage};
 use frame_support::{
-	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade, GetPalletVersion},
-	crate_to_pallet_version, weights::Weight,
+	crate_to_pallet_version,
+	traits::{
+		GetPalletVersion, OnRuntimeUpgrade, PalletVersion, PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	},
+	weights::Weight,
 };
-use sp_core::{H256, sr25519};
+use sp_core::{sr25519, H256};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+	BuildStorage,
+};
 
 /// A version that we will check for in the tests
 const SOME_TEST_VERSION: PalletVersion = PalletVersion { major: 3000, minor: 30, patch: 13 };
@@ -47,7 +54,7 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Config<I=DefaultInstance>: frame_system::Config {}
+	pub trait Config<I = DefaultInstance>: frame_system::Config {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
@@ -82,8 +89,7 @@ mod pallet3 {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
-	}
+	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -91,13 +97,12 @@ mod pallet3 {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			return 3;
+			return 3
 		}
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-	}
+	impl<T: Config> Pallet<T> {}
 }
 
 #[frame_support::pallet]
@@ -106,22 +111,20 @@ mod pallet4 {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config {
-	}
+	pub trait Config<I: 'static = ()>: frame_system::Config {}
 
 	#[pallet::pallet]
-	pub struct Pallet<T, I=()>(PhantomData<(T, I)>);
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_runtime_upgrade() -> Weight {
-			return 3;
+			return 3
 		}
 	}
 
 	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	}
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
 }
 
 impl module1::Config for Runtime {}
@@ -210,8 +213,8 @@ fn get_pallet_version_storage_key_for_pallet(pallet: &str) -> [u8; 32] {
 fn check_pallet_version(pallet: &str) {
 	let key = get_pallet_version_storage_key_for_pallet(pallet);
 	let value = sp_io::storage::get(&key).expect("Pallet version exists");
-	let version = PalletVersion::decode(&mut &value[..])
-		.expect("Pallet version is encoded correctly");
+	let version =
+		PalletVersion::decode(&mut &value[..]).expect("Pallet version is encoded correctly");
 
 	assert_eq!(crate_to_pallet_version!(), version);
 }

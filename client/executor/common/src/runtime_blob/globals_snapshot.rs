@@ -55,10 +55,8 @@ pub struct ExposedMutableGlobalsSet(Vec<String>);
 impl ExposedMutableGlobalsSet {
 	/// Collect the set from the given runtime blob. See the struct documentation for details.
 	pub fn collect(runtime_blob: &RuntimeBlob) -> Self {
-		let global_names = runtime_blob
-			.exported_internal_global_names()
-			.map(ToOwned::to_owned)
-			.collect();
+		let global_names =
+			runtime_blob.exported_internal_global_names().map(ToOwned::to_owned).collect();
 		Self(global_names)
 	}
 }

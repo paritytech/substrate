@@ -54,20 +54,16 @@
 //!	from on-chain storage.
 //!
 //! NOTE This pallet is experimental and not proven to work in production.
-//!
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_support::{
-	decl_module, decl_storage,
-	weights::Weight,
-};
+use frame_support::{decl_module, decl_storage, weights::Weight};
 use sp_runtime::traits;
 
-mod default_weights;
-mod mmr;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
+mod default_weights;
+mod mmr;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -88,8 +84,8 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// and some of the inner mmr nodes might be pruned from on-chain storage.
 	/// The later will contain all the entries in their full form.
 	///
-	/// Each node is stored in the Off-chain DB under key derived from the [`Self::INDEXING_PREFIX`] and
-	/// it's in-tree index (MMR position).
+	/// Each node is stored in the Off-chain DB under key derived from the [`Self::INDEXING_PREFIX`]
+	/// and it's in-tree index (MMR position).
 	const INDEXING_PREFIX: &'static [u8];
 
 	/// A hasher type for MMR.
@@ -107,8 +103,15 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	///
 	/// This type is actually going to be stored in the MMR.
 	/// Required to be provided again, to satisfy trait bounds for storage items.
-	type Hash: traits::Member + traits::MaybeSerializeDeserialize + sp_std::fmt::Debug
-		+ sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + codec::Codec
+	type Hash: traits::Member
+		+ traits::MaybeSerializeDeserialize
+		+ sp_std::fmt::Debug
+		+ sp_std::hash::Hash
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Default
+		+ codec::Codec
 		+ codec::EncodeLike;
 
 	/// Data stored in the leaf nodes.
@@ -116,11 +119,11 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// The [LeafData](primitives::LeafDataProvider) is responsible for returning the entire leaf
 	/// data that will be inserted to the MMR.
 	/// [LeafDataProvider](primitives::LeafDataProvider)s can be composed into tuples to put
-	/// multiple elements into the tree. In such a case it might be worth using [primitives::Compact]
-	/// to make MMR proof for one element of the tuple leaner.
+	/// multiple elements into the tree. In such a case it might be worth using
+	/// [primitives::Compact] to make MMR proof for one element of the tuple leaner.
 	///
-	/// Note that the leaf at each block MUST be unique. You may want to include a block hash or block
-	/// number as an easiest way to ensure that.
+	/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
+	/// block number as an easiest way to ensure that.
 	type LeafData: primitives::LeafDataProvider;
 
 	/// A hook to act on the new MMR root.
@@ -195,7 +198,8 @@ pub fn verify_leaf_proof<H, L>(
 	root: H::Output,
 	leaf: mmr::Node<H, L>,
 	proof: primitives::Proof<H::Output>,
-) -> Result<(), primitives::Error> where
+) -> Result<(), primitives::Error>
+where
 	H: traits::Hash,
 	L: primitives::FullLeaf,
 {
@@ -218,10 +222,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
-	pub fn generate_proof(leaf_index: u64) -> Result<
-		(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>),
-		primitives::Error,
-	> {
+	pub fn generate_proof(
+		leaf_index: u64,
+	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
 	}
@@ -236,13 +239,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		leaf: LeafOf<T, I>,
 		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
-		if proof.leaf_count > Self::mmr_leaves()
-			|| proof.leaf_count == 0
-			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
+		if proof.leaf_count > Self::mmr_leaves() ||
+			proof.leaf_count == 0 ||
+			proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
-			return Err(primitives::Error::Verify.log_debug(
-				"The proof has incorrect number of leaves or proof items."
-			));
+			return Err(primitives::Error::Verify
+				.log_debug("The proof has incorrect number of leaves or proof items."))
 		}
 
 		let mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(proof.leaf_count);

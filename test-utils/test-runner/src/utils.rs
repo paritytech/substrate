@@ -17,16 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::{Sink, SinkExt};
-use std::fmt;
-use std::io::Write;
 use log::LevelFilter;
-use sc_service::{BasePath, ChainSpec, Configuration, TaskExecutor, DatabaseConfig, KeepBlocks, TransactionStorageMode};
-use sp_keyring::sr25519::Keyring::Alice;
-use sc_network::{multiaddr, config::{NetworkConfiguration, TransportConfig, Role}};
-use sc_informant::OutputFormat;
-use sc_service::config::KeystoreConfig;
-use sc_executor::WasmExecutionMethod;
 use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_executor::WasmExecutionMethod;
+use sc_informant::OutputFormat;
+use sc_network::{
+	config::{NetworkConfiguration, Role, TransportConfig},
+	multiaddr,
+};
+use sc_service::{
+	config::KeystoreConfig, BasePath, ChainSpec, Configuration, DatabaseConfig, KeepBlocks,
+	TaskExecutor, TransactionStorageMode,
+};
+use sp_keyring::sr25519::Keyring::Alice;
+use std::{fmt, io::Write};
 
 /// Base db path gotten from env
 pub fn base_path() -> BasePath {
@@ -42,8 +46,7 @@ pub fn logger<S>(
 	log_targets: Vec<(&'static str, LevelFilter)>,
 	executor: tokio::runtime::Handle,
 	log_sink: S,
-)
-where
+) where
 	S: Sink<String> + Clone + Unpin + Send + Sync + 'static,
 	S::Error: Send + Sync + fmt::Debug,
 {
@@ -67,7 +70,10 @@ where
 }
 
 /// Produces a default configuration object, suitable for use with most set ups.
-pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn ChainSpec>) -> Configuration {
+pub fn default_config(
+	task_executor: TaskExecutor,
+	mut chain_spec: Box<dyn ChainSpec>,
+) -> Configuration {
 	let base_path = base_path();
 	let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
 
@@ -88,9 +94,7 @@ pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn Chain
 	let informant_output_format = OutputFormat { enable_color: false };
 	network_config.allow_non_globals_in_dht = true;
 
-	network_config
-		.listen_addresses
-		.push(multiaddr::Protocol::Memory(0).into());
+	network_config.listen_addresses.push(multiaddr::Protocol::Memory(0).into());
 
 	network_config.transport = TransportConfig::MemoryOnly;
 
@@ -101,14 +105,8 @@ pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn Chain
 		task_executor: task_executor.into(),
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore: KeystoreConfig::Path {
-			path: root_path.join("key"),
-			password: None,
-		},
-		database: DatabaseConfig::RocksDb {
-			path: root_path.join("db"),
-			cache_size: 128,
-		},
+		keystore: KeystoreConfig::Path { path: root_path.join("key"), password: None },
+		database: DatabaseConfig::RocksDb { path: root_path.join("db"), cache_size: 128 },
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		chain_spec,

@@ -28,7 +28,10 @@ frame_support::decl_storage! {
 }
 
 frame_support::decl_event!(
-	pub enum Event<T> where B = <T as Trait>::Balance {
+	pub enum Event<T>
+	where
+		B = <T as Trait>::Balance,
+	{
 		Dummy(B),
 	}
 );

@@ -35,47 +35,49 @@
 // --output=./frame/elections-phragmen/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{
+	traits::Get,
+	weights::{constants::RocksDbWeight, Weight},
+};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_elections_phragmen.
 pub trait WeightInfo {
-	fn vote_equal(v: u32, ) -> Weight;
-	fn vote_more(v: u32, ) -> Weight;
-	fn vote_less(v: u32, ) -> Weight;
+	fn vote_equal(v: u32) -> Weight;
+	fn vote_more(v: u32) -> Weight;
+	fn vote_less(v: u32) -> Weight;
 	fn remove_voter() -> Weight;
-	fn submit_candidacy(c: u32, ) -> Weight;
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
+	fn submit_candidacy(c: u32) -> Weight;
+	fn renounce_candidacy_candidate(c: u32) -> Weight;
 	fn renounce_candidacy_members() -> Weight;
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
 	fn remove_member_wrong_refund() -> Weight;
-	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
-	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight;
+	fn clean_defunct_voters(v: u32, d: u32) -> Weight;
+	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight;
 }
 
 /// Weights for pallet_elections_phragmen using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn vote_equal(v: u32, ) -> Weight {
+	fn vote_equal(v: u32) -> Weight {
 		(43_911_000 as Weight)
 			// Standard Error: 7_000
 			.saturating_add((324_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn vote_more(v: u32, ) -> Weight {
+	fn vote_more(v: u32) -> Weight {
 		(68_236_000 as Weight)
 			// Standard Error: 10_000
 			.saturating_add((359_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn vote_less(v: u32, ) -> Weight {
+	fn vote_less(v: u32) -> Weight {
 		(68_162_000 as Weight)
 			// Standard Error: 9_000
 			.saturating_add((350_000 as Weight).saturating_mul(v as Weight))
@@ -87,14 +89,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn submit_candidacy(c: u32, ) -> Weight {
+	fn submit_candidacy(c: u32) -> Weight {
 		(58_498_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((305_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight {
+	fn renounce_candidacy_candidate(c: u32) -> Weight {
 		(52_062_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((173_000 as Weight).saturating_mul(c as Weight))
@@ -117,10 +119,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(6_877_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		(6_877_000 as Weight).saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
-	fn clean_defunct_voters(v: u32, _d: u32, ) -> Weight {
+	fn clean_defunct_voters(v: u32, _d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 39_000
 			.saturating_add((112_381_000 as Weight).saturating_mul(v as Weight))
@@ -128,7 +129,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
-	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
+	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_789_000
 			.saturating_add((42_600_000 as Weight).saturating_mul(c as Weight))
@@ -144,21 +145,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn vote_equal(v: u32, ) -> Weight {
+	fn vote_equal(v: u32) -> Weight {
 		(43_911_000 as Weight)
 			// Standard Error: 7_000
 			.saturating_add((324_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vote_more(v: u32, ) -> Weight {
+	fn vote_more(v: u32) -> Weight {
 		(68_236_000 as Weight)
 			// Standard Error: 10_000
 			.saturating_add((359_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vote_less(v: u32, ) -> Weight {
+	fn vote_less(v: u32) -> Weight {
 		(68_162_000 as Weight)
 			// Standard Error: 9_000
 			.saturating_add((350_000 as Weight).saturating_mul(v as Weight))
@@ -170,14 +171,14 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn submit_candidacy(c: u32, ) -> Weight {
+	fn submit_candidacy(c: u32) -> Weight {
 		(58_498_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((305_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight {
+	fn renounce_candidacy_candidate(c: u32) -> Weight {
 		(52_062_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((173_000 as Weight).saturating_mul(c as Weight))
@@ -200,10 +201,9 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(6_877_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		(6_877_000 as Weight).saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-	fn clean_defunct_voters(v: u32, _d: u32, ) -> Weight {
+	fn clean_defunct_voters(v: u32, _d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 39_000
 			.saturating_add((112_381_000 as Weight).saturating_mul(v as Weight))
@@ -211,7 +211,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
-	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
+	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_789_000
 			.saturating_add((42_600_000 as Weight).saturating_mul(c as Weight))

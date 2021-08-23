@@ -17,11 +17,11 @@
 
 //! Miscellaneous types.
 
-use sp_std::fmt::Debug;
-use codec::{Encode, Decode, FullCodec};
+use codec::{Decode, Encode, FullCodec};
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
-use sp_runtime::{DispatchError, ArithmeticError, TokenError};
+use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -51,8 +51,8 @@ pub enum WithdrawConsequence<Balance> {
 }
 
 impl<Balance: Zero> WithdrawConsequence<Balance> {
-	/// Convert the type into a `Result` with `DispatchError` as the error or the additional `Balance`
-	/// by which the account will be reduced.
+	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
+	/// `Balance` by which the account will be reduced.
 	pub fn into_result(self) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
@@ -150,7 +150,7 @@ impl WithdrawReasons {
 	/// assert_eq!(
 	/// 	WithdrawReasons::FEE | WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE | WithdrawReasons::TIP,
 	/// 	WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
-	///	);
+	/// 	);
 	/// # }
 	/// ```
 	pub fn except(one: WithdrawReasons) -> WithdrawReasons {
@@ -161,7 +161,7 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy  + Eq + PartialEq + Debug {}
+pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug {}
 impl<T: FullCodec + Copy + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.

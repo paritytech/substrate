@@ -19,13 +19,10 @@
 
 #![cfg(test)]
 
-use crate as treasury;
 use super::*;
+use crate as treasury;
+use frame_support::{assert_noop, assert_ok, parameter_types, traits::OnInitialize, PalletId};
 use std::cell::RefCell;
-use frame_support::{
-	assert_noop, assert_ok, parameter_types,
-	traits::OnInitialize, PalletId
-};
 
 use sp_core::H256;
 use sp_runtime::{
@@ -117,7 +114,7 @@ impl Config for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type BurnDestination = ();  // Just gets burned.
+	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
 	type MaxApprovals = MaxApprovals;
@@ -125,11 +122,15 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
-	}.assimilate_storage(&mut t).unwrap();
-	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	treasury::GenesisConfig::default()
+		.assimilate_storage::<Test, _>(&mut t)
+		.unwrap();
 	t.into()
 }
 
@@ -318,9 +319,9 @@ fn treasury_account_doesnt_get_deleted() {
 #[test]
 fn inexistent_account_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
-		balances: vec![(0, 100), (1, 99), (2, 1)],
-	}.assimilate_storage(&mut t).unwrap();
+	pallet_balances::GenesisConfig::<Test> { balances: vec![(0, 100), (1, 99), (2, 1)] }
+		.assimilate_storage(&mut t)
+		.unwrap();
 	// Treasury genesis config is not build thus treasury account does not exist
 	let mut t: sp_io::TestExternalities = t.into();
 
@@ -351,11 +352,15 @@ fn inexistent_account_works() {
 fn genesis_funding_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let initial_funding = 100;
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
-	}.assimilate_storage(&mut t).unwrap();
-	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	treasury::GenesisConfig::default()
+		.assimilate_storage::<Test, _>(&mut t)
+		.unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
@@ -370,13 +375,16 @@ fn max_approvals_limited() {
 		Balances::make_free_balance_be(&Treasury::account_id(), u64::MAX);
 		Balances::make_free_balance_be(&0, u64::MAX);
 
-		for _ in 0 .. MaxApprovals::get() {
+		for _ in 0..MaxApprovals::get() {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 		}
 
 		// One too many will fail
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test, _>::TooManyApprovals);
+		assert_noop!(
+			Treasury::approve_proposal(Origin::root(), 0),
+			Error::<Test, _>::TooManyApprovals
+		);
 	});
 }

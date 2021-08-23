@@ -57,41 +57,41 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
 #[cfg(test)]
 mod tests;
-mod benchmarking;
 
 pub mod weights;
 
-use sp_std::prelude::*;
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_module, decl_storage, decl_event, ensure, print, decl_error,
-	PalletId, BoundedVec, storage::TryAppendValue,
-};
-use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
-	ReservableCurrency, WithdrawReasons,
-};
-use sp_runtime::{
-	Permill, RuntimeDebug,
+	decl_error, decl_event, decl_module, decl_storage, ensure, print,
+	storage::TryAppendValue,
 	traits::{
-		Zero, StaticLookup, AccountIdConversion, Saturating
-	}
+		Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
+		ReservableCurrency, WithdrawReasons,
+	},
+	weights::{DispatchClass, Weight},
+	BoundedVec, PalletId,
 };
-use frame_support::weights::{Weight, DispatchClass};
-use frame_support::traits::EnsureOrigin;
-use codec::{Encode, Decode};
 use frame_system::ensure_signed;
+use sp_runtime::{
+	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
+	Permill, RuntimeDebug,
+};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
-pub type BalanceOf<T, I=DefaultInstance> =
+pub type BalanceOf<T, I = DefaultInstance> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-pub type PositiveImbalanceOf<T, I=DefaultInstance> =
-	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
-pub type NegativeImbalanceOf<T, I=DefaultInstance> =
-	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+pub type PositiveImbalanceOf<T, I = DefaultInstance> = <<T as Config<I>>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::PositiveImbalance;
+pub type NegativeImbalanceOf<T, I = DefaultInstance> = <<T as Config<I>>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
-pub trait Config<I=DefaultInstance>: frame_system::Config {
+pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type PalletId: Get<PalletId>;
 
@@ -139,17 +139,16 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
 /// There is an expectation that the implementer of this trait will correctly manage
 /// the mutable variables passed to it:
-/// * `budget_remaining`: How much available funds that can be spent by the treasury.
-///    As funds are spent, you must correctly deduct from this value.
-/// * `imbalance`: Any imbalances that you create should be subsumed in here to
-///    maximize efficiency of updating the total issuance. (i.e. `deposit_creating`)
-/// * `total_weight`: Track any weight that your `spend_fund` implementation uses by
-///    updating this value.
-/// * `missed_any`: If there were items that you want to spend on, but there were
-///    not enough funds, mark this value as `true`. This will prevent the treasury
-///    from burning the excess funds.
+/// * `budget_remaining`: How much available funds that can be spent by the treasury. As funds are
+///   spent, you must correctly deduct from this value.
+/// * `imbalance`: Any imbalances that you create should be subsumed in here to maximize efficiency
+///   of updating the total issuance. (i.e. `deposit_creating`)
+/// * `total_weight`: Track any weight that your `spend_fund` implementation uses by updating this
+///   value.
+/// * `missed_any`: If there were items that you want to spend on, but there were not enough funds,
+///   mark this value as `true`. This will prevent the treasury from burning the excess funds.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait SpendFunds<T: Config<I>, I=DefaultInstance> {
+pub trait SpendFunds<T: Config<I>, I = DefaultInstance> {
 	fn spend_funds(
 		budget_remaining: &mut BalanceOf<T, I>,
 		imbalance: &mut PositiveImbalanceOf<T, I>,
@@ -405,7 +404,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
-		T::SpendFunds::spend_funds( &mut budget_remaining, &mut imbalance, &mut total_weight, &mut missed_any);
+		T::SpendFunds::spend_funds(
+			&mut budget_remaining,
+			&mut imbalance,
+			&mut total_weight,
+			&mut missed_any,
+		);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
@@ -422,12 +426,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		// proof: budget_remaining is account free balance minus ED;
 		// Thus we can't spend more than account free balance minus ED;
 		// Thus account is kept alive; qed;
-		if let Err(problem) = T::Currency::settle(
-			&account_id,
-			imbalance,
-			WithdrawReasons::TRANSFER,
-			KeepAlive
-		) {
+		if let Err(problem) =
+			T::Currency::settle(&account_id, imbalance, WithdrawReasons::TRANSFER, KeepAlive)
+		{
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
 			// Nothing else to do here.
 			drop(problem);
@@ -445,7 +446,6 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			// Must never be less than 0 but better be safe.
 			.saturating_sub(T::Currency::minimum_balance())
 	}
-
 }
 
 impl<T: Config<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {

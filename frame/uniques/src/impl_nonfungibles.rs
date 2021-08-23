@@ -18,10 +18,12 @@
 //! Implementations for `nonfungibles` traits.
 
 use super::*;
-use sp_std::convert::TryFrom;
-use frame_support::traits::tokens::nonfungibles::{Inspect, Mutate, Transfer};
-use frame_support::BoundedSlice;
+use frame_support::{
+	traits::tokens::nonfungibles::{Inspect, Mutate, Transfer},
+	BoundedSlice,
+};
 use sp_runtime::DispatchResult;
+use sp_std::convert::TryFrom;
 
 impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	type InstanceId = T::InstanceId;
@@ -43,9 +45,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	/// When `key` is empty, we return the instance metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(class: &Self::ClassId, instance: &Self::InstanceId, key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn attribute(
+		class: &Self::ClassId,
+		instance: &Self::InstanceId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the instance metadata value.
 			InstanceMetadataOf::<T, I>::get(class, instance).map(|m| m.data.into())
@@ -60,9 +64,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	/// When `key` is empty, we return the instance metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn class_attribute(class: &Self::ClassId, key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn class_attribute(class: &Self::ClassId, key: &[u8]) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the instance metadata value.
 			ClassMetadataOf::<T, I>::get(class).map(|m| m.data.into())

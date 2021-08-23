@@ -15,11 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{Criterion, criterion_group, criterion_main, black_box};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use frame_support::{decl_event, decl_module};
 use frame_system as system;
-use frame_support::{decl_module, decl_event};
 use sp_core::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
 
 mod module {
 	use super::*;
@@ -104,17 +108,18 @@ fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
 		for _ in 0..n {
-			module::Module::<Runtime>::deposit_event(
-				module::Event::Complex(vec![1, 2, 3], 2, 3, 899)
-			);
+			module::Module::<Runtime>::deposit_event(module::Event::Complex(
+				vec![1, 2, 3],
+				2,
+				3,
+				899,
+			));
 		}
 	});
 }
 
 fn sr_system_benchmark(c: &mut Criterion) {
-	c.bench_function("deposit 100 events", |b| {
-		b.iter(|| deposit_events(black_box(100)))
-	});
+	c.bench_function("deposit 100 events", |b| b.iter(|| deposit_events(black_box(100))));
 }
 
 criterion_group!(benches, sr_system_benchmark);

@@ -19,13 +19,15 @@
 
 #![cfg(test)]
 
-use crate::{AuthorityId, AuthorityList, ConsensusLog, Config, self as pallet_grandpa};
+use crate::{self as pallet_grandpa, AuthorityId, AuthorityList, Config, ConsensusLog};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
+use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
-	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize, GenesisBuild},
+	traits::{GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize},
 };
+use pallet_session::historical as pallet_session_historical;
 use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_finality_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
@@ -38,8 +40,6 @@ use sp_runtime::{
 	DigestItem, Perbill,
 };
 use sp_staking::SessionIndex;
-use pallet_session::historical as pallet_session_historical;
-use frame_election_provider_support::onchain;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -275,13 +275,9 @@ pub fn new_test_ext(vec: Vec<(u64, u64)>) -> sp_io::TestExternalities {
 }
 
 pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let balances: Vec<_> = (0..authorities.len())
-		.map(|i| (i as u64, 10_000_000))
-		.collect();
+	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 
 	pallet_balances::GenesisConfig::<Test> { balances }
 		.assimilate_storage(&mut t)
@@ -295,9 +291,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 			(
 				i as u64,
 				i as u64,
-				TestSessionKeys {
-					grandpa_authority: AuthorityId::from(k.clone()),
-				},
+				TestSessionKeys { grandpa_authority: AuthorityId::from(k.clone()) },
 			)
 		})
 		.collect();
@@ -311,12 +305,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
 		.map(|i| {
-			(
-				i as u64,
-				i as u64 + 1000,
-				10_000,
-				pallet_staking::StakerStatus::<u64>::Validator,
-			)
+			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
 		})
 		.collect();
 
@@ -348,12 +337,7 @@ pub fn start_session(session_index: SessionIndex) {
 			System::parent_hash()
 		};
 
-		System::initialize(
-			&(i as u64 + 1),
-			&parent_hash,
-			&Default::default(),
-			Default::default(),
-		);
+		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default(), Default::default());
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 6000);
 
@@ -372,12 +356,7 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn initialize_block(number: u64, parent_hash: H256) {
-	System::initialize(
-		&number,
-		&parent_hash,
-		&Default::default(),
-		Default::default(),
-	);
+	System::initialize(&number, &parent_hash, &Default::default(), Default::default());
 }
 
 pub fn generate_equivocation_proof(
@@ -386,10 +365,7 @@ pub fn generate_equivocation_proof(
 	vote2: (RoundNumber, H256, u64, &Ed25519Keyring),
 ) -> sp_finality_grandpa::EquivocationProof<H256, u64> {
 	let signed_prevote = |round, hash, number, keyring: &Ed25519Keyring| {
-		let prevote = finality_grandpa::Prevote {
-			target_hash: hash,
-			target_number: number,
-		};
+		let prevote = finality_grandpa::Prevote { target_hash: hash, target_number: number };
 
 		let prevote_msg = finality_grandpa::Message::Prevote(prevote.clone());
 		let payload = sp_finality_grandpa::localized_payload(round, set_id, &prevote_msg);

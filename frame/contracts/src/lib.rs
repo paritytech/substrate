@@ -17,43 +17,47 @@
 
 //! # Contract Pallet
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! smart-contracts.
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the [`Currency`] trait to have smart-contract functionality. It can
-//! be used with other modules that implement accounts based on [`Currency`]. These "smart-contract accounts"
-//! have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
+//! This module extends accounts based on the [`Currency`] trait to have smart-contract
+//! functionality. It can be used with other modules that implement accounts based on [`Currency`].
+//! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
+//! to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
-//! This means that multiple smart-contracts can be instantiated from the same hash, without replicating
-//! the code each time.
+//! This means that multiple smart-contracts can be instantiated from the same hash, without
+//! replicating the code each time.
 //!
-//! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
-//! This call can alter the storage entries of the smart-contract account, instantiate new smart-contracts,
-//! or call other smart-contracts.
+//! When a smart-contract is called, its associated code is retrieved via the code hash and gets
+//! executed. This call can alter the storage entries of the smart-contract account, instantiate new
+//! smart-contracts, or call other smart-contracts.
 //!
-//! Finally, when an account is reaped, its associated code and storage of the smart-contract account
-//! will also be deleted.
+//! Finally, when an account is reaped, its associated code and storage of the smart-contract
+//! account will also be deleted.
 //!
 //! ### Gas
 //!
-//! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
-//! Unused gas is refunded after the call, regardless of the execution outcome.
+//! Senders must specify a gas limit with every call, as all instructions invoked by the
+//! smart-contract require gas. Unused gas is refunded after the call, regardless of the execution
+//! outcome.
 //!
-//! If the gas limit is reached, then all calls and state changes (including balance transfers) are only
-//! reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
-//! then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
-//! changes still persist.
+//! If the gas limit is reached, then all calls and state changes (including balance transfers) are
+//! only reverted at the current call's contract level. For example, if contract A calls B and B
+//! runs out of gas mid-call, then all of B's calls are reverted. Assuming correct error handling by
+//! contract A, A's other calls and state changes still persist.
 //!
 //! ### Notable Scenarios
 //!
-//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
-//! and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
-//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not
+//! "bubble up", and the call will only revert at the specific contract level. For example, if
+//! contract A calls contract B, and B fails, A can decide how to handle that failure, either
+//! proceeding or reverting A's changes.
 //!
 //! ## Interface
 //!
@@ -78,17 +82,17 @@
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
+#![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "512")]
 
 #[macro_use]
 mod gas;
-mod storage;
-mod exec;
-mod wasm;
-mod rent;
 mod benchmarking;
-mod schedule;
+mod exec;
 mod migration;
+mod rent;
+mod schedule;
+mod storage;
+mod wasm;
 
 pub mod chain_extension;
 pub mod weights;
@@ -97,48 +101,47 @@ pub mod weights;
 mod tests;
 
 pub use crate::{
-	pallet::*,
-	schedule::{Schedule, Limits, InstructionWeights, HostFnWeights},
 	exec::Frame,
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
 use crate::{
+	exec::{Executable, Stack as ExecStack},
 	gas::GasMeter,
-	exec::{Stack as ExecStack, Executable},
 	rent::Rent,
-	storage::{Storage, DeletedContract, ContractInfo, AliveContractInfo, TombstoneContractInfo},
-	weights::WeightInfo,
+	storage::{AliveContractInfo, ContractInfo, DeletedContract, Storage, TombstoneContractInfo},
 	wasm::PrefabWasmModule,
-};
-use sp_core::{Bytes, crypto::UncheckedFrom};
-use sp_std::prelude::*;
-use sp_runtime::{
-	traits::{
-		Hash, StaticLookup, Convert, Saturating, Zero,
-	},
-	Perbill,
+	weights::WeightInfo,
 };
 use frame_support::{
-	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
-	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
+	traits::{Currency, Get, OnUnbalanced, Randomness, Time},
+	weights::{PostDispatchInfo, Weight, WithPostDispatchInfo},
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
-	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
-	ContractInstantiateResult, Code, InstantiateReturnValue,
+	Code, ContractAccessError, ContractExecResult, ContractInstantiateResult, GetStorageResult,
+	InstantiateReturnValue, RentProjectionResult,
 };
+use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_runtime::{
+	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
+	Perbill,
+};
+use sp_std::prelude::*;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -189,17 +192,18 @@ pub mod pallet {
 		/// deposited while the contract is alive. Costs for additional storage are added to
 		/// this base cost.
 		///
-		/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
-		/// making them pay rent. This creates an incentive to remove them early in order to save rent.
+		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
+		/// by making them pay rent. This creates an incentive to remove them early in order to save
+		/// rent.
 		#[pallet::constant]
 		type DepositPerContract: Get<BalanceOf<Self>>;
 
 		/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
 		///
-		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
-		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
-		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
-		/// then it would pay 500 BU/day.
+		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1
+		/// BU/byte/day, then a contract with 1,000,000 BU that uses 1,000 bytes of storage would
+		/// pay no rent. But if the balance reduced to 500,000 BU and the storage stayed the same at
+		/// 1,000, then it would pay 500 BU/day.
 		#[pallet::constant]
 		type DepositPerStorageByte: Get<BalanceOf<Self>>;
 
@@ -227,7 +231,7 @@ pub mod pallet {
 		/// The allowed depth is `CallStack::size() + 1`.
 		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
 		/// In other words only the origin called "root contract" is allowed to execute then.
-		type CallStack: smallvec::Array<Item=Frame<Self>>;
+		type CallStack: smallvec::Array<Item = Frame<Self>>;
 
 		/// The maximum number of tries that can be queued for deletion.
 		#[pallet::constant]
@@ -250,7 +254,8 @@ pub mod pallet {
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
 			// We do not want to go above the block limit and rather avoid lazy deletion
 			// in that case. This should only happen on runtime upgrades.
-			let weight_limit = T::BlockWeights::get().max_block
+			let weight_limit = T::BlockWeights::get()
+				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
@@ -281,14 +286,20 @@ pub mod pallet {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			data: Vec<u8>
+			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-				origin, dest, &mut gas_meter, &schedule, value, data, None,
+				origin,
+				dest,
+				&mut gas_meter,
+				&schedule,
+				value,
+				data,
+				None,
 			);
 			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
@@ -308,7 +319,8 @@ pub mod pallet {
 		///
 		/// Instantiation is executed as follows:
 		///
-		/// - The supplied `code` is instrumented, deployed, and a `code_hash` is created for that code.
+		/// - The supplied `code` is instrumented, deployed, and a `code_hash` is created for that
+		///   code.
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
@@ -338,11 +350,19 @@ pub mod pallet {
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
-			).map(|(_address, output)| output);
+				origin,
+				executable,
+				&mut gas_meter,
+				&schedule,
+				endowment,
+				data,
+				&salt,
+				None,
+			)
+			.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024)
+				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024),
 			)
 		}
 
@@ -367,12 +387,18 @@ pub mod pallet {
 			let schedule = T::Schedule::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
-			).map(|(_address, output)| output);
-			gas_meter.into_dispatch_result(
-				result,
-				T::WeightInfo::instantiate(salt.len() as u32 / 1024),
+				origin,
+				executable,
+				&mut gas_meter,
+				&schedule,
+				endowment,
+				data,
+				&salt,
+				None,
 			)
+			.map(|(_address, output)| output);
+			gas_meter
+				.into_dispatch_result(result, T::WeightInfo::instantiate(salt.len() as u32 / 1024))
 		}
 
 		/// Allows block producers to claim a small reward for evicting a contract. If a block
@@ -388,44 +414,34 @@ pub mod pallet {
 		pub fn claim_surcharge(
 			origin: OriginFor<T>,
 			dest: T::AccountId,
-			aux_sender: Option<T::AccountId>
+			aux_sender: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
-				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
-					(true, account)
-				},
-				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => {
-					(false, aux_sender)
-				},
+				(Ok(frame_system::RawOrigin::Signed(account)), None) => (true, account),
+				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => (false, aux_sender),
 				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
 			// adding a handicap: for signed extrinsics we use a slightly older block number
-			// for the eviction check. This can be viewed as if we pushed regular users back in past.
-			let handicap = if signed {
-				T::SignedClaimHandicap::get()
-			} else {
-				Zero::zero()
-			};
+			// for the eviction check. This can be viewed as if we pushed regular users back in
+			// past.
+			let handicap = if signed { T::SignedClaimHandicap::get() } else { Zero::zero() };
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_paid), code_len) => {
-					T::Currency::deposit_into_existing(
-						&rewarded,
-						T::SurchargeReward::get().min(rent_paid),
-					)
-					.map(|_| PostDispatchInfo {
-						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
-						pays_fee: Pays::No,
-					})
-					.map_err(Into::into)
-				}
-				(None, code_len) => Err(Error::<T>::ContractNotEvictable.with_weight(
-					T::WeightInfo::claim_surcharge(code_len / 1024)
-				)),
+				(Some(rent_paid), code_len) => T::Currency::deposit_into_existing(
+					&rewarded,
+					T::SurchargeReward::get().min(rent_paid),
+				)
+				.map(|_| PostDispatchInfo {
+					actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
+					pays_fee: Pays::No,
+				})
+				.map_err(Into::into),
+				(None, code_len) => Err(Error::<T>::ContractNotEvictable
+					.with_weight(T::WeightInfo::claim_surcharge(code_len / 1024))),
 			}
 		}
 	}
@@ -482,8 +498,8 @@ pub mod pallet {
 		/// # Params
 		///
 		/// - `contract`: The contract that emitted the event.
-		/// - `data`: Data supplied by the contract. Metadata generated during contract
-		///           compilation is needed to decode it.
+		/// - `data`: Data supplied by the contract. Metadata generated during contract compilation
+		///   is needed to decode it.
 		ContractEmitted(T::AccountId, Vec<u8>),
 
 		/// A code with the specified hash was removed.
@@ -602,7 +618,8 @@ pub mod pallet {
 
 	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
 	#[pallet::storage]
-	pub(crate) type CodeStorage<T: Config> = StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
+	pub(crate) type CodeStorage<T: Config> =
+		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
 	/// The subtrie counter.
 	#[pallet::storage]
@@ -612,7 +629,8 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	pub(crate) type ContractInfoOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
+	pub(crate) type ContractInfoOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
 
 	/// Evicted contracts that await child trie deletion.
 	///
@@ -648,13 +666,15 @@ where
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let schedule = T::Schedule::get();
-		let mut debug_message = if debug {
-			Some(Vec::new())
-		} else {
-			None
-		};
+		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin, dest, &mut gas_meter, &schedule, value, input_data, debug_message.as_mut(),
+			origin,
+			dest,
+			&mut gas_meter,
+			&schedule,
+			value,
+			input_data,
+			debug_message.as_mut(),
 		);
 		ContractExecResult {
 			result: result.map_err(|r| r.error),
@@ -697,33 +717,35 @@ where
 		};
 		let executable = match executable {
 			Ok(executable) => executable,
-			Err(error) => return ContractInstantiateResult {
-				result: Err(error.into()),
-				gas_consumed: gas_meter.gas_spent(),
-				debug_message: Vec::new(),
-			}
+			Err(error) =>
+				return ContractInstantiateResult {
+					result: Err(error.into()),
+					gas_consumed: gas_meter.gas_spent(),
+					debug_message: Vec::new(),
+				},
 		};
-		let mut debug_message = if debug {
-			Some(Vec::new())
-		} else {
-			None
-		};
+		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-			origin, executable, &mut gas_meter, &schedule,
-			endowment, data, &salt, debug_message.as_mut(),
-		).and_then(|(account_id, result)| {
+			origin,
+			executable,
+			&mut gas_meter,
+			&schedule,
+			endowment,
+			data,
+			&salt,
+			debug_message.as_mut(),
+		)
+		.and_then(|(account_id, result)| {
 			let rent_projection = if compute_projection {
-				Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
-					.map_err(|_| <Error<T>>::NewContractNotFunded)?)
+				Some(
+					Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
+						.map_err(|_| <Error<T>>::NewContractNotFunded)?,
+				)
 			} else {
 				None
 			};
 
-			Ok(InstantiateReturnValue {
-				result,
-				account_id,
-				rent_projection,
-			})
+			Ok(InstantiateReturnValue { result, account_id, rent_projection })
 		});
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),
@@ -761,9 +783,10 @@ where
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
 		salt: &[u8],
-	) -> T::AccountId
-	{
-		let buf: Vec<_> = deploying_address.as_ref().iter()
+	) -> T::AccountId {
+		let buf: Vec<_> = deploying_address
+			.as_ref()
+			.iter()
 			.chain(code_hash.as_ref())
 			.chain(salt)
 			.cloned()
@@ -808,7 +831,7 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn reinstrument_module(
 		module: &mut PrefabWasmModule<T>,
-		schedule: &Schedule<T>
+		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
 		self::wasm::reinstrument(module, schedule)
 	}

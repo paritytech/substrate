@@ -21,16 +21,17 @@
 pub mod error;
 pub mod helpers;
 
+use self::error::FutureResult;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use sp_core::Bytes;
-use sp_core::storage::{StorageKey, StorageData, StorageChangeSet};
+use sp_core::{
+	storage::{StorageChangeSet, StorageData, StorageKey},
+	Bytes,
+};
 use sp_version::RuntimeVersion;
-use self::error::FutureResult;
 
-pub use self::gen_client::Client as StateClient;
-pub use self::helpers::ReadProof;
+pub use self::{gen_client::Client as StateClient, helpers::ReadProof};
 
 /// Substrate state API
 #[rpc]
@@ -45,11 +46,16 @@ pub trait StateApi<Hash> {
 	/// DEPRECATED: Please use `state_getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix, leave empty to get all the keys.
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>)
+		-> FutureResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getPairs")]
-	fn storage_pairs(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+	fn storage_pairs(
+		&self,
+		prefix: StorageKey,
+		hash: Option<Hash>,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>>;
 
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
@@ -83,7 +89,8 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
 	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
@@ -92,7 +99,7 @@ pub trait StateApi<Hash> {
 		&self,
 		keys: Vec<StorageKey>,
 		block: Hash,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
@@ -105,7 +112,11 @@ pub trait StateApi<Hash> {
 
 	/// Returns proof of storage entries at a specific block's state.
 	#[rpc(name = "state_getReadProof")]
-	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<ReadProof<Hash>>;
+	fn read_proof(
+		&self,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> FutureResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[pubsub(
@@ -114,7 +125,11 @@ pub trait StateApi<Hash> {
 		name = "state_subscribeRuntimeVersion",
 		alias("chain_subscribeRuntimeVersion")
 	)]
-	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
+	fn subscribe_runtime_version(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<RuntimeVersion>,
+	);
 
 	/// Unsubscribe from runtime version subscription
 	#[pubsub(
@@ -123,18 +138,27 @@ pub trait StateApi<Hash> {
 		name = "state_unsubscribeRuntimeVersion",
 		alias("chain_unsubscribeRuntimeVersion")
 	)]
-	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_runtime_version(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
 	fn subscribe_storage(
-		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<StorageChangeSet<Hash>>,
+		keys: Option<Vec<StorageKey>>,
 	);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
 	fn unsubscribe_storage(
-		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
 	) -> RpcResult<bool>;
 
 	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
@@ -153,7 +177,8 @@ pub trait StateApi<Hash> {
 	/// ## Node requirements
 	///
 	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
-	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
+	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime
+	///   versions
 	/// for which tracing is desired.
 	///
 	/// ## Node recommendations
@@ -169,10 +194,12 @@ pub trait StateApi<Hash> {
 	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
 	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
 	/// - Compile the runtime with `cargo build --release --features with-tracing`
-	/// - Tracing-enabled WASM runtime should be found in `./target/release/wbuild/{{chain}}-runtime`
+	/// - Tracing-enabled WASM runtime should be found in
+	///   `./target/release/wbuild/{{chain}}-runtime`
 	/// and be called something like `{{your_chain}}_runtime.compact.wasm`. This can be
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
-	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
+	/// - Run the node with the wasm blob overrides by placing them in a folder with all your
+	///   runtimes,
 	/// and passing the path of this folder to your chain, e.g.:
 	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
@@ -199,7 +226,7 @@ pub trait StateApi<Hash> {
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
 	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
-	///		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
 	/// 	http://localhost:9933/
 	/// ```
 	///

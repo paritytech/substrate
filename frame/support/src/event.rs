@@ -21,7 +21,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use frame_metadata::{DecodeDifferent, EventMetadata, FnEncode, OuterEventMetadata};
 
 /// Implement the `Event` for a module.
 ///
@@ -35,7 +35,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///    }
 /// );
 ///
-///# fn main() {}
+/// # fn main() {}
 /// ```
 ///
 /// # Generic Event Example:
@@ -75,7 +75,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///     );
 /// }
 ///
-///# fn main() {}
+/// # fn main() {}
 /// ```
 ///
 /// The syntax for generic events requires the `where`.
@@ -83,9 +83,9 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 /// # Generic Event with Instance Example:
 ///
 /// ```rust
-///# struct DefaultInstance;
-///# trait Instance {}
-///# impl Instance for DefaultInstance {}
+/// # struct DefaultInstance;
+/// # trait Instance {}
+/// # impl Instance for DefaultInstance {}
 /// trait Config<I: Instance=DefaultInstance> {
 ///     type Balance;
 ///     type Token;
@@ -100,7 +100,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///       Message(Balance, Token),
 ///    }
 /// );
-///# fn main() {}
+/// # fn main() {}
 /// ```
 #[macro_export]
 macro_rules! decl_event {
@@ -551,8 +551,8 @@ macro_rules! __impl_outer_event_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use codec::{Decode, Encode};
 	use serde::Serialize;
-	use codec::{Encode, Decode};
 
 	mod system {
 		pub trait Config: 'static {
@@ -628,9 +628,10 @@ mod tests {
 
 		decl_event!(
 			/// Event with renamed generic parameter
-			pub enum Event<T> where
+			pub enum Event<T>
+			where
 				BalanceRenamed = <T as Config>::Balance,
-				OriginRenamed = <T as system::Config>::Origin
+				OriginRenamed = <T as system::Config>::Origin,
 			{
 				TestEvent(BalanceRenamed),
 				TestOrigin(OriginRenamed),
@@ -681,15 +682,13 @@ mod tests {
 
 		decl_event!(
 			/// Event finish formatting on an named one with trailing comma
-			pub enum Event<T> where
+			pub enum Event<T>
+			where
 				BalanceRenamed = <T as Config>::Balance,
 				OriginRenamed = <T as system::Config>::Origin,
 			{
 				TestEvent(BalanceRenamed, OriginRenamed),
-				TrailingCommaInArgs(
-					u32,
-					u32,
-				),
+				TrailingCommaInArgs(u32, u32),
 			}
 		);
 	}
@@ -760,55 +759,59 @@ mod tests {
 		events: DecodeDifferent::Encode(&[
 			(
 				"system",
-				FnEncode(|| &[
-					EventMetadata {
+				FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("SystemEvent"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					}
-				])
+					}]
+				}),
 			),
 			(
 				"event_module",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
-						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("EventWithoutParams"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
-					},
-				])
+				FnEncode(|| {
+					&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance", "Origin"]),
+							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
+						},
+						EventMetadata {
+							name: DecodeDifferent::Encode("EventWithoutParams"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[" Dog"]),
+						},
+					]
+				}),
 			),
 			(
 				"event_module2",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestOrigin"),
-						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-				])
+				FnEncode(|| {
+					&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["BalanceRenamed"]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestOrigin"),
+							arguments: DecodeDifferent::Encode(&["OriginRenamed"]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+					]
+				}),
 			),
 			(
 				"event_module3",
-				FnEncode(|| &[
-					EventMetadata {
+				FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("HiEvent"),
 						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[])
-					}
-				])
-			)
-		])
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}),
+			),
+		]),
 	};
 
 	#[test]
@@ -818,19 +821,17 @@ mod tests {
 
 	#[test]
 	fn test_codec() {
-		let runtime_1_event_module_2 = TestEvent::event_module2(
-			event_module2::Event::<TestRuntime>::TestEvent(3)
-		);
+		let runtime_1_event_module_2 =
+			TestEvent::event_module2(event_module2::Event::<TestRuntime>::TestEvent(3));
 		assert_eq!(runtime_1_event_module_2.encode()[0], 2);
 
 		let runtime_2_event_module_2 = TestEventSystemRenamed::event_module2(
-			event_module2::Event::<TestRuntime2>::TestEvent(3)
+			event_module2::Event::<TestRuntime2>::TestEvent(3),
 		);
 		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
-		
-		let runtime_2_event_module_3 = TestEventSystemRenamed::event_module3(
-			event_module3::Event::HiEvent
-		);
+
+		let runtime_2_event_module_3 =
+			TestEventSystemRenamed::event_module3(event_module3::Event::HiEvent);
 		assert_eq!(runtime_2_event_module_3.encode()[0], 3);
 	}
 }

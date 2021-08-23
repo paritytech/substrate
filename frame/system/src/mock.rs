@@ -16,13 +16,14 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use sp_std::cell::RefCell;
+use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
+	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	testing::Header, BuildStorage,
+	BuildStorage,
 };
-use frame_support::parameter_types;
+use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
@@ -75,13 +76,15 @@ parameter_types! {
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-thread_local!{
+thread_local! {
 	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
-	fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
+	fn on_killed_account(who: &u64) {
+		KILLED.with(|r| r.borrow_mut().push(*who))
+	}
 }
 
 impl Config for Test {
@@ -117,12 +120,14 @@ pub const CALL: &<Test as Config>::Call = &Call::System(frame_system::Call::set_
 
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = GenesisConfig::default()
-		.build_storage().unwrap().into();
+	let mut ext: sp_io::TestExternalities =
+		GenesisConfig::default().build_storage().unwrap().into();
 	// Add to each test the initial weight of a block
-	ext.execute_with(|| System::register_extra_weight_unchecked(
-		<Test as crate::Config>::BlockWeights::get().base_block,
-		DispatchClass::Mandatory
-	));
+	ext.execute_with(|| {
+		System::register_extra_weight_unchecked(
+			<Test as crate::Config>::BlockWeights::get().base_block,
+			DispatchClass::Mandatory,
+		)
+	});
 	ext
 }

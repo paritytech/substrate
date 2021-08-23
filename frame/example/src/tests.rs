@@ -20,14 +20,16 @@
 use crate::*;
 use frame_support::{
 	assert_ok, parameter_types,
-	weights::{DispatchInfo, GetDispatchInfo}, traits::OnInitialize
+	traits::OnInitialize,
+	weights::{DispatchInfo, GetDispatchInfo},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	testing::Header, BuildStorage,
+	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example;
@@ -115,7 +117,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
 		},
-	}.build_storage().unwrap();
+	}
+	.build_storage()
+	.unwrap();
 	t.into()
 }
 
@@ -163,7 +167,8 @@ fn signed_ext_watch_dummy_works() {
 		let info = DispatchInfo::default();
 
 		assert_eq!(
-			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
+			WatchDummy::<Test>(PhantomData)
+				.validate(&1, &call, &info, 150)
 				.unwrap()
 				.priority,
 			u64::MAX,
@@ -182,7 +187,6 @@ fn weights_work() {
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	assert!(info1.weight > 0);
-
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
