@@ -116,12 +116,11 @@ impl pallet_aura::Config for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
-	let state_version = Default::default();
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}
-	.assimilate_storage(&mut t, state_version)
+	.assimilate_storage(&mut t)
 	.unwrap();
-	(t, state_version).into()
+	t.into()
 }

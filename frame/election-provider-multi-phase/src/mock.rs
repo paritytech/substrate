@@ -511,10 +511,9 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		let state_version = Default::default();
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version).unwrap();
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
@@ -524,9 +523,9 @@ impl ExtBuilder {
 				(9999, 100),
 			],
 		}
-		.assimilate_storage(&mut storage, state_version);
+		.assimilate_storage(&mut storage);
 
-		sp_io::TestExternalities::from((storage, state_version))
+		sp_io::TestExternalities::from(storage)
 	}
 
 	pub fn build_offchainify(

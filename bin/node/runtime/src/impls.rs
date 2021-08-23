@@ -96,10 +96,9 @@ mod multiplier_tests {
 	where
 		F: Fn() -> (),
 	{
-		let state_version = Default::default();
-		let mut t: sp_io::TestExternalities = (frame_system::GenesisConfig::default()
-			.build_storage::<Runtime>(state_version)
-			.unwrap(), state_version)
+		let mut t: sp_io::TestExternalities = frame_system::GenesisConfig::default()
+			.build_storage::<Runtime>()
+			.unwrap()
 			.into();
 		t.execute_with(|| {
 			System::set_block_consumed_resources(w, 0);

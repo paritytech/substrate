@@ -127,9 +127,8 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		let state_version = Default::default();
 		self.set_associated_consts();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
@@ -143,10 +142,10 @@ impl ExtBuilder {
 				vec![]
 			},
 		}
-		.assimilate_storage(&mut t, state_version)
+		.assimilate_storage(&mut t)
 		.unwrap();
 
-		let mut ext = sp_io::TestExternalities::new(t, state_version);
+		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}

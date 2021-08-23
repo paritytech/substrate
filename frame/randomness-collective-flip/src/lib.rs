@@ -224,9 +224,8 @@ mod tests {
 	impl pallet_randomness_collective_flip::Config for Test {}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = Default::default();
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
-		(t, state_version).into()
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		t.into()
 	}
 
 	#[test]

@@ -1083,8 +1083,7 @@ mod tests {
 	);
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = sp_runtime::StateVersion::default();
-		let mut ext: sp_io::TestExternalities = (GenesisConfig {
+		let mut ext: sp_io::TestExternalities = GenesisConfig {
 			collective: collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
@@ -1095,8 +1094,9 @@ mod tests {
 			},
 			default_collective: Default::default(),
 		}
-		.build_storage(state_version)
-		.unwrap(), state_version).into();
+		.build_storage()
+		.unwrap()
+		.into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
@@ -2158,12 +2158,11 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
 	fn genesis_build_panics_with_duplicate_members() {
-		let state_version = sp_runtime::StateVersion::default();
 		collective::GenesisConfig::<Test> {
 			members: vec![1, 2, 3, 1],
 			phantom: Default::default(),
 		}
-		.build_storage(state_version)
+		.build_storage()
 		.unwrap();
 	}
 }

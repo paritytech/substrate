@@ -811,10 +811,9 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let state_version = Default::default();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version).unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 211)] }
-			.assimilate_storage(&mut t, state_version)
+			.assimilate_storage(&mut t)
 			.unwrap();
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
 		let weight = xt.get_dispatch_info().weight +
@@ -823,7 +822,7 @@ mod tests {
 				.base_extrinsic;
 		let fee: Balance =
 			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
-		let mut t = sp_io::TestExternalities::new(t, state_version);
+		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -840,12 +839,11 @@ mod tests {
 	}
 
 	fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
-		let state_version = Default::default();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>(state_version).unwrap();
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
-			.assimilate_storage(&mut t, state_version)
+			.assimilate_storage(&mut t)
 			.unwrap();
-		(t, state_version).into()
+		t.into()
 	}
 
 	#[test]

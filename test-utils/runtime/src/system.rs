@@ -366,13 +366,11 @@ mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		let state_version = Default::default();
 		let authorities = vec![
 			Sr25519Keyring::Alice.to_raw_public(),
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public(),
 		];
-
 		TestExternalities::new_with_code(
 			wasm_binary_unwrap(),
 			sp_core::storage::Storage {
@@ -381,11 +379,10 @@ mod tests {
 					twox_128(b"sys:auth").to_vec() => authorities.encode(),
 					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-					},
+					}
 				],
 				children_default: map![],
 			},
-			state_version,
 		)
 	}
 

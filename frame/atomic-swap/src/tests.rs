@@ -83,11 +83,10 @@ const A: u64 = 1;
 const B: u64 = 2;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = Default::default();
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let genesis = pallet_balances::GenesisConfig::<Test> { balances: vec![(A, 100), (B, 200)] };
-	genesis.assimilate_storage(&mut t, state_version).unwrap();
-	(t, state_version).into()
+	genesis.assimilate_storage(&mut t).unwrap();
+	t.into()
 }
 
 #[test]

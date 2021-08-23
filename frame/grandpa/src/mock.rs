@@ -275,13 +275,12 @@ pub fn new_test_ext(vec: Vec<(u64, u64)>) -> sp_io::TestExternalities {
 }
 
 pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestExternalities {
-	let state_version = Default::default();
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 
 	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t, state_version)
+		.assimilate_storage(&mut t)
 		.unwrap();
 
 	// stashes are the index.
@@ -300,7 +299,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 	// NOTE: this will initialize the grandpa authorities
 	// through OneSessionHandler::on_genesis_session
 	pallet_session::GenesisConfig::<Test> { keys: session_keys }
-		.assimilate_storage(&mut t, state_version)
+		.assimilate_storage(&mut t)
 		.unwrap();
 
 	// controllers are the index + 1000
@@ -319,9 +318,9 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		..Default::default()
 	};
 
-	staking_config.assimilate_storage(&mut t, state_version).unwrap();
+	staking_config.assimilate_storage(&mut t).unwrap();
 
-	(t, state_version).into()
+	t.into()
 }
 
 pub fn start_session(session_index: SessionIndex) {

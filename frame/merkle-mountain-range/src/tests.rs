@@ -25,8 +25,7 @@ use sp_core::{
 };
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = Default::default();
-	(frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap(), state_version).into()
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
 fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {

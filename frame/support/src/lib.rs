@@ -847,9 +847,7 @@ pub mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		let state_version = Default::default();
-		let storage = GenesisConfig::default().build_storage(state_version).unwrap();
-		(storage, state_version).into()
+		GenesisConfig::default().build_storage().unwrap().into()
 	}
 
 	type Map = Data;

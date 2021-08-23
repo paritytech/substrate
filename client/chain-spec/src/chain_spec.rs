@@ -440,6 +440,10 @@ mod tests {
 	struct Genesis(HashMap<String, String>);
 
 	impl BuildStorage for Genesis {
+		fn state_version(&self) -> StateVersion {
+			Default::default()
+		}
+
 		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
 			storage.top.extend(
 				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),

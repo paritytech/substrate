@@ -162,7 +162,6 @@ mod tests {
 	type Historical = Module<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let state_version = Default::default();
 		let mut t = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.expect("Failed to create test externalities.");
@@ -178,7 +177,7 @@ mod tests {
 
 		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 
-		let mut ext = sp_io::TestExternalities::new(t, state_version);
+		let mut ext = sp_io::TestExternalities::new(t);
 
 		let (offchain, offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
 

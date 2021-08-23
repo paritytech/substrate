@@ -74,9 +74,8 @@ mod tests {
 
 	#[test]
 	fn value_translate_works() {
-		let state_version = Default::default();
-		let t = GenesisConfig::default().build_storage(state_version).unwrap();
-		TestExternalities::new(t, state_version).execute_with(|| {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
 			// put the old value `1111u32` in the storage.
 			let key = Value::storage_value_final_key();
 			unhashed::put_raw(&key, &1111u32.encode());
@@ -95,9 +94,8 @@ mod tests {
 
 	#[test]
 	fn map_translate_works() {
-		let state_version = Default::default();
-		let t = GenesisConfig::default().build_storage(state_version).unwrap();
-		TestExternalities::new(t, state_version).execute_with(|| {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
 			// start with a map of u32 -> u32.
 			for i in 0u32..100u32 {
 				unhashed::put(&NumberMap::hashed_key_for(&i), &(i as u64));
@@ -125,9 +123,8 @@ mod tests {
 
 	#[test]
 	fn try_mutate_works() {
-		let state_version = Default::default();
-		let t = GenesisConfig::default().build_storage(state_version).unwrap();
-		TestExternalities::new(t, state_version).execute_with(|| {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
 			assert_eq!(Value::get(), (0, 0));
 			assert_eq!(NumberMap::get(0), 0);
 			assert_eq!(DoubleMap::get(0, 0), 0);

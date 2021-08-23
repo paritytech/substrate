@@ -251,7 +251,6 @@ fn construct_genesis_should_work_with_native() {
 		1000,
 		None,
 		Default::default(),
-		state_version,
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
@@ -288,7 +287,6 @@ fn construct_genesis_should_work_with_wasm() {
 		1000,
 		None,
 		Default::default(),
-		state_version,
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
@@ -325,7 +323,6 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		68,
 		None,
 		Default::default(),
-		state_version,
 	)
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
@@ -2106,7 +2103,10 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		substrate_test_runtime_client::runtime::RuntimeApi,
 	>(
 		substrate_test_runtime_client::new_native_executor(),
-		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		&(
+			substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			sp_runtime::StateVersion::default(),
+		),
 		None,
 		None,
 		None,

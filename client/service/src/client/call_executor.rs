@@ -396,7 +396,10 @@ mod tests {
 		>(
 			backend.clone(),
 			executor.clone(),
-			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			&(
+				substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+				sp_runtime::StateVersion::default(),
+			),
 			None,
 			Box::new(TaskExecutor::new()),
 			None,

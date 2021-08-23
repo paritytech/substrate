@@ -190,15 +190,14 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
-	let storage = sp_core::storage::Storage {
+	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
 			b"input".to_vec() => b"Hello worldHello worldHello worldHello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],
 		children_default: map![],
-	};
-	let expected = TestExternalities::new(storage, Default::default());
+	});
 	assert_eq!(ext, expected);
 }
 
@@ -221,16 +220,14 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
-	let storage = sp_core::storage::Storage {
+	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
 		],
 		children_default: map![],
-	};
-
-	let expected = TestExternalities::new(storage, Default::default());
+	});
 	assert_eq!(expected, ext);
 }
 

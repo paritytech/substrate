@@ -87,17 +87,28 @@ where
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: Storage, state_version: StateVersion) -> Self {
-		Self::new_with_code(&[], storage, state_version)
+	pub fn new(storage: Storage) -> Self {
+		Self::new_with_code_and_state(&[], storage, Default::default())
 	}
+
+	/// Create a new instance of `TestExternalities` with storage for a given state version.
+	pub fn new_with_state_version(storage: Storage, state_version: StateVersion) -> Self {
+		Self::new_with_code_and_state(&[], storage, state_version)
+	}
+
 
 	/// New empty test externalities.
 	pub fn new_empty() -> Self {
-		Self::new_with_code(&[], Storage::default(), Default::default())
+		Self::new_with_code_and_state(&[], Storage::default(), Default::default())
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], mut storage: Storage, state_version: StateVersion) -> Self {
+	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
+		Self::new_with_code_and_state(code, storage, Default::default())
+	}
+
+	/// Create a new instance of `TestExternalities` with code and storage for a given state version.
+	pub fn new_with_code_and_state(code: &[u8], mut storage: Storage, state_version: StateVersion) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage
 			.top
@@ -245,7 +256,16 @@ where
 {
 	fn default() -> Self {
 		// default to default version.
-		Self::new(Storage::default(), Default::default())
+		Self::new_with_state_version(Storage::default(), Default::default())
+	}
+}
+
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
+where
+	H::Out: Ord + 'static + codec::Codec,
+{
+	fn from(storage: Storage) -> Self {
+		Self::new_with_state_version(storage, Default::default())
 	}
 }
 
@@ -254,7 +274,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	fn from((storage, state_version): (Storage, StateVersion)) -> Self {
-		Self::new(storage, state_version)
+		Self::new_with_state_version(storage, state_version)
 	}
 }
 

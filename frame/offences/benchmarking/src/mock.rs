@@ -226,7 +226,6 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = Default::default();
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
-	sp_io::TestExternalities::new(t, state_version)
+	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	sp_io::TestExternalities::new(t)
 }

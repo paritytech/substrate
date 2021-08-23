@@ -445,6 +445,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			Default::default(),
+			Default::default(),
 		)
 	}
 
@@ -459,6 +460,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
+			Default::default(),
 			Default::default(),
 		)
 	}
@@ -492,16 +494,16 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_create_development_chain_spec() {
-		development_config().build_storage(Default::default()).unwrap();
+		development_config().build_storage().unwrap();
 	}
 
 	#[test]
 	fn test_create_local_testnet_chain_spec() {
-		local_testnet_config().build_storage(Default::default()).unwrap();
+		local_testnet_config().build_storage().unwrap();
 	}
 
 	#[test]
 	fn test_staging_test_net_chain_spec() {
-		staging_testnet_config().build_storage(Default::default()).unwrap();
+		staging_testnet_config().build_storage().unwrap();
 	}
 }

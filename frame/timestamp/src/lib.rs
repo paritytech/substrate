@@ -316,9 +316,8 @@ mod tests {
 	};
 
 	pub fn new_test_ext() -> TestExternalities {
-		let state_version = Default::default();
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>(state_version).unwrap();
-		TestExternalities::new(t, state_version)
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		TestExternalities::new(t)
 	}
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

@@ -318,9 +318,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	let state_version = Default::default();
-
-	(GenesisConfig {
+	GenesisConfig {
 		module_1_1: module1::GenesisConfig { value: 3, test: 2 },
 		module_1_2: module1::GenesisConfig { value: 4, test: 5 },
 		module_2: module2::GenesisConfig {
@@ -336,8 +334,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
 		module_2_2: Default::default(),
 		module_2_3: Default::default(),
 	}
-	.build_storage(state_version)
-	.unwrap(), state_version).into()
+	.build_storage()
+	.unwrap()
+	.into()
 }
 
 #[test]
