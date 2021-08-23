@@ -323,11 +323,9 @@ fn block_length_capacity_report() {
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
-					function: Call::System(frame_system::Call::remark { remark: vec![
-						0u8;
-						(block_number * factor)
-							as usize
-					]}),
+					function: Call::System(frame_system::Call::remark {
+						remark: vec![0u8; (block_number * factor) as usize],
+					}),
 				},
 			],
 			(time * 1000 / SLOT_DURATION).into(),
