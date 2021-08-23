@@ -223,7 +223,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		}
 		let mut r = Self::set_balance(asset, who, new_balance);
 		if r.is_err() {
-			// Some error, probably because we tried to destroy an account which cannot be destroyed.
+			// Some error, probably because we tried to destroy an account which cannot be
+			// destroyed.
 			if new_balance.is_zero() && amount >= minimum_balance {
 				new_balance = minimum_balance;
 				amount -= minimum_balance;

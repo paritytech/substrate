@@ -361,7 +361,8 @@ where
 		match Future::poll(Pin::new(&mut self.observer), cx) {
 			Poll::Pending => {},
 			Poll::Ready(Ok(())) => {
-				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
+				// observer commit stream doesn't conclude naturally; this could reasonably be an
+				// error.
 				return Poll::Ready(Ok(()))
 			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {

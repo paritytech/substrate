@@ -21,7 +21,8 @@ use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
 ///
-/// It is required that these instances are unique, to support multiple instances per pallet in the same runtime!
+/// It is required that these instances are unique, to support multiple instances per pallet in the
+/// same runtime!
 ///
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".

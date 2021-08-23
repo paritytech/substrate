@@ -183,7 +183,8 @@ pub enum ConversionError {
 	MinBalanceZero,
 	/// The asset is not present in storage.
 	AssetMissing,
-	/// The asset is not sufficient and thus does not have a reliable `min_balance` so it cannot be converted.
+	/// The asset is not sufficient and thus does not have a reliable `min_balance` so it cannot be
+	/// converted.
 	AssetNotSufficient,
 }
 
@@ -210,10 +211,11 @@ where
 {
 	type Error = ConversionError;
 
-	/// Convert the given balance value into an asset balance based on the ratio between the fungible's
-	/// minimum balance and the minimum asset balance.
+	/// Convert the given balance value into an asset balance based on the ratio between the
+	/// fungible's minimum balance and the minimum asset balance.
 	///
-	/// Will return `Err` if the asset is not found, not sufficient or the fungible's minimum balance is zero.
+	/// Will return `Err` if the asset is not found, not sufficient or the fungible's minimum
+	/// balance is zero.
 	fn to_asset_balance(
 		balance: BalanceOf<F, T>,
 		asset_id: AssetIdOf<T, I>,

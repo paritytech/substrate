@@ -38,15 +38,15 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 pub mod embed;
 
-/// An attribute that accepts a version declaration of a runtime and generates a custom wasm section
-/// with the equivalent contents.
+/// An attribute that accepts a version declaration of a runtime and generates a custom wasm
+/// section with the equivalent contents.
 ///
-/// The custom section allows to read the version of the runtime without having to execute any code.
-/// Instead, the generated custom section can be relatively easily parsed from the wasm binary. The
-/// identifier of the custom section is "runtime_version".
+/// The custom section allows to read the version of the runtime without having to execute any
+/// code. Instead, the generated custom section can be relatively easily parsed from the wasm
+/// binary. The identifier of the custom section is "runtime_version".
 ///
-/// A shortcoming of this macro is that it is unable to embed information regarding supported APIs.
-/// This is supported by the `construct_runtime!` macro.
+/// A shortcoming of this macro is that it is unable to embed information regarding supported
+/// APIs. This is supported by the `construct_runtime!` macro.
 ///
 /// # Usage
 ///
@@ -69,32 +69,33 @@ pub mod embed;
 /// # const RUNTIME_API_VERSIONS: sp_version::ApisVec = sp_version::create_apis_vec!([]);
 /// ```
 ///
-/// It will pass it through and add code required for emitting a custom section. The information that
-/// will go into the custom section is parsed from the item declaration. Due to that, the macro is
-/// somewhat rigid in terms of the code it accepts. There are the following considerations:
+/// It will pass it through and add code required for emitting a custom section. The
+/// information that will go into the custom section is parsed from the item declaration. Due
+/// to that, the macro is somewhat rigid in terms of the code it accepts. There are the
+/// following considerations:
 ///
-/// - The `spec_name` and `impl_name` must be set by a macro-like expression. The name of the macro
-///   doesn't matter though.
+/// - The `spec_name` and `impl_name` must be set by a macro-like expression. The name of the
+///   macro doesn't matter though.
 ///
 /// - `authoring_version`, `spec_version`, `impl_version` and `transaction_version` must be set
-///   by a literal. Literal must be an integer. No other expressions are allowed there. In particular,
-///   you can't supply a constant variable.
+///   by a literal. Literal must be an integer. No other expressions are allowed there. In
+///   particular, you can't supply a constant variable.
 ///
-/// - `apis` doesn't have any specific constraints. This is because this information doesn't get into
-///   the custom section and is not parsed.
+/// - `apis` doesn't have any specific constraints. This is because this information doesn't
+///   get into the custom section and is not parsed.
 ///
 /// # Compilation Target & "std" feature
 ///
-/// This macro assumes it will be used within a runtime. By convention, a runtime crate defines a
-/// feature named "std". This feature is enabled when the runtime is compiled to native code and
-/// disabled when it is compiled to the wasm code.
+/// This macro assumes it will be used within a runtime. By convention, a runtime crate defines
+/// a feature named "std". This feature is enabled when the runtime is compiled to native code
+/// and disabled when it is compiled to the wasm code.
 ///
-/// The custom section can only be emitted while compiling to wasm. In order to detect the compilation
-/// target we use the "std" feature. This macro will emit the custom section only if the "std" feature
-/// is **not** enabled.
+/// The custom section can only be emitted while compiling to wasm. In order to detect the
+/// compilation target we use the "std" feature. This macro will emit the custom section only
+/// if the "std" feature is **not** enabled.
 ///
-/// Including this macro in the context where there is no "std" feature and the code is not compiled
-/// to wasm can lead to cryptic linking errors.
+/// Including this macro in the context where there is no "std" feature and the code is not
+/// compiled to wasm can lead to cryptic linking errors.
 pub use sp_version_proc_macro::runtime_version;
 
 /// The identity of a particular API interface that the runtime might provide.
@@ -119,8 +120,9 @@ macro_rules! create_apis_vec {
 /// Runtime version.
 /// This should not be thought of as classic Semver (major/minor/tiny).
 /// This triplet have different semantics and mis-interpretation could cause problems.
-/// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
-/// absolutely not `impl_version` since they change the semantics of the runtime.
+/// In particular: bug fixes should result in an increment of `spec_version` and possibly
+/// `authoring_version`, absolutely not `impl_version` since they change the semantics of the
+/// runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -168,9 +170,9 @@ pub struct RuntimeVersion {
 	/// number changes, then `spec_version` must change, also.
 	///
 	/// This number must change when an existing dispatchable (module ID, dispatch ID) is changed,
-	/// either through an alteration in its user-level semantics, a parameter added/removed/changed,
-	/// a dispatchable being removed, a module being removed, or a dispatchable/module changing its
-	/// index.
+	/// either through an alteration in its user-level semantics, a parameter
+	/// added/removed/changed, a dispatchable being removed, a module being removed, or a
+	/// dispatchable/module changing its index.
 	///
 	/// It need *not* change when a new module is added or when a dispatchable is added.
 	pub transaction_version: u32,
