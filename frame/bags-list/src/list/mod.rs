@@ -591,11 +591,6 @@ impl<T: Config> Bag<T> {
 	pub(crate) fn contains(&self, id: &T::AccountId) -> bool {
 		self.iter().any(|n| n.id() == id)
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub(crate) fn head_id(&self) -> Option<&T::AccountId> {
-		self.head.as_ref()
-	}
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
@@ -652,7 +647,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is a bag head or tail.
-	fn is_terminal(&self) -> bool {
+	pub(crate) fn is_terminal(&self) -> bool {
 		self.prev.is_none() || self.next.is_none()
 	}
 

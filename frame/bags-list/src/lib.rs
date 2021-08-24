@@ -266,10 +266,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::clear()
 	}
 
-
 	#[cfg(feature = "runtime-benchmarks")]
 	fn is_in_pos(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn is_worst_pos(id: &T::AccountId, _: bool) -> bool {
+		list::Node::<T>::get(id).unwrap().is_terminal()
 	}
 
 	/// If `who`'s bond becomes the returned value they are guaranteed to change bags in terms of

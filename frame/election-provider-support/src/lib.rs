@@ -334,24 +334,15 @@ pub trait SortedListProvider<AccountId> {
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
 
-	/// `id` is in a position in the list that corresponds to `weight`
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	/// Whether or not `id` is in a position in the list that corresponds to `weight`.
+	#[cfg(feature = "runtime-benchmarks")]
 	fn is_in_pos(_id: &AccountId, _weight: VoteWeight, mock: bool) -> bool {
-		mock
-	}
-
-	/// Wether the voter is the head of the notional bag for the given weight. Only relevant for
-	/// implementations that use bags.
-	///
-	/// `mock` parameter is for implementations where this method is not relevant.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn is_bag_head(_: &AccountId, _: VoteWeight, mock: bool) -> bool {
 		mock
 	}
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(_who: &AccountId, is_increase: bool) -> VoteWeight {
 		if is_increase {
 			VoteWeight::MAX

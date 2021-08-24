@@ -134,9 +134,9 @@ pub fn create_validator_with_nominators<T: Config>(
 
 struct ListScenario<T: Config> {
 	dest_stash1: T::AccountId,
-	/// Stash that is expected to be move.
+	/// Stash that is expected to be moved.
 	origin_stash1: T::AccountId,
-	/// Controller of the Stash that is expected to be move.
+	/// Controller of the Stash that is expected to be moved.
 	origin_controller1: T::AccountId,
 	origin_stash2: T::AccountId,
 	origin_weight_as_vote: VoteWeight,
@@ -145,13 +145,17 @@ struct ListScenario<T: Config> {
 }
 
 impl<T: Config> ListScenario<T> {
-	/// An expensive rebag scenario:
+	/// An expensive scenario for bags-list implementation:
 	///
-	/// - the node to be rebagged (r) is the head of a bag that has at least one other node. The bag
+	/// - the node to be updated (r) is the head of a bag that has at least one other node. The bag
 	///   itself will need to be read and written to update its head. The node pointed to by r.next
 	///   will need to be read and written as it will need to have its prev pointer updated.
 	///
 	/// - the destination bag has at least one node, which will need its next pointer updated.
+	///
+	/// NOTE: while this scenario specifically targets a worst case for the bags-list, it should
+	/// also elicit a worst case for other known `SortedListProvider` implementations; although
+	/// this is subject to change.
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
@@ -191,7 +195,8 @@ impl<T: Config> ListScenario<T> {
 		let dest_weight_as_vote =
 			T::SortedListProvider::weight_update_worst_case(&origin_stash1, is_increase);
 		let total_issuance = T::Currency::total_issuance();
-		let dest_weight = T::CurrencyToVote::to_currency(dest_weight_as_vote as u128, total_issuance);
+		let dest_weight =
+			T::CurrencyToVote::to_currency(dest_weight_as_vote as u128, total_issuance);
 		let dest_factor: BalanceOf<T> = dest_weight * 10u32.into() / T::Currency::minimum_balance();
 
 		// create an account with the worst case destination weight
@@ -214,13 +219,16 @@ impl<T: Config> ListScenario<T> {
 	}
 
 	fn check_preconditions(&self) {
-		let ListScenario { dest_stash1, origin_stash2, origin_weight_as_vote, .. } = self;
-		// destination stash1 is not in the origin bag.
+		let ListScenario { dest_stash1, origin_stash2, origin_stash1, origin_weight_as_vote, .. } 
+			= self;
+		// destination stash1 is not in the origin pos.
 		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_weight_as_vote, false));
-		// origin stash2 is in the origin bag
+		// origin stash1 is in the origin pos.
+		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *origin_weight_as_vote, true));
+		// origin stash2 is in the origin pos.
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash2, *origin_weight_as_vote, true));
-		// this implicitly checks that dest stash1 and origin stash1 are in the correct bags.
-		// self.check_head_preconditions();
+
+		self.check_worst_removal_pos_preconditions();
 	}
 
 	fn check_postconditions(&self) {
@@ -231,42 +239,34 @@ impl<T: Config> ListScenario<T> {
 			origin_weight_as_vote,
 			..
 		} = self;
-		// dest stash1 is not in the origin bag
+		// dest stash1 is not in the origin pos.
 		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_weight_as_vote, false));
-		// and is in the destination bag.
+		// and is in the destination pos.
 		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_weight_as_vote, true));
-		// origin stash1 is now in the destination bag.
+		// origin stash1 is now in the destination pos.
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *dest_weight_as_vote, true));
-		// dest stash1 is the head of the destination bag.
-		// assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_weight_as_vote, true));
-		// self.check_origin_head_postconditions();
+		// dest stash1 is in a worst case removal position.
+		assert!(T::SortedListProvider::is_worst_pos(&dest_stash1, true));
+		self.check_origin_worst_removal_pos_postconditions();
 	}
 
-	// fn check_head_preconditions(&self) {
-	// 	assert!(T::SortedListProvider::is_bag_head(
-	// 		&self.dest_stash1,
-	// 		self.dest_weight_as_vote,
-	// 		true
-	// 	));
-	// 	self.check_origin_head_preconditions();
-	// }
+	fn check_worst_removal_pos_preconditions(&self) {
+		assert!(T::SortedListProvider::is_worst_pos(&self.dest_stash1, true));
+		self.check_origin_worst_removal_pos_preconditions();
+	}
 
-	// // Just checking the origin head is useful for scenarios where we start out with all the
-	// nodes // in the same bag, and thus no destination node is actually ever a head.
-	// fn check_origin_head_preconditions(&self) {
-	// 	assert!(T::SortedListProvider::is_bag_head(
-	// 		&self.origin_stash1,
-	// 		self.origin_weight_as_vote,
-	// 		true
-	// 	));
-	// }
+	// Just checking the origin head is useful for scenarios where we start out with all the
+	// nodes in the same pos, and thus no destination node is actually ever a head.
+	fn check_origin_worst_removal_pos_preconditions(&self) {
+		assert!(T::SortedListProvider::is_worst_pos(&self.origin_stash1, true));
+	}
 
-	// // Just checking the origin head is useful for scenarios where we start out with all the
-	// nodes // in the same bag, and thus no destination node is actually ever a head.
-	// fn check_origin_head_postconditions(&self) {
-	// 	let ListScenario { origin_stash2, origin_weight_as_vote, .. } = self;
-	// 	assert!(T::SortedListProvider::is_bag_head(&origin_stash2, *origin_weight_as_vote, true));
-	// }
+	// Just checking the origin head is useful for scenarios where we start out with all the
+	// nodes in the same bag, and thus no destination node is actually ever a head.
+	fn check_origin_worst_removal_pos_postconditions(&self) {
+		let ListScenario { origin_stash2, .. } = self;
+		assert!(T::SortedListProvider::is_worst_pos(&origin_stash2, true));
+	}
 }
 
 const USER_SEED: u32 = 999666;
@@ -379,16 +379,14 @@ benchmarks! {
 		Ledger::<T>::insert(&controller, ledger);
 		CurrentEra::<T>::put(EraIndex::max_value());
 
-		// TODO
-		// scenario.check_origin_head_preconditions();
+		scenario.check_preconditions();
 
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
 		assert!(!T::SortedListProvider::contains(&stash));
-		// TODO
-		// scenario.check_origin_head_postconditions();
+		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	validate {
@@ -402,7 +400,7 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		// scenario.check_origin_head_preconditions(); todo
+		scenario.check_preconditions();
 
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
@@ -410,7 +408,7 @@ benchmarks! {
 	verify {
 		assert!(Validators::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
-		// scenario.check_origin_head_postconditions(); todo
+		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	kick {
@@ -517,13 +515,13 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		// scenario.check_origin_head_preconditions();
+		scenario.check_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller))
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
-		// scenario.check_origin_head_postconditions();
+		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	set_payee {
@@ -588,13 +586,13 @@ benchmarks! {
 		assert!(T::SortedListProvider::contains(&stash));
 		add_slashing_spans::<T>(&stash, s);
 
-		// scenario.check_origin_head_preconditions();
+		scenario.check_preconditions();
 
 	}: _(RawOrigin::Root, stash.clone(), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
 		assert!(!T::SortedListProvider::contains(&stash));
-		// scenario.check_origin_head_postconditions();
+		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	cancel_deferred_slash {
@@ -764,14 +762,14 @@ benchmarks! {
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
-		// scenario.check_origin_head_preconditions();
+		scenario.check_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
-		// scenario.check_origin_head_postconditions();
+		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	new_era {
@@ -936,13 +934,13 @@ benchmarks! {
 			Some(Percent::from_percent(0))
 		)?;
 
-		// scenario.check_origin_head_preconditions();
+		scenario.check_preconditions();
 
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
-		// scenario.check_origin_head_postconditions();
+		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 }
 
