@@ -206,7 +206,7 @@ impl<C: SubstrateCli> Runner<C> {
 pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 	info!("{}", C::impl_name());
 	info!("✌️  version {}", C::impl_version());
-	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::today().year(),);
+	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::today().year());
 	info!("📋 Chain specification: {}", config.chain_spec.name());
 	info!("🏷 Node name: {}", config.network.node_name);
 	info!("👤 Role: {}", config.display_role());

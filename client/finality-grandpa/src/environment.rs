@@ -1087,7 +1087,7 @@ where
 
 		// random between `[0, 2 * gossip_duration]` seconds.
 		let delay: u64 =
-			thread_rng().gen_range(0, 2 * self.config.gossip_duration.as_millis() as u64);
+			thread_rng().gen_range(0..2 * self.config.gossip_duration.as_millis() as u64);
 		Box::pin(Delay::new(Duration::from_millis(delay)).map(Ok))
 	}
 
@@ -1376,7 +1376,7 @@ where
 					set_ref.len(),
 				);
 			} else {
-				afg_log!(initial_sync, "👴 Applying GRANDPA set change to new set {:?}", set_ref,);
+				afg_log!(initial_sync, "👴 Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
 			telemetry!(

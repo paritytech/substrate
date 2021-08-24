@@ -167,7 +167,7 @@ impl EventDef {
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid pallet::event, `Error` must be public";
+			let msg = "Invalid pallet::event, `Event` must be public";
 			return Err(syn::Error::new(item.span(), msg))
 		}
 

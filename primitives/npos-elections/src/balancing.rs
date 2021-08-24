@@ -157,8 +157,8 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	let last_stake = elected_edges
 		.get(last_index)
 		.expect(
-			"length of elected_edges is greater than or equal 2; last_index index is at \
-		the minimum elected_edges.len() - 1; index is within range; qed",
+			"length of elected_edges is greater than or equal 2; last_index index is at the \
+			 minimum elected_edges.len() - 1; index is within range; qed",
 		)
 		.candidate
 		.borrow()

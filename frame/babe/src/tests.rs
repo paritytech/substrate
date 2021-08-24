@@ -323,7 +323,7 @@ fn can_fetch_current_and_next_epoch_data() {
 		});
 
 		// genesis authorities should be used for the first and second epoch
-		assert_eq!(Babe::current_epoch().authorities, Babe::next_epoch().authorities,);
+		assert_eq!(Babe::current_epoch().authorities, Babe::next_epoch().authorities);
 		// 1 era = 3 epochs
 		// 1 epoch = 3 slots
 		// Eras start from 0.
@@ -374,6 +374,31 @@ fn tracks_block_numbers_when_current_and_previous_epoch_started() {
 }
 
 #[test]
+#[should_panic(
+	expected = "Validator with index 0 is disabled and should not be attempting to author blocks."
+)]
+fn disabled_validators_cannot_author_blocks() {
+	new_test_ext(4).execute_with(|| {
+		start_era(1);
+
+		// let's disable the validator at index 1
+		Session::disable_index(1);
+
+		// the mocking infrastructure always authors all blocks using authority index 0,
+		// so we should still be able to author blocks
+		start_era(2);
+
+		assert_eq!(Staking::current_era().unwrap(), 2);
+
+		// let's disable the validator at index 0
+		Session::disable_index(0);
+
+		// this should now panic as the validator authoring blocks is disabled
+		start_era(3);
+	});
+}
+
+#[test]
 fn report_equivocation_current_session_works() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(3);
 
@@ -394,8 +419,8 @@ fn report_equivocation_current_session_works() {
 			);
 		}
 
-		// we will use the validator at index 0 as the offending authority
-		let offending_validator_index = 0;
+		// we will use the validator at index 1 as the offending authority
+		let offending_validator_index = 1;
 		let offending_validator_id = Session::validators()[offending_validator_index];
 		let offending_authority_pair = pairs
 			.into_iter()
@@ -415,8 +440,12 @@ fn report_equivocation_current_session_works() {
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		// report the equivocation
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
@@ -456,7 +485,7 @@ fn report_equivocation_old_session_works() {
 		let authorities = Babe::authorities();
 
 		// we will use the validator at index 0 as the offending authority
-		let offending_validator_index = 0;
+		let offending_validator_index = 1;
 		let offending_validator_id = Session::validators()[offending_validator_index];
 		let offending_authority_pair = pairs
 			.into_iter()
@@ -483,8 +512,12 @@ fn report_equivocation_old_session_works() {
 		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 10_000);
 
 		// report the equivocation
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
@@ -533,7 +566,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		assert_err!(
 			Babe::report_equivocation_unsigned(
 				Origin::none(),
-				equivocation_proof.clone(),
+				Box::new(equivocation_proof.clone()),
 				key_owner_proof
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -551,7 +584,11 @@ fn report_equivocation_invalid_key_owner_proof() {
 		start_era(2);
 
 		assert_err!(
-			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof),
+			Babe::report_equivocation_unsigned(
+				Origin::none(),
+				Box::new(equivocation_proof),
+				key_owner_proof,
+			),
 			Error::<Test>::InvalidKeyOwnershipProof,
 		);
 	})
@@ -583,7 +620,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 			assert_err!(
 				Babe::report_equivocation_unsigned(
 					Origin::none(),
-					equivocation_proof,
+					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
 				Error::<Test>::InvalidEquivocationProof,
@@ -689,8 +726,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
-		let inner =
-			Call::report_equivocation_unsigned(equivocation_proof.clone(), key_owner_proof.clone());
+		let inner = Call::report_equivocation_unsigned(
+			Box::new(equivocation_proof.clone()),
+			key_owner_proof.clone(),
+		);
 
 		// only local/inblock reports are allowed
 		assert_eq!(
@@ -721,8 +760,12 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		assert_ok!(<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner));
 
 		// we submit the report
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid.
 		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
@@ -780,7 +823,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned(
-			equivocation_proof.clone(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.get_dispatch_info();
@@ -792,7 +835,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation.
 		let post_info = Babe::report_equivocation_unsigned(
 			Origin::none(),
-			equivocation_proof.clone(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.unwrap();
@@ -804,11 +847,14 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
-		let post_info =
-			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-				.err()
-				.unwrap()
-				.post_info;
+		let post_info = Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.err()
+		.unwrap()
+		.post_info;
 
 		// the fee is not waived and the original weight is kept.
 		assert!(post_info.actual_weight.is_none());

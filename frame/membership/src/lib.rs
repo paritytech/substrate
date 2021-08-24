@@ -459,7 +459,7 @@ mod benchmark {
 		}
 	}
 
-	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test,);
+	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test);
 }
 
 #[cfg(test)]
@@ -499,7 +499,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();

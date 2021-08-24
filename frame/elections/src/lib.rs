@@ -73,8 +73,8 @@ mod tests;
 // - remove inactive voter (either you or the target is removed; if the target, you get their
 //   "voter" bond back; O(1); one fewer DB entry, one DB change)
 // - submit candidacy (you pay a "candidate" bond; O(1); one extra DB entry, two DB changes)
-// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation
-//   is invalid; O(voters) compute; ) protected operations:
+// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation is
+//   invalid; O(voters) compute; ) protected operations:
 // - remove candidacy (remove all votes for a candidate) (one fewer DB entry, two DB changes)
 
 // to avoid a potentially problematic case of not-enough approvals prior to voting causing a
@@ -128,8 +128,8 @@ pub struct VoterInfo<Balance> {
 /// Used to demonstrate the status of a particular index in the global voter list.
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CellStatus {
-	/// Any out of bound index. Means a push a must happen to the chunk pointed by `NextVoterSet<T>`.
-	/// Voting fee is applied in case a new chunk is created.
+	/// Any out of bound index. Means a push a must happen to the chunk pointed by
+	/// `NextVoterSet<T>`. Voting fee is applied in case a new chunk is created.
 	Head,
 	/// Already occupied by another voter. Voting fee is applied.
 	Occupied,
@@ -694,7 +694,7 @@ pub mod pallet {
 			#[pallet::compact] index: VoteIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!total.is_zero(), Error::<T>::ZeroDeposit,);
+			ensure!(!total.is_zero(), Error::<T>::ZeroDeposit);
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
@@ -711,7 +711,7 @@ pub mod pallet {
 			ensure!(total > leaderboard[0].0, Error::<T>::UnworthyCandidate);
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
-				ensure!(p < expiring.len(), Error::<T>::DuplicatedCandidate,);
+				ensure!(p < expiring.len(), Error::<T>::DuplicatedCandidate);
 			}
 
 			let voters = Self::all_voters();
@@ -850,13 +850,14 @@ impl<T: Config> Pallet<T> {
 			None
 		} else {
 			let c = Self::members();
-			let (next_possible, count, coming) =
-				if let Some((tally_end, comers, leavers)) = Self::next_finalize() {
-					// if there's a tally in progress, then next tally can begin immediately afterwards
-					(tally_end, c.len() - leavers.len() + comers as usize, comers)
-				} else {
-					(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
-				};
+			let (next_possible, count, coming) = if let Some((tally_end, comers, leavers)) =
+				Self::next_finalize()
+			{
+				// if there's a tally in progress, then next tally can begin immediately afterwards
+				(tally_end, c.len() - leavers.len() + comers as usize, comers)
+			} else {
+				(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
+			};
 			if count < desired_seats as usize {
 				Some(next_possible)
 			} else {
@@ -916,12 +917,12 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!Self::presentation_active(), Error::<T>::ApprovalPresentation);
 		ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
-		ensure!(!candidates_len.is_zero(), Error::<T>::ZeroCandidates,);
+		ensure!(!candidates_len.is_zero(), Error::<T>::ZeroCandidates);
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
 		// length since otherwise an attacker may be able to submit a very long list of `votes` that
 		// far exceeds the amount of candidates and waste more computation than a reasonable voting
 		// bond would cover.
-		ensure!(candidates_len >= votes.len(), Error::<T>::TooManyVotes,);
+		ensure!(candidates_len >= votes.len(), Error::<T>::TooManyVotes);
 		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
 		// Amount to be locked up.

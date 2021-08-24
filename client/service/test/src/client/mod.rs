@@ -22,15 +22,14 @@ use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{in_mem, BlockBackend, BlockchainEvents, StorageProvider};
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, PruningMode, TransactionStorageMode,
+	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
 };
-use sc_executor::native_executor_instance;
+use sc_consensus::{
+	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
+};
 use sc_service::client::{self, new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, BlockStatus,
-	Error as ConsensusError, ForkChoiceStrategy, ImportResult, SelectChain,
-};
+use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -63,20 +62,28 @@ mod light;
 
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
-native_executor_instance!(
-	Executor,
-	substrate_test_runtime_client::runtime::api::dispatch,
-	substrate_test_runtime_client::runtime::native_version,
-);
+pub struct ExecutorDispatch;
 
-fn executor() -> sc_executor::NativeExecutor<Executor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
+	type ExtendHostFunctions = ();
+
+	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+		substrate_test_runtime_client::runtime::api::dispatch(method, data)
+	}
+
+	fn native_version() -> sc_executor::NativeVersion {
+		substrate_test_runtime_client::runtime::native_version()
+	}
+}
+
+fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
+	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn prepare_client_with_key_changes() -> (
 	client::Client<
 		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
+		substrate_test_runtime_client::ExecutorDispatch,
 		Block,
 		RuntimeApi,
 	>,
@@ -1209,6 +1216,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -1220,13 +1228,13 @@ fn import_with_justification() {
 		.block;
 	block_on(client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone())).unwrap();
 
-	assert_eq!(client.chain_info().finalized_hash, a3.hash(),);
+	assert_eq!(client.chain_info().finalized_hash, a3.hash());
 
-	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification),);
+	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification));
 
-	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None,);
+	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None);
 
-	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None,);
+	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
 }
 
 #[test]
@@ -1265,15 +1273,15 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	let b1 = b1.build().unwrap().block;
 
 	// A2 is the current best since it's the longest chain
-	assert_eq!(client.chain_info().best_hash, a2.hash(),);
+	assert_eq!(client.chain_info().best_hash, a2.hash());
 
 	// importing B1 as finalized should trigger a re-org and set it as new best
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
 	block_on(client.import_justified(BlockOrigin::Own, b1.clone(), justification)).unwrap();
 
-	assert_eq!(client.chain_info().best_hash, b1.hash(),);
+	assert_eq!(client.chain_info().best_hash, b1.hash());
 
-	assert_eq!(client.chain_info().finalized_hash, b1.hash(),);
+	assert_eq!(client.chain_info().finalized_hash, b1.hash());
 }
 
 #[test]
@@ -1320,21 +1328,21 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
 	// A2 is the current best since it's the longest chain
-	assert_eq!(client.chain_info().best_hash, a2.hash(),);
+	assert_eq!(client.chain_info().best_hash, a2.hash());
 
 	// we finalize block B1 which is on a different branch from current best
 	// which should trigger a re-org.
 	ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
 
 	// B1 should now be the latest finalized
-	assert_eq!(client.chain_info().finalized_hash, b1.hash(),);
+	assert_eq!(client.chain_info().finalized_hash, b1.hash());
 
 	// and B1 should be the new best block (`finalize_block` as no way of
 	// knowing about B2)
-	assert_eq!(client.chain_info().best_hash, b1.hash(),);
+	assert_eq!(client.chain_info().best_hash, b1.hash());
 
 	// `SelectChain` should report B2 as best block though
-	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b2.hash(),);
+	assert_eq!(block_on(select_chain.best_chain()).unwrap().hash(), b2.hash());
 
 	// after we build B3 on top of B2 and import it
 	// it should be the new best block,
@@ -1346,7 +1354,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 		.block;
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
 
-	assert_eq!(client.chain_info().best_hash, b3.hash(),);
+	assert_eq!(client.chain_info().best_hash, b3.hash());
 }
 
 #[test]
@@ -1432,7 +1440,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				state_pruning: PruningMode::ArchiveAll,
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
-				source: DatabaseSettingsSrc::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
 		)
@@ -1505,7 +1513,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		.to_string(),
 	);
 
-	assert_eq!(import_err.to_string(), expected_err.to_string(),);
+	assert_eq!(import_err.to_string(), expected_err.to_string());
 
 	// adding a C1 block which is lower than the last finalized should also
 	// fail (with a cheaper check that doesn't require checking ancestry).
@@ -1525,7 +1533,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	let expected_err =
 		ConsensusError::ClientImport(sp_blockchain::Error::NotInFinalizedChain.to_string());
 
-	assert_eq!(import_err.to_string(), expected_err.to_string(),);
+	assert_eq!(import_err.to_string(), expected_err.to_string());
 }
 
 #[test]
@@ -1555,6 +1563,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
@@ -1570,6 +1579,7 @@ fn respects_block_rules() {
 			number: 0,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1592,6 +1602,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
@@ -1610,6 +1621,7 @@ fn respects_block_rules() {
 			number: 1,
 			parent_hash: block_not_ok.header().parent_hash().clone(),
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 		};
 
@@ -1643,7 +1655,7 @@ fn returns_status_for_pruned_blocks() {
 				state_pruning: PruningMode::keep_blocks(1),
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
-				source: DatabaseSettingsSrc::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
 		)
@@ -1676,6 +1688,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1712,6 +1725,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 1,
 		parent_hash: a1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1745,6 +1759,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 2,
 		parent_hash: a2.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 
@@ -1779,6 +1794,7 @@ fn returns_status_for_pruned_blocks() {
 		number: 0,
 		parent_hash: b1.header().parent_hash().clone(),
 		allow_missing_state: false,
+		allow_missing_parent: false,
 		import_existing: false,
 	};
 	assert_eq!(
@@ -1817,7 +1833,8 @@ fn imports_blocks_with_changes_tries_config_change() {
 	// blocks 24,25 are changing the key
 	// block 26 is empty
 	// block 27 changes the key
-	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to 3^1
+	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to
+	// `3^1`
 	// ===================================================================
 	// block 29 is empty
 	// block 30 changes the key
@@ -2089,7 +2106,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		LocalCallExecutor<
 			Block,
 			in_mem::Backend<Block>,
-			sc_executor::NativeExecutor<LocalExecutor>,
+			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 		>,
 		substrate_test_runtime_client::runtime::Block,
 		substrate_test_runtime_client::runtime::RuntimeApi,

@@ -71,7 +71,7 @@ frame_support::parameter_types! {
 		);
 }
 impl system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = BlockLength;
 	type DbWeight = ();

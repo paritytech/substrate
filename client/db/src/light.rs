@@ -518,8 +518,8 @@ where
 
 			self.db.commit(transaction)?;
 			cache.commit(cache_ops).expect(
-				"only fails if cache with given name isn't loaded yet;\
-						cache is already loaded because there are cache_ops; qed",
+				"only fails if cache with given name isn't loaded yet; cache is already loaded \
+				 because there are cache_ops; qed",
 			);
 		}
 
@@ -569,8 +569,8 @@ where
 
 				self.db.commit(transaction)?;
 				cache.commit(cache_ops).expect(
-					"only fails if cache with given name isn't loaded yet;\
-							cache is already loaded because there are cache_ops; qed",
+					"only fails if cache with given name isn't loaded yet; cache is already loaded \
+					 because there are cache_ops; qed",
 				);
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
@@ -829,8 +829,8 @@ pub(crate) mod tests {
 			assert_eq!(raw_db.count(columns::HEADER), 1 + ucht_size + ucht_size);
 			assert_eq!(raw_db.count(columns::CHT), 0);
 
-			// insert block #{2 * cht::size() + 1} && check that new CHT is created + headers of this CHT are pruned
-			// nothing is yet finalized, so nothing is pruned.
+			// insert block #{2 * cht::size() + 1} && check that new CHT is created + headers of
+			// this CHT are pruned nothing is yet finalized, so nothing is pruned.
 			prev_hash = insert_block(&db, HashMap::new(), || {
 				header_producer(&prev_hash, 1 + cht_size + cht_size)
 			});
@@ -1155,23 +1155,23 @@ pub(crate) mod tests {
 
 			let hash7 =
 				insert_block(&db, make_authorities(vec![auth3()]), || default_header(&hash6, 7));
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), Some(vec![auth3()]));
 			let hash8 =
 				insert_block(&db, make_authorities(vec![auth3()]), || default_header(&hash7, 8));
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), Some(vec![auth3()]));
 			let hash6_1 =
 				insert_block(&db, make_authorities(vec![auth4()]), || default_header(&hash6, 7));
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1)), Some(vec![auth4()]));
 			let hash6_1_1 = insert_non_best_block(&db, make_authorities(vec![auth5()]), || {
 				default_header(&hash6_1, 8)
 			});
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1)), Some(vec![auth4()]));
@@ -1179,7 +1179,7 @@ pub(crate) mod tests {
 			let hash6_1_2 = insert_non_best_block(&db, make_authorities(vec![auth6()]), || {
 				default_header(&hash6_1, 8)
 			});
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1)), Some(vec![auth4()]));
@@ -1187,7 +1187,7 @@ pub(crate) mod tests {
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1_2)), Some(vec![auth6()]));
 			let hash6_2 =
 				insert_block(&db, make_authorities(vec![auth4()]), || default_header(&hash6_1, 8));
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), Some(vec![auth3()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1)), Some(vec![auth4()]));
@@ -1201,7 +1201,7 @@ pub(crate) mod tests {
 		{
 			// finalize block hash6_1
 			db.finalize_header(BlockId::Hash(hash6_1)).unwrap();
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), None);
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), None);
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1)), Some(vec![auth4()]));
@@ -1210,7 +1210,7 @@ pub(crate) mod tests {
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_2)), Some(vec![auth4()]));
 			// finalize block hash6_2
 			db.finalize_header(BlockId::Hash(hash6_2)).unwrap();
-			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]),);
+			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6)), Some(vec![auth1(), auth2()]));
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash7)), None);
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash8)), None);
 			assert_eq!(authorities(db.cache(), BlockId::Hash(hash6_1)), Some(vec![auth4()]));

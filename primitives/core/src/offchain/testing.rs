@@ -150,7 +150,7 @@ impl OffchainState {
 				panic!("Missing pending request: {:?}.\n\nAll: {:?}", id, self.requests);
 			},
 			Some(req) => {
-				assert_eq!(*req, expected,);
+				assert_eq!(*req, expected);
 				req.response = Some(response.into());
 				req.response_headers = response_headers.into_iter().collect();
 			},
@@ -168,8 +168,8 @@ impl OffchainState {
 	/// Add expected HTTP request.
 	///
 	/// This method can be used to initialize expected HTTP requests and their responses
-	/// before running the actual code that utilizes them (for instance before calling into runtime).
-	/// Expected request has to be fulfilled before this struct is dropped,
+	/// before running the actual code that utilizes them (for instance before calling into
+	/// runtime). Expected request has to be fulfilled before this struct is dropped,
 	/// the `response` and `response_headers` fields will be used to return results to the callers.
 	/// Requests are expected to be performed in the insertion order.
 	pub fn expect_request(&mut self, expected: PendingRequest) {
@@ -300,8 +300,9 @@ impl offchain::Externalities for TestOffchainExt {
 
 		ids.iter()
 			.map(|id| match state.requests.get(id) {
-				Some(req) if req.response.is_none() =>
-					panic!("No `response` provided for request with id: {:?}", id),
+				Some(req) if req.response.is_none() => {
+					panic!("No `response` provided for request with id: {:?}", id)
+				},
 				None => RequestStatus::Invalid,
 				_ => RequestStatus::Finished(200),
 			})

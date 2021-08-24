@@ -82,7 +82,8 @@ benchmarks! {
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
-		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
+		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
+			.map_err(|e| -> &'static str { e.into() })?;
 	}
 
 	validate_unsigned_and_then_heartbeat {
@@ -91,9 +92,10 @@ benchmarks! {
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
-		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
+		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
+			.map_err(|e| -> &'static str { e.into() })?;
 		call.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
 }
 
-impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime,);
+impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);

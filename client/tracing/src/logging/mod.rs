@@ -403,7 +403,7 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output,);
+		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output);
 	}
 
 	/// This is not an actual test, it is used by the `prefix_in_log_lines` test.
@@ -448,7 +448,7 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output,);
+		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output);
 	}
 
 	#[test]

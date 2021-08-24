@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use frame_support::Hashable;
 use frame_system::offchain::AppCrypto;
-use sc_executor::{error::Result, NativeExecutor, WasmExecutionMethod};
+use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutionMethod};
 use sp_consensus_babe::{
 	digests::{PreDigest, SecondaryPlainPreDigest},
 	Slot, BABE_ENGINE_ID,
@@ -35,7 +35,7 @@ use sp_runtime::{
 };
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 
-use node_executor::Executor;
+use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
 	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, Runtime,
@@ -67,12 +67,11 @@ impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
 ///
 /// `compact` since it is after post-processing with wasm-gc which performs tree-shaking thus
 /// making the binary slimmer. There is a convention to use compact version of the runtime
-/// as canonical. This is why `native_executor_instance` also uses the compact version of the
-/// runtime.
+/// as canonical.
 pub fn compact_code_unwrap() -> &'static [u8] {
 	node_runtime::WASM_BINARY.expect(
-		"Development wasm binary is not available. \
-									  Testing is only supported with the flag disabled.",
+		"Development wasm binary is not available. Testing is only supported with the flag \
+		 disabled.",
 	)
 }
 
@@ -96,8 +95,8 @@ pub fn from_block_number(n: u32) -> Header {
 	Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 }
 
-pub fn executor() -> NativeExecutor<Executor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
+	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn executor_call<

@@ -39,22 +39,23 @@ use sc_client_api::{
 	ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
-use sc_executor::{NativeExecutionDispatch, NativeExecutor, RuntimeInfo};
+use sc_consensus::import_queue::ImportQueue;
+use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
 	config::{OnDemand, Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
+	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{
-	block_validation::{BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator},
-	import_queue::ImportQueue,
+use sp_consensus::block_validation::{
+	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
@@ -64,8 +65,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use std::{str::FromStr, sync::Arc};
-use wasm_timer::SystemTime;
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -82,12 +82,12 @@ pub trait RpcExtensionBuilder {
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output;
+	) -> Result<Self::Output, Error>;
 }
 
 impl<F, R> RpcExtensionBuilder for F
 where
-	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> Result<R, Error>,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
@@ -96,7 +96,7 @@ where
 		&self,
 		deny: sc_rpc::DenyUnsafe,
 		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
+	) -> Result<Self::Output, Error> {
 		(*self)(deny, subscription_executor)
 	}
 }
@@ -116,8 +116,8 @@ where
 		&self,
 		_deny: sc_rpc::DenyUnsafe,
 		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
-	) -> Self::Output {
-		self.0.clone()
+	) -> Result<Self::Output, Error> {
+		Ok(self.0.clone())
 	}
 }
 
@@ -131,39 +131,39 @@ where
 }
 
 /// Full client type.
-pub type TFullClient<TBl, TRtApi, TExecDisp> =
-	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExecDisp>, TBl, TRtApi>;
+pub type TFullClient<TBl, TRtApi, TExec> =
+	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl, TRtApi>;
 
 /// Full client backend type.
 pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExecDisp> =
-	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, NativeExecutor<TExecDisp>>;
+pub type TFullCallExecutor<TBl, TExec> =
+	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
 
 /// Light client type.
-pub type TLightClient<TBl, TRtApi, TExecDisp> =
-	TLightClientWithBackend<TBl, TRtApi, TExecDisp, TLightBackend<TBl>>;
+pub type TLightClient<TBl, TRtApi, TExec> =
+	TLightClientWithBackend<TBl, TRtApi, TExec, TLightBackend<TBl>>;
 
 /// Light client backend type.
 pub type TLightBackend<TBl> =
 	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>;
 
 /// Light call executor type.
-pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
+pub type TLightCallExecutor<TBl, TExec> = sc_light::GenesisCallExecutor<
 	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
 	crate::client::LocalCallExecutor<
 		TBl,
 		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
-		NativeExecutor<TExecDisp>,
+		TExec,
 	>,
 >;
 
-type TFullParts<TBl, TRtApi, TExecDisp> =
-	(TFullClient<TBl, TRtApi, TExecDisp>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
+type TFullParts<TBl, TRtApi, TExec> =
+	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
-type TLightParts<TBl, TRtApi, TExecDisp> = (
-	Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
+type TLightParts<TBl, TRtApi, TExec> = (
+	Arc<TLightClient<TBl, TRtApi, TExec>>,
 	Arc<TLightBackend<TBl>>,
 	KeystoreContainer,
 	TaskManager,
@@ -175,12 +175,9 @@ pub type TLightBackendWithHash<TBl, THash> =
 	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, THash>;
 
 /// Light client type with a specific backend.
-pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
+pub type TLightClientWithBackend<TBl, TRtApi, TExec, TBackend> = Client<
 	TBackend,
-	sc_light::GenesisCallExecutor<
-		TBackend,
-		crate::client::LocalCallExecutor<TBl, TBackend, NativeExecutor<TExecDisp>>,
-	>,
+	sc_light::GenesisCallExecutor<TBackend, crate::client::LocalCallExecutor<TBl, TBackend, TExec>>,
 	TBl,
 	TRtApi,
 >;
@@ -256,34 +253,37 @@ impl KeystoreContainer {
 	///
 	/// # Note
 	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
-	/// a remote keystore for example. Only use this if you a certain that you require it!
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
+	/// implementation, like a remote keystore for example. Only use this if you a certain that you
+	/// require it!
 	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
 		Some(self.local.clone())
 	}
 }
 
 /// Creates a new full client for the given config.
-pub fn new_full_client<TBl, TRtApi, TExecDisp>(
+pub fn new_full_client<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error>
+	executor: TExec,
+) -> Result<TFullClient<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
+	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 	TBl::Hash: FromStr,
 {
-	new_full_parts(config, telemetry).map(|parts| parts.0)
+	new_full_parts(config, telemetry, executor).map(|parts| parts.0)
 }
 
 /// Create the initial parts of a full node.
-pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
+pub fn new_full_parts<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<TFullParts<TBl, TRtApi, TExecDisp>, Error>
+	executor: TExec,
+) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
+	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 	TBl::Hash: FromStr,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
@@ -292,12 +292,6 @@ where
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
-
-	let executor = NativeExecutor::<TExecDisp>::new(
-		config.wasm_method,
-		config.default_heap_pages,
-		config.max_runtime_instances,
-	);
 
 	let chain_spec = &config.chain_spec;
 	let fork_blocks = get_extension::<ForkBlocks<TBl>>(chain_spec.extensions())
@@ -356,7 +350,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. }
+					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
 				),
 				wasm_runtime_substitutes,
 			},
@@ -369,25 +363,20 @@ where
 }
 
 /// Create the initial parts of a light node.
-pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
+pub fn new_light_parts<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error>
+	executor: TExec,
+) -> Result<TLightParts<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
+	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
-
-	let executor = NativeExecutor::<TExecDisp>::new(
-		config.wasm_method,
-		config.default_heap_pages,
-		config.max_runtime_instances,
-	);
 
 	let db_storage = {
 		let db_settings = sc_client_db::DatabaseSettings {
@@ -455,7 +444,7 @@ pub fn new_client<E, Block, RA>(
 >
 where
 	Block: BlockT,
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
@@ -566,6 +555,8 @@ where
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl: BlockT,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
 		+ MallocSizeOfWasm
@@ -661,7 +652,7 @@ where
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
 			sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser"),
-		)
+		)?
 		.into(),
 	));
 
@@ -748,7 +739,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -767,6 +758,8 @@ where
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	TBl::Hash: Unpin,
+	TBl::Header: Unpin,
 {
 	use sc_rpc::{author, chain, offchain, state, system};
 
@@ -819,7 +812,7 @@ where
 		offchain::OffchainApi::to_delegate(offchain)
 	});
 
-	sc_rpc_server::rpc_handler(
+	Ok(sc_rpc_server::rpc_handler(
 		(
 			state::StateApi::to_delegate(state),
 			state::ChildStateApi::to_delegate(child_state),
@@ -827,10 +820,10 @@ where
 			maybe_offchain_rpc,
 			author::AuthorApi::to_delegate(author),
 			system::SystemApi::to_delegate(system),
-			rpc_extensions_builder.build(deny_unsafe, task_executor),
+			rpc_extensions_builder.build(deny_unsafe, task_executor)?,
 		),
 		rpc_middleware,
-	)
+	))
 }
 
 /// Parameters to pass into `build_network`.
@@ -850,6 +843,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// A block announce validator builder.
 	pub block_announce_validator_builder:
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	/// An optional warp sync provider.
+	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -885,6 +880,7 @@ where
 		import_queue,
 		on_demand,
 		block_announce_validator_builder,
+		warp_sync,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -935,6 +931,20 @@ where
 		}
 	};
 
+	let warp_sync_params = warp_sync.map(|provider| {
+		let protocol_config = if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			warp_request_handler::generate_request_response_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) =
+				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			spawn_handle.spawn("warp_sync_request_handler", handler.run());
+			protocol_config
+		};
+		(provider, protocol_config)
+	});
+
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
@@ -972,6 +982,7 @@ where
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
+		warp_sync: warp_sync_params,
 		light_client_request_protocol_config,
 	};
 
@@ -1022,7 +1033,6 @@ where
 	// future using `spawn_blocking`.
 	spawn_handle.spawn_blocking("network-worker", async move {
 		if network_start_rx.await.is_err() {
-			debug_assert!(false);
 			log::warn!(
 				"The NetworkStart returned as part of `build_network` has been silently dropped"
 			);

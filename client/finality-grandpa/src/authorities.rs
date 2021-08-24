@@ -165,8 +165,8 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
-	/// Track at which blocks the set id changed. This is useful when we need to prove finality for a
-	/// given block since we can figure out what set the block belongs to and when the set
+	/// Track at which blocks the set id changed. This is useful when we need to prove finality for
+	/// a given block since we can figure out what set the block belongs to and when the set
 	/// started/ended.
 	authority_set_changes: AuthoritySetChanges<N>,
 }
@@ -657,16 +657,16 @@ impl<H, N: Add<Output = N> + Clone> PendingChange<H, N> {
 pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
 /// The response when querying for a set id for a specific block. Either we get a set id
-/// together with a block number for the last block in the set, or that the requested block is in the
-/// latest set, or that we don't know what set id the given block belongs to.
+/// together with a block number for the last block in the set, or that the requested block is in
+/// the latest set, or that we don't know what set id the given block belongs to.
 #[derive(Debug, PartialEq)]
 pub enum AuthoritySetChangeId<N> {
 	/// The requested block is in the latest set.
 	Latest,
 	/// Tuple containing the set id and the last block number of that set.
 	Set(SetId, N),
-	/// We don't know which set id the request block belongs to (this can only happen due to missing
-	/// data).
+	/// We don't know which set id the request block belongs to (this can only happen due to
+	/// missing data).
 	Unknown,
 }
 
@@ -780,13 +780,13 @@ mod tests {
 		authorities.add_pending_change(change(1), &is_descendent_of).unwrap();
 		authorities.add_pending_change(change(2), &is_descendent_of).unwrap();
 
-		assert_eq!(authorities.current_limit(0), Some(1),);
+		assert_eq!(authorities.current_limit(0), Some(1));
 
-		assert_eq!(authorities.current_limit(1), Some(1),);
+		assert_eq!(authorities.current_limit(1), Some(1));
 
-		assert_eq!(authorities.current_limit(2), Some(2),);
+		assert_eq!(authorities.current_limit(2), Some(2));
 
-		assert_eq!(authorities.current_limit(3), None,);
+		assert_eq!(authorities.current_limit(3), None);
 	}
 
 	#[test]
@@ -910,9 +910,10 @@ mod tests {
 			.add_pending_change(change_b.clone(), &static_is_descendent_of(true))
 			.unwrap();
 
-		assert_eq!(authorities.pending_changes().collect::<Vec<_>>(), vec![&change_a, &change_b],);
+		assert_eq!(authorities.pending_changes().collect::<Vec<_>>(), vec![&change_a, &change_b]);
 
-		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"
+		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out
+		// "hash_b"
 		let status = authorities
 			.apply_standard_changes(
 				"hash_c",
@@ -929,7 +930,7 @@ mod tests {
 
 		assert!(status.changed);
 		assert_eq!(status.new_set_block, None);
-		assert_eq!(authorities.pending_changes().collect::<Vec<_>>(), vec![&change_a],);
+		assert_eq!(authorities.pending_changes().collect::<Vec<_>>(), vec![&change_a]);
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// finalizing "hash_d" will enact the change signaled at "hash_a"
@@ -1444,7 +1445,7 @@ mod tests {
 		);
 
 		// there's no longer any pending change at `best_b` fork
-		assert_eq!(authorities.next_change(&"best_b", &is_descendent_of).unwrap(), None,);
+		assert_eq!(authorities.next_change(&"best_b", &is_descendent_of).unwrap(), None);
 
 		// we a forced change at A10 (#8)
 		let change_a10 = PendingChange {
@@ -1666,7 +1667,7 @@ mod tests {
 		authority_set_changes.append(2, 81);
 
 		// we are missing the data for the first set, therefore we should return `None`
-		assert_eq!(None, authority_set_changes.iter_from(40).map(|it| it.collect::<Vec<_>>()),);
+		assert_eq!(None, authority_set_changes.iter_from(40).map(|it| it.collect::<Vec<_>>()));
 
 		// after adding the data for the first set the same query should work
 		let mut authority_set_changes = AuthoritySetChanges::empty();
@@ -1685,8 +1686,8 @@ mod tests {
 			authority_set_changes.iter_from(41).map(|it| it.cloned().collect::<Vec<_>>()),
 		);
 
-		assert_eq!(0, authority_set_changes.iter_from(121).unwrap().count(),);
+		assert_eq!(0, authority_set_changes.iter_from(121).unwrap().count());
 
-		assert_eq!(0, authority_set_changes.iter_from(200).unwrap().count(),);
+		assert_eq!(0, authority_set_changes.iter_from(200).unwrap().count());
 	}
 }

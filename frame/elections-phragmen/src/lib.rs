@@ -104,7 +104,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		SortedMembers, WithdrawReasons,
+		SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -121,6 +121,9 @@ pub use weights::WeightInfo;
 
 /// All migrations.
 pub mod migrations;
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -239,6 +242,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -374,7 +378,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
-			ensure!(actual_count as u32 <= candidate_count, Error::<T>::InvalidWitnessData,);
+			ensure!(actual_count as u32 <= candidate_count, Error::<T>::InvalidWitnessData);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
@@ -397,9 +401,9 @@ pub mod pallet {
 		///   origin is removed as a runner-up.
 		/// - `origin` is a current member. In this case, the deposit is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
-		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists,
-		///   they are immediately used. If the prime is renouncing, then no prime will exist until
-		///   the next round.
+		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists, they
+		///   are immediately used. If the prime is renouncing, then no prime will exist until the
+		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
 		///
@@ -470,7 +474,7 @@ pub mod pallet {
 		#[pallet::weight(if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::BlockWeights::get().max_block
+			T::WeightInfo::remove_member_without_replacement()
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
@@ -669,13 +673,15 @@ pub mod pallet {
 						"Genesis member does not have enough stake.",
 					);
 
-					// Note: all members will only vote for themselves, hence they must be given exactly
-					// their own stake as total backing. Any sane election should behave as such.
-					// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+					// Note: all members will only vote for themselves, hence they must be given
+					// exactly their own stake as total backing. Any sane election should behave as
+					// such. Nonetheless, stakes will be updated for term 1 onwards according to the
+					// election.
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
-							Ok(_) =>
-								panic!("Duplicate member in elections-phragmen genesis: {}", member),
+							Ok(_) => {
+								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+							},
 							Err(pos) => members.insert(
 								pos,
 								SeatHolder {
@@ -688,9 +694,9 @@ pub mod pallet {
 					});
 
 					// set self-votes to make persistent. Genesis voters don't have any bond, nor do
-					// they have any lock. NOTE: this means that we will still try to remove a lock once
-					// this genesis voter is removed, and for now it is okay because remove_lock is noop
-					// if lock is not there.
+					// they have any lock. NOTE: this means that we will still try to remove a lock
+					// once this genesis voter is removed, and for now it is okay because
+					// remove_lock is noop if lock is not there.
 					<Voting<T>>::insert(
 						&member,
 						Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
@@ -1116,7 +1122,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
@@ -1677,7 +1683,7 @@ mod tests {
 			assert_eq!(candidate_ids(), Vec::<u64>::new());
 			assert_ok!(submit_candidacy(Origin::signed(1)));
 			assert_eq!(candidate_ids(), vec![1]);
-			assert_noop!(submit_candidacy(Origin::signed(1)), Error::<Test>::DuplicatedCandidate,);
+			assert_noop!(submit_candidacy(Origin::signed(1)), Error::<Test>::DuplicatedCandidate);
 		});
 	}
 
@@ -1695,7 +1701,7 @@ mod tests {
 			assert!(Elections::runners_up().is_empty());
 			assert!(candidate_ids().is_empty());
 
-			assert_noop!(submit_candidacy(Origin::signed(5)), Error::<Test>::MemberSubmit,);
+			assert_noop!(submit_candidacy(Origin::signed(5)), Error::<Test>::MemberSubmit);
 		});
 	}
 
@@ -1715,7 +1721,7 @@ mod tests {
 			assert_eq!(members_ids(), vec![4, 5]);
 			assert_eq!(runners_up_ids(), vec![3]);
 
-			assert_noop!(submit_candidacy(Origin::signed(3)), Error::<Test>::RunnerUpSubmit,);
+			assert_noop!(submit_candidacy(Origin::signed(3)), Error::<Test>::RunnerUpSubmit);
 		});
 	}
 
@@ -1850,7 +1856,7 @@ mod tests {
 	#[test]
 	fn cannot_vote_for_no_candidate() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_noop!(vote(Origin::signed(2), vec![], 20), Error::<Test>::NoVotes,);
+			assert_noop!(vote(Origin::signed(2), vec![], 20), Error::<Test>::NoVotes);
 		});
 	}
 
@@ -2004,7 +2010,7 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
 
-			assert_noop!(vote(Origin::signed(2), vec![4], 1), Error::<Test>::LowBalance,);
+			assert_noop!(vote(Origin::signed(2), vec![4], 1), Error::<Test>::LowBalance);
 		})
 	}
 

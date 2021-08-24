@@ -19,7 +19,7 @@
 use super::*;
 
 use assert_matches::assert_matches;
-use futures::prelude::*;
+use futures::{executor, prelude::*};
 use sc_network::{self, config::Role, PeerId};
 use sp_utils::mpsc::tracing_unbounded;
 use std::{
@@ -139,33 +139,32 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 }
 
 fn wait_receiver<T>(rx: Receiver<T>) -> T {
-	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
-	runtime.block_on(rx).unwrap()
+	futures::executor::block_on(rx).unwrap()
 }
 
 #[test]
 fn system_name_works() {
-	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned(),);
+	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned());
 }
 
 #[test]
 fn system_version_works() {
-	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned(),);
+	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned());
 }
 
 #[test]
 fn system_chain_works() {
-	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned(),);
+	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned());
 }
 
 #[test]
 fn system_properties_works() {
-	assert_eq!(api(None).system_properties().unwrap(), serde_json::map::Map::new(),);
+	assert_eq!(api(None).system_properties().unwrap(), serde_json::map::Map::new());
 }
 
 #[test]
 fn system_type_works() {
-	assert_eq!(api(None).system_type().unwrap(), Default::default(),);
+	assert_eq!(api(None).system_type().unwrap(), Default::default());
 }
 
 #[test]
@@ -223,12 +222,10 @@ fn system_local_listen_addresses_works() {
 
 #[test]
 fn system_peers() {
-	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
-
 	let peer_id = PeerId::random();
 	let req = api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
 		.system_peers();
-	let res = runtime.block_on(req).unwrap();
+	let res = executor::block_on(req).unwrap();
 
 	assert_eq!(
 		res,
@@ -243,9 +240,8 @@ fn system_peers() {
 
 #[test]
 fn system_network_state() {
-	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 	let req = api(None).system_network_state();
-	let res = runtime.block_on(req).unwrap();
+	let res = executor::block_on(req).unwrap();
 
 	assert_eq!(
 		serde_json::from_value::<sc_network::network_state::NetworkState>(res).unwrap(),
@@ -278,12 +274,11 @@ fn system_network_add_reserved() {
 	let good_peer_id =
 		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
 	let bad_peer_id = "/ip4/198.51.100.19/tcp/30333";
-	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 
 	let good_fut = api(None).system_add_reserved_peer(good_peer_id.into());
 	let bad_fut = api(None).system_add_reserved_peer(bad_peer_id.into());
-	assert_eq!(runtime.block_on(good_fut), Ok(()));
-	assert!(runtime.block_on(bad_fut).is_err());
+	assert_eq!(executor::block_on(good_fut), Ok(()));
+	assert!(executor::block_on(bad_fut).is_err());
 }
 
 #[test]
@@ -291,12 +286,11 @@ fn system_network_remove_reserved() {
 	let good_peer_id = "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
 	let bad_peer_id =
 		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 
 	let good_fut = api(None).system_remove_reserved_peer(good_peer_id.into());
 	let bad_fut = api(None).system_remove_reserved_peer(bad_peer_id.into());
-	assert_eq!(runtime.block_on(good_fut), Ok(()));
-	assert!(runtime.block_on(bad_fut).is_err());
+	assert_eq!(executor::block_on(good_fut), Ok(()));
+	assert!(executor::block_on(bad_fut).is_err());
 }
 
 #[test]

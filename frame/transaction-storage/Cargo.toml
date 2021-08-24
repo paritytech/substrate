@@ -27,16 +27,12 @@ sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-frame-support-test = { version = "3.0.0", path = "../support/test" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"hex-literal",
-]
+runtime-benchmarks = ["frame-benchmarking", "hex-literal"]
 std = [
 	"serde",
 	"codec/std",

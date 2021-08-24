@@ -521,8 +521,8 @@ impl KeystoreInner {
 
 	/// Get a key pair for the given public key.
 	///
-	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists or `Err(_)` when
-	/// something failed.
+	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists or `Err(_)`
+	/// when something failed.
 	pub fn key_pair<Pair: AppPair>(
 		&self,
 		public: &<Pair as AppKey>::Public,
@@ -709,7 +709,7 @@ mod tests {
 		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
-		assert!(SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty(),);
+		assert!(SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty());
 	}
 
 	#[test]

@@ -456,7 +456,8 @@ mod tests {
 				CheckWeight::<Test>::do_pre_dispatch(&dispatch_normal, len),
 				InvalidTransaction::ExhaustsResources
 			);
-			// Thank goodness we can still do an operational transaction to possibly save the blockchain.
+			// Thank goodness we can still do an operational transaction to possibly save the
+			// blockchain.
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len));
 			// Not too much though
 			assert_err!(
@@ -606,7 +607,7 @@ mod tests {
 			assert_eq!(BlockWeight::<Test>::get().total(), info.weight + 256);
 
 			assert_ok!(CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(())));
-			assert_eq!(BlockWeight::<Test>::get().total(), post_info.actual_weight.unwrap() + 256,);
+			assert_eq!(BlockWeight::<Test>::get().total(), post_info.actual_weight.unwrap() + 256);
 		})
 	}
 
