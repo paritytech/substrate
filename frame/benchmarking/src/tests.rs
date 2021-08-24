@@ -28,47 +28,44 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+#[frame_support::pallet]
 mod pallet_test {
-	use frame_support::pallet_prelude::Get;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config> as Test where
-			<T as OtherConfig>::OtherEvent: Into<<T as Config>::Event>
-		{
-			pub Value get(fn value): Option<u32>;
-		}
-	}
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where
-			origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event>
-		{
-			#[weight = 0]
-			fn set_value(origin, n: u32) -> frame_support::dispatch::DispatchResult {
-				let _sender = frame_system::ensure_signed(origin)?;
-				Value::put(n);
-				Ok(())
-			}
-
-			#[weight = 0]
-			fn dummy(origin, _n: u32) -> frame_support::dispatch::DispatchResult {
-				let _sender = frame_system::ensure_none(origin)?;
-				Ok(())
-			}
-		}
-	}
-
-	pub trait OtherConfig {
-		type OtherEvent;
-	}
-
-	pub trait Config: frame_system::Config + OtherConfig
-	where
-		Self::OtherEvent: Into<<Self as Config>::Event>,
-	{
-		type Event;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
 		type LowerBound: Get<u32>;
 		type UpperBound: Get<u32>;
+	}
+
+	#[pallet::storage]
+	#[pallet::getter(fn heartbeat_after)]
+	pub(crate) type Value<T: Config> = StorageValue<_, u32, OptionQuery>;
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
+			let _sender = frame_system::ensure_signed(origin)?;
+			Value::<T>::put(n);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
+			let _sender = frame_system::ensure_none(origin)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
+			return Err("I always fail".into())
+		}
 	}
 }
 
@@ -118,13 +115,8 @@ parameter_types! {
 }
 
 impl pallet_test::Config for Test {
-	type Event = Event;
 	type LowerBound = LowerBound;
 	type UpperBound = UpperBound;
-}
-
-impl pallet_test::OtherConfig for Test {
-	type OtherEvent = Event;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -132,13 +124,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 mod benchmarks {
-	use super::{
-		new_test_ext,
-		pallet_test::{self, Value},
-		Test,
-	};
-	use crate::{account, BenchmarkParameter, BenchmarkingSetup};
-	use frame_support::{assert_err, assert_ok, ensure, traits::Get, StorageValue};
+	use super::{new_test_ext, pallet_test::Value, Test};
+	use crate::{account, BenchmarkError, BenchmarkParameter, BenchmarkResult, BenchmarkingSetup};
+	use frame_support::{assert_err, assert_ok, ensure, traits::Get};
 	use frame_system::RawOrigin;
 	use sp_std::prelude::*;
 
@@ -148,8 +136,7 @@ mod benchmarks {
 	crate::benchmarks! {
 		where_clause {
 			where
-				<T as pallet_test::OtherConfig>::OtherEvent: Into<<T as pallet_test::Config>::Event> + Clone,
-				<T as pallet_test::Config>::Event: Clone,
+				crate::tests::Origin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
 		}
 
 		set_value {
@@ -157,7 +144,7 @@ mod benchmarks {
 			let caller = account::<T::AccountId>("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 		verify {
-			assert_eq!(Value::get(), Some(b));
+			assert_eq!(Value::<T>::get(), Some(b));
 		}
 
 		other_name {
@@ -206,7 +193,7 @@ mod benchmarks {
 			let caller = account::<T::AccountId>("caller", 0, 0);
 		}: set_value(RawOrigin::Signed(caller), b.into())
 		verify {
-			assert_eq!(Value::get(), Some(b));
+			assert_eq!(Value::<T>::get(), Some(b));
 		}
 
 		#[skip_meta]
@@ -215,7 +202,21 @@ mod benchmarks {
 			let caller = account::<T::AccountId>("caller", 0, 0);
 		}: set_value(RawOrigin::Signed(caller), b.into())
 		verify {
-			assert_eq!(Value::get(), Some(b));
+			assert_eq!(Value::<T>::get(), Some(b));
+		}
+
+		override_benchmark {
+			let b in 1 .. 1000;
+			let caller = account::<T::AccountId>("caller", 0, 0);
+		}: {
+			Err(BenchmarkError::Override(
+				BenchmarkResult {
+					extrinsic_time: 1_234_567_890,
+					reads: 1337,
+					writes: 420,
+					..Default::default()
+				}
+			))?;
 		}
 	}
 
@@ -303,6 +304,23 @@ mod benchmarks {
 
 		new_test_ext().execute_with(|| {
 			assert_err!(closure(), "You forgot to sort!");
+		});
+	}
+
+	#[test]
+	fn benchmark_override_works() {
+		let selected = SelectedBenchmark::override_benchmark;
+
+		let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+			&selected,
+			&[(BenchmarkParameter::b, 1)],
+			true,
+		)
+		.expect("failed to create closure");
+
+		new_test_ext().execute_with(|| {
+			let result = closure();
+			assert!(matches!(result, Err(BenchmarkError::Override(_))));
 		});
 	}
 

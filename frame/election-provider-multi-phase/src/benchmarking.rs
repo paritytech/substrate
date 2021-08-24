@@ -438,7 +438,7 @@ frame_benchmarking::benchmarks! {
 		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<MultiPhase::<T>>::create_snapshot()?
+		<MultiPhase::<T>>::create_snapshot().map_err(|_| "could not create snapshot")?;
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v + t);
