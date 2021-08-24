@@ -266,15 +266,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::clear()
 	}
 
-	/// `id` is in a position in the list that corresponds to `weight`
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn is_in_pos(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn is_bag_head(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
-		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().head_id() == Some(id)
 	}
 
 	/// If `who`'s bond becomes the returned value they are guaranteed to change bags in terms of
@@ -291,7 +286,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 			.unwrap();
 
 		if is_increase {
-			// +2 helps in some edge cases to ensure threshold are far enough apart TODO
+			// +3 helps in some edge cases to ensure threshold are far enough apart TODO
 			let next_threshold_idx = current_bag_idx + 1;
 			assert!(thresholds.len() > next_threshold_idx);
 			thresholds[next_threshold_idx]

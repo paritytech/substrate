@@ -708,7 +708,7 @@ benchmarks! {
 
 		// the bag the voter will start at
 		let origin_bag_thresh =
-			T::CurrencyToVote::to_currency(MAX_UNLOCKING_CHUNKS as u64, total_issuance);
+			T::CurrencyToVote::to_currency(100u128, total_issuance);
 		let scenario
 			= ListScenario::<T>::new(origin_bag_thresh, true)?;
 		let dest_thresh = scenario.dest_thresh.clone();
@@ -716,7 +716,7 @@ benchmarks! {
 		println!("dest: {:#?}. origin: {:#?}", dest_thresh, origin_bag_thresh);
 		// rebond an amount that will put the user into the destination bag
 		// TODO
-		let rebond_amount = dest_thresh - origin_bag_thresh
+		let rebond_amount = dest_thresh - origin_bag_thresh;
 
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
@@ -776,8 +776,7 @@ benchmarks! {
 
 		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
 		// scenario setup, but we don't care about the setup of the destination bag.
-		let scenario
-			= ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 
