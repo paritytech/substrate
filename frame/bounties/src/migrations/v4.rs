@@ -26,7 +26,7 @@ use sp_io::hashing::twox_128;
 ///
 /// This new prefix must be the same as the one set in construct_runtime. For safety, use
 /// `PalletInfo` to get it, as:
-/// `<Runtime as frame_system::Config>::PalletInfo::name::<CollectivePallet>`.
+/// `<Runtime as frame_system::Config>::PalletInfo::name::<BountiesPallet>`.
 ///
 /// The migration will look into the storage version in order not to trigger a migration on an up
 /// to date storage. Thus the on chain storage version must be less than 4 in order to trigger the
