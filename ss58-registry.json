@@ -515,6 +515,15 @@
 			"website": "https://manta.network"
 		},
 		{
+                        "prefix": 88,
+                        "network": "aurogon",
+                        "displayName": "Aurogon Network",
+                        "symbols": ["ARGN", "CYGO"],
+                        "decimals": [12, 12],
+                        "standardAccount": "*25519",
+                        "website": "https://aurogon.chongya.com"
+                },
+		{
 			"prefix": 98,
 			"network": "polkasmith",
 			"displayName": "PolkaSmith Canary Network",

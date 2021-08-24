@@ -592,6 +592,8 @@ ss58_address_format!(
 		(77, "manta", "Manta Network, standard account (*25519).")
 	CalamariAccount =>
 		(78, "calamari", "Manta Canary Network, standard account (*25519).")
+	AurogonAccount =>
+                (88, "aurogon", "Aurogon Network, standard account (*25519).")
 	PolkaSmith =>
 		(98, "polkasmith", "PolkaSmith Canary Network, standard account (*25519).")
 	PolkaFoundry =>
