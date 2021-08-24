@@ -162,11 +162,11 @@ impl<T: Config> ListScenario<T> {
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
-		// create_stash_controller takes a factor, so we compute it.
+		// create_stash_controller takes a factor, so we compute it
 		let origin_factor: BalanceOf<T> =
 			origin_weight * 10u32.into() / T::Currency::minimum_balance();
 
-		// create validators to nominate.
+		// create validators to nominate
 		let validators = create_validators::<T>(
 			T::MAX_NOMINATIONS,
 			100,
@@ -194,7 +194,7 @@ impl<T: Config> ListScenario<T> {
 			validators.clone(),
 		)?;
 
-		// find a destination weight that will trigger the worst case scenario.
+		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
 			T::SortedListProvider::weight_update_worst_case(&origin_stash1, is_increase);
 		let total_issuance = T::Currency::total_issuance();
@@ -222,10 +222,18 @@ impl<T: Config> ListScenario<T> {
 	}
 
 	fn check_preconditions(&self) {
-		let ListScenario { dest_stash1, origin_stash2, origin_stash1, origin_weight_as_vote, .. } 
-			= self;
-		// destination stash1 is not in the origin pos.
+		let ListScenario {
+			dest_stash1,
+			origin_stash2,
+			origin_stash1,
+			origin_weight_as_vote,
+			dest_weight_as_vote,
+			..
+		} = self;
+		// destination stash1 is not in the origin pos,
 		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_weight_as_vote, false));
+		// and is in the destination pos.
+		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_weight_as_vote, true));
 		// origin stash1 is in the origin pos.
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *origin_weight_as_vote, true));
 		// origin stash2 is in the origin pos.
@@ -238,14 +246,17 @@ impl<T: Config> ListScenario<T> {
 			origin_stash1,
 			dest_weight_as_vote,
 			origin_weight_as_vote,
+			origin_stash2,
 			..
 		} = self;
-		// dest stash1 is not in the origin pos.
+		// dest stash1 is not in the origin pos,
 		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_weight_as_vote, false));
-		// and is in the destination pos.
+		// and is still in the destination pos.
 		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_weight_as_vote, true));
 		// origin stash1 is now in the destination pos.
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *dest_weight_as_vote, true));
+		// origin stash2 is still in the origin pos.
+		assert!(T::SortedListProvider::is_in_pos(&origin_stash2, *origin_weight_as_vote, true));
 	}
 }
 
@@ -285,7 +296,7 @@ benchmarks! {
 		scenario.check_preconditions();
 
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash.clone()), max_additional)
+	}: _(RawOrigin::Signed(stash), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
@@ -347,7 +358,7 @@ benchmarks! {
 		clear_validators_and_nominators::<T>();
 
 		// setup a worst case list scenario. Note that we don't care about the setup of the
-		// destination bag.
+		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
@@ -482,13 +493,12 @@ benchmarks! {
 	}
 
 	chill {
-		// Clean up any existing state.
+		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
 		// setup a worst case list scenario. Note that we don't care about the setup of the
-		// destination bag.
-		let scenario
-			= ListScenario::<T>::new(One::one(), true)?;
+		// destination position because we are doing a removal from the list but no insert.
+		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -555,9 +565,8 @@ benchmarks! {
 		clear_validators_and_nominators::<T>();
 
 		// setup a worst case list scenario. Note that we don't care about the setup of the
-		// destination bag.
-		let scenario
-			= ListScenario::<T>::new(One::one(), true)?;
+		// destination position because we are doing a removal from the list but no insert.
+		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -663,7 +672,7 @@ benchmarks! {
 
 		// setup a worst case list scenario.
 
-		// the weight the nominator will start at. Note we use 100 to play friendly with the bags
+		// the weight the nominator will start at. Note we use 100 to play friendly with the bags,
 		// list threshold values in the mock.
 		let origin_weight = 100u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
@@ -674,7 +683,7 @@ benchmarks! {
 
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
-		// so the sum of unlocking chunks puts voter into the dest bag
+		// so the sum of unlocking chunks puts voter into the dest bag.
 		assert!(value * l.into() + origin_weight > origin_weight);
 		assert!(value * l.into() + origin_weight <= dest_weight);
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -728,7 +737,7 @@ benchmarks! {
 		clear_validators_and_nominators::<T>();
 
 		// setup a worst case list scenario. Note that we don't care about the setup of the
-		// destination bag.
+		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
@@ -894,7 +903,7 @@ benchmarks! {
 		clear_validators_and_nominators::<T>();
 
 		// setup a worst case list scenario. Note that we don't care about the setup of the
-		// destination bag.
+		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
