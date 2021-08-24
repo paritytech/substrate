@@ -349,7 +349,8 @@ fn start_rpc_servers<
 >(
 	config: &Configuration,
 	mut gen_handler: H,
-	rpc_metrics: sc_rpc_server::RpcMetrics,
+	rpc_metrics: Option<sc_rpc_server::RpcMetrics>,
+	server_metrics: sc_rpc_server::ServerMetrics,
 ) -> Result<Box<dyn std::any::Any + Send>, Error> {
 	fn maybe_start_server<T, F>(
 		address: Option<SocketAddr>,
@@ -383,6 +384,7 @@ fn start_rpc_servers<
 		}
 	}
 
+	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
 	Ok(Box::new((
 		config
 			.rpc_ipc
@@ -392,8 +394,13 @@ fn start_rpc_servers<
 					&*path,
 					gen_handler(
 						sc_rpc::DenyUnsafe::No,
-						sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
+						sc_rpc_server::RpcMiddleware::new(
+							rpc_metrics.clone(),
+							rpc_method_names.clone(),
+							"ipc",
+						),
 					)?,
+					server_metrics.clone(),
 				)
 				.map_err(Error::from)
 			})
@@ -405,7 +412,11 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http"),
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"http",
+					),
 				)?,
 				config.rpc_max_payload,
 			)
@@ -419,9 +430,14 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws"),
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"ws",
+					),
 				)?,
 				config.rpc_max_payload,
+				server_metrics.clone(),
 			)
 			.map_err(Error::from)
 		})?
@@ -440,8 +456,9 @@ fn start_rpc_servers<
 >(
 	_: &Configuration,
 	_: H,
-	_: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send>, error::Error> {
+	_: Option<sc_rpc_server::RpcMetrics>,
+	_: sc_rpc_server::ServerMetrics,
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
 
