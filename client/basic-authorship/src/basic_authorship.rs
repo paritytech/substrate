@@ -286,6 +286,11 @@ where
 	}
 }
 
+/// If the block is full we will attempt to push at most
+/// this number of transactions before quitting for real.
+/// It allows us to increase block utilization.
+const MAX_SKIPPED_TRANSACTIONS: usize = 8;
+
 impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 where
 	A: TransactionPool<Block = Block>,
@@ -309,11 +314,6 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
-		/// If the block is full we will attempt to push at most
-		/// this number of transactions before quitting for real.
-		/// It allows us to increase block utilization.
-		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
-
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
@@ -336,6 +336,9 @@ where
 		}
 
 		// proceed with transactions
+		// We calculate soft deadline used only in case we start skipping transactions.
+		let now = (self.now)();
+		let soft_deadline = now + deadline.saturating_duration_since(now) / 2;
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -386,6 +389,13 @@ where
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
 					continue
+				} else if (self.now)() < soft_deadline {
+					debug!(
+						"Transaction would overflow the block size limit, \
+						 but we still have time before the soft deadline, so \
+						 we will try a bit more."
+					);
+					continue
 				} else {
 					debug!("Reached block size limit, proceeding with proposing.");
 					hit_block_size_limit = true;
@@ -405,6 +415,11 @@ where
 						debug!(
 							"Block seems full, but will try {} more transactions before quitting.",
 							MAX_SKIPPED_TRANSACTIONS - skipped,
+						);
+					} else if (self.now)() < soft_deadline {
+						debug!(
+							"Block seems full, but we still have time before the soft deadline, \
+							 so we will try a bit more before quitting."
 						);
 					} else {
 						debug!("Block is full, proceed with proposing.");
@@ -844,5 +859,76 @@ mod tests {
 		// The block limit didn't changed, but we now include the proof in the estimation of the
 		// block size and thus, one less transaction should fit into the limit.
 		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
+	}
+
+	#[test]
+	fn should_continue_skipping_transactions_up_until_soft_deadline_is_reached() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE,
+			(0..MAX_SKIPPED_TRANSACTIONS * 2)
+				.into_iter()
+				.map(|i| extrinsic(i as _))
+				.collect()
+		)).unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1
+				}
+				let old = value.1;
+				let new = old + time::Duration::from_secs(2);
+				*value = (true, new);
+				old
+			}),
+		);
+
+		// when
+		let deadline = time::Duration::from_secs((MAX_SKIPPED_TRANSACTIONS * 4) as u64);
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert!(
+			block.extrinsics().len() > MAX_SKIPPED_TRANSACTIONS,
+			"Got {}, expected more than {}",
+			block.extrinsics().len(),
+			MAX_SKIPPED_TRANSACTIONS
+		);
+	}
+
+	#[test]
+	fn should_add_more_transactions_when_soft_deadline_is_not_reached() {
+		assert_eq!(true, false);
 	}
 }
