@@ -272,13 +272,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn is_worst_pos(id: &T::AccountId, _: bool) -> bool {
-		list::Node::<T>::get(id).unwrap().is_terminal()
-	}
-
-	/// If `who`'s bond becomes the returned value they are guaranteed to change bags in terms of
-	/// the worst case
-	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
 		use frame_support::traits::Get as _;
 		let thresholds = T::BagThresholds::get();
@@ -290,7 +283,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 			.unwrap();
 
 		if is_increase {
-			// +3 helps in some edge cases to ensure threshold are far enough apart TODO
 			let next_threshold_idx = current_bag_idx + 1;
 			assert!(thresholds.len() > next_threshold_idx);
 			thresholds[next_threshold_idx]

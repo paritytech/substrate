@@ -227,8 +227,6 @@ impl<T: Config> ListScenario<T> {
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *origin_weight_as_vote, true));
 		// origin stash2 is in the origin pos.
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash2, *origin_weight_as_vote, true));
-
-		self.check_worst_removal_pos_preconditions();
 	}
 
 	fn check_postconditions(&self) {
@@ -245,27 +243,6 @@ impl<T: Config> ListScenario<T> {
 		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_weight_as_vote, true));
 		// origin stash1 is now in the destination pos.
 		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *dest_weight_as_vote, true));
-		// dest stash1 is in a worst case removal position.
-		assert!(T::SortedListProvider::is_worst_pos(&dest_stash1, true));
-		self.check_origin_worst_removal_pos_postconditions();
-	}
-
-	fn check_worst_removal_pos_preconditions(&self) {
-		assert!(T::SortedListProvider::is_worst_pos(&self.dest_stash1, true));
-		self.check_origin_worst_removal_pos_preconditions();
-	}
-
-	// Just checking the origin head is useful for scenarios where we start out with all the
-	// nodes in the same pos, and thus no destination node is actually ever a head.
-	fn check_origin_worst_removal_pos_preconditions(&self) {
-		assert!(T::SortedListProvider::is_worst_pos(&self.origin_stash1, true));
-	}
-
-	// Just checking the origin head is useful for scenarios where we start out with all the
-	// nodes in the same bag, and thus no destination node is actually ever a head.
-	fn check_origin_worst_removal_pos_postconditions(&self) {
-		let ListScenario { origin_stash2, .. } = self;
-		assert!(T::SortedListProvider::is_worst_pos(&origin_stash2, true));
 	}
 }
 
@@ -386,7 +363,6 @@ benchmarks! {
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	validate {
@@ -408,7 +384,6 @@ benchmarks! {
 	verify {
 		assert!(Validators::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	kick {
@@ -521,7 +496,6 @@ benchmarks! {
 	}: _(RawOrigin::Signed(controller))
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	set_payee {
@@ -592,7 +566,6 @@ benchmarks! {
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	cancel_deferred_slash {
@@ -769,7 +742,6 @@ benchmarks! {
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 
 	new_era {
@@ -940,7 +912,6 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), controller.clone())
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_worst_removal_pos_postconditions();
 	}
 }
 

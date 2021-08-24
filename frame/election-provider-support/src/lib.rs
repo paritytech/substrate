@@ -344,11 +344,7 @@ pub trait SortedListProvider<AccountId> {
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(_who: &AccountId, is_increase: bool) -> VoteWeight {
-		if is_increase {
-			VoteWeight::MAX
-		} else {
-			1
-		}
+		VoteWeight::MAX
 	}
 }
 
