@@ -35,6 +35,12 @@ impl DropTester {
 		*self.0.lock() += 1;
 		DropTesterRef(self.clone())
 	}
+
+	fn wait_on_drop(&self) {
+		while *self != 0 {
+			std::thread::sleep(std::time::Duration::from_millis(10));
+		}
+	}
 }
 
 impl PartialEq<usize> for DropTester {
@@ -98,7 +104,7 @@ fn ensure_tasks_are_awaited_on_shutdown() {
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
 
 #[test]
@@ -117,7 +123,7 @@ fn ensure_keep_alive_during_shutdown() {
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 1);
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
 
 #[test]
@@ -163,7 +169,7 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 	task_manager.terminate();
 	spawn_handle.spawn("task3", run_background_task(drop_tester.new_ref()));
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
 
 #[test]
@@ -209,7 +215,7 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
 		.expect_err("future()'s Result must be Err");
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
 
 #[test]
@@ -238,7 +244,7 @@ fn ensure_children_tasks_ends_when_task_manager_terminated() {
 	task_manager.terminate();
 	runtime.block_on(task_manager.future()).expect("future has ended without error");
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
 
 #[test]
@@ -271,7 +277,7 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 		.expect_err("future()'s Result must be Err");
 	assert_eq!(drop_tester, 4);
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
 
 #[test]
@@ -311,5 +317,5 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	});
 	assert_eq!(drop_tester, 4);
 	runtime.block_on(task_manager.clean_shutdown());
-	assert_eq!(drop_tester, 0);
+	drop_tester.wait_on_drop();
 }
