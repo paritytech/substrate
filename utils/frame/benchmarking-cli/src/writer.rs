@@ -357,7 +357,7 @@ pub fn write_results(
 // This function looks at the keys touched during the benchmark, and the storage info we collected
 // from the pallets, and creates comments with information about the storage keys touched during
 // each benchmark.
-fn add_storage_comments(
+pub(crate) fn add_storage_comments(
 	comments: &mut Vec<String>,
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
