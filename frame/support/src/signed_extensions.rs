@@ -17,7 +17,6 @@
 
 //! Signed Extensions utilities for FRAME.
 
-use crate::traits::Get;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	traits::{DispatchInfoOf, PostDispatchInfoOf, SignedExtension},
@@ -40,21 +39,21 @@ use sp_std::{fmt::Debug, marker::PhantomData, vec::Vec};
 /// than the fee payment, so we adjust the fee payment by given factor,
 /// by multiplying the priority returned by the second extension.
 #[derive(Default)]
-pub struct AdjustPriority<S, M, V> {
+pub struct AdjustPriority<S, M, const ADJUST: TransactionPriority> {
 	ext: S,
-	adjuster: PhantomData<(M, V)>,
+	adjuster: PhantomData<M>,
 }
 
-impl<S, M, V> From<S> for AdjustPriority<S, M, V> {
+impl<S, M, const V: TransactionPriority> From<S> for AdjustPriority<S, M, V> {
 	fn from(ext: S) -> Self {
 		Self { ext, adjuster: Default::default() }
 	}
 }
 
-impl<S: Debug, M, V: Get<TransactionPriority>> Debug for AdjustPriority<S, M, V> {
+impl<S: Debug, M, const V: TransactionPriority> Debug for AdjustPriority<S, M, V> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "{:?}::priority_adjustment({})", self.ext, V::get())
+		write!(f, "{:?}::priority_adjustment({})", self.ext, V)
 	}
 	#[cfg(not(feature = "std"))]
 	fn fmt(&self, _f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -62,21 +61,21 @@ impl<S: Debug, M, V: Get<TransactionPriority>> Debug for AdjustPriority<S, M, V>
 	}
 }
 
-impl<S: Clone, M, V> Clone for AdjustPriority<S, M, V> {
+impl<S: Clone, M, const V: TransactionPriority> Clone for AdjustPriority<S, M, V> {
 	fn clone(&self) -> Self {
 		Self { ext: self.ext.clone(), adjuster: self.adjuster.clone() }
 	}
 }
 
-impl<S: PartialEq, M, V> PartialEq for AdjustPriority<S, M, V> {
+impl<S: PartialEq, M, const V: TransactionPriority> PartialEq for AdjustPriority<S, M, V> {
 	fn eq(&self, other: &Self) -> bool {
 		self.ext == other.ext && self.adjuster == other.adjuster
 	}
 }
 
-impl<S: Eq, M, V> Eq for AdjustPriority<S, M, V> {}
+impl<S: Eq, M, const V: TransactionPriority> Eq for AdjustPriority<S, M, V> {}
 
-impl<S: Encode, M, V> Encode for AdjustPriority<S, M, V> {
+impl<S: Encode, M, const V: TransactionPriority> Encode for AdjustPriority<S, M, V> {
 	fn encode(&self) -> Vec<u8> {
 		self.ext.encode()
 	}
@@ -97,7 +96,7 @@ impl<S: Encode, M, V> Encode for AdjustPriority<S, M, V> {
 	}
 }
 
-impl<S: Decode, M, V> Decode for AdjustPriority<S, M, V> {
+impl<S: Decode, M, const V: TransactionPriority> Decode for AdjustPriority<S, M, V> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		Ok(Self { ext: S::decode(input)?, adjuster: Default::default() })
 	}
@@ -107,10 +106,9 @@ impl<S: Decode, M, V> Decode for AdjustPriority<S, M, V> {
 	}
 }
 
-impl<S, M, V> SignedExtension for AdjustPriority<S, M, V>
+impl<S, M, const V: TransactionPriority> SignedExtension for AdjustPriority<S, M, V>
 where
 	S: SignedExtension,
-	V: Get<TransactionPriority> + Send + Sync,
 	M: Mode + Send + Sync,
 {
 	type AccountId = S::AccountId;
@@ -132,7 +130,7 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		let mut validity = self.ext.validate(who, call, info, len)?;
-		validity.priority = M::combine(validity.priority, V::get());
+		validity.priority = M::combine(validity.priority, V);
 		Ok(validity)
 	}
 
@@ -152,7 +150,7 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		let mut validity = S::validate_unsigned(call, info, len)?;
-		validity.priority = M::combine(validity.priority, V::get());
+		validity.priority = M::combine(validity.priority, V);
 		Ok(validity)
 	}
 
@@ -268,18 +266,11 @@ mod tests {
 		}
 	}
 
-	#[derive(Default)]
-	struct Adjustment;
-
-	impl Get<TransactionPriority> for Adjustment {
-		fn get() -> TransactionPriority {
-			10
-		}
-	}
+	const ADJUSTMENT: TransactionPriority = 10;
 
 	#[test]
 	fn should_mul_priority_of_signed_transaction() {
-		type Adjusted = AdjustPriority<TestExtension, Multiply, Adjustment>;
+		type Adjusted = AdjustPriority<TestExtension, Multiply, ADJUSTMENT>;
 		let adj = Adjusted::default();
 
 		let got = adj.validate(&(), &(), &(), 5).unwrap();
@@ -289,7 +280,7 @@ mod tests {
 
 	#[test]
 	fn should_mul_priority_of_unsigned_transaction() {
-		type Adjusted = AdjustPriority<TestExtension, Multiply, Adjustment>;
+		type Adjusted = AdjustPriority<TestExtension, Multiply, ADJUSTMENT>;
 
 		let got = Adjusted::validate_unsigned(&(), &(), 0).unwrap();
 
@@ -298,7 +289,7 @@ mod tests {
 
 	#[test]
 	fn should_add_priority_of_signed_transaction() {
-		type Adjusted = AdjustPriority<TestExtension, Add, Adjustment>;
+		type Adjusted = AdjustPriority<TestExtension, Add, ADJUSTMENT>;
 		let adj = Adjusted::default();
 
 		let got = adj.validate(&(), &(), &(), 5).unwrap();
@@ -308,7 +299,7 @@ mod tests {
 
 	#[test]
 	fn should_add_priority_of_unsigned_transaction() {
-		type Adjusted = AdjustPriority<TestExtension, Add, Adjustment>;
+		type Adjusted = AdjustPriority<TestExtension, Add, ADJUSTMENT>;
 
 		let got = Adjusted::validate_unsigned(&(), &(), 0).unwrap();
 
@@ -317,7 +308,7 @@ mod tests {
 
 	#[test]
 	fn should_div_priority_of_signed_transaction() {
-		type Adjusted = AdjustPriority<TestExtension, Divide, Adjustment>;
+		type Adjusted = AdjustPriority<TestExtension, Divide, ADJUSTMENT>;
 		let adj = Adjusted::default();
 
 		let got = adj.validate(&(), &(), &(), 5).unwrap();
@@ -327,7 +318,7 @@ mod tests {
 
 	#[test]
 	fn should_div_priority_of_unsigned_transaction() {
-		type Adjusted = AdjustPriority<TestExtension, Divide, Adjustment>;
+		type Adjusted = AdjustPriority<TestExtension, Divide, ADJUSTMENT>;
 
 		let got = Adjusted::validate_unsigned(&(), &(), 0).unwrap();
 
