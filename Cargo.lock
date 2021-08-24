@@ -5981,6 +5981,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log 0.4.14",
  "pallet-balances",
  "parity-scale-codec",
  "sp-core",
@@ -7183,6 +7184,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-version",
  "tokio 0.2.25",
 ]
 

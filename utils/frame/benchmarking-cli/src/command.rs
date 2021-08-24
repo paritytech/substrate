@@ -407,6 +407,20 @@ impl BenchmarkCmd {
 				println!();
 			}
 
+			if !self.no_storage_info {
+				let mut comments: Vec<String> = Default::default();
+				crate::writer::add_storage_comments(
+					&mut comments,
+					&batch.db_results,
+					&storage_info,
+				);
+				println!("Raw Storage Info\n========");
+				for comment in comments {
+					println!("{}", comment);
+				}
+				println!("");
+			}
+
 			// Conduct analysis.
 			if !self.no_median_slopes {
 				println!("Median Slopes Analysis\n========");
@@ -425,6 +439,7 @@ impl BenchmarkCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				println!("");
 			}
 			if !self.no_min_squares {
 				println!("Min Squares Analysis\n========");
@@ -443,6 +458,7 @@ impl BenchmarkCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				println!("");
 			}
 		}
 
