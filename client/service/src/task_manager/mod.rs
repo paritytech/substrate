@@ -304,7 +304,7 @@ impl TaskManager {
 	/// objects properly otherwise it triggers a SIGABRT on exit.
 	pub fn clean_shutdown(
 		mut self,
-	) -> Pin<Box<dyn Future<Output = Box<dyn std::any::Any + Send>> + Send>> {
+	) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		self.terminate();
 		let children_shutdowns = self.children.into_iter().map(|x| x.clean_shutdown());
 		let keep_alive = self.keep_alive;
@@ -313,7 +313,13 @@ impl TaskManager {
 		Box::pin(async move {
 			join_all(children_shutdowns).await;
 			completion_future.await;
-			keep_alive
+
+			// The keep_alive stuff is holding references to some RPC handles etc. These
+			// RPC handles spawn their own tokio stuff and that doesn't like to be closed in an
+			// async context. So, we move the deletion to some other thread.
+			std::thread::spawn(move || {
+				let _ = keep_alive;
+			});
 		})
 	}
 

@@ -178,15 +178,13 @@ where
 					.all(|&(ref id, ref service, _)| light_predicate(*id, service));
 
 				if light_ready {
-					return Ok(())
+					return
 				}
 			}
 		};
 
-		match self.runtime.block_on(async move { time::timeout(MAX_WAIT_TIME, future).await }) {
-			Ok(Ok(())) => (),
-			Ok(Err(())) => unreachable!("future never fails; qed"),
-			Err(_) => panic!("Waited for too long"),
+		if self.runtime.block_on(async move { time::timeout(MAX_WAIT_TIME, future).await }).is_err() {
+			panic!("Waited for too long"),
 		}
 	}
 }
