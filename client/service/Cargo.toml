@@ -87,5 +87,5 @@ directories = "3.0.2"
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
-tokio = { version = "0.2.25", default-features = false }
+tokio = { version = "1.10", features = ["time"] }
 async-std = { version = "1.6.5", default-features = false }

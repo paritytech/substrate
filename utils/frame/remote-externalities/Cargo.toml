@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = [
-    "tokio02",
+    "tokio1",
 ] }
 jsonrpsee-proc-macros = "0.3.0"
 
@@ -30,7 +30,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
+tokio = { version = "1.10", features = ["macros", "rt-multi-thread"] }
 pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev" }
 
 [features]

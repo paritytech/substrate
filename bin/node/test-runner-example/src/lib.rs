@@ -92,7 +92,7 @@ mod tests {
 
 	#[test]
 	fn test_runner() {
-		let mut tokio_runtime = build_runtime().unwrap();
+		let tokio_runtime = build_runtime().unwrap();
 		let task_executor = task_executor(tokio_runtime.handle().clone());
 		let (rpc, task_manager, client, pool, command_sink, backend) = client_parts::<
 			NodeTemplateChainInfo,
