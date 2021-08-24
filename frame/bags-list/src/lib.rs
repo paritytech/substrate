@@ -291,8 +291,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 			.unwrap();
 
 		if is_increase {
-			// +2 helps in some edge cases to ensure threshold are far enough apart
-			let next_threshold_idx = current_bag_idx + 2;
+			// +2 helps in some edge cases to ensure threshold are far enough apart TODO
+			let next_threshold_idx = current_bag_idx + 1;
 			assert!(thresholds.len() > next_threshold_idx);
 			thresholds[next_threshold_idx]
 		} else {

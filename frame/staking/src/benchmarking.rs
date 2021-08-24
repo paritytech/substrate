@@ -708,17 +708,19 @@ benchmarks! {
 
 		// the bag the voter will start at
 		let origin_bag_thresh =
-			T::CurrencyToVote::to_currency(One::one(), total_issuance);
+			T::CurrencyToVote::to_currency(MAX_UNLOCKING_CHUNKS as u64, total_issuance);
 		let scenario
 			= ListScenario::<T>::new(origin_bag_thresh, true)?;
 		let dest_thresh = scenario.dest_thresh.clone();
 
 		println!("dest: {:#?}. origin: {:#?}", dest_thresh, origin_bag_thresh);
 		// rebond an amount that will put the user into the destination bag
-		let rebond_amount = dest_thresh - origin_bag_thresh;
+		// TODO
+		let rebond_amount = dest_thresh - origin_bag_thresh
 
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
+		println!("value: {:#?}. rebond_amount: {:#?}. l: {:#?}.", value, rebond_amount, l);
 		// so the sum of unlocking chunks puts voter into the dest bag
 		assert!(value * l.into() + origin_bag_thresh > origin_bag_thresh);
 		assert!(value * l.into() + origin_bag_thresh <= dest_thresh);
