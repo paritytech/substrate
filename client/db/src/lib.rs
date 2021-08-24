@@ -46,7 +46,7 @@ mod upgrade;
 mod utils;
 
 use linked_hash_map::LinkedHashMap;
-use log::{debug, trace, warn};
+use log::{debug, trace, warn, info};
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -2057,9 +2057,68 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
+
+
+		if let Some(pending_block) = operation.pending_block.as_mut() {
+			let number = pending_block.header.number().clone();
+
+			if let Some((migration_from, migration_to)) = self.state_versions.need_migrate(number) {
+				use std::time;
+				if let Some(prev_block_state) = operation.old_state.as_trie_backend() {
+					let limit_size: Option<u64> = None;
+					let limit_items: Option<u64> = None;
+					let init_root = pending_block.header.state_root().clone();
+					let mut current_root = init_root.clone();
+					let mut start_top = None;
+					let mut start_child = None;
+
+					let timer = time::SystemTime::now();
+
+					let init_root = current_root.clone();
+					info!("Starting migrating from state root {:x?} at block {:?}", &current_root, &number);
+					loop {
+						let sp_state_machine::MigrateProgress {
+							current_top,
+							current_child,
+							root,
+						} = prev_block_state.migrate(
+							migration_from,
+							migration_to,
+							limit_size,
+							limit_items,
+							&mut operation.db_updates,
+							init_root.clone(),
+							sp_state_machine::MigrateProgress {
+								current_top: start_top.take(),
+								current_child: start_child.take(),
+								root: Some(current_root), // TODO non optional rather?
+							}
+						).map_err(|err| {
+							sp_blockchain::Error::Backend(format!(
+								"error migrating: {}",
+								err
+							))
+						})?;
+
+						info!("Finished migration iteration, new state root: {:x?}, elapsed time: {:?}.", &current_root, timer.elapsed());
+						start_top = current_top;
+						start_child = current_child;
+						current_root = root.unwrap_or_else(|| pending_block.header.state_root().clone());
+						if start_top.is_none() {
+							break;
+						}
+					}
+
+					info!("Finished processing migration with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
+					pending_block.header.set_state_root(current_root);
+				} else {
+					panic!("Could not migrate at block: {:?}", number);
+				}
+			}
+		}
 
 		match self.try_commit_operation(operation) {
 			Ok(_) => {

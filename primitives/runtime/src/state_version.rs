@@ -104,4 +104,26 @@ impl<B: Block> StateVersions<B> {
 			canonical_states,
 		})
 	}
+
+
+	/// Indicate if block need migration.
+	/// Returns version to migrate from and to if
+	/// migration is needed.
+	pub fn need_migrate(&self, at: NumberFor<B>) -> Option<(StateVersion, StateVersion)> {
+		// TODO switch to default when all V0 chains did migrate.
+		let mut from = StateVersion::V0;
+		let mut to = None;
+		let at = at + 1u32.into();
+		for (number, version) in self.canonical_states.iter() {
+			if number == &at {
+				to = Some(*version);
+				break;
+			}
+			if number > &at {
+				break;
+			}
+			from = *version;
+		}
+		to.map(|to| (from, to))
+	}
 }

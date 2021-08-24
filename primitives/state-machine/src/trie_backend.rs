@@ -27,6 +27,7 @@ use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, ChildType};
 use sp_core::state_version::StateVersion;
 use sp_std::{boxed::Box, vec::Vec};
+use sp_std::{rc::Rc, cell::RefCell};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
 	trie_types::{TrieDB, TrieError},
@@ -291,6 +292,211 @@ where
 
 	fn state_version(&self) -> StateVersion {
 		self.state_version.clone()
+	}
+}
+
+
+/// Migration progress.
+pub struct MigrateProgress<H> {
+	pub current_top: Option<Vec<u8>>,
+	pub current_child: Option<(Vec<u8>, H)>,
+	pub root: Option<H>,
+}
+
+/// Migration storage.
+pub struct MigrateStorage<'a, S, H>
+where
+	H: Hasher,
+{
+	overlay: Rc<RefCell<&'a mut sp_trie::PrefixedMemoryDB<H>>>,
+	storage: &'a S,
+}
+
+// type is neither send nor sync but only ever
+// use in migrate method local to a single thread.
+unsafe impl<'a, S, H: Hasher> Send for MigrateStorage<'a, S, H> { }
+unsafe impl<'a, S, H: Hasher> Sync for MigrateStorage<'a, S, H> { }
+
+impl<'a, S, H: Hasher> Clone for MigrateStorage<'a, S, H> {
+	fn clone(&self) -> Self {
+		MigrateStorage {
+			overlay: self.overlay.clone(),
+			storage: self.storage
+		}
+	}
+}
+
+use hash_db::{self, AsHashDB, HashDB, HashDBRef, Prefix};
+use sp_trie::DBValue;
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
+	for MigrateStorage<'a, S, H>
+{
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		if let Some(val) = HashDB::get(*self.overlay.borrow(), key, prefix) {
+			Some(val)
+		} else {
+			match self.storage.get(&key, prefix) {
+				Ok(x) => x,
+				Err(e) => {
+					warn!(target: "trie", "Failed to read from DB: {}", e);
+					None
+				},
+			}
+		}
+	}
+
+	fn access_from(&self, key: &H::Out, _at: Option<&H::Out>) -> Option<DBValue> {
+		// call back to storage even if the overlay was hit.
+		self.storage.access_from(key);
+		None
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		HashDB::get(self, key, prefix).is_some()
+	}
+
+	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
+		HashDB::insert(*self.overlay.borrow_mut(), prefix, value)
+	}
+
+	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
+		HashDB::emplace(*self.overlay.borrow_mut(), key, prefix, value)
+	}
+
+	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
+		HashDB::emplace_ref(*self.overlay.borrow_mut(), key, prefix, value)
+	}
+
+	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
+		HashDB::remove(*self.overlay.borrow_mut(), key, prefix)
+	}
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for MigrateStorage<'a, S, H> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		HashDB::get(self, key, prefix)
+	}
+
+	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<DBValue> {
+		HashDB::access_from(self, key, at)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		HashDB::contains(self, key, prefix)
+	}
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
+	for MigrateStorage<'a, S, H>
+{
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
+}
+
+#[cfg(feature = "std")]
+fn error_version() -> crate::DefaultError {
+	"Cannot migrate for given state versions".into()
+}
+
+#[cfg(not(feature = "std"))]
+fn error_version() -> crate::DefaultError {
+	crate::DefaultError
+}
+
+#[cfg(feature = "std")]
+fn trie_error<H: Hasher>(e: &sp_trie::TrieError<Layout<H>>) -> crate::DefaultError {
+	format!("Migrate trieDB error: {}", e)
+}
+
+#[cfg(not(feature = "std"))]
+fn trie_error<H: Hasher>(_e: &sp_trie::TrieError<Layout<H>>) -> crate::DefaultError {
+	crate::DefaultError
+}
+
+
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
+where
+	H::Out: Ord + Codec,
+{
+	/// Execute a state migration, new and removed node are
+	/// directly written in the db update.
+	pub fn migrate(
+		&self,
+		migration_from: StateVersion,
+		migration_to: StateVersion,
+		mut limit_size: Option<u64>,
+		mut limit_items: Option<u64>,
+		changes: &mut sp_trie::PrefixedMemoryDB<H>,
+		root: H::Out,
+		mut progress: MigrateProgress<H::Out>,
+	) -> Result<MigrateProgress<H::Out>, crate::DefaultError> {
+		use sp_trie::{TrieDB, TrieDBMut, TrieMut, TrieDBIterator};
+		let mut dest_threshold = 0;
+		match (migration_from, migration_to, self.state_version) {
+			(StateVersion::V0, StateVersion::V1 { threshold }, StateVersion::V0) => {
+				dest_threshold = threshold;
+			},
+			_ => return Err(error_version()),
+		}
+		let empty_value = sp_std::vec![23u8; dest_threshold as usize];
+		let empty_value2 = sp_std::vec![0u8; dest_threshold as usize];
+		let dest_layout = Layout::with_alt_hashing(dest_threshold);
+		let overlay = Rc::new(RefCell::new(changes));
+		let mut dest_db = MigrateStorage::<S, H> {
+			overlay,
+			storage: self.essence.backend_storage(),
+		};
+		let ori_root = self.essence.root().clone();
+		// Using db with remove node is ok as long as iteration
+		// start at uncommited key.
+		let ori_db = dest_db.clone();
+		if progress.root.is_none() {
+			progress.root = Some(self.essence.root().clone());
+		}
+		let dest_root = progress.root.as_mut().expect("Lazy init above.");
+		let ori = TrieDB::new_with_layout(&ori_db, &ori_root, Layout::default())
+			.map_err(|e| trie_error::<H>(&*e))?;
+		let mut dest = TrieDBMut::from_existing_with_layout(&mut dest_db, dest_root, dest_layout)
+			.map_err(|e| trie_error::<H>(&*e))?;
+
+		let mut iter = TrieDBIterator::new_prefixed_then_seek(&ori, &[], progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[])).map_err(|e| trie_error::<H>(&*e))?;
+		for elt in iter {
+			let (key, value) = elt
+				.map_err(|e| trie_error::<H>(&*e))?;
+			if let Some(mut limit_size) = limit_size.as_mut() {
+				if *limit_size < value.len() as u64 {
+					progress.current_top = Some(key);
+					break;
+				}
+				*limit_size -= value.len() as u64;
+			}
+			if let Some(mut limit_items) = limit_items.as_mut() {
+				if *limit_items == 0 {
+					progress.current_top = Some(key);
+					break;
+				}
+				*limit_items -= 1;
+			}
+			if value.len() >= dest_threshold as usize {
+				// Force a change so triedbmut do not ignore
+				// setting the same value.
+				if value != empty_value {
+					dest.insert(key.as_slice(), empty_value.as_slice());
+				} else {
+					dest.insert(key.as_slice(), empty_value2.as_slice());
+				}
+				dest.insert(key.as_slice(), value.as_slice());
+			}
+		}
+
+		sp_std::mem::drop(ori);
+		sp_std::mem::drop(dest);
+		Ok(progress)
 	}
 }
 

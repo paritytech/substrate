@@ -127,7 +127,7 @@ pub use crate::{
 		StorageTransactionCache, StorageValue,
 	},
 	stats::{StateMachineStats, UsageInfo, UsageUnit},
-	trie_backend::TrieBackend,
+	trie_backend::{TrieBackend, MigrateProgress},
 	trie_backend_essence::{Storage, TrieBackendStorage},
 };
 
