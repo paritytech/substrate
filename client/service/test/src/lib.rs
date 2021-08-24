@@ -183,7 +183,11 @@ where
 			}
 		};
 
-		if self.runtime.block_on(async move { time::timeout(MAX_WAIT_TIME, future).await }).is_err() {
+		if self
+			.runtime
+			.block_on(async move { time::timeout(MAX_WAIT_TIME, future).await })
+			.is_err()
+		{
 			panic!("Waited for too long");
 		}
 	}
