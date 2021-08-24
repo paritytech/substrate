@@ -82,7 +82,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
-		final_key.extend_from_slice(&storage_prefix[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -102,7 +102,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 			storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
 		);
 
-		final_key.extend_from_slice(&storage_prefix[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key1_hashed.as_ref());
 		final_key.extend_from_slice(key2_hashed.as_ref());
 
@@ -311,7 +311,7 @@ where
 				storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
 			);
 
-			final_key.extend_from_slice(&storage_prefix[..]);
+			final_key.extend_from_slice(&storage_prefix);
 			final_key.extend_from_slice(key1_hashed.as_ref());
 			final_key.extend_from_slice(key2_hashed.as_ref());
 

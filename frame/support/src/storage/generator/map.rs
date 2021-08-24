@@ -72,7 +72,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
-		final_key.extend_from_slice(&storage_prefix[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -324,7 +324,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 			let mut final_key =
 				Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
-			final_key.extend_from_slice(&storage_prefix[..]);
+			final_key.extend_from_slice(&storage_prefix);
 			final_key.extend_from_slice(key_hashed.as_ref());
 
 			final_key

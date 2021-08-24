@@ -90,7 +90,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
 
-		final_key.extend_from_slice(&storage_prefix[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -107,7 +107,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
 
-		final_key.extend_from_slice(&storage_prefix[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -274,7 +274,7 @@ where
 
 			let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
 
-			final_key.extend_from_slice(&storage_prefix[..]);
+			final_key.extend_from_slice(&storage_prefix);
 			final_key.extend_from_slice(key_hashed.as_ref());
 
 			final_key
