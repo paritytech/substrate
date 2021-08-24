@@ -26,7 +26,7 @@ use sp_runtime::transaction_validity::InvalidTransaction;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Author RPC future Result type.
-pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
+pub type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T>>;
 
 /// Author RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]

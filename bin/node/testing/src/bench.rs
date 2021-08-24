@@ -46,7 +46,7 @@ use sc_client_api::{
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
-use sc_executor::{NativeExecutor, WasmExecutionMethod};
+use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_consensus::BlockOrigin;
@@ -220,10 +220,10 @@ pub enum DatabaseType {
 }
 
 impl DatabaseType {
-	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSettingsSrc {
+	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSource {
 		match self {
-			Self::RocksDb => sc_client_db::DatabaseSettingsSrc::RocksDb { path, cache_size: 512 },
-			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb { path },
+			Self::RocksDb => sc_client_db::DatabaseSource::RocksDb { path, cache_size: 512 },
+			Self::ParityDb => sc_client_db::DatabaseSource::ParityDb { path },
 		}
 	}
 }
@@ -306,8 +306,8 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersReaping => {
 						Call::Balances(BalancesCall::transfer(
 							sp_runtime::MultiAddress::Id(receiver),
-							// Transfer so that ending balance would be 1 less than existential deposit
-							// so that we kill the sender account.
+							// Transfer so that ending balance would be 1 less than existential
+							// deposit so that we kill the sender account.
 							100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
 						))
 					},
@@ -390,7 +390,7 @@ impl BenchDb {
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
 			None,
 			None,

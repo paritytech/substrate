@@ -27,10 +27,9 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig,
-		NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
-		Role, RpcMethods, TaskExecutor, TelemetryEndpoints, TransactionPoolOptions,
-		WasmExecutionMethod,
+		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
+		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+		TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
 };
@@ -220,10 +219,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-	) -> Result<DatabaseConfig> {
+	) -> Result<DatabaseSource> {
+		let rocksdb_path = base_path.join("db");
+		let paritydb_path = base_path.join("paritydb");
 		Ok(match database {
-			Database::RocksDb => DatabaseConfig::RocksDb { path: base_path.join("db"), cache_size },
-			Database::ParityDb => DatabaseConfig::ParityDb { path: base_path.join("paritydb") },
+			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
+			Database::ParityDb => DatabaseSource::ParityDb { path: rocksdb_path },
+			Database::Auto => DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size },
 		})
 	}
 
@@ -377,13 +379,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(chain_spec.telemetry_endpoints().clone())
 	}
 
-	/// Get the telemetry external transport
-	///
-	/// By default this is `None`.
-	fn telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
-		Ok(None)
-	}
-
 	/// Get the default value for heap pages
 	///
 	/// By default this is `None`.
@@ -523,7 +518,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_max_payload: self.rpc_max_payload()?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,
-			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
 			force_authoring: self.force_authoring()?,

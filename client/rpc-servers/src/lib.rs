@@ -61,10 +61,13 @@ pub fn rpc_handler<M: PubSubMetadata>(
 			.expect("Serialization of Vec<String> is infallible; qed");
 
 		move |_| {
-			Ok(serde_json::json!({
-				"version": 1,
-				"methods": methods.clone(),
-			}))
+			let methods = methods.clone();
+			async move {
+				Ok(serde_json::json!({
+					"version": 1,
+					"methods": methods,
+				}))
+			}
 		}
 	});
 	io
@@ -84,7 +87,7 @@ mod inner {
 	/// Start HTTP server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_http<M: pubsub::PubSubMetadata + Default>(
+	pub fn start_http<M: pubsub::PubSubMetadata + Default + Unpin>(
 		addr: &std::net::SocketAddr,
 		thread_pool_size: Option<usize>,
 		cors: Option<&Vec<String>>,
@@ -94,6 +97,7 @@ mod inner {
 		let max_request_body_size = maybe_max_payload_mb
 			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+
 		http::ServerBuilder::new(io)
 			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
 			.health_api(("/health", "system_health"))
@@ -125,7 +129,7 @@ mod inner {
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
 	pub fn start_ws<
-		M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>,
+		M: pubsub::PubSubMetadata + From<futures::channel::mpsc::UnboundedSender<String>>,
 	>(
 		addr: &std::net::SocketAddr,
 		max_connections: Option<usize>,

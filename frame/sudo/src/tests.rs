@@ -109,7 +109,8 @@ fn set_key_basics() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		// A non-root `key` will trigger a `RequireSudo` error and a non-root `key` cannot change the root `key`.
+		// A non-root `key` will trigger a `RequireSudo` error and a non-root `key` cannot change
+		// the root `key`.
 		assert_noop!(Sudo::set_key(Origin::signed(2), 3), Error::<Test>::RequireSudo);
 	});
 }
