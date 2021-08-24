@@ -919,7 +919,7 @@ mod tests {
 				let solution =
 					RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
 				let call = Call::submit_unsigned {
-					solution: Box::new(solution.clone()),
+					raw_solution: Box::new(solution.clone()),
 					witness: witness(),
 				};
 
