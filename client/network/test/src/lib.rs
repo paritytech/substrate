@@ -727,15 +727,19 @@ where
 		self.add_full_peer_with_config(Default::default())
 	}
 
+	/// Get state versioning to use with test.
+	fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>>;
+
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
 		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
 			(Some(keep_blocks), true) =>
-				TestClientBuilder::with_tx_storage(keep_blocks).state_hashed_value(),
-			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX).state_hashed_value(),
+				TestClientBuilder::with_tx_storage(keep_blocks, self.state_versions()).state_hashed_value(),
+			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX, self.state_versions()).state_hashed_value(),
 			(Some(keep_blocks), false) =>
-				TestClientBuilder::with_pruning_window(keep_blocks).state_hashed_value(),
-			(None, false) => TestClientBuilder::with_default_backend().state_hashed_value(),
+				TestClientBuilder::with_pruning_window(keep_blocks, self.state_versions()).state_hashed_value(),
+			(None, false) =>
+				TestClientBuilder::with_default_backend_and_state_versions(self.state_versions()).state_hashed_value(),
 		};
 		if matches!(config.sync_mode, SyncMode::Fast { .. }) {
 			test_client_builder = test_client_builder.set_no_genesis();
@@ -1078,12 +1082,27 @@ where
 pub struct TestNet {
 	peers: Vec<Peer<(), PeersClient>>,
 	fork_choice: ForkChoiceStrategy,
+	state_versions: Option<sp_runtime::StateVersions<Block>>,
 }
 
 impl TestNet {
 	/// Create a `TestNet` that used the given fork choice rule.
 	pub fn with_fork_choice(fork_choice: ForkChoiceStrategy) -> Self {
-		Self { peers: Vec::new(), fork_choice }
+		Self { peers: Vec::new(), fork_choice, state_versions: None }
+	}
+
+	/// Create new test network with this many peers.
+	pub fn new_with_state_versions(n: usize, state_versions: sp_runtime::StateVersions<Block>) -> Self {
+		trace!(target: "test_network", "Creating test network with peer config");
+		let config = Self::default_config();
+		let mut net = Self::from_config(&config);
+		net.state_versions = Some(state_versions);
+
+		for i in 0..n {
+			trace!(target: "test_network", "Adding peer {}", i);
+			net.add_full_peer();
+		}
+		net
 	}
 }
 
@@ -1094,7 +1113,7 @@ impl TestNetFactory for TestNet {
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
-		TestNet { peers: Vec::new(), fork_choice: ForkChoiceStrategy::LongestChain }
+		TestNet { peers: Vec::new(), fork_choice: ForkChoiceStrategy::LongestChain, state_versions: None }
 	}
 
 	fn make_verifier(
@@ -1127,6 +1146,10 @@ impl TestNetFactory for TestNet {
 
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
+	}
+
+	fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>> {
+		self.state_versions.clone()
 	}
 }
 
@@ -1196,5 +1219,9 @@ impl TestNetFactory for JustificationTestNet {
 		Self::PeerData,
 	) {
 		(client.as_block_import(), Some(Box::new(ForceFinalized(client))), Default::default())
+	}
+
+	fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>> {
+		self.0.state_versions.clone()
 	}
 }

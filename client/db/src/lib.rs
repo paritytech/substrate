@@ -1149,6 +1149,18 @@ impl<Block: BlockT> Backend<Block> {
 		canonicalization_delay: u64,
 		transaction_storage: TransactionStorageMode,
 	) -> Self {
+		let state_versions = Default::default();
+		Self::new_test_with_tx_storage_and_state_versions(keep_blocks, canonicalization_delay, transaction_storage, state_versions)
+	}
+
+	/// Create new memory-backed client backend for tests.
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test_with_tx_storage_and_state_versions(
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+		transaction_storage: TransactionStorageMode,
+		state_versions: StateVersions<Block>,
+	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
@@ -1159,7 +1171,6 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 			transaction_storage,
 		};
-		let state_versions = Default::default();
 
 		Self::new(db_setting, canonicalization_delay, state_versions).expect("failed to create test-db")
 	}

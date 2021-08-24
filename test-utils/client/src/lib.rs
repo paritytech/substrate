@@ -106,18 +106,36 @@ impl<Block: BlockT, Executor, G: GenesisInit>
 		Self::with_backend(backend)
 	}
 
+	/// Create new `TestClientBuilder` with default backend and state versions.
+	pub fn with_default_backend_and_state_versions(state_versions: Option<sp_runtime::StateVersions<Block>>) -> Self {
+		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
+			std::u32::MAX,
+			std::u64::MAX,
+			sc_client_db::TransactionStorageMode::BlockBody,
+			state_versions.unwrap_or_default(),
+		));
+		Self::with_backend(backend)
+	}
+
+
 	/// Create new `TestClientBuilder` with default backend and pruning window size
-	pub fn with_pruning_window(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
+	pub fn with_pruning_window(keep_blocks: u32, state_versions: Option<sp_runtime::StateVersions<Block>>) -> Self {
+		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
+			keep_blocks,
+			0,
+			sc_client_db::TransactionStorageMode::BlockBody,
+			state_versions.unwrap_or_default(),
+		));
 		Self::with_backend(backend)
 	}
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
-	pub fn with_tx_storage(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(
+	pub fn with_tx_storage(keep_blocks: u32, state_versions: Option<sp_runtime::StateVersions<Block>>) -> Self {
+		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			keep_blocks,
 			0,
 			sc_client_db::TransactionStorageMode::StorageChain,
+			state_versions.unwrap_or_default(),
 		));
 		Self::with_backend(backend)
 	}
