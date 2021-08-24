@@ -351,6 +351,12 @@ pub trait SortedListProvider<AccountId> {
 	fn is_bag_head(_: &AccountId, _: VoteWeight, mock: bool) -> bool {
 		mock
 	}
+
+	/// If `who` changes by `amount` they are guaranteed to change bags in terms of the worst case
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn weight_update_worst_case(_who: &AccountId, _amount: Balance) -> VoteWeight {
+		VoteWeight::MAX
+	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and

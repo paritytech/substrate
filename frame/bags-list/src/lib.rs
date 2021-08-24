@@ -275,4 +275,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	fn is_bag_head(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().head_id() == Some(id)
 	}
+
+	/// If `who`'s bond becomes the returned value they are guaranteed to change bags in terms of the worst case
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn weight_update_worst_case(_who: &T::AccountId) -> Result<VotWeight> {
+
+	}
 }
