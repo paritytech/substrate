@@ -266,8 +266,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::clear()
 	}
 
+	/// `id` is in a position in the list that corresponds to `weight`
 	#[cfg(feature = "runtime-benchmarks")]
-	fn is_in_bag(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
+	fn is_in_pos(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
 	}
 
@@ -276,9 +277,28 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().head_id() == Some(id)
 	}
 
-	/// If `who`'s bond becomes the returned value they are guaranteed to change bags in terms of the worst case
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn weight_update_worst_case(_who: &T::AccountId) -> Result<VotWeight> {
+	/// If `who`'s bond becomes the returned value they are guaranteed to change bags in terms of
+	/// the worst case
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
+		use frame_support::traits::Get as _;
+		let thresholds = T::BagThresholds::get();
+		let node = list::Node::<T>::get(who).unwrap();
+		let current_bag_idx = thresholds
+			.iter()
+			.chain(std::iter::once(&VoteWeight::MAX))
+			.position(|w| w == &node.bag_upper)
+			.unwrap();
 
+		if is_increase {
+			// +2 helps in some edge cases to ensure threshold are far enough apart
+			let next_threshold_idx = current_bag_idx + 2;
+			assert!(thresholds.len() > next_threshold_idx);
+			thresholds[next_threshold_idx]
+		} else {
+			assert!(current_bag_idx != 0);
+			let prev_threshold_idx = current_bag_idx - 1;
+			thresholds[prev_threshold_idx]
+		}
 	}
 }

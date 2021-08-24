@@ -132,7 +132,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	Ok((v_stash, nominators))
 }
 
-struct RebagScenario<T: Config> {
+struct ListScenario<T: Config> {
 	dest_stash1: T::AccountId,
 	/// Stash that is expected to be rebagged.
 	origin_stash1: T::AccountId,
@@ -141,9 +141,10 @@ struct RebagScenario<T: Config> {
 	origin_stash2: T::AccountId,
 	origin_thresh_as_vote: VoteWeight,
 	dest_thresh_as_vote: VoteWeight,
+	dest_thresh: BalanceOf<T>,
 }
 
-impl<T: Config> RebagScenario<T> {
+impl<T: Config> ListScenario<T> {
 	/// An expensive rebag scenario:
 	///
 	/// - the node to be rebagged (r) is the head of a bag that has at least one other node. The bag
@@ -151,20 +152,12 @@ impl<T: Config> RebagScenario<T> {
 	///   will need to be read and written as it will need to have its prev pointer updated.
 	///
 	/// - the destination bag has at least one node, which will need its next pointer updated.
-	fn new(
-		origin_bag_thresh: BalanceOf<T>,
-		dest_bag_thresh: BalanceOf<T>,
-	) -> Result<Self, &'static str> {
-		ensure!(
-			!origin_bag_thresh.is_zero() && !dest_bag_thresh.is_zero(),
-			"both thresholds must be greater than 0"
-		);
+	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
+		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
 		// create_stash_controller takes a factor, so we compute it.
 		let origin_factor: BalanceOf<T> =
-			origin_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
-		let dest_factor: BalanceOf<T> =
-			dest_bag_thresh * 10u32.into() / T::Currency::minimum_balance();
+			origin_weight * 10u32.into() / T::Currency::minimum_balance();
 
 		// create validators to nominate.
 		let validators = create_validators::<T>(
@@ -173,7 +166,7 @@ impl<T: Config> RebagScenario<T> {
 			T::MAX_NOMINATIONS * 2, // account seed prevents unintentional account collisions
 		)?;
 
-		// create accounts in origin bag
+		// create accounts with the origin weight
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_max_free::<T>(
 			USER_SEED + 2,
 			origin_factor,
@@ -194,7 +187,14 @@ impl<T: Config> RebagScenario<T> {
 			validators.clone(),
 		)?;
 
-		// create an account in the destination bag
+		// find a destination weight that will trigger the worst case scenario.
+		let dest_weight =
+			T::SortedListProvider::weight_update_worst_case(&origin_stash1, is_increase);
+		let total_issuance = T::Currency::total_issuance();
+		let dest_weight_balance = T::CurrencyToVote::to_currency(dest_weight as u128, total_issuance);
+		let dest_factor: BalanceOf<T> = dest_weight_balance * 10u32.into() / T::Currency::minimum_balance();
+
+		// create an account with the worst case destination weight
 		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
 			USER_SEED + 1,
 			dest_factor,
@@ -202,32 +202,31 @@ impl<T: Config> RebagScenario<T> {
 		)?;
 		Staking::<T>::nominate(RawOrigin::Signed(dest_controller1).into(), validators)?;
 
-		let total_issuance = T::Currency::total_issuance();
-		let origin_thresh_as_vote = T::CurrencyToVote::to_vote(origin_bag_thresh, total_issuance);
-		let dest_thresh_as_vote = T::CurrencyToVote::to_vote(dest_bag_thresh, total_issuance);
 
-		Ok(RebagScenario {
+
+		Ok(ListScenario {
 			dest_stash1,
 			origin_stash1,
 			origin_controller1,
 			origin_stash2,
-			origin_thresh_as_vote,
-			dest_thresh_as_vote,
+			origin_thresh_as_vote: T::CurrencyToVote::to_vote(origin_weight, total_issuance),
+			dest_thresh_as_vote: dest_weight,
+			dest_thresh: dest_weight_balance,
 		})
 	}
 
 	fn check_preconditions(&self) {
-		let RebagScenario { dest_stash1, origin_stash2, origin_thresh_as_vote, .. } = self;
+		let ListScenario { dest_stash1, origin_stash2, origin_thresh_as_vote, .. } = self;
 		// destination stash1 is not in the origin bag.
-		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
+		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_thresh_as_vote, false));
 		// origin stash2 is in the origin bag
-		assert!(T::SortedListProvider::is_in_bag(&origin_stash2, *origin_thresh_as_vote, true));
+		assert!(T::SortedListProvider::is_in_pos(&origin_stash2, *origin_thresh_as_vote, true));
 		// this implicitly checks that dest stash1 and origin stash1 are in the correct bags.
-		self.check_head_preconditions();
+		// self.check_head_preconditions();
 	}
 
 	fn check_postconditions(&self) {
-		let RebagScenario {
+		let ListScenario {
 			dest_stash1,
 			origin_stash1,
 			dest_thresh_as_vote,
@@ -235,41 +234,41 @@ impl<T: Config> RebagScenario<T> {
 			..
 		} = self;
 		// dest stash1 is not in the origin bag
-		assert!(!T::SortedListProvider::is_in_bag(&dest_stash1, *origin_thresh_as_vote, false));
+		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_thresh_as_vote, false));
 		// and is in the destination bag.
-		assert!(T::SortedListProvider::is_in_bag(&dest_stash1, *dest_thresh_as_vote, true));
+		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_thresh_as_vote, true));
 		// origin stash1 is now in the destination bag.
-		assert!(T::SortedListProvider::is_in_bag(&origin_stash1, *dest_thresh_as_vote, true));
+		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *dest_thresh_as_vote, true));
 		// dest stash1 is the head of the destination bag.
-		assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_thresh_as_vote, true));
-		self.check_origin_head_postconditions();
+		// assert!(T::SortedListProvider::is_bag_head(&dest_stash1, *dest_thresh_as_vote, true));
+		// self.check_origin_head_postconditions();
 	}
 
-	fn check_head_preconditions(&self) {
-		assert!(T::SortedListProvider::is_bag_head(
-			&self.dest_stash1,
-			self.dest_thresh_as_vote,
-			true
-		));
-		self.check_origin_head_preconditions();
-	}
+	// fn check_head_preconditions(&self) {
+	// 	assert!(T::SortedListProvider::is_bag_head(
+	// 		&self.dest_stash1,
+	// 		self.dest_thresh_as_vote,
+	// 		true
+	// 	));
+	// 	self.check_origin_head_preconditions();
+	// }
 
-	// Just checking the origin head is useful for scenarios where we start out with all the nodes
-	// in the same bag, and thus no destination node is actually ever a head.
-	fn check_origin_head_preconditions(&self) {
-		assert!(T::SortedListProvider::is_bag_head(
-			&self.origin_stash1,
-			self.origin_thresh_as_vote,
-			true
-		));
-	}
+	// // Just checking the origin head is useful for scenarios where we start out with all the
+	// nodes // in the same bag, and thus no destination node is actually ever a head.
+	// fn check_origin_head_preconditions(&self) {
+	// 	assert!(T::SortedListProvider::is_bag_head(
+	// 		&self.origin_stash1,
+	// 		self.origin_thresh_as_vote,
+	// 		true
+	// 	));
+	// }
 
-	// Just checking the origin head is useful for scenarios where we start out with all the nodes
-	// in the same bag, and thus no destination node is actually ever a head.
-	fn check_origin_head_postconditions(&self) {
-		let RebagScenario { origin_stash2, origin_thresh_as_vote, .. } = self;
-		assert!(T::SortedListProvider::is_bag_head(&origin_stash2, *origin_thresh_as_vote, true));
-	}
+	// // Just checking the origin head is useful for scenarios where we start out with all the
+	// nodes // in the same bag, and thus no destination node is actually ever a head.
+	// fn check_origin_head_postconditions(&self) {
+	// 	let ListScenario { origin_stash2, origin_thresh_as_vote, .. } = self;
+	// 	assert!(T::SortedListProvider::is_bag_head(&origin_stash2, *origin_thresh_as_vote, true));
+	// }
 }
 
 const USER_SEED: u32 = 999666;
@@ -292,19 +291,15 @@ benchmarks! {
 		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
-		// The worst case scenario includes the voter changing bags.
+		// setup the worst case list scenario
 		let total_issuance = T::Currency::total_issuance();
-		// the bag the voter will start at
+		// the weight the voter will start at
 		let origin_bag_thresh =
 			T::CurrencyToVote::to_currency(1u128, total_issuance);
-		// the bag we will move the voter to
-		let dest_bag_thresh =
-			T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
-
 		let scenario
-			= RebagScenario::<T>::new(origin_bag_thresh, dest_bag_thresh)?;
+			= ListScenario::<T>::new(origin_bag_thresh, true)?;
 
-		let max_additional = dest_bag_thresh - origin_bag_thresh;
+		let max_additional = scenario.dest_thresh.clone() - origin_bag_thresh;
 
 		let stash = scenario.origin_stash1.clone();
 		let controller = scenario.origin_controller1.clone();
@@ -332,15 +327,12 @@ benchmarks! {
 		// the bag the voter will start at
 		let origin_bag_thresh =
 			T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
-		// the bag we will move the voter to
-		let dest_bag_thresh =
-			T::CurrencyToVote::to_currency(1u128, total_issuance);
 		let scenario
-			= RebagScenario::<T>::new(origin_bag_thresh, dest_bag_thresh)?;
+			= ListScenario::<T>::new(origin_bag_thresh, false)?;
 
 		let stash = scenario.origin_stash1.clone();
 		let controller = scenario.origin_controller1.clone();
-		let amount = origin_bag_thresh - dest_bag_thresh;
+		let amount = origin_bag_thresh - scenario.dest_thresh.clone();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 
@@ -383,7 +375,7 @@ benchmarks! {
 
 		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
 		// scenario setup, but we don't care about the setup of the destination bag.
-		let scenario = RebagScenario::<T>::new(One::one(), One::one())?;
+		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -394,14 +386,16 @@ benchmarks! {
 		Ledger::<T>::insert(&controller, ledger);
 		CurrentEra::<T>::put(EraIndex::max_value());
 
-		scenario.check_origin_head_preconditions();
+		// TODO
+		// scenario.check_origin_head_preconditions();
 
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_postconditions();
+		// TODO
+		// scenario.check_origin_head_postconditions();
 	}
 
 	validate {
@@ -412,12 +406,12 @@ benchmarks! {
 		// a nominator), so we can reuse the rebag scenario setup, but we don't care about the setup
 		// of the destination bag.
 
-		let scenario = RebagScenario::<T>::new(One::one(), One::one())?;
+		let scenario = ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		scenario.check_origin_head_preconditions();
+		// scenario.check_origin_head_preconditions(); todo
 
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
@@ -425,7 +419,7 @@ benchmarks! {
 	verify {
 		assert!(Validators::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_postconditions();
+		// scenario.check_origin_head_postconditions(); todo
 	}
 
 	kick {
@@ -502,7 +496,7 @@ benchmarks! {
 		// the bag itself and the tail.next pointer need to be updated.
 
 		let threshold = One::one(); // all the voters in the scenario will be in the same bag.
-		let scenario = RebagScenario::<T>::new(threshold, threshold)?;
+		let scenario = ListScenario::<T>::new(threshold, true)?;
 		let origin_threshold_factor: BalanceOf<T> =
 			threshold * 10u32.into() / T::Currency::minimum_balance();
 		let (stash, controller) = create_stash_controller_with_max_free::<T>(
@@ -531,18 +525,18 @@ benchmarks! {
 
 		// thresholds are inconsequential because we are just care that we are removing a head.
 		let scenario
-			= RebagScenario::<T>::new(One::one(), One::one())?;
+			= ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		scenario.check_origin_head_preconditions();
+		// scenario.check_origin_head_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller))
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_postconditions();
+		// scenario.check_origin_head_postconditions();
 	}
 
 	set_payee {
@@ -603,19 +597,19 @@ benchmarks! {
 
 		// thresholds are inconsequential because we are just care that we are removing a head.
 		let scenario
-			= RebagScenario::<T>::new(One::one(), One::one())?;
+			= ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 		add_slashing_spans::<T>(&stash, s);
 
-		scenario.check_origin_head_preconditions();
+		// scenario.check_origin_head_preconditions();
 
 	}: _(RawOrigin::Root, stash.clone(), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_postconditions();
+		// scenario.check_origin_head_postconditions();
 	}
 
 	cancel_deferred_slash {
@@ -714,21 +708,20 @@ benchmarks! {
 
 		// the bag the voter will start at
 		let origin_bag_thresh =
-			T::CurrencyToVote::to_currency(1u128, total_issuance);
-		// the bag we will move the voter to
-		let dest_bag_thresh =
-			T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
+			T::CurrencyToVote::to_currency(One::one(), total_issuance);
 		let scenario
-			= RebagScenario::<T>::new(origin_bag_thresh, dest_bag_thresh)?;
+			= ListScenario::<T>::new(origin_bag_thresh, true)?;
+		let dest_thresh = scenario.dest_thresh.clone();
 
+		println!("dest: {:#?}. origin: {:#?}", dest_thresh, origin_bag_thresh);
 		// rebond an amount that will put the user into the destination bag
-		let rebond_amount = dest_bag_thresh - origin_bag_thresh;
+		let rebond_amount = dest_thresh - origin_bag_thresh;
 
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
 		// so the sum of unlocking chunks puts voter into the dest bag
-		assert!((value * l.into() + origin_bag_thresh) > origin_bag_thresh);
-		assert!(value * l.into() + origin_bag_thresh <= dest_bag_thresh);
+		assert!(value * l.into() + origin_bag_thresh > origin_bag_thresh);
+		assert!(value * l.into() + origin_bag_thresh <= dest_thresh);
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value,
 			era: EraIndex::zero(),
@@ -782,7 +775,7 @@ benchmarks! {
 		// A worst case scenario includes the voter being a bag head, so we can reuse the rebag
 		// scenario setup, but we don't care about the setup of the destination bag.
 		let scenario
-			= RebagScenario::<T>::new(One::one(), One::one())?;
+			= ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 
@@ -791,14 +784,14 @@ benchmarks! {
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_preconditions();
+		// scenario.check_origin_head_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_postconditions();
+		// scenario.check_origin_head_postconditions();
 	}
 
 	new_era {
@@ -952,7 +945,7 @@ benchmarks! {
 
 		// thresholds are inconsequential because we are just care that we are removing a head.
 		let scenario
-			= RebagScenario::<T>::new(One::one(), One::one())?;
+			= ListScenario::<T>::new(One::one(), true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -966,13 +959,13 @@ benchmarks! {
 			Some(Percent::from_percent(0))
 		)?;
 
-		scenario.check_origin_head_preconditions();
+		// scenario.check_origin_head_preconditions();
 
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
-		scenario.check_origin_head_postconditions();
+		// scenario.check_origin_head_postconditions();
 	}
 }
 

@@ -606,7 +606,7 @@ pub struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
-	bag_upper: VoteWeight,
+	pub(crate) bag_upper: VoteWeight,
 }
 
 impl<T: Config> Node<T> {
