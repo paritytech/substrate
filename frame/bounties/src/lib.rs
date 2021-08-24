@@ -77,6 +77,7 @@
 mod benchmarking;
 mod tests;
 pub mod weights;
+pub mod migrations;
 
 use sp_std::prelude::*;
 
