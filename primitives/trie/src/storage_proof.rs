@@ -29,17 +29,54 @@ use sp_core::state_version::StateVersion;
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode)]
 pub struct StorageProof {
-	trie_nodes: Vec<Vec<u8>>,
-	state_version: StateVersion,
+	// TODO decode no more bytes to V0 for compatibility  and remove pub(crate)
+	pub(crate) trie_nodes: Vec<Vec<u8>>,
+	pub(crate) state_version: StateVersion,
 }
 
 /// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
 	pub state_version: StateVersion,
+}
+
+mod decode_impl {
+	use super::*;
+	use codec::{Input, Error};
+	impl Decode for StorageProof {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+			let trie_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
+			let state_version = if let Ok(Some(0)) = input.remaining_len() {
+				// for compatibility with existing proof decoded from sized buffer
+				StateVersion::V0
+			} else {
+				Decode::decode(input)?
+			};
+			Ok(StorageProof {
+				trie_nodes,
+				state_version,
+			})
+		}
+	}
+
+	impl Decode for CompactProof {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+			let encoded_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
+			let state_version = if let Ok(Some(0)) = input.remaining_len() {
+				// for compatibility with existing proof decoded from sized buffer
+				StateVersion::V0
+			} else {
+				Decode::decode(input)?
+			};
+			Ok(CompactProof {
+				encoded_nodes,
+				state_version,
+			})
+		}
+	}
 }
 
 impl StorageProof {
