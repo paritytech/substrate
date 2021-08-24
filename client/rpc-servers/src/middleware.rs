@@ -153,13 +153,16 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 			metrics.requests_started.with_label_values(&[transport_label.as_str()]).inc();
 		}
 		let r = next(request, meta);
-		Either::Left(async move {
-			let r = r.await;
-			if let Some(ref metrics) = metrics {
-				metrics.requests_finished.with_label_values(&[transport_label.as_str()]).inc();
+		Either::Left(
+			async move {
+				let r = r.await;
+				if let Some(ref metrics) = metrics {
+					metrics.requests_finished.with_label_values(&[transport_label.as_str()]).inc();
+				}
+				r
 			}
-			r
-		}.boxed())
+			.boxed(),
+		)
 	}
 
 	fn on_call<F, X>(
@@ -185,36 +188,39 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 				.inc();
 		}
 		let r = next(call, meta);
-		Either::Left(async move {
-			let r = r.await;
-			#[cfg(not(target_os = "unknown"))]
-			let micros = start.elapsed().as_micros();
-			// seems that std::time is not implemented for browser target
-			#[cfg(target_os = "unknown")]
-			let micros = 1;
-			if let Some(ref metrics) = metrics {
-				metrics
-					.calls_time
-					.with_label_values(&[transport_label.as_str(), name.as_str()])
-					.observe(micros as _);
-				metrics
-					.calls_finished
-					.with_label_values(&[
-						transport_label.as_str(),
-						name.as_str(),
-						if is_success(&r) { "true" } else { "false" },
-					])
-					.inc();
+		Either::Left(
+			async move {
+				let r = r.await;
+				#[cfg(not(target_os = "unknown"))]
+				let micros = start.elapsed().as_micros();
+				// seems that std::time is not implemented for browser target
+				#[cfg(target_os = "unknown")]
+				let micros = 1;
+				if let Some(ref metrics) = metrics {
+					metrics
+						.calls_time
+						.with_label_values(&[transport_label.as_str(), name.as_str()])
+						.observe(micros as _);
+					metrics
+						.calls_finished
+						.with_label_values(&[
+							transport_label.as_str(),
+							name.as_str(),
+							if is_success(&r) { "true" } else { "false" },
+						])
+						.inc();
+				}
+				log::debug!(
+					target: "rpc_metrics",
+					"[{}] {} call took {} μs",
+					transport_label,
+					name,
+					micros,
+				);
+				r
 			}
-			log::debug!(
-				target: "rpc_metrics",
-				"[{}] {} call took {} μs",
-				transport_label,
-				name,
-				micros,
-			);
-			r
-		}.boxed())
+			.boxed(),
+		)
 	}
 }
 

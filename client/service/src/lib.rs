@@ -386,22 +386,25 @@ fn start_rpc_servers<
 
 	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| {
-			sc_rpc_server::start_ipc(
-				&*path,
-				gen_handler(
-					sc_rpc::DenyUnsafe::No,
-					sc_rpc_server::RpcMiddleware::new(
-						rpc_metrics.clone(),
-						rpc_method_names.clone(),
-						"ipc",
-					),
-				)?,
-				server_metrics.clone(),
-			)
-			.map_err(Error::from)
-		})
-		.transpose()?,
+		config
+			.rpc_ipc
+			.as_ref()
+			.map(|path| {
+				sc_rpc_server::start_ipc(
+					&*path,
+					gen_handler(
+						sc_rpc::DenyUnsafe::No,
+						sc_rpc_server::RpcMiddleware::new(
+							rpc_metrics.clone(),
+							rpc_method_names.clone(),
+							"ipc",
+						),
+					)?,
+					server_metrics.clone(),
+				)
+				.map_err(Error::from)
+			})
+			.transpose()?,
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,

@@ -205,14 +205,15 @@ mod inner {
 			e => {
 				error!("{}", e);
 				io::ErrorKind::Other.into()
-			}
+			},
 		})
 	}
 
 	fn map_cors<T: for<'a> From<&'a str>>(
 		cors: Option<&Vec<String>>,
 	) -> http::DomainsValidation<T> {
-		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
+		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>())
+			.into()
 	}
 
 	fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
