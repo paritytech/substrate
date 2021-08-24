@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 /// initial state versionning in their chainspec for block 0.
 /// Therefore defining genesis version in chainspec is good practice
 /// and this default should mostly be use when testing.
-pub const DEFAULT_STATE_VERSION: StateVersion = StateVersion::V1 { threshold: 33 };
+pub const DEFAULT_STATE_VERSION: StateVersion = StateVersion::V1 { threshold: crate::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD };
 
 /// Supported version with substrate chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]

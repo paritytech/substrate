@@ -2590,7 +2590,7 @@ pub(crate) mod tests {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
 		}
 	}
-
+33
 	#[test]
 	fn set_state_data() {
 		set_state_data_inner(true);
@@ -2599,7 +2599,7 @@ pub(crate) mod tests {
 	fn set_state_data_inner(alt_hashing: bool) {
 		let state_version = if alt_hashing {
 			StateVersion::V1 {
-				threshold: 33,
+				threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
 			}
 		} else {
 			StateVersion::V0

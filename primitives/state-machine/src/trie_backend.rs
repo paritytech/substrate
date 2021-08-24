@@ -343,7 +343,13 @@ pub mod tests {
 		hashed_value: bool,
 	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
-		TrieBackend::new(mdb, root, Default::default())
+		let state_version = if hashed_value {
+			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }
+		} else {
+			StateVersion::V0
+		};
+
+		TrieBackend::new(mdb, root, state_version)
 	}
 
 	#[test]

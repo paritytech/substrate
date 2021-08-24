@@ -1704,7 +1704,7 @@ mod tests {
 		}
 		let root3 = root.clone();
 		assert!(root1 != root3);
-		let remote_proof = check_proof(mdb.clone(), root.clone(), StateVersion::V1 { threshold: 33 });
+		let remote_proof = check_proof(mdb.clone(), root.clone(), StateVersion::V1 { threshold: TRESHOLD });
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
 		assert!(remote_proof.encoded_size() < 1000);
@@ -1717,14 +1717,14 @@ mod tests {
 		let size_no_inner_hash = compact_multiple_child_trie_inner(false);
 		assert!(size_inner_hash < size_no_inner_hash);
 	}
-	fn compact_multiple_child_trie_inner(flagged: bool) -> usize {
+	fn compact_multiple_child_trie_inner(inner_hashed: bool) -> usize {
 		// this root will be queried
 		let child_info1 = ChildInfo::new_default(b"sub1");
 		// this root will not be include in proof
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie(flagged);
+		let mut remote_backend = trie_backend::tests::test_trie(inner_hashed);
 		let long_vec: Vec<u8> = (0..1024usize).map(|_| 8u8).collect();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
