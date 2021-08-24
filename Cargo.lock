@@ -5898,6 +5898,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log 0.4.14",
  "pallet-balances",
  "parity-scale-codec",
  "sp-core",
