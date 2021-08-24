@@ -149,13 +149,16 @@ impl<T: Config> ListScenario<T> {
 	///
 	/// - the node to be updated (r) is the head of a bag that has at least one other node. The bag
 	///   itself will need to be read and written to update its head. The node pointed to by r.next
-	///   will need to be read and written as it will need to have its prev pointer updated.
+	///   will need to be read and written as it will need to have its prev pointer updated. Note
+	///   that there are two other worst case scenarios for bag removal: 1) the node is a tail and
+	///   2) the node is a middle node with prev and next; all scenarios end up with the same number
+	///   of storage reads and writes.
 	///
 	/// - the destination bag has at least one node, which will need its next pointer updated.
 	///
 	/// NOTE: while this scenario specifically targets a worst case for the bags-list, it should
 	/// also elicit a worst case for other known `SortedListProvider` implementations; although
-	/// this is subject to change.
+	/// this may not be true against unknown `SortedListProvider` implementations.
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 

@@ -647,7 +647,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is a bag head or tail.
-	pub(crate) fn is_terminal(&self) -> bool {
+	fn is_terminal(&self) -> bool {
 		self.prev.is_none() || self.next.is_none()
 	}
 
