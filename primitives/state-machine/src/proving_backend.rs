@@ -112,6 +112,8 @@ struct ProofRecorderInner<Hash> {
 	records: HashMap<Hash, Option<(DBValue, Meta, bool)>>,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
+	/// State version in use.
+	state_version: StateVersion,
 }
 
 /// Global proof recorder, act as a layer over a hash db for recording queried data.
@@ -125,7 +127,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	pub fn record<H: Hasher>(&self, key: Hash, val: Option<DBValue>) {
 		let mut inner = self.inner.write();
 
-		let ProofRecorderInner { encoded_size, records } = &mut *inner;
+		let ProofRecorderInner { encoded_size, records, .. } = &mut *inner;
 		records.entry(key).or_insert_with(|| {
 			val.map(|val| {
 				let mut val = (val, Meta::default(), false);
@@ -170,18 +172,17 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	pub fn estimate_encoded_size(&self) -> usize {
 		let inner = self.inner.read();
 		inner.encoded_size + codec::Compact(inner.records.len() as u32).encoded_size()
+			+ inner.state_version.encoded_size()
 	}
 
 	/// Convert into a [`StorageProof`].
-	pub fn to_storage_proof<H: Hasher>(&self, state_version: StateVersion) -> StorageProof {
-		// TODO consider state_version as inner field
-		let try_inner_hashing = match state_version {
+	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
+		let inner = self.inner.read();
+		let try_inner_hashing = match inner.state_version {
 			StateVersion::V0 => None,
 			StateVersion::V1 { threshold } => Some(threshold),
 		};
-		let trie_nodes = self
-			.inner
-			.read()
+		let trie_nodes = inner
 			.records
 			.iter()
 			.filter_map(|(_k, v)| {
@@ -199,7 +200,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 			})
 			.collect();
 
-		StorageProof::new(trie_nodes, state_version)
+		StorageProof::new(trie_nodes, inner.state_version)
 	}
 
 	/// Reset the internal state.
@@ -245,8 +246,7 @@ where
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		let state_version = self.0.state_version();
-		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>(state_version)
+		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>()
 	}
 
 	/// Returns the estimated encoded size of the proof.
