@@ -618,7 +618,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| {
 			let proof_size = recorder.estimate_encoded_size() as u32;
-			let proof = recorder.to_storage_proof::<HashFor<B>>(self.state_version.get());
+			let proof = recorder.to_storage_proof::<HashFor<B>>();
 			let proof_recorder_root = self.proof_recorder_root.get();
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie

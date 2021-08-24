@@ -2590,7 +2590,7 @@ pub(crate) mod tests {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
 		}
 	}
-33
+
 	#[test]
 	fn set_state_data() {
 		set_state_data_inner(true);
