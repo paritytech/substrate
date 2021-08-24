@@ -31,7 +31,7 @@
 
 use crate::{
 	storage::{
-		self,
+		self, storage_prefix,
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 			ReversibleKeyGenerator, TupleToEncodedIter,
@@ -70,7 +70,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
 	/// `storage_prefix`.
 	fn prefix_hash() -> Vec<u8> {
-		let result = crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		let result = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		result.to_vec()
 	}
 
@@ -85,8 +85,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		let storage_prefix =
-			crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key_hashed = <K as HasKeyPrefix<KP>>::partial_key(key);
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
@@ -103,8 +102,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		KG: KeyGenerator,
 		KArg: EncodeLikeTuple<KG::KArg> + TupleToEncodedIter,
 	{
-		let storage_prefix =
-			crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key_hashed = KG::final_key(key);
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
@@ -271,8 +269,7 @@ where
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 	{
 		let old_key = {
-			let storage_prefix =
-				crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix());
+			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 			let key_hashed = K::migrate_key(&key, hash_fns);
 
 			let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
