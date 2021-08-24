@@ -171,7 +171,6 @@ where
 	Block: traits::Block,
 	A: ApiExt<Block>,
 {
-
 	let version = runtime.api_version::<dyn OffchainWorkerApi<Block>>(at);
 
 	match version {
@@ -281,12 +280,11 @@ where
 			let run = {
 				#[allow(deprecated)]
 				match version {
-					1 =>
-						runtime.offchain_worker_before_version_2_with_context(
-							&at,
-							context,
-							*header.number(),
-						),
+					1 => runtime.offchain_worker_before_version_2_with_context(
+						&at,
+						context,
+						*header.number(),
+					),
 					2 =>
 						runtime.offchain_worker_before_version_3_with_context(&at, context, &header),
 					_ => runtime.offchain_worker_with_context(&at, context, &header, false),
