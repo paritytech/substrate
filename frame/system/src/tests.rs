@@ -437,21 +437,6 @@ fn runtime_upgraded_with_set_storage() {
 }
 
 #[test]
-fn events_not_emitted_during_genesis() {
-	new_test_ext().execute_with(|| {
-		// Block Number is zero at genesis
-		assert!(System::block_number().is_zero());
-		let mut account_data = AccountInfo::default();
-		System::on_created_account(Default::default(), &mut account_data);
-		assert!(System::events().is_empty());
-		// Events will be emitted starting on block 1
-		System::set_block_number(1);
-		System::on_created_account(Default::default(), &mut account_data);
-		assert!(System::events().len() == 1);
-	});
-}
-
-#[test]
 fn ensure_one_of_works() {
 	fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<Either<(), u64>, Origin> {
 		EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())

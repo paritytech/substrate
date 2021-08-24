@@ -1278,7 +1278,9 @@ impl<T: Config> Pallet<T> {
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let block_number = Self::block_number();
-		// Don't populate events on genesis.
+		// Don't populate events on genesis for live chains.
+		// For tests, we don't check this to improve developer experience.
+		#[cfg(not(test))]
 		if block_number.is_zero() {
 			return
 		}
