@@ -52,7 +52,9 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let max_signatories = T::MaxSignatories::get().into();
 		let (mut signatories, _) = setup_multi::<T>(max_signatories, z)?;
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![0; z as usize] }.into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark {
+			remark: vec![0; z as usize]
+		}.into();
 		let call_hash = call.using_encoded(blake2_256);
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, 1);
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;

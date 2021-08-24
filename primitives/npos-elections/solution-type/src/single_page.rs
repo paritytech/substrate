@@ -77,7 +77,16 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		}
 	} else {
 		// automatically derived.
-		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode, _npos::scale_info::TypeInfo)])
+		quote!(#[derive(
+			Default,
+			PartialEq,
+			Eq,
+			Clone,
+			Debug,
+			_npos::codec::Encode,
+			_npos::codec::Decode,
+			_npos::scale_info::TypeInfo,
+		)])
 	};
 
 	let struct_name = syn::Ident::new("solution", proc_macro2::Span::call_site());

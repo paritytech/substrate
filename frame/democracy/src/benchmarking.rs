@@ -283,7 +283,11 @@ benchmarks! {
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0u32;
-		let call = Call::<T>::fast_track { proposal_hash, voting_period: voting_period.into(), delay: delay.into() };
+		let call = Call::<T>::fast_track {
+			proposal_hash,
+			voting_period: voting_period.into(),
+			delay: delay.into()
+		};
 
 	}: { call.dispatch_bypass_filter(origin_fast_track)? }
 	verify {
