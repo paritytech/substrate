@@ -39,7 +39,7 @@ pub use frame_metadata::{
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
 
-/// The return typ of a `Dispatchable` in frame. When returned explicitly from
+/// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
 /// returned from a dispatch.
 pub type DispatchResultWithPostInfo =
@@ -2814,7 +2814,7 @@ mod tests {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = ();
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockNumber = u32;
 		type PalletInfo = Self;
 		type DbWeight = ();

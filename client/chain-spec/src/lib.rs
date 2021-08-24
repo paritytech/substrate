@@ -110,10 +110,10 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{
-	ChainSpec as GenericChainSpec, LightSyncState, NoExtension, SerializableLightSyncState,
+pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
+pub use extension::{
+	get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group,
 };
-pub use extension::{get_extension, Extension, Fork, Forks, GetExtension, Group};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
 use sc_network::config::MultiaddrWithPeerId;
@@ -169,8 +169,10 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	///
 	/// Returns an empty JSON object if 'properties' not defined in config
 	fn properties(&self) -> Properties;
-	/// Returns a reference to defined chain spec extensions.
+	/// Returns a reference to the defined chain spec extensions.
 	fn extensions(&self) -> &dyn GetExtension;
+	/// Returns a mutable reference to the defined chain spec extensions.
+	fn extensions_mut(&mut self) -> &mut dyn GetExtension;
 	/// Add a bootnode to the list.
 	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId);
 	/// Return spec as JSON.
@@ -183,8 +185,6 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	///
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
-	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
-	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
 	/// Returns code substitutes that should be used for the on chain wasm.
 	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>>;
 }

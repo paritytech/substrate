@@ -177,12 +177,11 @@ where
 {
 	let LinkHalf {
 		client,
-		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
 		justification_sender,
-		justification_stream: _,
 		telemetry,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -362,7 +361,8 @@ where
 		match Future::poll(Pin::new(&mut self.observer), cx) {
 			Poll::Pending => {},
 			Poll::Ready(Ok(())) => {
-				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
+				// observer commit stream doesn't conclude naturally; this could reasonably be an
+				// error.
 				return Poll::Ready(Ok(()))
 			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {

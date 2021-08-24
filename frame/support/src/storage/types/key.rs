@@ -58,7 +58,8 @@ pub trait KeyGeneratorMaxEncodedLen: KeyGenerator {
 	fn key_max_encoded_len() -> usize;
 }
 
-/// A trait containing methods that are only implemented on the Key struct instead of the entire tuple.
+/// A trait containing methods that are only implemented on the Key struct instead of the entire
+/// tuple.
 pub trait KeyGeneratorInner: KeyGenerator {
 	type Hasher: StorageHasher;
 

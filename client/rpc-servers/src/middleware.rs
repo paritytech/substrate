@@ -25,7 +25,7 @@ use prometheus_endpoint::{
 	register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
 };
 
-use futures::{future::Either, Future};
+use futures::{future::Either, Future, FutureExt};
 use pubsub::PubSubMetadata;
 
 use crate::RpcHandler;
@@ -103,13 +103,13 @@ impl RpcMetrics {
 }
 
 /// Instantiates a dummy `IoHandler` given a builder function to extract supported method names.
-pub fn method_names<F, M>(gen_handler: F) -> HashSet<String>
+pub fn method_names<F, M, E>(gen_handler: F) -> Result<HashSet<String>, E>
 where
-	F: FnOnce(RpcMiddleware) -> RpcHandler<M>,
+	F: FnOnce(RpcMiddleware) -> Result<RpcHandler<M>, E>,
 	M: PubSubMetadata,
 {
-	let io = gen_handler(RpcMiddleware::new(None, HashSet::new(), "dummy"));
-	io.iter().map(|x| x.0.clone()).collect()
+	let io = gen_handler(RpcMiddleware::new(None, HashSet::new(), "dummy"))?;
+	Ok(io.iter().map(|x| x.0.clone()).collect())
 }
 
 /// Middleware for RPC calls
@@ -145,19 +145,21 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 	) -> Either<Self::Future, X>
 	where
 		F: Fn(jsonrpc_core::Request, M) -> X + Send + Sync,
-		X: Future<Item = Option<jsonrpc_core::Response>, Error = ()> + Send + 'static,
+		X: Future<Output = Option<jsonrpc_core::Response>> + Send + 'static,
 	{
 		let metrics = self.metrics.clone();
 		let transport_label = self.transport_label.clone();
 		if let Some(ref metrics) = metrics {
 			metrics.requests_started.with_label_values(&[transport_label.as_str()]).inc();
 		}
-		Either::A(Box::new(next(request, meta).then(move |r| {
+		let r = next(request, meta);
+		Either::Left(async move {
+			let r = r.await;
 			if let Some(ref metrics) = metrics {
 				metrics.requests_finished.with_label_values(&[transport_label.as_str()]).inc();
 			}
 			r
-		})))
+		}.boxed())
 	}
 
 	fn on_call<F, X>(
@@ -168,7 +170,7 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 	) -> Either<Self::CallFuture, X>
 	where
 		F: Fn(jsonrpc_core::Call, M) -> X + Send + Sync,
-		X: Future<Item = Option<jsonrpc_core::Output>, Error = ()> + Send + 'static,
+		X: Future<Output = Option<jsonrpc_core::Output>> + Send + 'static,
 	{
 		#[cfg(not(target_os = "unknown"))]
 		let start = std::time::Instant::now();
@@ -182,7 +184,9 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 				.with_label_values(&[transport_label.as_str(), name.as_str()])
 				.inc();
 		}
-		Either::A(Box::new(next(call, meta).then(move |r| {
+		let r = next(call, meta);
+		Either::Left(async move {
+			let r = r.await;
 			#[cfg(not(target_os = "unknown"))]
 			let micros = start.elapsed().as_micros();
 			// seems that std::time is not implemented for browser target
@@ -210,7 +214,7 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 				micros,
 			);
 			r
-		})))
+		}.boxed())
 	}
 }
 
@@ -231,9 +235,9 @@ fn call_name<'a>(call: &'a jsonrpc_core::Call, known_methods: &HashSet<String>) 
 	}
 }
 
-fn is_success(output: &Result<Option<jsonrpc_core::Output>, ()>) -> bool {
+fn is_success(output: &Option<jsonrpc_core::Output>) -> bool {
 	match output {
-		Ok(Some(jsonrpc_core::Output::Success(..))) => true,
+		Some(jsonrpc_core::Output::Success(..)) => true,
 		_ => false,
 	}
 }

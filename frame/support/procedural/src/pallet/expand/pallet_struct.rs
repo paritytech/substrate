@@ -17,6 +17,7 @@
 
 use crate::pallet::{expand::merge_where_clauses, parse::helper::get_doc_literals, Def};
 
+///
 /// * Add derive trait on Pallet
 /// * Implement GetStorageVersion on Pallet
 /// * Implement OnGenesis on Pallet

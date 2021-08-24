@@ -117,6 +117,12 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	) -> Box<dyn Iterator<Item = Self::InstanceId>>;
 }
 
+/// Trait for providing the ability to create classes of nonfungible assets.
+pub trait Create<AccountId>: Inspect<AccountId> {
+	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
+	fn create_class(class: &Self::ClassId, who: &AccountId, admin: &AccountId) -> DispatchResult;
+}
+
 /// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,
 /// burned and/or have attributes set on them.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
