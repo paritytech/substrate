@@ -24,9 +24,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	log,
 	traits::{Get, OneSessionHandler},
-	BoundedVec,
+	WeakBoundedVec,
 };
 use sp_authority_discovery::AuthorityId;
 use sp_std::prelude::*;
@@ -56,13 +55,13 @@ pub mod pallet {
 	#[pallet::getter(fn keys)]
 	/// Keys of the current authority set.
 	pub(super) type Keys<T: Config> =
-		StorageValue<_, BoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.
 	pub(super) type NextKeys<T: Config> =
-		StorageValue<_, BoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -98,12 +97,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Retrieve authority identifiers of the current authority set in the original order.
-	pub fn current_authorities() -> BoundedVec<AuthorityId, T::MaxAuthorities> {
+	pub fn current_authorities() -> WeakBoundedVec<AuthorityId, T::MaxAuthorities> {
 		Keys::<T>::get()
 	}
 
 	/// Retrieve authority identifiers of the next authority set in the original order.
-	pub fn next_authorities() -> BoundedVec<AuthorityId, T::MaxAuthorities> {
+	pub fn next_authorities() -> WeakBoundedVec<AuthorityId, T::MaxAuthorities> {
 		NextKeys::<T>::get()
 	}
 
@@ -112,11 +111,11 @@ impl<T: Config> Pallet<T> {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
 
 			let bounded_keys =
-				BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from((*keys).clone())
+				WeakBoundedVec::<AuthorityId, T::MaxAuthorities>::try_from((*keys).clone())
 					.expect("Keys vec too big");
 
-			Keys::<T>::put(bounded_keys.clone());
-			NextKeys::<T>::put(bounded_keys);
+			Keys::<T>::put(&bounded_keys);
+			NextKeys::<T>::put(&bounded_keys);
 		}
 	}
 }
@@ -141,40 +140,27 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let mut keys = validators.map(|x| x.1).collect::<Vec<_>>();
+			let keys = validators.map(|x| x.1).collect::<Vec<_>>();
 
-			if keys.len() >= T::MaxAuthorities::get() as usize {
-				// Truncate to MaxAuthorities, to not fail the conversion
-				keys.truncate(T::MaxAuthorities::get() as usize);
-
-				log::warn!(
-					"Provided validators vec size {} is too large (max size {})",
-					keys.len(),
-					T::MaxAuthorities::get()
-				);
-			}
-
-			let bounded_keys = BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(keys)
-				.expect("We truncated so this should never fail");
+			let bounded_keys = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+				keys,
+				Some(
+					"Warning: The session has more validators than expected. \
+				A runtime configuration adjustment may be needed.",
+				),
+			);
 
 			Keys::<T>::put(bounded_keys);
 
-			let mut next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
+			let next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
 
-			if next_keys.len() >= T::MaxAuthorities::get() as usize {
-				// Truncate to MaxAuthorities, to not fail the conversion
-				next_keys.truncate(T::MaxAuthorities::get() as usize);
-
-				log::warn!(
-					"Provided queued_validators vec size {} is too large (max size {})",
-					next_keys.len(),
-					T::MaxAuthorities::get()
-				);
-			}
-
-			let next_bounded_keys =
-				BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(next_keys)
-					.expect("We truncated so this should never fail");
+			let next_bounded_keys = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+				next_keys,
+				Some(
+					"Warning: The session has more queued validators than expected. \
+				A runtime configuration adjustment may be needed.",
+				),
+			);
 
 			NextKeys::<T>::put(next_bounded_keys);
 		}
