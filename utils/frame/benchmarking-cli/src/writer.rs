@@ -107,7 +107,7 @@ fn io_error(s: &str) -> std::io::Error {
 }
 
 // This function takes a list of `BenchmarkBatch` and organizes them by pallet into a `HashMap`.
-// So this: `[(p1, b1), (p1, b2), (p1, b3), (p2, b1), (p2, b2)]`
+// So this: `[(p1, b1), (p1, b2), (p2, b1), (p1, b3), (p2, b2)]`
 // Becomes:
 //
 // ```
