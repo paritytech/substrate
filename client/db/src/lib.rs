@@ -2077,7 +2077,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 					let timer = time::SystemTime::now();
 
-					let init_root = current_root.clone();
 					info!("Starting migrating from state root {:x?} at block {:?}", &current_root, &number);
 					loop {
 						let sp_state_machine::MigrateProgress {
@@ -2090,7 +2089,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							limit_size,
 							limit_items,
 							&mut operation.db_updates,
-							init_root.clone(),
 							sp_state_machine::MigrateProgress {
 								current_top: start_top.take(),
 								current_child: start_child.take(),

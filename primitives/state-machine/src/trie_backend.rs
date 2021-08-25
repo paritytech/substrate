@@ -298,9 +298,15 @@ where
 
 /// Migration progress.
 pub struct MigrateProgress<H> {
+	/// Next key to migrate for top.
 	pub current_top: Option<Vec<u8>>,
-	pub current_child: Option<(Vec<u8>, H)>,
+	/// Current migrated root of top trie.
 	pub root: Option<H>,
+	/// Next key to migrate with current migrated root for a child
+	/// trie.
+	/// When defined, `current_top` always point to the
+	/// child trie root top location.
+	pub current_child: Option<(Vec<u8>, H)>,
 }
 
 /// Migration storage.
@@ -432,17 +438,13 @@ where
 		mut limit_size: Option<u64>,
 		mut limit_items: Option<u64>,
 		changes: &mut sp_trie::PrefixedMemoryDB<H>,
-		root: H::Out,
 		mut progress: MigrateProgress<H::Out>,
 	) -> Result<MigrateProgress<H::Out>, crate::DefaultError> {
 		use sp_trie::{TrieDB, TrieDBMut, TrieMut, TrieDBIterator};
-		let mut dest_threshold = 0;
-		match (migration_from, migration_to, self.state_version) {
-			(StateVersion::V0, StateVersion::V1 { threshold }, StateVersion::V0) => {
-				dest_threshold = threshold;
-			},
+		let dest_threshold = match (migration_from, migration_to, self.state_version) {
+			(StateVersion::V0, StateVersion::V1 { threshold }, StateVersion::V0) => threshold,
 			_ => return Err(error_version()),
-		}
+		};
 		let empty_value = sp_std::vec![23u8; dest_threshold as usize];
 		let empty_value2 = sp_std::vec![0u8; dest_threshold as usize];
 		let dest_layout = Layout::with_alt_hashing(dest_threshold);
@@ -464,18 +466,18 @@ where
 		let mut dest = TrieDBMut::from_existing_with_layout(&mut dest_db, dest_root, dest_layout)
 			.map_err(|e| trie_error::<H>(&*e))?;
 
-		let mut iter = TrieDBIterator::new_prefixed_then_seek(&ori, &[], progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[])).map_err(|e| trie_error::<H>(&*e))?;
+		let iter = TrieDBIterator::new_prefixed_then_seek(&ori, &[], progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[])).map_err(|e| trie_error::<H>(&*e))?;
 		for elt in iter {
 			let (key, value) = elt
 				.map_err(|e| trie_error::<H>(&*e))?;
-			if let Some(mut limit_size) = limit_size.as_mut() {
+			if let Some(limit_size) = limit_size.as_mut() {
 				if *limit_size < value.len() as u64 {
 					progress.current_top = Some(key);
 					break;
 				}
 				*limit_size -= value.len() as u64;
 			}
-			if let Some(mut limit_items) = limit_items.as_mut() {
+			if let Some(limit_items) = limit_items.as_mut() {
 				if *limit_items == 0 {
 					progress.current_top = Some(key);
 					break;
@@ -486,11 +488,14 @@ where
 				// Force a change so triedbmut do not ignore
 				// setting the same value.
 				if value != empty_value {
-					dest.insert(key.as_slice(), empty_value.as_slice());
+					dest.insert(key.as_slice(), empty_value.as_slice())
+						.map_err(|e| trie_error::<H>(&*e))?;
 				} else {
-					dest.insert(key.as_slice(), empty_value2.as_slice());
+					dest.insert(key.as_slice(), empty_value2.as_slice())
+						.map_err(|e| trie_error::<H>(&*e))?;
 				}
-				dest.insert(key.as_slice(), value.as_slice());
+				dest.insert(key.as_slice(), value.as_slice())
+					.map_err(|e| trie_error::<H>(&*e))?;
 			}
 		}
 

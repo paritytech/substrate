@@ -498,7 +498,7 @@ mod tests {
 			.clone()
 			.map(|i| (vec![i], Some(vec![i; size_content])))
 			.collect::<Vec<_>>())];
-		let mut in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
+		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
 			(contents, StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }).into()
 		} else {
 			(contents, StateVersion::V0).into()
