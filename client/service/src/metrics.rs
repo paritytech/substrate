@@ -28,8 +28,10 @@ use sc_transaction_pool_api::{MaintainedTransactionPool, PoolStatus};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{Block, NumberFor, SaturatedConversion, UniqueSaturatedInto};
 use sp_utils::metrics::register_globals;
-use std::{sync::Arc, time::Duration};
-use wasm_timer::Instant;
+use std::{
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
 struct PrometheusMetrics {
 	// generic info

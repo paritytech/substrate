@@ -37,7 +37,7 @@ mod task_manager;
 use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 
 use codec::{Decode, Encode};
-use futures::{compat::*, stream, Future, FutureExt, Stream, StreamExt};
+use futures::{stream, Future, FutureExt, Stream, StreamExt};
 use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_network::PeerId;
@@ -112,11 +112,7 @@ impl RpcHandlers {
 		mem: &RpcSession,
 		request: &str,
 	) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0
-			.handle_request(request, mem.metadata.clone())
-			.compat()
-			.map(|res| res.expect("this should never fail"))
-			.boxed()
+		self.0.handle_request(request, mem.metadata.clone()).boxed()
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
@@ -308,8 +304,8 @@ async fn build_network_future<
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
+#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 	impl Drop for HttpServer {
@@ -353,8 +349,9 @@ fn start_rpc_servers<
 >(
 	config: &Configuration,
 	mut gen_handler: H,
-	rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, Error> {
+	rpc_metrics: Option<sc_rpc_server::RpcMetrics>,
+	server_metrics: sc_rpc_server::ServerMetrics,
+) -> Result<Box<dyn std::any::Any + Send>, Error> {
 	fn maybe_start_server<T, F>(
 		address: Option<SocketAddr>,
 		mut start: F,
@@ -387,17 +384,27 @@ fn start_rpc_servers<
 		}
 	}
 
+	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| {
-			sc_rpc_server::start_ipc(
-				&*path,
-				gen_handler(
-					sc_rpc::DenyUnsafe::No,
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
-				)?,
-			)
-			.map_err(Error::from)
-		}),
+		config
+			.rpc_ipc
+			.as_ref()
+			.map(|path| {
+				sc_rpc_server::start_ipc(
+					&*path,
+					gen_handler(
+						sc_rpc::DenyUnsafe::No,
+						sc_rpc_server::RpcMiddleware::new(
+							rpc_metrics.clone(),
+							rpc_method_names.clone(),
+							"ipc",
+						),
+					)?,
+					server_metrics.clone(),
+				)
+				.map_err(Error::from)
+			})
+			.transpose()?,
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,
@@ -405,7 +412,11 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http"),
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"http",
+					),
 				)?,
 				config.rpc_max_payload,
 			)
@@ -419,9 +430,14 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws"),
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"ws",
+					),
 				)?,
 				config.rpc_max_payload,
+				server_metrics.clone(),
 			)
 			.map_err(Error::from)
 		})?
@@ -440,7 +456,8 @@ fn start_rpc_servers<
 >(
 	_: &Configuration,
 	_: H,
-	_: sc_rpc_server::RpcMetrics,
+	_: Option<sc_rpc_server::RpcMetrics>,
+	_: sc_rpc_server::ServerMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
@@ -459,7 +476,7 @@ impl RpcSession {
 	/// messages.
 	///
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
+	pub fn new(sender: futures::channel::mpsc::UnboundedSender<String>) -> RpcSession {
 		RpcSession { metadata: sender.into() }
 	}
 }

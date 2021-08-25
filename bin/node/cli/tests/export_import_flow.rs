@@ -78,8 +78,9 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let sub_command_str = sub_command.to_string();
 		// Adding "--binary" if need be.
 		let arguments: Vec<&str> = match format_opt {
-			FormatOpt::Binary =>
-				vec![&sub_command_str, "--dev", "--pruning", "archive", "--binary", "-d"],
+			FormatOpt::Binary => {
+				vec![&sub_command_str, "--dev", "--pruning", "archive", "--binary", "-d"]
+			},
 			FormatOpt::Json => vec![&sub_command_str, "--dev", "--pruning", "archive", "-d"],
 		};
 

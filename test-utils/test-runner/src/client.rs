@@ -26,6 +26,7 @@ use manual_seal::{
 	run_manual_seal, EngineCommand, ManualSealParams,
 };
 use sc_client_api::backend::Backend;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{
 	build_network, new_full_parts, spawn_tasks, BuildNetworkParams, ChainSpec, Configuration,
 	SpawnTasksParams, TFullBackend, TFullClient, TaskExecutor, TaskManager,
@@ -50,7 +51,7 @@ type ClientParts<T> = (
 		TFullClient<
 			<T as ChainInfo>::Block,
 			<T as ChainInfo>::RuntimeApi,
-			<T as ChainInfo>::Executor,
+			NativeElseWasmExecutor<<T as ChainInfo>::ExecutorDispatch>,
 		>,
 	>,
 	Arc<
@@ -83,7 +84,7 @@ where
 	T: ChainInfo + 'static,
 	<T::RuntimeApi as ConstructRuntimeApi<
 		T::Block,
-		TFullClient<T::Block, T::RuntimeApi, T::Executor>,
+		TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
 	>>::RuntimeApi: Core<T::Block>
 		+ Metadata<T::Block>
 		+ OffchainWorkerApi<T::Block>
@@ -94,7 +95,8 @@ where
 		+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>
 		+ GrandpaApi<T::Block>,
 	<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
-	<<T as ChainInfo>::Block as BlockT>::Hash: FromStr,
+	<<T as ChainInfo>::Block as BlockT>::Hash: FromStr + Unpin,
+	<<T as ChainInfo>::Block as BlockT>::Header: Unpin,
 	<<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number:
 		num_traits::cast::AsPrimitive<usize>,
 {
@@ -105,8 +107,14 @@ where
 			default_config(task_executor, chain_spec),
 	};
 
+	let executor = NativeElseWasmExecutor::<T::ExecutorDispatch>::new(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+	);
+
 	let (client, backend, keystore, mut task_manager) =
-		new_full_parts::<T::Block, T::RuntimeApi, T::Executor>(&config, None)?;
+		new_full_parts::<T::Block, T::RuntimeApi, _>(&config, None, executor)?;
 	let client = Arc::new(client);
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());

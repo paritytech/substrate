@@ -289,7 +289,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 		number: NumberFor<B>,
 		justification: Justification,
 	) {
-		let started = wasm_timer::Instant::now();
+		let started = std::time::Instant::now();
 
 		let success = match self.justification_import.as_mut() {
 			Some(justification_import) => justification_import
