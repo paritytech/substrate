@@ -2059,6 +2059,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		if block.is_pre_genesis() {
 			operation.old_state = self.empty_state()?;
 		} else {
+			// TODO migration from header cache of parent (block)
+			// if finished assert this is chainspec block 0 of new state
 			operation.old_state = self.state_at(block)?;
 		}
 		operation.old_state.disable_syncing();
@@ -2123,8 +2125,37 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						}
 					}
 
+					if start_top.is_some() {
+						unreachable!("TODO save progress in dest state in migrate fn and put a differnt progress digest");
+					}
+
+					// TODO ensure no duplicate when setting.
+					let has_finished_digest = pending_block.header.digest().log(|digest| match digest {
+						sp_runtime::DigestItem::StateMigration(sp_runtime::StateMigrationDigest {
+							from,
+							to,
+							state_root,
+							progress,
+						}) => {
+							if from == &migration_from
+								&& to == &migration_to
+								&& state_root == &current_root
+								&& progress == &sp_runtime::StateMigrationProgress::Finished {
+									return Some(&());
+							}
+							// check for other state migration digest
+							// if there is.
+							None
+						},
+						_ => None,
+					});
+
+					if has_finished_digest.is_none() {
+						info!("Migration state mismatch with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
+						return Err(ClientError::InvalidMigrationState);
+					}
+
 					info!("Finished processing migration with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
-					pending_block.header.set_state_root(current_root);
 				} else {
 					panic!("Could not migrate at block: {:?}", number);
 				}

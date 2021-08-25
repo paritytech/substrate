@@ -164,6 +164,10 @@ where
 		backend: &'a B,
 		state_versions: &'a StateVersions<Block>,
 	) -> Result<Self, Error> {
+		// TODO call need_migration here and remove inner field
+		// then also compare (or init from) with parent header migration state.
+		// TODO pass parent header as param instead of hash and number
+	
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
 			Default::default(),
@@ -296,7 +300,15 @@ where
 					}
 				}
 
-				header.set_state_root(current_root);
+				if start_top.is_some() {
+					unreachable!("TODO save progress in dest state in migrate fn and put a differnt progress digest");
+				}
+				header.digest_mut().push(sp_runtime::DigestItem::StateMigration(sp_runtime::StateMigrationDigest {
+					from: migration_from,
+					to: migration_to,
+					state_root: current_root,
+					progress: sp_runtime::StateMigrationProgress::Finished,
+				}));
 			} else {
 				panic!("Could not migrate at block: {:?}", number);
 			}

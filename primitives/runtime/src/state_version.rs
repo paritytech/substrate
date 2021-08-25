@@ -18,10 +18,10 @@
 //! Substrate state versioning and migrations related types.
 
 use crate::traits::{Block, NumberFor};
+use codec::{Decode, Encode};
 use sp_arithmetic::traits::Zero;
 pub use sp_core::state_version::{StateVersion, DEFAULT_STATE_VERSION};
 use sp_std::{str::FromStr, vec::Vec};
-use codec::{Encode, Decode};
 
 /// Multiple versions of state in use for a chain.
 #[derive(Clone, crate::RuntimeDebug)]
@@ -129,21 +129,26 @@ impl<B: Block> StateVersions<B> {
 #[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub struct StateMigrationDigest<Hash> {
 	/// State version to double check.
-	from: StateVersion,
+	pub from: StateVersion,
 	/// State version to double check.
-	to: StateVersion,
+	pub to: StateVersion,
 	/// State root of target state.
-	state_root: Hash,
+	pub state_root: Hash,
 	/// Current state.
-	progress: StateMigrationProgress,
+	pub progress: StateMigrationProgress,
 }
 
 /// State of migration for a given block.
 #[derive(PartialEq, Eq, Clone, crate::RuntimeDebug, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum StateMigrationProgress {
+	// Started, start requested from runtime (field `StateMigrationDigest` other than `to` should be ignored),
+	// then we switch the digest to `Pending` for empty state root and correct version.
+
 	// Pending, read progress from destination at well known key
 	// (need to overwrite with origin value when finish).
+
+	//
 	/// Destination is equivalent to origin.
 	///
 	/// Next block will use `to` state with the

@@ -498,6 +498,22 @@ where
 			}
 		}
 
+		// Set again changes from current block in dest (import may have overwrite them,
+		// or may have change a previous block migration change).c
+		for (key, value) in previous_block_updates.0.iter() {
+			if let Some(value) = value.as_ref() {
+				if value.len() >= dest_threshold as usize {
+					if progress.current_top.as_ref().map(|end| key < end).unwrap_or(true) {
+						dest.insert(key.as_slice(), value.as_slice())
+							.map_err(|e| trie_error::<H>(&*e))?;
+					}
+				}
+			} else {
+				dest.remove(key.as_slice())
+					.map_err(|e| trie_error::<H>(&*e))?;
+			}
+		}
+		// TODO same for child
 		sp_std::mem::drop(ori);
 		sp_std::mem::drop(dest);
 		Ok(progress)

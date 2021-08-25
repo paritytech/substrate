@@ -144,6 +144,9 @@ pub enum Error {
 	#[error("Calculated state root does not match.")]
 	InvalidStateRoot,
 
+	#[error("Calculated migration state does not match.")]
+	InvalidMigrationState,
+
 	#[error("Incomplete block import pipeline.")]
 	IncompletePipeline,
 
