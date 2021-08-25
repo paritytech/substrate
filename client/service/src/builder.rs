@@ -660,13 +660,17 @@ where
 		)
 	};
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
-	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone())?;
+	let server_metrics = sc_rpc_server::ServerMetrics::new(config.prometheus_registry())?;
+	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone(), server_metrics)?;
 	// This is used internally, so don't restrict access to unsafe RPC
+	let known_rpc_method_names =
+		sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
 	let rpc_handlers = RpcHandlers(Arc::new(
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
 			RpcMiddleware::<TCm>::new_with_custom_middleware(
 				rpc_metrics,
+				known_rpc_method_names,
 				"inbrowser",
 				rpc_middleware.unwrap_or_default(),
 			),
@@ -1052,7 +1056,6 @@ where
 	// future using `spawn_blocking`.
 	spawn_handle.spawn_blocking("network-worker", async move {
 		if network_start_rx.await.is_err() {
-			debug_assert!(false);
 			log::warn!(
 				"The NetworkStart returned as part of `build_network` has been silently dropped"
 			);

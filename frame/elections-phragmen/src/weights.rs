@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn renounce_candidacy_members() -> Weight;
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
+	fn remove_member_without_replacement() -> Weight;
 	fn remove_member_wrong_refund() -> Weight;
 	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
 	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight;
@@ -149,6 +150,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(76_153_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+	}
+	fn remove_member_without_replacement() -> Weight {
+		T::BlockWeights::get().max_block
 	}
 	// Storage: Elections RunnersUp (r:1 w:0)
 	fn remove_member_wrong_refund() -> Weight {
@@ -278,6 +282,11 @@ impl WeightInfo for () {
 	// Storage: Instance1Collective Proposals (r:1 w:0)
 	// Storage: Instance1Collective Members (r:0 w:1)
 	fn remove_member_with_replacement() -> Weight {
+		(76_153_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn remove_member_without_replacement() -> Weight {
 		(76_153_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
