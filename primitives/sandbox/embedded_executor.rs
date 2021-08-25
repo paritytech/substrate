@@ -15,16 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_std::collections::btree_map::BTreeMap;
-use sp_std::fmt;
-
-use wasmi::{
-	Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef, ImportResolver,
-	MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind
+use super::{Error, HostError, HostFuncType, ReturnValue, Value, TARGET};
+use alloc::string::String;
+use log::debug;
+use sp_std::{
+	borrow::ToOwned, collections::btree_map::BTreeMap, fmt, marker::PhantomData, prelude::*,
 };
-use wasmi::memory_units::Pages;
-use super::{Error, Value, ReturnValue, HostFuncType, HostError};
+use wasmi::{
+	memory_units::Pages, Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef,
+	ImportResolver, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind,
+};
 
 #[derive(Clone)]
 pub struct Memory {
@@ -37,7 +38,8 @@ impl Memory {
 			memref: MemoryInstance::alloc(
 				Pages(initial as usize),
 				maximum.map(|m| Pages(m as usize)),
-			).map_err(|_| Error::Module)?,
+			)
+			.map_err(|_| Error::Module)?,
 		})
 	}
 
@@ -60,17 +62,13 @@ struct DefinedHostFunctions<T> {
 
 impl<T> Clone for DefinedHostFunctions<T> {
 	fn clone(&self) -> DefinedHostFunctions<T> {
-		DefinedHostFunctions {
-			funcs: self.funcs.clone(),
-		}
+		DefinedHostFunctions { funcs: self.funcs.clone() }
 	}
 }
 
 impl<T> DefinedHostFunctions<T> {
 	fn new() -> DefinedHostFunctions<T> {
-		DefinedHostFunctions {
-			funcs: Vec::new(),
-		}
+		DefinedHostFunctions { funcs: Vec::new() }
 	}
 
 	fn define(&mut self, f: HostFuncType<T>) -> HostFuncIndex {
@@ -102,16 +100,12 @@ impl<'a, T> Externals for GuestExternals<'a, T> {
 		index: usize,
 		args: RuntimeArgs,
 	) -> Result<Option<RuntimeValue>, Trap> {
-		let args = args.as_ref()
-			.iter()
-			.cloned()
-			.map(Into::into)
-			.collect::<Vec<_>>();
+		let args = args.as_ref().iter().cloned().map(to_interface).collect::<Vec<_>>();
 
 		let result = (self.defined_host_functions.funcs[index])(self.state, &args);
 		match result {
 			Ok(value) => Ok(match value {
-				ReturnValue::Value(v) => Some(v.into()),
+				ReturnValue::Value(v) => Some(to_wasmi(v)),
 				ReturnValue::Unit => None,
 			}),
 			Err(HostError) => Err(TrapKind::Host(Box::new(DummyHostError)).into()),
@@ -143,8 +137,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		N2: Into<Vec<u8>>,
 	{
 		let idx = self.defined_host_functions.define(f);
-		self.map
-			.insert((module.into(), field.into()), ExternVal::HostFunc(idx));
+		self.map.insert((module.into(), field.into()), ExternVal::HostFunc(idx));
 	}
 
 	pub fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
@@ -152,8 +145,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
 	{
-		self.map
-			.insert((module.into(), field.into()), ExternVal::Memory(mem));
+		self.map.insert((module.into(), field.into()), ExternVal::Memory(mem));
 	}
 }
 
@@ -164,21 +156,17 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		field_name: &str,
 		signature: &Signature,
 	) -> Result<FuncRef, wasmi::Error> {
-		let key = (
-			module_name.as_bytes().to_owned(),
-			field_name.as_bytes().to_owned(),
-		);
+		let key = (module_name.as_bytes().to_owned(), field_name.as_bytes().to_owned());
 		let externval = self.map.get(&key).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
+			debug!(target: TARGET, "Export {}:{} not found", module_name, field_name);
+			wasmi::Error::Instantiation(String::new())
 		})?;
 		let host_func_idx = match *externval {
 			ExternVal::HostFunc(ref idx) => idx,
 			_ => {
-				return Err(wasmi::Error::Instantiation(format!(
-					"Export {}:{} is not a host func",
-					module_name, field_name
-				)))
-			}
+				debug!(target: TARGET, "Export {}:{} is not a host func", module_name, field_name);
+				return Err(wasmi::Error::Instantiation(String::new()))
+			},
 		};
 		Ok(FuncInstance::alloc_host(signature.clone(), host_func_idx.0))
 	}
@@ -189,9 +177,8 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		_field_name: &str,
 		_global_type: &GlobalDescriptor,
 	) -> Result<GlobalRef, wasmi::Error> {
-		Err(wasmi::Error::Instantiation(format!(
-			"Importing globals is not supported yet"
-		)))
+		debug!(target: TARGET, "Importing globals is not supported yet");
+		Err(wasmi::Error::Instantiation(String::new()))
 	}
 
 	fn resolve_memory(
@@ -200,21 +187,17 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		field_name: &str,
 		_memory_type: &MemoryDescriptor,
 	) -> Result<MemoryRef, wasmi::Error> {
-		let key = (
-			module_name.as_bytes().to_owned(),
-			field_name.as_bytes().to_owned(),
-		);
+		let key = (module_name.as_bytes().to_owned(), field_name.as_bytes().to_owned());
 		let externval = self.map.get(&key).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
+			debug!(target: TARGET, "Export {}:{} not found", module_name, field_name);
+			wasmi::Error::Instantiation(String::new())
 		})?;
 		let memory = match *externval {
 			ExternVal::Memory(ref m) => m,
 			_ => {
-				return Err(wasmi::Error::Instantiation(format!(
-					"Export {}:{} is not a memory",
-					module_name, field_name
-				)))
-			}
+				debug!(target: TARGET, "Export {}:{} is not a memory", module_name, field_name);
+				return Err(wasmi::Error::Instantiation(String::new()))
+			},
 		};
 		Ok(memory.memref.clone())
 	}
@@ -225,16 +208,15 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		_field_name: &str,
 		_table_type: &TableDescriptor,
 	) -> Result<TableRef, wasmi::Error> {
-		Err(wasmi::Error::Instantiation(format!(
-			"Importing tables is not supported yet"
-		)))
+		debug!("Importing tables is not supported yet");
+		Err(wasmi::Error::Instantiation(String::new()))
 	}
 }
 
 pub struct Instance<T> {
 	instance: ModuleRef,
 	defined_host_functions: DefinedHostFunctions<T>,
-	_marker: std::marker::PhantomData<T>,
+	_marker: PhantomData<T>,
 }
 
 impl<T> Instance<T> {
@@ -244,26 +226,19 @@ impl<T> Instance<T> {
 		state: &mut T,
 	) -> Result<Instance<T>, Error> {
 		let module = Module::from_buffer(code).map_err(|_| Error::Module)?;
-		let not_started_instance = ModuleInstance::new(&module, env_def_builder)
-			.map_err(|_| Error::Module)?;
-
+		let not_started_instance =
+			ModuleInstance::new(&module, env_def_builder).map_err(|_| Error::Module)?;
 
 		let defined_host_functions = env_def_builder.defined_host_functions.clone();
 		let instance = {
-			let mut externals = GuestExternals {
-				state,
-				defined_host_functions: &defined_host_functions,
-			};
-			let instance = not_started_instance.run_start(&mut externals)
-				.map_err(|_| Error::Execution)?;
+			let mut externals =
+				GuestExternals { state, defined_host_functions: &defined_host_functions };
+			let instance =
+				not_started_instance.run_start(&mut externals).map_err(|_| Error::Execution)?;
 			instance
 		};
 
-		Ok(Instance {
-			instance,
-			defined_host_functions,
-			_marker: std::marker::PhantomData::<T>,
-		})
+		Ok(Instance { instance, defined_host_functions, _marker: PhantomData::<T> })
 	}
 
 	pub fn invoke(
@@ -272,35 +247,49 @@ impl<T> Instance<T> {
 		args: &[Value],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
-		let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
+		let args = args.iter().cloned().map(to_wasmi).collect::<Vec<_>>();
 
-		let mut externals = GuestExternals {
-			state,
-			defined_host_functions: &self.defined_host_functions,
-		};
-		let result = self.instance
-			.invoke_export(&name, &args, &mut externals);
+		let mut externals =
+			GuestExternals { state, defined_host_functions: &self.defined_host_functions };
+		let result = self.instance.invoke_export(&name, &args, &mut externals);
 
 		match result {
 			Ok(None) => Ok(ReturnValue::Unit),
-			Ok(Some(val)) => Ok(ReturnValue::Value(val.into())),
+			Ok(Some(val)) => Ok(ReturnValue::Value(to_interface(val))),
 			Err(_err) => Err(Error::Execution),
 		}
 	}
 
 	pub fn get_global_val(&self, name: &str) -> Option<Value> {
-		let global = self.instance
-			.export_by_name(name)?
-			.as_global()?
-			.get();
+		let global = self.instance.export_by_name(name)?.as_global()?.get();
 
-		Some(global.into())
+		Some(to_interface(global))
+	}
+}
+
+/// Convert the substrate value type to the wasmi value type.
+fn to_wasmi(value: Value) -> RuntimeValue {
+	match value {
+		Value::I32(val) => RuntimeValue::I32(val),
+		Value::I64(val) => RuntimeValue::I64(val),
+		Value::F32(val) => RuntimeValue::F32(val.into()),
+		Value::F64(val) => RuntimeValue::F64(val.into()),
+	}
+}
+
+/// Convert the wasmi value type to the substrate value type.
+fn to_interface(value: RuntimeValue) -> Value {
+	match value {
+		RuntimeValue::I32(val) => Value::I32(val),
+		RuntimeValue::I64(val) => Value::I64(val),
+		RuntimeValue::F32(val) => Value::F32(val.into()),
+		RuntimeValue::F64(val) => Value::F64(val.into()),
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate::{Error, Value, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
+	use crate::{EnvironmentDefinitionBuilder, Error, HostError, Instance, ReturnValue, Value};
 	use assert_matches::assert_matches;
 
 	fn execute_sandboxed(code: &[u8], args: &[Value]) -> Result<ReturnValue, HostError> {
@@ -310,7 +299,7 @@ mod tests {
 
 		fn env_assert(_e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
-				return Err(HostError);
+				return Err(HostError)
 			}
 			let condition = args[0].as_i32().ok_or_else(|| HostError)?;
 			if condition != 0 {
@@ -321,7 +310,7 @@ mod tests {
 		}
 		fn env_inc_counter(e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
-				return Err(HostError);
+				return Err(HostError)
 			}
 			let inc_by = args[0].as_i32().ok_or_else(|| HostError)?;
 			e.counter += inc_by as u32;
@@ -330,7 +319,7 @@ mod tests {
 		/// Function that takes one argument of any type and returns that value.
 		fn env_polymorphic_id(_e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
-				return Err(HostError);
+				return Err(HostError)
 			}
 			Ok(ReturnValue::Value(args[0]))
 		}
@@ -350,7 +339,8 @@ mod tests {
 
 	#[test]
 	fn invoke_args() {
-		let code = wat::parse_str(r#"
+		let code = wat::parse_str(
+			r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -371,21 +361,19 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
-		let result = execute_sandboxed(
-			&code,
-			&[
-				Value::I32(0x12345678),
-				Value::I64(0x1234567887654321),
-			]
-		);
+		let result =
+			execute_sandboxed(&code, &[Value::I32(0x12345678), Value::I64(0x1234567887654321)]);
 		assert!(result.is_ok());
 	}
 
 	#[test]
 	fn return_value() {
-		let code = wat::parse_str(r#"
+		let code = wat::parse_str(
+			r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -394,20 +382,18 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
-		let return_val = execute_sandboxed(
-			&code,
-			&[
-				Value::I32(0x1336),
-			]
-		).unwrap();
+		let return_val = execute_sandboxed(&code, &[Value::I32(0x1336)]).unwrap();
 		assert_eq!(return_val, ReturnValue::Value(Value::I32(0x1337)));
 	}
 
 	#[test]
 	fn signatures_dont_matter() {
-		let code = wat::parse_str(r#"
+		let code = wat::parse_str(
+			r#"
 		(module
 			(import "env" "polymorphic_id" (func $id_i32 (param i32) (result i32)))
 			(import "env" "polymorphic_id" (func $id_i64 (param i64) (result i64)))
@@ -434,7 +420,9 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
 		let return_val = execute_sandboxed(&code, &[]).unwrap();
 		assert_eq!(return_val, ReturnValue::Unit);
@@ -449,7 +437,8 @@ mod tests {
 		let mut env_builder = EnvironmentDefinitionBuilder::new();
 		env_builder.add_host_func("env", "returns_i32", env_returns_i32);
 
-		let code = wat::parse_str(r#"
+		let code = wat::parse_str(
+			r#"
 		(module
 			;; It's actually returns i32, but imported as if it returned i64
 			(import "env" "returns_i32" (func $returns_i32 (result i64)))
@@ -460,15 +449,14 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
 		// It succeeds since we are able to import functions with types we want.
 		let mut instance = Instance::new(&code, &env_builder, &mut ()).unwrap();
 
 		// But this fails since we imported a function that returns i32 as if it returned i64.
-		assert_matches!(
-			instance.invoke("call", &[], &mut ()),
-			Err(Error::Execution)
-		);
+		assert_matches!(instance.invoke("call", &[], &mut ()), Err(Error::Execution));
 	}
 }
