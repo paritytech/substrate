@@ -2216,9 +2216,9 @@ checksum = "0b0e06c393068f3a6ef246c75cdca793d6a46347e75286933e5e75fd2fd11582"
 
 [[package]]
 name = "futures-lite"
-version = "1.11.3"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4481d0cd0de1d204a4fa55e7d45f07b1d958abcb06714b3446438e2eff695fb"
+checksum = "7694489acd39452c77daa48516b894c153f192c3578d5a839b62c58099fcbf48"
 dependencies = [
  "fastrand",
  "futures-core",
@@ -7634,6 +7634,7 @@ dependencies = [
  "async-trait",
  "derive_more",
  "futures 0.3.16",
+ "futures-core",
  "futures-timer 3.0.2",
  "log 0.4.14",
  "parity-scale-codec",
@@ -7649,6 +7650,8 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "substrate-prometheus-endpoint",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -10186,9 +10189,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.10.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01cf844b23c6131f624accf65ce0e4e9956a8bb329400ea5bcc26ae3a5c20b0b"
+checksum = "92036be488bb6594459f2e03b60e42df6f937fe6ca5c5ffdcb539c6b84dc40f5"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -10296,6 +10299,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.6",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
