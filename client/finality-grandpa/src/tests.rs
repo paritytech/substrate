@@ -172,6 +172,11 @@ impl TestNetFactory for GrandpaTestNet {
 	fn mut_peers<F: FnOnce(&mut Vec<GrandpaPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
+
+	fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>> {
+		// Currently no support for grandpa test net with stateversion update.
+		None
+	}
 }
 
 #[derive(Default, Clone)]
@@ -1244,7 +1249,7 @@ fn finalize_3_voters_1_light_observer() {
 #[test]
 fn voter_catches_up_to_latest_round_when_behind() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
+	let runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);

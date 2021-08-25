@@ -119,7 +119,7 @@ where
 		.collect::<Vec<_>>();
 	// No inner hashing for cht.
 	let backend: InMemoryBackend<Hasher> = sp_runtime::StateVersion::V0.into();
-	let mut storage = backend.update(vec![(None, transaction)]);
+	let storage = backend.update(vec![(None, transaction)]);
 	let trie_storage = storage
 		.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");

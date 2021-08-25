@@ -405,7 +405,7 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
-		let (election_result, weight) = if is_genesis {
+		let election_result = if is_genesis {
 			T::GenesisElectionProvider::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
@@ -418,13 +418,7 @@ impl<T: Config> Pallet<T> {
 		}
 		.ok()?;
 
-		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
-			frame_support::weights::DispatchClass::Mandatory,
-		);
-
 		let exposures = Self::collect_exposures(election_result);
-
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
 			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
 			match CurrentEra::<T>::get() {
@@ -637,25 +631,28 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will use all on-chain nominators, and all the validators will inject a self vote.
 	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
+	///
 	/// ### Slashing
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
 	/// auto-chilled.
-	///
-	/// Note that this is VERY expensive. Use with care.
 	pub fn get_npos_voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
 
+		let mut validator_count = 0u32;
 		for (validator, _) in <Validators<T>>::iter() {
 			// Append self vote.
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
+			validator_count.saturating_inc();
 		}
 
 		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
+		let mut nominator_count = 0u32;
 		for (nominator, nominations) in Nominators::<T>::iter() {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
@@ -669,17 +666,35 @@ impl<T: Config> Pallet<T> {
 
 			if !targets.is_empty() {
 				let vote_weight = weight_of(&nominator);
-				all_voters.push((nominator, vote_weight, targets))
+				all_voters.push((nominator, vote_weight, targets));
+				nominator_count.saturating_inc();
 			}
 		}
+
+		Self::register_weight(T::WeightInfo::get_npos_voters(
+			validator_count,
+			nominator_count,
+			slashing_spans.len() as u32,
+		));
 
 		all_voters
 	}
 
-	/// This is a very expensive function and result should be cached versus being called multiple
-	/// times.
+	/// Get the targets for an upcoming npos election.
+	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+		let mut validator_count = 0u32;
+		let targets = Validators::<T>::iter()
+			.map(|(v, _)| {
+				validator_count.saturating_inc();
+				v
+			})
+			.collect::<Vec<_>>();
+
+		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
+
+		targets
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
@@ -731,47 +746,58 @@ impl<T: Config> Pallet<T> {
 			false
 		}
 	}
+
+	/// Register some amount of weight directly with the system pallet.
+	///
+	/// This is always mandatory weight.
+	fn register_weight(weight: Weight) {
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
+	}
 }
 
 impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Pallet<T>
 {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
-	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
-		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
+	fn desired_targets() -> data_provider::Result<u32> {
+		Self::register_weight(T::DbWeight::get().reads(1));
+		Ok(Self::validator_count())
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 		let nominator_count = CounterForNominators::<T>::get();
 		let validator_count = CounterForValidators::<T>::get();
+
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
+
+		// register the extra 2 reads
+		Self::register_weight(T::DbWeight::get().reads(2));
 
 		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
 			return Err("Voter snapshot too big")
 		}
 
-		let slashing_span_count = <SlashingSpans<T>>::iter().count();
-		let weight = T::WeightInfo::get_npos_voters(
-			nominator_count,
-			validator_count,
-			slashing_span_count as u32,
-		);
-		Ok((Self::get_npos_voters(), weight))
+		Ok(Self::get_npos_voters())
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
 		let target_count = CounterForValidators::<T>::get() as usize;
+
+		// register the extra 1 read
+		Self::register_weight(T::DbWeight::get().reads(1));
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big")
 		}
 
-		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
-		Ok((Self::get_npos_targets(), weight))
+		Ok(Self::get_npos_targets())
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
@@ -807,7 +833,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
 		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
@@ -827,7 +853,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_target(target: T::AccountId) {
 		let stake = MinValidatorBond::<T>::get() * 100u32.into();
 		<Bonded<T>>::insert(target.clone(), target.clone());
@@ -847,7 +873,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
 		<Bonded<T>>::remove_all(None);
 		<Ledger<T>>::remove_all(None);
@@ -855,7 +881,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		<Nominators<T>>::remove_all(None);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,

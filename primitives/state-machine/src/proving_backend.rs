@@ -540,7 +540,7 @@ mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let mut in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
+		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
 			(contents, StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }).into()
 		} else {
 			(contents, StateVersion::V0).into()
