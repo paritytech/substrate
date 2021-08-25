@@ -912,7 +912,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let gen_storage_changes =
 					runtime_api.into_storage_changes(&state, changes_trie_state.as_ref(), *parent_hash)?;
 
-				// TODO not to myself - bring it back in this PR
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
 				{
