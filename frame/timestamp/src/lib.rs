@@ -192,7 +192,9 @@ decl_module! {
 		/// - 1 storage deletion (codec `O(1)`).
 		/// # </weight>
 		fn on_finalize() {
-			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+			if <frame_system::Module<T>>::block_number() > 1.into(){
+				assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+			}
 		}
 	}
 }
@@ -282,7 +284,7 @@ impl<T: Trait> UnixTime for Module<T> {
 		// `sp_timestamp::InherentDataProvider`.
 		let now = Self::now();
 		sp_std::if_std! {
-			if now == T::Moment::zero() {
+			if now == T::Moment::zero() && <frame_system::Module<T>>::block_number() > 1.into() {
 				debug::error!(
 					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
 				);
