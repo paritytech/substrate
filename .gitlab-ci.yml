@@ -113,6 +113,26 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
 
+.test-refs-wasmer-sandbox:                        &test-refs-wasmer-sandbox
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+      changes:
+        - client/executor/**/*
+        - frame/contracts/**/*
+        - primitives/sandbox/**/*
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+      changes:
+        - client/executor/**/*
+        - frame/contracts/**/*
+        - primitives/sandbox/**/*
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+      changes:
+        - client/executor/**/*
+        - frame/contracts/**/*
+        - primitives/sandbox/**/*
+
 .build-refs:                       &build-refs
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
@@ -424,6 +444,16 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - sccache -s
+
+test-wasmer-sandbox:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs-wasmer-sandbox
+  variables:
+    <<:                            *default-vars
+  script:
+    - time cargo test --release --features runtime-benchmarks,wasmer-sandbox
     - sccache -s
 
 cargo-check-macos:

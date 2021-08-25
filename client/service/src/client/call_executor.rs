@@ -212,7 +212,7 @@ where
 			backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let mut state = self.backend.state_at(*at)?;
+		let state = self.backend.state_at(*at)?;
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -220,20 +220,21 @@ where
 			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
 		})?;
 
+		// It is important to extract the runtime code here before we create the proof
+		// recorder to not record it. We also need to fetch the runtime code from `state` to
+		// make sure we use the caching layers.
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+
+		let runtime_code =
+			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
+		let runtime_code = self.check_override(runtime_code, at)?;
+
 		match recorder {
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend().ok_or_else(|| {
 					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
 						as Box<dyn sp_state_machine::Error>
 				})?;
-
-				let state_runtime_code =
-					sp_state_machine::backend::BackendRuntimeCode::new(trie_state);
-				// It is important to extract the runtime code here before we create the proof
-				// recorder.
-				let runtime_code =
-					state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-				let runtime_code = self.check_override(runtime_code, at)?;
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -259,11 +260,6 @@ where
 				)
 			},
 			None => {
-				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				let runtime_code =
-					state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-				let runtime_code = self.check_override(runtime_code, at)?;
-
 				let mut state_machine = StateMachine::new(
 					&state,
 					changes_trie_state,
@@ -309,7 +305,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let mut state = self.backend.state_at(*at)?;
+		let state = self.backend.state_at(*at)?;
 
 		let trie_backend = state.as_trie_backend().ok_or_else(|| {
 			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)

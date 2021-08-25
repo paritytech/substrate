@@ -46,8 +46,7 @@ use sp_blockchain::{
 };
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData,
-		StorageKey,
+		ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey,
 	},
 	Bytes,
 };
@@ -447,23 +446,6 @@ where
 			.map_err(client_err)
 	}
 
-	async fn trace_block(
-		&self,
-		block: Block::Hash,
-		targets: Option<String>,
-		storage_keys: Option<String>,
-	) -> std::result::Result<sp_rpc::tracing::TraceBlockResponse, Error> {
-		sc_tracing::block::BlockExecutor::new(
-			self.client.clone(),
-			block,
-			targets,
-			storage_keys,
-			self.rpc_max_payload,
-		)
-		.trace_block()
-		.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
-	}
-
 	fn subscribe_runtime_version(
 		&self,
 		mut sink: SubscriptionSink,
@@ -474,19 +456,15 @@ where
 		let mut previous_version = client
 			.runtime_version_at(&BlockId::hash(client.info().best_hash))
 			.expect("best hash is valid; qed");
-		let _ = sink.send(&previous_version);
-		let rt_version_stream = client
-			.storage_changes_notification_stream(
-				Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
-				None,
-			)
-			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
+		let _ = sink.send(&previous_version);
+		// A stream of all best blocks.
+		let rt_version_stream =
+			client.import_notification_stream().filter(|n| future::ready(n.is_new_best));
 		let fut = async move {
 			rt_version_stream
-				.filter_map(|_| {
-					let info = client.info();
-					let version = client.runtime_version_at(&BlockId::hash(info.best_hash));
+				.filter_map(move |n| {
+					let version = client.runtime_version_at(&BlockId::hash(n.hash));
 					match version {
 						Ok(v) =>
 							if previous_version != v {
@@ -585,6 +563,23 @@ where
 		executor.execute(fut);
 
 		Ok(())
+	}
+
+	async fn trace_block(
+		&self,
+		block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>,
+	) -> std::result::Result<sp_rpc::tracing::TraceBlockResponse, Error> {
+		sc_tracing::block::BlockExecutor::new(
+			self.client.clone(),
+			block,
+			targets,
+			storage_keys,
+			self.rpc_max_payload,
+		)
+		.trace_block()
+		.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
 	}
 }
 

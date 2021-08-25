@@ -20,7 +20,7 @@
 
 #![warn(missing_docs)]
 
-// mod middleware;
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -34,7 +34,43 @@ const WS_MAX_CONNECTIONS: usize = 100;
 const HTTP_THREADS: usize = 4;
 
 pub use self::inner::*;
-// pub use middleware::{RpcMiddleware, RpcMetrics};
+
+/// RPC server-specific prometheus metrics.
+#[derive(Debug, Clone, Default)]
+pub struct ServerMetrics {
+	/// Number of sessions opened.
+	session_opened: Option<Counter<U64>>,
+	/// Number of sessions closed.
+	session_closed: Option<Counter<U64>>,
+}
+
+impl ServerMetrics {
+	/// Create new WebSocket RPC server metrics.
+	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
+		registry
+			.map(|r| {
+				Ok(Self {
+					session_opened: register(
+						Counter::new(
+							"rpc_sessions_opened",
+							"Number of persistent RPC sessions opened",
+						)?,
+						r,
+					)?
+					.into(),
+					session_closed: register(
+						Counter::new(
+							"rpc_sessions_closed",
+							"Number of persistent RPC sessions closed",
+						)?,
+						r,
+					)?
+					.into(),
+				})
+			})
+			.unwrap_or_else(|| Ok(Default::default()))
+	}
+}
 
 #[cfg(not(target_os = "unknown"))]
 mod inner {
@@ -50,6 +86,17 @@ mod inner {
 	pub type HttpServer = HttpStopHandle;
 	/// Type alias for ws server
 	pub type WsServer = WsStopHandle;
+
+	// TODO: (dp) port this stuff
+	// impl ws::SessionStats for ServerMetrics {
+	// 	fn open_session(&self, _id: ws::SessionId) {
+	// 		self.session_opened.as_ref().map(|m| m.inc());
+	// 	}
+
+	// 	fn close_session(&self, _id: ws::SessionId) {
+	// 		self.session_closed.as_ref().map(|m| m.inc());
+	// 	}
+	// }
 
 	/// Start HTTP server listening on given address.
 	///
