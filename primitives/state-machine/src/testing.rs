@@ -36,13 +36,13 @@ use codec::Decode;
 use hash_db::Hasher;
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
+	state_version::StateVersion,
 	storage::{
 		well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE},
 		Storage,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
-	state_version::StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 
@@ -96,7 +96,6 @@ where
 		Self::new_with_code_and_state(&[], storage, state_version)
 	}
 
-
 	/// New empty test externalities.
 	pub fn new_empty() -> Self {
 		Self::new_with_code_and_state(&[], Storage::default(), Default::default())
@@ -107,8 +106,13 @@ where
 		Self::new_with_code_and_state(code, storage, Default::default())
 	}
 
-	/// Create a new instance of `TestExternalities` with code and storage for a given state version.
-	pub fn new_with_code_and_state(code: &[u8], mut storage: Storage, state_version: StateVersion) -> Self {
+	/// Create a new instance of `TestExternalities` with code and storage for a given state
+	/// version.
+	pub fn new_with_code_and_state(
+		code: &[u8],
+		mut storage: Storage,
+		state_version: StateVersion,
+	) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage
 			.top

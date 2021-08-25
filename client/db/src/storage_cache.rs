@@ -25,7 +25,7 @@ use hash_db::Hasher;
 use linked_hash_map::{Entry, LinkedHashMap};
 use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo, state_version::StateVersion};
+use sp_core::{hexdisplay::HexDisplay, state_version::StateVersion, storage::ChildInfo};
 use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, StorageCollection, StorageKey,
@@ -987,12 +987,18 @@ mod tests {
 			true,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h0));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h0),
+		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), true);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h0));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h0),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1003,8 +1009,11 @@ mod tests {
 			false,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1b));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1b),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1015,8 +1024,11 @@ mod tests {
 			false,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1a));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1a),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1027,30 +1039,48 @@ mod tests {
 			true,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2a));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2a),
+		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), true);
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h3a));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h3a),
+		);
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1a));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1a),
+		);
 		assert!(s.storage(&key).unwrap().is_none());
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2b),
+		);
 		assert!(s.storage(&key).unwrap().is_none());
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1b));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1b),
+		);
 		assert!(s.storage(&key).unwrap().is_none());
 
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2b),
+		);
 		s.cache.sync_cache(
 			&[h1b, h2b, h3b],
 			&[h1a, h2a, h3a],
@@ -1060,8 +1090,11 @@ mod tests {
 			Some(3),
 			true,
 		);
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h3a));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h3a),
+		);
 		assert!(s.storage(&key).unwrap().is_none());
 	}
 
@@ -1094,12 +1127,18 @@ mod tests {
 			true,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1110,8 +1149,11 @@ mod tests {
 			false,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2b),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1122,8 +1164,11 @@ mod tests {
 			false,
 		);
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2a));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2a),
+		);
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
@@ -1147,12 +1192,18 @@ mod tests {
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2a));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2a),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1163,12 +1214,18 @@ mod tests {
 			true,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), false);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h2b));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h2b),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1179,8 +1236,11 @@ mod tests {
 			false,
 		);
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h3a));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h3a),
+		);
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
@@ -1319,8 +1379,11 @@ mod tests {
 			true,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h0));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h0),
+		);
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1331,8 +1394,11 @@ mod tests {
 			true,
 		);
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
 
 		// Restart (or unknown block?), clear caches.
@@ -1351,8 +1417,11 @@ mod tests {
 		// New value is propagated.
 		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, true);
 
-		let s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 		assert_eq!(s.storage(&key).unwrap(), None);
 	}
 
@@ -1384,8 +1453,11 @@ mod tests {
 		);
 		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 
 		// commit as non-best
 		s.cache.sync_cache(
@@ -1400,8 +1472,11 @@ mod tests {
 
 		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
-		let mut s =
-			CachingState::new(InMemoryBackend::<BlakeTwo256>::from(state_version), shared.clone(), Some(h1));
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::from(state_version),
+			shared.clone(),
+			Some(h1),
+		);
 
 		// commit again as best with no changes
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2), Some(2), true);

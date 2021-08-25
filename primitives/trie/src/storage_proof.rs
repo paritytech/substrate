@@ -18,9 +18,9 @@
 use crate::{Layout, TrieLayout};
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
+use sp_core::state_version::StateVersion;
 use sp_std::vec::Vec;
 use trie_db::NodeCodec;
-use sp_core::state_version::StateVersion;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -45,7 +45,7 @@ pub struct CompactProof {
 
 mod decode_impl {
 	use super::*;
-	use codec::{Input, Error};
+	use codec::{Error, Input};
 	impl Decode for StorageProof {
 		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 			let trie_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
@@ -55,10 +55,7 @@ mod decode_impl {
 			} else {
 				Decode::decode(input)?
 			};
-			Ok(StorageProof {
-				trie_nodes,
-				state_version,
-			})
+			Ok(StorageProof { trie_nodes, state_version })
 		}
 	}
 
@@ -71,10 +68,7 @@ mod decode_impl {
 			} else {
 				Decode::decode(input)?
 			};
-			Ok(CompactProof {
-				encoded_nodes,
-				state_version,
-			})
+			Ok(CompactProof { encoded_nodes, state_version })
 		}
 	}
 }
@@ -140,7 +134,10 @@ impl StorageProof {
 		let trie_nodes = proofs
 			.into_iter()
 			.flat_map(|proof| {
-				debug_assert!(state_version == &StateVersion::default() || state_version == &proof.state_version);
+				debug_assert!(
+					state_version == &StateVersion::default() ||
+						state_version == &proof.state_version
+				);
 				*state_version = proof.state_version;
 				proof.iter_nodes()
 			})

@@ -22,12 +22,12 @@ use codec::Encode;
 use hash_db::Hasher;
 use log::warn;
 use sp_core::{
+	state_version::StateVersion,
 	storage::{
 		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey,
 	},
 	traits::Externalities,
 	Blake2Hasher,
-	state_version::StateVersion,
 };
 use sp_externalities::{Extension, Extensions};
 use sp_trie::{empty_child_trie_root, Layout, TrieConfiguration};
@@ -48,7 +48,11 @@ pub struct BasicExternalities {
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage, state_version: StateVersion) -> Self {
-		BasicExternalities { inner, extensions: Default::default(), state_version: Some(state_version) }
+		BasicExternalities {
+			inner,
+			extensions: Default::default(),
+			state_version: Some(state_version),
+		}
 	}
 
 	/// New basic externalities with empty storage.
@@ -78,7 +82,7 @@ impl BasicExternalities {
 	) -> R {
 		Self::execute_with_storage_inner(storage, Some(state_version), f)
 	}
-	
+
 	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
@@ -313,19 +317,20 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = match self.state_version.expect("Unsupported state calculation for genesis storage build.") {
-			StateVersion::V0 => {
-				Layout::<Blake2Hasher>::default()
-			},
-			StateVersion::V1 { threshold } => {
-				Layout::<Blake2Hasher>::with_alt_hashing(threshold)
-			},
+		let layout = match self
+			.state_version
+			.expect("Unsupported state calculation for genesis storage build.")
+		{
+			StateVersion::V0 => Layout::<Blake2Hasher>::default(),
+			StateVersion::V1 { threshold } => Layout::<Blake2Hasher>::with_alt_hashing(threshold),
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
 	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
-		let state_version = self.state_version.expect("Unsupported state calculation for genesis storage build.");
+		let state_version = self
+			.state_version
+			.expect("Unsupported state calculation for genesis storage build.");
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
 			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(state_version);
@@ -437,15 +442,18 @@ mod tests {
 	fn children_works() {
 		let child_info = ChildInfo::new_default(b"storage_key");
 		let child_info = &child_info;
-		let mut ext = BasicExternalities::new(Storage {
-			top: Default::default(),
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
-					child_info: child_info.to_owned(),
-				}
-			],
-		}, StateVersion::default());
+		let mut ext = BasicExternalities::new(
+			Storage {
+				top: Default::default(),
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		);
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
 
@@ -463,19 +471,22 @@ mod tests {
 	fn kill_child_storage_returns_num_elements_removed() {
 		let child_info = ChildInfo::new_default(b"storage_key");
 		let child_info = &child_info;
-		let mut ext = BasicExternalities::new(Storage {
-			top: Default::default(),
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![
-						b"doe".to_vec() => b"reindeer".to_vec(),
-						b"dog".to_vec() => b"puppy".to_vec(),
-						b"hello".to_vec() => b"world".to_vec(),
-					],
-					child_info: child_info.to_owned(),
-				}
-			],
-		}, StateVersion::default());
+		let mut ext = BasicExternalities::new(
+			Storage {
+				top: Default::default(),
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![
+							b"doe".to_vec() => b"reindeer".to_vec(),
+							b"dog".to_vec() => b"puppy".to_vec(),
+							b"hello".to_vec() => b"world".to_vec(),
+						],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		);
 
 		let res = ext.kill_child_storage(child_info, None);
 		assert_eq!(res, (true, 3));

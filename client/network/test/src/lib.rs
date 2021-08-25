@@ -734,12 +734,16 @@ where
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
 		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
 			(Some(keep_blocks), true) =>
-				TestClientBuilder::with_tx_storage(keep_blocks, self.state_versions()).state_hashed_value(),
-			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX, self.state_versions()).state_hashed_value(),
+				TestClientBuilder::with_tx_storage(keep_blocks, self.state_versions())
+					.state_hashed_value(),
+			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX, self.state_versions())
+				.state_hashed_value(),
 			(Some(keep_blocks), false) =>
-				TestClientBuilder::with_pruning_window(keep_blocks, self.state_versions()).state_hashed_value(),
+				TestClientBuilder::with_pruning_window(keep_blocks, self.state_versions())
+					.state_hashed_value(),
 			(None, false) =>
-				TestClientBuilder::with_default_backend_and_state_versions(self.state_versions()).state_hashed_value(),
+				TestClientBuilder::with_default_backend_and_state_versions(self.state_versions())
+					.state_hashed_value(),
 		};
 		if matches!(config.sync_mode, SyncMode::Fast { .. }) {
 			test_client_builder = test_client_builder.set_no_genesis();
@@ -1092,7 +1096,10 @@ impl TestNet {
 	}
 
 	/// Create new test network with this many peers.
-	pub fn new_with_state_versions(n: usize, state_versions: sp_runtime::StateVersions<Block>) -> Self {
+	pub fn new_with_state_versions(
+		n: usize,
+		state_versions: sp_runtime::StateVersions<Block>,
+	) -> Self {
 		trace!(target: "test_network", "Creating test network with peer config");
 		let config = Self::default_config();
 		let mut net = Self::from_config(&config);
@@ -1113,7 +1120,11 @@ impl TestNetFactory for TestNet {
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
-		TestNet { peers: Vec::new(), fork_choice: ForkChoiceStrategy::LongestChain, state_versions: None }
+		TestNet {
+			peers: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+			state_versions: None,
+		}
 	}
 
 	fn make_verifier(

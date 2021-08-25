@@ -127,7 +127,7 @@ pub use crate::{
 		StorageTransactionCache, StorageValue,
 	},
 	stats::{StateMachineStats, UsageInfo, UsageUnit},
-	trie_backend::{TrieBackend, MigrateProgress},
+	trie_backend::{MigrateProgress, TrieBackend},
 	trie_backend_essence::{Storage, TrieBackendStorage},
 };
 
@@ -1000,10 +1000,11 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
+		state_version::StateVersion,
 		storage::{ChildInfo, TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD},
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
-		NativeOrEncoded, NeverNativeValue, state_version::StateVersion,
+		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use std::{
@@ -1704,7 +1705,8 @@ mod tests {
 		}
 		let root3 = root.clone();
 		assert!(root1 != root3);
-		let remote_proof = check_proof(mdb.clone(), root.clone(), StateVersion::V1 { threshold: TRESHOLD });
+		let remote_proof =
+			check_proof(mdb.clone(), root.clone(), StateVersion::V1 { threshold: TRESHOLD });
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
 		assert!(remote_proof.encoded_size() < 1000);

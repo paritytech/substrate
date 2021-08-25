@@ -26,8 +26,7 @@ use codec::{Codec, Decode, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
-use sp_core::storage::ChildInfo;
-use sp_core::state_version::StateVersion;
+use sp_core::{state_version::StateVersion, storage::ChildInfo};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
@@ -171,8 +170,9 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// encoded proof.
 	pub fn estimate_encoded_size(&self) -> usize {
 		let inner = self.inner.read();
-		inner.encoded_size + codec::Compact(inner.records.len() as u32).encoded_size()
-			+ inner.state_version.encoded_size()
+		inner.encoded_size +
+			codec::Compact(inner.records.len() as u32).encoded_size() +
+			inner.state_version.encoded_size()
 	}
 
 	/// Convert into a [`StorageProof`].
@@ -494,12 +494,19 @@ mod tests {
 		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
 
-		let contents = vec![(None, value_range
-			.clone()
-			.map(|i| (vec![i], Some(vec![i; size_content])))
-			.collect::<Vec<_>>())];
+		let contents = vec![(
+			None,
+			value_range
+				.clone()
+				.map(|i| (vec![i], Some(vec![i; size_content])))
+				.collect::<Vec<_>>(),
+		)];
 		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
-			(contents, StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }).into()
+			(
+				contents,
+				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD },
+			)
+				.into()
 		} else {
 			(contents, StateVersion::V0).into()
 		};
@@ -541,7 +548,11 @@ mod tests {
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
-			(contents, StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }).into()
+			(
+				contents,
+				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD },
+			)
+				.into()
 		} else {
 			(contents, StateVersion::V0).into()
 		};

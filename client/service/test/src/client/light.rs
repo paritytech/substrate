@@ -295,7 +295,8 @@ fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 
 #[test]
 fn light_aux_store_is_updated_via_non_importing_op() {
-	let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
+	let backend =
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
 	BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
 	ClientBackend::<Block>::commit_operation(&backend, op).unwrap();

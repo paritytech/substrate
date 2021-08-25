@@ -235,9 +235,7 @@ where
 		);
 
 		let state = self.backend.state_at(self.block_id)?;
-		let proof = {
-			self.api.extract_proof()
-		};
+		let proof = { self.api.extract_proof() };
 
 		let changes_trie_state = backend::changes_tries_state_at_block(
 			&self.block_id,

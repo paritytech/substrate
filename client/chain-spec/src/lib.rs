@@ -119,8 +119,7 @@ pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{de::DeserializeOwned, Serialize};
-use sp_core::storage::Storage;
-use sp_core::state_version::StateVersion;
+use sp_core::{state_version::StateVersion, storage::Storage};
 use sp_runtime::BuildStorage;
 
 /// The type of a chain.

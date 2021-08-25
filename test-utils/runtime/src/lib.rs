@@ -1316,7 +1316,8 @@ mod tests {
 	#[test]
 	fn witness_backend_works() {
 		let (db, root) = witness_backend();
-		let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root, Default::default());
+		let backend =
+			sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root, Default::default());
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();

@@ -57,11 +57,11 @@ mod multiaddress;
 pub mod offchain;
 pub mod runtime_logger;
 mod runtime_string;
+pub mod state_version;
 #[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod state_version;
 
 pub use crate::runtime_string::*;
 

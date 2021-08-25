@@ -22,8 +22,10 @@ use crate::{
 };
 use codec::Codec;
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, Storage};
-use sp_core::state_version::StateVersion;
+use sp_core::{
+	state_version::StateVersion,
+	storage::{ChildInfo, Storage},
+};
 use sp_trie::{empty_trie_root, Layout, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
@@ -103,8 +105,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<StateVersion>
-	for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<StateVersion> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -112,13 +113,18 @@ where
 		new_in_mem(state_version)
 	}
 }
-	
+
 impl<H: Hasher> From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)>
 	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inner, state_version): (HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)) -> Self {
+	fn from(
+		(inner, state_version): (
+			HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>,
+			StateVersion,
+		),
+	) -> Self {
 		let mut backend = new_in_mem(state_version);
 		backend.insert(
 			inner
@@ -144,7 +150,8 @@ where
 	}
 }
 
-impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)>
+	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -155,11 +162,14 @@ where
 	}
 }
 
-impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)>
+	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inner, state_version): (Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)) -> Self {
+	fn from(
+		(inner, state_version): (Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion),
+	) -> Self {
 		let mut expanded: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
 			HashMap::new();
 		for (child_info, key_values) in inner {

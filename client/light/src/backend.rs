@@ -48,7 +48,7 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header, NumberFor, Zero},
-	Justification, Justifications, Storage, StateVersions, StateVersion,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -95,7 +95,12 @@ pub enum GenesisOrUnavailableState<H: Hasher> {
 impl<S, B: BlockT> Backend<S, B> {
 	/// Create new light backend.
 	pub fn new(blockchain: Arc<Blockchain<S>>, state_versions: StateVersions<B>) -> Self {
-		Self { blockchain, genesis_state: RwLock::new(None), import_lock: Default::default(), state_versions }
+		Self {
+			blockchain,
+			genesis_state: RwLock::new(None),
+			import_lock: Default::default(),
+			state_versions,
+		}
 	}
 
 	/// Get shared blockchain reference.
@@ -156,7 +161,6 @@ where
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
-
 		if let Some(number) = self.blockchain.storage().block_number_from_id(&block)? {
 			operation.state_version = Some(self.state_versions.state_version_at(number));
 		}

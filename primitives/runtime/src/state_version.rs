@@ -17,11 +17,10 @@
 
 //! Substrate state versioning and migrations related types.
 
-pub use sp_core::state_version::{StateVersion, DEFAULT_STATE_VERSION};
 use crate::traits::{Block, NumberFor};
-use sp_std::str::FromStr;
-use sp_std::vec::Vec;
 use sp_arithmetic::traits::Zero;
+pub use sp_core::state_version::{StateVersion, DEFAULT_STATE_VERSION};
+use sp_std::{str::FromStr, vec::Vec};
 
 /// Multiple versions of state in use for a chain.
 #[derive(Clone, crate::RuntimeDebug)]
@@ -31,9 +30,7 @@ pub struct StateVersions<B: Block> {
 
 impl<B: Block> Default for StateVersions<B> {
 	fn default() -> Self {
-		StateVersions {
-			canonical_states: Vec::new(),
-		}
+		StateVersions { canonical_states: Vec::new() }
 	}
 }
 
@@ -43,7 +40,7 @@ impl<B: Block> StateVersions<B> {
 	pub fn genesis_state_version(&self) -> StateVersion {
 		if let Some((number, version)) = self.canonical_states.get(0) {
 			if number.is_zero() {
-				return *version;
+				return *version
 			}
 		}
 		DEFAULT_STATE_VERSION
@@ -55,7 +52,7 @@ impl<B: Block> StateVersions<B> {
 		let mut version = DEFAULT_STATE_VERSION;
 		for (number, state) in self.canonical_states.iter() {
 			if number > &at {
-				break;
+				break
 			}
 			version = *state;
 		}
@@ -69,10 +66,10 @@ impl<B: Block> StateVersions<B> {
 		for (i, (number, _)) in self.canonical_states.iter().enumerate() {
 			if number == &at {
 				replace = Some(i);
-				break;
+				break
 			}
 			if number > &at {
-				break;
+				break
 			}
 			insert = Some(i + 1);
 		}
@@ -85,7 +82,8 @@ impl<B: Block> StateVersions<B> {
 
 	/// Convert from chainspec conf.
 	pub fn from_conf<'a, I>(conf: I) -> Option<Self>
-		where I: IntoIterator<Item = (&'a str, StateVersion)>,
+	where
+		I: IntoIterator<Item = (&'a str, StateVersion)>,
 	{
 		let iter = conf.into_iter();
 		let mut canonical_states = match iter.size_hint() {
@@ -97,14 +95,11 @@ impl<B: Block> StateVersions<B> {
 			if let Ok(number) = NumberFor::<B>::from_str(number) {
 				canonical_states.push((number.into(), version));
 			} else {
-				return None;
+				return None
 			}
 		}
-		Some(StateVersions {
-			canonical_states,
-		})
+		Some(StateVersions { canonical_states })
 	}
-
 
 	/// Indicate if block need migration.
 	/// Returns version to migrate from and to if
@@ -117,10 +112,10 @@ impl<B: Block> StateVersions<B> {
 		for (number, version) in self.canonical_states.iter() {
 			if number == &at {
 				to = Some(*version);
-				break;
+				break
 			}
 			if number > &at {
-				break;
+				break
 			}
 			from = *version;
 		}

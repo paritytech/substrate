@@ -51,7 +51,9 @@ use sp_core::{
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
-	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256, state_version::StateVersion,
+	sr25519,
+	state_version::StateVersion,
+	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
 
 #[cfg(feature = "std")]
@@ -1542,10 +1544,10 @@ mod tests {
 			storage::set(b"foo", &[1, 2, 3][..]);
 		});
 
-		t = BasicExternalities::new(Storage {
-			top: map![b"foo".to_vec() => b"bar".to_vec()],
-			children_default: map![],
-		}, state_version);
+		t = BasicExternalities::new(
+			Storage { top: map![b"foo".to_vec() => b"bar".to_vec()], children_default: map![] },
+			state_version,
+		);
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
@@ -1567,10 +1569,10 @@ mod tests {
 	fn read_storage_works() {
 		let state_version = StateVersion::default();
 		let value = b"\x0b\0\0\0Hello world".to_vec();
-		let mut t = BasicExternalities::new(Storage {
-			top: map![b":test".to_vec() => value.clone()],
-			children_default: map![],
-		}, state_version);
+		let mut t = BasicExternalities::new(
+			Storage { top: map![b":test".to_vec() => value.clone()], children_default: map![] },
+			state_version,
+		);
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
@@ -1585,15 +1587,18 @@ mod tests {
 	#[test]
 	fn clear_prefix_works() {
 		let state_version = StateVersion::default();
-		let mut t = BasicExternalities::new(Storage {
-			top: map![
-				b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
-				b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
-				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
-				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-			],
-			children_default: map![],
-		}, state_version);
+		let mut t = BasicExternalities::new(
+			Storage {
+				top: map![
+					b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+					b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+					b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+					b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
+				],
+				children_default: map![],
+			},
+			state_version,
+		);
 
 		t.execute_with(|| {
 			assert!(matches!(

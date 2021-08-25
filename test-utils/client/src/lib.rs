@@ -45,11 +45,7 @@ use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::{
-	codec::Encode,
-	traits::Block as BlockT,
-	OpaqueExtrinsic,
-};
+use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
@@ -57,8 +53,7 @@ use std::{
 };
 
 /// Test client light database backend.
-pub type LightBackend<Block> =
-	sc_light::Backend<sc_client_db::light::LightStorage<Block>, Block>;
+pub type LightBackend<Block> = sc_light::Backend<sc_client_db::light::LightStorage<Block>, Block>;
 
 /// A genesis storage initialization trait.
 pub trait GenesisInit: Default {
@@ -107,7 +102,9 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 	}
 
 	/// Create new `TestClientBuilder` with default backend and state versions.
-	pub fn with_default_backend_and_state_versions(state_versions: Option<sp_runtime::StateVersions<Block>>) -> Self {
+	pub fn with_default_backend_and_state_versions(
+		state_versions: Option<sp_runtime::StateVersions<Block>>,
+	) -> Self {
 		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			std::u32::MAX,
 			std::u64::MAX,
@@ -117,9 +114,11 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 		Self::with_backend(backend)
 	}
 
-
 	/// Create new `TestClientBuilder` with default backend and pruning window size
-	pub fn with_pruning_window(keep_blocks: u32, state_versions: Option<sp_runtime::StateVersions<Block>>) -> Self {
+	pub fn with_pruning_window(
+		keep_blocks: u32,
+		state_versions: Option<sp_runtime::StateVersions<Block>>,
+	) -> Self {
 		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			keep_blocks,
 			0,
@@ -130,7 +129,10 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 	}
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
-	pub fn with_tx_storage(keep_blocks: u32, state_versions: Option<sp_runtime::StateVersions<Block>>) -> Self {
+	pub fn with_tx_storage(
+		keep_blocks: u32,
+		state_versions: Option<sp_runtime::StateVersions<Block>>,
+	) -> Self {
 		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			keep_blocks,
 			0,

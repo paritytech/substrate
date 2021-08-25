@@ -24,9 +24,9 @@ use sp_core::{
 	offchain::storage::InMemOffchainStorage as OffchainStorage, storage::well_known_keys,
 };
 use sp_runtime::{
-	generic::BlockId, StateVersions, StateVersion,
+	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -150,13 +150,12 @@ impl<Block: BlockT> Blockchain<Block> {
 	/// Get version of state.
 	pub fn state_version(&self, id: BlockId<Block>) -> StateVersion {
 		let number = match id {
-			BlockId::Hash(h) => {
+			BlockId::Hash(h) =>
 				if let Ok(Some(header)) = self.header(BlockId::Hash(h)) {
 					header.number().clone()
 				} else {
 					0u32.into()
-				}
-			},
+				},
 			BlockId::Number(n) => n,
 		};
 		self.storage.read().state_versions.state_version_at(number)

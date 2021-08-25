@@ -289,7 +289,8 @@ impl<G, E> ChainSpec<G, E> {
 	/// Return genesis state version.
 	fn genesis_state_version(&self) -> StateVersion {
 		use std::str::FromStr;
-		self.state_versions().get(0)
+		self.state_versions()
+			.get(0)
 			// This is incorrect (can have number representation not compatible with u64
 			.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
 			.and_then(|(n, s)| (n == 0).then(|| s.clone()))

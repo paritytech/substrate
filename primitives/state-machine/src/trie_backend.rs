@@ -24,10 +24,11 @@ use crate::{
 };
 use codec::{Codec, Decode};
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, ChildType};
-use sp_core::state_version::StateVersion;
-use sp_std::{boxed::Box, vec::Vec};
-use sp_std::{rc::Rc, cell::RefCell};
+use sp_core::{
+	state_version::StateVersion,
+	storage::{ChildInfo, ChildType},
+};
+use sp_std::{boxed::Box, cell::RefCell, rc::Rc, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
 	trie_types::{TrieDB, TrieError},
@@ -46,7 +47,7 @@ where
 {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out, state_version: StateVersion) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root), state_version: state_version }
+		TrieBackend { essence: TrieBackendEssence::new(storage, root), state_version }
 	}
 
 	/// Get backend essence reference.
@@ -205,12 +206,8 @@ where
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
 				let layout = match self.state_version {
-					StateVersion::V0 => {
-						sp_trie::Layout::default()
-					},
-					StateVersion::V1{ threshold } => {
-						sp_trie::Layout::with_alt_hashing(threshold)
-					},
+					StateVersion::V0 => sp_trie::Layout::default(),
+					StateVersion::V1 { threshold } => sp_trie::Layout::with_alt_hashing(threshold),
 				};
 				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
 			};
@@ -236,12 +233,8 @@ where
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
 		};
 		let layout = match self.state_version {
-			StateVersion::V0 => {
-				sp_trie::Layout::default()
-			},
-			StateVersion::V1{ threshold } => {
-				sp_trie::Layout::with_alt_hashing(threshold)
-			},
+			StateVersion::V0 => sp_trie::Layout::default(),
+			StateVersion::V1 { threshold } => sp_trie::Layout::with_alt_hashing(threshold),
 		};
 
 		let mut write_overlay = S::Overlay::default();
@@ -295,7 +288,6 @@ where
 	}
 }
 
-
 /// Migration progress.
 pub struct MigrateProgress<H> {
 	/// Next key to migrate for top.
@@ -320,15 +312,12 @@ where
 
 // type is neither send nor sync but only ever
 // use in migrate method local to a single thread.
-unsafe impl<'a, S, H: Hasher> Send for MigrateStorage<'a, S, H> { }
-unsafe impl<'a, S, H: Hasher> Sync for MigrateStorage<'a, S, H> { }
+unsafe impl<'a, S, H: Hasher> Send for MigrateStorage<'a, S, H> {}
+unsafe impl<'a, S, H: Hasher> Sync for MigrateStorage<'a, S, H> {}
 
 impl<'a, S, H: Hasher> Clone for MigrateStorage<'a, S, H> {
 	fn clone(&self) -> Self {
-		MigrateStorage {
-			overlay: self.overlay.clone(),
-			storage: self.storage
-		}
+		MigrateStorage { overlay: self.overlay.clone(), storage: self.storage }
 	}
 }
 
@@ -379,7 +368,9 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for MigrateStorage<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue>
+	for MigrateStorage<'a, S, H>
+{
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		HashDB::get(self, key, prefix)
 	}
@@ -424,7 +415,6 @@ fn trie_error<H: Hasher>(_e: &sp_trie::TrieError<Layout<H>>) -> crate::DefaultEr
 	crate::DefaultError
 }
 
-
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
 where
 	H::Out: Ord + Codec,
@@ -440,7 +430,7 @@ where
 		changes: &mut sp_trie::PrefixedMemoryDB<H>,
 		mut progress: MigrateProgress<H::Out>,
 	) -> Result<MigrateProgress<H::Out>, crate::DefaultError> {
-		use sp_trie::{TrieDB, TrieDBMut, TrieMut, TrieDBIterator};
+		use sp_trie::{TrieDB, TrieDBIterator, TrieDBMut, TrieMut};
 		let dest_threshold = match (migration_from, migration_to, self.state_version) {
 			(StateVersion::V0, StateVersion::V1 { threshold }, StateVersion::V0) => threshold,
 			_ => return Err(error_version()),
@@ -449,10 +439,8 @@ where
 		let empty_value2 = sp_std::vec![0u8; dest_threshold as usize];
 		let dest_layout = Layout::with_alt_hashing(dest_threshold);
 		let overlay = Rc::new(RefCell::new(changes));
-		let mut dest_db = MigrateStorage::<S, H> {
-			overlay,
-			storage: self.essence.backend_storage(),
-		};
+		let mut dest_db =
+			MigrateStorage::<S, H> { overlay, storage: self.essence.backend_storage() };
 		let ori_root = self.essence.root().clone();
 		// Using db with remove node is ok as long as iteration
 		// start at uncommited key.
@@ -466,21 +454,25 @@ where
 		let mut dest = TrieDBMut::from_existing_with_layout(&mut dest_db, dest_root, dest_layout)
 			.map_err(|e| trie_error::<H>(&*e))?;
 
-		let iter = TrieDBIterator::new_prefixed_then_seek(&ori, &[], progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[])).map_err(|e| trie_error::<H>(&*e))?;
+		let iter = TrieDBIterator::new_prefixed_then_seek(
+			&ori,
+			&[],
+			progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[]),
+		)
+		.map_err(|e| trie_error::<H>(&*e))?;
 		for elt in iter {
-			let (key, value) = elt
-				.map_err(|e| trie_error::<H>(&*e))?;
+			let (key, value) = elt.map_err(|e| trie_error::<H>(&*e))?;
 			if let Some(limit_size) = limit_size.as_mut() {
 				if *limit_size < value.len() as u64 {
 					progress.current_top = Some(key);
-					break;
+					break
 				}
 				*limit_size -= value.len() as u64;
 			}
 			if let Some(limit_items) = limit_items.as_mut() {
 				if *limit_items == 0 {
 					progress.current_top = Some(key);
-					break;
+					break
 				}
 				*limit_items -= 1;
 			}

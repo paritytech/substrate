@@ -59,8 +59,7 @@ use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, BlockIdTo, Zero},
-	BuildStorage,
-	StateVersions,
+	BuildStorage, StateVersions,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
@@ -144,8 +143,7 @@ pub type TLightClient<TBl, TRtApi, TExec> =
 	TLightClientWithBackend<TBl, TRtApi, TExec, TLightBackend<TBl>>;
 
 /// Light client backend type.
-pub type TLightBackend<TBl> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>;
+pub type TLightBackend<TBl> = sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>;
 
 /// Light call executor type.
 pub type TLightCallExecutor<TBl, TExec> = sc_light::GenesisCallExecutor<
@@ -310,9 +308,16 @@ where
 			transaction_storage: config.transaction_storage.clone(),
 		};
 
-		let state_versions = StateVersions::from_conf(config.chain_spec.state_versions()
-			.iter().map(|(number, version)| (number.as_str(), *version)))
-			.ok_or_else(|| Error::Application(Box::from("Invalid state versions for chain spec".to_string())))?;
+		let state_versions = StateVersions::from_conf(
+			config
+				.chain_spec
+				.state_versions()
+				.iter()
+				.map(|(number, version)| (number.as_str(), *version)),
+		)
+		.ok_or_else(|| {
+			Error::Application(Box::from("Invalid state versions for chain spec".to_string()))
+		})?;
 
 		let backend = new_db_backend(db_config, state_versions.clone())?;
 
@@ -401,9 +406,16 @@ where
 	));
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 
-	let state_versions = StateVersions::from_conf(config.chain_spec.state_versions()
-		.iter().map(|(number, version)| (number.as_str(), *version)))
-		.ok_or_else(|| Error::Application(Box::from("Invalid state versions for chain spec".to_string())))?;
+	let state_versions = StateVersions::from_conf(
+		config
+			.chain_spec
+			.state_versions()
+			.iter()
+			.map(|(number, version)| (number.as_str(), *version)),
+	)
+	.ok_or_else(|| {
+		Error::Application(Box::from("Invalid state versions for chain spec".to_string()))
+	})?;
 
 	let backend = sc_light::new_light_backend(light_blockchain, state_versions);
 	let client = Arc::new(light::new_light(

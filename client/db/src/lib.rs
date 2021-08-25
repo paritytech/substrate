@@ -46,7 +46,7 @@ mod upgrade;
 mod utils;
 
 use linked_hash_map::LinkedHashMap;
-use log::{debug, trace, warn, info};
+use log::{debug, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -88,7 +88,7 @@ use sp_runtime::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
-	Justification, Justifications, Storage, StateVersion, StateVersions,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
@@ -1126,7 +1126,11 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64, state_versions: StateVersions<Block>) -> ClientResult<Self> {
+	pub fn new(
+		config: DatabaseSettings,
+		canonicalization_delay: u64,
+		state_versions: StateVersions<Block>,
+	) -> ClientResult<Self> {
 		// TODO state_versions could also be part of database settings
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
 		Self::from_database(db as Arc<_>, canonicalization_delay, &config, state_versions)
@@ -1150,7 +1154,12 @@ impl<Block: BlockT> Backend<Block> {
 		transaction_storage: TransactionStorageMode,
 	) -> Self {
 		let state_versions = Default::default();
-		Self::new_test_with_tx_storage_and_state_versions(keep_blocks, canonicalization_delay, transaction_storage, state_versions)
+		Self::new_test_with_tx_storage_and_state_versions(
+			keep_blocks,
+			canonicalization_delay,
+			transaction_storage,
+			state_versions,
+		)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1172,7 +1181,8 @@ impl<Block: BlockT> Backend<Block> {
 			transaction_storage,
 		};
 
-		Self::new(db_setting, canonicalization_delay, state_versions).expect("failed to create test-db")
+		Self::new(db_setting, canonicalization_delay, state_versions)
+			.expect("failed to create test-db")
 	}
 
 	fn from_database(
@@ -1891,7 +1901,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		// state_version for genesis in empty state.
+										   // state_version for genesis in empty state.
 		let state_version = self.state_versions.genesis_state_version();
 		let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
@@ -2061,7 +2071,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
-
 		if let Some(pending_block) = operation.pending_block.as_mut() {
 			let number = pending_block.header.number().clone();
 
@@ -2077,36 +2086,39 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 					let timer = time::SystemTime::now();
 
-					info!("Starting migrating from state root {:x?} at block {:?}", &current_root, &number);
+					info!(
+						"Starting migrating from state root {:x?} at block {:?}",
+						&current_root, &number
+					);
 					loop {
-						let sp_state_machine::MigrateProgress {
-							current_top,
-							current_child,
-							root,
-						} = prev_block_state.migrate(
-							migration_from,
-							migration_to,
-							limit_size,
-							limit_items,
-							&mut operation.db_updates,
-							sp_state_machine::MigrateProgress {
-								current_top: start_top.take(),
-								current_child: start_child.take(),
-								root: Some(current_root), // TODO non optional rather?
-							}
-						).map_err(|err| {
-							sp_blockchain::Error::Backend(format!(
-								"error migrating: {}",
-								err
-							))
-						})?;
+						let sp_state_machine::MigrateProgress { current_top, current_child, root } =
+							prev_block_state
+								.migrate(
+									migration_from,
+									migration_to,
+									limit_size,
+									limit_items,
+									&mut operation.db_updates,
+									sp_state_machine::MigrateProgress {
+										current_top: start_top.take(),
+										current_child: start_child.take(),
+										root: Some(current_root), // TODO non optional rather?
+									},
+								)
+								.map_err(|err| {
+									sp_blockchain::Error::Backend(format!(
+										"error migrating: {}",
+										err
+									))
+								})?;
 
 						info!("Finished migration iteration, new state root: {:x?}, elapsed time: {:?}.", &current_root, timer.elapsed());
 						start_top = current_top;
 						start_child = current_child;
-						current_root = root.unwrap_or_else(|| pending_block.header.state_root().clone());
+						current_root =
+							root.unwrap_or_else(|| pending_block.header.state_root().clone());
 						if start_top.is_none() {
-							break;
+							break
 						}
 					}
 
@@ -2417,12 +2429,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		let (is_genesis, number) = match &block {
 			BlockId::Number(n) => (n.is_zero(), *n),
-			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => {
-				(true, NumberFor::<Block>::zero())
-			},
+			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash =>
+				(true, NumberFor::<Block>::zero()),
 			BlockId::Hash(h) => {
 				let n = self.blockchain.number(*h)?.ok_or_else(|| {
-					sp_blockchain::Error::UnknownBlock(format!("Unknown number for block hash {}", h))
+					sp_blockchain::Error::UnknownBlock(format!(
+						"Unknown number for block hash {}",
+						h
+					))
 				})?;
 				(false, n)
 			},
@@ -2666,9 +2680,7 @@ pub(crate) mod tests {
 	}
 	fn set_state_data_inner(alt_hashing: bool) {
 		let state_version = if alt_hashing {
-			StateVersion::V1 {
-				threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-			}
+			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }
 		} else {
 			StateVersion::V0
 		};

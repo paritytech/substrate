@@ -25,10 +25,7 @@ use sc_executor::RuntimeVersionOf;
 use sc_telemetry::TelemetryHandle;
 use sp_blockchain::Result as ClientResult;
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_runtime::{
-	traits::Block as BlockT,
-	BuildStorage,
-};
+use sp_runtime::{traits::Block as BlockT, BuildStorage};
 
 use super::{
 	call_executor::LocalCallExecutor,
@@ -48,10 +45,7 @@ pub fn new_light<B, S, RA, E>(
 ) -> ClientResult<
 	Client<
 		Backend<S, B>,
-		GenesisCallExecutor<
-			Backend<S, B>,
-			LocalCallExecutor<B, Backend<S, B>, E>,
-		>,
+		GenesisCallExecutor<Backend<S, B>, LocalCallExecutor<B, Backend<S, B>, E>>,
 		B,
 		RA,
 	>,

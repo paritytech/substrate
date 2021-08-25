@@ -28,7 +28,8 @@ use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_core::{
-	convert_hash, state_version::StateVersion,
+	convert_hash,
+	state_version::StateVersion,
 	storage::{ChildInfo, ChildType},
 	traits::{CodeExecutor, SpawnNamed},
 };
@@ -202,7 +203,8 @@ impl<E, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, B, S> {
 					}
 
 					// check proof for single changes trie root
-					let proving_backend = TrieBackend::new(storage, local_cht_root, StateVersion::V0);
+					let proving_backend =
+						TrieBackend::new(storage, local_cht_root, StateVersion::V0);
 					let remote_changes_trie_root = remote_roots[&block];
 					cht::check_proof_on_proving_backend::<B::Header, HashFor<B>>(
 						local_cht_root,

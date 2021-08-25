@@ -34,7 +34,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	traits::{Block as BlockT, HashFor},
-	Storage, StateVersion,
+	StateVersion, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
