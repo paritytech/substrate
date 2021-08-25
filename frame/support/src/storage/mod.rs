@@ -1358,7 +1358,9 @@ where
 	}
 }
 
-/// Returns the storage prefix for a specific pallet and storage string.
+/// Returns the storage prefix for a specific pallet name and storage name.
+///
+/// The storage prefix is `concat(twox_128(pallet_name), twox_128(storage_name))`.
 pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 	let pallet_hash = sp_io::hashing::twox_128(pallet_name);
 	let storage_hash = sp_io::hashing::twox_128(storage_name);
