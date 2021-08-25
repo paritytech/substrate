@@ -49,7 +49,7 @@ use sc_network::{
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
-use sp_api::{CallApiAt, ProvideRuntimeApi};
+use sp_api::{ApiExt, CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
@@ -628,13 +628,13 @@ where
 			rpc_middleware,
 			&config,
 			task_manager.spawn_handle(),
+			backend.clone(),
 			client.clone(),
 			transaction_pool.clone(),
 			keystore.clone(),
 			on_demand.clone(),
 			remote_blockchain.clone(),
 			&*rpc_extensions_builder,
-			backend.offchain_storage(),
 			system_rpc_tx.clone(),
 		)
 	};
@@ -727,13 +727,13 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_middleware: sc_rpc_server::RpcMiddleware,
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
+	backend: Arc<TBackend>,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	keystore: SyncCryptoStorePtr,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
-	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 ) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>
 where
@@ -753,7 +753,9 @@ where
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
+	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl>
+		+ sp_api::Metadata<TBl>
+		+ ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 {
@@ -791,6 +793,7 @@ where
 			// Full nodes
 			let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
 			let (state, child_state) = sc_rpc::state::new_full(
+				backend.clone(),
 				client.clone(),
 				subscriptions.clone(),
 				deny_unsafe,
@@ -803,7 +806,7 @@ where
 		sc_rpc::author::Author::new(client, transaction_pool, subscriptions, keystore, deny_unsafe);
 	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
 
-	let maybe_offchain_rpc = offchain_storage.map(|storage| {
+	let maybe_offchain_rpc = backend.offchain_storage().map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
 		offchain::OffchainApi::to_delegate(offchain)
 	});

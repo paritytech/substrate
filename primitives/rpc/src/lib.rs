@@ -21,6 +21,7 @@
 
 pub mod list;
 pub mod number;
+pub mod storage;
 pub mod tracing;
 
 /// A util function to assert the result of serialization and deserialization is the same.

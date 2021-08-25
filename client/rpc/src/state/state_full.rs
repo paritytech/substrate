@@ -24,11 +24,18 @@ use log::warn;
 use rpc::Result as RpcResult;
 use std::{
 	collections::{BTreeMap, HashMap},
+	marker::PhantomData,
 	ops::Range,
 	sync::Arc,
 };
 
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
+	StateBackendFor, StorageProvider,
+};
 use sc_rpc_api::state::ReadProof;
+use sc_rpc_server::RPC_MAX_PAYLOAD_DEFAULT;
+use sp_api::{ApiExt, CallApiAt, Core, Metadata, ProvideRuntimeApi};
 use sp_blockchain::{
 	CachedHeaderMetadata, Error as ClientError, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
@@ -42,22 +49,30 @@ use sp_core::{
 };
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, CheckedSub, NumberFor, SaturatedConversion},
+	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, SaturatedConversion},
 };
 use sp_version::RuntimeVersion;
-
-use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 
 use super::{
 	client_err,
 	error::{Error, FutureResult, Result},
-	ChildStateBackend, StateBackend,
+	BlockExecError, BlockExecResult, ChildStateBackend, StateBackend,
 };
-use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
-	StorageProvider,
-};
-use std::marker::PhantomData;
+
+// Heuristic for average storage key/value size in bytes.
+const AVG_STORAGE_KV: usize = 200 * 8;
+// Estimate of the max base RPC payload size when the Id is bound as a u64. If strings
+// are used for the RPC Id this may need to be adjusted. Note: The base payload
+// does not include the RPC result.
+//
+// The estimate is based on the JSONRPC response message which has the following format:
+// `{"jsonrpc":"2.0","result":[],"id":18446744073709551615}`.
+//
+// We care about the total size of the payload because jsonrpc-server will simply ignore
+// messages larger than `sc_rpc_server::MAX_PAYLOAD` and the caller will not get any
+// response.
+const BASE_PAYLOAD: usize = 100;
+const MEGABYTE: usize = 1024 * 1024;
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -75,28 +90,32 @@ struct QueryStorageRange<Block: BlockT> {
 
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
+	backend: Arc<BE>,
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 	_phantom: PhantomData<(BE, Block)>,
 	rpc_max_payload: Option<usize>,
 }
 
-impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
+impl<BE, Block, Client> FullState<BE, Block, Client>
 where
 	BE: Backend<Block>,
 	Client: StorageProvider<Block, BE>
 		+ HeaderBackend<Block>
 		+ BlockBackend<Block>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ ProvideRuntimeApi<Block>,
 	Block: BlockT + 'static,
+	Client::Api: Metadata<Block> + ApiExt<Block, StateBackend = StateBackendFor<BE, Block>>,
 {
 	/// Create new state API backend for full nodes.
 	pub fn new(
+		backend: Arc<BE>,
 		client: Arc<Client>,
 		subscriptions: SubscriptionManager,
 		rpc_max_payload: Option<usize>,
 	) -> Self {
-		Self { client, subscriptions, _phantom: PhantomData, rpc_max_payload }
+		Self { backend, client, subscriptions, _phantom: PhantomData, rpc_max_payload }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -255,6 +274,41 @@ where
 		changes.extend(changes_map.into_iter().map(|(_, cs)| cs));
 		Ok(())
 	}
+
+	fn query_storage_changes(
+		&self,
+		block: Block::Hash,
+	) -> BlockExecResult<(Block::Hash, sp_api::StorageChanges<BE::State, Block>)> {
+		// Prepare the block
+		let id = BlockId::Hash(block);
+		let mut header = self
+			.client
+			.header(id)
+			.map_err(|e| BlockExecError::InvalidBlockId(e))?
+			.ok_or_else(|| BlockExecError::MissingBlockComponent("Header not found".into()))?;
+		let extrinsics = self
+			.client
+			.block_body(&id)
+			.map_err(|e| BlockExecError::InvalidBlockId(e))?
+			.ok_or_else(|| BlockExecError::MissingBlockComponent("Extrinsics not found".into()))?;
+
+		let parent_hash = *header.parent_hash();
+		let parent_id = BlockId::Hash(parent_hash);
+		// Remove all `Seal`s as they are added by the consensus engines after building the block.
+		// On import they are normally removed by the consensus engine.
+		header.digest_mut().logs.retain(|d| d.as_seal().is_none());
+
+		let state = self
+			.backend
+			.state_at(parent_id)
+			.map_err(|e| BlockExecError::InvalidBlockId(e))?;
+		let api = self.client.runtime_api();
+		api.execute_block(&parent_id, Block::new(header, extrinsics))
+			.map_err(|e| BlockExecError::InvalidBlockId(e.into()))?;
+		api.into_storage_changes(&state, None, parent_hash)
+			.map(|storage_changes| (parent_hash, storage_changes))
+			.map_err(BlockExecError::Other)
+	}
 }
 
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
@@ -274,7 +328,7 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
+	Client::Api: Metadata<Block> + ApiExt<Block, StateBackend = StateBackendFor<BE, Block>>,
 {
 	fn call(
 		&self,
@@ -602,6 +656,68 @@ where
 			.map_err(|e| invalid_block::<Block>(block, None, e.to_string()));
 		async move { r }.boxed()
 	}
+
+	fn diff_block_storage(
+		&self,
+		block: Block::Hash,
+		storage_prefixes: Option<Vec<String>>,
+	) -> FutureResult<sp_rpc::storage::BlockStorageChangesResponse<Block::Hash>> {
+		let prefixes = storage_prefixes.clone().map(|prefixes| {
+			prefixes
+				.into_iter()
+				.filter_map(|prefix| hex::decode(prefix).ok())
+				.collect::<Vec<_>>()
+		});
+		let rpc_max_payload = self
+			.rpc_max_payload
+			.map(|mb| mb.saturating_mul(MEGABYTE))
+			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+		let r = self
+			.query_storage_changes(block)
+			.map(|(parent_hash, storage_changes)| {
+				let main_storage_changes = storage_changes
+					.main_storage_changes
+					.into_iter()
+					.filter(|(k, _v)| storage_key_filter(k, &prefixes))
+					.map(|(k, v)| (StorageKey(k), v.map(StorageData)))
+					.collect::<Vec<_>>();
+				let approx_payload_size =
+					BASE_PAYLOAD + main_storage_changes.len() * AVG_STORAGE_KV;
+				if approx_payload_size > rpc_max_payload {
+					sp_rpc::storage::BlockStorageChangesResponse::StorageChangesError(
+						sp_rpc::storage::StorageChangesError {
+							error: "Payload likely exceeds max payload size of RPC server."
+								.to_string(),
+						},
+					)
+				} else {
+					sp_rpc::storage::BlockStorageChangesResponse::BlockStorageChanges(
+						sp_rpc::storage::BlockStorageChanges {
+							block_hash: block,
+							parent_hash,
+							storage_prefixes: storage_prefixes.unwrap_or_default(),
+							storage_changes: main_storage_changes,
+						},
+					)
+				}
+			})
+			.map_err(|e| invalid_block::<Block>(block, None, e.to_string()));
+
+		async move { r }.boxed()
+	}
+}
+
+fn storage_key_filter(key: &[u8], prefixes: &Option<Vec<Vec<u8>>>) -> bool {
+	if let Some(prefixes) = prefixes {
+		for prefix in prefixes {
+			if key.starts_with(prefix) {
+				return true
+			}
+		}
+		return false
+	} else {
+		true
+	}
 }
 
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client>
@@ -620,7 +736,7 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
+	Client::Api: Metadata<Block> + ApiExt<Block, StateBackend = StateBackendFor<BE, Block>>,
 {
 	fn read_child_proof(
 		&self,

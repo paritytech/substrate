@@ -278,4 +278,70 @@ pub trait StateApi<Hash> {
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
+
+	/// The `state_diffBlockStorage` RPC provides a way to trace the re-execution of a single
+	/// block, collecting storage changes from both the client and the relevant WASM runtime.
+	///
+	/// ## Node requirements
+	///
+	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
+	///
+	/// ## Node recommendations
+	///
+	/// - Use fast SSD disk storage.
+	/// - Run node flags to increase DB read speed (i.e. `--state-cache-size`, `--db-cache`).
+	///
+	/// ## RPC Usage
+	///
+	/// The RPC allows for one filtering mechanism: storage key prefixes.
+	/// The filtering of storage key/value takes place after they are all collected; so while
+	/// filters do not reduce time for actual block re-execution, they reduce the response payload
+	/// size.
+	///
+	/// ### `curl` example
+	///
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_diffBlockStorage", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// ### Params
+	///
+	/// - `block` (param index 0): Hash of the block to trace.
+	/// - `storage_prefixes` (param index 1): hex encoded
+	/// (no `0x` prefix) storage key prefixes. If an empty prefixes is specified no storages will
+	/// be filtered out. If anything other than an empty prefixes is specified, storages
+	/// will be filtered by storage key prefixes.
+	/// You can specify any length of a storage key prefix (i.e. if a specified storage
+	/// key is in the beginning of an events storage key it is considered a match).
+	/// Example: for balance tracking on Polkadot & Kusama you would likely want
+	/// to track changes to account balances with the frame_system::Account storage item,
+	/// which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
+	/// the storage prefix for the map:
+	/// `26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
+	///
+	/// Additionally you would want to track the extrinsic index, which is under the
+	/// `:extrinsic_index` key. The key for this would be the aforementioned string as bytes
+	/// in hex: `3a65787472696e7369635f696e646578`.
+	/// The following are some resources to learn more about storage keys in substrate:
+	/// [substrate storage][1], [transparent keys in substrate][2],
+	/// [querying substrate storage via rpc][3].
+	///
+	/// [1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
+	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
+	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+	///
+	/// ### Maximum payload size
+	///
+	/// The maximum payload size allowed is 15mb. Payloads over this size will return a
+	/// object with a simple error message.
+	#[rpc(name = "state_diffBlockStorage")]
+	fn diff_block_storage(
+		&self,
+		block: Hash,
+		storage_prefixes: Option<Vec<String>>,
+	) -> FutureResult<sp_rpc::storage::BlockStorageChangesResponse<Hash>>;
 }

@@ -29,16 +29,18 @@ use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, Subscripti
 use rpc::Result as RpcResult;
 use std::sync::Arc;
 
-use sc_client_api::light::{Fetcher, RemoteBlockchain};
+use sc_client_api::{
+	backend::StateBackendFor,
+	light::{Fetcher, RemoteBlockchain},
+};
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
+use sp_api::{ApiExt, CallApiAt, Metadata, ProvideRuntimeApi};
 use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
 	Bytes,
 };
 use sp_runtime::traits::Block as BlockT;
 use sp_version::RuntimeVersion;
-
-use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 
 use self::error::{Error, FutureResult};
 
@@ -179,10 +181,18 @@ where
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
+
+	/// Diff storage changes for block
+	fn diff_block_storage(
+		&self,
+		block: Block::Hash,
+		storage_prefixes: Option<Vec<String>>,
+	) -> FutureResult<sp_rpc::storage::BlockStorageChangesResponse<Block::Hash>>;
 }
 
 /// Create new state API that works on full node.
 pub fn new_full<BE, Block: BlockT, Client>(
+	backend: Arc<BE>,
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 	deny_unsafe: DenyUnsafe,
@@ -204,15 +214,16 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
+	Client::Api: Metadata<Block> + ApiExt<Block, StateBackend = StateBackendFor<BE, Block>>,
 {
 	let child_backend = Box::new(self::state_full::FullState::new(
+		backend.clone(),
 		client.clone(),
 		subscriptions.clone(),
 		rpc_max_payload,
 	));
 	let backend =
-		Box::new(self::state_full::FullState::new(client, subscriptions, rpc_max_payload));
+		Box::new(self::state_full::FullState::new(backend, client, subscriptions, rpc_max_payload));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -420,6 +431,22 @@ where
 
 		self.backend.trace_block(block, targets, storage_keys)
 	}
+
+	/// Re-execute the given block and capture all state changes.
+	///
+	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
+	/// Note: requires runtimes compiled with wasm tracing support, `--features with-tracing`.
+	fn diff_block_storage(
+		&self,
+		block: Block::Hash,
+		storage_prefixes: Option<Vec<String>>,
+	) -> FutureResult<sp_rpc::storage::BlockStorageChangesResponse<Block::Hash>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return async move { Err(err.into()) }.boxed()
+		}
+
+		self.backend.diff_block_storage(block, storage_prefixes)
+	}
 }
 
 /// Child state backend API.
@@ -556,3 +583,17 @@ where
 fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }
+
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+enum BlockExecError {
+	#[error("Invalid block Id: {0}")]
+	InvalidBlockId(#[from] sp_blockchain::Error),
+	#[error("Missing block component: {0}")]
+	MissingBlockComponent(String),
+	#[error("{0}")]
+	Other(String),
+}
+
+type BlockExecResult<T> = Result<T, BlockExecError>;

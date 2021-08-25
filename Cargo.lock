@@ -8061,6 +8061,7 @@ dependencies = [
  "assert_matches",
  "futures 0.3.16",
  "hash-db",
+ "hex",
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "lazy_static",
@@ -8072,6 +8073,7 @@ dependencies = [
  "sc-client-api",
  "sc-network",
  "sc-rpc-api",
+ "sc-rpc-server",
  "sc-tracing",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
@@ -8089,13 +8091,13 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
 name = "sc-rpc-api"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "futures 0.3.16",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -8113,6 +8115,7 @@ dependencies = [
  "sp-runtime",
  "sp-tracing",
  "sp-version",
+ "thiserror",
 ]
 
 [[package]]

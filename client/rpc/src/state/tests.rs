@@ -37,6 +37,8 @@ fn prefixed_storage_key() -> PrefixedStorageKey {
 	child_info.prefixed_storage_key()
 }
 
+type TestBackend = substrate_test_runtime_client::Backend;
+
 #[test]
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
@@ -44,15 +46,17 @@ fn should_return_storage() {
 	const CHILD_VALUE: &[u8] = b"hello world !";
 
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-	let client = TestClientBuilder::new()
+	let builder = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
 		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
 		// similar to a map with two keys
 		.add_extra_storage(b":map:acc1".to_vec(), vec![1, 2])
-		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3])
-		.build();
+		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3]);
+	let backend = builder.backend();
+	let client = builder.build();
 	let genesis_hash = client.genesis_hash();
 	let (client, child) = new_full(
+		backend,
 		Arc::new(client),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
@@ -96,14 +100,17 @@ fn should_return_storage() {
 #[test]
 fn should_return_child_storage() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-	let client = Arc::new(
-		substrate_test_runtime_client::TestClientBuilder::new()
-			.add_child_storage(&child_info, "key", vec![42_u8])
-			.build(),
-	);
+	let builder = TestClientBuilder::new().add_child_storage(&child_info, "key", vec![42_u8]);
+	let backend = builder.backend();
+	let client = Arc::new(builder.build());
 	let genesis_hash = client.genesis_hash();
-	let (_client, child) =
-		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
+	let (_client, child) = new_full(
+		backend,
+		client,
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+		None,
+	);
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
@@ -132,10 +139,17 @@ fn should_return_child_storage() {
 
 #[test]
 fn should_call_contract() {
-	let client = Arc::new(substrate_test_runtime_client::new());
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let client = Arc::new(builder.build());
 	let genesis_hash = client.genesis_hash();
-	let (client, _child) =
-		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
+	let (client, _child) = new_full(
+		backend,
+		client,
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+		None,
+	);
 
 	assert_matches!(
 		executor::block_on(client.call(
@@ -152,8 +166,11 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let mut client = Arc::new(builder.build());
 		let (api, _child) = new_full(
+			backend,
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
@@ -188,8 +205,11 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let mut client = Arc::new(builder.build());
 		let (api, _child) = new_full(
+			backend,
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
@@ -228,8 +248,13 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+	fn run_tests(
+		backend: Arc<TestBackend>,
+		mut client: Arc<TestClient>,
+		has_changes_trie_config: bool,
+	) {
 		let (api, _child) = new_full(
+			backend,
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
@@ -411,15 +436,16 @@ fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
-	run_tests(
-		Arc::new(
-			TestClientBuilder::new()
-				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-				.build(),
-		),
-		true,
-	);
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let client = Arc::new(builder.build());
+	run_tests(backend, client, false);
+
+	let builder =
+		TestClientBuilder::new().changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)));
+	let backend = builder.backend();
+	let client = Arc::new(builder.build());
+	run_tests(backend, client, true);
 }
 
 #[test]
@@ -433,8 +459,11 @@ fn should_split_ranges() {
 
 #[test]
 fn should_return_runtime_version() {
-	let client = Arc::new(substrate_test_runtime_client::new());
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let client = Arc::new(builder.build());
 	let (api, _child) = new_full(
+		backend,
 		client.clone(),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
@@ -461,8 +490,11 @@ fn should_notify_on_runtime_version_initially() {
 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(substrate_test_runtime_client::new());
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = Arc::new(builder.build());
 		let (api, _child) = new_full(
+			backend,
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,

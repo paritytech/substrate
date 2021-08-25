@@ -452,6 +452,14 @@ where
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
+
+	fn diff_block_storage(
+		&self,
+		_block: Block::Hash,
+		_storage_prefixes: Option<Vec<String>>,
+	) -> FutureResult<sp_rpc::storage::BlockStorageChangesResponse<Block::Hash>> {
+		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
+	}
 }
 
 impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F, Client>
