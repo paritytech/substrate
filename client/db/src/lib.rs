@@ -2098,7 +2098,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 									migration_to,
 									limit_size,
 									limit_items,
-									&mut operation.db_updates,
+									Some(&mut operation.db_updates),
+									(&operation.storage_updates, &operation.child_storage_updates),
 									sp_state_machine::MigrateProgress {
 										current_top: start_top.take(),
 										current_child: start_child.take(),

@@ -427,7 +427,8 @@ where
 		migration_to: StateVersion,
 		mut limit_size: Option<u64>,
 		mut limit_items: Option<u64>,
-		changes: &mut sp_trie::PrefixedMemoryDB<H>,
+		do_update: Option<&mut sp_trie::PrefixedMemoryDB<H>>,
+		previous_block_updates: (&crate::StorageCollection, &crate::ChildStorageCollection),
 		mut progress: MigrateProgress<H::Out>,
 	) -> Result<MigrateProgress<H::Out>, crate::DefaultError> {
 		use sp_trie::{TrieDB, TrieDBIterator, TrieDBMut, TrieMut};
@@ -438,7 +439,13 @@ where
 		let empty_value = sp_std::vec![23u8; dest_threshold as usize];
 		let empty_value2 = sp_std::vec![0u8; dest_threshold as usize];
 		let dest_layout = Layout::with_alt_hashing(dest_threshold);
-		let overlay = Rc::new(RefCell::new(changes));
+		let mut in_mem;
+		let overlay = if let Some(change) = do_update {
+			Rc::new(RefCell::new(change))
+		} else {
+			in_mem = sp_trie::PrefixedMemoryDB::default();
+			Rc::new(RefCell::new(&mut in_mem))
+		};
 		let mut dest_db =
 			MigrateStorage::<S, H> { overlay, storage: self.essence.backend_storage() };
 		let ori_root = self.essence.root().clone();

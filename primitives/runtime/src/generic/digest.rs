@@ -116,6 +116,11 @@ pub enum DigestItem<Hash> {
 	/// native code.
 	ChangesTrieSignal(ChangesTrieSignal),
 
+	/// System digest item that contains pending migration state.
+	/// This allows keeping trace of migration progress (root of
+	/// pending new state), and switching root to use on completion.
+	StateMigration(crate::state_version::StateMigrationDigest<Hash>),
+
 	/// Some other thing. Unsupported and experimental.
 	Other(Vec<u8>),
 }
@@ -182,6 +187,10 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Digest item that contains signal from changes tries manager to the
 	/// native code.
 	ChangesTrieSignal(&'a ChangesTrieSignal),
+	/// System digest item that contains pending migration state.
+	/// This allows keeping trace of migration progress (root of
+	/// pending new state), and switching root to use on completion.
+	StateMigration(&'a crate::state_version::StateMigrationDigest<Hash>),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(&'a Vec<u8>),
 }
@@ -199,6 +208,7 @@ pub enum DigestItemType {
 	Seal = 5,
 	PreRuntime = 6,
 	ChangesTrieSignal = 7,
+	StateMigration = 8,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -224,6 +234,7 @@ impl<Hash> DigestItem<Hash> {
 			Self::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
 			Self::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
 			Self::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
+			Self::StateMigration(ref s) => DigestItemRef::StateMigration(s),
 			Self::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
@@ -321,6 +332,8 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 			},
 			DigestItemType::ChangesTrieSignal =>
 				Ok(Self::ChangesTrieSignal(Decode::decode(input)?)),
+			DigestItemType::StateMigration =>
+				Ok(Self::StateMigration(Decode::decode(input)?)),
 			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
 		}
 	}
@@ -452,6 +465,10 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 			Self::ChangesTrieSignal(changes_trie_signal) => {
 				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
 				changes_trie_signal.encode_to(&mut v);
+			},
+			Self::StateMigration(progress) => {
+				DigestItemType::StateMigration.encode_to(&mut v);
+				progress.encode_to(&mut v);
 			},
 			Self::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);

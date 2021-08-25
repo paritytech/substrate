@@ -1427,6 +1427,7 @@ where
 			record_proof.into(),
 			inherent_digests,
 			&self.backend,
+			&self.config.state_versions,
 		)
 	}
 
@@ -1442,6 +1443,7 @@ where
 			RecordProof::No,
 			inherent_digests,
 			&self.backend,
+			&self.config.state_versions,
 		)
 	}
 }

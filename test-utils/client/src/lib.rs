@@ -34,7 +34,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-pub use sp_runtime::{Storage, StorageChild};
+pub use sp_runtime::{Storage, StorageChild, StateVersions};
 pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{
@@ -81,6 +81,7 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: Genesi
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
 	state_hashed_value: bool, // TODO useless ?
+	state_versions: StateVersions<Block>,
 	no_genesis: bool,
 }
 
@@ -105,13 +106,14 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 	pub fn with_default_backend_and_state_versions(
 		state_versions: Option<sp_runtime::StateVersions<Block>>,
 	) -> Self {
+		let state_versions = state_versions.unwrap_or_default();
 		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			std::u32::MAX,
 			std::u64::MAX,
 			sc_client_db::TransactionStorageMode::BlockBody,
-			state_versions.unwrap_or_default(),
+			state_versions.clone(),
 		));
-		Self::with_backend(backend)
+		Self::with_backend_and_state_versions(backend, state_versions)
 	}
 
 	/// Create new `TestClientBuilder` with default backend and pruning window size
@@ -119,13 +121,14 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 		keep_blocks: u32,
 		state_versions: Option<sp_runtime::StateVersions<Block>>,
 	) -> Self {
+		let state_versions = state_versions.unwrap_or_default();
 		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			keep_blocks,
 			0,
 			sc_client_db::TransactionStorageMode::BlockBody,
-			state_versions.unwrap_or_default(),
+			state_versions.clone(),
 		));
-		Self::with_backend(backend)
+		Self::with_backend_and_state_versions(backend, state_versions)
 	}
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
@@ -133,13 +136,14 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 		keep_blocks: u32,
 		state_versions: Option<sp_runtime::StateVersions<Block>>,
 	) -> Self {
+		let state_versions = state_versions.unwrap_or_default();
 		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			keep_blocks,
 			0,
 			sc_client_db::TransactionStorageMode::StorageChain,
-			state_versions.unwrap_or_default(),
+			state_versions.clone(),
 		));
-		Self::with_backend(backend)
+		Self::with_backend_and_state_versions(backend, state_versions)
 	}
 }
 
@@ -148,6 +152,11 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 {
 	/// Create a new instance of the test client builder.
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
+		Self::with_backend_and_state_versions(backend, Default::default())
+	}
+
+	/// Create a new instance of the test client builder with specific state versions.
+	pub fn with_backend_and_state_versions(backend: Arc<Backend>, state_versions: StateVersions<Block>) -> Self {
 		TestClientBuilder {
 			backend,
 			execution_strategies: ExecutionStrategies::default(),
@@ -160,6 +169,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			enable_offchain_indexing_api: false,
 			state_hashed_value: false,
 			no_genesis: false,
+			state_versions,
 		}
 	}
 
@@ -280,6 +290,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			ClientConfig {
 				offchain_indexing_api: self.enable_offchain_indexing_api,
 				no_genesis: self.no_genesis,
+				state_versions: self.state_versions.clone(),
 				..Default::default()
 			},
 		)
@@ -320,11 +331,13 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		let executor = executor.into().unwrap_or_else(|| {
 			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		});
+		let mut client_config = ClientConfig::default();
+		client_config.state_versions = self.state_versions.clone();
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
-			Default::default(),
+			client_config,
 		)
 		.expect("Creates LocalCallExecutor");
 

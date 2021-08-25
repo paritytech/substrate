@@ -21,6 +21,7 @@ use crate::traits::{Block, NumberFor};
 use sp_arithmetic::traits::Zero;
 pub use sp_core::state_version::{StateVersion, DEFAULT_STATE_VERSION};
 use sp_std::{str::FromStr, vec::Vec};
+use codec::{Encode, Decode};
 
 /// Multiple versions of state in use for a chain.
 #[derive(Clone, crate::RuntimeDebug)]
@@ -40,7 +41,7 @@ impl<B: Block> StateVersions<B> {
 	pub fn genesis_state_version(&self) -> StateVersion {
 		if let Some((number, version)) = self.canonical_states.get(0) {
 			if number.is_zero() {
-				return *version
+				return *version;
 			}
 		}
 		DEFAULT_STATE_VERSION
@@ -52,7 +53,7 @@ impl<B: Block> StateVersions<B> {
 		let mut version = DEFAULT_STATE_VERSION;
 		for (number, state) in self.canonical_states.iter() {
 			if number > &at {
-				break
+				break;
 			}
 			version = *state;
 		}
@@ -66,10 +67,10 @@ impl<B: Block> StateVersions<B> {
 		for (i, (number, _)) in self.canonical_states.iter().enumerate() {
 			if number == &at {
 				replace = Some(i);
-				break
+				break;
 			}
 			if number > &at {
-				break
+				break;
 			}
 			insert = Some(i + 1);
 		}
@@ -95,7 +96,7 @@ impl<B: Block> StateVersions<B> {
 			if let Ok(number) = NumberFor::<B>::from_str(number) {
 				canonical_states.push((number.into(), version));
 			} else {
-				return None
+				return None;
 			}
 		}
 		Some(StateVersions { canonical_states })
@@ -112,13 +113,40 @@ impl<B: Block> StateVersions<B> {
 		for (number, version) in self.canonical_states.iter() {
 			if number == &at {
 				to = Some(*version);
-				break
+				break;
 			}
 			if number > &at {
-				break
+				break;
 			}
 			from = *version;
 		}
 		to.map(|to| (from, to))
 	}
+}
+
+/// Migration definition at a given block.
+#[derive(PartialEq, Eq, Clone, crate::RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
+pub struct StateMigrationDigest<Hash> {
+	/// State version to double check.
+	from: StateVersion,
+	/// State version to double check.
+	to: StateVersion,
+	/// State root of target state.
+	state_root: Hash,
+	/// Current state.
+	progress: StateMigrationProgress,
+}
+
+/// State of migration for a given block.
+#[derive(PartialEq, Eq, Clone, crate::RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
+pub enum StateMigrationProgress {
+	// Pending, read progress from destination at well known key
+	// (need to overwrite with origin value when finish).
+	/// Destination is equivalent to origin.
+	///
+	/// Next block will use `to` state with the
+	/// state root of from the migration progress destination state.
+	Finished,
 }

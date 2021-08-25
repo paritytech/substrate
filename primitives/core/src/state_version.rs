@@ -31,6 +31,7 @@ pub const DEFAULT_STATE_VERSION: StateVersion =
 /// Supported version with substrate chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum StateVersion {
 	/// Patricia trie Radix 16 without extension node.
 	V0,

@@ -34,7 +34,7 @@ use sp_api::{
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, StateVersions,
 	traits::{Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
 };
 
@@ -139,6 +139,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	backend: &'a B,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
+	state_versions: &'a StateVersions<Block>,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -161,6 +162,7 @@ where
 		record_proof: RecordProof,
 		inherent_digests: DigestFor<Block>,
 		backend: &'a B,
+		state_versions: &'a StateVersions<Block>,
 	) -> Result<Self, Error> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
@@ -189,6 +191,7 @@ where
 			block_id,
 			backend,
 			estimated_header_size,
+			state_versions,
 		})
 	}
 
@@ -223,7 +226,7 @@ where
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
 	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		let header = self
+		let mut header = self
 			.api
 			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
@@ -248,6 +251,56 @@ where
 			.into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)
 			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 
+		let number = header.number().clone();
+		if let Some((migration_from, migration_to)) = self.state_versions.need_migrate(number) {
+			// TODO remove code duplicate with client/db/src/lib import block
+			use sp_api::StateBackend;
+			if let Some(prev_block_state) = state.as_trie_backend() {
+				let limit_size: Option<u64> = None;
+				let limit_items: Option<u64> = None;
+				let init_root = header.state_root().clone();
+				let mut current_root = init_root.clone();
+				let mut start_top = None;
+				let mut start_child = None;
+
+				loop {
+					let sp_state_machine::MigrateProgress { current_top, current_child, root } =
+						prev_block_state
+							.migrate(
+								migration_from,
+								migration_to,
+								limit_size,
+								limit_items,
+								//Some(&mut storage_changes.transaction),
+								None,
+								(&storage_changes.main_storage_changes, &storage_changes.child_storage_changes),
+								sp_state_machine::MigrateProgress {
+									current_top: start_top.take(),
+									current_child: start_child.take(),
+									root: Some(current_root), // TODO non optional rather?
+								},
+							)
+							.map_err(|err| {
+								sp_blockchain::Error::Backend(format!(
+									"error migrating: {}",
+									err
+								))
+							})?;
+
+					start_top = current_top;
+					start_child = current_child;
+					current_root =
+						root.unwrap_or_else(|| header.state_root().clone());
+					if start_top.is_none() {
+						break
+					}
+				}
+
+				header.set_state_root(current_root);
+			} else {
+				panic!("Could not migrate at block: {:?}", number);
+			}
+		}
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
 			storage_changes,
