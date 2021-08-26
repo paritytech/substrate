@@ -152,7 +152,7 @@ impl<B: Block> StateVersions<B> {
 		// TODO switch to default when all V0 chains did migrate.
 		let mut from = StateVersion::V0;
 		let mut to = None;
-		let mut first = true;
+		let mut first = false;
 		let at_plus_one = at + 1u32.into();
 		for (number, version) in self.canonical_states.iter() {
 			first = number == &at;
