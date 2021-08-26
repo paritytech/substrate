@@ -17,8 +17,8 @@
 
 //! Types for working with block storage change data
 
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 use sp_core::storage::{StorageData, StorageKey};
 
