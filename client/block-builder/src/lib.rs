@@ -303,12 +303,12 @@ where
 				if start_top.is_some() {
 					unreachable!("TODO save progress in dest state in migrate fn and put a differnt progress digest");
 				}
-				header.digest_mut().push(sp_runtime::DigestItem::StateMigration(sp_runtime::StateMigrationDigest {
+				StateVersions::<Block>::set_migrate_digest(header.digest_mut(), sp_runtime::StateMigrationDigest {
 					from: migration_from,
 					to: migration_to,
 					state_root: current_root,
 					progress: sp_runtime::StateMigrationProgress::Finished,
-				}));
+				});
 			} else {
 				panic!("Could not migrate at block: {:?}", number);
 			}

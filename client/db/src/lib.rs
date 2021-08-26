@@ -2130,27 +2130,20 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					}
 
 					// TODO ensure no duplicate when setting.
-					let has_finished_digest = pending_block.header.digest().log(|digest| match digest {
-						sp_runtime::DigestItem::StateMigration(sp_runtime::StateMigrationDigest {
+					let has_finished_digest = match StateVersions::<Block>::migrate_digest(pending_block.header.digest()) {
+						Some(sp_runtime::StateMigrationDigest {
 							from,
 							to,
 							state_root,
 							progress,
-						}) => {
-							if from == &migration_from
-								&& to == &migration_to
-								&& state_root == &current_root
-								&& progress == &sp_runtime::StateMigrationProgress::Finished {
-									return Some(&());
-							}
-							// check for other state migration digest
-							// if there is.
-							None
-						},
-						_ => None,
-					});
+						}) => from == &migration_from
+							&& to == &migration_to
+							&& state_root == &current_root
+							&& progress == &sp_runtime::StateMigrationProgress::Finished,
+						_ => false,
+					};
 
-					if has_finished_digest.is_none() {
+					if !has_finished_digest {
 						info!("Migration state mismatch with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
 						return Err(ClientError::InvalidMigrationState);
 					}
