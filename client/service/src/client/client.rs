@@ -868,7 +868,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				match self.backend.blockchain().body(BlockId::Hash(*parent_hash)).unwrap() {
 					Some(previous_block_extrinsics) => {
-						info!("previous block has extrinsics");
 						//TODO include serialize/deserialize seed field in header
 						//and use received seed instead
 						let mut header = import_block.header.clone();

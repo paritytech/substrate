@@ -144,7 +144,6 @@ where
 
 		let block_id = BlockId::Hash(parent_hash);
 
-		info!("Api call to initialize the block");
 		api.initialize_block_with_context(
 			&block_id, ExecutionContext::BlockConstruction, &header,
 		)?;
@@ -246,7 +245,7 @@ where
 			.unwrap()
 		{
 			Some(previous_block_extrinsics) => {
-				info!("transaction count {}", previous_block_extrinsics.len());
+				log::debug!(target: "block_builder", "transaction count {}", previous_block_extrinsics.len());
 				let shuffled_extrinsics = if previous_block_extrinsics.len() <= 1 {
 					previous_block_extrinsics
 				}else{
