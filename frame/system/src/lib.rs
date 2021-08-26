@@ -1458,14 +1458,14 @@ impl<T: Config> Pallet<T> {
 	/// items for any behavior like this.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn events() -> Vec<EventRecord<T::Event, T::Hash>> {
-		Self::read_events_i_know_what_i_am_doing()
+		Self::read_events_no_consensus()
 	}
 
 	/// Get the current events deposited by the runtime.
 	///
-	/// Should only be called if you know what you are doing and outside of the runtime else it can
-	/// have a large impact on the PoV size of a block.
-	pub fn read_events_i_know_what_i_am_doing() -> Vec<EventRecord<T::Event, T::Hash>> {
+	/// Should only be called if you know what you are doing and outside of the runtime block
+	/// execution else it can have a large impact on the PoV size of a block.
+	pub fn read_events_no_consensus() -> Vec<EventRecord<T::Event, T::Hash>> {
 		Events::<T>::get()
 	}
 

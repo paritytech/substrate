@@ -1238,7 +1238,7 @@ impl<T: Config> Pallet<T> {
 		// After election finalization, clear OCW solution storage.
 		//
 		// We can read the events here because offchain worker doesn't affect PoV.
-		if <frame_system::Pallet<T>>::read_events_i_know_what_i_am_doing()
+		if <frame_system::Pallet<T>>::read_events_no_consensus()
 			.into_iter()
 			.filter_map(|event_record| {
 				let local_event = <T as Config>::Event::from(event_record.event);
