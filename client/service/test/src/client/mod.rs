@@ -388,12 +388,20 @@ fn block_builder_works_with_transactions() {
 	}).unwrap();
 
 	let block = builder.build(Default::default()).unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
-
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
+
+	let builder = client.new_block_at(&BlockId::Hash(block.header().hash()),Default::default(), false).unwrap();
+	client.import(BlockOrigin::Own, builder.build(Default::default()).unwrap().block).unwrap();
+
+	assert_eq!(client.chain_info().best_number, 2);
+	assert_eq!(
 		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
 		client.state_at(&BlockId::Number(0)).unwrap().pairs()
+	);
+	assert_ne!(
+		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
+		client.state_at(&BlockId::Number(2)).unwrap().pairs()
 	);
 	assert_eq!(
 		client.runtime_api().balance_of(
