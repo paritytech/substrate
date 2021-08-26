@@ -2115,11 +2115,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 									))
 								})?;
 
-						info!("Finished migration iteration, new state root: {:x?}, elapsed time: {:?}.", &current_root, timer.elapsed());
 						start_top = current_top;
 						start_child = current_child;
 						current_root =
 							root.unwrap_or_else(|| pending_block.header.state_root().clone());
+						info!("Finished migration iteration, new state root: {:x?}, elapsed time: {:?}.", &current_root, timer.elapsed());
 						if start_top.is_none() {
 							break
 						}
