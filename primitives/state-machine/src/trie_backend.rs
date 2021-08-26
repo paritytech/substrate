@@ -310,11 +310,6 @@ where
 	storage: &'a S,
 }
 
-// type is neither send nor sync but only ever
-// use in migrate method local to a single thread.
-unsafe impl<'a, S, H: Hasher> Send for MigrateStorage<'a, S, H> {}
-unsafe impl<'a, S, H: Hasher> Sync for MigrateStorage<'a, S, H> {}
-
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Prefix};
 use sp_trie::DBValue;
 
