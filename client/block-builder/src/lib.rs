@@ -377,6 +377,7 @@ mod tests {
 			RecordProof::Yes,
 			Default::default(),
 			&*backend,
+			&client.state_versions(),
 		)
 		.unwrap()
 		.build()

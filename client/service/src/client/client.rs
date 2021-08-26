@@ -116,7 +116,7 @@ where
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
-	config: ClientConfig<Block>,
+	 config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
@@ -1265,6 +1265,11 @@ where
 		}
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
+	}
+
+	/// Access to configured state versions.
+	pub fn state_versions(&self) -> &sp_runtime::StateVersions<Block> {
+		&self.config.state_versions
 	}
 }
 

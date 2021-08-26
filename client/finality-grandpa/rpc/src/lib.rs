@@ -415,6 +415,7 @@ mod tests {
 			RecordProof::No,
 			Default::default(),
 			&*backend,
+			&Default::default(),
 		)
 		.unwrap()
 		.build()

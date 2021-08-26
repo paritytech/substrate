@@ -234,6 +234,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 
 	/// Enable the internal value hash of state.
+	/// TODO remove and use state_versions instead
 	pub fn state_hashed_value(mut self) -> Self {
 		self.state_hashed_value = true;
 		self
