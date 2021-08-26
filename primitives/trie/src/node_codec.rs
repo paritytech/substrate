@@ -175,7 +175,7 @@ impl<H> NodeCodecT for NodeCodec<H>
 where
 	H: Hasher,
 {
-	const OFFSET_CONTAINS_HASH: usize = 1;
+	const OFFSET_IF_CONTAINS_HASH: usize = 1;
 	type Error = Error;
 	type HashOut = H::Out;
 
