@@ -181,11 +181,6 @@ impl<T: Config> ListScenario<T> {
 			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
 		)?;
 
-		log!(
-			info,
-			"A origin1 ledger active {:#?}",
-			Ledger::<T>::get(&origin_controller1).ok_or("ledger not created before")?.active
-		);
 
 		let (origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 3,
@@ -196,12 +191,6 @@ impl<T: Config> ListScenario<T> {
 			RawOrigin::Signed(origin_controller2.clone()).into(),
 			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))].clone(),
 		)?;
-
-		log!(
-			info,
-			"B origin1 ledger active {:#?}",
-			Ledger::<T>::get(&origin_controller1).ok_or("ledger not created before")?.active
-		);
 
 		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
