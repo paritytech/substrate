@@ -201,6 +201,11 @@ fn should_send_initial_storage_changes_and_notifications() {
 			nonce: 0,
 		}).unwrap();
 		let block = builder.build(Default::default()).unwrap().block;
+		client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+		// add extra block so precious one can be executed
+		let builder = client.new_block_at(&BlockId::Hash(block.header().hash()), Default::default(), false).unwrap();
+		let block = builder.build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
