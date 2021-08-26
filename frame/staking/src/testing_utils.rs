@@ -53,26 +53,21 @@ pub fn create_funded_user<T: Config>(
 ) -> T::AccountId {
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
-	T::Currency::make_free_balance_be(&user, balance);
+	let _ = T::Currency::make_free_balance_be(&user, balance);
 	// ensure T::CurrencyToVote will work correctly.
-	T::Currency::issue(balance);
+	// T::Currency::issue(balance);
 	user
 }
 
 /// Grab a funded user with max Balance.
-pub fn create_funded_user_with_max<T: Config>(
+pub fn create_funded_user_with_balance<T: Config>(
 	string: &'static str,
 	n: u32,
-	balance_factor: BalanceOf<T>,
+	balance: BalanceOf<T>,
 ) -> T::AccountId {
 	use sp_runtime::traits::Bounded;
 	let user = account(string, n, SEED);
-	let base = T::Currency::minimum_balance() * balance_factor;
-	let balance = base.saturating_mul(20u32.into());
-	let imbalance = T::Currency::make_free_balance_be(&user, balance);
-	// ensure T::CurrencyToVote will work correctly.
-	// T::Currency::issue(balance);
-	// cancels itself out
+	let _ = T::Currency::make_free_balance_be(&user, balance);
 	user
 }
 
@@ -96,22 +91,21 @@ pub fn create_stash_controller<T: Config>(
 	return Ok((stash, controller))
 }
 
-/// Create a stash and controller pair with max free balance.
-pub fn create_stash_controller_with_max_free<T: Config>(
+/// Create a stash and controller pair with fixed balance.
+pub fn create_stash_controller_with_balance<T: Config>(
 	n: u32,
-	balance_factor: crate::BalanceOf<T>,
+	balance: crate::BalanceOf<T>,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user_with_max::<T>("stash", n, balance_factor);
-	let controller = create_funded_user_with_max::<T>("controller", n, balance_factor);
+	let stash = create_funded_user_with_balance::<T>("stash", n, balance);
+	let controller = create_funded_user_with_balance::<T>("controller", n, balance);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source =
 		T::Lookup::unlookup(controller.clone());
-	let amount = T::Currency::minimum_balance() * (balance_factor / 10u32.into()).max(1u32.into());
 
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		controller_lookup,
-		amount,
+		balance,
 		destination,
 	)?;
 	Ok((stash, controller))

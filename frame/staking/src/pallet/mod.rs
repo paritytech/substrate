@@ -760,7 +760,9 @@ pub mod pallet {
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
 				let extra = extra.min(max_additional);
-				log!(info, "extra to bond_extra {:#?}", extra);
+				sp_std::if_std! {
+					println!("extra to bond_extra {:#?}", extra);
+				}
 				ledger.total += extra;
 				ledger.active += extra;
 				// Last check: the new active amount of ledger must be more than ED.

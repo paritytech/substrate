@@ -162,29 +162,23 @@ impl<T: Config> ListScenario<T> {
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
-		log!(info, "scenario origin_weight {:#?}", origin_weight);
+		// burn the entire issuance.
+		let i = T::Currency::burn(T::Currency::total_issuance());
+		sp_std::mem::forget(i);
 
-		// create validators to nominate
-		let validators = create_validators::<T>(
-			T::MAX_NOMINATIONS,
-			100,
-			T::MAX_NOMINATIONS * 2, // account seed prevents unintentional account collisions
-		)?;
+		log!(info, "scenario origin_weight {:#?}", origin_weight);
 
 		// create accounts with the origin weight
 
-		// create_stash_controller takes a factor, so we compute it
-		let origin_factor: BalanceOf<T> =
-			origin_weight * 10u32.into() / T::Currency::minimum_balance();
-
-		let (origin_stash1, origin_controller1) = create_stash_controller_with_max_free::<T>(
+		let (origin_stash1, origin_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 2,
-			origin_factor,
+			origin_weight,
 			Default::default(),
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
-			validators.clone(),
+			// NOTE: these don't really need to be validators.
+			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
 		)?;
 
 		log!(
@@ -193,14 +187,14 @@ impl<T: Config> ListScenario<T> {
 			Ledger::<T>::get(&origin_controller1).ok_or("ledger not created before")?.active
 		);
 
-		let (origin_stash2, origin_controller2) = create_stash_controller_with_max_free::<T>(
+		let (origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 3,
-			origin_factor,
+			origin_weight,
 			Default::default(),
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller2.clone()).into(),
-			validators.clone(),
+			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))].clone(),
 		)?;
 
 		log!(
@@ -212,18 +206,24 @@ impl<T: Config> ListScenario<T> {
 		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
 			T::SortedListProvider::weight_update_worst_case(&origin_stash1, is_increase);
+
 		let total_issuance = T::Currency::total_issuance();
+
 		let dest_weight =
 			T::CurrencyToVote::to_currency(dest_weight_as_vote as u128, total_issuance);
+
 		let dest_factor: BalanceOf<T> = dest_weight * 10u32.into() / T::Currency::minimum_balance();
 
 		// create an account with the worst case destination weight
-		let (dest_stash1, dest_controller1) = create_stash_controller_with_max_free::<T>(
+		let (dest_stash1, dest_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 1,
-			dest_factor,
+			dest_weight,
 			Default::default(),
 		)?;
-		Staking::<T>::nominate(RawOrigin::Signed(dest_controller1).into(), validators)?;
+		Staking::<T>::nominate(
+			RawOrigin::Signed(dest_controller1).into(),
+			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
+		)?;
 
 		Ok(ListScenario {
 			dest_stash1,
@@ -303,17 +303,12 @@ benchmarks! {
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 
 		let max_additional = scenario.dest_weight.clone() - origin_weight;
-		log!(info, "dest_weight {:#?}, origin_weight {:#?}", scenario.dest_weight.clone(), origin_weight);
-		log!(info, "max additional in benchmark to try {:#?}", max_additional);
 
 		let stash = scenario.origin_stash1.clone();
 		let controller = scenario.origin_controller1.clone();
-		let mut ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
-		let original_bonded: BalanceOf<T> = ledger.active;
+		let original_bonded: BalanceOf<T> = Ledger::<T>::get(&controller).map(|l| l.active).ok_or("ledger not created after")?;
 
-		// ledger.total = BalanceOf::<T>::max_value();
-		// Ledger::<T>::insert(&controller, &ledger);
-
+		T::Currency::deposit_into_existing(&stash, max_additional);
 		scenario.check_preconditions();
 
 		whitelist_account!(stash);
@@ -499,18 +494,16 @@ benchmarks! {
 
 		// setup a worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let origin_weight_factor: BalanceOf<T> =
-			origin_weight * 10u32.into() / T::Currency::minimum_balance();
-		let (stash, controller) = create_stash_controller_with_max_free::<T>(
+		let (stash, controller) = create_stash_controller_with_balance::<T>(
 			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
-			origin_weight_factor, // bond an amount that puts them in the bag with nodes.
+			origin_weight,
 			Default::default(),
-		)?;
+		).unwrap();
 
 		assert!(!Nominators::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
 
-		let validators = create_validators::<T>(n, 100, 0)?;
+		let validators = create_validators::<T>(n, 100, 0).unwrap();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), validators)
 	verify {
