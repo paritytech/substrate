@@ -557,16 +557,16 @@ mod tests {
 	}
 
 	#[test]
-	// TODO this tests fails due two reasons. It verifies extrinsics order compairing extrinsic
-	// root hash block-builder/src/lib.rs:272 and due to fact that extrinsic validation mechanism
-	// has been disabled BlockBuilder::push. Once shuffling will be done at runtime and validation
-	// will be reverted it can be enalbed again
-	#[ignore]
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full(Default::default(), None, spawner, client.clone());
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			None,
+			spawner,
+			client.clone(),
+		);
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -608,10 +608,10 @@ mod tests {
 				proposer.propose(create_inherents(), Default::default(), deadline, RecordProof::No)
 			).map(|r| r.block).unwrap();
 
-				// then
-				// block should have some extrinsics although we have some more in the pool.
-				//assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
-				assert_eq!(txpool.ready().count(), expected_pool_transactions);
+			// then
+			// block should have some extrinsics although we have some more in the pool.
+			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
+			assert_eq!(txpool.ready().count(), expected_pool_transactions);
 
 				block
 			};
@@ -626,7 +626,20 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
+		let block_hash = block.header().hash();
 		client.import(BlockOrigin::Own, block).unwrap();
+
+		// push one extra block - extrinsics in the pool makred as 'exhausted_resources'
+		// to succeed needs to be executed as first in the processed block. Due to
+		// modifications in block_builder all extrinsics from previous block are applied
+		// beofre trying to validate extrinsics from the tx pool. Once we include empty
+		// block in between 'exhausted_resources' extrinsic from the pool is exeucted as
+		// the first one and the origin test logic is maintained
+		let block = client.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
+			.unwrap()
+			.build(Default::default())
+			.unwrap();
+		client.import(BlockOrigin::Own, block.block).unwrap();
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
@@ -635,9 +648,8 @@ mod tests {
 					.expect("there should be header")
 			))
 		);
-
 		// now let's make sure that we can still make some progress
-		let block = propose_block(&client, 1, 2, 5);
+		let block = propose_block(&client, 2, 2, 5);
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 }
