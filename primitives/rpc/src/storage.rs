@@ -37,7 +37,7 @@ pub struct BlockStorageChanges<Hash> {
 	pub storage_changes: FxHashMap<StorageKey, Option<StorageData>>,
 }
 
-/// Error response for the `state_traceBlockStorageAt` RPC.
+/// Error response for the `state_diffBlockStorage` RPC.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageChangesError {
@@ -45,12 +45,12 @@ pub struct StorageChangesError {
 	pub error: String,
 }
 
-/// Response for the `state_traceBlockStorageAt` RPC.
+/// Response for the `state_diffBlockStorage` RPC.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum BlockStorageChangesResponse<Hash> {
-	/// Error block tracing response
+	/// Error block storage changes response
 	StorageChangesError(StorageChangesError),
-	/// Successful block storage tracing response
+	/// Successful block storage changes response
 	BlockStorageChanges(BlockStorageChanges<Hash>),
 }
