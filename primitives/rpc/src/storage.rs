@@ -18,6 +18,7 @@
 //! Types for working with block storage change data
 
 use serde::{Deserialize, Serialize};
+use rustc_hash::FxHashMap;
 
 use sp_core::storage::{StorageData, StorageKey};
 
@@ -33,7 +34,7 @@ pub struct BlockStorageChanges<Hash> {
 	/// prefixes. Empty vector means do not filter out any storage prefixes.
 	pub storage_prefixes: Vec<String>,
 	/// Vec of storage key-value pair.
-	pub storage_changes: Vec<(StorageKey, Option<StorageData>)>,
+	pub storage_changes: FxHashMap<StorageKey, Option<StorageData>>,
 }
 
 /// Error response for the `state_traceBlockStorageAt` RPC.

@@ -680,7 +680,7 @@ where
 					.into_iter()
 					.filter(|(k, _v)| storage_key_filter(k, &prefixes))
 					.map(|(k, v)| (StorageKey(k), v.map(StorageData)))
-					.collect::<Vec<_>>();
+					.collect::<HashMap<_, _, _>>();
 				let approx_payload_size =
 					BASE_PAYLOAD + main_storage_changes.len() * AVG_STORAGE_KV;
 				if approx_payload_size > rpc_max_payload {
