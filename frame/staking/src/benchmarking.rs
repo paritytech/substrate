@@ -162,9 +162,7 @@ impl<T: Config> ListScenario<T> {
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
-		// create_stash_controller takes a factor, so we compute it
-		let origin_factor: BalanceOf<T> =
-			origin_weight * 10u32.into() / T::Currency::minimum_balance();
+		log!(info, "scenario origin_weight {:#?}", origin_weight);
 
 		// create validators to nominate
 		let validators = create_validators::<T>(
@@ -174,6 +172,11 @@ impl<T: Config> ListScenario<T> {
 		)?;
 
 		// create accounts with the origin weight
+
+		// create_stash_controller takes a factor, so we compute it
+		let origin_factor: BalanceOf<T> =
+			origin_weight * 10u32.into() / T::Currency::minimum_balance();
+
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_max_free::<T>(
 			USER_SEED + 2,
 			origin_factor,
@@ -184,6 +187,12 @@ impl<T: Config> ListScenario<T> {
 			validators.clone(),
 		)?;
 
+		log!(
+			info,
+			"A origin1 ledger active {:#?}",
+			Ledger::<T>::get(&origin_controller1).ok_or("ledger not created before")?.active
+		);
+
 		let (origin_stash2, origin_controller2) = create_stash_controller_with_max_free::<T>(
 			USER_SEED + 3,
 			origin_factor,
@@ -193,6 +202,12 @@ impl<T: Config> ListScenario<T> {
 			RawOrigin::Signed(origin_controller2.clone()).into(),
 			validators.clone(),
 		)?;
+
+		log!(
+			info,
+			"B origin1 ledger active {:#?}",
+			Ledger::<T>::get(&origin_controller1).ok_or("ledger not created before")?.active
+		);
 
 		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
@@ -280,18 +295,24 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup the worst case list scenario.
-		let total_issuance = T::Currency::total_issuance();
+
 		// the weight the nominator will start at.
-		let origin_weight = One::one();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 
 		let max_additional = scenario.dest_weight.clone() - origin_weight;
+		log!(info, "dest_weight {:#?}, origin_weight {:#?}", scenario.dest_weight.clone(), origin_weight);
+		log!(info, "max additional in benchmark to try {:#?}", max_additional);
 
 		let stash = scenario.origin_stash1.clone();
 		let controller = scenario.origin_controller1.clone();
-		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
+		let mut ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
+
+		// ledger.total = BalanceOf::<T>::max_value();
+		// Ledger::<T>::insert(&controller, &ledger);
 
 		scenario.check_preconditions();
 
@@ -311,7 +332,7 @@ benchmarks! {
 		// setup the worst case list scenario.
 		let total_issuance = T::Currency::total_issuance();
 		// the weight the nominator will start at.
-		let origin_weight = T::CurrencyToVote::to_currency(VoteWeight::MAX as u128, total_issuance);
+		let origin_weight = T::CurrencyToVote::to_currency(106_282_535_907_434u128, total_issuance);
 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
 
 		let stash = scenario.origin_stash1.clone();
@@ -357,9 +378,11 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case list scenario. Note that we don't care about the setup of the
 		// destination position because we are doing a removal from the list but no insert.
-		let scenario = ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -383,9 +406,11 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case scenario where the user calling validate was formerly a nominator so
 		// they must be removed from the list.
-		let scenario = ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -470,11 +495,12 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case list scenario.
-		let threshold = One::one();
-		let scenario = ListScenario::<T>::new(threshold, true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let origin_weight_factor: BalanceOf<T> =
-			threshold * 10u32.into() / T::Currency::minimum_balance();
+			origin_weight * 10u32.into() / T::Currency::minimum_balance();
 		let (stash, controller) = create_stash_controller_with_max_free::<T>(
 			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
 			origin_weight_factor, // bond an amount that puts them in the bag with nodes.
@@ -496,9 +522,11 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case list scenario. Note that we don't care about the setup of the
 		// destination position because we are doing a removal from the list but no insert.
-		let scenario = ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -564,9 +592,11 @@ benchmarks! {
 		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case list scenario. Note that we don't care about the setup of the
 		// destination position because we are doing a removal from the list but no insert.
-		let scenario = ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
@@ -670,11 +700,12 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
-		// setup a worst case list scenario.
+		let origin_weight = MinNominatorBond::<T>::get()
+			.max(T::Currency::minimum_balance())
+			// we use 100 to play friendly with the bags, list threshold values in the mock.
+			.max(100u32.into());
 
-		// the weight the nominator will start at. Note we use 100 to play friendly with the bags,
-		// list threshold values in the mock.
-		let origin_weight = 100u32.into();
+		// setup a worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let dest_weight = scenario.dest_weight.clone();
 
@@ -736,9 +767,11 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case list scenario. Note that we don't care about the setup of the
 		// destination position because we are doing a removal from the list but no insert.
-		let scenario = ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 
@@ -902,9 +935,11 @@ benchmarks! {
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
+		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
 		// setup a worst case list scenario. Note that we don't care about the setup of the
 		// destination position because we are doing a removal from the list but no insert.
-		let scenario = ListScenario::<T>::new(One::one(), true)?;
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));

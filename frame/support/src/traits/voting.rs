@@ -61,6 +61,9 @@ impl U128CurrencyToVote {
 
 impl CurrencyToVote<u128> for U128CurrencyToVote {
 	fn to_vote(value: u128, issuance: u128) -> u64 {
+		sp_std::if_std! {
+			println!("issuance factor {:#?}. issuance {:#?}", Self::factor(issuance), issuance);
+		}
 		(value / Self::factor(issuance)).saturated_into()
 	}
 

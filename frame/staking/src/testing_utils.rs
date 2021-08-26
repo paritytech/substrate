@@ -60,13 +60,19 @@ pub fn create_funded_user<T: Config>(
 }
 
 /// Grab a funded user with max Balance.
-pub fn create_funded_user_with_max<T: Config>(string: &'static str, n: u32) -> T::AccountId {
+pub fn create_funded_user_with_max<T: Config>(
+	string: &'static str,
+	n: u32,
+	balance_factor: BalanceOf<T>,
+) -> T::AccountId {
 	use sp_runtime::traits::Bounded;
 	let user = account(string, n, SEED);
-	let balance = BalanceOf::<T>::max_value();
-	T::Currency::make_free_balance_be(&user, balance);
+	let base = T::Currency::minimum_balance() * balance_factor;
+	let balance = base.saturating_mul(20u32.into());
+	let imbalance = T::Currency::make_free_balance_be(&user, balance);
 	// ensure T::CurrencyToVote will work correctly.
-	T::Currency::issue(balance); // TODO I don't get this .. will drop NegativeImbalance which cancels itself out
+	// T::Currency::issue(balance);
+	// cancels itself out
 	user
 }
 
@@ -96,11 +102,12 @@ pub fn create_stash_controller_with_max_free<T: Config>(
 	balance_factor: crate::BalanceOf<T>,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user_with_max::<T>("stash", n);
-	let controller = create_funded_user_with_max::<T>("controller", n);
+	let stash = create_funded_user_with_max::<T>("stash", n, balance_factor);
+	let controller = create_funded_user_with_max::<T>("controller", n, balance_factor);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source =
 		T::Lookup::unlookup(controller.clone());
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10u32.into()).max(1u32.into());
+
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		controller_lookup,

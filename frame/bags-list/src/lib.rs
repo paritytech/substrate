@@ -278,15 +278,17 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		let node = list::Node::<T>::get(who).unwrap();
 		let current_bag_idx = thresholds
 			.iter()
-			.chain(std::iter::once(&VoteWeight::MAX))
+			.chain(sp_std::iter::once(&VoteWeight::MAX))
 			.position(|w| w == &node.bag_upper)
 			.unwrap();
 
 		if is_increase {
 			let next_threshold_idx = current_bag_idx + 1;
+			log!(info, "next_threshold_idx {:#?}", next_threshold_idx);
 			assert!(thresholds.len() > next_threshold_idx);
 			thresholds[next_threshold_idx]
 		} else {
+			log!(info, "node bag upper {:#?}", node.bag_upper);
 			assert!(current_bag_idx != 0);
 			let prev_threshold_idx = current_bag_idx - 1;
 			thresholds[prev_threshold_idx]
