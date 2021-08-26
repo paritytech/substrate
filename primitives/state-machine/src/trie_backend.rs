@@ -451,8 +451,10 @@ where
 		let mut dest = TrieDBMut::from_existing_with_layout(&mut dest_db, dest_root, dest_layout)
 			.map_err(|e| trie_error::<H>(&*e))?;
 
-		let iter = TrieDBIterator::new(
+		let iter = TrieDBIterator::new_prefixed_then_seek(
 			&ori,
+			&[],
+			progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[]),
 		)
 		.map_err(|e| trie_error::<H>(&*e))?;
 		for elt in iter {
