@@ -16,12 +16,13 @@
 // limitations under the License.
 
 use super::*;
-use crate::{self as multi_phase, unsigned as unsigned_pallet, verifier as verifier_pallet};
+use crate::{self as multi_block, unsigned as unsigned_pallet, verifier as verifier_pallet};
 use frame_election_provider_support::{data_provider, ElectionDataProvider, Support};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
+	crypto::UncheckedInto,
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
@@ -37,7 +38,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16, Perbill,
 };
-use std::{convert::TryFrom, sync::Arc};
+use std::{convert::TryFrom, sync::Arc, vec};
+use substrate_test_utils::assert_eq_uvec;
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -51,9 +53,9 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		MultiBlock: multi_block::{Pallet, Event<T>}, // 10 Signed Phase,
 		VerifierPallet: verifier_pallet::{Pallet},
 		UnsignedPallet: unsigned_pallet::{Pallet, Call, ValidateUnsigned},
-		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
 );
 
@@ -69,11 +71,11 @@ sp_npos_elections::generate_solution_type!(
 );
 
 /// All events of this pallet.
-pub(crate) fn multi_phase_events() -> Vec<super::Event<Runtime>> {
+pub(crate) fn multi_block_events() -> Vec<super::Event<Runtime>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::MultiPhase(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let Event::MultiBlock(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>()
 }
 
@@ -82,7 +84,7 @@ pub fn roll_to(n: u64) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
-		MultiPhase::on_initialize(i);
+		MultiBlock::on_initialize(i);
 	}
 }
 
@@ -90,73 +92,16 @@ pub fn roll_to_with_ocw(n: u64) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
-		MultiPhase::on_initialize(i);
-		MultiPhase::offchain_worker(i);
+		MultiBlock::on_initialize(i);
+		MultiBlock::offchain_worker(i);
 	}
 }
-
-// pub struct TrimHelpers {
-// 	pub voters: Vec<Voter<Runtime>>,
-// 	pub assignments: Vec<IndexAssignmentOf<Runtime>>,
-// 	pub encoded_size_of:
-// 		Box<dyn Fn(&[IndexAssignmentOf<Runtime>]) -> Result<usize, sp_npos_elections::Error>>,
-// 	pub voter_index: Box<
-// 		dyn Fn(
-// 			&<Runtime as frame_system::Config>::AccountId,
-// 		) -> Option<SolutionVoterIndexOf<Runtime>>,
-// 	>,
-// }
-
-/// Helpers for setting up trimming tests.
-///
-/// Assignments are pre-sorted in reverse order of stake.
-// pub fn trim_helpers() -> TrimHelpers {
-// 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
-// 	let stakes: std::collections::HashMap<_, _> =
-// 		voters.iter().map(|(id, stake, _)| (*id, *stake)).collect();
-
-// 	// Compute the size of a solution comprised of the selected arguments.
-// 	//
-// 	// This function completes in `O(edges)`; it's expensive, but linear.
-// 	let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
-// 		SolutionOf::<Runtime>::try_from(assignments).map(|s| s.encoded_size())
-// 	});
-// 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
-// 	let voter_index = helpers::voter_index_fn_owned::<Runtime>(cache);
-// 	let target_index = helpers::target_index_fn::<Runtime>(&targets);
-
-// 	let desired_targets = MultiPhase::desired_targets().unwrap();
-
-// 	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-// 		desired_targets as usize,
-// 		targets.clone(),
-// 		voters.clone(),
-// 		None,
-// 	)
-// 	.unwrap();
-
-// 	// sort by decreasing order of stake
-// 	assignments.sort_unstable_by_key(|assignment| {
-// 		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
-// 	});
-
-// 	// convert to IndexAssignment
-// 	let assignments = assignments
-// 		.iter()
-// 		.map(|assignment| {
-// 			IndexAssignmentOf::<Runtime>::new(assignment, &voter_index, &target_index)
-// 		})
-// 		.collect::<Result<Vec<_>, _>>()
-// 		.expect("test assignments don't contain any voters with too many votes");
-
-// 	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
-// }
 
 /// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
 fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 	let mut flatten: Vec<Vec<Voter<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
 	flatten.resize(Pages::get() as usize, vec![]);
-	let voter_snapshot = <PagedVoterSnapshot<Runtime>>::iter().collect::<Vec<_>>();
+	let voter_snapshot = crate::Snapshot::<Runtime>::voters_iter().collect::<Vec<_>>();
 	for (page, voters) in voter_snapshot {
 		flatten[page as usize] = voters
 	}
@@ -164,15 +109,14 @@ fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 	flatten
 }
 
-pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
+pub(crate) fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 	// ensure snapshot exists.
-	assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
-	assert!(<PagedVoterSnapshot<Runtime>>::iter().count() > 0);
+	ensure_full_snapshot();
 
 	// read all voter snapshots
 	let voter_snapshot = nested_voter_snapshot();
-	let target_snapshot = MultiPhase::paged_target_snapshot(0).unwrap();
-	let desired_targets = MultiPhase::desired_targets().unwrap();
+	let target_snapshot = crate::Snapshot::<Runtime>::targets().unwrap();
+	let desired_targets = crate::Snapshot::<Runtime>::desired_targets().unwrap();
 
 	let all_voters = voter_snapshot.iter().flatten().cloned().collect::<Vec<_>>();
 
@@ -194,7 +138,7 @@ pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 	};
 
 	let page_for_voter = |voter: &AccountId| -> PageIndex {
-		// TODO: for now we do this in a super naive way.
+		// NOTE: here we do this in a super naive way. in production, you don't want to do that.
 		voter_snapshot
 			.iter()
 			.enumerate()
@@ -228,7 +172,7 @@ pub fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 		solution_pages.push(page);
 	}
 
-	let round = MultiPhase::round();
+	let round = MultiBlock::round();
 
 	PagedRawSolution { solution_pages, round, score }
 }
@@ -320,63 +264,62 @@ parameter_types! {
 	pub static Pages: PageIndex = 1;
 }
 
-// Hopefully this won't be too much of a hassle to maintain.
 pub struct DualMockWeightInfo;
-impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
+impl multi_block::weights::WeightInfo for DualMockWeightInfo {
 	fn on_initialize_nothing() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
+			<() as multi_block::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
 	fn on_initialize_open_signed() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_signed()
+			<() as multi_block::weights::WeightInfo>::on_initialize_open_signed()
 		}
 	}
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_with_snapshot()
+			<() as multi_block::weights::WeightInfo>::on_initialize_open_unsigned_with_snapshot()
 		}
 	}
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
+			<() as multi_block::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
 	fn finalize_signed_phase_accept_solution() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
+			<() as multi_block::weights::WeightInfo>::finalize_signed_phase_accept_solution()
 		}
 	}
 	fn finalize_signed_phase_reject_solution() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
+			<() as multi_block::weights::WeightInfo>::finalize_signed_phase_reject_solution()
 		}
 	}
 	fn submit(c: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::submit(c)
+			<() as multi_block::weights::WeightInfo>::submit(c)
 		}
 	}
 	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::elect_queued(v, t, a, d)
+			<() as multi_block::weights::WeightInfo>::elect_queued(v, t, a, d)
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -385,7 +328,7 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			// 5 per edge.
 			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
 		} else {
-			<() as multi_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
+			<() as multi_block::weights::WeightInfo>::submit_unsigned(v, t, a, d)
 		}
 	}
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -394,7 +337,7 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			// 5 per edge.
 			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
 		} else {
-			<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
+			<() as multi_block::weights::WeightInfo>::feasibility_check(v, t, a, d)
 		}
 	}
 }
@@ -415,18 +358,8 @@ impl crate::unsigned::Config for Runtime {
 
 impl crate::Config for Runtime {
 	type Event = Event;
-	type Currency = Balances;
-	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SignedRewardBase = SignedRewardBase;
-	type SignedDepositBase = SignedDepositBase;
-	type SignedDepositByte = ();
-	type SignedDepositWeight = ();
-	type SignedMaxWeight = SignedMaxWeight;
-	type SignedMaxSubmissions = SignedMaxSubmissions;
-	type SlashHandler = ();
-	type RewardHandler = ();
 	type DataProvider = MockStaking;
 	type BenchmarkingConfig = ();
 	type Fallback = MockFallback;
@@ -457,13 +390,13 @@ impl onchain::Config for OnChainConfig {
 
 pub struct MockFallback;
 impl ElectionProvider<AccountId, u64> for MockFallback {
-	type Error = ElectionError;
+	type Error = &'static str;
 	type DataProvider = MockStaking;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
 		if OnChianFallback::get() {
 			onchain::OnChainSequentialPhragmen::<OnChainConfig>::elect(remaining)
-				.map_err(Into::into)
+				.map_err(|_| "OnChainSequentialPhragmen failed")
 		} else {
 			InitiateEmergencyPhase::<Runtime>::elect(remaining)
 		}
@@ -621,7 +554,7 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn build(self) -> sp_io::TestExternalities {
+	pub fn build_unchecked(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -639,11 +572,12 @@ impl ExtBuilder {
 		sp_io::TestExternalities::from(storage)
 	}
 
+	/// Warning: this does not execute the post-sanity-checks.
 	pub fn build_offchainify(
 		self,
 		iters: u32,
 	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
-		let mut ext = self.build();
+		let mut ext = self.build_unchecked();
 		let (offchain, offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
 
@@ -658,8 +592,10 @@ impl ExtBuilder {
 		(ext, pool_state)
 	}
 
+	/// Build the externalities, and execute the given  s`test` closure with it.
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.build().execute_with(test)
+		self.build_unchecked().execute_with(test);
+		sanity_checks();
 	}
 }
 
@@ -670,54 +606,76 @@ pub(crate) fn balances(who: &u64) -> (u64, u64) {
 pub(crate) fn create_all_snapshots() {
 	let _ = (0..Pages::get())
 		.rev()
-		.map(|p| MultiPhase::create_voters_snapshot_paged(p))
+		.map(|p| MultiBlock::create_voters_snapshot_paged(p))
 		.collect::<Result<Vec<_>, _>>()
 		.unwrap();
-	let _ = MultiPhase::create_targets_snapshot().unwrap();
+	let _ = MultiBlock::create_targets_snapshot().unwrap();
 }
 
 pub(crate) fn witness() -> SolutionOrSnapshotSize {
-	let voters = <PagedVoterSnapshot<Runtime>>::iter()
-		.map(|(_, voters)| voters)
-		.fold(0u32, |acc, next| acc.saturating_add(next.len() as u32));
-	let targets = <PagedTargetSnapshot<Runtime>>::get(0)
-		.map(|t| t.len() as u32)
-		.unwrap_or_default();
+	let voters = Snapshot::<Runtime>::voters_iter_flattened().count() as u32;
+	let targets = Snapshot::<Runtime>::targets().map(|t| t.len() as u32).unwrap_or_default();
 	SolutionOrSnapshotSize { voters, targets }
 }
 
-// TODO: post-condition check that the metadata storage items are consistent: they must all
-// exist at the same time.
+fn sanity_checks() {
+	let _ = VerifierPallet::sanity_check().unwrap();
+	let _ = UnsignedPallet::sanity_check().unwrap();
+	let _ = MultiBlock::sanity_check().unwrap();
+}
+
 pub(crate) fn ensure_snapshot(exists: bool, up_to_page: PageIndex) {
 	assert!(up_to_page > 0);
 
-	assert!(exists ^ !MultiPhase::desired_targets().is_some());
-	assert!(exists ^ !MultiPhase::snapshot_metadata().is_some());
-	assert!(exists ^ !<PagedTargetSnapshot<Runtime>>::contains_key(0));
+	assert!(exists ^ !crate::Snapshot::<Runtime>::desired_targets().is_some());
+	assert!(exists ^ !crate::Snapshot::<Runtime>::metadata().is_some());
+	assert!(exists ^ !crate::Snapshot::<Runtime>::targets().is_some());
 
-	// TODO: snapshot is created from top to bottom..
 	(Pages::get() - 1..=0).take(up_to_page.into()).for_each(|p| {
 		assert!(
-			exists ^ !<PagedVoterSnapshot<Runtime>>::contains_key(p),
-			"voter page {} not {}",
+			exists ^ !crate::Snapshot::<Runtime>::voters(p).is_some(),
+			"voter page {} existence {} not satisfied",
 			p,
 			exists
 		);
 	});
 }
 
+pub(crate) fn ensure_full_snapshot() {
+	ensure_snapshot(true, Pages::get())
+}
+
 #[test]
-fn raw_paged_solution_works() {
-	// TODO: do a 3 page version of this as well, helps a lot with understanding.
+fn raw_paged_solution_works_2_page() {
 	ExtBuilder::default().pages(2).voter_per_page(4).build_and_execute(|| {
 		create_all_snapshots();
 
 		// 2 pages of 8 voters
-		assert_eq!(<PagedVoterSnapshot<Runtime>>::iter().count(), 2);
-		assert_eq!(<PagedVoterSnapshot<Runtime>>::iter().map(|(_p, x)| x).flatten().count(), 8);
-		// 1 page of 4 voters
-		assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().count(), 1);
-		assert_eq!(<PagedTargetSnapshot<Runtime>>::iter().map(|(_p, x)| x).flatten().count(), 4);
+		assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 2);
+		assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 8);
+		// 1 page of 4 targets
+		assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
+		assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+
+		// voters in pages. note the reverse page index.
+		assert_eq!(
+			Snapshot::<Runtime>::voters(1)
+				.unwrap()
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![1, 2, 3, 4]
+		);
+		assert_eq!(
+			Snapshot::<Runtime>::voters(0)
+				.unwrap()
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![5, 6, 7, 8]
+		);
+		// targets in pages.
+		assert_eq!(Snapshot::<Runtime>::targets().unwrap(), vec![10, 20, 30, 40]);
 
 		let paged = raw_paged_solution();
 		assert_eq!(
@@ -725,27 +683,38 @@ fn raw_paged_solution_works() {
 			vec![
 				// in page 0 of the snapshot.
 				TestNposSolution {
+					// voter 2 (index 1) is backing 40 (index 3).
+					// voter 4 (index 3) is backing 10 (index 0)
 					votes1: vec![(1, 3), (3, 0)],
+					// voter 1 (index 0) is backing 40 (index 10) and 10 (index 0)
 					votes2: vec![(0, [(0, PerU16::from_parts(32768))], 3)],
 					..Default::default()
 				},
 				// in page 1 of the snapshot.
 				TestNposSolution {
+					// voter 5 (index 0) is backing 10 (index 0)
+					// voter 6 (index 1) is backing 40 (index 3)
+					// voter 7 (index 2) is backing 40 (index 3)
 					votes1: vec![(0, 0), (1, 3), (2, 3)],
+					// voter 8 (index 3) is backing 40 (index 10) and 10 (index 0)
 					votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
 					..Default::default()
 				},
 			]
 		);
 
-		// this solution must be feasible.
+		// this solution must be feasible and submittable.
+		crate::unsigned::miner::BaseMiner::<Runtime>::full_checks(&paged, "mined");
+
+		// convert ot supports
 		let supports = paged
 			.solution_pages
 			.iter()
 			.enumerate()
 			.map(|(i, p)| {
 				let page_index = i as PageIndex;
-				VerifierPallet::feasibility_check_page(p.clone(), page_index).unwrap()
+				VerifierPallet::feasibility_check_page(p.clone(), page_index)
+					.expect("feasibility has already been checked; qed.")
 			})
 			.collect::<Vec<_>>();
 
@@ -767,6 +736,138 @@ fn raw_paged_solution_works() {
 
 		assert_eq!(paged.score, [30, 70, 2500]);
 	})
+}
+
+#[test]
+fn raw_paged_solution_works_3_page() {
+	ExtBuilder::default().pages(3).voter_per_page(4).build_and_execute(|| {
+		create_all_snapshots();
+
+		// 3 pages of 12 voters
+		assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
+		assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 12);
+		// 1 page of 4 targets
+		assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
+		assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+
+		// voters in pages. note the reverse page index.
+		assert_eq!(
+			Snapshot::<Runtime>::voters(2)
+				.unwrap()
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![1, 2, 3, 4]
+		);
+		assert_eq!(
+			Snapshot::<Runtime>::voters(1)
+				.unwrap()
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![5, 6, 7, 8]
+		);
+		assert_eq!(
+			Snapshot::<Runtime>::voters(0)
+				.unwrap()
+				.into_iter()
+				.map(|(x, _, _)| x)
+				.collect::<Vec<_>>(),
+			vec![10, 20, 30, 40]
+		);
+
+		let paged = raw_paged_solution();
+		assert_eq!(
+			paged.solution_pages,
+			vec![
+				TestNposSolution { votes1: vec![(2, 2), (3, 3)], ..Default::default() },
+				TestNposSolution {
+					votes1: vec![(2, 2)],
+					votes2: vec![
+						(0, [(2, PerU16::from_parts(32768))], 3),
+						(1, [(2, PerU16::from_parts(32768))], 3)
+					],
+					..Default::default()
+				},
+				TestNposSolution {
+					votes1: vec![(2, 3), (3, 3)],
+					votes2: vec![(1, [(2, PerU16::from_parts(32768))], 3)],
+					..Default::default()
+				}
+			]
+		);
+
+		// this solution must be feasible and submittable.
+		crate::unsigned::miner::BaseMiner::<Runtime>::full_checks(&paged, "mined");
+
+		// convert ot supports
+		let supports = paged
+			.solution_pages
+			.iter()
+			.enumerate()
+			.map(|(i, p)| {
+				let page_index = i as PageIndex;
+				VerifierPallet::feasibility_check_page(p.clone(), page_index)
+					.expect("feasibility has already been checked; qed.")
+			})
+			.collect::<Vec<_>>();
+
+		assert_eq!(
+			supports,
+			vec![
+				// page 0: self-votes.
+				vec![
+					(30, Support { total: 30, voters: vec![(30, 30)] }),
+					(40, Support { total: 40, voters: vec![(40, 40)] })
+				],
+				// page 1: 5, 6, 7, 8
+				vec![
+					(30, Support { total: 20, voters: vec![(7, 10), (5, 5), (6, 5)] }),
+					(40, Support { total: 10, voters: vec![(5, 5), (6, 5)] })
+				],
+				// page 2: 1, 2, 3, 4
+				vec![
+					(30, Support { total: 5, voters: vec![(2, 5)] }),
+					(40, Support { total: 25, voters: vec![(3, 10), (4, 10), (2, 5)] })
+				]
+			]
+		);
+
+		assert_eq!(paged.score, [55, 130, 8650]);
+	})
+}
+
+#[test]
+fn pagination_does_not_affect_score() {
+	let score_1 = ExtBuilder::default()
+		.pages(1)
+		.voter_per_page(12)
+		.build_unchecked()
+		.execute_with(|| {
+			create_all_snapshots();
+			raw_paged_solution().score
+		});
+	let score_2 =
+		ExtBuilder::default()
+			.pages(2)
+			.voter_per_page(6)
+			.build_unchecked()
+			.execute_with(|| {
+				create_all_snapshots();
+				raw_paged_solution().score
+			});
+	let score_3 =
+		ExtBuilder::default()
+			.pages(3)
+			.voter_per_page(4)
+			.build_unchecked()
+			.execute_with(|| {
+				create_all_snapshots();
+				raw_paged_solution().score
+			});
+
+	assert_eq!(score_1, score_2);
+	assert_eq!(score_2, score_3);
 }
 
 #[test]

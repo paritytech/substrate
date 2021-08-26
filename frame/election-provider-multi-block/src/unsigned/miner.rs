@@ -1,9 +1,23 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crate::{log, types::*, verifier};
 use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::Weight,
-	traits::{Get, OffchainWorker},
-};
+use frame_support::{dispatch::Weight, traits::Get};
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	traits::SaturatedConversion,
@@ -80,19 +94,18 @@ impl<T: super::Config> BaseMiner<T> {
 	/// Perform all checks:
 	///
 	/// 1. feasibility check.
-	/// 2. snapshot-independent checks
+	/// 2. snapshot-independent checks.
 	pub fn full_checks(
 		paged_solution: &PagedRawSolution<SolutionOf<T>>,
 		solution_type: &str,
 	) -> Result<(), MinerError> {
-		super::Pallet::<T>::snapshot_independent_checks(paged_solution)
+		crate::Pallet::<T>::snapshot_independent_checks(paged_solution)
 			.map_err(|de| MinerError::SnapshotIndependentChecksFailed(de))
 			.and_then(|_| Self::check_feasibility(&paged_solution, solution_type))
 	}
 
-	// perform basic checks of a solution's validity
-	//
-	// Performance: note that it internally clones the provided solution.
+	/// perform the feasibility check on all pages of a solution, returning `Ok(())` if all good and
+	/// the corresponding error otherwise.
 	pub fn check_feasibility(
 		paged_solution: &PagedRawSolution<SolutionOf<T>>,
 		solution_type: &str,
@@ -507,15 +520,6 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	fn clear_offchain_repeat_frequency() {
 		let mut last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
 		last_block.clear();
-	}
-
-	/// `true` when OCW storage contains a solution
-	#[cfg(test)]
-	fn ocw_solution_exists() -> bool {
-		matches!(
-			StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL).get::<super::Call<T>>(),
-			Ok(Some(_))
-		)
 	}
 }
 

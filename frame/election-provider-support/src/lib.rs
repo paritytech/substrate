@@ -166,7 +166,7 @@ use sp_std::{fmt::Debug, prelude::*};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ExtendedBalance, PerThing128, Support, Supports, VoteWeight,
+	Assignment, ExtendedBalance, NposSolution, PerThing128, Support, Supports, VoteWeight,
 };
 
 /// Types that are used by the data provider trait.

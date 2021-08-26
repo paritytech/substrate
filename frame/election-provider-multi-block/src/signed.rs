@@ -55,6 +55,93 @@ pub type SignedSubmissionOf<T> =
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
 
+// /// Maximum number of signed submissions that can be queued.
+// ///
+// /// It is best to avoid adjusting this during an election, as it impacts downstream data
+// /// structures. In particular, `SignedSubmissionIndices<T>` is bounded on this value. If you
+// /// update this value during an election, you _must_ ensure that
+// /// `SignedSubmissionIndices.len()` is less than or equal to the new value. Otherwise,
+// /// attempts to submit new solutions may cause a runtime panic.
+// #[pallet::constant]
+// type SignedMaxSubmissions: Get<u32> = impl Get<u32>;
+
+// /// Currency type.
+// type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId> =
+// 	impl ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
+
+// /// Something that can predict the fee of a call. Used to sensibly distribute rewards.
+// type EstimateCallFee: EstimateCallFee<Call<Self>, BalanceOf<Self>> =
+// 	impl EstimateCallFee<Call<Self>, BalanceOf<Self>>;
+
+// /// Maximum weight of a signed solution.
+// ///
+// /// This should probably be similar to [`Config::MinerMaxWeight`].
+// #[pallet::constant]
+// type SignedMaxWeight: Get<Weight> = impl Get<Weight>;
+
+// /// Base reward for a signed solution
+// #[pallet::constant]
+// type SignedRewardBase: Get<BalanceOf<Self>> = impl Get<BalanceOf<Self>>;
+
+// /// Base deposit for a signed solution.
+// #[pallet::constant]
+// type SignedDepositBase: Get<BalanceOf<Self>> = impl Get<BalanceOf<Self>>;
+
+// /// Per-byte deposit for a signed solution.
+// #[pallet::constant]
+// type SignedDepositByte: Get<BalanceOf<Self>> = impl Get<BalanceOf<Self>>;
+
+// /// Per-weight deposit for a signed solution.
+// #[pallet::constant]
+// type SignedDepositWeight: Get<BalanceOf<Self>> = impl Get<BalanceOf<Self>>;
+
+// /// Handler for the slashed deposits.
+// type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>> =
+// 	impl OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+// /// Handler for the rewards.
+// type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>> =
+// 	impl OnUnbalanced<PositiveImbalanceOf<Self>>;
+
+// // The following storage items collectively comprise `SignedSubmissions<T>`, and should never be
+// // accessed independently. Instead, get `Self::signed_submissions()`, modify it as desired, and
+// // then do `signed_submissions.put()` when you're done with it.
+
+// /// The next index to be assigned to an incoming signed submission.
+// ///
+// /// Every accepted submission is assigned a unique index; that index is bound to that particular
+// /// submission for the duration of the election. On election finalization, the next index is
+// /// reset to 0.
+// ///
+// /// We can't just use `SignedSubmissionIndices.len()`, because that's a bounded set; past its
+// /// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
+// /// because iteration is slow. Instead, we store the value here.
+// #[pallet::storage]
+// pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+// /// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
+// /// `SignedSubmissions`.
+// ///
+// /// We never need to process more than a single signed submission at a time. Signed submissions
+// /// can be quite large, so we're willing to pay the cost of multiple database accesses to access
+// /// them one at a time instead of reading and decoding all of them at once.
+// #[pallet::storage]
+// pub(crate) type SignedSubmissionIndices<T: Config> =
+// 	StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
+
+// /// Unchecked, signed solutions.
+// ///
+// /// Together with `SubmissionIndices`, this stores a bounded set of `SignedSubmissions` while
+// /// allowing us to keep only a single one in memory at a time.
+// ///
+// /// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
+// /// affect; we shouldn't need a cryptographically secure hasher.
+// #[pallet::storage]
+// pub(crate) type SignedSubmissionsMap<T: Config> =
+// 	StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, ValueQuery>;
+
+// // `SignedSubmissions` items end here.
+
 /// A raw, unchecked signed submission.
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
@@ -395,7 +482,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
+			balances, raw_solution, roll_to, ExtBuilder, MultiBlock, Origin, Runtime,
 			SignedMaxSubmissions, SignedMaxWeight,
 		},
 		Error, Phase,
@@ -406,10 +493,10 @@ mod tests {
 		origin: Origin,
 		solution: RawSolution<SolutionOf<Runtime>>,
 	) -> DispatchResult {
-		MultiPhase::submit(
+		MultiBlock::submit(
 			origin,
 			Box::new(solution),
-			MultiPhase::signed_submissions().len() as u32,
+			MultiBlock::signed_submissions().len() as u32,
 		)
 	}
 
@@ -417,10 +504,10 @@ mod tests {
 	fn cannot_submit_too_early() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(2);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
 			// create a temp snapshot only for this test.
-			MultiPhase::create_snapshot().unwrap();
+			MultiBlock::create_snapshot().unwrap();
 			let solution = raw_solution();
 
 			assert_noop!(
@@ -434,16 +521,16 @@ mod tests {
 	fn wrong_witness_fails() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let solution = raw_solution();
 			// submit this once correctly
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
-			assert_eq!(MultiPhase::signed_submissions().len(), 1);
+			assert_eq!(MultiBlock::signed_submissions().len(), 1);
 
 			// now try and cheat by passing a lower queue length
 			assert_noop!(
-				MultiPhase::submit(Origin::signed(99), Box::new(solution), 0),
+				MultiBlock::submit(Origin::signed(99), Box::new(solution), 0),
 				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
@@ -453,7 +540,7 @@ mod tests {
 	fn should_pay_deposit() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -461,7 +548,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(balances(&99), (95, 5));
-			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
+			assert_eq!(MultiBlock::signed_submissions().iter().next().unwrap().deposit, 5);
 		})
 	}
 
@@ -469,7 +556,7 @@ mod tests {
 	fn good_solution_is_rewarded() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -478,7 +565,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			let issuance = <Runtime as Config>::Currency::total_issuance();
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiBlock::finalize_signed_phase().0);
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// reward is minted.
 			assert_eq!(<Runtime as Config>::Currency::total_issuance(), issuance + 8 + 7);
@@ -489,7 +576,7 @@ mod tests {
 	fn bad_solution_is_slashed() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -501,7 +588,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
-			assert!(!MultiPhase::finalize_signed_phase().0);
+			assert!(!MultiBlock::finalize_signed_phase().0);
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
 		})
@@ -511,7 +598,7 @@ mod tests {
 	fn suppressed_solution_gets_bond_back() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -527,7 +614,7 @@ mod tests {
 			assert_eq!(balances(&999), (95, 5));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiBlock::finalize_signed_phase().0);
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -540,7 +627,7 @@ mod tests {
 	fn cannot_submit_worse_with_full_queue() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -562,7 +649,7 @@ mod tests {
 	fn weakest_is_removed_if_better_provided() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -571,7 +658,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				MultiPhase::signed_submissions()
+				MultiBlock::signed_submissions()
 					.iter()
 					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
@@ -584,7 +671,7 @@ mod tests {
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
-				MultiPhase::signed_submissions()
+				MultiBlock::signed_submissions()
 					.iter()
 					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
@@ -597,7 +684,7 @@ mod tests {
 	fn replace_weakest_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			for s in 1..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -609,7 +696,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(
-				MultiPhase::signed_submissions()
+				MultiBlock::signed_submissions()
 					.iter()
 					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
@@ -622,7 +709,7 @@ mod tests {
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
-				MultiPhase::signed_submissions()
+				MultiBlock::signed_submissions()
 					.iter()
 					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
@@ -635,7 +722,7 @@ mod tests {
 	fn early_ejected_solution_gets_bond_back() {
 		ExtBuilder::default().signed_deposit(2, 0, 0).build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -660,14 +747,14 @@ mod tests {
 	fn equally_good_solution_is_not_accepted() {
 		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
 				let solution = RawSolution { score: [(5 + i).into(), 0, 0], ..Default::default() };
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 			assert_eq!(
-				MultiPhase::signed_submissions()
+				MultiBlock::signed_submissions()
 					.iter()
 					.map(|s| s.raw_solution.score[0])
 					.collect::<Vec<_>>(),
@@ -691,7 +778,7 @@ mod tests {
 		// - suppressed_solution_gets_bond_back
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			assert_eq!(balances(&99), (100, 0));
 			assert_eq!(balances(&999), (100, 0));
@@ -713,12 +800,12 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
 
 			assert_eq!(
-				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
+				MultiBlock::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
 				vec![9999, 99, 999]
 			);
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiBlock::finalize_signed_phase().0);
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -736,9 +823,9 @@ mod tests {
 			.mock_weight_info(true)
 			.build_and_execute(|| {
 				roll_to(15);
-				assert!(MultiPhase::current_phase().is_signed());
+				assert!(MultiBlock::current_phase().is_signed());
 
-				let (raw, witness) = MultiPhase::mine_solution(2).unwrap();
+				let (raw, witness) = MultiBlock::mine_solution(2).unwrap();
 				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
 					witness.voters,
 					witness.targets,
@@ -767,7 +854,7 @@ mod tests {
 	fn insufficient_deposit_does_not_store_submission() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let solution = raw_solution();
 
@@ -787,7 +874,7 @@ mod tests {
 	fn insufficient_deposit_with_full_queue_works_properly() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -818,7 +905,7 @@ mod tests {
 				roll_to(block_number);
 
 				assert_eq!(SignedSubmissions::<Runtime>::decode_len().unwrap_or_default(), 0);
-				assert_storage_noop!(MultiPhase::finalize_signed_phase());
+				assert_storage_noop!(MultiBlock::finalize_signed_phase());
 			}
 		})
 	}
@@ -827,7 +914,7 @@ mod tests {
 	fn finalize_signed_phase_is_idempotent_given_submissions() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiBlock::current_phase().is_signed());
 
 			let solution = raw_solution();
 
@@ -835,10 +922,10 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiBlock::finalize_signed_phase().0);
 
 			// calling it again doesn't change anything
-			assert_storage_noop!(MultiPhase::finalize_signed_phase());
+			assert_storage_noop!(MultiBlock::finalize_signed_phase());
 		})
 	}
 }

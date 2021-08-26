@@ -1,3 +1,4 @@
+use frame_election_provider_support::ElectionProvider;
 pub use frame_election_provider_support::{PageIndex, Supports};
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
 
@@ -10,6 +11,11 @@ pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as NposSolution>::VoterIndex;
 pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex;
 /// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
 pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
+/// The fallback election type.
+pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider<
+	<T as frame_system::Config>::AccountId,
+	<T as frame_system::Config>::BlockNumber,
+>>::Error;
 
 /// The relative distribution of a voter's stake among the winning targets.
 pub type AssignmentOf<T> =
