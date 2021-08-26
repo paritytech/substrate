@@ -1693,8 +1693,8 @@ pub mod pallet_prelude {
 /// E.g. if runtime names the pallet "MyExample" then the storage `type Foo<T> = ...` use the
 /// prefix: `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a specific
-/// name to use for the prefix.
+/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
+/// specific name to use for the prefix.
 ///
 /// E.g:
 /// ```ignore
