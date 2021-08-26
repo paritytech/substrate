@@ -65,6 +65,14 @@ pub enum InvalidErrorDigest {
 	InvalidImportedHeaderDigest,
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Display for InvalidErrorDigest {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		let msg = " TODO implement with comments";
+		write!(f, "{}", msg)
+	}
+}
+
 impl<B: Block> StateVersions<B> {
 	/// Access genesis state version.
 	/// This uses default state if undefined.

@@ -94,7 +94,7 @@ pub use sp_arithmetic::{
 
 pub use either::Either;
 
-pub use state_version::{StateVersion, StateVersions, StateMigrationDigest, StateMigrationProgress};
+pub use state_version::{StateVersion, StateVersions, StateMigrationDigest, StateMigrationProgress, MigrateState};
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///

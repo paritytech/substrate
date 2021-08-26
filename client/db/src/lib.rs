@@ -88,7 +88,7 @@ use sp_runtime::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
-	Justification, Justifications, StateVersion, StateVersions, Storage,
+	Justification, Justifications, StateVersion, StateVersions, Storage, MigrateState,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
@@ -2145,7 +2145,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 					if !has_finished_digest {
 						info!("Migration state mismatch with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
-						return Err(ClientError::InvalidMigrationState);
+						return Err(ClientError::InvalidMigrationState("No finished digest found on chainspec switch".to_string()));
 					}
 
 					info!("Finished processing migration with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
@@ -2452,19 +2452,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		let (is_genesis, number) = match &block {
-			BlockId::Number(n) => (n.is_zero(), *n),
-			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash =>
-				(true, NumberFor::<Block>::zero()),
-			BlockId::Hash(h) => {
-				let n = self.blockchain.number(*h)?.ok_or_else(|| {
-					sp_blockchain::Error::UnknownBlock(format!(
-						"Unknown number for block hash {}",
-						h
-					))
-				})?;
-				(false, n)
-			},
+		let is_genesis= match &block {
+			BlockId::Number(n) => n.is_zero(),
+			BlockId::Hash(h) => h == &self.blockchain.meta.read().genesis_hash,
 		};
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
@@ -2491,6 +2481,26 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			})?,
 		};
 
+		// TODO remove this to cache result and use from header_metadata instead.
+		let mut override_state_root = None;
+		let state_version = if let Some(parent_header) = self.blockchain.header(BlockId::Hash(hash))? {
+			match self.state_versions.resolve_migrate(parent_header.number().clone() + 1u32.into(), parent_header.digest(), None)
+				.map_err(|err| sp_blockchain::Error::InvalidMigrationState(format!("{}", err)))? {
+				MigrateState::None(v) => v,
+				MigrateState::Switch(v, dest_root) => {
+					override_state_root = Some(dest_root);
+					v
+				},
+				MigrateState::Start(v, _) => v,
+				MigrateState::Pending(v, _, _) => v,
+			}
+		} else {
+			return Err(sp_blockchain::Error::UnknownBlock(format!(
+				"No header found for {:?}",
+				block
+			)))
+		};
+
 		match self.blockchain.header_metadata(hash) {
 			Ok(ref hdr) => {
 				if !self.have_state_at(&hash, hdr.number) {
@@ -2500,8 +2510,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					)))
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
-					let root = hdr.state_root;
-					let state_version = self.state_versions.state_version_at(number);
+					let root = override_state_root.unwrap_or_else(|| hdr.state_root);
 					let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
