@@ -456,7 +456,8 @@ where
 			progress.root = Some(self.essence.root().clone());
 		}
 		let dest_root = progress.root.as_mut().expect("Lazy init above.");
-		let ori = TrieDB::new_with_layout(&ori_db, &ori_root, Layout::default())
+			let in_mem2 = sp_trie::PrefixedMemoryDB::<H>::default();
+		let ori = TrieDB::new_with_layout(&in_mem2, &ori_root, Layout::default())
 			.map_err(|e| trie_error::<H>(&*e))?;
 		let mut dest = TrieDBMut::from_existing_with_layout(&mut dest_db, dest_root, dest_layout)
 			.map_err(|e| trie_error::<H>(&*e))?;
