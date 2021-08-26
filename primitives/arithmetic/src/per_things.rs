@@ -774,7 +774,9 @@ macro_rules! implement_per_thing {
 
 			#[inline]
 			fn add(self, rhs: Self) -> Self::Output {
-				$name::from_parts(self.deconstruct().add(rhs.deconstruct()))
+				let inner = self.deconstruct().add(rhs.deconstruct());
+				debug_assert!(inner < $max);
+				$name::from_parts(inner)
 			}
 		}
 
@@ -820,15 +822,12 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		/// # Note
+		/// CheckedMul will never fail for PerThings.
 		impl CheckedMul for $name {
 			#[inline]
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
-				let a = self.0 as $upper_type;
-				let b = rhs.0 as $upper_type;
-				let m = <$upper_type>::from($max);
-				let d = a.checked_mul(b)?;
-				let parts = d.checked_div(m)?;
-				Some(Self::from_parts(parts as $type))
+				Some(*self * *rhs)
 			}
 		}
 
