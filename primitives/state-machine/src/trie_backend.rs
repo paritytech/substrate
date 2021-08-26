@@ -28,7 +28,7 @@ use sp_core::{
 	state_version::StateVersion,
 	storage::{ChildInfo, ChildType},
 };
-use sp_std::{boxed::Box, cell::RefCell, rc::Rc, vec::Vec};
+use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
 	trie_types::{TrieDB, TrieError},
@@ -306,7 +306,7 @@ pub struct MigrateStorage<'a, S, H>
 where
 	H: Hasher,
 {
-	overlay: Rc<RefCell<&'a mut sp_trie::PrefixedMemoryDB<H>>>,
+	overlay: &'a mut sp_trie::PrefixedMemoryDB<H>,
 	storage: &'a S,
 }
 
@@ -315,12 +315,6 @@ where
 unsafe impl<'a, S, H: Hasher> Send for MigrateStorage<'a, S, H> {}
 unsafe impl<'a, S, H: Hasher> Sync for MigrateStorage<'a, S, H> {}
 
-impl<'a, S, H: Hasher> Clone for MigrateStorage<'a, S, H> {
-	fn clone(&self) -> Self {
-		MigrateStorage { overlay: self.overlay.clone(), storage: self.storage }
-	}
-}
-
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Prefix};
 use sp_trie::DBValue;
 
@@ -328,7 +322,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for MigrateStorage<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		if let Some(val) = HashDB::get(*self.overlay.borrow(), key, prefix) {
+		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
 			match self.storage.get(&key, prefix) {
@@ -352,19 +346,19 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		HashDB::insert(*self.overlay.borrow_mut(), prefix, value)
+		HashDB::insert(self.overlay, prefix, value)
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
-		HashDB::emplace(*self.overlay.borrow_mut(), key, prefix, value)
+		HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
 	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
-		HashDB::emplace_ref(*self.overlay.borrow_mut(), key, prefix, value)
+		HashDB::emplace_ref(self.overlay, key, prefix, value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		HashDB::remove(*self.overlay.borrow_mut(), key, prefix)
+		HashDB::remove(self.overlay, key, prefix)
 	}
 }
 
@@ -440,24 +434,24 @@ where
 		let empty_value2 = sp_std::vec![0u8; dest_threshold as usize];
 		let dest_layout = Layout::with_alt_hashing(dest_threshold);
 		let mut in_mem;
+		let without_payload;
 		let overlay = if let Some(change) = do_update {
-			Rc::new(RefCell::new(change))
+			without_payload = false;
+			change
 		} else {
+			without_payload = true;
 			in_mem = sp_trie::PrefixedMemoryDB::default();
-			Rc::new(RefCell::new(&mut in_mem))
+			&mut in_mem
 		};
+		// Using same db with remove node is ok, but require locking state pruning.
 		let mut dest_db =
 			MigrateStorage::<S, H> { overlay, storage: self.essence.backend_storage() };
-		let ori_root = self.essence.root().clone();
-		// Using db with remove node is ok as long as iteration
-		// start at uncommited key.
-		let ori_db = dest_db.clone();
 		if progress.root.is_none() {
 			progress.root = Some(self.essence.root().clone());
 		}
 		let dest_root = progress.root.as_mut().expect("Lazy init above.");
-			let in_mem2 = sp_trie::PrefixedMemoryDB::<H>::default();
-		let ori = TrieDB::new_with_layout(&in_mem2, &ori_root, Layout::default())
+		let ori_root = self.essence.root().clone();
+		let ori = TrieDB::new_with_layout(&self.essence, &ori_root, Layout::default())
 			.map_err(|e| trie_error::<H>(&*e))?;
 		let mut dest = TrieDBMut::from_existing_with_layout(&mut dest_db, dest_root, dest_layout)
 			.map_err(|e| trie_error::<H>(&*e))?;
@@ -503,15 +497,18 @@ where
 		// or may have change a previous block migration change).c
 		for (key, value) in previous_block_updates.0.iter() {
 			if let Some(value) = value.as_ref() {
-				if value.len() >= dest_threshold as usize {
+				if without_payload || value.len() >= dest_threshold as usize {
 					if progress.current_top.as_ref().map(|end| key < end).unwrap_or(true) {
 						dest.insert(key.as_slice(), value.as_slice())
 							.map_err(|e| trie_error::<H>(&*e))?;
 					}
 				}
 			} else {
-				dest.remove(key.as_slice())
-					.map_err(|e| trie_error::<H>(&*e))?;
+				if progress.current_top.as_ref().map(|end| key < end).unwrap_or(true) {
+					// rerun all remove in case we import old. .
+					dest.remove(key.as_slice())
+						.map_err(|e| trie_error::<H>(&*e))?;
+				}
 			}
 		}
 		// TODO same for child
