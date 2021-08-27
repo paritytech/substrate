@@ -100,7 +100,7 @@ impl<T: super::Config> BaseMiner<T> {
 		let ElectionResult { winners, assignments } =
 			sp_npos_elections::seq_phragmen::<_, SolutionAccuracyOf<T>>(
 				desired_targets as usize,
-				targets,
+				targets.clone(),
 				voters.clone(),
 				None,
 			)
@@ -149,15 +149,15 @@ impl<T: super::Config> BaseMiner<T> {
 					voter_pages.get(page_index).ok_or(MinerError::SnapshotUnAvailable)?;
 
 				let voter_index_fn = {
-					let cache = helpers::generate_voter_cache(&voter_snapshot_page);
-					helpers::voter_index_fn_owned(cache)
+					let cache = helpers::generate_voter_cache::<T>(&voter_snapshot_page);
+					helpers::voter_index_fn_owned::<T>(cache)
 				};
 				<SolutionOf<T>>::from_assignment(
 					&assignment_page,
 					&voter_index_fn,
 					&target_index_fn,
 				)
-				.map_err(Into::into)
+				.map_err::<MinerError, _>(Into::into)
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
