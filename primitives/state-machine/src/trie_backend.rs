@@ -34,6 +34,8 @@ use sp_trie::{
 	trie_types::{TrieDB, TrieError},
 	Layout, Trie,
 };
+#[cfg(feature = "std")]
+use log::info;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -457,6 +459,11 @@ where
 			progress.current_top.as_ref().map(|s| s.as_slice()).unwrap_or(&[]),
 		)
 		.map_err(|e| trie_error::<H>(&*e))?;
+
+		let mut total_top_size = 0u64;
+		let mut total_written_top_size = 0u64;
+		let mut total_top_items = 0u64;
+		let mut total_written_top_items = 0u64;
 		for elt in iter {
 			let (key, value) = elt.map_err(|e| trie_error::<H>(&*e))?;
 			if let Some(limit_size) = limit_size.as_mut() {
@@ -473,7 +480,11 @@ where
 				}
 				*limit_items -= 1;
 			}
+			total_top_size += value.len() as u64;
+			total_top_items += 1;
 			if value.len() >= dest_threshold as usize {
+				total_written_top_size += value.len() as u64;
+				total_written_top_items += 1;
 				// Force a change so triedbmut do not ignore
 				// setting the same value.
 				if value != empty_value {
@@ -509,6 +520,19 @@ where
 		// TODO same for child
 		sp_std::mem::drop(ori);
 		sp_std::mem::drop(dest);
+		#[cfg(feature = "std")]
+		info!("\n  
+		total_top_size: {},\n  
+		total_written_top_size: {},\n  
+		total_top_items: {}, \n  
+		total_written_top_items: {}, \n  
+		",
+		total_top_size,
+		total_written_top_size,
+		total_top_items,
+		total_written_top_items,
+		);
+	
 		Ok(progress)
 	}
 }
