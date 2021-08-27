@@ -166,8 +166,6 @@ impl<T: Config> ListScenario<T> {
 		let i = T::Currency::burn(T::Currency::total_issuance());
 		sp_std::mem::forget(i);
 
-		log!(info, "scenario origin_weight {:#?}", origin_weight);
-
 		// create accounts with the origin weight
 
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_balance::<T>(
@@ -200,8 +198,6 @@ impl<T: Config> ListScenario<T> {
 
 		let dest_weight =
 			T::CurrencyToVote::to_currency(dest_weight_as_vote as u128, total_issuance);
-
-		let dest_factor: BalanceOf<T> = dest_weight * 10u32.into() / T::Currency::minimum_balance();
 
 		// create an account with the worst case destination weight
 		let (dest_stash1, dest_controller1) = create_stash_controller_with_balance::<T>(
@@ -297,7 +293,7 @@ benchmarks! {
 		let controller = scenario.origin_controller1.clone();
 		let original_bonded: BalanceOf<T> = Ledger::<T>::get(&controller).map(|l| l.active).ok_or("ledger not created after")?;
 
-		T::Currency::deposit_into_existing(&stash, max_additional);
+		T::Currency::deposit_into_existing(&stash, max_additional).unwrap();
 		scenario.check_preconditions();
 
 		whitelist_account!(stash);
@@ -310,13 +306,17 @@ benchmarks! {
 	}
 
 	unbond {
+		use sp_std::convert::TryFrom;
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
 		// setup the worst case list scenario.
 		let total_issuance = T::Currency::total_issuance();
-		// the weight the nominator will start at.
-		let origin_weight = T::CurrencyToVote::to_currency(106_282_535_907_434u128, total_issuance);
+		// the weight the nominator will start at. The value used here is expected to be
+		// significantly higher than the first position in a list (e.g. the first bag threshold).
+		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
+			.map_err(|_| "balance expected to be a u128")
+			.unwrap();
 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
 
 		let stash = scenario.origin_stash1.clone();

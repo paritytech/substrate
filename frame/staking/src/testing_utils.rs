@@ -64,7 +64,6 @@ pub fn create_funded_user_with_balance<T: Config>(
 	n: u32,
 	balance: BalanceOf<T>,
 ) -> T::AccountId {
-	use sp_runtime::traits::Bounded;
 	let user = account(string, n, SEED);
 	let _ = T::Currency::make_free_balance_be(&user, balance);
 	user
