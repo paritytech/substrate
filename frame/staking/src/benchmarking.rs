@@ -179,7 +179,6 @@ impl<T: Config> ListScenario<T> {
 			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
 		)?;
 
-
 		let (origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 3,
 			origin_weight,

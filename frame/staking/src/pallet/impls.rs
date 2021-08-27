@@ -746,8 +746,7 @@ impl<T: Config> Pallet<T> {
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
 
 			// maybe update sorted list. Defensive-only: this should never fail.
-			let weight = Self::weight_of(who);
-			if T::SortedListProvider::on_insert(who.clone(), weight).is_err() {
+			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
 				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
 				debug_assert!(false, "attempt to insert duplicate nominator");
 			};

@@ -54,7 +54,6 @@ pub fn create_funded_user<T: Config>(
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
 	let _ = T::Currency::make_free_balance_be(&user, balance);
-	// ensure T::CurrencyToVote will work correctly.
 	user
 }
 
