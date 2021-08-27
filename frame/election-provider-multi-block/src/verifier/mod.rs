@@ -78,18 +78,16 @@ pub trait Verifier {
 
 	fn seal_verifying_solution(claimed_score: ElectionScore) -> Result<(), ()>;
 
-	/// Tell me if you have some queued solution read for use, with what score.
+	/// The score of the current best solution. `None` if there is no best solution.
 	fn queued_solution() -> Option<ElectionScore>;
 
-	/// Check if this solution would have been sufficiently good, if it were to be a correct
-	/// one.
+	/// Check if the claimed score is sufficient.
 	fn check_claimed_score(claimed_score: ElectionScore) -> bool;
 
-	/// Tell me your status.
+	/// Get the current stage of the verification process.
 	///
-	/// Returns `Some(x)` if there's a verification ongoing, and `x` more blocks are needed to
-	/// finish it.
-	/// Return `None` if there isn't a verification ongoing.
+	/// Returns `Some(n)` if there's a ongoing verification; where `n` is the remaining number
+	/// of blocks for the verification process. Returns `None` if there isn't a verification ongoing.
 	fn verification_status() -> Option<PageIndex>;
 
 	/// Clear everything, there's nothing else for you to do until further notice.
@@ -99,6 +97,7 @@ pub trait Verifier {
 	///
 	/// It is the responsibility of the call site to call this function with all appropriate
 	/// `page` arguments.
+	// TODO maybe rename to get_queued_solution_paged
 	fn get_verified_solution(page: PageIndex) -> Option<Supports<Self::AccountId>>;
 
 	/// Perform the feasibility check of the given solution page.
