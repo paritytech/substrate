@@ -511,7 +511,6 @@ fn uncles_with_only_ancestors() {
 }
 
 #[test]
-#[ignore]
 fn uncles_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -664,7 +663,6 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 }
 
 #[test]
-#[ignore]
 fn best_containing_on_longest_chain_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -1131,7 +1129,6 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 }
 
 #[test]
-#[ignore]
 fn finalizing_diverged_block_should_trigger_reorg() {
 	let (mut client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
@@ -1229,7 +1226,6 @@ fn get_header_by_block_number_doesnt_panic() {
 }
 
 #[test]
-#[ignore]
 fn state_reverted_on_reorg() {
 	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
@@ -1271,6 +1267,11 @@ fn state_reverted_on_reorg() {
 	// Reorg to B1
 	client.import_as_best(BlockOrigin::Own, b1.clone()).unwrap();
 
+	let empty_block = client.new_block(
+		Default::default(),
+	).unwrap().build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, empty_block).unwrap();
+
 	assert_eq!(950, current_balance(&client));
 	let mut a2 = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
@@ -1286,6 +1287,11 @@ fn state_reverted_on_reorg() {
 	let a2 = a2.build(Default::default()).unwrap().block;
 	// Re-org to A2
 	client.import_as_best(BlockOrigin::Own, a2).unwrap();
+
+	let empty_block = client.new_block(
+		Default::default(),
+	).unwrap().build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, empty_block).unwrap();
 	assert_eq!(980, current_balance(&client));
 }
 
