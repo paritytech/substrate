@@ -1837,7 +1837,6 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 
 /// Test that ensures that we always send an import notification for re-orgs.
 #[test]
-#[ignore]
 fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifications() {
 	let mut client = TestClientBuilder::new().build();
 
