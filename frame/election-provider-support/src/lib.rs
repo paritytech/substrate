@@ -334,12 +334,6 @@ pub trait SortedListProvider<AccountId> {
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
 
-	/// Whether or not `id` is in a position in the list that corresponds to `weight`.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn is_in_pos(_id: &AccountId, _weight: VoteWeight, mock: bool) -> bool {
-		mock
-	}
-
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]

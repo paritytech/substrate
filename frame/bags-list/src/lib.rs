@@ -267,11 +267,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn is_in_pos(id: &T::AccountId, weight: VoteWeight, _: bool) -> bool {
-		list::Bag::<T>::get(list::notional_bag_for::<T>(weight)).unwrap().contains(id)
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
 		use frame_support::traits::Get as _;
 		let thresholds = T::BagThresholds::get();

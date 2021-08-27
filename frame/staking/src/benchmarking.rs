@@ -219,44 +219,6 @@ impl<T: Config> ListScenario<T> {
 			dest_weight,
 		})
 	}
-
-	fn check_preconditions(&self) {
-		let ListScenario {
-			dest_stash1,
-			origin_stash2,
-			origin_stash1,
-			origin_weight_as_vote,
-			dest_weight_as_vote,
-			..
-		} = self;
-		// destination stash1 is not in the origin pos,
-		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_weight_as_vote, false));
-		// and is in the destination pos.
-		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_weight_as_vote, true));
-		// origin stash1 is in the origin pos.
-		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *origin_weight_as_vote, true));
-		// origin stash2 is in the origin pos.
-		assert!(T::SortedListProvider::is_in_pos(&origin_stash2, *origin_weight_as_vote, true));
-	}
-
-	fn check_postconditions(&self) {
-		let ListScenario {
-			dest_stash1,
-			origin_stash1,
-			dest_weight_as_vote,
-			origin_weight_as_vote,
-			origin_stash2,
-			..
-		} = self;
-		// dest stash1 is not in the origin pos,
-		assert!(!T::SortedListProvider::is_in_pos(&dest_stash1, *origin_weight_as_vote, false));
-		// and is still in the destination pos.
-		assert!(T::SortedListProvider::is_in_pos(&dest_stash1, *dest_weight_as_vote, true));
-		// origin stash1 is now in the destination pos.
-		assert!(T::SortedListProvider::is_in_pos(&origin_stash1, *dest_weight_as_vote, true));
-		// origin stash2 is still in the origin pos.
-		assert!(T::SortedListProvider::is_in_pos(&origin_stash2, *origin_weight_as_vote, true));
-	}
 }
 
 const USER_SEED: u32 = 999666;
@@ -293,7 +255,6 @@ benchmarks! {
 		let original_bonded: BalanceOf<T> = Ledger::<T>::get(&controller).map(|l| l.active).ok_or("ledger not created after")?;
 
 		T::Currency::deposit_into_existing(&stash, max_additional).unwrap();
-		scenario.check_preconditions();
 
 		whitelist_account!(stash);
 	}: _(RawOrigin::Signed(stash), max_additional)
@@ -301,7 +262,6 @@ benchmarks! {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
-		scenario.check_postconditions();
 	}
 
 	unbond {
@@ -324,15 +284,12 @@ benchmarks! {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 
-		scenario.check_preconditions();
-
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), amount)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded > new_bonded);
-		scenario.check_postconditions();
 	}
 
 	// Withdraw only updates the ledger
@@ -376,8 +333,6 @@ benchmarks! {
 		Ledger::<T>::insert(&controller, ledger);
 		CurrentEra::<T>::put(EraIndex::max_value());
 
-		scenario.check_preconditions();
-
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
@@ -397,8 +352,6 @@ benchmarks! {
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
-
-		scenario.check_preconditions();
 
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
@@ -512,8 +465,6 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		scenario.check_preconditions();
-
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller))
 	verify {
@@ -582,8 +533,6 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 		add_slashing_spans::<T>(&stash, s);
-
-		scenario.check_preconditions();
 
 	}: _(RawOrigin::Root, stash.clone(), s)
 	verify {
@@ -713,16 +662,12 @@ benchmarks! {
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
 
-		scenario.check_preconditions();
-
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), rebond_amount)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
-
-		scenario.check_postconditions();
 	}
 
 	set_history_depth {
@@ -761,7 +706,6 @@ benchmarks! {
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
-		scenario.check_preconditions();
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
@@ -933,8 +877,6 @@ benchmarks! {
 			Some(0),
 			Some(Percent::from_percent(0))
 		)?;
-
-		scenario.check_preconditions();
 
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())
