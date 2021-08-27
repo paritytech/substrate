@@ -1,54 +1,163 @@
 # Subkey
 
-Subkey is a commandline utility included with Substrate that generates or restores Substrate keys.
+Subkey is a commandline utility included with Substrate. It allows generating and restoring keys for Substrate based chains such as Polkadot, Kusama and a growing number of parachains and Substrate based projects.
 
-`subkey` will use the [sr25519](http://wiki.polkadot.network/en/latest/polkadot/learn/cryptography/#keypairs-and-signing) cryptography by default. If you need to use the older ed25519 cryptography to generate or restore your key pass the `--ed25519` flag to any of the commands.
+`subkey` provides a few sub-commands to generate keys, check keys, sign messages, verify messages, etc...
+
+You can see the list of command with `subkey --help`. You can then see additional options per command with for instance `subkey generate --help` for the `generate` command.
+
+## Satefy first
+
+`subkey` does not need any internet connection to work. For the best levels of security, you should be using `subkey` on a machine that is **not connected** to the internet.
+
+`subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check you commands history).
+
+If you save anything output of `subkey` into a file, make sure to apply proper permissions and delete the file as soon as possible.
 
 ## Usage
 
+The following guide explains *some* of the `subkey` commands. For the full list and the most up to date documentation, make sure to check the integrated help with `subkey --help`.
+
 ### Generate a random account
+
+Generating a new key is as simple as running:
 
     subkey generate
 
-Will output a secret phrase("mnemonic phrase") and give you the secret seed("Private Key"), public key("Account ID") and SS58 address("Public Address") of a new account. DO NOT SHARE your mnemonic phrase or secret seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Public Address**.
+The output looks similar to:
+
+```
+Secret phrase `hotel forest jar hover kite book view eight stuff angle legend defense` is account:
+  Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+  Public key (hex): 0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  Account ID:       0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  SS58 Address:     5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte
+```
+
+---
+☠️ DO NT RE-USE ANY OF THE INFORMATION (seed and secrets) FROM THIS PAGE ☠️.
+
+You can read more about security and risks in [SECURITY.md](./SECURITY.md) and in the [Polkadot Wiki](https://wiki.polkadot.network/docs/learn-account-generation).
+
+---
+
+The output above shows a **secret phrase** (also called **mnemonic phrase**) and the **secret seed** (also called **Private Key**). Those 2 secrets are the pieces of information you MUST keep safe and secret. All the other information below can be derivated from those secrets.
+
+The output above also show the **public key** and the **Account ID**. Those are the independant from the network where you will use the key.
+
+The **SS58 address** (or **Public Address**) of a new account is a reprensentation of the public keys of an account for a given network (for instance Kusama or Polkadot).
+
+For instance, considering the previous seed `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` the SS58 addresses are:
+- Polkadot: `16m4J167Mptt8UXL8aGSAi7U2FnPpPxZHPrCgMG9KJzVoFqM`
+- Kusama: `JLNozAv8QeLSbLFwe2UvWeKKE4yvmDbfGxTuiYkF2BUMx4M`
+
+### Json output
+
+`subkey` can calso generate the output as *json*. This is useful for automation:
+
+command:
+```
+subkey generate --output-type json
+```
+
+output:
+```
+{
+  "accountId": "0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515",
+  "publicKey": "0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515",
+  "secretPhrase": "hotel forest jar hover kite book view eight stuff angle legend defense",
+  "secretSeed": "0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d",
+  "ss58Address": "5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte"
+}
+```
+
+So if you only want to get the `secretSeed` for instance, you can use:
+
+command:
+```
+subkey generate --output-type json | jq -r .secretSeed
+```
+
+output:
+```
+0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+```
 
 ### Inspecting a key
 
 You can inspect a given URI (mnemonic, seed, public key, or address) and recover the public key and the address.
 
-    subkey inspect <mnemonic,seed,pubkey,address>
+    subkey inspect <mnemonic | seed | pubkey | address>
 
 *Example Output*:
 
-    Secret Key URI `` is account:
-      Secret seed:       0xfac7959dbfe72f052e5a0c3c8d6530f202b02fd8f9f5ca3580ec8deb7797479e
-      Public key (hex):  0x46ebddef8cd9bb167dc30878d7113b7e168e6f0646beffd77d69d39bad76b47a
-      Public key (SS58): 5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV
-      Account ID:        0x46ebddef8cd9bb167dc30878d7113b7e168e6f0646beffd77d69d39bad76b47a
-      SS58 Address:      5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV
-
+```
+Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` is account:
+  Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+  Public key (hex): 0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  Account ID:       0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  SS58 Address:     5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte
+```
 ### Signing
 
-`subkey` expects a message to come in on STDIN, one way to sign a message would look like this:
+`subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your **public key**:
 
     echo -n <msg> | subkey sign --suri <seed,mnemonic>
 
-*Example Output*:
+*Example*:
 
-    a69da4a6ccbf81dbbbfad235fa12cf8528c18012b991ae89214de8d20d29c1280576ced6eb38b7406d1b7e03231df6dd4a5257546ddad13259356e1c3adfb509
+    MESSAGE=hello
+    SURI=0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+    echo -n $MESSAGE | subkey sign --suri $SURI
 
+*outputs*:
+
+    9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+
+**NOTE**: Each run of the `sign` command with yield a different output. While each signature is different, they are all valid.
 ### Verifying a signature
+
+Given a message, a signature and an address, `subkey` can verify whether the **message** has been digitally signed by the (or one of the ...) holder of the **private key** for the given **address**:
 
     echo -n <msg> | subkey verify <sig> <address>
 
-    OUTPUT:
+*Example*:
+
+    MESSAGE=hello
+    URI=0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+    SIGNATURE=9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+    echo -n $MESSAGE | subkey verify $SIGNATURE $URI
+
+*outputs*:
+
     Signature verifies correctly.
 
+A failure looks like:
+
+    Error: SignatureInvalid
 ### Using the vanity generator
 
 You can use the included vanity generator to find a seed that provides an address which includes the desired pattern. Be warned, depending on your hardware this may take a while.
 
-    subkey vanity 1337
+command:
+```
+subkey vanity --network polkadot --pattern bob
+```
+
+output:
+```
+Generating key containing pattern 'bob'
+best: 190 == top: 189
+Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d6691` is account:
+  Secret seed:      0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d6691
+  Public key (hex): 0x1a8b32e95c1f571118ea0b84801264c3c70f823e320d099e5de31b9b1f18f843
+  Account ID:       0x1a8b32e95c1f571118ea0b84801264c3c70f823e320d099e5de31b9b1f18f843
+  SS58 Address:     1bobYxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE
+```
+
+`Bob` now got a nice address starting with his name: 1**bob**YxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE.
+
+**Note**: While `Bob`, having a short name (3 chars), got a result rather quickly, it will take much longer for `Alice` who has a much longer name, thus the chances to generate a random address that contains the chain `alice` will be much smaller.
 
 ### Signing a transaction
 
