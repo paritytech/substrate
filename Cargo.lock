@@ -8095,7 +8095,6 @@ dependencies = [
 name = "sc-rpc-api"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "futures 0.3.16",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -8113,6 +8112,7 @@ dependencies = [
  "sp-runtime",
  "sp-tracing",
  "sp-version",
+ "thiserror",
 ]
 
 [[package]]
