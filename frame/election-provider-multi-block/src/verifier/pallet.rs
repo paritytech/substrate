@@ -133,7 +133,7 @@ mod pallet {
 			VerifyingSolutionScore::<T>::exists()
 		}
 
-		/// The the `claimed` score of the current verifying solution.
+		/// The `claimed` score of the current verifying solution.
 		pub(crate) fn get_score() -> Option<ElectionScore> {
 			VerifyingSolutionScore::<T>::get()
 		}
@@ -181,6 +181,7 @@ mod pallet {
 	}
 
 	// ---- All storage items about the verifying solution.
+	/// A wrapper interface for the storage items related to the queued solution.
 	pub(crate) struct QueuedSolution<T: Config>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> QueuedSolution<T> {
 		/// Return the `score` and `winner_count` of verifying solution.
@@ -197,6 +198,13 @@ mod pallet {
 			debug_assert_eq!(QueuedSolutionBackings::<T>::iter().count() as u8, T::Pages::get());
 
 			let mut total_supports: BTreeMap<T::AccountId, ExtendedBalance> = Default::default();
+			// TODO the number of targets in each page support should not exceed the desired
+			// target count.
+			// ASSUMPTION: total number of targets can fit into one page (and thus the desired
+			// number of targets can always fit in one page).
+			// ATTACK VECTOR: if the solution includes more targets than can fit into memory we
+			// could OOM
+			// QUESTION: how are we sure the targets here are valid? Is this checked somewhere else
 			QueuedSolutionBackings::<T>::iter()
 				.map(|(_page, backings)| backings)
 				.flatten()
@@ -232,9 +240,7 @@ mod pallet {
 		/// Should be called at any step, if we encounter an issue which makes the solution
 		/// infeasible.
 		pub(crate) fn clear_invalid() {
-			let valid = QueuedValidVariant::<T>::get();
-			let invalid = valid.other();
-			match invalid {
+			match Self::invalid() {
 				ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
 				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
 			};
@@ -247,8 +253,7 @@ mod pallet {
 		/// This should only be used when we intend to replace the valid solution with something
 		/// else (either better, or when being forced).
 		pub(crate) fn clear_valid() {
-			let valid = QueuedValidVariant::<T>::get();
-			match valid {
+			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
 				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
 			};
@@ -263,13 +268,10 @@ mod pallet {
 		/// known to be valid. At this stage, we write to the invalid variant. Once all pages are
 		/// verified, a call to [`finalize_correct`] will seal the correct pages.
 		pub(crate) fn set_invalid_page(page: PageIndex, supports: Supports<T::AccountId>) {
-			let valid = QueuedValidVariant::<T>::get();
-			let invalid = valid.other();
-
 			let backings = supports.iter().map(|(x, s)| (x, s.total)).collect::<Vec<_>>();
 			QueuedSolutionBackings::<T>::insert(page, backings);
 
-			match invalid {
+			match Self::invalid() {
 				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
 				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
 			}
@@ -282,12 +284,11 @@ mod pallet {
 			paged_supports: Vec<Supports<T::AccountId>>,
 			score: ElectionScore,
 		) {
-			let valid = QueuedValidVariant::<T>::get();
 			// TODO: something like enumerate for Vec<T> that pagify it.
 			for (page_index, supports) in
 				paged_supports.into_iter().enumerate().map(|(p, s)| (p as PageIndex, s))
 			{
-				match valid {
+				match Self::valid() {
 					ValidSolution::X => QueuedSolutionX::<T>::insert(page_index, supports),
 					ValidSolution::Y => QueuedSolutionY::<T>::insert(page_index, supports),
 				}
@@ -299,7 +300,7 @@ mod pallet {
 		///
 		/// This is not the normal flow of writing, and the solution is not checked.
 		///
-		/// This is only useful to override the valid solution with a single (mostly backup)
+		/// This is only useful to override the valid solution with a single (likely backup)
 		/// solution.
 		pub(crate) fn force_set_single_page_valid(
 			page: PageIndex,
@@ -310,8 +311,7 @@ mod pallet {
 			Self::clear_valid();
 
 			// write a single new page.
-			let valid = QueuedValidVariant::<T>::get();
-			match valid {
+			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
 				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
 			}
@@ -337,14 +337,22 @@ mod pallet {
 		}
 
 		pub(crate) fn get_verified_solution(page: PageIndex) -> Option<Supports<T::AccountId>> {
-			let valid = QueuedValidVariant::<T>::get();
-
-			match valid {
+			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
 				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
 			}
 		}
+
+		fn valid() -> ValidSolution {
+			QueuedValidVariant::<T>::get()
+		}
+
+		fn invalid() -> ValidSolution {
+			QueuedValidVariant::<T>::get().other()
+		}
 	}
+
+	// Begin storage items wrapped by QueuedSolution.
 
 	/// The `X` variant of the current queued solution. Might be the valid one or not.
 	///
@@ -371,6 +379,8 @@ mod pallet {
 	// This only ever lives for the `valid` variant.
 	#[pallet::storage]
 	type QueuedSolutionScore<T: Config> = StorageValue<_, ElectionScore>;
+
+	// End storage items wrapped by QueuedSolution.
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.
@@ -452,6 +462,9 @@ mod pallet {
 
 						let desired_targets = crate::Snapshot::<T>::desired_targets().unwrap();
 						if final_score == claimed_score &&
+							// TODO shouldn't checking final_score == claimed_score implicitly
+							// check this?
+							// TODO check score is good when starting verifier
 							Self::ensure_correct_final_score_quality(final_score).is_ok() &&
 							winner_count == desired_targets
 						{
@@ -481,7 +494,7 @@ impl<T: Config> Pallet<T> {
 	/// Once we know that a claimed score is correct, now we check it further to be:
 	///
 	/// 1. more than a potentially queued solution
-	/// 2. more than the minimum untrusted score
+	/// 2. more than the minimum untrusted score // TODO shouldn't this be done prior to any verification
 	pub(super) fn ensure_correct_final_score_quality(
 		correct_score: ElectionScore,
 	) -> Result<(), FeasibilityError> {
@@ -515,6 +528,7 @@ impl<T: Config> Pallet<T> {
 		page: PageIndex,
 	) -> Result<Supports<T::AccountId>, FeasibilityError> {
 		// Read the corresponding snapshots.
+		// TODO we assume _all_ + a page of voters fit into memory, is this OK?
 		let snapshot_targets =
 			crate::Snapshot::<T>::targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 		let snapshot_voters =

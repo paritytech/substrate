@@ -97,12 +97,12 @@ pub trait Verifier {
 	///
 	/// It is the responsibility of the call site to call this function with all appropriate
 	/// `page` arguments.
-	// TODO maybe rename to get_queued_solution_paged
+	// TODO maybe rename to get_queued_solution_page
 	fn get_verified_solution(page: PageIndex) -> Option<Supports<Self::AccountId>>;
 
 	/// Perform the feasibility check of the given solution page.
 	///
-	/// This will not check the score and winner-count, since they can only be checked in
+	/// This will not check the score or winner-count, since they can only be checked in
 	/// context.
 	///
 	/// Corresponding snapshots are assumed to be available.
