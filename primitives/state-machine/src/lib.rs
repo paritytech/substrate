@@ -719,7 +719,7 @@ mod execution {
 	}
 
 	/// Generate storage read proof.
-	pub fn prove_read<B, H, I>(mut backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
+	pub fn prove_read<B, H, I>(backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
 	where
 		B: Backend<H>,
 		H: Hasher,
@@ -735,7 +735,7 @@ mod execution {
 
 	/// Generate range storage read proof.
 	pub fn prove_range_read_with_size<B, H>(
-		mut backend: B,
+		backend: B,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		size_limit: usize,
@@ -794,7 +794,7 @@ mod execution {
 
 	/// Generate child storage read proof.
 	pub fn prove_child_read<B, H, I>(
-		mut backend: B,
+		backend: B,
 		child_info: &ChildInfo,
 		keys: I,
 	) -> Result<StorageProof, Box<dyn Error>>
@@ -1197,7 +1197,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1350,7 +1350,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1372,7 +1372,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1427,7 +1427,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1696,7 +1696,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();

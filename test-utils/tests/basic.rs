@@ -29,7 +29,7 @@ async fn panicking_test(_: TaskExecutor) {
 	panic!("boo!");
 }
 
-#[substrate_test_utils::test(max_threads = 2)]
+#[substrate_test_utils::test(flavor = "multi_thread", worker_threads = 1)]
 async fn basic_test_with_args(_: TaskExecutor) {
 	assert!(true);
 }
@@ -41,14 +41,14 @@ async fn rename_argument(ex: TaskExecutor) {
 	assert!(true);
 }
 
-#[substrate_test_utils::test]
-#[should_panic(expected = "test took too long")]
 // NOTE: enable this test only after setting SUBSTRATE_TEST_TIMEOUT to a smaller value
 //
 // SUBSTRATE_TEST_TIMEOUT=1 cargo test -- --ignored timeout
+#[substrate_test_utils::test]
+#[should_panic(expected = "test took too long")]
 #[ignore]
 async fn timeout(_: TaskExecutor) {
-	tokio::time::delay_for(std::time::Duration::from_secs(
+	tokio::time::sleep(std::time::Duration::from_secs(
 		std::env::var("SUBSTRATE_TEST_TIMEOUT")
 			.expect("env var SUBSTRATE_TEST_TIMEOUT has been provided by the user")
 			.parse::<u64>()
