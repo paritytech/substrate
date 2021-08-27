@@ -112,6 +112,10 @@ pub fn prepare_client_with_key_changes() -> (
 		local_roots.push(trie_root);
 	}
 
+	let builder = remote_client.new_block(Default::default()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	remote_client.import(BlockOrigin::Own, block).unwrap();
+
 	// prepare test cases
 	let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
 	let bob = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
@@ -120,21 +124,21 @@ pub fn prepare_client_with_key_changes() -> (
 	let eve = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
 	let ferdie = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
 	let test_cases = vec![
-		(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
-		(1, 3, alice.clone(), vec![(1, 0)]),
-		(2, 4, alice.clone(), vec![(4, 0)]),
-		(2, 3, alice.clone(), vec![]),
-		(1, 4, bob.clone(), vec![(1, 1)]),
-		(1, 1, bob.clone(), vec![(1, 1)]),
-		(2, 4, bob.clone(), vec![]),
-		(1, 4, charlie.clone(), vec![(2, 0)]),
-		(1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
-		(1, 1, dave.clone(), vec![(1, 1), (1, 0)]),
-		(3, 4, dave.clone(), vec![(4, 0)]),
-		(1, 4, eve.clone(), vec![(2, 0)]),
-		(1, 1, eve.clone(), vec![]),
-		(3, 4, eve.clone(), vec![]),
-		(1, 4, ferdie.clone(), vec![]),
+		(1, 5, alice.clone(), vec![(5, 0), (2, 0)]),
+		(2, 4, alice.clone(), vec![(2, 0)]),
+		(3, 5, alice.clone(), vec![(5, 0)]),
+		(3, 4, alice.clone(), vec![]),
+		(2, 5, bob.clone(), vec![(2, 1)]),
+		(2, 2, bob.clone(), vec![(2, 1)]),
+		(3, 5, bob.clone(), vec![]),
+		(2, 5, charlie.clone(), vec![(3, 0)]),
+		(2, 5, dave.clone(), vec![(5, 0), (2, 1), (2, 0)]),
+		(2, 2, dave.clone(), vec![(2, 1), (2, 0)]),
+		(4, 5, dave.clone(), vec![(5, 0)]),
+		(2, 5, eve.clone(), vec![(3, 0)]),
+		(2, 2, eve.clone(), vec![]),
+		(4, 5, eve.clone(), vec![]),
+		(2, 5, ferdie.clone(), vec![]),
 	];
 
 	(remote_client, local_roots, test_cases)
@@ -1005,7 +1009,6 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 }
 
 #[test]
-#[ignore]
 fn key_changes_works() {
 	let (client, _, test_cases) = prepare_client_with_key_changes();
 

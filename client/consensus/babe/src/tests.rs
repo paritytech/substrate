@@ -450,7 +450,6 @@ fn run_one_test(
 }
 
 #[test]
-#[ignore]
 fn authoring_blocks() {
 	run_one_test(|_, _| ())
 }
