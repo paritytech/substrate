@@ -13,7 +13,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
 sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
@@ -23,8 +25,7 @@ impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-io ={ version = "4.0.0-dev", path = "../../primitives/io" }
-serde = { version = "1.0.126" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

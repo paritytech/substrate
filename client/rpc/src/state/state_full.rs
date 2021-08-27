@@ -35,8 +35,7 @@ use sp_blockchain::{
 };
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData,
-		StorageKey,
+		ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey,
 	},
 	Bytes,
 };
@@ -470,17 +469,6 @@ where
 		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
-		let stream = match self.client.storage_changes_notification_stream(
-			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
-			None,
-		) {
-			Ok(stream) => stream,
-			Err(err) => {
-				let _ = subscriber.reject(Error::from(client_err(err)).into());
-				return
-			},
-		};
-
 		self.subscriptions.add(subscriber, |sink| {
 			let version = self
 				.block_or_best(None)
@@ -493,12 +481,16 @@ where
 			let client = self.client.clone();
 			let mut previous_version = version.clone();
 
-			let stream = stream.filter_map(move |_| {
-				let info = client.info();
+			// A stream of all best blocks.
+			let stream =
+				client.import_notification_stream().filter(|n| future::ready(n.is_new_best));
+
+			let stream = stream.filter_map(move |n| {
 				let version = client
-					.runtime_version_at(&BlockId::hash(info.best_hash))
+					.runtime_version_at(&BlockId::hash(n.hash))
 					.map_err(|e| Error::Client(Box::new(e)))
 					.map_err(Into::into);
+
 				if previous_version != version {
 					previous_version = version.clone();
 					future::ready(Some(Ok::<_, ()>(version)))

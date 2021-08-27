@@ -474,7 +474,7 @@ pub mod pallet {
 		#[pallet::weight(if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::BlockWeights::get().max_block
+			T::WeightInfo::remove_member_without_replacement()
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
@@ -679,8 +679,9 @@ pub mod pallet {
 					// election.
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
-							Ok(_) =>
-								panic!("Duplicate member in elections-phragmen genesis: {}", member),
+							Ok(_) => {
+								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+							},
 							Err(pos) => members.insert(
 								pos,
 								SeatHolder {

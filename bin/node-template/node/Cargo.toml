@@ -25,7 +25,6 @@ sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", featu
 sc-service = { version = "0.10.0-dev", path = "../../../client/service", features = ["wasmtime"] }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sc-consensus-aura = { version = "0.10.0-dev", path = "../../../client/consensus/aura" }

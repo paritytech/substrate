@@ -42,9 +42,8 @@ use std::{
 	str,
 	sync::Arc,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other peers.
 ///
@@ -565,8 +564,9 @@ impl Notifications {
 				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
 			},
 
-			PeerState::Poisoned =>
-				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id),
+			PeerState::Poisoned => {
+				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id)
+			},
 		}
 	}
 

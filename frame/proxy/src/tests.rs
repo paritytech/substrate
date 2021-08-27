@@ -123,8 +123,9 @@ impl InstanceFilter<Call> for ProxyType {
 	fn filter(&self, c: &Call) -> bool {
 		match self {
 			ProxyType::Any => true,
-			ProxyType::JustTransfer =>
-				matches!(c, Call::Balances(pallet_balances::Call::transfer(..))),
+			ProxyType::JustTransfer => {
+				matches!(c, Call::Balances(pallet_balances::Call::transfer(..)))
+			},
 			ProxyType::JustUtility => matches!(c, Call::Utility(..)),
 		}
 	}
@@ -193,6 +194,7 @@ fn expect_events(e: Vec<Event>) {
 fn announcement_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any, 1));
+		System::assert_last_event(ProxyEvent::ProxyAdded(1, 3, ProxyType::Any, 1).into());
 		assert_ok!(Proxy::add_proxy(Origin::signed(2), 3, ProxyType::Any, 1));
 		assert_eq!(Balances::reserved_balance(3), 0);
 

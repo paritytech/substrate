@@ -319,8 +319,9 @@ where
 
 		for inherent in block_builder.create_inherents(inherent_data)? {
 			match block_builder.push(inherent) {
-				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
-					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
+				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
 					error!(
 						"❌️ Mandatory inherent extrinsic returned error. Block cannot be produced."

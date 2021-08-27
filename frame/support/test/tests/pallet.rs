@@ -934,14 +934,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 	const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 
 	fn pallet_version_key(name: &str) -> [u8; 32] {
-		let pallet_name = sp_io::hashing::twox_128(name.as_bytes());
-		let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&pallet_name);
-		final_key[16..].copy_from_slice(&postfix);
-
-		final_key
+		frame_support::storage::storage_prefix(name.as_bytes(), PALLET_VERSION_STORAGE_KEY_POSTFIX)
 	}
 
 	TestExternalities::default().execute_with(|| {
@@ -1274,16 +1267,8 @@ fn test_pallet_info_access() {
 #[test]
 fn test_storage_info() {
 	use frame_support::{
-		pallet_prelude::*,
+		storage::storage_prefix as prefix,
 		traits::{StorageInfo, StorageInfoTrait},
-		StorageHasher,
-	};
-
-	let prefix = |pallet_name, storage_name| {
-		let mut res = [0u8; 32];
-		res[0..16].copy_from_slice(&Twox128::hash(pallet_name));
-		res[16..32].copy_from_slice(&Twox128::hash(storage_name));
-		res
 	};
 
 	assert_eq!(
