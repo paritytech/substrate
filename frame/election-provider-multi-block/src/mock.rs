@@ -165,6 +165,7 @@ pub(crate) fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 	let mut solution_pages: Vec<SolutionOf<Runtime>> = Vec::with_capacity(Pages::get() as usize);
 	for (index, assignment_page) in paged_assignments.iter().enumerate() {
 		let corresponding_snapshot = &voter_snapshot[index];
+		// TODO maybe we don't need all these variants of voter_index_fn just for testing?
 		let voter_index = helpers::voter_index_fn_linear::<Runtime>(corresponding_snapshot);
 		let page =
 			<SolutionOf<Runtime>>::from_assignment(assignment_page, voter_index, &target_index)

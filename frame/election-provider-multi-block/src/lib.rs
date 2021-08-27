@@ -698,6 +698,10 @@ pub mod pallet {
 		pub fn kill_desired_targets() {
 			DesiredTargets::<T>::kill();
 		}
+
+		pub fn remove_target_page(page: PageIndex) {
+			PagedTargetSnapshot::<T>::remove(page);
+		}
 	}
 
 	/// The metadata of the [`RoundSnapshot`]
@@ -844,7 +848,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
-		T::Verifier::get_verified_solution(remaining)
+		T::Verifier::get_valid_page(remaining)
 			.ok_or(ElectionError::SupportPageNotAvailable)
 			.or_else(|err| {
 				// if this is the last page, we might use the fallback to do something.

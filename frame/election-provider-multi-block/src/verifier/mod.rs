@@ -72,7 +72,7 @@ pub trait Verifier {
 	///
 	/// This should be used to load solutions into this pallet.
 	fn set_unverified_solution_page(
-		page_index: PageIndex,
+		remaining: PageIndex,
 		page_solution: Self::Solution,
 	) -> Result<(), ()>;
 
@@ -87,7 +87,8 @@ pub trait Verifier {
 	/// Get the current stage of the verification process.
 	///
 	/// Returns `Some(n)` if there's a ongoing verification; where `n` is the remaining number
-	/// of blocks for the verification process. Returns `None` if there isn't a verification ongoing.
+	/// of blocks for the verification process. Returns `None` if there isn't a verification
+	/// ongoing.
 	fn verification_status() -> Option<PageIndex>;
 
 	/// Clear everything, there's nothing else for you to do until further notice.
@@ -98,7 +99,7 @@ pub trait Verifier {
 	/// It is the responsibility of the call site to call this function with all appropriate
 	/// `page` arguments.
 	// TODO maybe rename to get_queued_solution_page
-	fn get_verified_solution(page: PageIndex) -> Option<Supports<Self::AccountId>>;
+	fn get_valid_page(page: PageIndex) -> Option<Supports<Self::AccountId>>;
 
 	/// Perform the feasibility check of the given solution page.
 	///
@@ -160,8 +161,8 @@ impl<T: Config> Verifier for Pallet<T> {
 		QueuedSolution::<T>::kill();
 	}
 
-	fn get_verified_solution(page: PageIndex) -> Option<Supports<Self::AccountId>> {
-		QueuedSolution::<T>::get_verified_solution(page)
+	fn get_valid_page(page: PageIndex) -> Option<Supports<Self::AccountId>> {
+		QueuedSolution::<T>::get_valid_page(page)
 	}
 
 	fn feasibility_check_page(
