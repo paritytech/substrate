@@ -1601,7 +1601,6 @@ fn returns_status_for_pruned_blocks() {
 }
 
 #[test]
-#[ignore]
 fn imports_blocks_with_changes_tries_config_change() {
 	// create client with initial 4^2 configuration
 	let mut client = TestClientBuilder::with_default_backend()
@@ -1697,7 +1696,8 @@ fn imports_blocks_with_changes_tries_config_change() {
 	// now check that configuration cache works
 	assert_eq!(
 		client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
-		vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
+		//because of delayed block execution changes are applied in following blocks
+		vec![(31, 0), (28, 0), (26, 0), (25, 0), (12, 0)]
 	);
 }
 
