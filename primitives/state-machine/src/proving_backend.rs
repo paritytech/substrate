@@ -484,7 +484,7 @@ mod tests {
 			.clone()
 			.map(|i| (vec![i], Some(vec![i; size_content])))
 			.collect::<Vec<_>>();
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		if flagged {
 			in_memory = in_memory.update(vec![(
 				None,
@@ -534,7 +534,7 @@ mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		if flagged {
 			in_memory = in_memory.update(vec![(
 				None,

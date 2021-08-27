@@ -30,7 +30,6 @@ rand = "0.7.3"
 parking_lot = "0.11.1"
 log = "0.4.11"
 futures-timer = "3.0.1"
-wasm-timer = "0.2"
 exit-future = "0.2.0"
 pin-project = "1.0.4"
 hash-db = "0.15.2"
@@ -83,10 +82,10 @@ async-trait = "0.1.50"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
-directories = "3.0.1"
+directories = "3.0.2"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
-tokio = { version = "0.2.25", default-features = false }
+tokio = { version = "1.10", features = ["time"] }
 async-std = { version = "1.6.5", default-features = false }

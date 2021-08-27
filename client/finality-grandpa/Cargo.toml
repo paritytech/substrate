@@ -45,7 +45,6 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 finality-grandpa = { version = "0.14.1", features = ["derive-codec"] }
 async-trait = "0.1.50"
-wasm-timer = "0.2"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
@@ -58,5 +57,5 @@ sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-tokio = { version = "0.2", features = ["rt-core"] }
+tokio = "1.10"
 tempfile = "3.1.0"
