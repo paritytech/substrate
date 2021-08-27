@@ -220,7 +220,6 @@ fn should_send_initial_storage_changes_and_notifications() {
 }
 
 #[test]
-#[ignore]
 fn should_query_storage() {
 	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
@@ -242,8 +241,21 @@ fn should_query_storage() {
 			client.import(BlockOrigin::Own, block).unwrap();
 			hash
 		};
-		let block1_hash = add_block(0);
-		let block2_hash = add_block(1);
+		let pre_block1_hash = add_block(0);
+
+		let builder = c.new_block(Default::default()).unwrap();
+		let block = builder.build(Default::default()).unwrap().block;
+		let block1_hash = block.header().hash();
+		c.import(BlockOrigin::Own, block).unwrap();
+
+		let pre_block2_hash = add_block(1);
+
+		// add extra block so previous one can be executed
+		let builder = c.new_block(Default::default()).unwrap();
+		let block = builder.build(Default::default()).unwrap().block;
+		let block2_hash = block.header().hash();
+		c.import(BlockOrigin::Own, block).unwrap();
+
 		let genesis_hash = client.genesis_hash();
 
 		if has_changes_trie_config {
@@ -438,7 +450,6 @@ fn should_split_ranges() {
 
 
 #[test]
-#[ignore]
 fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
