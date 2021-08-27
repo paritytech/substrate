@@ -203,7 +203,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 		let block = builder.build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block.clone()).unwrap();
 
-		// add extra block so precious one can be executed
+		// add extra block so previous one can be executed
 		let builder = client.new_block_at(&BlockId::Hash(block.header().hash()), Default::default(), false).unwrap();
 		let block = builder.build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -221,9 +221,19 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+	fn run_tests(client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let mut c = client.clone();
 
+		let mut add_empty_block = || {
+			let builder = client.new_block(Default::default()).unwrap();
+			let block = builder.build(Default::default()).unwrap().block;
+			let hash = block.header.hash();
+			c.import(BlockOrigin::Own, block).unwrap();
+			hash
+		};
+
+		let mut c = client.clone();
 		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
@@ -238,30 +248,19 @@ fn should_query_storage() {
 			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
 			let block = builder.build(Default::default()).unwrap().block;
 			let hash = block.header.hash();
-			client.import(BlockOrigin::Own, block).unwrap();
+			c.import(BlockOrigin::Own, block).unwrap();
 			hash
 		};
-		let pre_block1_hash = add_block(0);
-
-		let builder = c.new_block(Default::default()).unwrap();
-		let block = builder.build(Default::default()).unwrap().block;
-		let block1_hash = block.header().hash();
-		c.import(BlockOrigin::Own, block).unwrap();
-
-		let pre_block2_hash = add_block(1);
-
-		// add extra block so previous one can be executed
-		let builder = c.new_block(Default::default()).unwrap();
-		let block = builder.build(Default::default()).unwrap().block;
-		let block2_hash = block.header().hash();
-		c.import(BlockOrigin::Own, block).unwrap();
+		let _block1_hash = add_block(0);
+		let block2_hash = add_block(1);
+		let block3_hash = add_empty_block();
 
 		let genesis_hash = client.genesis_hash();
 
 		if has_changes_trie_config {
 			assert_eq!(
-				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
-				Some((0, BlockId::Hash(block1_hash))),
+				client.max_key_changes_range(1, BlockId::Hash(block2_hash)).unwrap(),
+				Some((0, BlockId::Hash(block2_hash))),
 			);
 		}
 
@@ -277,7 +276,7 @@ fn should_query_storage() {
 				],
 			},
 			StorageChangeSet {
-				block: block1_hash,
+				block: block2_hash,
 				changes: vec![
 					(StorageKey(vec![2]), Some(StorageData(vec![2]))),
 					(StorageKey(vec![3]), Some(StorageData(vec![3]))),
@@ -291,7 +290,7 @@ fn should_query_storage() {
 		let result = api.query_storage(
 			keys.clone(),
 			genesis_hash,
-			Some(block1_hash).into(),
+			Some(block2_hash).into(),
 		);
 
 		assert_eq!(result.wait().unwrap(), expected);
@@ -304,7 +303,7 @@ fn should_query_storage() {
 		);
 
 		expected.push(StorageChangeSet {
-			block: block2_hash,
+			block: block3_hash,
 			changes: vec![
 				(StorageKey(vec![3]), None),
 				(StorageKey(vec![4]), Some(StorageData(vec![4]))),
@@ -317,7 +316,7 @@ fn should_query_storage() {
 		let result = api.query_storage(
 			keys.clone(),
 			genesis_hash,
-			Some(block2_hash),
+			Some(block3_hash),
 		);
 
 		assert_eq!(result.wait().unwrap(), expected);
@@ -325,14 +324,14 @@ fn should_query_storage() {
 		// Inverted range.
 		let result = api.query_storage(
 			keys.clone(),
-			block1_hash,
+			block2_hash,
 			Some(genesis_hash),
 		);
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
-				from: format!("1 ({:?})", block1_hash),
+				from: format!("2 ({:?})", block2_hash),
 				to: format!("0 ({:?})", genesis_hash),
 				details: "from number > to number".to_owned(),
 			}).map_err(|e| e.to_string())
@@ -384,7 +383,7 @@ fn should_query_storage() {
 			result.wait().map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
-				to: format!("{:?}", Some(block2_hash)), // Best block hash.
+				to: format!("{:?}", Some(block3_hash)), // Best block hash.
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
 			}).map_err(|e| e.to_string()),
 		);
@@ -408,14 +407,14 @@ fn should_query_storage() {
 		// single block range
 		let result = api.query_storage_at(
 			keys.clone(),
-			Some(block1_hash),
+			Some(block2_hash),
 		);
 
 		assert_eq!(
 			result.wait().unwrap(),
 			vec![
 				StorageChangeSet {
-					block: block1_hash,
+					block: block2_hash,
 					changes: vec![
 						(StorageKey(vec![1_u8]), None),
 						(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
@@ -456,10 +455,10 @@ fn should_return_runtime_version() {
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",4],\
-		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
-		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1}";
+		[\"0xb76521c61ad13ade\",1],[\"0x0f71f73ae590773f\",1],[\"0x37e397fc7c91f5e4\",1],\
+		[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",4],[\"0xc6e9a76309f39b09\",1],\
+		[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],[\"0xf78b278be53f454c\",2],\
+		[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\"transactionVersion\":1}";
 
 	let runtime_version = api.runtime_version(None.into()).wait().unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
