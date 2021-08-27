@@ -27,6 +27,7 @@ use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
+use sp_core::StateVersion;
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
@@ -364,22 +365,24 @@ where
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
+		threshold: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		self.0.storage_root(delta)
+		self.0.storage_root(delta, threshold)
 	}
 
 	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
+		threshold: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		self.0.child_storage_root(child_info, delta)
+		self.0.child_storage_root(child_info, delta, threshold)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) {}

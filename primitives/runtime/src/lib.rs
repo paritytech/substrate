@@ -45,7 +45,7 @@ use sp_core::{
 	crypto::{self, Public},
 	ecdsa, ed25519,
 	hash::{H256, H512},
-	sr25519,
+	sr25519, StateVersion, DEFAULT_STATE_HASHING,
 };
 use sp_std::{convert::TryFrom, prelude::*};
 

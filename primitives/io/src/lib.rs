@@ -191,7 +191,17 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root()
+		self.storage_root(None)
+	}
+
+	#[version(2)]
+	/// "Commit" all existing operations and compute the resulting storage root.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	fn root(&mut self) -> Vec<u8> {
+		self.storage_root(sp_core::DEFAULT_STATE_HASHING)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
@@ -379,7 +389,22 @@ pub trait DefaultChildStorage {
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info)
+		self.child_storage_root(&child_info, None)
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	/// TODO this will be use by default for all new runtime that is an issue: we want it
+	/// to be call only when we choose to migrate, otherwhise lazy migration will apply too
+	/// soon. -> Maybe just name it differently.
+	#[version(2)]
+	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info, sp_core::DEFAULT_STATE_HASHING)
 	}
 
 	/// Child storage key iteration.

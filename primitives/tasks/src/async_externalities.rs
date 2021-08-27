@@ -19,7 +19,7 @@
 //! Async externalities.
 
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
+	storage::{ChildInfo, TrackedStorageKey}, StateVersion,
 	traits::{Externalities, RuntimeSpawn, RuntimeSpawnExt, SpawnNamed, TaskExecutorExt},
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
@@ -126,11 +126,11 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage_append`: should not be used in async externalities!")
 	}
 
-	fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self, _state_hashing: StateVersion) -> Vec<u8> {
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
 
-	fn child_storage_root(&mut self, _child_info: &ChildInfo) -> Vec<u8> {
+	fn child_storage_root(&mut self, _child_info: &ChildInfo, _state_hashing: StateVersion) -> Vec<u8> {
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
 
@@ -152,7 +152,7 @@ impl Externalities for AsyncExternalities {
 
 	fn wipe(&mut self) {}
 
-	fn commit(&mut self) {}
+	fn commit(&mut self, _state_hashing: StateVersion) {}
 
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		unimplemented!("read_write_count is not supported in AsyncExternalities")

@@ -26,7 +26,7 @@ use sp_core::{
 		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey,
 	},
 	traits::Externalities,
-	Blake2Hasher,
+	Blake2Hasher, StateVersion,
 };
 use sp_externalities::{Extension, Extensions};
 use sp_trie::{empty_child_trie_root, Layout, TrieConfiguration};
@@ -111,8 +111,8 @@ impl BasicExternalities {
 
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
-		self.inner.top.eq(&other.inner.top) &&
-			self.inner.children_default.eq(&other.inner.children_default)
+		self.inner.top.eq(&other.inner.top)
+			&& self.inner.children_default.eq(&other.inner.children_default)
 	}
 }
 
@@ -180,16 +180,16 @@ impl Externalities for BasicExternalities {
 	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to set child storage key via main storage");
-			return
+			return;
 		}
 
 		match maybe_value {
 			Some(value) => {
 				self.inner.top.insert(key, value);
-			},
+			}
 			None => {
 				self.inner.top.remove(&key);
-			},
+			}
 		}
 	}
 
@@ -230,7 +230,7 @@ impl Externalities for BasicExternalities {
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (false, 0)
+			return (false, 0);
 		}
 
 		let to_remove = self
@@ -279,7 +279,7 @@ impl Externalities for BasicExternalities {
 		crate::ext::StorageAppend::new(current).append(value);
 	}
 
-	fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self, threshold: StateVersion) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
 		let prefixed_keys: Vec<_> = self
 			.inner
@@ -292,7 +292,7 @@ impl Externalities for BasicExternalities {
 		// type of child trie support.
 		let empty_hash = empty_child_trie_root::<Layout<Blake2Hasher>>();
 		for (prefixed_storage_key, child_info) in prefixed_keys {
-			let child_root = self.child_storage_root(&child_info);
+			let child_root = self.child_storage_root(&child_info, threshold);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
 			} else {
@@ -300,20 +300,20 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if let Some(threshold) = self.alt_hashing.as_ref() {
-			Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
+		let layout = if let Some(threshold) = threshold {
+			Layout::<Blake2Hasher>::with_alt_hashing(threshold)
 		} else {
 			Layout::<Blake2Hasher>::default()
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_info: &ChildInfo, threshold: StateVersion) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
 			let mut in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>();
 			in_mem.force_alt_hashing(self.alt_hashing.clone());
-			in_mem.child_storage_root(&child.child_info, delta).0
+			in_mem.child_storage_root(&child.child_info, delta, threshold).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}
@@ -338,7 +338,7 @@ impl Externalities for BasicExternalities {
 
 	fn wipe(&mut self) {}
 
-	fn commit(&mut self) {}
+	fn commit(&mut self, _threshold: StateVersion) {}
 
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		unimplemented!("read_write_count is not supported in Basic")

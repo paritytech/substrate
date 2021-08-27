@@ -43,6 +43,7 @@ use sp_core::{
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
+	StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 
@@ -62,6 +63,8 @@ where
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	/// Extensions.
 	pub extensions: Extensions,
+	/// State hashing to apply during tests.
+	pub state_hashing: StateVersion,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
@@ -91,12 +94,6 @@ where
 		Self::new_with_code(&[], storage)
 	}
 
-	/// Create a new instance of `TestExternalities` with storage
-	/// on a backend containing defined default alt hashing threshold.
-	pub fn new_with_alt_hashing(storage: Storage) -> Self {
-		Self::new_with_code_inner(&[], storage, true)
-	}
-
 	/// New empty test externalities.
 	pub fn new_empty() -> Self {
 		Self::new_with_code(&[], Storage::default())
@@ -104,10 +101,16 @@ where
 
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
-		Self::new_with_code_inner(code, storage, false)
+		Self::new_with_code_and_state(code, storage, sp_core::DEFAULT_STATE_HASHING)
 	}
 
-	fn new_with_code_inner(code: &[u8], mut storage: Storage, force_alt_hashing: bool) -> Self {
+	/// Create a new instance of `TestExternalities` with code and storage for a given state
+	/// version.
+	pub fn new_with_code_and_state(
+		code: &[u8],
+		mut storage: Storage,
+		state_hashing: StateVersion,
+	) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage
 			.top
@@ -125,38 +128,15 @@ where
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
-		let backend = if force_alt_hashing {
-			let mut backend: InMemoryBackend<H> = {
-				let mut storage = Storage::default();
-				storage.modify_trie_alt_hashing_threshold(Some(
-					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-				));
-				storage.into()
-			};
-			let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = storage
-				.children_default
-				.into_iter()
-				.map(|(_k, c)| (Some(c.child_info), c.data))
-				.collect();
-			inner.insert(None, storage.top);
-			backend.insert(
-				inner
-					.into_iter()
-					.map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
-			);
-			backend
-		} else {
-			storage.into()
-		};
-
 		TestExternalities {
 			overlay,
 			offchain_db,
 			changes_trie_config,
 			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend,
+			backend: (storage, state_hashing).into(),
 			storage_transaction_cache: Default::default(),
+			state_hashing,
 		}
 	}
 
@@ -177,7 +157,7 @@ where
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
+		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_hashing);
 	}
 
 	/// Registers the given extension for this instance.
@@ -206,7 +186,7 @@ where
 			))
 		}
 
-		self.backend.update(transaction)
+		self.backend.update(transaction, self.state_hashing)
 	}
 
 	/// Commit all pending changes to the underlying backend.
@@ -220,6 +200,7 @@ where
 			None,
 			Default::default(),
 			&mut Default::default(),
+			self.state_hashing,
 		)?;
 
 		self.backend

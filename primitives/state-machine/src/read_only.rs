@@ -23,7 +23,7 @@ use hash_db::Hasher;
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::Externalities,
-	Blake2Hasher,
+	Blake2Hasher, StateVersion,
 };
 use std::{
 	any::{Any, TypeId},
@@ -145,11 +145,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("storage_append is not supported in ReadOnlyExternalities")
 	}
 
-	fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self, _threshold: StateVersion) -> Vec<u8> {
 		unimplemented!("storage_root is not supported in ReadOnlyExternalities")
 	}
 
-	fn child_storage_root(&mut self, _child_info: &ChildInfo) -> Vec<u8> {
+	fn child_storage_root(&mut self, _child_info: &ChildInfo, _threshold: StateVersion) -> Vec<u8> {
 		unimplemented!("child_storage_root is not supported in ReadOnlyExternalities")
 	}
 
@@ -171,7 +171,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 
 	fn wipe(&mut self) {}
 
-	fn commit(&mut self) {}
+	fn commit(&mut self, _threshold: StateVersion) {}
 
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		unimplemented!("read_write_count is not supported in ReadOnlyExternalities")

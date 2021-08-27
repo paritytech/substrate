@@ -25,6 +25,7 @@ use crate::{
 use codec::{Codec, Decode};
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::StateVersion;
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
@@ -195,22 +196,18 @@ where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		threshold: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
-			force.clone()
-		} else {
-			self.get_trie_alt_hashing_threshold()
-		};
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
-				let layout = if let Some(threshold) = use_inner_hash_value {
+				let layout = if let Some(threshold) = threshold {
 					sp_trie::Layout::with_alt_hashing(threshold)
 				} else {
 					sp_trie::Layout::default()
@@ -231,20 +228,15 @@ where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		threshold: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
-			force.clone()
-		} else {
-			self.get_trie_alt_hashing_threshold()
-		};
-
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
 		};
-		let layout = if let Some(threshold) = use_inner_hash_value {
+		let layout = if let Some(threshold) = threshold {
 			sp_trie::Layout::with_alt_hashing(threshold)
 		} else {
 			sp_trie::Layout::default()

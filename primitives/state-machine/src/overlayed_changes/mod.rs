@@ -38,7 +38,7 @@ use crate::{
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use sp_core::{
-	offchain::OffchainOverlayedChange,
+	offchain::OffchainOverlayedChange, StateVersion,
 	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo},
 };
 use sp_externalities::{Extension, Extensions};
@@ -546,11 +546,12 @@ impl OverlayedChanges {
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
+		state_threshold: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache)
+		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache, state_threshold)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
@@ -560,13 +561,14 @@ impl OverlayedChanges {
 		#[cfg(feature = "std")] changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
+		state_threshold: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
-			self.storage_root(backend, &mut cache);
+			self.storage_root(backend, &mut cache, state_threshold);
 		}
 
 		let (transaction, transaction_storage_root) = cache
@@ -642,6 +644,7 @@ impl OverlayedChanges {
 		&self,
 		backend: &B,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
+		threshold: sp_core::StateVersion,
 	) -> H::Out
 	where
 		H::Out: Ord + Encode,
@@ -651,7 +654,7 @@ impl OverlayedChanges {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
 		});
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta, threshold);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);

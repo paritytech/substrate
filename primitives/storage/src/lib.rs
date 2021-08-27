@@ -451,6 +451,14 @@ impl ChildTrieParentKeyId {
 	}
 }
 
+/// Different state that can be applied. TODO rename to StateValueHashing.
+///
+/// When a value is define, apply inner hashing over the given threshold.
+pub type StateVersion = Option<u32>;
+
+/// Default threshold value for activated inner hashing of trie state.
+pub const DEFAULT_STATE_HASHING: StateVersion = Some(33);
+
 #[cfg(test)]
 mod tests {
 	use super::*;

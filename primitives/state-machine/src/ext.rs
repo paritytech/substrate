@@ -24,7 +24,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 use sp_core::{
-	hexdisplay::HexDisplay,
+	hexdisplay::HexDisplay, StateVersion,
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions, Externalities};
@@ -521,7 +521,7 @@ where
 		StorageAppend::new(current_value).append(value);
 	}
 
-	fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self, threshold: StateVersion) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			trace!(
@@ -534,7 +534,7 @@ where
 			return root.encode()
 		}
 
-		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
+		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache, threshold);
 		trace!(
 			target: "state",
 			method = "StorageRoot",
@@ -545,7 +545,7 @@ where
 		root.encode()
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_info: &ChildInfo, threshold: StateVersion) -> Vec<u8> {
 		let _guard = guard();
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
@@ -566,7 +566,7 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta))
+				Some(self.backend.child_storage_root(info, delta, threshold))
 			} else {
 				None
 			};
@@ -718,6 +718,7 @@ where
 				None,
 				Default::default(),
 				self.storage_transaction_cache,
+				None, // using any state
 			)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -727,7 +728,7 @@ where
 			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
-	fn commit(&mut self) {
+	fn commit(&mut self, state_threshold: StateVersion) {
 		for _ in 0..self.overlay.transaction_depth() {
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
@@ -739,6 +740,7 @@ where
 				None,
 				Default::default(),
 				self.storage_transaction_cache,
+				state_threshold,
 			)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend
