@@ -906,7 +906,7 @@ mod tests {
 
 	#[test]
 	fn phase_rotation_single_page() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().pages(1).build_and_execute(|| {
 			// 0 ------- 14 15 ------- 25 ------- 30 -------------- 44 45 ------- 55 ------- 60
 			//              |           |          |                 |   |           |          |
 			//            Signed      Unsigned   Elect        Snapshot  Signed     Unsigned    Elect

@@ -126,6 +126,11 @@ fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 	flatten
 }
 
+pub(crate) fn raw_fake_solution(score: ElectionScore) -> PagedRawSolution<TestNposSolution> {
+	let solution_pages = (0..Pages::get()).map(|_| Default::default()).collect::<Vec<_>>();
+	PagedRawSolution { score, solution_pages, ..Default::default() }
+}
+
 pub(crate) fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 	// ensure snapshot exists.
 	ensure_full_snapshot();
@@ -279,7 +284,7 @@ parameter_types! {
 	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
 
 	pub static EpochLength: u64 = 30;
-	pub static Pages: PageIndex = 1;
+	pub static Pages: PageIndex = 3;
 }
 
 pub struct DualMockWeightInfo;

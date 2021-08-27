@@ -265,6 +265,8 @@ mod pallet {
 			paged_solution: &PagedRawSolution<SolutionOf<T>>,
 		) -> DispatchResult {
 			// ensure solution is timely, and it has only 1 page..
+			// TODO: the fact that we return an error from the top level pallet here is a wee bit
+			// strange.
 			ensure!(
 				crate::Pallet::<T>::current_phase().is_unsigned_open(),
 				crate::Error::<T>::EarlySubmission
@@ -308,6 +310,8 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_too_many_pages_unsigned() {
+		// NOTE: unsigned solutions should have just 1 page, regardless of the configured
+		// page count.
 		todo!()
 	}
 
@@ -386,6 +390,34 @@ mod validate_unsigned {
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 		})
+	}
+
+	#[test]
+	fn priority_is_set() {
+		ExtBuilder::default()
+			.miner_tx_priority(20)
+			.desired_targets(0)
+			.build_and_execute(|| {
+				roll_to(25);
+				assert!(MultiBlock::current_phase().is_unsigned());
+
+				let solution = PagedRawSolution::<TestNposSolution> {
+					score: [5, 0, 0],
+					solution_pages: vec![TestNposSolution::default()],
+					..Default::default()
+				};
+				let call = super::Call::submit_unsigned(Box::new(solution.clone()), witness());
+
+				assert_eq!(
+					<UnsignedPallet as ValidateUnsigned>::validate_unsigned(
+						TransactionSource::Local,
+						&call
+					)
+					.unwrap()
+					.priority,
+					25
+				);
+			})
 	}
 }
 
@@ -469,31 +501,6 @@ mod tests {
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
 			));
 		})
-	}
-
-	#[test]
-	fn priority_is_set() {
-		ExtBuilder::default()
-			.miner_tx_priority(20)
-			.desired_targets(0)
-			.build_and_execute(|| {
-				roll_to(25);
-				assert!(MultiBlock::current_phase().is_unsigned());
-
-				let solution =
-					RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-				let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
-
-				assert_eq!(
-					<MultiBlock as ValidateUnsigned>::validate_unsigned(
-						TransactionSource::Local,
-						&call
-					)
-					.unwrap()
-					.priority,
-					25
-				);
-			})
 	}
 
 	#[test]
