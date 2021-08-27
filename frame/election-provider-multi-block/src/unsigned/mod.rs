@@ -235,7 +235,8 @@ mod pallet {
 					let initial_output =
 						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now)
 							.and_then(|_| OffchainWorkerMiner::<T>::mine_check_save_submit());
-					log!(debug, "initial offchain thread output: {:?}", initial_output);
+					log!(debug, "initial offchain worker output: {:?}", initial_output);
+					initial_output.unwrap();
 				},
 				Phase::Unsigned((true, opened)) if opened < now => {
 					// Try and resubmit the cached solution, and recompute ONLY if it is not
@@ -244,7 +245,7 @@ mod pallet {
 						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now).and_then(
 							|_| OffchainWorkerMiner::<T>::restore_or_compute_then_maybe_submit(),
 						);
-					log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
+					log!(debug, "resubmit offchain worker output: {:?}", resubmit_output);
 				},
 				_ => {},
 			}

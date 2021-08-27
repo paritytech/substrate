@@ -658,7 +658,7 @@ mod feasibility_check {
 
 	#[test]
 	fn missing_snapshot() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
@@ -672,7 +672,7 @@ mod feasibility_check {
 			);
 		});
 
-		ExtBuilder::default().pages(2).build_and_execute(|| {
+		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
@@ -686,7 +686,7 @@ mod feasibility_check {
 			);
 		});
 
-		ExtBuilder::default().pages(2).build_and_execute(|| {
+		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
@@ -697,7 +697,7 @@ mod feasibility_check {
 			assert_ok!(VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0));
 		});
 
-		ExtBuilder::default().pages(2).build_and_execute(|| {
+		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
@@ -708,7 +708,7 @@ mod feasibility_check {
 			assert_ok!(VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0));
 		});
 
-		ExtBuilder::default().pages(2).build_and_execute(|| {
+		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			roll_to(25);
@@ -774,7 +774,7 @@ mod feasibility_check {
 
 	#[test]
 	fn voter_must_have_same_targets_as_snapshot() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
+		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
 			let mut paged = raw_paged_solution();
 

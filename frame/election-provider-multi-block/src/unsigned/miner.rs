@@ -819,13 +819,13 @@ mod offchain_worker_miner {
 
 			let last_block =
 				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_LAST_BLOCK);
+			assert_eq!(last_block.get::<BlockNumber>(), Ok(None));
 
 			assert!(
 				OffchainWorkerMiner::<Runtime>::cached_solution().is_none(),
 				"no solution should be present before we mine one",
 			);
 
-			assert_eq!(last_block.get::<BlockNumber>(), Ok(None));
 			// creates, caches, submits without expecting previous cache value
 			UnsignedPallet::offchain_worker(25);
 			assert_eq!(pool.read().transactions.len(), 1);
