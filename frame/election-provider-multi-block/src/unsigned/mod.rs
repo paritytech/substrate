@@ -249,18 +249,9 @@ mod pallet {
 				_ => {},
 			}
 
-			// After election finalization, clear OCW solution storage.
-			// TODO: this is a bad pattern anyways, find another way for it.
-			// if <frame_system::Pallet<T>>::events()
-			// 	.into_iter()
-			// 	.filter_map(|event_record| {
-			// 		let local_event = <T as Config>::Event::from(event_record.event);
-			// 		local_event.try_into().ok()
-			// 	})
-			// 	.any(|event| matches!(event, Event::ElectionFinalized(_)))
-			// {
-			// 	unsigned::kill_ocw_solution::<T>();
-			// }
+			// TODO: we don't clear the cache here. I don't think it has any implications. It will
+			// be overwritten sometime in the future. In either case, once we add the snapshot hash
+			// check, an outdated cache is never a problem. backport this as well.
 		}
 
 		pub(crate) fn pre_dispatch_checks(

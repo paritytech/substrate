@@ -591,7 +591,7 @@ impl<T: Config> Pallet<T> {
 mod feasibility_check {
 	use super::{super::Verifier, *};
 	use crate::mock::{
-		create_all_snapshots, raw_paged_solution, roll_to, EpochLength, ExtBuilder, MultiBlock,
+		raw_paged_solution, roll_to, roll_to_snapshot_created, EpochLength, ExtBuilder, MultiBlock,
 		Runtime, SignedPhase, TargetIndex, UnsignedPhase, VerifierPallet, VoterIndex,
 	};
 	use frame_support::{assert_noop, assert_ok};
@@ -600,7 +600,7 @@ mod feasibility_check {
 	fn missing_snapshot() {
 		ExtBuilder::default().build_and_execute(|| {
 			// create snapshot just so that we can create a solution..
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
 
 			// ..remove the only page of the target snapshot.
@@ -614,7 +614,7 @@ mod feasibility_check {
 
 		ExtBuilder::default().pages(2).build_and_execute(|| {
 			// create snapshot just so that we can create a solution..
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
 
 			// ..remove just one of the pages of voter snapshot that is relevant.
@@ -628,7 +628,7 @@ mod feasibility_check {
 
 		ExtBuilder::default().pages(2).build_and_execute(|| {
 			// create snapshot just so that we can create a solution..
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
 
 			// ..removing this page is not important.
@@ -639,7 +639,7 @@ mod feasibility_check {
 
 		ExtBuilder::default().pages(2).build_and_execute(|| {
 			// create snapshot just so that we can create a solution..
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let paged = raw_paged_solution();
 
 			// `DesiredTargets` is not checked here.
@@ -652,12 +652,11 @@ mod feasibility_check {
 	#[test]
 	fn winner_indices_single_page() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let mut paged = raw_paged_solution();
 			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
-			dbg!(&paged);
 			// Swap all votes from 3 to 4.
 			paged.solution_pages[0]
 				.votes1
@@ -682,7 +681,7 @@ mod feasibility_check {
 	#[test]
 	fn voter_indices_per_page() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let mut paged = raw_paged_solution();
 
 			assert_eq!(crate::Snapshot::<Runtime>::voters(0).unwrap().len(), 12);
@@ -707,7 +706,7 @@ mod feasibility_check {
 	#[test]
 	fn voter_votes() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let mut paged = raw_paged_solution();
 
 			// First, check that voter at index 11 (40) actually voted for 3 (40) -- this is self
@@ -732,7 +731,7 @@ mod feasibility_check {
 	#[test]
 	fn desired_targets() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let raw = raw_paged_solution();
 			todo!()
 		})
@@ -741,7 +740,7 @@ mod feasibility_check {
 	#[test]
 	fn score() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			let raw = raw_paged_solution();
 			todo!()
 		})

@@ -61,7 +61,7 @@ frame_support::construct_runtime!(
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
-pub(crate) type BlockNumber = u32;
+pub(crate) type BlockNumber = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 
@@ -79,21 +79,38 @@ pub(crate) fn multi_block_events() -> Vec<super::Event<Runtime>> {
 		.collect::<Vec<_>>()
 }
 
-/// To from `now` to block `n`.
-pub fn roll_to(n: u64) {
+pub fn roll_to(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
 		MultiBlock::on_initialize(i);
+		VerifierPallet::on_initialize(i);
+		UnsignedPallet::on_initialize(i);
 	}
 }
 
-pub fn roll_to_with_ocw(n: u64) {
+pub fn roll_to_snapshot_created() {
+	let mut now = System::block_number() + 1;
+	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
+		System::set_block_number(now);
+		MultiBlock::on_initialize(now);
+		VerifierPallet::on_initialize(now);
+		UnsignedPallet::on_initialize(now);
+		now += 1;
+	}
+}
+
+pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
 		MultiBlock::on_initialize(i);
+		VerifierPallet::on_initialize(i);
+		UnsignedPallet::on_initialize(i);
+
 		MultiBlock::offchain_worker(i);
+		VerifierPallet::offchain_worker(i);
+		UnsignedPallet::offchain_worker(i);
 	}
 }
 
@@ -182,7 +199,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
@@ -196,7 +213,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = BlockWeights;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -205,7 +222,7 @@ impl frame_system::Config for Runtime {
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	pub const ExistentialDeposit: Balance = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
 		::with_sensible_defaults(2 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
 }
@@ -243,8 +260,8 @@ parameter_types! {
 
 	pub static OnChianFallback: bool = true; // TODO: this should be false by default.
 	pub static DesiredTargets: u32 = 2;
-	pub static SignedPhase: u64 = 10;
-	pub static UnsignedPhase: u64 = 5;
+	pub static SignedPhase: BlockNumber = 10;
+	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
@@ -594,22 +611,14 @@ impl ExtBuilder {
 
 	/// Build the externalities, and execute the given  s`test` closure with it.
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.build_unchecked().execute_with(test);
-		sanity_checks();
+		let mut ext = self.build_unchecked();
+		ext.execute_with(test);
+		ext.execute_with(sanity_checks);
 	}
 }
 
 pub(crate) fn balances(who: &u64) -> (u64, u64) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
-pub(crate) fn create_all_snapshots() {
-	let _ = (0..Pages::get())
-		.rev()
-		.map(|p| MultiBlock::create_voters_snapshot_paged(p))
-		.collect::<Result<Vec<_>, _>>()
-		.unwrap();
-	let _ = MultiBlock::create_targets_snapshot().unwrap();
 }
 
 pub(crate) fn witness() -> SolutionOrSnapshotSize {
@@ -619,36 +628,20 @@ pub(crate) fn witness() -> SolutionOrSnapshotSize {
 }
 
 fn sanity_checks() {
+	// TODO: check phase, and match snapshot to it.
 	let _ = VerifierPallet::sanity_check().unwrap();
 	let _ = UnsignedPallet::sanity_check().unwrap();
 	let _ = MultiBlock::sanity_check().unwrap();
 }
 
-pub(crate) fn ensure_snapshot(exists: bool, up_to_page: PageIndex) {
-	assert!(up_to_page > 0);
-
-	assert!(exists ^ !crate::Snapshot::<Runtime>::desired_targets().is_some());
-	assert!(exists ^ !crate::Snapshot::<Runtime>::metadata().is_some());
-	assert!(exists ^ !crate::Snapshot::<Runtime>::targets().is_some());
-
-	(Pages::get() - 1..=0).take(up_to_page.into()).for_each(|p| {
-		assert!(
-			exists ^ !crate::Snapshot::<Runtime>::voters(p).is_some(),
-			"voter page {} existence {} not satisfied",
-			p,
-			exists
-		);
-	});
-}
-
 pub(crate) fn ensure_full_snapshot() {
-	ensure_snapshot(true, Pages::get())
+	Snapshot::<Runtime>::assert_snapshot(true, Pages::get())
 }
 
 #[test]
 fn raw_paged_solution_works_2_page() {
 	ExtBuilder::default().pages(2).voter_per_page(4).build_and_execute(|| {
-		create_all_snapshots();
+		roll_to_snapshot_created();
 
 		// 2 pages of 8 voters
 		assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 2);
@@ -741,7 +734,7 @@ fn raw_paged_solution_works_2_page() {
 #[test]
 fn raw_paged_solution_works_3_page() {
 	ExtBuilder::default().pages(3).voter_per_page(4).build_and_execute(|| {
-		create_all_snapshots();
+		roll_to_snapshot_created();
 
 		// 3 pages of 12 voters
 		assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
@@ -844,7 +837,7 @@ fn pagination_does_not_affect_score() {
 		.voter_per_page(12)
 		.build_unchecked()
 		.execute_with(|| {
-			create_all_snapshots();
+			roll_to_snapshot_created();
 			raw_paged_solution().score
 		});
 	let score_2 =
@@ -853,7 +846,7 @@ fn pagination_does_not_affect_score() {
 			.voter_per_page(6)
 			.build_unchecked()
 			.execute_with(|| {
-				create_all_snapshots();
+				roll_to_snapshot_created();
 				raw_paged_solution().score
 			});
 	let score_3 =
@@ -862,7 +855,7 @@ fn pagination_does_not_affect_score() {
 			.voter_per_page(4)
 			.build_unchecked()
 			.execute_with(|| {
-				create_all_snapshots();
+				roll_to_snapshot_created();
 				raw_paged_solution().score
 			});
 

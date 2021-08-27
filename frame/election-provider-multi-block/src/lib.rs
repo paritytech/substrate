@@ -312,6 +312,8 @@ impl<T: Config> From<unsigned::miner::MinerError> for ElectionError<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use std::fmt::Result;
+
 	use crate::{types::*, verifier, BenchmarkingConfig, WeightInfo};
 	use frame_election_provider_support::{
 		ElectionDataProvider, ElectionProvider, NposSolution, PageIndex,
@@ -444,7 +446,9 @@ pub mod pallet {
 					// any circumstance and we should deal with it.
 
 					// snapshot must be fully created here.
-					debug_assert_eq!(Snapshot::<T>::ensure_fully_created(), Ok(()));
+					if cfg!(debug_assertions) {
+						Snapshot::<T>::assert_snapshot(true, T::Pages::get());
+					}
 
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					<CurrentPhase<T>>::put(Phase::Signed);
@@ -629,21 +633,6 @@ pub mod pallet {
 		}
 
 		// ----------- non-mutables
-		pub(crate) fn ensure_fully_created() -> Result<(), &'static str> {
-			ensure!(DesiredTargets::<T>::exists(), "DesiredTargets missing");
-			ensure!(SnapshotMetadata::<T>::exists(), "SnapshotMetadata missing");
-			ensure!(
-				PagedVoterSnapshot::<T>::iter().count().saturated_into::<PageIndex>() ==
-					T::Pages::get(),
-				"PagedVoterSnapshot missing"
-			);
-			ensure!(
-				PagedTargetSnapshot::<T>::iter().count().saturated_into::<PageIndex>().is_one(),
-				"PagedTargetSnapshot missing"
-			);
-			Ok(())
-		}
-
 		pub(crate) fn desired_targets() -> Option<u32> {
 			DesiredTargets::<T>::get()
 		}
@@ -658,6 +647,31 @@ pub mod pallet {
 
 		pub(crate) fn metadata() -> Option<SolutionOrSnapshotSize> {
 			SnapshotMetadata::<T>::get()
+		}
+
+		#[cfg(any(test, debug_assertions))]
+		pub(crate) fn assert_snapshot(exists: bool, up_to_page: PageIndex) {
+			assert!(up_to_page > 0, "can't check snapshot up to page 0");
+
+			assert!(
+				exists ^ !Self::desired_targets().is_some(),
+				"desired target snapshot mismatch: phase: {:?}, exists: {}",
+				Pallet::<T>::current_phase(),
+				exists,
+			);
+			assert!(exists ^ !Self::metadata().is_some(), "metadata mismatch");
+			assert!(exists ^ !Self::targets().is_some(), "targets mismatch");
+
+			(T::Pages::get() - 1..=crate::Pallet::<T>::lsp())
+				.take(up_to_page.into())
+				.for_each(|p| {
+					assert!(
+						exists ^ !Self::voters(p).is_some(),
+						"voter page {} mismatch {}",
+						p,
+						exists
+					);
+				});
 		}
 
 		fn write_storage_with_pre_allocate<E: Encode>(key: &[u8], data: E) {
@@ -834,7 +848,13 @@ impl<T: Config> Pallet<T> {
 
 	#[cfg(test)]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
-		// TODO: check the sanity of the snapshot: all storage items must exist, or none.
+		match Self::current_phase() {
+			Phase::Off => Snapshot::<T>::assert_snapshot(false, T::Pages::get()),
+			Phase::Signed | Phase::Unsigned(_) =>
+				Snapshot::<T>::assert_snapshot(true, T::Pages::get()),
+			_ => (),
+		};
+
 		Ok(())
 	}
 }
@@ -871,8 +891,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			ensure_snapshot, multi_block_events, roll_to, AccountId, ExtBuilder, MockWeightInfo,
-			MultiBlock, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_block_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiBlock,
+			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -889,7 +909,7 @@ mod tests {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			ensure_snapshot(false, 1);
+			Snapshot::<Runtime>::assert_snapshot(false, 1);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(4);
@@ -905,12 +925,12 @@ mod tests {
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(25);
@@ -919,25 +939,25 @@ mod tests {
 				multi_block_events(),
 				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
 			);
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			roll_to(29);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			roll_to(30);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			MultiBlock::elect(0).unwrap();
 
 			assert!(MultiBlock::current_phase().is_off());
-			ensure_snapshot(false, 1);
+			Snapshot::<Runtime>::assert_snapshot(false, 1);
 			assert_eq!(MultiBlock::round(), 2);
 
 			roll_to(43);
@@ -963,7 +983,7 @@ mod tests {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			ensure_snapshot(false, 2);
+			Snapshot::<Runtime>::assert_snapshot(false, 2);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(4);
@@ -975,21 +995,21 @@ mod tests {
 
 			roll_to(13);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			roll_to(14);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(25);
@@ -998,15 +1018,15 @@ mod tests {
 				multi_block_events(),
 				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
 			);
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 			roll_to(29);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 			roll_to(30);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
@@ -1017,7 +1037,7 @@ mod tests {
 
 			assert!(MultiBlock::current_phase().is_off());
 			// all snapshots are gone.
-			ensure_snapshot(false, 2);
+			Snapshot::<Runtime>::assert_snapshot(false, 2);
 			assert_eq!(MultiBlock::round(), 2);
 
 			roll_to(42);
@@ -1047,7 +1067,7 @@ mod tests {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			ensure_snapshot(false, 2);
+			Snapshot::<Runtime>::assert_snapshot(false, 2);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(4);
@@ -1059,25 +1079,25 @@ mod tests {
 
 			roll_to(12);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(2));
-			ensure_snapshot(true, 1);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			roll_to(13);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
-			ensure_snapshot(true, 2);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 			roll_to(14);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
-			ensure_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
-			ensure_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 3);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			ensure_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 3);
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(25);
@@ -1086,15 +1106,15 @@ mod tests {
 				multi_block_events(),
 				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
 			);
-			ensure_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			roll_to(29);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			roll_to(30);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			ensure_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
@@ -1105,7 +1125,7 @@ mod tests {
 
 			assert!(MultiBlock::current_phase().is_off());
 			// all snapshots are gone.
-			ensure_snapshot(false, 3);
+			Snapshot::<Runtime>::assert_snapshot(false, 3);
 			assert_eq!(MultiBlock::round(), 2);
 
 			roll_to(41);
