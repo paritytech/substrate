@@ -44,7 +44,7 @@ pub use self::{
 	error::Error,
 	consensus::ConsensusDataProvider,
 	finalize_block::{finalize_block, FinalizeBlockParams},
-	seal_block::{SealBlockParams, seal_block, MAX_PROPOSAL_DURATION},
+	seal_block::{SealBlockParams, /*seal_block,*/ MAX_PROPOSAL_DURATION},
 	rpc::{EngineCommand, CreatedBlock},
 };
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -143,7 +143,8 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpoo
 }
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
+#[allow(dead_code)]
+async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 	ManualSealParams {
 		mut block_import,
 		mut env,
@@ -177,7 +178,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 				parent_hash,
 				sender,
 			} => {
-				seal_block(
+				seal_block::seal_block(
 					SealBlockParams {
 						sender,
 						parent_hash,
@@ -211,7 +212,8 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
+#[allow(dead_code)]
+async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
 	InstantSealParams {
 		block_import,
 		env,
