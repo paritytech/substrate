@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +18,8 @@
 //! Some helper functions/macros for this crate.
 
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
+use crate::types::{PageIndex, Voter};
+use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
 #[macro_export]
@@ -28,6 +30,26 @@ macro_rules! log {
 			concat!("[#{:?}] 🗳  ", $pattern), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
+}
+
+/// Generate an `efficient closure of voters and the page in which they live in.
+pub fn generate_voter_page_fn<T: Config>(
+	paged_snapshot: &Vec<Vec<Voter<T>>>,
+) -> impl Fn(&T::AccountId) -> Option<PageIndex> {
+	let mut cache: BTreeMap<T::AccountId, PageIndex> = BTreeMap::new();
+	paged_snapshot
+		.iter()
+		.enumerate()
+		.map(|(page, whatever)| (page.saturated_into::<PageIndex>(), whatever))
+		.for_each(|(page, page_voters)| {
+			page_voters.iter().for_each(|(v, _, _)| {
+				let _existed = cache.insert(v.clone(), page);
+				// if a duplicate exists, we only consider the last one. Defensive only, should
+				// never happen.
+				debug_assert!(_existed.is_none());
+			});
+		});
+	move |who| cache.get(who).copied()
 }
 
 /// Generate a btree-map cache of the voters and their indices.

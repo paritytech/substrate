@@ -53,7 +53,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
-		MultiBlock: multi_block::{Pallet, Event<T>}, // 10 Signed Phase,
+		MultiBlock: multi_block::{Pallet, Event<T>},
 		VerifierPallet: verifier_pallet::{Pallet},
 		UnsignedPallet: unsigned_pallet::{Pallet, Call, ValidateUnsigned},
 	}

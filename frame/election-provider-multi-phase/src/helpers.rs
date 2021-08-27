@@ -18,6 +18,8 @@
 //! Some helper functions/macros for this crate.
 
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
+use frame_election_provider_support::PageIndex;
+use sp_npos_elections::Voter;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
 #[macro_export]
@@ -33,9 +35,7 @@ macro_rules! log {
 /// Generate a btree-map cache of the voters and their indices.
 ///
 /// This can be used to efficiently build index getter closures.
-pub fn generate_voter_cache<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> BTreeMap<T::AccountId, usize> {
+pub fn generate_voter_cache<T: Config>(snapshot: &Vec<Voter<T>>) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
 		let _existed = cache.insert(x.clone(), i);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,14 +67,16 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 pub trait Verifier {
 	type Solution;
 	type AccountId;
-	/// This is the solution that we want to verify next, store it.
+
+	/// This is a page of the solution that we want to verify next, store it.
 	///
-	/// Can only accept a new solution if an ongoing verification is not ongoing. Use [`status`]
-	/// to query this.
-	fn set_unverified_solution(
-		solution_pages: Vec<Self::Solution>,
-		claimed_score: ElectionScore,
+	/// This should be used to load solutions into this pallet.
+	fn set_unverified_solution_page(
+		page_index: PageIndex,
+		page_solution: Self::Solution,
 	) -> Result<(), ()>;
+
+	fn seal_verifying_solution(claimed_score: ElectionScore) -> Result<(), ()>;
 
 	/// Tell me if you have some queued solution read for use, with what score.
 	fn queued_solution() -> Option<ElectionScore>;
@@ -105,6 +107,10 @@ pub trait Verifier {
 	/// context.
 	///
 	/// Corresponding snapshots are assumed to be available.
+	///
+	/// IMPORTANT: this does not check any scores.
+	// TODO: maybe check score as well, and merge this with
+	// `force_set_single_page_verified_solution`.
 	fn feasibility_check_page(
 		partial_solution: Self::Solution,
 		page: PageIndex,
@@ -127,11 +133,15 @@ impl<T: Config> Verifier for Pallet<T> {
 	type Solution = SolutionOf<T>;
 	type AccountId = T::AccountId;
 
-	fn set_unverified_solution(
-		solution_pages: Vec<Self::Solution>,
-		claimed_score: ElectionScore,
+	fn set_unverified_solution_page(
+		page_index: PageIndex,
+		page_solution: Self::Solution,
 	) -> Result<(), ()> {
-		VerifyingSolution::<T>::put(solution_pages, claimed_score)
+		VerifyingSolution::<T>::put_page(page_index, page_solution)
+	}
+
+	fn seal_verifying_solution(claimed_score: ElectionScore) -> Result<(), ()> {
+		VerifyingSolution::<T>::seal_verifying_solution(claimed_score)
 	}
 
 	fn check_claimed_score(claimed_score: ElectionScore) -> bool {

@@ -15,8 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{log, types::*, verifier};
+use crate::{helpers, log, types::*, verifier};
 use codec::{Decode, Encode};
+use frame_election_provider_support::ExtendedBalance;
 use frame_support::{dispatch::Weight, traits::Get};
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -47,6 +48,8 @@ pub enum MinerError {
 	FailedToStoreSolution,
 	/// There are no more voters to remove to trim the solution.
 	NoMoreVoters,
+	/// Some page index has been invalid.
+	InvalidPage,
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -68,17 +71,104 @@ pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<
 /// A base miner that is only capable of mining a new solution and checking it against the state of
 /// this pallet for feasibility, and trimming its length/weight.
 ///
-/// The type of solver is hardcoded for now, `seq-phragmen`.
-// TODO: finally make it possible to stick different election algorithms into this guy.
+/// The type of solver is hardcoded for now, `seq-phragmen`. TODO: turn it a configurable,
+/// extensible trait.
 pub struct BaseMiner<T: super::Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: super::Config> BaseMiner<T> {
-	/// Mine a new solution. Performs the feasibility checks on it as well.
-	pub fn mine_checked_solution(
-		iters: usize,
+	/// Mine a new npos solution, with the given number of pages.
+	pub fn mine_solution(
 		pages: PageIndex,
 	) -> Result<(PagedRawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError> {
-		let (paged_solution, witness) = Self::mine_solution(iters)?;
+		// read the appropriate snapshot pages.
+		let desired_targets =
+			crate::Snapshot::<T>::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+		let targets = crate::Snapshot::<T>::targets().ok_or(MinerError::SnapshotUnAvailable)?;
+		let voter_pages_range =
+			(crate::Pallet::<T>::msp()..crate::Pallet::<T>::msp()).take(pages.into());
+		let voter_pages = voter_pages_range
+			.map(|p| crate::Snapshot::<T>::voters(p).ok_or(MinerError::SnapshotUnAvailable))
+			.collect::<Result<Vec<_>, _>>()?;
+
+		// we also build this closure early, so we can let `targets` be consumed.
+		let voter_page_fn = helpers::generate_voter_page_fn::<T>(&voter_pages);
+		let target_index_fn = helpers::target_index_fn::<T>(&targets);
+
+		// now flatten the voters, ready to be used as if pagination did not existed.
+		let voters = voter_pages.iter().flatten().cloned().collect::<Vec<_>>();
+
+		let ElectionResult { winners, assignments } =
+			sp_npos_elections::seq_phragmen::<_, SolutionAccuracyOf<T>>(
+				desired_targets as usize,
+				targets,
+				voters.clone(),
+				None,
+			)
+			.map_err::<MinerError, _>(Into::into)?;
+
+		// compute score from the overall solution before dealing with pages in any way.
+		let score = {
+			use crate::helpers;
+			use sp_npos_elections::{
+				assignment_ratio_to_staked_normalized, to_supports, to_without_backing,
+				EvaluateSupport,
+			};
+			// These closures are of no use in the rest of these code, since they only deal with the
+			// overall list of voters.
+			let cache = helpers::generate_voter_cache::<T>(&voters);
+			let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
+			let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of)
+				.map_err::<MinerError, _>(Into::into)?;
+			let winners = to_without_backing(winners);
+			to_supports(&winners, &staked).map_err::<MinerError, _>(Into::into)?.evaluate()
+		};
+
+		// split the assignments into different pages.
+		let mut paged_assignments: Vec<Vec<AssignmentOf<T>>> =
+			Vec::with_capacity(T::Pages::get() as usize);
+		paged_assignments.resize(T::Pages::get() as usize, vec![]);
+		for assignment in assignments {
+			let page = voter_page_fn(&assignment.who).ok_or(MinerError::InvalidPage)?;
+			let mut assignment_page =
+				paged_assignments.get_mut(page as usize).ok_or(MinerError::InvalidPage)?;
+			assignment_page.push(assignment);
+		}
+
+		// TODO: unify naming: everything should be
+		// xxx_page: singular
+		// paged_xxx: plural
+
+		// convert each page to a compact struct
+		let mut paged_solution: Vec<SolutionOf<T>> = paged_assignments
+			.into_iter()
+			.enumerate()
+			.map(|(page_index, assignment_page)| {
+				// get the page of the snapshot that corresponds to this page of the assignments.
+				let page: PageIndex = page_index.saturated_into();
+				let voter_snapshot_page =
+					voter_pages.get(page_index).ok_or(MinerError::SnapshotUnAvailable)?;
+
+				let voter_index_fn = {
+					let cache = helpers::generate_voter_cache(&voter_snapshot_page);
+					helpers::voter_index_fn_owned(cache)
+				};
+				<SolutionOf<T>>::from_assignment(
+					&assignment_page,
+					&voter_index_fn,
+					&target_index_fn,
+				)
+				.map_err(Into::into)
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+
+		todo!();
+	}
+
+	/// Mine a new solution. Performs the feasibility checks on it as well.
+	pub fn mine_checked_solution(
+		pages: PageIndex,
+	) -> Result<(PagedRawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError> {
+		let (paged_solution, witness) = Self::mine_solution(pages)?;
 		let _ = Self::full_checks(&paged_solution, "mined")?;
 
 		log!(
@@ -133,13 +223,6 @@ impl<T: super::Config> BaseMiner<T> {
 			})?;
 
 		Ok(())
-	}
-
-	/// Mine a new npos solution.
-	pub fn mine_solution(
-		iters: usize,
-	) -> Result<(PagedRawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError> {
-		todo!()
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
@@ -340,7 +423,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// return an submittable call.
 	fn mine_checked_call() -> Result<super::Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
-		let (paged_solution, witness) = BaseMiner::<T>::mine_checked_solution(iters, 1)?;
+		let (paged_solution, witness) = BaseMiner::<T>::mine_checked_solution(1)?;
 		let _ = super::Pallet::<T>::unsigned_specific_checks(&paged_solution)
 			.map_err(|de| MinerError::UnsignedChecksFailed(de))?;
 
