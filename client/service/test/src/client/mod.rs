@@ -1296,7 +1296,6 @@ fn state_reverted_on_reorg() {
 }
 
 #[test]
-#[ignore]
 fn doesnt_import_blocks_that_revert_finality() {
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
