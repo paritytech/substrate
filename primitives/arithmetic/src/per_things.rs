@@ -19,15 +19,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{
-	BaseArithmetic, Bounded, One, SaturatedConversion, Saturating, UniqueSaturatedInto, Unsigned,
-	Zero,
+	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
+	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
 use codec::{CompactAs, Encode};
-use num_traits::Pow;
+use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_debug_derive::RuntimeDebug;
 use sp_std::{
 	convert::{TryFrom, TryInto},
 	fmt, ops,
+	ops::{Add, Sub},
 	prelude::*,
 };
 
@@ -768,6 +769,69 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl Add<Self> for $name {
+			type Output = $name;
+
+			#[inline]
+			fn add(self, rhs: Self) -> Self::Output {
+				let inner = self.deconstruct().add(rhs.deconstruct());
+				debug_assert!(inner < $max);
+				$name::from_parts(inner)
+			}
+		}
+
+		impl CheckedAdd for $name {
+			// For PerU16, $max == u16::MAX, so we need this `allow`.
+			#[allow(unused_comparisons)]
+			#[inline]
+			fn checked_add(&self, rhs: &Self) -> Option<Self> {
+				self.deconstruct()
+					.checked_add(rhs.deconstruct())
+					.map(|inner| if inner > $max { None } else { Some($name::from_parts(inner)) })
+					.flatten()
+			}
+		}
+
+		impl Sub<Self> for $name {
+			type Output = $name;
+
+			#[inline]
+			fn sub(self, rhs: Self) -> Self::Output {
+				$name::from_parts(self.deconstruct().sub(rhs.deconstruct()))
+			}
+		}
+
+		impl CheckedSub for $name {
+			#[inline]
+			fn checked_sub(&self, v: &Self) -> Option<Self> {
+				self.deconstruct().checked_sub(v.deconstruct()).map($name::from_parts)
+			}
+		}
+
+		impl SaturatingAdd for $name {
+			#[inline]
+			fn saturating_add(&self, v: &Self) -> Self {
+				$name::from_parts(self.deconstruct().saturating_add(v.deconstruct()))
+			}
+		}
+
+		impl SaturatingSub for $name {
+			#[inline]
+			fn saturating_sub(&self, v: &Self) -> Self {
+				$name::from_parts(self.deconstruct().saturating_sub(v.deconstruct()))
+			}
+		}
+
+		/// # Note
+		/// CheckedMul will never fail for PerThings.
+		impl CheckedMul for $name {
+			#[inline]
+			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
+				Some(*self * *rhs)
+			}
+		}
+
+
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
@@ -1353,6 +1417,106 @@ macro_rules! implement_per_thing {
 					.unwrap();
 				assert_eq!((p.0).0, $max);
 				assert_eq!($name::from(p), $name::max_value());
+			}
+
+			#[allow(unused_imports)]
+			use super::*;
+
+			#[test]
+			fn test_add_basic() {
+				assert_eq!($name::from_parts(1) + $name::from_parts(1), $name::from_parts(2));
+				assert_eq!($name::from_parts(10) + $name::from_parts(10), $name::from_parts(20));
+			}
+
+			#[test]
+			fn test_basic_checked_add() {
+				assert_eq!(
+					$name::from_parts(1).checked_add(&$name::from_parts(1)),
+					Some($name::from_parts(2))
+				);
+				assert_eq!(
+					$name::from_parts(10).checked_add(&$name::from_parts(10)),
+					Some($name::from_parts(20))
+				);
+				assert_eq!(
+					$name::from_parts(<$type>::MAX).checked_add(&$name::from_parts(<$type>::MAX)),
+					None
+				);
+				assert_eq!(
+					$name::from_parts($max).checked_add(&$name::from_parts(1)),
+					None
+				);
+			}
+
+			#[test]
+			fn test_basic_saturating_add() {
+				assert_eq!(
+					$name::from_parts(1).saturating_add($name::from_parts(1)),
+					$name::from_parts(2)
+				);
+				assert_eq!(
+					$name::from_parts(10).saturating_add($name::from_parts(10)),
+					$name::from_parts(20)
+				);
+				assert_eq!(
+					$name::from_parts(<$type>::MAX).saturating_add($name::from_parts(<$type>::MAX)),
+					$name::from_parts(<$type>::MAX)
+				);
+			}
+
+			#[test]
+			fn test_basic_sub() {
+				assert_eq!($name::from_parts(2) - $name::from_parts(1), $name::from_parts(1));
+				assert_eq!($name::from_parts(20) - $name::from_parts(10), $name::from_parts(10));
+			}
+
+			#[test]
+			fn test_basic_checked_sub() {
+				assert_eq!(
+					$name::from_parts(2).checked_sub(&$name::from_parts(1)),
+					Some($name::from_parts(1))
+				);
+				assert_eq!(
+					$name::from_parts(20).checked_sub(&$name::from_parts(10)),
+					Some($name::from_parts(10))
+				);
+				assert_eq!($name::from_parts(0).checked_sub(&$name::from_parts(1)), None);
+			}
+
+			#[test]
+			fn test_basic_saturating_sub() {
+				assert_eq!(
+					$name::from_parts(2).saturating_sub($name::from_parts(1)),
+					$name::from_parts(1)
+				);
+				assert_eq!(
+					$name::from_parts(20).saturating_sub($name::from_parts(10)),
+					$name::from_parts(10)
+				);
+				assert_eq!(
+					$name::from_parts(0).saturating_sub($name::from_parts(1)),
+					$name::from_parts(0)
+				);
+			}
+
+			#[test]
+			fn test_basic_checked_mul() {
+				assert_eq!(
+					$name::from_parts($max).checked_mul(&$name::from_parts($max)),
+					Some($name::from_percent(100))
+				);
+				assert_eq!(
+					$name::from_percent(100).checked_mul(&$name::from_percent(100)),
+					Some($name::from_percent(100))
+				);
+				assert_eq!(
+					$name::from_percent(50).checked_mul(&$name::from_percent(26)),
+					Some($name::from_percent(13))
+				);
+				assert_eq!(
+					$name::from_percent(0).checked_mul(&$name::from_percent(0)),
+					Some($name::from_percent(0))
+				);
 			}
 		}
 	};

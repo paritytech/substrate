@@ -87,7 +87,7 @@ where
 
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
-					Error::from(format!(
+					Error::Other(format!(
 						"`{:?}` > u32::MAX, the max block number is u32.",
 						num_or_hex
 					))
@@ -332,7 +332,9 @@ fn subscribe_headers<Block, Client, F, G, S>(
 		let header = client
 			.header(BlockId::Hash(best_block_hash()))
 			.map_err(client_err)
-			.and_then(|header| header.ok_or_else(|| "Best header missing.".to_string().into()))
+			.and_then(|header| {
+				header.ok_or_else(|| Error::Other("Best header missing.".to_string()))
+			})
 			.map_err(Into::into);
 
 		// send further subscriptions
