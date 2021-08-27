@@ -35,4 +35,4 @@ error[E0119]: conflicting implementations of trait `std::convert::TryFrom<&[_npo
   = note: conflicting implementation in crate `core`:
           - impl<T, U> TryFrom<U> for T
             where U: Into<T>;
-  = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the macro `generate_solution_type` (in Nightly builds, run with -Z macro-backtrace for more info)
