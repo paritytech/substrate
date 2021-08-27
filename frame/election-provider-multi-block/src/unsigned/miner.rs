@@ -899,7 +899,7 @@ mod offchain_worker_miner {
 	}
 
 	#[test]
-	fn infeasible_cache_wipes_it() {
+	fn infeasible_cache() {
 		todo!();
 	}
 
