@@ -81,13 +81,24 @@ pub struct BaseMiner<T: super::Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: super::Config> BaseMiner<T> {
 	/// Mine a new npos solution, with the given number of pages.
+	///
+	/// This is the core functionality of the miner.
 	pub fn mine_solution(pages: PageIndex) -> Result<PagedRawSolution<SolutionOf<T>>, MinerError> {
 		// read the appropriate snapshot pages.
 		let desired_targets =
 			crate::Snapshot::<T>::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 		let targets = crate::Snapshot::<T>::targets().ok_or(MinerError::SnapshotUnAvailable)?;
+
 		let voter_pages_range =
-			(crate::Pallet::<T>::msp()..crate::Pallet::<T>::msp()).take(pages.into());
+			(crate::Pallet::<T>::msp()..=crate::Pallet::<T>::lsp()).take(pages.into());
+
+		log!(
+			trace,
+			"mining a solution with {} pages, voter snapshot range will be: {:?}",
+			pages,
+			voter_pages_range
+		);
+
 		let voter_pages = voter_pages_range
 			.map(|p| crate::Snapshot::<T>::voters(p).ok_or(MinerError::SnapshotUnAvailable))
 			.collect::<Result<Vec<_>, _>>()?;
@@ -423,7 +434,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// return an submittable call.
 	fn mine_checked_call() -> Result<super::Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
-		let witness = todo!();
+		let witness = crate::Snapshot::<T>::metadata().ok_or(MinerError::SnapshotUnAvailable)?;
 		let paged_solution = BaseMiner::<T>::mine_checked_solution(1)?;
 		let _ = super::Pallet::<T>::unsigned_specific_checks(&paged_solution)
 			.map_err(|de| MinerError::UnsignedChecksFailed(de))?;
@@ -605,6 +616,331 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 		let mut last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
 		last_block.clear();
 	}
+}
+
+#[cfg(test)]
+mod base_miner {
+	use super::*;
+
+	#[test]
+	fn mine_solution_single_page_works() {
+		todo!()
+	}
+
+	#[test]
+	fn mine_solution_choses_most_significant_pages() {
+		todo!()
+	}
+
+	#[test]
+	fn mine_solution_can_paginate() {
+		todo!()
+	}
+
+	#[test]
+	fn trim_length_works() {
+		todo!()
+	}
+
+	#[test]
+	fn trim_weight_works() {
+		todo!()
+	}
+}
+
+#[cfg(test)]
+mod offchain_worker_miner {
+	use frame_support::traits::Hooks;
+	use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
+
+	use super::*;
+	use crate::mock::*;
+
+	#[test]
+	fn unsigned_specific_checks_are_enforced() {
+		todo!()
+	}
+
+	#[test]
+	fn ocw_lock_prevents_frequent_execution() {
+		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			let offchain_repeat = <Runtime as crate::unsigned::Config>::OffchainRepeat::get();
+
+			// TODO: backport to base pallet: simplify this.
+
+			// first execution -- okay.
+			assert!(OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(25).is_ok());
+
+			// next block: rejected.
+			assert_noop!(
+				OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(26),
+				MinerError::Lock("recently executed.")
+			);
+
+			// allowed after `OFFCHAIN_REPEAT`
+			assert!(OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat).into()
+			)
+			.is_ok());
+
+			// a fork like situation: re-execute last 3.
+			assert!(OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 3).into()
+			)
+			.is_err());
+			assert!(OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 2).into()
+			)
+			.is_err());
+			assert!(OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 1).into()
+			)
+			.is_err());
+		})
+	}
+
+	#[test]
+	fn ocw_lock_released_after_successful_execution() {
+		// first, ensure that a successful execution releases the lock
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			let guard = StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_LOCK);
+			let last_block =
+				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_LAST_BLOCK);
+
+			roll_to(25);
+			assert!(MultiBlock::current_phase().is_unsigned());
+
+			// initially, the lock is not set.
+			assert!(guard.get::<bool>().unwrap().is_none());
+
+			// a successful a-z execution.
+			UnsignedPallet::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// afterwards, the lock is not set either..
+			assert!(guard.get::<bool>().unwrap().is_none());
+			assert_eq!(last_block.get::<BlockNumber>().unwrap(), Some(25));
+		});
+	}
+
+	#[test]
+	fn ocw_lock_prevents_overlapping_execution() {
+		// ensure that if the guard is in hold, a new execution is not allowed.
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert!(MultiBlock::current_phase().is_unsigned());
+
+			// artificially set the value, as if another thread is mid-way.
+			let mut lock = StorageLock::<BlockAndTime<System>>::with_block_deadline(
+				OffchainWorkerMiner::<Runtime>::OFFCHAIN_LOCK,
+				UnsignedPhase::get().saturated_into(),
+			);
+			let guard = lock.lock();
+
+			// nothing submitted.
+			UnsignedPallet::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 0);
+			UnsignedPallet::offchain_worker(26);
+			assert_eq!(pool.read().transactions.len(), 0);
+
+			drop(guard);
+
+			// 🎉 !
+			UnsignedPallet::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+		});
+	}
+
+	#[test]
+	fn ocw_only_runs_initial_when_unsigned_open_now() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+
+			let last_block =
+				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_LAST_BLOCK);
+
+			assert_eq!(last_block.get::<BlockNumber>(), Ok(None));
+			// creates, caches, submits without expecting previous cache value
+			MultiBlock::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			assert_eq!(last_block.get::<BlockNumber>(), Ok(Some(25)));
+		})
+	}
+
+	/*
+
+	#[test]
+	fn ocw_clears_cache_after_election() {
+		let (mut ext, _pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+			storage.clear();
+
+			assert!(
+				!ocw_solution_exists::<Runtime>(),
+				"no solution should be present before we mine one",
+			);
+
+			// creates and cache a solution
+			MultiBlock::offchain_worker(25);
+			assert!(
+				ocw_solution_exists::<Runtime>(),
+				"a solution must be cached after running the worker",
+			);
+
+			// after an election, the solution must be cleared
+			// we don't actually care about the result of the election
+			roll_to(26);
+			let _ = MultiBlock::do_elect();
+			MultiBlock::offchain_worker(26);
+			assert!(!ocw_solution_exists::<Runtime>(), "elections must clear the ocw cache");
+		})
+	}
+
+	#[test]
+	fn ocw_resubmits_after_offchain_repeat() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: i32| ((BLOCK as i32) + delta) as u64;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, BLOCK)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+
+			MultiBlock::offchain_worker(block_plus(-1));
+			assert!(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			// creates, caches, submits without expecting previous cache value
+			MultiBlock::offchain_worker(BLOCK);
+			assert_eq!(pool.read().transactions.len(), 1);
+			let tx_cache = pool.read().transactions[0].clone();
+			// assume that the tx has been processed
+			pool.try_write().unwrap().transactions.clear();
+
+			// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			MultiBlock::offchain_worker(block_plus(1 + offchain_repeat as i32));
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// resubmitted tx is identical to first submission
+			let tx = &pool.read().transactions[0];
+			assert_eq!(&tx_cache, tx);
+		})
+	}
+
+	#[test]
+	fn ocw_regenerates_and_resubmits_after_offchain_repeat() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: i32| ((BLOCK as i32) + delta) as u64;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, BLOCK)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+
+			MultiBlock::offchain_worker(block_plus(-1));
+			assert!(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			// creates, caches, submits without expecting previous cache value
+			MultiBlock::offchain_worker(BLOCK);
+			assert_eq!(pool.read().transactions.len(), 1);
+			let tx_cache = pool.read().transactions[0].clone();
+			// assume that the tx has been processed
+			pool.try_write().unwrap().transactions.clear();
+
+			// remove the cached submitted tx
+			// this ensures that when the resubmit window rolls around, we're ready to regenerate
+			// from scratch if necessary
+			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+			assert!(matches!(call_cache.get::<Call<Runtime>>(), Ok(Some(_call))));
+			call_cache.clear();
+
+			// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			MultiBlock::offchain_worker(block_plus(1 + offchain_repeat as i32));
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// resubmitted tx is identical to first submission
+			let tx = &pool.read().transactions[0];
+			assert_eq!(&tx_cache, tx);
+		})
+	}
+
+	#[test]
+	fn ocw_can_submit_to_pool() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to_with_ocw(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			// OCW must have submitted now
+
+			let encoded = pool.read().transactions[0].clone();
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+			let call = extrinsic.call;
+			assert!(matches!(call, OuterCall::MultiBlock(Call::submit_unsigned(..))));
+		})
+	}
+
+	#[test]
+	fn ocw_solution_must_have_correct_round() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to_with_ocw(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			// OCW must have submitted now
+			// now, before we check the call, update the round
+			<crate::Round<Runtime>>::mutate(|round| *round += 1);
+
+			let encoded = pool.read().transactions[0].clone();
+			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
+			let call = match extrinsic.call {
+				OuterCall::MultiBlock(call @ Call::submit_unsigned(..)) => call,
+				_ => panic!("bad call: unexpected submission"),
+			};
+
+			// Custom(7) maps to PreDispatchChecksFailed
+			let pre_dispatch_check_error =
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(7));
+			assert_eq!(
+				<MultiBlock as ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&call,
+				)
+				.unwrap_err(),
+				pre_dispatch_check_error,
+			);
+			assert_eq!(
+				<MultiBlock as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				pre_dispatch_check_error,
+			);
+		})
+	}
+	*/
 }
 
 #[cfg(test)]
