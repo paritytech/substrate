@@ -167,8 +167,6 @@ impl<T: super::Config> BaseMiner<T> {
 			assignment_page.push(assignment);
 		}
 
-		dbg!(&paged_assignments, &voter_pages);
-
 		// convert each page to a compact struct
 		let mut solution_pages: Vec<Option<SolutionOf<T>>> = paged_assignments
 			.into_iter()
@@ -196,6 +194,7 @@ impl<T: super::Config> BaseMiner<T> {
 
 		let solution_pages =
 			FixedVec::<Option<SolutionOf<T>>, T::Pages>::filling_new(solution_pages, None).unwrap();
+
 		// finally, get the round, and pack everything.
 		let round = crate::Pallet::<T>::round();
 

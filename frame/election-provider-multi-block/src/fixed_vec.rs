@@ -41,7 +41,7 @@ impl<T: Default, S: Get<PageIndex>> Default for FixedVec<T, S> {
 		for _ in 0..Self::size() {
 			src.push(Default::default())
 		}
-		Self::try_new(src).unwrap()
+		Self::try_from(src).unwrap()
 	}
 }
 
@@ -138,14 +138,6 @@ impl<T, S> FixedVec<T, S> {
 impl<T, S: Get<PageIndex>> FixedVec<T, S> {
 	pub fn size() -> usize {
 		S::get().into()
-	}
-
-	pub fn try_new(src: Vec<T>) -> Result<Self, ()> {
-		if src.len() == Self::size() {
-			Ok(Self::unchecked_from(src))
-		} else {
-			Err(())
-		}
 	}
 
 	pub fn filling_new(mut src: Vec<T>, placeholder: T) -> Result<Self, ()>

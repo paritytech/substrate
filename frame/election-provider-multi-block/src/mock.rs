@@ -17,7 +17,9 @@
 
 use super::*;
 use crate::{self as multi_block, unsigned as unsigned_pallet, verifier as verifier_pallet};
-use frame_election_provider_support::{data_provider, ElectionDataProvider, Support};
+use frame_election_provider_support::{
+	data_provider, ElectionDataProvider, ExtendedBalance, Support,
+};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
@@ -131,6 +133,27 @@ pub(crate) fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<R
 	let mut solution_pages: FixedVec<Option<SolutionOf<Runtime>>, Pages> = Default::default();
 	*solution_pages.as_mut().last_mut().unwrap() = Some(Default::default());
 	PagedRawSolution { score, solution_pages, ..Default::default() }
+}
+
+pub(crate) fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
+	PagedRawSolution {
+		solution_pages: FixedVec::<Option<SolutionOf<Runtime>>, Pages>::try_from(vec![
+			None,
+			None,
+			Some(TestNposSolution {
+				// 2 desired targets, both voting for themselves
+				votes1: vec![(0, 0), (1, 2)],
+				..Default::default()
+			}),
+		])
+		.unwrap(),
+		round: 1,
+		score: [
+			10,  // lowest staked
+			20,  // total staked
+			200, // sum of stakes squared
+		],
+	}
 }
 
 impl frame_system::Config for Runtime {
