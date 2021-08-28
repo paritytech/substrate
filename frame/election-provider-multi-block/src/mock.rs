@@ -133,9 +133,7 @@ pub(crate) fn raw_fake_solution(score: ElectionScore) -> PagedRawSolution<TestNp
 	PagedRawSolution { score, solution_pages, ..Default::default() }
 }
 
-pub(crate) fn raw_paged_solution(
-	balance: Option<(usize, ExtendedBalance)>,
-) -> PagedRawSolution<SolutionOf<Runtime>> {
+pub(crate) fn raw_paged_solution() -> PagedRawSolution<SolutionOf<Runtime>> {
 	// ensure snapshot exists.
 	ensure_full_snapshot();
 
@@ -202,6 +200,26 @@ pub(crate) fn raw_paged_solution(
 	let round = MultiBlock::round();
 
 	PagedRawSolution { solution_pages, round, score }
+}
+
+pub(crate) fn raw_paged_solution_low_score() -> PagedRawSolution<SolutionOf<Runtime>> {
+	PagedRawSolution {
+		solution_pages: vec![
+			TestNposSolution::default(),
+			TestNposSolution::default(),
+			TestNposSolution {
+				// 2 desired targets, both voting for themselves
+				votes1: vec![(0, 0), (1, 2)],
+				..Default::default()
+			},
+		],
+		round: 1,
+		score: [
+			10,  // lowest staked
+			20,  // total staked
+			200, // sum of stakes squared
+		],
+	}
 }
 
 impl frame_system::Config for Runtime {
@@ -680,7 +698,7 @@ fn raw_paged_solution_works_2_page() {
 		// targets in pages.
 		assert_eq!(Snapshot::<Runtime>::targets().unwrap(), vec![10, 20, 30, 40]);
 
-		let paged = raw_paged_solution(None);
+		let paged = raw_paged_solution();
 		assert_eq!(
 			paged.solution_pages,
 			vec![
@@ -779,7 +797,7 @@ fn raw_paged_solution_works_3_page() {
 			vec![10, 20, 30, 40]
 		);
 
-		let paged = raw_paged_solution(None);
+		let paged = raw_paged_solution();
 		assert_eq!(
 			paged.solution_pages,
 			vec![
@@ -848,7 +866,7 @@ fn pagination_does_not_affect_score() {
 		.build_unchecked()
 		.execute_with(|| {
 			roll_to_snapshot_created();
-			raw_paged_solution(None).score
+			raw_paged_solution().score
 		});
 	let score_2 =
 		ExtBuilder::default()
@@ -857,7 +875,7 @@ fn pagination_does_not_affect_score() {
 			.build_unchecked()
 			.execute_with(|| {
 				roll_to_snapshot_created();
-				raw_paged_solution(None).score
+				raw_paged_solution().score
 			});
 	let score_3 =
 		ExtBuilder::default()
@@ -866,7 +884,7 @@ fn pagination_does_not_affect_score() {
 			.build_unchecked()
 			.execute_with(|| {
 				roll_to_snapshot_created();
-				raw_paged_solution(None).score
+				raw_paged_solution().score
 			});
 
 	assert_eq!(score_1, score_2);
