@@ -118,7 +118,7 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
 
 ### Verifying a signature
 
-Given a message, a signature and an address, `subkey` can verify whether the **message** has been digitally signed by the (or one of the ...) holder of the **private key** for the given **address**:
+Given a message, a signature and an address, `subkey` can verify whether the **message** has been digitally signed by the holder (or one of the holders) of the **private key** for the given **address**:
 
     echo -n <msg> | subkey verify <sig> <address>
 
