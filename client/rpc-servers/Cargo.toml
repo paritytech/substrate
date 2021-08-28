@@ -19,5 +19,5 @@ serde_json = "1.0.41"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 futures-channel = "0.3"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-proc-macros-generics", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-fix-441", features = ["server"] }
 tokio = { version = "1", features = ["full"] }

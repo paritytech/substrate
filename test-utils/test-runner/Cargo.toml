@@ -52,5 +52,5 @@ tokio = { version = "1", features = ["full"] }
 
 # Calling RPC
 
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-proc-macros-generics", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-fix-441", features = ["server"] }
 num-traits = "0.2.14"
