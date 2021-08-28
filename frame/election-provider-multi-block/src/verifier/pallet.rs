@@ -1203,6 +1203,7 @@ mod verifier_trait {
 			let score = paged.score.clone();
 
 			let mut bad_paged = raw_paged_solution();
+			bad_paged.score = [1, 1, 1];
 			// change a vote in the 2nd page to out an out-of-bounds target index
 			assert_eq!(
 				bad_paged.solution_pages[1]
