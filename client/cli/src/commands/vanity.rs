@@ -24,6 +24,8 @@ use crate::{
 use rand::{rngs::OsRng, RngCore};
 use sp_core::crypto::{Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
+use std::sync::mpsc::channel;
+use std::thread;
 use structopt::StructOpt;
 use utils::print_from_uri;
 
@@ -34,6 +36,14 @@ pub struct VanityCmd {
 	/// Desired pattern
 	#[structopt(long, parse(try_from_str = assert_non_empty_string))]
 	pattern: String,
+
+	/// Only returns a key with the pattern in the leftmost position
+	#[structopt(long)]
+	left: bool,
+
+	/// How many cores to use, default value is 1
+	#[structopt(long, default_value = "1")]
+	cores: usize,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -53,7 +63,12 @@ impl VanityCmd {
 	pub fn run(&self) -> error::Result<()> {
 		let formated_seed = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			generate_key(&self.pattern, self.network_scheme.network.clone().unwrap_or_default()),
+			generate_key(
+				&self.pattern,
+				self.network_scheme.network.clone().unwrap_or_default(),
+				self.left,
+				self.cores
+			),
 		)?;
 
 		with_crypto_scheme!(
@@ -73,6 +88,8 @@ impl VanityCmd {
 fn generate_key<Pair>(
 	desired: &str,
 	network_override: Ss58AddressFormat,
+	left: bool,
+	cores: usize,
 ) -> Result<String, &'static str>
 where
 	Pair: sp_core::Pair,
@@ -81,34 +98,62 @@ where
 {
 	println!("Generating key containing pattern '{}'", desired);
 
-	let top = 45 + (desired.len() * 48);
-	let mut best = 0;
-	let mut seed = Pair::Seed::default();
-	let mut done = 0;
-
-	loop {
-		if done % 100000 == 0 {
-			OsRng.fill_bytes(seed.as_mut());
+	let top = 45 + (desired.len() * 48) + {
+		if left {
+			1
 		} else {
-			next_seed(seed.as_mut());
+			0
 		}
+	};
 
-		let p = Pair::from_seed(&seed);
-		let ss58 = p.public().into_account().to_ss58check_with_version(network_override);
-		let score = calculate_score(&desired, &ss58);
-		if score > best || desired.len() < 2 {
-			best = score;
-			if best >= top {
-				println!("best: {} == top: {}", best, top);
-				return Ok(utils::format_seed::<Pair>(seed.clone()))
+	let (tx, rx) = channel();
+
+	for core in 0..cores {
+		let network_override = network_override.clone();
+		let des = desired.clone().to_string();
+		let sender = tx.clone();
+		thread::spawn(move || {
+			let mut best = 0;
+			let mut seed = Pair::Seed::default();
+			let mut done = 0;
+
+			loop {
+				if done % 100000 == 0 {
+					OsRng.fill_bytes(seed.as_mut());
+				} else {
+					next_seed(seed.as_mut());
+				}
+
+				let p = Pair::from_seed(&seed);
+				let ss58 = p.public().into_account().to_ss58check_with_version(network_override);
+				let score = calculate_score(&des, &ss58);
+				if score > best || des.len() < 2 {
+					best = score;
+					if best >= top {
+						println!("best: {} == top: {}", best, top);
+						sender.send(utils::format_seed::<Pair>(seed.clone())).unwrap();
+					}
+				}
+				done += 1;
+
+				if done % good_waypoint(done) == 0 {
+					println!(
+						"{}{} keys searched; best is {}/{} complete",
+						if cores > 1 {
+							format!("Core {} report: ", core + 1)
+						} else {
+							String::new()
+						},
+						done,
+						best,
+						top
+					);
+				}
 			}
-		}
-		done += 1;
-
-		if done % good_waypoint(done) == 0 {
-			println!("{} keys searched; best is {}/{} complete", done, best, top);
-		}
+		});
 	}
+
+	Ok(rx.recv().unwrap())
 }
 
 fn good_waypoint(done: u64) -> u64 {
@@ -125,11 +170,11 @@ fn next_seed(seed: &mut [u8]) {
 		match seed[i] {
 			255 => {
 				seed[i] = 0;
-			},
+			}
 			_ => {
 				seed[i] += 1;
-				break
-			},
+				break;
+			}
 		}
 	}
 }
@@ -141,7 +186,13 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		let snip_size = _desired.len() - truncate;
 		let truncated = &_desired[0..snip_size];
 		if let Some(pos) = key.find(truncated) {
-			return (47 - pos) + (snip_size * 48)
+			return (47 - pos) + (snip_size * 48) + {
+				if pos <= 1 {
+					1
+				} else {
+					0
+				}
+			};
 		}
 	}
 	0
