@@ -273,12 +273,12 @@ mod tests {
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_paranoiac(b: &mut Bencher) {
-		b.iter(|| generate_key("polk"));
+		b.iter(|| generate_key("polk", Default::default(), false, 1));
 	}
 
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_not_paranoiac(b: &mut Bencher) {
-		b.iter(|| generate_key("polk"));
+		b.iter(|| generate_key("polk", Default::default(), false, 1));
 	}
 }
