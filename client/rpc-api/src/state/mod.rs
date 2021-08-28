@@ -232,7 +232,7 @@ pub trait StateApi<Hash> {
 	///
 	/// ### Params
 	///
-	/// - `block_hash` (param index 0): Hash of the block to trace.
+	/// - `block` (param index 0): Hash of the block to trace.
 	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
 	/// targets match with trace targets by prefix (i.e if a target is in the beginning
 	/// of a trace target it is considered a match). If an empty string is specified no
@@ -263,6 +263,11 @@ pub trait StateApi<Hash> {
 	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
 	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///
+	/// - `methods` (param index 3): String of comma separated (no spaces) tracing event method.
+	/// If an empty string is specified no events will be filtered out. If anything other than
+	/// an empty string is specified, events will be filtered by method (so non-method events will
+	/// **not** show up).
+	///
 	/// ### Maximum payload size
 	///
 	/// The maximum payload size allowed is 15mb. Payloads over this size will return a
@@ -277,5 +282,6 @@ pub trait StateApi<Hash> {
 		block: Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
