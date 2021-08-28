@@ -57,7 +57,7 @@ fn database_role_subdir_migration() {
 	// start a light client
 	common::run_node_for_a_while(
 		base_path.path(),
-		&["--dev", "--light", "--rpc-port", "44444", "--ws-port", "44445"],
+		&["--dev", "--light", "--rpc-port", "44444", "--ws-port", "44445", "--no-prometheus"],
 	);
 
 	// check if the database dir had been migrated
@@ -96,7 +96,7 @@ fn database_role_subdir_migration_not_fail_on_different_role() {
 	// full database next to the light database
 	common::run_node_for_a_while(
 		base_path.path(),
-		&["--dev", "--rpc-port", "44446", "--ws-port", "44447"],
+		&["--dev", "--rpc-port", "44446", "--ws-port", "44447", "--no-prometheus"],
 	);
 
 	// check if both database dirs coexist
