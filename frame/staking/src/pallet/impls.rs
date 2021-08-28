@@ -1273,7 +1273,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-
 	fn clear() {
 		Nominators::<T>::remove_all(None);
 		CounterForNominators::<T>::kill();

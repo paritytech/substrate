@@ -52,7 +52,7 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
@@ -586,6 +586,11 @@ impl<T: Config> Bag<T> {
 
 		Ok(())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub(crate) fn contains(&self, id: &T::AccountId) -> bool {
+		self.iter().any(|n| n.id() == id)
+	}
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
@@ -596,7 +601,7 @@ pub struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
-	bag_upper: VoteWeight,
+	pub(crate) bag_upper: VoteWeight,
 }
 
 impl<T: Config> Node<T> {

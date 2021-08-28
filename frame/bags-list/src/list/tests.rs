@@ -136,8 +136,8 @@ fn migrate_works() {
 					(15, vec![710]), // nodes in range 11 ..= 15 move from bag 20 to bag 15
 					(20, vec![711]),
 					(1000, vec![2, 3, 4]),
-					(10_000, vec![712]), /* nodes in range 1_001 ..= 2_000 move from bag 2_000
-					                      * to bag 10_000 */
+					// nodes in range 1_001 ..= 2_000 move from bag 2_000 to bag 10_000
+					(10_000, vec![712]),
 				]
 			);
 		});

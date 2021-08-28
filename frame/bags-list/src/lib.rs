@@ -56,8 +56,6 @@ use sp_std::prelude::*;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
-#[cfg(feature = "generate-bags")]
-pub mod generate_bags;
 mod list;
 #[cfg(test)]
 mod mock;
@@ -266,5 +264,27 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	fn clear() {
 		List::<T>::clear()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
+		use frame_support::traits::Get as _;
+		let thresholds = T::BagThresholds::get();
+		let node = list::Node::<T>::get(who).unwrap();
+		let current_bag_idx = thresholds
+			.iter()
+			.chain(sp_std::iter::once(&VoteWeight::MAX))
+			.position(|w| w == &node.bag_upper)
+			.unwrap();
+
+		if is_increase {
+			let next_threshold_idx = current_bag_idx + 1;
+			assert!(thresholds.len() > next_threshold_idx);
+			thresholds[next_threshold_idx]
+		} else {
+			assert!(current_bag_idx != 0);
+			let prev_threshold_idx = current_bag_idx - 1;
+			thresholds[prev_threshold_idx]
+		}
 	}
 }

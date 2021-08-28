@@ -333,6 +333,13 @@ pub trait SortedListProvider<AccountId> {
 	fn clear();
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
+
+	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
+	/// in their list position.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
+		VoteWeight::MAX
+	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
