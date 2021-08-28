@@ -281,7 +281,7 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
-	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
+	pub static VoterSnapshotPerBlock: VoterIndex = 4;
 
 	pub static EpochLength: u64 = 30;
 	pub static Pages: PageIndex = 3;

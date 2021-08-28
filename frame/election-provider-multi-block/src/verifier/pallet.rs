@@ -524,6 +524,7 @@ mod pallet {
 						}
 					}
 				} else {
+					// the page solution was invalid
 					VerifyingSolution::<T>::kill();
 					QueuedSolution::<T>::clear_invalid();
 				}
@@ -836,11 +837,12 @@ mod verifier_trait {
 			let score = paged.score.clone();
 
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				let page_index = page_index as PageIndex;
-				assert_ok!(<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-					page_index,
-					solution_page,
-				));
+				assert_ok!( // TODO is this going backwards? Since its goes 0 .. =2 NOT 2 .. =0
+					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+						page_index as PageIndex,
+						solution_page,
+					)
+				);
 			}
 
 			// after this, the pages should be set
@@ -860,7 +862,6 @@ mod verifier_trait {
 
 			// check the queued solution variants
 			assert!(QueuedSolution::<Runtime>::get_invalid_page(2).is_some());
-			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
 
@@ -905,12 +906,111 @@ mod verifier_trait {
 
 	#[test]
 	fn correct_solution_is_stored_initial() {
-		// first valid solution is ok
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(25);
+			let paged = raw_paged_solution();
+			let score = paged.score.clone();
+
+			// set each page of the solution
+			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+				let page_index = page_index as PageIndex;
+				assert_ok!(<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+					page_index,
+					solution_page,
+				));
+			}
+
+			// seal the solution
+			assert_ok!(
+				<<Runtime as crate::Config>::Verifier as Verifier>::seal_verifying_solution(
+					paged.score.clone(),
+				)
+			);
+
+			// now we finalize everything.
+			roll_to(28);
+
+			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+
+			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+			// everything about the verifying solution is now removed.
+			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+		});
 	}
 
 	#[test]
 	fn incorrect_solution_discarded_initial() {
 		// first solution and invalid, should do nothing
+		ExtBuilder::default().pages(3).build_and_execute(|| {
+			roll_to(25);
+			let mut paged = raw_paged_solution();
+			let score = paged.score.clone();
+
+			// change a vote in the 2nd page to out an out-of-bounds target index
+			dbg!(&paged.solution_pages);
+			assert_eq!(
+				paged.solution_pages[1]
+					.votes2
+					.iter_mut()
+					.filter(|(v, _, _)| *v == 0)
+					.map(|(_, t, _)| t[0].0 = 4)
+					.count(),
+				1,
+			);
+
+			// set each page of the solution
+			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+				let page_index = page_index as PageIndex;
+				assert_ok!(<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+					page_index,
+					solution_page,
+				));
+			}
+
+			// seal the solution
+			assert_ok!(
+				<<Runtime as crate::Config>::Verifier as Verifier>::seal_verifying_solution(
+					paged.score.clone(),
+				)
+			);
+			// thus full loading the verify solution
+			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 3);
+			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(score));
+			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+
+			// the queued solution is untouched
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+			roll_to(26);
+
+			// verifying the 1st page is fine since it is valid
+
+			// cursor decrements by 1
+			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
+			// the queued solution has its first page
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
+			// and the target backings now include the first page
+			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
+			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 1);
+
+			roll_to(27);
+
+			// the 2nd page is rejected since it is invalid
+
+			// .. so the verifying solution is totally cleared
+			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+
+			// and the invalid backing solution is totally cleared/
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+		});
 	}
 
 	#[test]
