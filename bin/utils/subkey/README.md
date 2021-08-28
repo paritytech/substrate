@@ -136,6 +136,7 @@ Given a message, a signature and an address, `subkey` can verify whether the **m
 A failure looks like:
 
     Error: SignatureInvalid
+
 ### Using the vanity generator
 
 You can use the included vanity generator to find a seed that provides an address which includes the desired pattern. Be warned, depending on your hardware this may take a while.
