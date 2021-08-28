@@ -73,10 +73,15 @@ pub trait Verifier {
 	/// This should be used to load solutions into this pallet.
 	fn set_unverified_solution_page(
 		remaining: PageIndex,
-		page_solution: Self::Solution,
+		page_solution: Option<Self::Solution>,
 	) -> Result<(), ()>;
 
-	fn seal_verifying_solution(claimed_score: ElectionScore) -> Result<(), ()>;
+	/// Indicate that the previous calls to `set_unverified_solution_page` are now enough to form
+	/// one full solution.
+	///
+	/// Fails previous calls to `set_unverified_solution_page` to form exactly `T::Pages` pages.
+	/// Fails if
+	fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()>;
 
 	/// The score of the current best solution. `None` if there is no best solution.
 	fn queued_solution() -> Option<ElectionScore>;
@@ -89,7 +94,7 @@ pub trait Verifier {
 	/// Returns `Some(n)` if there's a ongoing verification; where `n` is the remaining number
 	/// of blocks for the verification process. Returns `None` if there isn't a verification
 	/// ongoing.
-	fn verification_status() -> Option<PageIndex>;
+	fn status() -> Option<PageIndex>;
 
 	/// Clear everything, there's nothing else for you to do until further notice.
 	fn kill();
@@ -108,11 +113,11 @@ pub trait Verifier {
 	///
 	/// Corresponding snapshots are assumed to be available.
 	///
+	/// A page that is `None` must always be valid.
+	///
 	/// IMPORTANT: this does not check any scores.
-	// TODO: maybe check score as well, and merge this with
-	// `force_set_single_page_verified_solution`.
 	fn feasibility_check_page(
-		partial_solution: Self::Solution,
+		partial_solution: Option<Self::Solution>,
 		page: PageIndex,
 	) -> Result<Supports<Self::AccountId>, FeasibilityError>;
 
@@ -135,13 +140,13 @@ impl<T: Config> Verifier for Pallet<T> {
 
 	fn set_unverified_solution_page(
 		page_index: PageIndex,
-		page_solution: Self::Solution,
+		page_solution: Option<Self::Solution>,
 	) -> Result<(), ()> {
 		VerifyingSolution::<T>::put_page(page_index, page_solution)
 	}
 
-	fn seal_verifying_solution(claimed_score: ElectionScore) -> Result<(), ()> {
-		VerifyingSolution::<T>::seal_verifying_solution(claimed_score)
+	fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
+		VerifyingSolution::<T>::seal_unverified_solution(claimed_score)
 	}
 
 	fn check_claimed_score(claimed_score: ElectionScore) -> bool {
@@ -152,7 +157,7 @@ impl<T: Config> Verifier for Pallet<T> {
 		QueuedSolution::<T>::queued_solution()
 	}
 
-	fn verification_status() -> Option<PageIndex> {
+	fn status() -> Option<PageIndex> {
 		todo!()
 	}
 
@@ -166,10 +171,13 @@ impl<T: Config> Verifier for Pallet<T> {
 	}
 
 	fn feasibility_check_page(
-		partial_solution: Self::Solution,
+		maybe_partial_solution: Option<Self::Solution>,
 		page: PageIndex,
 	) -> Result<Supports<Self::AccountId>, FeasibilityError> {
-		Self::feasibility_check_page_inner(partial_solution, page)
+		match maybe_partial_solution {
+			Some(partial_solution) => Self::feasibility_check_page_inner(partial_solution, page),
+			None => Ok(Default::default()),
+		}
 	}
 
 	fn force_set_single_page_verified_solution(

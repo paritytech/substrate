@@ -30,7 +30,7 @@ mod pallet {
 	use crate::{
 		types::*,
 		unsigned::miner::{self, BaseMiner},
-		Verifier,
+		verifier::Verifier,
 	};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
@@ -104,7 +104,7 @@ mod pallet {
 		#[pallet::weight((0, DispatchClass::Operational))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			mut paged_solution: Box<PagedRawSolution<SolutionOf<T>>>,
+			mut paged_solution: Box<PagedRawSolution<T>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -122,8 +122,9 @@ mod pallet {
 
 			let only_page = paged_solution
 				.solution_pages
-				.pop()
-				.expect("length of solution_pages is checked to be 1, can be popped, qed;");
+				.inner()
+				.pop() // TODO: we're assuming msp being last here, can be done better.
+				.expect("length of `solution_pages` is always `T::Pages`, `T::Pages` is always greater than 1, can be popped; qed.");
 			let supports = <T::Verifier as Verifier>::feasibility_check_page(
 				only_page,
 				crate::Pallet::<T>::msp(),
@@ -236,7 +237,6 @@ mod pallet {
 						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now)
 							.and_then(|_| OffchainWorkerMiner::<T>::mine_check_save_submit());
 					log!(debug, "initial offchain worker output: {:?}", initial_output);
-					initial_output.unwrap();
 				},
 				Phase::Unsigned((true, opened)) if opened < now => {
 					// Try and resubmit the cached solution, and recompute ONLY if it is not
@@ -255,16 +255,12 @@ mod pallet {
 			// check, an outdated cache is never a problem. backport this as well.
 		}
 
-		pub(crate) fn pre_dispatch_checks(
-			paged_solution: &PagedRawSolution<SolutionOf<T>>,
-		) -> DispatchResult {
+		pub(crate) fn pre_dispatch_checks(paged_solution: &PagedRawSolution<T>) -> DispatchResult {
 			Self::unsigned_specific_checks(paged_solution)
 				.and(crate::Pallet::<T>::snapshot_independent_checks(paged_solution))
 		}
 
-		pub fn unsigned_specific_checks(
-			paged_solution: &PagedRawSolution<SolutionOf<T>>,
-		) -> DispatchResult {
+		pub fn unsigned_specific_checks(paged_solution: &PagedRawSolution<T>) -> DispatchResult {
 			// ensure solution is timely, and it has only 1 page..
 			// TODO: the fact that we return an error from the top level pallet here is a wee bit
 			// strange.
@@ -272,7 +268,12 @@ mod pallet {
 				crate::Pallet::<T>::current_phase().is_unsigned_open(),
 				crate::Error::<T>::EarlySubmission
 			);
-			ensure!(paged_solution.solution_pages.len() == 1, crate::Error::<T>::WrongPageCount);
+			// there must be one `Some` in `paged_solution`, and it must be the last one.
+			ensure!(
+				paged_solution.some_len() == 1 &&
+					matches!(paged_solution.solution_pages.last(), Some(Some(_))),
+				crate::Error::<T>::WrongPageCount
+			);
 
 			Ok(())
 		}
@@ -325,11 +326,7 @@ mod validate_unsigned {
 	#[test]
 	fn retracts_wrong_phase() {
 		ExtBuilder::default().build_and_execute(|| {
-			let solution = PagedRawSolution::<TestNposSolution> {
-				score: [5, 0, 0],
-				solution_pages: vec![TestNposSolution::default()],
-				..Default::default()
-			};
+			let solution = fake_unsigned_solution([5, 0, 0]);
 
 			let call = super::Call::submit_unsigned(Box::new(solution.clone()), witness());
 
@@ -402,11 +399,7 @@ mod validate_unsigned {
 				roll_to(25);
 				assert!(MultiBlock::current_phase().is_unsigned());
 
-				let solution = PagedRawSolution::<TestNposSolution> {
-					score: [5, 0, 0],
-					solution_pages: vec![TestNposSolution::default()],
-					..Default::default()
-				};
+				let solution = fake_unsigned_solution([5, 0, 0]);
 				let call = super::Call::submit_unsigned(Box::new(solution.clone()), witness());
 
 				assert_eq!(

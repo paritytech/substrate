@@ -202,6 +202,7 @@ use sp_arithmetic::{
 use sp_npos_elections::{NposSolution, VoteWeight};
 use sp_runtime::{traits::Bounded, PerThing, SaturatedConversion};
 use sp_std::{convert::TryInto, prelude::*};
+use verifier::Verifier;
 
 #[cfg(test)]
 mod mock;
@@ -211,17 +212,15 @@ pub mod helpers;
 const LOG_TARGET: &'static str = "runtime::multiblock-election";
 
 // pub mod signed;
+pub mod fixed_vec;
 pub mod types;
 pub mod unsigned;
 pub mod verifier;
 pub mod weights;
 
 pub use pallet::*;
-
-pub use verifier::Verifier;
-pub use weights::WeightInfo;
-
 pub use types::*;
+pub use weights::WeightInfo;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -662,7 +661,7 @@ pub mod pallet {
 			assert!(exists ^ !Self::metadata().is_some(), "metadata mismatch");
 			assert!(exists ^ !Self::targets().is_some(), "targets mismatch");
 
-			(T::Pages::get() - 1..=crate::Pallet::<T>::lsp())
+			(crate::Pallet::<T>::msp()..=crate::Pallet::<T>::lsp())
 				.take(up_to_page.into())
 				.for_each(|p| {
 					assert!(
@@ -743,7 +742,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Perform all the basic checks that are independent of the snapshot.
 	pub(crate) fn snapshot_independent_checks(
-		paged_solution: &PagedRawSolution<SolutionOf<T>>,
+		paged_solution: &PagedRawSolution<T>,
 	) -> sp_runtime::DispatchResult {
 		// ensure round is current
 		ensure!(Self::round() == paged_solution.round, Error::<T>::WrongRound);
@@ -827,7 +826,12 @@ impl<T: Config> Pallet<T> {
 		Snapshot::<T>::set_voters(remaining, voters);
 		Snapshot::<T>::update_metadata(Some(count), None);
 
-		log!(trace, "created paged voters snapshot, {} more pages needed", remaining);
+		log!(
+			debug,
+			"created paged voters snapshot with key {}, {} more pages needed",
+			remaining,
+			remaining
+		);
 		Ok(count)
 	}
 

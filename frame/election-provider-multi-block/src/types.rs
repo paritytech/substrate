@@ -15,9 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use frame_election_provider_support::ElectionProvider;
 pub use frame_election_provider_support::{PageIndex, Supports};
+use frame_support::traits::Get;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
+
+pub use crate::fixed_vec::FixedVec;
+use crate::Config;
 
 /// The solution type used by this crate.
 pub type SolutionOf<T> = <T as crate::Config>::Solution;
@@ -39,17 +45,28 @@ pub type AssignmentOf<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
 
 #[derive(
-	PartialEq, Eq, Clone, codec::Encode, codec::Decode, sp_runtime::RuntimeDebug, PartialOrd, Ord,
+	codec::Encode,
+	codec::Decode,
+	frame_support::RuntimeDebugNoBound,
+	frame_support::CloneNoBound,
+	frame_support::EqNoBound,
+	frame_support::PartialEqNoBound,
 )]
-pub struct PagedRawSolution<Solution> {
-	pub solution_pages: Vec<Solution>, // TODO: consider using a fixed size array here.
+pub struct PagedRawSolution<T: Config> {
+	pub solution_pages: FixedVec<Option<SolutionOf<T>>, T::Pages>,
 	pub score: ElectionScore,
 	pub round: u32,
 }
 
-impl<S: Default> Default for PagedRawSolution<S> {
+impl<T: Config> Default for PagedRawSolution<T> {
 	fn default() -> Self {
-		Self { round: 1, solution_pages: Default::default(), score: Default::default() }
+		Self { round: 1, score: Default::default(), solution_pages: Default::default() }
+	}
+}
+
+impl<T: Config> PagedRawSolution<T> {
+	pub fn some_len(&self) -> usize {
+		self.solution_pages.iter().filter(|x| x.is_some()).count() as usize
 	}
 }
 

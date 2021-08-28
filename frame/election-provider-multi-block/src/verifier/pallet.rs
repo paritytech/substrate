@@ -32,7 +32,7 @@ pub use pallet::{Config, Pallet};
 
 #[frame_support::pallet]
 mod pallet {
-	use crate::Snapshot;
+	use crate::{verifier::Verifier, Snapshot};
 
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -71,7 +71,7 @@ mod pallet {
 		/// Write a new verifying solution's page.
 		pub(crate) fn put_page(
 			page_index: PageIndex,
-			page_solution: SolutionOf<T>,
+			page_solution: Option<SolutionOf<T>>,
 		) -> Result<(), ()> {
 			if Self::exists() {
 				return Err(())
@@ -83,7 +83,7 @@ mod pallet {
 
 		/// This should be called after all pages of a verifying solution are loaded with
 		/// [`put_page`].
-		pub(crate) fn seal_verifying_solution(claimed_score: ElectionScore) -> Result<(), ()> {
+		pub(crate) fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
 			if Self::exists() {
 				return Err(())
 			}
@@ -135,7 +135,7 @@ mod pallet {
 		}
 
 		/// Get the partial solution at the given page of the verifying solution.
-		pub(crate) fn get_page(index: PageIndex) -> Option<SolutionOf<T>> {
+		pub(crate) fn get_page(index: PageIndex) -> Option<Option<SolutionOf<T>>> {
 			VerifyingSolutionStorage::<T>::get(index)
 		}
 
@@ -144,7 +144,7 @@ mod pallet {
 		}
 
 		#[cfg(test)]
-		pub(crate) fn iter() -> impl Iterator<Item = (PageIndex, SolutionOf<T>)> {
+		pub(crate) fn iter() -> impl Iterator<Item = (PageIndex, Option<SolutionOf<T>>)> {
 			VerifyingSolutionStorage::<T>::iter()
 		}
 	}
@@ -152,7 +152,7 @@ mod pallet {
 	/// A solution that should be verified next.
 	#[pallet::storage]
 	type VerifyingSolutionStorage<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, SolutionOf<T>>;
+		StorageMap<_, Twox64Concat, PageIndex, Option<SolutionOf<T>>>;
 	/// Next page that should be verified.
 	#[pallet::storage]
 	type VerifyingSolutionPage<T: Config> = StorageValue<_, PageIndex>;
@@ -483,13 +483,16 @@ mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			if let Some(current_page) = VerifyingSolution::<T>::current_page() {
-				let page_solution = VerifyingSolution::<T>::get_page(current_page).unwrap();
-				let maybe_support = Self::feasibility_check_page_inner(page_solution, current_page);
+				let maybe_page_solution = VerifyingSolution::<T>::get_page(current_page).unwrap();
+
+				let maybe_support =
+					<Self as Verifier>::feasibility_check_page(maybe_page_solution, current_page);
+
 				log!(
 					trace,
 					"verified page {} of a solution, outcome = {:?}",
 					current_page,
-					maybe_support.is_ok()
+					maybe_support.as_ref().map(|s| s.len())
 				);
 
 				if let Ok(support) = maybe_support {
@@ -576,7 +579,7 @@ impl<T: Config> Pallet<T> {
 		page: PageIndex,
 	) -> Result<Supports<T::AccountId>, FeasibilityError> {
 		// Read the corresponding snapshots.
-		// TODO we assume _all_ + a page of voters fit into memory, is this OK?
+		// TODO we assume _all_ targets + a page of voters fit into memory, is this OK?
 		let snapshot_targets =
 			crate::Snapshot::<T>::targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 		let snapshot_voters =
@@ -653,15 +656,16 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod feasibility_check {
 	use super::{super::Verifier, *};
-	use crate::mock::*;
+	use crate::{mock::*, unsigned::miner::BaseMiner};
 	use frame_support::{assert_noop, assert_ok};
+	use sp_runtime::traits::Bounded;
 
 	#[test]
 	fn missing_snapshot() {
 		ExtBuilder::default().build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
 			// ..remove the only page of the target snapshot.
 			crate::Snapshot::<Runtime>::remove_voter_page(0);
@@ -675,7 +679,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
 			// ..remove just one of the pages of voter snapshot that is relevant.
 			crate::Snapshot::<Runtime>::remove_voter_page(0);
@@ -689,7 +693,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
 			// ..removing this page is not important.
 			crate::Snapshot::<Runtime>::remove_voter_page(1);
@@ -700,7 +704,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
 			// `DesiredTargets` is not checked here.
 			crate::Snapshot::<Runtime>::kill_desired_targets();
@@ -712,7 +716,7 @@ mod feasibility_check {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			roll_to(25);
-			let paged = raw_paged_solution();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
 			// `DesiredTargets` is not checked here.
 			crate::Snapshot::<Runtime>::remove_target_page(0);
@@ -728,12 +732,14 @@ mod feasibility_check {
 	fn winner_indices_single_page_must_be_in_bounds() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
-			let mut paged = raw_paged_solution();
+			let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
 			// Swap all votes from 3 to 4. here are only 4 targets, so index 4 is invalid.
 			paged.solution_pages[0]
+				.as_mut()
+				.unwrap()
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
@@ -748,91 +754,89 @@ mod feasibility_check {
 
 	#[test]
 	fn voter_indices_per_page_must_be_in_bounds() {
-		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
-			roll_to_snapshot_created();
-			let mut paged = raw_paged_solution();
+		ExtBuilder::default()
+			.pages(1)
+			.voter_per_page(Bounded::max_value())
+			.desired_targets(2)
+			.build_and_execute(|| {
+				roll_to_snapshot_created();
+				let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
-			assert_eq!(crate::Snapshot::<Runtime>::voters(0).unwrap().len(), 12);
-			// ------------------------------------------------^^ valid range is [0..11] in page 0.
+				assert_eq!(crate::Snapshot::<Runtime>::voters(0).unwrap().len(), 12);
+				// ------------------------------------------------^^ valid range is [0..11] in page
+				// 0.
 
-			// Check that there is an index 11 in votes1, and flip to 12. There are only 12 voters,
-			// so index 12 is invalid.
-			assert!(
-				paged.solution_pages[0]
-					.votes1
-					.iter_mut()
-					.filter(|(v, _)| *v == VoterIndex::from(11u32))
-					.map(|(v, _)| *v = 12)
-					.count() > 0
-			);
-			assert_noop!(
-				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
-				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex),
-			);
-		})
+				// Check that there is an index 11 in votes1, and flip to 12. There are only 12
+				// voters, so index 12 is invalid.
+				assert!(
+					paged.solution_pages[0]
+						.as_mut()
+						.unwrap()
+						.votes1
+						.iter_mut()
+						.filter(|(v, _)| *v == VoterIndex::from(11u32))
+						.map(|(v, _)| *v = 12)
+						.count() > 0
+				);
+				assert_noop!(
+					VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
+					FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex),
+				);
+			})
 	}
 
 	#[test]
 	fn voter_must_have_same_targets_as_snapshot() {
-		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
-			roll_to_snapshot_created();
-			let mut paged = raw_paged_solution();
+		ExtBuilder::default()
+			.pages(1)
+			.voter_per_page(Bounded::max_value())
+			.desired_targets(2)
+			.build_and_execute(|| {
+				roll_to_snapshot_created();
+				let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 
-			// First, check that voter at index 11 (40) actually voted for 3 (40) -- this is self
-			// vote. Then, change the vote to 2 (30).
+				// First, check that voter at index 11 (40) actually voted for 3 (40) -- this is
+				// self vote. Then, change the vote to 2 (30).
 
-			assert_eq!(
-				paged.solution_pages[0]
-					.votes1
-					.iter_mut()
-					.filter(|(v, t)| *v == 11 && *t == 3)
-					.map(|(_, t)| *t = 2)
-					.count(),
-				1,
-			);
-			assert_noop!(
-				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
-				FeasibilityError::InvalidVote,
-			);
-		})
+				assert_eq!(
+					paged.solution_pages[0]
+						.as_mut()
+						.unwrap()
+						.votes1
+						.iter_mut()
+						.filter(|(v, t)| *v == 11 && *t == 3)
+						.map(|(_, t)| *t = 2)
+						.count(),
+					1,
+				);
+				assert_noop!(
+					VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
+					FeasibilityError::InvalidVote,
+				);
+			})
 	}
 
 	#[test]
 	fn desired_targets() {
-		// ExtBuilder::default().desired_targets(8).build_and_execute(|| {
-		// 	create_all_snapshots();
-		// 	let paged = raw_paged_solution();
-		// 	// desire_targets is checked when we are finalizing a correct solution in on_initialize
-
-		// 	// we can remove a target?
-		// 	paged.solution_pages[0]
-		// 		.votes1
-		// 		iter_mut()
-		// 		.filter(|_, t| *t == 3)
-		// 		for_each(|(_, t)| *t = 2);
-		// })
+		todo!()
 	}
 
 	#[test]
 	fn score() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to_snapshot_created();
-			let raw = raw_paged_solution();
-			todo!()
-		})
+		ExtBuilder::default().desired_targets(2).build_and_execute(|| todo!())
 	}
 }
 
 #[cfg(test)]
 mod verifier_trait {
 	use super::*;
-	use crate::{mock::*, verifier::Verifier};
+	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier};
 
 	#[test]
 	fn setting_unverified_and_sealing_it() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let paged = raw_paged_solution();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 			let score = paged.score.clone();
 
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
@@ -845,7 +849,7 @@ mod verifier_trait {
 
 			// after this, the pages should be set
 			assert_ok!(
-				<<Runtime as crate::Config>::Verifier as Verifier>::seal_verifying_solution(
+				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
 					paged.score.clone(),
 				)
 			);
