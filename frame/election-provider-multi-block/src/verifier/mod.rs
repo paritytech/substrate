@@ -73,7 +73,7 @@ pub trait Verifier {
 	/// This should be used to load solutions into this pallet.
 	fn set_unverified_solution_page(
 		remaining: PageIndex,
-		page_solution: Option<Self::Solution>,
+		page_solution: Self::Solution,
 	) -> Result<(), ()>;
 
 	/// Indicate that the previous calls to `set_unverified_solution_page` are now enough to form
@@ -117,7 +117,7 @@ pub trait Verifier {
 	///
 	/// IMPORTANT: this does not check any scores.
 	fn feasibility_check_page(
-		partial_solution: Option<Self::Solution>,
+		partial_solution: Self::Solution,
 		page: PageIndex,
 	) -> Result<Supports<Self::AccountId>, FeasibilityError>;
 
@@ -140,7 +140,7 @@ impl<T: Config> Verifier for Pallet<T> {
 
 	fn set_unverified_solution_page(
 		page_index: PageIndex,
-		page_solution: Option<Self::Solution>,
+		page_solution: Self::Solution,
 	) -> Result<(), ()> {
 		VerifyingSolution::<T>::put_page(page_index, page_solution)
 	}
@@ -171,13 +171,10 @@ impl<T: Config> Verifier for Pallet<T> {
 	}
 
 	fn feasibility_check_page(
-		maybe_partial_solution: Option<Self::Solution>,
+		partial_solution: Self::Solution,
 		page: PageIndex,
 	) -> Result<Supports<Self::AccountId>, FeasibilityError> {
-		match maybe_partial_solution {
-			Some(partial_solution) => Self::feasibility_check_page_inner(partial_solution, page),
-			None => Ok(Default::default()),
-		}
+		Self::feasibility_check_page_inner(partial_solution, page)
 	}
 
 	fn force_set_single_page_verified_solution(

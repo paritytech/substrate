@@ -122,8 +122,7 @@ mod pallet {
 
 			let only_page = paged_solution
 				.solution_pages
-				.inner()
-				.pop() // TODO: we're assuming msp being last here, can be done better.
+				.pop()
 				.expect("length of `solution_pages` is always `T::Pages`, `T::Pages` is always greater than 1, can be popped; qed.");
 			let supports = <T::Verifier as Verifier>::feasibility_check_page(
 				only_page,
@@ -261,19 +260,15 @@ mod pallet {
 		}
 
 		pub fn unsigned_specific_checks(paged_solution: &PagedRawSolution<T>) -> DispatchResult {
-			// ensure solution is timely, and it has only 1 page..
+			// ensure solution is timely, and it has only 1 page.
 			// TODO: the fact that we return an error from the top level pallet here is a wee bit
 			// strange.
 			ensure!(
 				crate::Pallet::<T>::current_phase().is_unsigned_open(),
 				crate::Error::<T>::EarlySubmission
 			);
-			// there must be one `Some` in `paged_solution`, and it must be the last one.
-			ensure!(
-				paged_solution.some_len() == 1 &&
-					matches!(paged_solution.solution_pages.last(), Some(Some(_))),
-				crate::Error::<T>::WrongPageCount
-			);
+
+			ensure!(paged_solution.solution_pages.len() == 1, crate::Error::<T>::WrongPageCount);
 
 			Ok(())
 		}

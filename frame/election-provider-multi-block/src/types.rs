@@ -21,8 +21,8 @@ use frame_election_provider_support::ElectionProvider;
 pub use frame_election_provider_support::{PageIndex, Supports};
 use frame_support::traits::Get;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
+use sp_runtime::SaturatedConversion;
 
-pub use crate::fixed_vec::FixedVec;
 use crate::Config;
 
 /// The solution type used by this crate.
@@ -53,20 +53,30 @@ pub type AssignmentOf<T> =
 	frame_support::PartialEqNoBound,
 )]
 pub struct PagedRawSolution<T: Config> {
-	pub solution_pages: FixedVec<Option<SolutionOf<T>>, T::Pages>,
+	pub solution_pages: Vec<SolutionOf<T>>, // TODO: at least use the bounded vec.
 	pub score: ElectionScore,
 	pub round: u32,
+}
+
+// TODO: we also need a consuming version of this
+pub trait Pagify<T> {
+	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_>;
+}
+
+impl<T> Pagify<T> for Vec<T> {
+	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_> {
+		Box::new(self.iter().enumerate().map(|(p, s)| (p.saturated_into::<PageIndex>(), s)).map(
+			move |(p, s)| {
+				let new_page = bound.saturating_sub(1).saturating_sub(p);
+				(new_page, s)
+			},
+		))
+	}
 }
 
 impl<T: Config> Default for PagedRawSolution<T> {
 	fn default() -> Self {
 		Self { round: 1, score: Default::default(), solution_pages: Default::default() }
-	}
-}
-
-impl<T: Config> PagedRawSolution<T> {
-	pub fn some_len(&self) -> usize {
-		self.solution_pages.iter().filter(|x| x.is_some()).count() as usize
 	}
 }
 

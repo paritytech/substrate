@@ -128,25 +128,17 @@ fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 	flatten
 }
 
-/// A fake solution that might pass the pre dispatch checks of the unsigned phase.
 pub(crate) fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
-	let mut solution_pages: FixedVec<Option<SolutionOf<Runtime>>, Pages> = Default::default();
-	*solution_pages.as_mut().last_mut().unwrap() = Some(Default::default());
-	PagedRawSolution { score, solution_pages, ..Default::default() }
+	PagedRawSolution { score, solution_pages: Default::default(), ..Default::default() }
 }
 
 pub(crate) fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 	PagedRawSolution {
-		solution_pages: FixedVec::<Option<SolutionOf<Runtime>>, Pages>::try_from(vec![
-			None,
-			None,
-			Some(TestNposSolution {
-				// 2 desired targets, both voting for themselves
-				votes1: vec![(0, 0), (1, 2)],
-				..Default::default()
-			}),
-		])
-		.unwrap(),
+		solution_pages: vec![TestNposSolution {
+			// 2 targets, both voting for themselves
+			votes1: vec![(0, 0), (1, 2)],
+			..Default::default()
+		}],
 		round: 1,
 		score: [
 			10,  // lowest staked

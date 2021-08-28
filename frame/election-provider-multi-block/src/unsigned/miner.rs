@@ -168,14 +168,15 @@ impl<T: super::Config> BaseMiner<T> {
 		}
 
 		// convert each page to a compact struct
-		let mut solution_pages: Vec<Option<SolutionOf<T>>> = paged_assignments
+		let mut solution_pages: Vec<SolutionOf<T>> = paged_assignments
+			// NOTE: we actually don't want to pagify this here.
 			.into_iter()
 			.enumerate()
 			.map(|(page_index, assignment_page)| {
 				// get the page of the snapshot that corresponds to this page of the assignments.
 				let page: PageIndex = page_index.saturated_into();
 				let voter_snapshot_page = voter_pages
-					.get(page_index)
+					.get(page as usize)
 					.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(page)))?;
 
 				let voter_index_fn = {
@@ -187,13 +188,9 @@ impl<T: super::Config> BaseMiner<T> {
 					&voter_index_fn,
 					&target_index_fn,
 				)
-				.map(|s| Some(s))
 				.map_err::<MinerError, _>(Into::into)
 			})
 			.collect::<Result<Vec<_>, _>>()?;
-
-		let solution_pages =
-			FixedVec::<Option<SolutionOf<T>>, T::Pages>::filling_new(solution_pages, None).unwrap();
 
 		// finally, get the round, and pack everything.
 		let round = crate::Pallet::<T>::round();
@@ -237,11 +234,10 @@ impl<T: super::Config> BaseMiner<T> {
 		// check every solution page for feasibility.
 		paged_solution
 			.solution_pages
-			.iter()
-			.enumerate()
-			.map(|(page_index, maybe_page_solution)| {
+			.pagify(T::Pages::get())
+			.map(|(page_index, page_solution)| {
 				<T::Verifier as verifier::Verifier>::feasibility_check_page(
-					maybe_page_solution.clone(),
+					page_solution.clone(),
 					page_index as PageIndex,
 				)
 				.map(|_ready_page| ())
@@ -736,15 +732,15 @@ mod base_miner {
 			assert_eq!(
 				paged.solution_pages,
 				vec![
-					Some(TestNposSolution {
+					TestNposSolution {
 						// voter 6 (index 1) is backing 40 (index 3).
 						// voter 8 (index 3) is backing 10 (index 0)
 						votes1: vec![(1, 3), (3, 0)],
 						// voter 5 (index 0) is backing 40 (index 10) and 10 (index 0)
 						votes2: vec![(0, [(0, PerU16::from_parts(32768))], 3)],
 						..Default::default()
-					}),
-					Some(TestNposSolution {
+					},
+					TestNposSolution {
 						// voter 1 (index 0) is backing 10 (index 0)
 						// voter 2 (index 1) is backing 40 (index 3)
 						// voter 3 (index 2) is backing 40 (index 3)
@@ -752,7 +748,7 @@ mod base_miner {
 						// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
 						votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
 						..Default::default()
-					}),
+					},
 				]
 			);
 
@@ -762,8 +758,7 @@ mod base_miner {
 			// convert ot supports
 			let supports = paged
 				.solution_pages
-				.iter()
-				.enumerate()
+				.pagify(Pages::get())
 				.map(|(i, p)| {
 					let page_index = i as PageIndex;
 					VerifierPallet::feasibility_check_page(p.clone(), page_index)
@@ -834,20 +829,20 @@ mod base_miner {
 			assert_eq!(
 				paged.solution_pages,
 				vec![
-					Some(TestNposSolution { votes1: vec![(2, 2), (3, 3)], ..Default::default() }),
-					Some(TestNposSolution {
+					TestNposSolution { votes1: vec![(2, 2), (3, 3)], ..Default::default() },
+					TestNposSolution {
 						votes1: vec![(2, 2)],
 						votes2: vec![
 							(0, [(2, PerU16::from_parts(32768))], 3),
 							(1, [(2, PerU16::from_parts(32768))], 3)
 						],
 						..Default::default()
-					}),
-					Some(TestNposSolution {
+					},
+					TestNposSolution {
 						votes1: vec![(2, 3), (3, 3)],
 						votes2: vec![(1, [(2, PerU16::from_parts(32768))], 3)],
 						..Default::default()
-					}),
+					},
 				]
 			);
 
@@ -857,8 +852,7 @@ mod base_miner {
 			// convert ot supports
 			let supports = paged
 				.solution_pages
-				.iter()
-				.enumerate()
+				.pagify(Pages::get())
 				.map(|(i, p)| {
 					let page_index = i as PageIndex;
 					VerifierPallet::feasibility_check_page(p.clone(), page_index)
@@ -927,18 +921,15 @@ mod base_miner {
 
 			assert_eq!(
 				paged.solution_pages,
-				vec![
-					None,
-					Some(TestNposSolution {
-						// voter 1 (index 0) is backing 10 (index 0)
-						// voter 2 (index 1) is backing 40 (index 3)
-						// voter 3 (index 2) is backing 40 (index 3)
-						votes1: vec![(0, 0), (1, 3), (2, 3)],
-						// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
-						votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
-						..Default::default()
-					}),
-				]
+				vec![TestNposSolution {
+					// voter 1 (index 0) is backing 10 (index 0)
+					// voter 2 (index 1) is backing 40 (index 3)
+					// voter 3 (index 2) is backing 40 (index 3)
+					votes1: vec![(0, 0), (1, 3), (2, 3)],
+					// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
+					votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
+					..Default::default()
+				},]
 			);
 
 			// this solution must be feasible and submittable.
@@ -947,8 +938,7 @@ mod base_miner {
 			// convert ot supports
 			let supports = paged
 				.solution_pages
-				.iter()
-				.enumerate()
+				.pagify(Pages::get())
 				.map(|(i, p)| {
 					let page_index = i as PageIndex;
 					VerifierPallet::feasibility_check_page(p.clone(), page_index)
@@ -959,8 +949,6 @@ mod base_miner {
 			assert_eq!(
 				supports,
 				vec![
-					// page0, supports from voters 5, 6, 7, 8
-					vec![],
 					// page1 supports from voters 1, 2, 3, 4
 					vec![
 						(10, Support { total: 15, voters: vec![(1, 10), (4, 5)] }),

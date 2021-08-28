@@ -32,7 +32,7 @@ pub use pallet::{Config, Pallet};
 
 #[frame_support::pallet]
 mod pallet {
-	use crate::{verifier::Verifier, Snapshot};
+	use crate::{types::Pagify, verifier::Verifier, Snapshot};
 
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -71,7 +71,7 @@ mod pallet {
 		/// Write a new verifying solution's page.
 		pub(crate) fn put_page(
 			page_index: PageIndex,
-			page_solution: Option<SolutionOf<T>>,
+			page_solution: SolutionOf<T>,
 		) -> Result<(), ()> {
 			if Self::exists() {
 				return Err(())
@@ -135,8 +135,7 @@ mod pallet {
 		}
 
 		/// Get the partial solution at the given page of the verifying solution.
-		pub(crate) fn get_page(index: PageIndex) -> Option<Option<SolutionOf<T>>> {
-			// TODO: this gets the job done, but is ugly AF.
+		pub(crate) fn get_page(index: PageIndex) -> Option<SolutionOf<T>> {
 			VerifyingSolutionStorage::<T>::get(index)
 		}
 
@@ -145,7 +144,7 @@ mod pallet {
 		}
 
 		#[cfg(test)]
-		pub(crate) fn iter() -> impl Iterator<Item = (PageIndex, Option<SolutionOf<T>>)> {
+		pub(crate) fn iter() -> impl Iterator<Item = (PageIndex, SolutionOf<T>)> {
 			VerifyingSolutionStorage::<T>::iter()
 		}
 	}
@@ -153,7 +152,7 @@ mod pallet {
 	/// A solution that should be verified next.
 	#[pallet::storage]
 	type VerifyingSolutionStorage<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, Option<SolutionOf<T>>>;
+		StorageMap<_, Twox64Concat, PageIndex, SolutionOf<T>>;
 	/// Next page that should be verified.
 	#[pallet::storage]
 	type VerifyingSolutionPage<T: Config> = StorageValue<_, PageIndex>;
@@ -289,10 +288,9 @@ mod pallet {
 			paged_supports: Vec<Supports<T::AccountId>>,
 			score: ElectionScore,
 		) {
-			// TODO: something like enumerate for Vec<T> that pagify it.
-			for (page_index, supports) in
-				paged_supports.into_iter().enumerate().map(|(p, s)| (p as PageIndex, s))
-			{
+			// TODO: would be nice if we could consume `Vec<_>.pagify` as well, but rustc is not
+			// cooperating.
+			for (page_index, supports) in paged_supports.pagify(T::Pages::get()) {
 				match Self::valid() {
 					ValidSolution::X => QueuedSolutionX::<T>::insert(page_index, supports),
 					ValidSolution::Y => QueuedSolutionY::<T>::insert(page_index, supports),
@@ -484,10 +482,18 @@ mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			if let Some(current_page) = VerifyingSolution::<T>::current_page() {
-				let maybe_page_solution = VerifyingSolution::<T>::get_page(current_page).unwrap();
+				// TODO: We can optimize this: If at some point we rely on the `unwrap_or_default`,
+				// it means that this verifying solution is over, early exit.
+				let page_solution =
+					VerifyingSolution::<T>::get_page(current_page).unwrap_or_default();
+
+				// TODO: we can do some exit-earlys here:
+				// - if the count of winners in any page is more than desired_targets, we can
+				//   reject.
+				// - similarly, we can early exist based on partial score
 
 				let maybe_support =
-					<Self as Verifier>::feasibility_check_page(maybe_page_solution, current_page);
+					<Self as Verifier>::feasibility_check_page(page_solution, current_page);
 
 				log!(
 					trace,
@@ -502,30 +508,7 @@ mod pallet {
 					let has_more_pages = VerifyingSolution::<T>::proceed_page();
 
 					if !has_more_pages {
-						// this was the last page, we can't go any further.
-						let (final_score, winner_count) = QueuedSolution::<T>::final_score();
-						let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
-
-						// TODO: we can do some exit-earlys here:
-						// - if the count of winners in any page is more than desired_targets, we
-						//   can reject.
-						// - similarly, we can early exist based on partial score
-
-						let desired_targets = crate::Snapshot::<T>::desired_targets().unwrap();
-						if final_score == claimed_score &&
-							// TODO shouldn't checking final_score == claimed_score implicitly
-							// check this?
-							// TODO check score is good when starting verifier
-							Self::ensure_correct_final_score_quality(final_score).is_ok() &&
-							winner_count == desired_targets
-						{
-							// all good, finalize this solution
-							VerifyingSolution::<T>::kill();
-							QueuedSolution::<T>::finalize_correct(final_score);
-						} else {
-							VerifyingSolution::<T>::kill();
-							QueuedSolution::<T>::clear_invalid();
-						}
+						Self::finalize_verification()
 					}
 				} else {
 					// the page solution was invalid
@@ -543,6 +526,33 @@ mod pallet {
 // access the internal storage items directly. All operations should happen with the wrapper types.
 
 impl<T: Config> Pallet<T> {
+	/// This should only be called when we are sure that no other page of `VerifyingSolutionStorage`
+	/// needs verification.
+	///
+	/// This could happen because `VerifyingSolutionPage == 0`, or because
+	/// `VerifyingSolutionStorage` contains less than `T::Pages` pages.
+	fn finalize_verification() {
+		// this was the last page, we can't go any further.
+		let (final_score, winner_count) = QueuedSolution::<T>::final_score();
+		let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
+
+		let desired_targets = crate::Snapshot::<T>::desired_targets().unwrap();
+		if final_score == claimed_score &&
+			// TODO shouldn't checking final_score == claimed_score implicitly
+			// check this?
+			// TODO check score is good when starting verifier
+			Self::ensure_correct_final_score_quality(final_score).is_ok() &&
+			winner_count == desired_targets
+		{
+			// all good, finalize this solution
+			VerifyingSolution::<T>::kill();
+			QueuedSolution::<T>::finalize_correct(final_score);
+		} else {
+			VerifyingSolution::<T>::kill();
+			QueuedSolution::<T>::clear_invalid();
+		}
+	}
+
 	/// Once we know that a claimed score is correct, now we check it further to be:
 	///
 	/// 1. more than a potentially queued solution
@@ -740,8 +750,6 @@ mod feasibility_check {
 
 			// Swap all votes from 3 to 4. here are only 4 targets, so index 4 is invalid.
 			paged.solution_pages[0]
-				.as_mut()
-				.unwrap()
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
@@ -772,8 +780,6 @@ mod feasibility_check {
 				// voters, so index 12 is invalid.
 				assert!(
 					paged.solution_pages[0]
-						.as_mut()
-						.unwrap()
 						.votes1
 						.iter_mut()
 						.filter(|(v, _)| *v == VoterIndex::from(11u32))
@@ -802,8 +808,6 @@ mod feasibility_check {
 
 				assert_eq!(
 					paged.solution_pages[0]
-						.as_mut()
-						.unwrap()
 						.votes1
 						.iter_mut()
 						.filter(|(v, t)| *v == 11 && *t == 3)
@@ -971,8 +975,6 @@ mod verifier_trait {
 			// change a vote in the 2nd page to out an out-of-bounds target index
 			assert_eq!(
 				paged.solution_pages[1]
-					.as_mut()
-					.unwrap()
 					.votes2
 					.iter_mut()
 					.filter(|(v, _, _)| *v == 0)
@@ -1212,8 +1214,6 @@ mod verifier_trait {
 			// change a vote in the 2nd page to out an out-of-bounds target index
 			assert_eq!(
 				bad_paged.solution_pages[1]
-					.as_mut()
-					.unwrap()
 					.votes2
 					.iter_mut()
 					.filter(|(v, _, _)| *v == 0)
