@@ -662,7 +662,7 @@ mod feasibility_check {
 		ExtBuilder::default().build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 
 			// ..remove the only page of the target snapshot.
 			crate::Snapshot::<Runtime>::remove_voter_page(0);
@@ -676,7 +676,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 
 			// ..remove just one of the pages of voter snapshot that is relevant.
 			crate::Snapshot::<Runtime>::remove_voter_page(0);
@@ -690,7 +690,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 
 			// ..removing this page is not important.
 			crate::Snapshot::<Runtime>::remove_voter_page(1);
@@ -701,7 +701,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 
 			// `DesiredTargets` is not checked here.
 			crate::Snapshot::<Runtime>::kill_desired_targets();
@@ -713,7 +713,7 @@ mod feasibility_check {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			roll_to(25);
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 
 			// `DesiredTargets` is not checked here.
 			crate::Snapshot::<Runtime>::remove_target_page(0);
@@ -729,7 +729,7 @@ mod feasibility_check {
 	fn winner_indices_single_page_must_be_in_bounds() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
-			let mut paged = raw_paged_solution();
+			let mut paged = raw_paged_solution(None);
 			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
@@ -751,7 +751,7 @@ mod feasibility_check {
 	fn voter_indices_per_page_must_be_in_bounds() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
-			let mut paged = raw_paged_solution();
+			let mut paged = raw_paged_solution(None);
 
 			assert_eq!(crate::Snapshot::<Runtime>::voters(0).unwrap().len(), 12);
 			// ------------------------------------------------^^ valid range is [0..11] in page 0.
@@ -777,7 +777,7 @@ mod feasibility_check {
 	fn voter_must_have_same_targets_as_snapshot() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
-			let mut paged = raw_paged_solution();
+			let mut paged = raw_paged_solution(None);
 
 			// First, check that voter at index 11 (40) actually voted for 3 (40) -- this is self
 			// vote. Then, change the vote to 2 (30).
@@ -802,7 +802,7 @@ mod feasibility_check {
 	fn desired_targets() {
 		// ExtBuilder::default().desired_targets(8).build_and_execute(|| {
 		// 	create_all_snapshots();
-		// 	let paged = raw_paged_solution();
+		// 	let paged = raw_paged_solution(None);
 		// 	// desire_targets is checked when we are finalizing a correct solution in on_initialize
 
 		// 	// we can remove a target?
@@ -818,7 +818,7 @@ mod feasibility_check {
 	fn score() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
-			let raw = raw_paged_solution();
+			let raw = raw_paged_solution(None);
 			todo!()
 		})
 	}
@@ -833,11 +833,11 @@ mod verifier_trait {
 	fn setting_unverified_and_sealing_it() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 			let score = paged.score.clone();
 
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!( // TODO is this going backwards? Since its goes 0 .. =2 NOT 2 .. =0
+				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
 						page_index as PageIndex,
 						solution_page,
@@ -891,8 +891,9 @@ mod verifier_trait {
 			roll_to(28);
 
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
 
+			// invalid related queued solution data is cleared
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
 
 			// everything about the verifying solution is now removed.
@@ -908,14 +909,13 @@ mod verifier_trait {
 	fn correct_solution_is_stored_initial() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
-			let paged = raw_paged_solution();
+			let paged = raw_paged_solution(None);
 			let score = paged.score.clone();
 
 			// set each page of the solution
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				let page_index = page_index as PageIndex;
 				assert_ok!(<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-					page_index,
+					page_index as PageIndex,
 					solution_page,
 				));
 			}
@@ -944,14 +944,14 @@ mod verifier_trait {
 
 	#[test]
 	fn incorrect_solution_discarded_initial() {
-		// first solution and invalid, should do nothing
+		// first solution and invalid, should do nothing and make sure storage is totally cleared.
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let mut paged = raw_paged_solution();
+			let mut paged = raw_paged_solution(None);
 			let score = paged.score.clone();
 
 			// change a vote in the 2nd page to out an out-of-bounds target index
-			dbg!(&paged.solution_pages);
+			dbg!(&paged.solution_pages[1].votes2);
 			assert_eq!(
 				paged.solution_pages[1]
 					.votes2
@@ -986,9 +986,8 @@ mod verifier_trait {
 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
 
-			roll_to(26);
-
 			// verifying the 1st page is fine since it is valid
+			roll_to(26);
 
 			// cursor decrements by 1
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
@@ -998,9 +997,8 @@ mod verifier_trait {
 			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 1);
 
-			roll_to(27);
-
 			// the 2nd page is rejected since it is invalid
+			roll_to(27);
 
 			// .. so the verifying solution is totally cleared
 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
@@ -1016,6 +1014,38 @@ mod verifier_trait {
 	#[test]
 	fn correct_solution_is_stored_secondary() {
 		// we have a good solution, new better one comes along, we stored it.
+
+		roll_to(25);
+		let ok_paged = raw_paged_solution(None);
+		let ok_score = ok_paged.score.clone();
+
+		// set
+		for (page_index, solution_page) in ok_paged.solution_pages.into_iter().enumerate() {
+			assert_ok!(
+				<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+					page_index as PageIndex,
+					solution_page,
+				)
+			);
+		}
+		// and seal the solution against the verifier
+		assert_ok!(<<Runtime as crate::Config>::Verifier as Verifier>::seal_verifying_solution(
+			ok_paged.score.clone(),
+		));
+
+		// now we finalize everything for the ok solution.
+		roll_to(28);
+
+		// the valid solution and invalid are flipped
+		assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+		assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+		// and the score is as expected
+		assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(ok_score));
+
+		let mut great_paged = raw_paged_solution(Some((10, One::one())));
+		let great_score = great_paged.score.clone();
+
+		assert!(great_score > ok_score);
 	}
 
 	#[test]
