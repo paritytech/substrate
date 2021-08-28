@@ -19,9 +19,14 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{convert::TryInto, fmt, io, path::Path, sync::Arc};
+use std::{
+	convert::TryInto,
+	fmt, fs, io,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
-use log::debug;
+use log::{debug, info};
 
 use crate::{Database, DatabaseSettings, DatabaseSource, DbHash};
 use codec::Decode;
@@ -213,7 +218,32 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	let db: Arc<dyn Database<DbHash>> = match &config.source {
+	// Try to open the database to check if the current `DatabaseType` matches the type of database
+	// stored in the target directory and close the database on success.
+	open_database_at::<Block>(&config.source, db_type).and_then(|db| {
+		drop(db);
+		let mut source = config.source.clone();
+		if let Some(db_path) = config.source.path() {
+			// Maybe migrate (copy) the database to a type specific subdirectory to make it
+			// possible that light and full databases coexist
+			let new_db_path = maybe_migrate_to_type_subdir(&db_path, db_type).map_err(|e| {
+				sp_blockchain::Error::Backend(format!(
+					"Error in migration to role subdirectory {}",
+					e
+				))
+			})?;
+			source.set_path(&new_db_path);
+		};
+
+		open_database_at::<Block>(&source, db_type)
+	})
+}
+
+fn open_database_at<Block: BlockT>(
+	source: &DatabaseSource,
+	db_type: DatabaseType,
+) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+	let db: Arc<dyn Database<DbHash>> = match &source {
 		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true)?,
 		DatabaseSource::RocksDb { path, cache_size } =>
 			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
@@ -394,6 +424,33 @@ pub fn check_database_type(
 	Ok(())
 }
 
+fn maybe_migrate_to_type_subdir(p: &Path, db_type: DatabaseType) -> io::Result<PathBuf> {
+	let mut basedir = p.to_path_buf();
+	basedir.pop();
+
+	// Do we have to migrate to a database-type-based subdirectory layout:
+	// See if the base dir exists (`db`) and there's no `light` or `full` directory inside
+	// of it, so we assume the database is not-migrated yet.
+	if basedir.exists() && !(basedir.join("light").exists() || basedir.join("full").exists()) {
+		info!(
+			"Migrating database to a database-type-based subdirectory: '{:?}' -> '{:?}'",
+			p,
+			p.join(db_type.as_str())
+		);
+		let mut p = p.to_path_buf();
+		let mut tmp_dir = p.clone();
+		tmp_dir.pop();
+		tmp_dir.push("tmp");
+
+		fs::rename(&p, &tmp_dir)?;
+		p.push(db_type.as_str());
+		fs::create_dir_all(&p)?;
+		fs::rename(tmp_dir, &p)?;
+		return Ok(p)
+	}
+	Ok(p.to_path_buf())
+}
+
 /// Read database column entry for the given block.
 pub fn read_db<Block>(
 	db: &dyn Database<DbHash>,
@@ -571,6 +628,52 @@ mod tests {
 	use sc_state_db::PruningMode;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[test]
+	fn database_type_subdir_migration() {
+		type Block = RawBlock<ExtrinsicWrapper<u64>>;
+
+		fn check_dir_for_db_type(dir: &str, db_type: DatabaseType) {
+			let base_path = tempfile::TempDir::new().unwrap();
+			let old_db_path = base_path.path().join("chains/dev/db");
+
+			let source = DatabaseSource::RocksDb { path: old_db_path.clone(), cache_size: 128 };
+			let settings = db_settings(source);
+
+			let db_res = open_database::<Block>(&settings, db_type);
+			assert!(db_res.is_ok(), "New database should be created.");
+
+			// check if the database dir had been migrated
+			assert!(!old_db_path.join("db_version").exists());
+			assert!(old_db_path.join(dir).join("db_version").exists());
+		}
+
+		check_dir_for_db_type("light", DatabaseType::Light);
+		check_dir_for_db_type("full", DatabaseType::Full);
+
+		// check failure on reopening with wrong role
+		{
+			let base_path = tempfile::TempDir::new().unwrap();
+			let old_db_path = base_path.path().join("chains/dev/db");
+
+			let source = DatabaseSource::RocksDb { path: old_db_path.clone(), cache_size: 128 };
+			let settings = db_settings(source);
+			{
+				let db_res = open_database::<Block>(&settings, DatabaseType::Light);
+				assert!(db_res.is_ok(), "New database should be created.");
+
+				// check if the database dir had been migrated
+				assert!(!old_db_path.join("db_version").exists());
+				assert!(old_db_path.join("light/db_version").exists());
+			}
+			let source =
+				DatabaseSource::RocksDb { path: old_db_path.join("light"), cache_size: 128 };
+			let settings = db_settings(source);
+			let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+			assert!(db_res.is_err(), "Opening a light database in full role should fail");
+		}
+	}
 
 	#[test]
 	fn number_index_key_doesnt_panic() {

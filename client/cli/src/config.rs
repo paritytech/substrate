@@ -219,9 +219,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
+		role: &Role,
 	) -> Result<DatabaseSource> {
-		let rocksdb_path = base_path.join("db");
-		let paritydb_path = base_path.join("paritydb");
+		let role_dir = match role {
+			Role::Light => "light",
+			Role::Full | Role::Authority => "full",
+		};
+		let rocksdb_path = base_path.join("db").join(role_dir);
+		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
 			Database::ParityDb => DatabaseSource::ParityDb { path: rocksdb_path },
@@ -499,7 +504,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore_remote,
 			keystore,
-			database: self.database_config(&config_dir, database_cache_size, database)?,
+			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
