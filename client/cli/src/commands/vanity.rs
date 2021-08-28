@@ -131,7 +131,7 @@ where
 					best = score;
 					if best >= top {
 						println!("best: {} == top: {}", best, top);
-						sender.send(utils::format_seed::<Pair>(seed.clone())).unwrap();
+						sender.send(utils::format_seed::<Pair>(seed.clone())).expect("Failed to send generated address");
 					}
 				}
 				done += 1;
@@ -153,7 +153,7 @@ where
 		});
 	}
 
-	Ok(rx.recv().unwrap())
+	Ok(rx.recv().expect("Failed to receive generated address"))
 }
 
 fn good_waypoint(done: u64) -> u64 {
