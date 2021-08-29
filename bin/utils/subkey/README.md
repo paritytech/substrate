@@ -4,7 +4,7 @@ Subkey is a commandline utility included with Substrate. It allows generating an
 
 `subkey` provides a few sub-commands to generate keys, check keys, sign messages, verify messages, etc...
 
-You can see the list of command with `subkey --help`. You can then see additional options per command with for instance `subkey generate --help` for the `generate` command.
+You can see the full list of commands with `subkey --help`. Most commands have additional help available with for instance `subkey generate --help` for the `generate` command.
 
 ## Satefy first
 
