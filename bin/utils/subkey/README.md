@@ -8,7 +8,7 @@ You can see the full list of commands with `subkey --help`. Most commands have a
 
 ## Satefy first
 
-`subkey` does not need any internet connection to work. For the best levels of security, you should be using `subkey` on a machine that is **not connected** to the internet.
+`subkey` does not need an internet connection to work. Indeed, for the best security, you should be using `subkey` on a machine that is **not connected** to the internet.
 
 `subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check you commands history).
 
