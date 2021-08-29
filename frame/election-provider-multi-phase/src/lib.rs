@@ -114,8 +114,8 @@
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
 //! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
 //! determine what needs to be done. The on-chain election is slow, and contains no balancing or
-//! reduction post-processing. See [`onchain::OnChainSequentialPhragmen`]. The
-//! [`FallbackStrategy::Nothing`] just returns an error, and enables the [`Phase::Emergency`].
+//! reduction post-processing. [`InitiateEmergencyPhase`] enables the [`Phase::Emergency`] which is
+//! a more *fail-safe* approach.
 //!
 //! ### Emergency Phase
 //!
@@ -201,25 +201,8 @@
 //! [`DesiredTargets`], no more, no less. Over time, we can change this to a [min, max] where any
 //! solution within this range is acceptable, where bigger solutions are prioritized.
 //!
-//! **Recursive Fallback**: Currently, the fallback is a separate enum. A different and fancier way
-//! of doing this would be to have the fallback be another
-//! [`frame_election_provider_support::ElectionProvider`]. In this case, this pallet can even have
-//! the on-chain election provider as fallback, or special _noop_ fallback that simply returns an
-//! error, thus replicating [`FallbackStrategy::Nothing`]. In this case, we won't need the
-//! additional config OnChainAccuracy either.
-//!
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
-//!
-//! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
-//! dependency from staking and the solution type. It should be generated at runtime, there
-//! it should be encoded how many votes each nominators have. Essentially translate
-//! <https://github.com/paritytech/substrate/pull/7929> to this pallet.
-//!
-//! **More accurate weight for error cases**: Both `ElectionDataProvider` and `ElectionProvider`
-//! assume no weight is consumed in their functions, when operations fail with `Err`. This can
-//! clearly be improved, but not a priority as we generally expect snapshot creation to fail only
-//! due to extreme circumstances.
 //!
 //! **Take into account the encode/decode weight in benchmarks.** Currently, we only take into
 //! account the weight of encode/decode in the `submit_unsigned` given its priority. Nonetheless,
@@ -284,6 +267,11 @@ pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex
 pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
+/// The fallback election type.
+pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider<
+	<T as frame_system::Config>::AccountId,
+	<T as frame_system::Config>::BlockNumber,
+>>::Error;
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
@@ -320,6 +308,21 @@ impl BenchmarkingConfig for () {
 	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 10_000;
 	const MINER_MAXIMUM_VOTERS: u32 = 10_000;
 	const MAXIMUM_TARGETS: u32 = 2_000;
+}
+
+/// A fallback implementation that transitions the pallet to the emergency phase.
+pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmergencyPhase<T> {
+	type DataProvider = T::DataProvider;
+	type Error = &'static str;
+
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		log!(warn, "Entering emergency phase.");
+		CurrentPhase::<T>::put(Phase::Emergency);
+		// We won't succeed, this is intentional.
+		Err("Emergency phase started.")
+	}
 }
 
 /// Current phase of the pallet.
@@ -384,19 +387,6 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 	}
 }
 
-/// A configuration for the pallet to indicate what should happen in the case of a fallback i.e.
-/// reaching a call to `elect` with no good solution.
-#[cfg_attr(test, derive(Clone))]
-pub enum FallbackStrategy {
-	/// Run a on-chain sequential phragmen.
-	///
-	/// This might burn the chain for a few minutes due to a stall, but is generally a safe
-	/// approach to maintain a sensible validator set.
-	OnChain,
-	/// Nothing. Return an error.
-	Nothing,
-}
-
 /// The type of `Computation` that provided this election data.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug)]
 pub enum ElectionCompute {
@@ -406,6 +396,8 @@ pub enum ElectionCompute {
 	Signed,
 	/// Election was computed with an unsigned submission.
 	Unsigned,
+	/// Election was computed using the fallback
+	Fallback,
 	/// Election was computed with emergency status.
 	Emergency,
 }
@@ -485,34 +477,45 @@ pub struct SolutionOrSnapshotSize {
 /// Internal errors of the pallet.
 ///
 /// Note that this is different from [`pallet::Error`].
-#[derive(Debug, Eq, PartialEq)]
+#[derive(frame_support::DebugNoBound)]
 #[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
-pub enum ElectionError {
+pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
 	/// An error in the miner (offchain) sub-system.
 	Miner(unsigned::MinerError),
-	/// An error in the on-chain fallback.
-	OnChainFallback(onchain::Error),
 	/// An error happened in the data provider.
 	DataProvider(&'static str),
-	/// No fallback is configured. This is a special case.
-	NoFallbackConfigured,
+	/// An error nested in the fallback.
+	Fallback(FallbackErrorOf<T>),
 }
 
-impl From<onchain::Error> for ElectionError {
-	fn from(e: onchain::Error) -> Self {
-		ElectionError::OnChainFallback(e)
+// NOTE: we have to do this manually because of the additional where clause needed on
+// `FallbackErrorOf<T>`.
+#[cfg(test)]
+impl<T: Config> PartialEq for ElectionError<T>
+where
+	FallbackErrorOf<T>: PartialEq,
+{
+	fn eq(&self, other: &Self) -> bool {
+		use ElectionError::*;
+		match (self, other) {
+			(&Feasibility(ref x), &Feasibility(ref y)) if x == y => true,
+			(&Miner(ref x), &Miner(ref y)) if x == y => true,
+			(&DataProvider(ref x), &DataProvider(ref y)) if x == y => true,
+			(&Fallback(ref x), &Fallback(ref y)) if x == y => true,
+			_ => false,
+		}
 	}
 }
 
-impl From<FeasibilityError> for ElectionError {
+impl<T: Config> From<FeasibilityError> for ElectionError<T> {
 	fn from(e: FeasibilityError) -> Self {
 		ElectionError::Feasibility(e)
 	}
 }
 
-impl From<unsigned::MinerError> for ElectionError {
+impl<T: Config> From<unsigned::MinerError> for ElectionError<T> {
 	fn from(e: unsigned::MinerError) -> Self {
 		ElectionError::Miner(e)
 	}
@@ -666,7 +669,11 @@ pub mod pallet {
 		type OnChainAccuracy: PerThing128;
 
 		/// Configuration for the fallback
-		type Fallback: Get<FallbackStrategy>;
+		type Fallback: ElectionProvider<
+			Self::AccountId,
+			Self::BlockNumber,
+			DataProvider = Self::DataProvider,
+		>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
@@ -1301,7 +1308,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError> {
+	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
@@ -1331,7 +1338,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This is a *self-weighing* function, it will register its own extra weight as
 	/// [`DispatchClass::Mandatory`] with the system pallet.
-	pub fn create_snapshot() -> Result<(), ElectionError> {
+	pub fn create_snapshot() -> Result<(), ElectionError<T>> {
 		// this is self-weighing itself..
 		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
 
@@ -1473,16 +1480,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError> {
-		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
-			T::AccountId,
-			T::BlockNumber,
-		>>::elect()
-		.map_err(Into::into)
-	}
-
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError> {
+	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1493,15 +1491,10 @@ impl<T: Config> Pallet<T> {
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.map_or_else(
-				|| match T::Fallback::get() {
-					FallbackStrategy::OnChain => Self::onchain_fallback()
-						.map(|s| {
-							// onchain election incurs maximum block weight
-							Self::register_weight(T::BlockWeights::get().max_block);
-							(s, ElectionCompute::OnChain)
-						})
-						.map_err(Into::into),
-					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
+				|| {
+					T::Fallback::elect()
+						.map_err(|fe| ElectionError::Fallback(fe))
+						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
 				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
@@ -1533,7 +1526,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
-	type Error = ElectionError;
+	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
@@ -1907,7 +1900,7 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted(1),
-					Event::ElectionFinalized(Some(ElectionCompute::OnChain))
+					Event::ElectionFinalized(Some(ElectionCompute::Fallback))
 				],
 			);
 			// All storage items must be cleared.
@@ -1959,14 +1952,12 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
-		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-
+		ExtBuilder::default().onchain_fallback(true).build_and_execute(|| {
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-			// Zilch solutions thus far.
+			// Zilch solutions thus far, but we get a result.
+			assert!(MultiPhase::queued_solution().is_none());
 			let supports = MultiPhase::elect().unwrap();
 
 			assert_eq!(
@@ -1978,15 +1969,16 @@ mod tests {
 			)
 		});
 
-		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_eq!(
+				MultiPhase::elect().unwrap_err(),
+				ElectionError::Fallback("Emergency phase started.")
+			);
 		})
 	}
 
