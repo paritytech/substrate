@@ -161,12 +161,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
+use frame_support::traits::Get;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ExtendedBalance, PerThing128, Support, Supports, VoteWeight,
+	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
+	VoteWeight,
 };
 
 /// Types that are used by the data provider trait.
@@ -292,5 +294,74 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")
+	}
+}
+
+/// Anything that can compute the result to an NPoS solution
+pub trait NposSolver {
+	/// The account identifier type of this solver.
+	type AccountId: sp_npos_elections::IdentifierT;
+	/// The accuracy of this solver. This will affect the accuracy of the output.
+	type Accuracy: PerThing128;
+	/// The error type of this implementation.
+	type Error;
+
+	/// Solve an npos solution with the given `voters`, `targets`, and select `to_elect` from
+	/// `targets`.
+	fn solve(
+		to_elect: usize,
+		targets: Vec<Self::AccountId>,
+		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
+}
+
+// TODO: zeke: get this to compile, then we need:
+
+// 1. `type Solver: Solver` in `election-provider-multi-phase`
+// 2. `fn mine_solution` and `mind_and_check` need to both become generic over `<S: Solver>` and use
+// that instead of a hardcoded call into `seq_phragmen`
+// 3. in offchain worker call path (`mine_checked_call` and above), use the `T::Solver` for this new
+// generic. 4. in staking-miner, we call directly into `mine_solution` and `mine_and_check`, so we
+// have the freedom to diverge from the runtime
+// 5. proper companion and fixing of top level runtimes.
+// 6. add very minimal config to the staking miner to be capable of running phragmms
+
+/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
+/// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
+pub struct SequentialPhragmen<Balancing>(sp_std::marker::PhantomData<Balancing>);
+
+impl<Balancing: Get<Option<(usize, ExtendedBalance)>>> NposSolver
+	for SequentialPhragmen<Balancing>
+{
+	fn solve(
+		winners: usize,
+		targets: Vec<Self::AccountId>,
+		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+	) {
+		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
+	}
+}
+
+/// A wrapper for [`sp_npos_elections::phragmms`] that implements [`NposSolver`]. See the
+/// documentation of [`sp_npos_elections::phragmms`] for more info.
+pub struct PhragMMS<AccountId, Accuracy, Balancing>(
+	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
+);
+
+impl<
+		AccountId: IdentifierT,
+		Accuracy: PerThing128,
+		Balancing: Get<Option<(usize, ExtendedBalance)>>,
+	> NposSolver for PhragMMS<AccountId, Accuracy, Balancing>
+{
+	type AccountId = AccountId;
+	type Accuracy = Accuracy;
+	type Error = &'static str; // TODO: probably best to move phragmms also into `sp_npos_elections::Error`
+	fn solve(
+		winners: usize,
+		targets: Vec<Self::AccountId>,
+		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
+		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
 	}
 }
