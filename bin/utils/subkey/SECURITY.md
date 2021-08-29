@@ -16,7 +16,7 @@ You want to ensure that:
 - you **do not lose** those secrets
 - **no one but you can access** those secrets
 
-☠️ **DO NOT SHARE** your mnemonic phrase or secret seed with ANYONE under **ANY** circumstances. It would give them access to your funds and to send transactions on your behalf.
+☠️ **DO NOT SHARE** your mnemonic phrase or secret seed with ANYONE under **ANY** circumstances. Doing so would give them access to your funds and to send transactions on your behalf.
 
 ☠️ If someone is asking for your **secret** phrase or **secret** seed, you can be **SURE** they are attempting to steal your funds.
 
