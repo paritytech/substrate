@@ -87,7 +87,7 @@ To create a Polkadot companion PR:
     - Merge the Substrate PR.
     - The bot will push a commit to the Polkadot PR updating its Substrate reference.
     - If the polkadot PR origins from a fork then a project member may need to press `approve run` on the polkadot PR.
-    - The bot will merge the Polkadot PR once all its CI checks are green.
+    - The bot will merge the Polkadot PR once all its CI `{"build_allow_failure":false}` checks are green.
     
     Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts. 
 
