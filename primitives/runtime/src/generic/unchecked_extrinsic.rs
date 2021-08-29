@@ -26,7 +26,7 @@ use crate::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
 };
-use codec::{Decode, Encode, EncodeLike, Error, Input, Compact};
+use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
@@ -450,6 +450,9 @@ mod tests {
 	#[test]
 	fn large_bad_prefix_should_work() {
 		let encoded = Compact::<u32>::from(u32::MAX).encode();
-		assert_eq!(Ex::decode(&mut &encoded[..]), Err(Error::from("Not enough data to fill buffer")));
+		assert_eq!(
+			Ex::decode(&mut &encoded[..]),
+			Err(Error::from("Not enough data to fill buffer"))
+		);
 	}
 }
