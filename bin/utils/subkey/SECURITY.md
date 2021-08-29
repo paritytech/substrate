@@ -20,6 +20,6 @@ You want to ensure that:
 
 ☠️ If someone is asking for your **secret** phrase or **secret** seed, you can be **SURE** they are attempting to steal your funds.
 
-✅ It is however fine to share your **SS58 Address** as this a public information that is needed by anyone who you like to make a transfer to your account they will only need your **Public Address**.
+✅ It is however fine to share your **SS58 Address** as this is meant to be public information and is needed by anyone you want to be able to make transfer to or otherwise interact with your account. They will only ever need your **Public Address**.
 
 ⚠️ While using the same key on multiple networks is possible, it is usually **not** recommended unless you have good motivations for doing so and understand the associated risks and drawbacks.
