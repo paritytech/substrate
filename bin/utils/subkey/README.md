@@ -41,7 +41,7 @@ You can read more about security and risks in [SECURITY.md](./SECURITY.md) and i
 
 ---
 
-The output above shows a **secret phrase** (also called **mnemonic phrase**) and the **secret seed** (also called **Private Key**). Those 2 secrets are the pieces of information you MUST keep safe and secret. All the other information below can be derivated from those secrets.
+The output above shows a **secret phrase** (also called **mnemonic phrase**) and the **secret seed** (also called **Private Key**). Those 2 secrets are the pieces of information you MUST keep safe and secret. All the other information below can be derived from those secrets.
 
 The output above also show the **public key** and the **Account ID**. Those are the independant from the network where you will use the key.
 
