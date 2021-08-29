@@ -643,7 +643,7 @@ decl_module! {
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
-					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
+					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				return Ok((
 					Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)),
@@ -682,7 +682,7 @@ decl_module! {
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
-					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
+					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				return Ok((
 					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)),
@@ -764,14 +764,14 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// - `P` is number of active proposals
 	fn do_approve_proposal(
 		seats: MemberCount,
-		voting: Votes<T::AccountId, T::BlockNumber>,
+		yes_votes: MemberCount,
 		proposal_hash: T::Hash,
 		proposal: <T as Config<I>>::Proposal,
 	) -> (Weight, u32) {
 		Self::deposit_event(RawEvent::Approved(proposal_hash));
 
 		let dispatch_weight = proposal.get_dispatch_info().weight;
-		let origin = RawOrigin::Members(voting.threshold, seats).into();
+		let origin = RawOrigin::Members(yes_votes, seats).into();
 		let result = proposal.dispatch(origin);
 		Self::deposit_event(RawEvent::Executed(
 			proposal_hash,
