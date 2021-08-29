@@ -14,7 +14,7 @@ There are 2 risks related to private keys:
 
 You want to ensure that:
 - you **do not lose** those secrets
-- **no one but you gets access** to those secrets
+- **no one but you can access** those secrets
 
 ☠️ **DO NOT SHARE** your mnemonic phrase or secret seed with ANYONE under **ANY** circumstances. It would give them access to your funds and to send transactions on your behalf.
 
