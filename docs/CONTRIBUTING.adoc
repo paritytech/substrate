@@ -76,7 +76,7 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 To create a Polkadot companion PR:
 
 . Pull latest Polkadot master (or clone it, if you haven't yet).
-. Override your local cargo config to point to your local substrate (pointing to your WIP branch): place `paths = ["path/to/substrate"]` in `~/.cargo/config`.
+. Override substrate deps to point to your local path or branch using https://github.com/bkchr/diener.
 . Make the changes required and build polkadot locally.
 . Submit all this as a PR against the Polkadot Repo.
 . Link to your Polkadot PR in the _description_ of your _Substrate_ PR as "polkadot companion: [URL]"
