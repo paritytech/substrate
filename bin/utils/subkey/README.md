@@ -12,7 +12,7 @@ You can see the full list of commands with `subkey --help`. Most commands have a
 
 `subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check you commands history).
 
-If you save anything output of `subkey` into a file, make sure to apply proper permissions and delete the file as soon as possible.
+If you save any output of `subkey` into a file, make sure to apply proper permissions and/or delete the file as soon as possible.
 
 ## Usage
 
