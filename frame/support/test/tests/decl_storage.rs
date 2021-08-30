@@ -428,16 +428,10 @@ mod tests {
 	#[test]
 	fn storage_info() {
 		use frame_support::{
-			pallet_prelude::*,
+			storage::storage_prefix as prefix,
 			traits::{StorageInfo, StorageInfoTrait},
-			StorageHasher,
 		};
-		let prefix = |pallet_name, storage_name| {
-			let mut res = [0u8; 32];
-			res[0..16].copy_from_slice(&Twox128::hash(pallet_name));
-			res[16..32].copy_from_slice(&Twox128::hash(storage_name));
-			res
-		};
+
 		pretty_assertions::assert_eq!(
 			<Module<TraitImpl>>::storage_info(),
 			vec![
@@ -717,15 +711,8 @@ mod test2 {
 	#[test]
 	fn storage_info() {
 		use frame_support::{
-			pallet_prelude::*,
+			storage::storage_prefix as prefix,
 			traits::{StorageInfo, StorageInfoTrait},
-			StorageHasher,
-		};
-		let prefix = |pallet_name, storage_name| {
-			let mut res = [0u8; 32];
-			res[0..16].copy_from_slice(&Twox128::hash(pallet_name));
-			res[16..32].copy_from_slice(&Twox128::hash(storage_name));
-			res
 		};
 		pretty_assertions::assert_eq!(
 			<Module<TraitImpl>>::storage_info(),
