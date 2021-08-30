@@ -178,6 +178,7 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
 
@@ -413,12 +414,13 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return async move { Err(err.into()) }.boxed()
 		}
 
-		self.backend.trace_block(block, targets, storage_keys)
+		self.backend.trace_block(block, targets, storage_keys, methods)
 	}
 }
 

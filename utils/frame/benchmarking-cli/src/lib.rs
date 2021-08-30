@@ -141,4 +141,11 @@ pub struct BenchmarkCmd {
 	/// When nothing is provided, we list all benchmarks.
 	#[structopt(long)]
 	pub list: bool,
+
+	/// If enabled, the storage info is not displayed in the output next to the analysis.
+	///
+	/// This is independent of the storage info appearing in the *output file*. Use a Handlebar
+	/// template for that purpose.
+	#[structopt(long)]
+	pub no_storage_info: bool,
 }

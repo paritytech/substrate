@@ -38,17 +38,22 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
 use sp_std::prelude::*;
 
 pub use sp_core::sandbox::HostError;
 pub use sp_wasm_interface::{ReturnValue, Value};
 
-mod imp {
-	#[cfg(feature = "std")]
-	include!("../with_std.rs");
+/// The target used for logging.
+const TARGET: &str = "runtime::sandbox";
 
-	#[cfg(not(feature = "std"))]
-	include!("../without_std.rs");
+mod imp {
+	#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
+	include!("../host_executor.rs");
+
+	#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
+	include!("../embedded_executor.rs");
 }
 
 /// Error that can occur while using this crate.
