@@ -283,6 +283,13 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
+	fn create_snapshot_internal() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal()
+		}
+	}
 	fn on_initialize_open_signed() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
@@ -290,18 +297,18 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_signed()
 		}
 	}
-	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
+	fn on_initialize_open_unsigned() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_with_snapshot()
+			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned()
 		}
 	}
-	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
+	fn elect_queued(a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
+			<() as multi_phase::weights::WeightInfo>::elect_queued(a, d)
 		}
 	}
 	fn finalize_signed_phase_accept_solution() -> Weight {
@@ -323,13 +330,6 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit(c)
-		}
-	}
-	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::elect_queued(v, t, a, d)
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -397,35 +397,36 @@ pub struct ExtBuilder {}
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
 			return Err("Targets too big")
 		}
 
-		Ok((targets, 0))
+		Ok(targets)
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		let voters = Voters::get();
 		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
 			return Err("Voters too big")
 		}
 
-		Ok((voters, 0))
+		Ok(voters)
 	}
-	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
-		Ok((DesiredTargets::get(), 0))
+
+	fn desired_targets() -> data_provider::Result<u32> {
+		Ok(DesiredTargets::get())
 	}
 
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 		targets: Vec<AccountId>,
@@ -435,20 +436,20 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		Voters::set(voters);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
 		Targets::set(vec![]);
 		Voters::set(vec![]);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
 		Voters::set(current);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_target(target: AccountId) {
 		let mut current = Targets::get();
 		current.push(target);
