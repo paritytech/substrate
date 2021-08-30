@@ -2056,6 +2056,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
+		// TODO with correct executive (not testnet), this would require removing form pending_block
+		// first the migration progress digest (so digest checks from executive point of view).
+		//
+		// TODO actually the parent block check from executive would not pass anyway: this would then
+		// fail anyway unless runing the migration BEFORE the block to change backend state writen
+		// by executive.
 		if block.is_pre_genesis() {
 			operation.old_state = self.empty_state()?;
 		} else {
