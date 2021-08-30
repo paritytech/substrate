@@ -47,6 +47,8 @@ The output above also show the **public key** and the **Account ID**. Those are 
 
 The **SS58 address** (or **Public Address**) of a new account is a reprensentation of the public keys of an account for a given network (for instance Kusama or Polkadot).
 
+You can read more about the SS58 format in the [substrate wiki](https://github.com/paritytech/substrate/wiki/External-Address-Format-(SS58)) and see the list of reserved prefixes in the [Polkadot wiki](https://wiki.polkadot.network/docs/build-ss58-registry).
+
 For instance, considering the previous seed `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` the SS58 addresses are:
 - Polkadot: `16m4J167Mptt8UXL8aGSAi7U2FnPpPxZHPrCgMG9KJzVoFqM`
 - Kusama: `JLNozAv8QeLSbLFwe2UvWeKKE4yvmDbfGxTuiYkF2BUMx4M`
