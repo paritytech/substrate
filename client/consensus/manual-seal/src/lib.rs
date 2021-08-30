@@ -308,7 +308,7 @@ mod tests {
 			consensus_data_provider: None,
 		});
 		std::thread::spawn(|| {
-			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			let rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
 			rt.block_on(future);
 		});
@@ -365,7 +365,7 @@ mod tests {
 			create_inherent_data_providers: |_, _| async { Ok(()) },
 		});
 		std::thread::spawn(|| {
-			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			let rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
 			rt.block_on(future);
 		});
@@ -443,7 +443,7 @@ mod tests {
 			create_inherent_data_providers: |_, _| async { Ok(()) },
 		});
 		std::thread::spawn(|| {
-			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			let rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
 			rt.block_on(future);
 		});
