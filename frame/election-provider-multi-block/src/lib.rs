@@ -251,7 +251,6 @@ impl BenchmarkingConfig for () {
 }
 
 /// A fallback implementation that transitions the pallet to the emergency phase.
-// TODO: backport this to the original pallet.
 pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmergencyPhase<T> {
 	type DataProvider = T::DataProvider;
