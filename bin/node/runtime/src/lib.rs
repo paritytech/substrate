@@ -589,7 +589,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type OnChainAccuracy = Perbill;
 	type Solution = NposSolution16;
-	type Fallback = pallet_election_provider_multi_phase::InitiateEmergencyPhase<Self>;
+	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = BenchmarkConfig;

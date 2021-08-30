@@ -114,7 +114,7 @@
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
 //! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
 //! determine what needs to be done. The on-chain election is slow, and contains no balancing or
-//! reduction post-processing. [`InitiateEmergencyPhase`] enables the [`Phase::Emergency`] which is
+//! reduction post-processing. [`NoFallback`] does nothing enables the [`Phase::Emergency`] which is
 //! a more *fail-safe* approach.
 //!
 //! ### Emergency Phase
@@ -311,17 +311,15 @@ impl BenchmarkingConfig for () {
 }
 
 /// A fallback implementation that transitions the pallet to the emergency phase.
-pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
+pub struct NoFallback<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmergencyPhase<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for NoFallback<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		log!(warn, "Entering emergency phase.");
-		CurrentPhase::<T>::put(Phase::Emergency);
-		// We won't succeed, this is intentional.
-		Err("Emergency phase started.")
+		// Do nothing, this will enable the emergency phase.
+		Err("NoFallback.")
 	}
 }
 
@@ -1977,8 +1975,10 @@ mod tests {
 			assert!(MultiPhase::queued_solution().is_none());
 			assert_eq!(
 				MultiPhase::elect().unwrap_err(),
-				ElectionError::Fallback("Emergency phase started.")
+				ElectionError::Fallback("NoFallback.")
 			);
+			// phase is now emergency.
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		})
 	}
 

@@ -291,7 +291,7 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 			onchain::OnChainSequentialPhragmen::<OnChainConfig>::elect()
 				.map_err(|_| "OnChainSequentialPhragmen failed")
 		} else {
-			super::InitiateEmergencyPhase::<Runtime>::elect()
+			super::NoFallback::<Runtime>::elect()
 		}
 	}
 }
