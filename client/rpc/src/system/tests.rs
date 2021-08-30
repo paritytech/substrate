@@ -16,11 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::*;
-
+use super::{helpers::SyncState, *};
 use assert_matches::assert_matches;
 use futures::{executor, prelude::*};
+use jsonrpsee::types::v2::{error::JsonRpcError, response::JsonRpcResponse};
 use sc_network::{self, config::Role, PeerId};
+use sc_rpc_api::system::helpers::PeerInfo;
+use serde_json::value::to_raw_value;
+use sp_core::H256;
 use sp_utils::mpsc::tracing_unbounded;
 use std::{
 	env,
@@ -43,7 +46,7 @@ impl Default for Status {
 	}
 }
 
-fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
+fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
 	let (tx, rx) = tracing_unbounded("rpc_system_tests");
@@ -130,105 +133,114 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 			impl_name: "testclient".into(),
 			impl_version: "0.2.0".into(),
 			chain_name: "testchain".into(),
-			properties: Default::default(),
+			properties: serde_json::from_str(r#"{"prop": "something"}"#).unwrap(),
 			chain_type: Default::default(),
 		},
 		tx,
 		sc_rpc_api::DenyUnsafe::No,
 	)
+	.into_rpc_module()
+	.expect("TODO: couldn't create RPC module")
 }
 
-fn wait_receiver<T>(rx: Receiver<T>) -> T {
-	futures::executor::block_on(rx).unwrap()
+#[tokio::test]
+async fn system_name_works() {
+	assert_eq!(
+		api(None).call("system_name", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":"testclient","id":0}"#.to_owned())
+	);
 }
 
-#[test]
-fn system_name_works() {
-	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned());
+#[tokio::test]
+async fn system_version_works() {
+	assert_eq!(
+		api(None).call("system_version", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":"0.2.0","id":0}"#.to_owned()),
+	);
 }
 
-#[test]
-fn system_version_works() {
-	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned());
+#[tokio::test]
+async fn system_chain_works() {
+	assert_eq!(
+		api(None).call("system_chain", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":"testchain","id":0}"#.to_owned()),
+	);
 }
 
-#[test]
-fn system_chain_works() {
-	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned());
+#[tokio::test]
+async fn system_properties_works() {
+	assert_eq!(
+		api(None).call("system_properties", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":{"prop":"something"},"id":0}"#.to_owned()),
+	);
 }
 
-#[test]
-fn system_properties_works() {
-	assert_eq!(api(None).system_properties().unwrap(), serde_json::map::Map::new());
+#[tokio::test]
+async fn system_type_works() {
+	assert_eq!(
+		api(None).call("system_chainType", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":"Live","id":0}"#.to_owned()),
+	);
 }
 
-#[test]
-fn system_type_works() {
-	assert_eq!(api(None).system_type().unwrap(), Default::default());
-}
-
-#[test]
-fn system_health() {
-	assert_matches!(
-		wait_receiver(api(None).system_health()),
-		Health { peers: 0, is_syncing: false, should_have_peers: true }
+#[tokio::test]
+async fn system_health() {
+	assert_eq!(
+		api(None).call("system_health", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":{"peers":0,"isSyncing":false,"shouldHavePeers":true},"id":0}"#.to_owned()),
 	);
 
-	assert_matches!(
-		wait_receiver(
-			api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: true, is_dev: true })
-				.system_health()
+	assert_eq!(
+		api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: true, is_dev: true }).call("system_health", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":{"peers":5,"isSyncing":true,"shouldHavePeers":false},"id":0}"#.to_owned()),
+	);
+
+	assert_eq!(
+		api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: false, is_dev: false }).call("system_health", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":{"peers":5,"isSyncing":false,"shouldHavePeers":true},"id":0}"#.to_owned()),
+	);
+
+	assert_eq!(
+		api(Status { peer_id: PeerId::random(), peers: 0, is_syncing: false, is_dev: true }).call("system_health", None).await,
+		Some(r#"{"jsonrpc":"2.0","result":{"peers":0,"isSyncing":false,"shouldHavePeers":false},"id":0}"#.to_owned()),
+	);
+}
+
+#[tokio::test]
+async fn system_local_peer_id_works() {
+	assert_eq!(
+		api(None).call("system_localPeerId", None).await,
+		Some(
+			r#"{"jsonrpc":"2.0","result":"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV","id":0}"#
+				.to_owned()
 		),
-		Health { peers: 5, is_syncing: true, should_have_peers: false }
 	);
+}
 
+#[tokio::test]
+async fn system_local_listen_addresses_works() {
 	assert_eq!(
-		wait_receiver(
-			api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: false, is_dev: false })
-				.system_health()
+		api(None).call("system_localListenAddresses", None).await,
+		Some(
+			r#"{"jsonrpc":"2.0","result":["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV","/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"],"id":0}"#
+				.to_owned()
 		),
-		Health { peers: 5, is_syncing: false, should_have_peers: true }
-	);
-
-	assert_eq!(
-		wait_receiver(
-			api(Status { peer_id: PeerId::random(), peers: 0, is_syncing: false, is_dev: true })
-				.system_health()
-		),
-		Health { peers: 0, is_syncing: false, should_have_peers: false }
 	);
 }
 
-#[test]
-fn system_local_peer_id_works() {
-	assert_eq!(
-		wait_receiver(api(None).system_local_peer_id()),
-		"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_owned(),
-	);
-}
-
-#[test]
-fn system_local_listen_addresses_works() {
-	assert_eq!(
-		wait_receiver(api(None).system_local_listen_addresses()),
-		vec![
-			"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-				.to_string(),
-			"/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-				.to_string(),
-		]
-	);
-}
-
-#[test]
-fn system_peers() {
+#[tokio::test]
+async fn system_peers() {
+	use jsonrpsee::types::v2::response::JsonRpcResponse;
 	let peer_id = PeerId::random();
-	let req = api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
-		.system_peers();
-	let res = executor::block_on(req).unwrap();
-
+	let call_result =
+		api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
+			.call("system_peers", None)
+			.await
+			.unwrap();
+	let peer_info: JsonRpcResponse<Vec<PeerInfo<H256, _>>> =
+		serde_json::from_str(&call_result).unwrap();
 	assert_eq!(
-		res,
+		peer_info.result,
 		vec![PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
@@ -238,14 +250,15 @@ fn system_peers() {
 	);
 }
 
-#[test]
-fn system_network_state() {
-	let req = api(None).system_network_state();
-	let res = executor::block_on(req).unwrap();
-
+#[tokio::test]
+async fn system_network_state() {
+	use sc_network::network_state::NetworkState;
+	let network_state = api(None).call("system_unstable_networkState", None).await.unwrap();
+	let network_state: JsonRpcResponse<NetworkState> =
+		serde_json::from_str(&network_state).unwrap();
 	assert_eq!(
-		serde_json::from_value::<sc_network::network_state::NetworkState>(res).unwrap(),
-		sc_network::network_state::NetworkState {
+		network_state.result,
+		NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
 			external_addresses: Default::default(),
@@ -256,53 +269,71 @@ fn system_network_state() {
 	);
 }
 
-#[test]
-fn system_node_roles() {
-	assert_eq!(wait_receiver(api(None).system_node_roles()), vec![NodeRole::Authority]);
-}
+// TODO: (dp) no tests for `system_removeReservedPeer`, `system_reservedPeers`?
 
-#[test]
-fn system_sync_state() {
+#[tokio::test]
+async fn system_node_roles() {
+	let node_roles = api(None).call("system_nodeRoles", None).await.unwrap();
+	let node_roles: JsonRpcResponse<Vec<NodeRole>> = serde_json::from_str(&node_roles).unwrap();
+	assert_eq!(node_roles.result, vec![NodeRole::Authority]);
+}
+#[tokio::test]
+async fn system_sync_state() {
+	let sync_state = api(None).call("system_syncState", None).await.unwrap();
+	let sync_state: JsonRpcResponse<SyncState<i32>> = serde_json::from_str(&sync_state).unwrap();
 	assert_eq!(
-		wait_receiver(api(None).system_sync_state()),
+		sync_state.result,
 		SyncState { starting_block: 1, current_block: 2, highest_block: Some(3) }
 	);
 }
 
-#[test]
-fn system_network_add_reserved() {
-	let good_peer_id =
-		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-	let bad_peer_id = "/ip4/198.51.100.19/tcp/30333";
+#[tokio::test]
+async fn system_network_add_reserved() {
+	let good_peer_id = to_raw_value(
+		&"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+	)
+	.unwrap();
+	let good = api(None).call("system_addReservedPeer", Some(good_peer_id)).await.unwrap();
+	let good: JsonRpcResponse<()> = serde_json::from_str(&good).unwrap();
+	assert_eq!(good.result, ());
 
-	let good_fut = api(None).system_add_reserved_peer(good_peer_id.into());
-	let bad_fut = api(None).system_add_reserved_peer(bad_peer_id.into());
-	assert_eq!(executor::block_on(good_fut), Ok(()));
-	assert!(executor::block_on(bad_fut).is_err());
+	let bad_peer_id = to_raw_value(&"/ip4/198.51.100.19/tcp/30333").unwrap();
+	let bad = api(None).call("system_addReservedPeer", Some(bad_peer_id)).await.unwrap();
+	let bad: JsonRpcError = serde_json::from_str(&bad).unwrap();
+	assert_eq!(bad.error.message, "Peer id is missing from the address");
 }
+#[tokio::test]
+async fn system_network_remove_reserved() {
+	let good_peer_id = to_raw_value(&"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV").unwrap();
+	let good = api(None).call("system_removeReservedPeer", Some(good_peer_id)).await.unwrap();
+	let good: JsonRpcResponse<()> = serde_json::from_str(&good).unwrap();
+	assert_eq!(good.result, ());
 
-#[test]
-fn system_network_remove_reserved() {
-	let good_peer_id = "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-	let bad_peer_id =
-		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-
-	let good_fut = api(None).system_remove_reserved_peer(good_peer_id.into());
-	let bad_fut = api(None).system_remove_reserved_peer(bad_peer_id.into());
-	assert_eq!(executor::block_on(good_fut), Ok(()));
-	assert!(executor::block_on(bad_fut).is_err());
-}
-
-#[test]
-fn system_network_reserved_peers() {
+	let bad_peer_id = to_raw_value(
+		&"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+	)
+	.unwrap();
+	let bad = api(None).call("system_removeReservedPeer", Some(bad_peer_id)).await.unwrap();
+	let bad: JsonRpcError = serde_json::from_str(&bad).unwrap();
 	assert_eq!(
-		wait_receiver(api(None).system_reserved_peers()),
-		vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()]
+		bad.error.message,
+		"base-58 decode error: provided string contained invalid character '/' at byte 0"
+	);
+}
+#[tokio::test]
+async fn system_network_reserved_peers() {
+	let reserved_peers = api(None).call("system_reservedPeers", None).await.unwrap();
+	let reserved_peers: JsonRpcResponse<Vec<String>> =
+		serde_json::from_str(&reserved_peers).unwrap();
+	assert_eq!(
+		reserved_peers.result,
+		vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()],
 	);
 }
 
-#[test]
-fn test_add_reset_log_filter() {
+// TODO: (dp) This hangs. Likely have to make this a normal test and execute the RPC calls manually on an executor.
+#[tokio::test]
+async fn test_add_reset_log_filter() {
 	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
 	const EXPECTED_AFTER_ADD: &'static str = "EXPECTED_AFTER_ADD";
 	const EXPECTED_WITH_TRACE: &'static str = "EXPECTED_WITH_TRACE";
@@ -313,15 +344,22 @@ fn test_add_reset_log_filter() {
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {
+				let filter = to_raw_value(&"test_after_add").unwrap();
 				api(None)
-					.system_add_log_filter("test_after_add".into())
+					.call("system_addLogFilter", Some(filter))
+					.await
 					.expect("`system_add_log_filter` failed");
 			} else if line.contains("add_trace") {
+				let filter = to_raw_value(&"test_before_add=trace").unwrap();
 				api(None)
-					.system_add_log_filter("test_before_add=trace".into())
+					.call("system_addLogFilter", Some(filter))
+					.await
 					.expect("`system_add_log_filter` failed");
 			} else if line.contains("reset") {
-				api(None).system_reset_log_filter().expect("`system_reset_log_filter` failed");
+				api(None)
+					.call("system_resetLogFilter", None)
+					.await
+					.expect("`system_reset_log_filter` failed");
 			} else if line.contains("exit") {
 				return
 			}
@@ -377,3 +415,80 @@ fn test_add_reset_log_filter() {
 	// Check for EOF
 	assert_eq!(child_out.read_line(&mut String::new()).unwrap(), 0);
 }
+
+// #[test]
+// fn test_add_reset_log_filter() {
+// 	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
+// 	const EXPECTED_AFTER_ADD: &'static str = "EXPECTED_AFTER_ADD";
+// 	const EXPECTED_WITH_TRACE: &'static str = "EXPECTED_WITH_TRACE";
+
+// 	// Enter log generation / filter reload
+// 	if std::env::var("TEST_LOG_FILTER").is_ok() {
+// 		sc_tracing::logging::LoggerBuilder::new("test_before_add=debug").init().unwrap();
+// 		for line in std::io::stdin().lock().lines() {
+// 			let line = line.expect("Failed to read bytes");
+// 			if line.contains("add_reload") {
+// 				api(None)
+// 					.system_add_log_filter("test_after_add".into())
+// 					.expect("`system_add_log_filter` failed");
+// 			} else if line.contains("add_trace") {
+// 				api(None)
+// 					.system_add_log_filter("test_before_add=trace".into())
+// 					.expect("`system_add_log_filter` failed");
+// 			} else if line.contains("reset") {
+// 				api(None).system_reset_log_filter().expect("`system_reset_log_filter` failed");
+// 			} else if line.contains("exit") {
+// 				return
+// 			}
+// 			log::trace!(target: "test_before_add", "{}", EXPECTED_WITH_TRACE);
+// 			log::debug!(target: "test_before_add", "{}", EXPECTED_BEFORE_ADD);
+// 			log::debug!(target: "test_after_add", "{}", EXPECTED_AFTER_ADD);
+// 		}
+// 	}
+
+// 	// Call this test again to enter the log generation / filter reload block
+// 	let test_executable = env::current_exe().expect("Unable to get current executable!");
+// 	let mut child_process = Command::new(test_executable)
+// 		.env("TEST_LOG_FILTER", "1")
+// 		.args(&["--nocapture", "test_add_reset_log_filter"])
+// 		.stdin(Stdio::piped())
+// 		.stderr(Stdio::piped())
+// 		.spawn()
+// 		.unwrap();
+
+// 	let child_stderr = child_process.stderr.take().expect("Could not get child stderr");
+// 	let mut child_out = BufReader::new(child_stderr);
+// 	let mut child_in = child_process.stdin.take().expect("Could not get child stdin");
+
+// 	let mut read_line = || {
+// 		let mut line = String::new();
+// 		child_out.read_line(&mut line).expect("Reading a line");
+// 		line
+// 	};
+
+// 	// Initiate logs loop in child process
+// 	child_in.write(b"\n").unwrap();
+// 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
+
+// 	// Initiate add directive & reload in child process
+// 	child_in.write(b"add_reload\n").unwrap();
+// 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
+// 	assert!(read_line().contains(EXPECTED_AFTER_ADD));
+
+// 	// Check that increasing the max log level works
+// 	child_in.write(b"add_trace\n").unwrap();
+// 	assert!(read_line().contains(EXPECTED_WITH_TRACE));
+// 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
+// 	assert!(read_line().contains(EXPECTED_AFTER_ADD));
+
+// 	// Initiate logs filter reset in child process
+// 	child_in.write(b"reset\n").unwrap();
+// 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
+
+// 	// Return from child process
+// 	child_in.write(b"exit\n").unwrap();
+// 	assert!(child_process.wait().expect("Error waiting for child process").success());
+
+// 	// Check for EOF
+// 	assert_eq!(child_out.read_line(&mut String::new()).unwrap(), 0);
+// }

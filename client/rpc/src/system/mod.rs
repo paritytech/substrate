@@ -174,7 +174,8 @@ impl<B: traits::Block> System<B> {
 		// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
 		// is an example of a valid, passing multiaddr with PeerId attached.
 		rpc_module.register_async_method("system_addReservedPeer", |param, system| {
-			let peer = match param.one() {
+			// TODO: (dp) Why doesn't param.one() work in tests?
+			let peer = match param.parse() {
 				Ok(peer) => peer,
 				Err(e) => return Box::pin(futures::future::err(e)),
 			};
@@ -196,7 +197,8 @@ impl<B: traits::Block> System<B> {
 		rpc_module.register_async_method::<(), _>(
 			"system_removeReservedPeer",
 			|param, system| {
-				let peer = match param.one() {
+				// TODO: (dp) Why doesn't param.one() work in tests?
+				let peer = match param.parse() {
 					Ok(peer) => peer,
 					Err(e) => return Box::pin(futures::future::err(e)),
 				};
