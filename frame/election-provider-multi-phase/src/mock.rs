@@ -17,7 +17,7 @@
 
 use super::*;
 use crate as multi_phase;
-use frame_election_provider_support::{data_provider, ElectionDataProvider};
+use frame_election_provider_support::{data_provider, ElectionDataProvider, SequentialPhragmen};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
@@ -31,7 +31,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	ElectionResult, EvaluateSupport, NposSolution,
+	ElectionResult, EvaluateSupport, ExtendedBalance, NposSolution,
 };
 use sp_runtime::{
 	testing::Header,
@@ -352,6 +352,25 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 	}
 }
 
+/// A source of random balance for PhragMMS, which is mean to be run by the OCW election miner.
+pub struct OffchainRandomBalance;
+impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalance {
+	fn get() -> Option<(usize, ExtendedBalance)> {
+		// match MinerMaxIterations::get() { // TODO this parameter type can be taken out of Config
+		// 	0 => 0,
+		// 	max @ _ => {
+		// 		let seed = sp_io::offchain::random_seed();
+		// 		let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+		// 			.expect("input is padded with zeroes; qed") %
+		// 			max.saturating_add(1);
+		// 		random as usize
+		// 	},
+		// }
+
+		Some((0, 0))
+	}
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -360,7 +379,7 @@ impl crate::Config for Runtime {
 	type UnsignedPhase = UnsignedPhase;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxIterations = MinerMaxIterations;
+	type MinerMaxIterations = MinerMaxIterations; // TODO this parameter type can be taken out of Config
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
@@ -379,6 +398,7 @@ impl crate::Config for Runtime {
 	type Fallback = Fallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, OffchainRandomBalance>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

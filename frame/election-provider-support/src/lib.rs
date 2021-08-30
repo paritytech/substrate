@@ -304,7 +304,7 @@ pub trait NposSolver {
 	/// The accuracy of this solver. This will affect the accuracy of the output.
 	type Accuracy: PerThing128;
 	/// The error type of this implementation.
-	type Error;
+	type Error: sp_std::fmt::Debug + sp_std::cmp::PartialEq;
 
 	/// Solve an npos solution with the given `voters`, `targets`, and select `to_elect` from
 	/// `targets`.
@@ -328,23 +328,29 @@ pub trait NposSolver {
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
 /// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
-pub struct SequentialPhragmen<Balancing>(sp_std::marker::PhantomData<Balancing>);
+pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>);
 
-impl<Balancing: Get<Option<(usize, ExtendedBalance)>>> NposSolver
-	for SequentialPhragmen<Balancing>
+impl<
+		AccountId: IdentifierT,
+		Accuracy: PerThing128,
+		Balancing: Get<Option<(usize, ExtendedBalance)>>,
+	> NposSolver for SequentialPhragmen<AccountId, Accuracy, Balancing>
 {
+	type AccountId = AccountId;
+	type Accuracy = Accuracy;
+	type Error = sp_npos_elections::Error;
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
 		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
-	) {
+	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
 }
 
 /// A wrapper for [`sp_npos_elections::phragmms`] that implements [`NposSolver`]. See the
 /// documentation of [`sp_npos_elections::phragmms`] for more info.
-pub struct PhragMMS<AccountId, Accuracy, Balancing>(
+pub struct PhragMMS<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );
 

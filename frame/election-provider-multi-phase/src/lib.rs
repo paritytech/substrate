@@ -485,13 +485,13 @@ pub struct SolutionOrSnapshotSize {
 /// Internal errors of the pallet.
 ///
 /// Note that this is different from [`pallet::Error`].
-#[derive(Debug, Eq, PartialEq)]
+#[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
 #[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
-pub enum ElectionError {
+pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
 	/// An error in the miner (offchain) sub-system.
-	Miner(unsigned::MinerError),
+	Miner(unsigned::MinerError<T>),
 	/// An error in the on-chain fallback.
 	OnChainFallback(onchain::Error),
 	/// An error happened in the data provider.
@@ -500,20 +500,20 @@ pub enum ElectionError {
 	NoFallbackConfigured,
 }
 
-impl From<onchain::Error> for ElectionError {
+impl<T: Config> From<onchain::Error> for ElectionError<T> {
 	fn from(e: onchain::Error) -> Self {
 		ElectionError::OnChainFallback(e)
 	}
 }
 
-impl From<FeasibilityError> for ElectionError {
+impl<T: Config> From<FeasibilityError> for ElectionError<T> {
 	fn from(e: FeasibilityError) -> Self {
 		ElectionError::Feasibility(e)
 	}
 }
 
-impl From<unsigned::MinerError> for ElectionError {
-	fn from(e: unsigned::MinerError) -> Self {
+impl<T: Config> From<unsigned::MinerError<T>> for ElectionError<T> {
+	fn from(e: unsigned::MinerError<T>) -> Self {
 		ElectionError::Miner(e)
 	}
 }
@@ -555,6 +555,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_election_provider_support::NposSolver;
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
@@ -667,6 +668,9 @@ pub mod pallet {
 
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
+
+		/// Election solution algorithm implementation.
+		type Solver: NposSolver<AccountId = Self::AccountId>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
@@ -1301,7 +1305,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError> {
+	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
@@ -1331,7 +1335,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This is a *self-weighing* function, it will register its own extra weight as
 	/// [`DispatchClass::Mandatory`] with the system pallet.
-	pub fn create_snapshot() -> Result<(), ElectionError> {
+	pub fn create_snapshot() -> Result<(), ElectionError<T>> {
 		// this is self-weighing itself..
 		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
 
@@ -1474,7 +1478,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError> {
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError<T>> {
 		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
@@ -1482,7 +1486,7 @@ impl<T: Config> Pallet<T> {
 		.map_err(Into::into)
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError> {
+	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1533,7 +1537,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
-	type Error = ElectionError;
+	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
@@ -2010,13 +2014,20 @@ mod tests {
 		})
 	}
 
-	#[test]
+ 	#[test]
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
+			use sp_npos_elections::ExtendedBalance;
+			use frame_election_provider_support::SequentialPhragmen;
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
-			let (solution, _) = MultiPhase::mine_solution(2).unwrap();
+			frame_support::parameter_types! {
+				static TwoBalancing: Option<(usize, ExtendedBalance)> = Some((2, 0));
+			}
+
+			let (solution, _) =
+				MultiPhase::mine_solution::<SequentialPhragmen<AccountId, Perbill, TwoBalancing>>().unwrap();
 			// Default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
 
