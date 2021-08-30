@@ -28,20 +28,20 @@ use sp_runtime::{
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Tally<Balance> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
-	pub(crate) ayes: Balance,
+	pub ayes: Balance,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
-	pub(crate) nays: Balance,
+	pub nays: Balance,
 	/// The amount of funds currently expressing its opinion. Pre-conviction.
-	pub(crate) turnout: Balance,
+	pub turnout: Balance,
 }
 
 /// Amount of votes and capital placed in delegation for an account.
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Delegations<Balance> {
 	/// The number of votes (this is post-conviction).
-	pub(crate) votes: Balance,
+	pub votes: Balance,
 	/// The amount of raw capital, used for the turnout.
-	pub(crate) capital: Balance,
+	pub capital: Balance,
 }
 
 impl<Balance: Saturating> Saturating for Delegations<Balance> {
@@ -162,15 +162,15 @@ impl<
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct ReferendumStatus<BlockNumber, Hash, Balance> {
 	/// When voting on this referendum will end.
-	pub(crate) end: BlockNumber,
+	pub end: BlockNumber,
 	/// The hash of the proposal being voted on.
-	pub(crate) proposal_hash: Hash,
+	pub proposal_hash: Hash,
 	/// The thresholding mechanism to determine whether it passed.
-	pub(crate) threshold: VoteThreshold,
+	pub threshold: VoteThreshold,
 	/// The delay (in blocks) to wait after a successful referendum before deploying.
-	pub(crate) delay: BlockNumber,
+	pub delay: BlockNumber,
 	/// The current tally of votes in this referendum.
-	pub(crate) tally: Tally<Balance>,
+	pub tally: Tally<Balance>,
 }
 
 /// Info regarding a referendum, present or past.

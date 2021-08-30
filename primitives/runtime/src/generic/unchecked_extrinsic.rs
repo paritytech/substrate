@@ -26,7 +26,7 @@ use crate::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
 };
-use codec::{Decode, Encode, EncodeLike, Error, Input};
+use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
@@ -203,7 +203,7 @@ where
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of vector length (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
+		let _length_do_not_remove_me_see_above: Compact<u32> = Decode::decode(input)?;
 
 		let version = input.read_byte()?;
 
@@ -445,5 +445,14 @@ mod tests {
 		let opaque: OpaqueExtrinsic = ux.into();
 		let opaque_encoded = opaque.encode();
 		assert_eq!(opaque_encoded, encoded);
+	}
+
+	#[test]
+	fn large_bad_prefix_should_work() {
+		let encoded = Compact::<u32>::from(u32::MAX).encode();
+		assert_eq!(
+			Ex::decode(&mut &encoded[..]),
+			Err(Error::from("Not enough data to fill buffer"))
+		);
 	}
 }
