@@ -440,9 +440,7 @@ mod tests {
 		assert_eq!(rx.await.unwrap().unwrap(), ());
 	}
 
-	//temporarly ignore test that randomly fails
 	#[tokio::test]
-	#[ignore]
 	async fn manual_seal_fork_blocks() {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();
