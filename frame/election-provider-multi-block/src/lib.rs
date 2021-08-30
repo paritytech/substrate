@@ -885,6 +885,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				// if either of `Verifier` or `Fallback` was okay, and if this is the last page,
 				// then clear everything.
 				if remaining.is_zero() {
+					log!(trace, "processing last page of election");
 					Self::rotate_round()
 				}
 
@@ -895,14 +896,8 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::{
-		mock::{
-			multi_block_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiBlock,
-			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
-		},
-		Phase,
-	};
+	use super::{Event, *};
+	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_npos_elections::Support;
@@ -1068,9 +1063,9 @@ mod tests {
 	fn phase_rotation_multi_page_3() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			#[rustfmt::skip]
-			// 0 ------- 12 13 14 15 ------- 25 ------- 30 -------------- 42 43 44 45 ------- 55 ------- 60
-			//            |     |             |          |                |        |          |           |
-			//     Snapshot    Signed    Unsigned   Elect         Snapshot       Signed    Unsigned      Elect
+	 		// 0 ------- 12 13 14 15 ------- 25 ------- 30 -------------- 42 43 44 45 ------- 55 ------- 60
+			//            |     |             |          |                |        |          |       |
+	 		//     Snapshot    Signed    Unsigned   Elect         Snapshot       Signed    Unsigned  Elect
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1157,13 +1152,203 @@ mod tests {
 
 	#[test]
 	fn multi_page_elect_works() {
-		todo!()
+		ExtBuilder::default().pages(3).build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+
+			// load a solution into the verifier
+
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let score = paged.score.clone();
+
+			// put each submitted page
+			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+				assert_ok!(
+					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+						page_index as PageIndex,
+						solution_page,
+					)
+				);
+			}
+
+			// "seal" the submission
+			assert_ok!(
+				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(score)
+			);
+
+			// there is no queued solution prior to the last page of the solution getting verified
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+
+			// roll to the block it is finalized
+			roll_to(28);
+
+			// there is now a queued solution
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+
+			// pre-elect state
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(Round::<Runtime>::get(), 1);
+			assert!(Snapshot::<Runtime>::metadata().is_some());
+			assert!(Snapshot::<Runtime>::desired_targets().is_some());
+			assert!(Snapshot::<Runtime>::targets().is_some());
+
+			// call elect for each page
+			let msp = <Runtime as Config>::Pages::get();
+			let solutions = (0..msp)
+				.rev() // 2, 1, 0
+				.map(|page| {
+					crate::Pallet::<Runtime>::elect(page as PageIndex).unwrap();
+				})
+				.collect::<Vec<_>>();
+			assert_eq!(solutions.len(), msp as usize);
+
+			// after the last elect:
+			// verifier is cleared,
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			// the phase is off,
+			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+			// the round is incremented,
+			assert_eq!(Round::<Runtime>::get(), 2);
+			// and the snapshot is cleared.
+			assert!(Snapshot::<Runtime>::metadata().is_none());
+			assert!(Snapshot::<Runtime>::desired_targets().is_none());
+			assert!(Snapshot::<Runtime>::targets().is_none());
+		});
 	}
 
 	#[test]
 	fn multi_page_elect_fast_track() {
-		todo!("we expect 3 pages, but we suddenly receive a call to elect(0)");
+		ExtBuilder::default().pages(3).build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+
+			// load a solution into the verifier
+
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let score = paged.score.clone();
+
+			// put each submitted page
+			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+				assert_ok!(
+					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+						page_index as PageIndex,
+						solution_page,
+					)
+				);
+			}
+
+			// "seal" the submission
+			assert_ok!(
+				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(score)
+			);
+
+			// there is no queued solution prior to the last page of the solution getting verified
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+
+			// roll to the block it is finalized
+			roll_to(28);
+
+			// there is now a queued solution
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+
+			// pre-elect state:
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(Round::<Runtime>::get(), 1);
+			assert!(Snapshot::<Runtime>::metadata().is_some());
+			assert!(Snapshot::<Runtime>::desired_targets().is_some());
+			assert!(Snapshot::<Runtime>::targets().is_some());
+
+			// there are 3 pages (indexes 2..=0), but we short circuit by just calling 0.
+			let _solution = crate::Pallet::<Runtime>::elect(0).unwrap();
+
+			// after elect(0) is called:
+			// verifier is cleared,
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			// the phase is off,
+			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+			// the round is incremented,
+			assert_eq!(Round::<Runtime>::get(), 2);
+			// and the snapshot is cleared.
+			assert!(Snapshot::<Runtime>::metadata().is_none());
+			assert!(Snapshot::<Runtime>::desired_targets().is_none());
+			assert!(Snapshot::<Runtime>::targets().is_none());
+		});
 	}
+
+	fn elect_does_not_finish_without_call_of_page_0() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+
+			// load a solution into the verifier
+
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let score = paged.score.clone();
+
+			// put each submitted page
+			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+				assert_ok!(
+					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
+						page_index as PageIndex,
+						solution_page,
+					)
+				);
+			}
+
+			// "seal" the submission
+			assert_ok!(
+				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(score)
+			);
+
+			// there is no queued solution prior to the last page of the solution getting verified
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+
+			// roll to the block it is finalized
+			roll_to(28);
+
+			// there is now a queued solution
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+
+			// pre-elect state:
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(Round::<Runtime>::get(), 1);
+			assert!(Snapshot::<Runtime>::metadata().is_some());
+			assert!(Snapshot::<Runtime>::desired_targets().is_some());
+			assert!(Snapshot::<Runtime>::targets().is_some());
+
+			// call elect for page 2 and 1, but NOT 0
+			let msp = <Runtime as Config>::Pages::get();
+			let solutions = (1..msp)
+				.rev() // 2, 1
+				.map(|page| {
+					crate::Pallet::<Runtime>::elect(page as PageIndex).unwrap();
+				})
+				.collect::<Vec<_>>();
+			assert_eq!(solutions.len(), 2);
+
+			// nothing changes from the prelect state
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(Round::<Runtime>::get(), 1);
+			assert!(Snapshot::<Runtime>::metadata().is_some());
+			assert!(Snapshot::<Runtime>::desired_targets().is_some());
+			assert!(Snapshot::<Runtime>::targets().is_some());
+		});
+	}
+
+	#[test]
+	fn when_passive_stay_in_phase_unsigned() {
+		ExtBuilder::default().build_and_execute(|| {
+			// once the unsigned phase starts, it will not be changed by on_initialize (something
+			// like `elect` must be called).
+			for page in 25..55 {
+				roll_to(page);
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			}
+		});
+	}
+
+	#[test]
+	fn multi_page_elect_fallback_works() {}
 
 	/*
 	#[test]
@@ -1445,6 +1630,7 @@ mod tests {
 		while weight_with(active) <=
 			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
 			active == all_voters
+
 		{
 			active += 1;
 		}
