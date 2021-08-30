@@ -105,7 +105,7 @@ Using the `inspect` command (see more details below), we see that knowning only 
 
     subkey inspect "soup lyrics media market way crouch elevator put moon useful question wide"
 
-which recovers the account `5Fe4sqj2K4fRuzEGvToi4KATqZfiDU7TqynjXG6PZE2dxwyh` and not `5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC` as we expected. The additional user-defined **password** (`extra_secret` in our example) is now required to fully recover the account. Let's inspect the the previous mnemonice, this time passing also the required `password` as shown below:
+which recovers the account `5Fe4sqj2K4fRuzEGvToi4KATqZfiDU7TqynjXG6PZE2dxwyh` and not `5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC` as we expected. The additional user-defined **password** (`extra_secret` in our example) is now required to fully recover the account. Let's inspect the the previous mnemonic, this time passing also the required `password` as shown below:
 
     subkey inspect --password extra_secret "soup lyrics media market way crouch elevator put moon useful question wide"
 
