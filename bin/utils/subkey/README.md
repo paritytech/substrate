@@ -102,7 +102,7 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
 
 `subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your **public key**:
 
-    echo -n <msg> | subkey sign --suri <seed,mnemonic>
+    echo -n <msg> | subkey sign --suri <seed|mnemonic>
 
 *Example*:
 
