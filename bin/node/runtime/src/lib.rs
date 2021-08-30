@@ -486,6 +486,11 @@ parameter_types! {
 }
 
 use frame_election_provider_support::onchain;
+impl onchain::Config for Runtime {
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
+}
+
 impl pallet_staking::Config for Runtime {
 	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
 	type Currency = Balances;
@@ -509,9 +514,7 @@ impl pallet_staking::Config for Runtime {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
-		pallet_election_provider_multi_phase::OnChainConfig<Self>,
-	>;
+	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
@@ -587,7 +590,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SlashHandler = (); // burn slashes
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
-	type OnChainAccuracy = Perbill;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
@@ -1668,6 +1670,7 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_system::offchain::CreateSignedTransaction;
+	use sp_runtime::UpperOf;
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {
@@ -1678,6 +1681,16 @@ mod tests {
 		}
 
 		is_submit_signed_transaction::<Runtime>();
+	}
+
+	#[test]
+	fn perbill_as_onchain_accuracy() {
+		type OnChainAccuracy = <Runtime as onchain::Config>::Accuracy;
+		let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracy>> = (0..MAX_NOMINATIONS)
+			.map(|_| <UpperOf<OnChainAccuracy>>::from(OnChainAccuracy::one().deconstruct()))
+			.collect();
+		let _: UpperOf<OnChainAccuracy> =
+			maximum_chain_accuracy.iter().fold(0, |acc, x| acc.checked_add(*x).unwrap());
 	}
 
 	#[test]

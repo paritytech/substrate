@@ -18,6 +18,7 @@
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
 use crate::{ElectionDataProvider, ElectionProvider};
+use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -53,11 +54,11 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 /// Configuration trait of [`OnChainSequentialPhragmen`].
 ///
 /// Note that this is similar to a pallet traits, but [`OnChainSequentialPhragmen`] is not a pallet.
-pub trait Config {
-	/// The account identifier type.
-	type AccountId: IdentifierT;
-	/// The block number type.
-	type BlockNumber;
+///
+/// WARNING: the user of this pallet must ensure that the `Accuracy` type will work nicely with the
+/// normalization operation done inside `seq_phragmen`. See
+/// [`sp_npos_elections::assignment::try_normalize`] for more info.
+pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
@@ -88,6 +89,12 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 		let winners = to_without_backing(winners);
+
+		let weight = T::BlockWeights::get().max_block;
+		frame_system::Pallet::<T>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
 
 		to_supports(&winners, &staked).map_err(Error::from)
 	}

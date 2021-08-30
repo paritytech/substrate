@@ -36,7 +36,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	PerU16,
+	PerU16, RuntimeAppPublic,
 };
 use std::{convert::TryFrom, sync::Arc};
 
@@ -273,10 +273,7 @@ parameter_types! {
 	pub static OnChianFallback: bool = true;
 }
 
-pub struct OnChainConfig;
-impl onchain::Config for OnChainConfig {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
+impl onchain::Config for Runtime {
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = StakingMock;
 }
@@ -288,7 +285,7 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		if OnChianFallback::get() {
-			onchain::OnChainSequentialPhragmen::<OnChainConfig>::elect()
+			onchain::OnChainSequentialPhragmen::<Runtime>::elect()
 				.map_err(|_| "OnChainSequentialPhragmen failed")
 		} else {
 			super::NoFallback::<Runtime>::elect()
@@ -398,7 +395,6 @@ impl crate::Config for Runtime {
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
-	type OnChainAccuracy = Perbill;
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;

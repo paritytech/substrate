@@ -146,13 +146,11 @@
 //!
 //! ## Accuracy
 //!
-//! The accuracy of the election is configured via two trait parameters. namely,
-//! [`OnChainAccuracyOf`] dictates the accuracy used to compute the on-chain fallback election and
-//! [`SolutionAccuracyOf`] is the accuracy that the submitted solutions must adhere to.
+//! The accuracy of the election is configured via
+//! [`SolutionAccuracyOf`] which is the accuracy that the submitted solutions must adhere to.
 //!
-//! Note that both accuracies are of great importance. The offchain solution should be as small as
-//! possible, reducing solutions size/weight. The on-chain solution can use more space for accuracy,
-//! but should still be fast to prevent massively large blocks in case of a fallback.
+//! Note that the accuracy is of great importance. The offchain solution should be as small as
+//! possible, reducing solutions size/weight.
 //!
 //! ## Error types
 //!
@@ -211,7 +209,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider};
+use frame_election_provider_support::{ElectionDataProvider, ElectionProvider};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -224,8 +222,8 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, NposSolution,
-	PerThing128, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, NposSolution, Supports,
+	VoteWeight,
 };
 use sp_runtime::{
 	traits::Bounded,
@@ -265,22 +263,11 @@ pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as NposSolution>::VoterIndex;
 pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex;
 /// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
 pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
-/// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
-pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 /// The fallback election type.
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider<
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
 >>::Error;
-
-/// Wrapper type that implements the configurations needed for the on-chain backup.
-pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
-impl<T: Config> onchain::Config for OnChainConfig<T> {
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type Accuracy = T::OnChainAccuracy;
-	type DataProvider = T::DataProvider;
-}
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -663,9 +650,6 @@ pub mod pallet {
 			+ Ord
 			+ NposSolution;
 
-		/// Accuracy used for fallback on-chain election.
-		type OnChainAccuracy: PerThing128;
-
 		/// Configuration for the fallback
 		type Fallback: ElectionProvider<
 			Self::AccountId,
@@ -795,18 +779,6 @@ pub mod pallet {
 			// ----------------------------
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
 			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
-
-			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
-			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
-				.map(|_| {
-					<UpperOf<OnChainAccuracyOf<T>>>::from(
-						<OnChainAccuracyOf<T>>::one().deconstruct(),
-					)
-				})
-				.collect();
-			let _: UpperOf<OnChainAccuracyOf<T>> = maximum_chain_accuracy
-				.iter()
-				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 
 			// 2. Maximum sum of [SolutionAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
 			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T>>> = (0..max_vote)
@@ -1973,10 +1945,7 @@ mod tests {
 
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(
-				MultiPhase::elect().unwrap_err(),
-				ElectionError::Fallback("NoFallback.")
-			);
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		})
