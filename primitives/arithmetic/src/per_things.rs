@@ -772,10 +772,12 @@ macro_rules! implement_per_thing {
 		impl Add<Self> for $name {
 			type Output = $name;
 
+			// For PerU16, $max == u16::MAX, so we need this `allow`.
+			#[allow(unused_comparisons)]
 			#[inline]
 			fn add(self, rhs: Self) -> Self::Output {
 				let inner = self.deconstruct().add(rhs.deconstruct());
-				debug_assert!(inner < $max);
+				debug_assert!(inner <= $max);
 				$name::from_parts(inner)
 			}
 		}
