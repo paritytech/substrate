@@ -333,63 +333,6 @@ impl std::fmt::Display for RpcTransactionError {
 	}
 }
 
-// /// An extension trait for `RpcHandlers`.
-// pub trait RpcHandlersExt {
-// 	/// Send a transaction through the RpcHandlers.
-// 	fn send_transaction(
-// 		&self,
-// 		extrinsic: OpaqueExtrinsic,
-// 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>>;
-// }
-
-// impl RpcHandlersExt for RpcHandlers {
-// 	fn send_transaction(
-// 		&self,
-// 		extrinsic: OpaqueExtrinsic,
-// 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
-// 		let (tx, rx) = futures::channel::mpsc::unbounded();
-// 		let mem = RpcSession::new(tx.into());
-// 		Box::pin(
-// 			self.rpc_query(
-// 				&mem,
-// 				&format!(
-// 					r#"{{
-// 						"jsonrpc": "2.0",
-// 						"method": "author_submitExtrinsic",
-// 						"params": ["0x{}"],
-// 						"id": 0
-// 					}}"#,
-// 					hex::encode(extrinsic.encode())
-// 				),
-// 			)
-// 			.map(move |result| parse_rpc_result(result, mem, rx)),
-// 		)
-// 	}
-// }
-
-// /// The output of an RPC transaction.
-// pub struct RpcTransactionOutput {
-// 	/// The output string of the transaction if any.
-// 	pub result: Option<String>,
-// 	/// The session object.
-// 	pub session: RpcSession,
-// 	/// An async receiver if data will be returned via a callback.
-// 	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
-// }
-// impl std::fmt::Debug for RpcTransactionOutput {
-// 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-// 		write!(f, "RpcTransactionOutput {{ result: {:?}, session, receiver }}", self.result)
-// 	}
-// }
-
-// /// bla bla
-// #[derive(Deserialize, Debug)]
-// pub struct RpcTransactionError {
-//     pub code: i64,
-//     pub message: String,
-//     pub data: Option<Value>,
-// }
-
 pub(crate) fn parse_rpc_result(
 	result: Option<String>,
 	session: RpcSession,
