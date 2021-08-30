@@ -310,11 +310,11 @@ where
 	}
 }
 
-fn event_values_filter(event: &TraceEvent, key: &str, values: &str) -> bool {
+fn event_values_filter(event: &TraceEvent, filter_kind: &str, values: &str) -> bool {
 	event
 		.values
 		.string_values
-		.get(key)
+		.get(filter_kind)
 		.and_then(|value| Some(check_target(values, value, &event.level)))
 		.unwrap_or(false)
 }
