@@ -710,20 +710,20 @@ mod base_miner {
 
 			// voters in pages. note the reverse page index.
 			assert_eq!(
-				Snapshot::<Runtime>::voters(1)
-					.unwrap()
-					.into_iter()
-					.map(|(x, _, _)| x)
-					.collect::<Vec<_>>(),
-				vec![1, 2, 3, 4]
-			);
-			assert_eq!(
 				Snapshot::<Runtime>::voters(0)
 					.unwrap()
 					.into_iter()
 					.map(|(x, _, _)| x)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8]
+			);
+			assert_eq!(
+				Snapshot::<Runtime>::voters(1)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![1, 2, 3, 4]
 			);
 			// targets in pages.
 			assert_eq!(Snapshot::<Runtime>::targets().unwrap(), vec![10, 20, 30, 40]);
@@ -760,8 +760,7 @@ mod base_miner {
 				.solution_pages
 				.pagify(Pages::get())
 				.map(|(i, p)| {
-					let page_index = i as PageIndex;
-					VerifierPallet::feasibility_check_page(p.clone(), page_index)
+					VerifierPallet::feasibility_check_page(p.clone(), i)
 						.expect("feasibility has already been checked; qed.")
 				})
 				.collect::<Vec<_>>();
@@ -929,7 +928,7 @@ mod base_miner {
 					// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
 					votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
 					..Default::default()
-				},]
+				}]
 			);
 
 			// this solution must be feasible and submittable.

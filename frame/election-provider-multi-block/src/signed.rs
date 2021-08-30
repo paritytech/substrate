@@ -381,8 +381,8 @@ impl<T: Config> SignedSubmissions<T> {
 				};
 				// TODO: check score with T::check_claimed_score;
 				// let threshold = T::SolutionImprovementThreshold::get();
-				// // if we haven't improved on the weakest score, don't change anything.
-				// if !is_score_better(insert_score, weakest_score, threshold) {
+				// if we haven't improved on the weakest score or it is not above the minimiium
+				// untrusted threhold if !is_score_better(insert_score, weakest_score, threshold) {
 				// 	return InsertResult::NotInserted
 				// }
 
