@@ -183,7 +183,7 @@ Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d66
 
 ### Signing a transaction
 
-Sign a transaction from an encoded `Call`.
+Sign a transaction for an encoded `Call`.
 
     subkey sign-transaction \
         --call <call-as-hex> \
