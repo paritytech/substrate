@@ -609,7 +609,7 @@ mod tests {
 	use codec::{Compact, Decode, Encode};
 	use hash_db::{HashDB, Hasher};
 	use hex_literal::hex;
-	use sp_core::{storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD, Blake2Hasher};
+	use sp_core::{storage::DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD, Blake2Hasher};
 	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
 	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
 

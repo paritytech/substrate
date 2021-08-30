@@ -42,14 +42,12 @@ use std::{
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	alt_hashing: Option<u32>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage) -> Self {
-		let alt_hashing = inner.get_trie_alt_hashing_threshold();
-		BasicExternalities { inner, extensions: Default::default(), alt_hashing }
+		BasicExternalities { inner, extensions: Default::default() }
 	}
 
 	/// New basic externalities with empty storage.
@@ -74,14 +72,12 @@ impl BasicExternalities {
 		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
-		let alt_hashing = storage.get_trie_alt_hashing_threshold();
 		let mut ext = Self {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
 				children_default: std::mem::take(&mut storage.children_default),
 			},
 			extensions: Default::default(),
-			alt_hashing,
 		};
 
 		let r = ext.execute_with(f);
@@ -132,11 +128,9 @@ impl Default for BasicExternalities {
 
 impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
-		let alt_hashing = sp_core::storage::alt_hashing::get_trie_alt_hashing_threshold(&hashmap);
 		BasicExternalities {
 			inner: Storage { top: hashmap, children_default: Default::default() },
 			extensions: Default::default(),
-			alt_hashing,
 		}
 	}
 }
@@ -311,8 +305,7 @@ impl Externalities for BasicExternalities {
 	fn child_storage_root(&mut self, child_info: &ChildInfo, threshold: StateVersion) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let mut in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>();
-			in_mem.force_alt_hashing(self.alt_hashing.clone());
+			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>();
 			in_mem.child_storage_root(&child.child_info, delta, threshold).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
@@ -404,7 +397,7 @@ mod tests {
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root()[..], &ROOT);
+		assert_eq!(&ext.storage_root(None)[..], &ROOT);
 	}
 
 	#[test]

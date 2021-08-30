@@ -952,7 +952,7 @@ mod tests {
 	use hex_literal::hex;
 	use num_traits::Zero;
 	use sp_core::{
-		map,
+		map, DEFAULT_STATE_HASHING,
 		storage::{well_known_keys::EXTRINSIC_INDEX, Storage, StorageChild},
 		Blake2Hasher, H256,
 	};
@@ -1029,14 +1029,14 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(vec![20], None);
 		overlay.set_storage(vec![30], Some(vec![31]));
-		let backend = Storage {
+		let backend = (Storage {
 			top: map![
 				vec![10] => vec![10],
 				vec![20] => vec![20],
 				vec![40] => vec![40]
 			],
 			children_default: map![],
-		}
+		}, DEFAULT_STATE_HASHING)
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1075,12 +1075,12 @@ mod tests {
 		overlay.set_storage(vec![27], None);
 		overlay.set_storage(vec![28], None);
 		overlay.set_storage(vec![29], None);
-		let backend = Storage {
+		let backend = (Storage {
 			top: map![
 				vec![30] => vec![30]
 			],
 			children_default: map![],
-		}
+		}, DEFAULT_STATE_HASHING)
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1099,7 +1099,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		let backend = Storage {
+		let backend = (Storage {
 			top: map![],
 			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
@@ -1111,7 +1111,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}
+		}, DEFAULT_STATE_HASHING)
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1144,7 +1144,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		let backend = Storage {
+		let backend = (Storage {
 			top: map![],
 			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
@@ -1156,7 +1156,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}
+		}, DEFAULT_STATE_HASHING)
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1183,7 +1183,7 @@ mod tests {
 		let child_info = &child_info;
 		let mut cache = StorageTransactionCache::default();
 		let mut overlay = OverlayedChanges::default();
-		let backend = Storage {
+		let backend = (Storage {
 			top: map![],
 			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
@@ -1193,7 +1193,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}
+		}, DEFAULT_STATE_HASHING)
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);

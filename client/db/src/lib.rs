@@ -2586,16 +2586,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let mut storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
-
-			if alt_hashing {
-				storage.push((
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					),
-				));
-			}
+			let storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
 
 			header.state_root = op
 				.old_state

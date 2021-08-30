@@ -1000,7 +1000,8 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
-		storage::{ChildInfo, TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD},
+		DEFAULT_STATE_HASHING, StateVersion,
+		storage::ChildInfo,
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
 		NativeOrEncoded, NeverNativeValue,
@@ -1071,10 +1072,10 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		execute_works_inner(false);
-		execute_works_inner(true);
+		execute_works_inner(None);
+		execute_works_inner(DEFAULT_STATE_HASHING);
 	}
-	fn execute_works_inner(hashed: bool) {
+	fn execute_works_inner(hashed: StateVersion) {
 		let backend = trie_backend::tests::test_trie(hashed);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
@@ -1101,11 +1102,11 @@ mod tests {
 
 	#[test]
 	fn execute_works_with_native_else_wasm() {
-		execute_works_with_native_else_wasm_inner(false);
-		execute_works_with_native_else_wasm_inner(true);
+		execute_works_with_native_else_wasm_inner(None);
+		execute_works_with_native_else_wasm_inner(DEFAULT_STATE_HASHING);
 	}
-	fn execute_works_with_native_else_wasm_inner(hashed: bool) {
-		let backend = trie_backend::tests::test_trie(hashed);
+	fn execute_works_with_native_else_wasm_inner(state_hash: StateVersion) {
+		let backend = trie_backend::tests::test_trie(state_hash);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1131,12 +1132,12 @@ mod tests {
 
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
-		dual_execution_strategy_detects_consensus_failure_inner(false);
-		dual_execution_strategy_detects_consensus_failure_inner(true);
+		dual_execution_strategy_detects_consensus_failure_inner(None);
+		dual_execution_strategy_detects_consensus_failure_inner(DEFAULT_STATE_HASHING);
 	}
-	fn dual_execution_strategy_detects_consensus_failure_inner(hashed: bool) {
+	fn dual_execution_strategy_detects_consensus_failure_inner(state_hash: StateVersion) {
 		let mut consensus_failed = false;
-		let backend = trie_backend::tests::test_trie(hashed);
+		let backend = trie_backend::tests::test_trie(state_hash);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1171,10 +1172,10 @@ mod tests {
 
 	#[test]
 	fn prove_execution_and_proof_check_works() {
-		prove_execution_and_proof_check_works_inner(true);
-		prove_execution_and_proof_check_works_inner(false);
+		prove_execution_and_proof_check_works_inner(DEFAULT_STATE_HASHING);
+		prove_execution_and_proof_check_works_inner(None);
 	}
-	fn prove_execution_and_proof_check_works_inner(flagged: bool) {
+	fn prove_execution_and_proof_check_works_inner(state_hash: StateVersion) {
 		let executor = DummyCodeExecutor {
 			change_changes_trie_config: false,
 			native_available: true,
@@ -1183,8 +1184,8 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let mut remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+		let mut remote_backend = trie_backend::tests::test_trie(state_hash);
+		let remote_root = remote_backend.storage_root(std::iter::empty(), state_hash).0;
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
 			&mut remote_backend,
 			&mut Default::default(),
@@ -1222,7 +1223,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1303,7 +1304,7 @@ mod tests {
 				b"d".to_vec() => b"3".to_vec()
 			],
 		];
-		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
 
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(&child_info, b"1".to_vec(), Some(b"1312".to_vec()));
@@ -1351,7 +1352,7 @@ mod tests {
 				b"d".to_vec() => b"3".to_vec()
 			],
 		];
-		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
@@ -1539,15 +1540,15 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works() {
-		prove_read_and_proof_check_works_inner(false);
-		prove_read_and_proof_check_works_inner(true);
+		prove_read_and_proof_check_works_inner(None);
+		prove_read_and_proof_check_works_inner(DEFAULT_STATE_HASHING);
 	}
-	fn prove_read_and_proof_check_works_inner(flagged: bool) {
+	fn prove_read_and_proof_check_works_inner(state_hash: StateVersion) {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+		let remote_backend = trie_backend::tests::test_trie(state_hash);
+		let remote_root = remote_backend.storage_root(std::iter::empty(), state_hash).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		// check proof locally
@@ -1564,8 +1565,8 @@ mod tests {
 		);
 		assert_eq!(local_result2, false);
 		// on child trie
-		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+		let remote_backend = trie_backend::tests::test_trie(state_hash);
+		let remote_root = remote_backend.storage_root(std::iter::empty(), state_hash).0;
 		let remote_proof = prove_child_read(remote_backend, child_info, &[b"value3"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
@@ -1591,16 +1592,16 @@ mod tests {
 
 	#[test]
 	fn prove_read_with_size_limit_works() {
-		let hashed_value = false;
-		let remote_backend = trie_backend::tests::test_trie(hashed_value);
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let state_hash = None;
+		let remote_backend = trie_backend::tests::test_trie(state_hash);
+		let remote_root = remote_backend.storage_root(::std::iter::empty(), state_hash).0;
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
 		// Alwasys contains at least some nodes.
 		assert_eq!(proof.into_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
 
-		let remote_backend = trie_backend::tests::test_trie(hashed_value);
+		let remote_backend = trie_backend::tests::test_trie(state_hash);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 9);
@@ -1623,7 +1624,7 @@ mod tests {
 		assert_eq!(results.len() as u32, 101);
 		assert_eq!(completed, false);
 
-		let remote_backend = trie_backend::tests::test_trie(hashed_value);
+		let remote_backend = trie_backend::tests::test_trie(state_hash);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 11);
@@ -1644,7 +1645,8 @@ mod tests {
 	#[test]
 	fn inner_state_hashing_switch_proofs() {
 		let mut layout = Layout::default();
-		let (mut mdb, mut root) = trie_backend::tests::test_db(false);
+		let mut state_hash = None;
+		let (mut mdb, mut root) = trie_backend::tests::test_db(state_hash);
 		{
 			let mut trie =
 				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
@@ -1656,9 +1658,9 @@ mod tests {
 				.expect("insert failed");
 		}
 
-		let check_proof = |mdb, root| -> StorageProof {
+		let check_proof = |mdb, root, state_hash| -> StorageProof {
 			let remote_backend = TrieBackend::new(mdb, root);
-			let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+			let remote_root = remote_backend.storage_root(::std::iter::empty(), state_hash).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
 			let local_result1 =
@@ -1672,14 +1674,15 @@ mod tests {
 			remote_proof
 		};
 
-		let remote_proof = check_proof(mdb.clone(), root.clone());
+		let remote_proof = check_proof(mdb.clone(), root.clone(), state_hash);
 		// check full values in proof
 		assert!(remote_proof.encode().len() > 1_100);
 		assert!(remote_proof.encoded_size() > 1_100);
 		let root1 = root.clone();
 
 		// do switch
-		layout = Layout::with_alt_hashing(TRESHOLD);
+		layout = Layout::with_alt_hashing(sp_core::storage::DEFAULT_ALT_HASH_THRESHOLD);
+		state_hash = DEFAULT_STATE_HASHING;
 		// update with same value do not change
 		{
 			let mut trie =
@@ -1703,7 +1706,7 @@ mod tests {
 		}
 		let root3 = root.clone();
 		assert!(root1 != root3);
-		let remote_proof = check_proof(mdb.clone(), root.clone());
+		let remote_proof = check_proof(mdb.clone(), root.clone(), state_hash);
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
 		assert!(remote_proof.encoded_size() < 1000);
@@ -1712,18 +1715,18 @@ mod tests {
 
 	#[test]
 	fn compact_multiple_child_trie() {
-		let size_inner_hash = compact_multiple_child_trie_inner(true);
-		let size_no_inner_hash = compact_multiple_child_trie_inner(false);
+		let size_inner_hash = compact_multiple_child_trie_inner(DEFAULT_STATE_HASHING);
+		let size_no_inner_hash = compact_multiple_child_trie_inner(None);
 		assert!(size_inner_hash < size_no_inner_hash);
 	}
-	fn compact_multiple_child_trie_inner(flagged: bool) -> usize {
+	fn compact_multiple_child_trie_inner(state_hash: StateVersion) -> usize {
 		// this root will be queried
 		let child_info1 = ChildInfo::new_default(b"sub1");
 		// this root will not be include in proof
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie(flagged);
+		let mut remote_backend = trie_backend::tests::test_trie(state_hash);
 		let long_vec: Vec<u8> = (0..1024usize).map(|_| 8u8).collect();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
@@ -1753,6 +1756,7 @@ mod tests {
 				),
 			]
 			.into_iter(),
+			state_hash,
 		);
 		remote_backend.backend_storage_mut().consolidate(transaction);
 		remote_backend.essence.set_root(remote_root.clone());
@@ -1773,6 +1777,7 @@ mod tests {
 
 	#[test]
 	fn child_storage_uuid() {
+		let state_hash = None;
 		let child_info_1 = ChildInfo::new_default(b"sub_test1");
 		let child_info_2 = ChildInfo::new_default(b"sub_test2");
 
@@ -1780,7 +1785,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		let mut transaction = {
-			let backend = test_trie(false);
+			let backend = test_trie(state_hash);
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1791,7 +1796,7 @@ mod tests {
 			);
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
 			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
-			ext.storage_root();
+			ext.storage_root(state_hash);
 			cache.transaction.unwrap()
 		};
 		let mut duplicate = false;
@@ -1811,7 +1816,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1843,12 +1848,13 @@ mod tests {
 
 	#[test]
 	fn runtime_registered_extensions_are_removed_after_execution() {
+		let state_hash = DEFAULT_STATE_HASHING;
 		use sp_externalities::ExternalitiesExt;
 		sp_externalities::decl_extension! {
 			struct DummyExt(u32);
 		}
 
-		let backend = trie_backend::tests::test_trie(false);
+		let backend = trie_backend::tests::test_trie(state_hash);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 

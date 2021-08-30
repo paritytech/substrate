@@ -19,7 +19,6 @@
 
 use std::{
 	any::{Any, TypeId},
-	collections::{BTreeMap, HashMap},
 	panic::{AssertUnwindSafe, UnwindSafe},
 };
 
@@ -39,7 +38,7 @@ use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE},
-		ChildInfo, Storage,
+		Storage,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
@@ -257,12 +256,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	fn default() -> Self {
-		// default to inner hashed.
-		let mut storage = Storage::default();
-		storage.modify_trie_alt_hashing_threshold(Some(
-			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-		));
-		Self::new(storage)
+		Self::new(Default::default())
 	}
 }
 
@@ -328,7 +322,7 @@ where
 mod tests {
 	use super::*;
 	use hex_literal::hex;
-	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
+	use sp_core::{storage::ChildInfo, traits::Externalities, H256, DEFAULT_STATE_HASHING};
 	use sp_runtime::traits::BlakeTwo256;
 
 	#[test]
@@ -341,7 +335,7 @@ mod tests {
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		let root =
 			H256::from(hex!("ed4d8c799d996add422395a6abd7545491d40bd838d738afafa1b8a4de625489"));
-		assert_eq!(H256::from_slice(ext.storage_root().as_slice()), root);
+		assert_eq!(H256::from_slice(ext.storage_root(DEFAULT_STATE_HASHING).as_slice()), root);
 	}
 
 	#[test]

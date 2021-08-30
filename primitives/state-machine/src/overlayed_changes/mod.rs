@@ -926,6 +926,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
+		let state_hash = None;
 		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
@@ -934,7 +935,7 @@ mod tests {
 		]
 		.into_iter()
 		.collect();
-		let backend = InMemoryBackend::<Blake2Hasher>::from(initial);
+		let backend = InMemoryBackend::<Blake2Hasher>::from((initial, state_hash));
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_collect_extrinsics(false);
 
@@ -959,7 +960,7 @@ mod tests {
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root()[..], &ROOT);
+		assert_eq!(&ext.storage_root(state_hash)[..], &ROOT);
 	}
 
 	#[test]

@@ -1577,11 +1577,8 @@ mod tests {
 		});
 
 		let value = vec![7u8; 35];
-		let mut storage =
+		let storage =
 			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
-		storage.modify_trie_alt_hashing_threshold(Some(
-			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-		));
 		t = BasicExternalities::new(storage);
 
 		t.execute_with(|| {
