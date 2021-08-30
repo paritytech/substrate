@@ -21,7 +21,9 @@
 
 use sp_std::{prelude::*, result::Result};
 
-use codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use codec::Decode;
+use codec::Encode;
 use sp_inherents::{Error, InherentData, InherentIdentifier, IsFatalError};
 use sp_runtime::{traits::Header as HeaderT, RuntimeString};
 

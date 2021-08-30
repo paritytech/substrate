@@ -219,9 +219,10 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	/// Revert all pending changes
 	pub fn revert_pending(&mut self) {
 		// Revert pending deletions.
-		// Note that pending insertions might cause some existing deletions to be removed from `death_index`
-		// We don't bother to track and revert that for now. This means that a few nodes might end up no being
-		// deleted in case transaction fails and `revert_pending` is called.
+		// Note that pending insertions might cause some existing deletions to be removed from
+		// `death_index` We don't bother to track and revert that for now. This means that a few
+		// nodes might end up no being deleted in case transaction fails and `revert_pending` is
+		// called.
 		self.death_rows.truncate(self.death_rows.len() - self.pending_canonicalizations);
 		if self.count_insertions {
 			let new_max_block = self.death_rows.len() as u64 + self.pending_number;

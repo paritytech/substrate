@@ -506,8 +506,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 										};
 
 										if next_value.is_zero() {
-											// if the removed edge is from the current assignment, dis_index
-											// should NOT be increased.
+											// if the removed edge is from the current assignment,
+											// index should NOT be increased.
 											if target_ass_index == assignment_index {
 												should_inc_counter = false
 											}
@@ -551,8 +551,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 										};
 
 										if next_value.is_zero() {
-											// if the removed edge is from the current assignment, dis_index
-											// should NOT be increased.
+											// if the removed edge is from the current assignment,
+											// index should NOT be increased.
 											if target_ass_index == assignment_index {
 												should_inc_counter = false
 											}

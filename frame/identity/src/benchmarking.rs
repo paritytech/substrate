@@ -77,7 +77,7 @@ fn create_sub_accounts<T: Config>(
 	// Set identity so `set_subs` does not fail.
 	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
 	let info = create_identity_info::<T>(1);
-	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
+	Identity::<T>::set_identity(who_origin.clone().into(), Box::new(info))?;
 
 	Ok(subs)
 }
@@ -137,7 +137,7 @@ benchmarks! {
 
 			// Add an initial identity
 			let initial_info = create_identity_info::<T>(1);
-			Identity::<T>::set_identity(caller_origin.clone(), initial_info)?;
+			Identity::<T>::set_identity(caller_origin.clone(), Box::new(initial_info))?;
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
@@ -151,7 +151,7 @@ benchmarks! {
 			}
 			caller
 		};
-	}: _(RawOrigin::Signed(caller.clone()), create_identity_info::<T>(x))
+	}: _(RawOrigin::Signed(caller.clone()), Box::new(create_identity_info::<T>(x)))
 	verify {
 		assert_last_event::<T>(Event::<T>::IdentitySet(caller).into());
 	}
@@ -204,7 +204,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		// User requests judgement from all the registrars, and they approve
@@ -233,7 +233,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
@@ -251,7 +251,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
@@ -321,7 +321,7 @@ benchmarks! {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			let info = create_identity_info::<T>(x);
-			Identity::<T>::set_identity(user_origin.clone(), info)?;
+			Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
@@ -342,7 +342,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
 		let info = create_identity_info::<T>(x);
-		Identity::<T>::set_identity(target_origin.clone(), info)?;
+		Identity::<T>::set_identity(target_origin.clone(), Box::new(info))?;
 		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve

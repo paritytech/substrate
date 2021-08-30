@@ -266,9 +266,9 @@ pub mod pallet {
 							*lottery = None;
 							return T::WeightInfo::on_initialize_end()
 						}
-						// We choose not need to kill Participants and Tickets to avoid a large number
-						// of writes at one time. Instead, data persists between lotteries, but is not used
-						// if it is not relevant.
+						// We choose not need to kill Participants and Tickets to avoid a large
+						// number of writes at one time. Instead, data persists between lotteries,
+						// but is not used if it is not relevant.
 					}
 				}
 				return T::DbWeight::get().reads(1)

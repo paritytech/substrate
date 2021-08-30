@@ -94,7 +94,8 @@ pub trait Externalities: ExtensionStore {
 		self.place_storage(key.to_vec(), None);
 	}
 
-	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
+	/// Clear a child storage entry (`key`) of current contract being called (effective
+	/// immediately).
 	fn clear_child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) {
 		self.place_child_storage(child_info, key.to_vec(), None)
 	}
@@ -144,7 +145,8 @@ pub trait Externalities: ExtensionStore {
 		limit: Option<u32>,
 	) -> (bool, u32);
 
-	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Set or clear a storage entry (`key`) of current contract being called (effective
+	/// immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry.
@@ -167,7 +169,8 @@ pub trait Externalities: ExtensionStore {
 
 	/// Append storage item.
 	///
-	/// This assumes specific format of the storage item. Also there is no way to undo this operation.
+	/// This assumes specific format of the storage item. Also there is no way to undo this
+	/// operation.
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>);
 
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.

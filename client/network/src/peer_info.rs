@@ -40,9 +40,8 @@ use std::{
 	error, io,
 	pin::Pin,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -340,6 +339,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						address,
 						score,
 					}),
+				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
+					}),
 			}
 		}
 
@@ -352,8 +356,9 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						let event = PeerInfoEvent::Identified { peer_id, info };
 						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
 					},
-					IdentifyEvent::Error { peer_id, error } =>
-						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
+					IdentifyEvent::Error { peer_id, error } => {
+						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
+					},
 					IdentifyEvent::Pushed { .. } => {},
 					IdentifyEvent::Sent { .. } => {},
 				},
@@ -371,6 +376,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 						address,
 						score,
+					}),
+				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
 					}),
 			}
 		}

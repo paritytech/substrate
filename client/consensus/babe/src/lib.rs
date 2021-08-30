@@ -127,7 +127,7 @@ pub use sp_consensus_babe::{
 		CompatibleDigestItem, NextConfigDescriptor, NextEpochDescriptor, PreDigest,
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
-	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight,
+	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
 	BabeEpochConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
 	VRF_OUTPUT_LENGTH,
 };
@@ -430,8 +430,8 @@ pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
-	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
-	/// because there were no blocks produced for some slots.
+	/// slot. However, the proposing can still take longer when there is some lenience factor
+	/// applied, because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
 
 	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied
