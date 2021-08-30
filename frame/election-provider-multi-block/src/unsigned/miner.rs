@@ -169,7 +169,6 @@ impl<T: super::Config> BaseMiner<T> {
 
 		// convert each page to a compact struct
 		let mut solution_pages: Vec<SolutionOf<T>> = paged_assignments
-			// NOTE: we actually don't want to pagify this here.
 			.into_iter()
 			.enumerate()
 			.map(|(page_index, assignment_page)| {
@@ -897,15 +896,6 @@ mod base_miner {
 			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
 			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
 
-			// voters in pages 1, this is the most significant page.
-			assert_eq!(
-				Snapshot::<Runtime>::voters(1)
-					.unwrap()
-					.into_iter()
-					.map(|(x, _, _)| x)
-					.collect::<Vec<_>>(),
-				vec![1, 2, 3, 4]
-			);
 			// these folks should be ignored safely.
 			assert_eq!(
 				Snapshot::<Runtime>::voters(0)
@@ -914,6 +904,15 @@ mod base_miner {
 					.map(|(x, _, _)| x)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8]
+			);
+			// voters in pages 1, this is the most significant page.
+			assert_eq!(
+				Snapshot::<Runtime>::voters(1)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![1, 2, 3, 4]
 			);
 
 			// now we ask for just 1 page of solution.
@@ -929,7 +928,7 @@ mod base_miner {
 					// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
 					votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
 					..Default::default()
-				},]
+				}]
 			);
 
 			// this solution must be feasible and submittable.
@@ -958,6 +957,88 @@ mod base_miner {
 			);
 
 			assert_eq!(paged.score, [15, 40, 850]);
+		})
+	}
+
+	#[test]
+	fn mine_solution_2_out_of_3_pages() {
+		ExtBuilder::default().pages(3).voter_per_page(4).build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			// 2 pages of 8 voters
+			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
+			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 12);
+			// 1 page of 4 targets
+			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
+			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+
+			assert_eq!(
+				Snapshot::<Runtime>::voters(0)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![10, 20, 30, 40]
+			);
+			assert_eq!(
+				Snapshot::<Runtime>::voters(1)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![5, 6, 7, 8]
+			);
+			assert_eq!(
+				Snapshot::<Runtime>::voters(2)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![1, 2, 3, 4]
+			);
+
+			// now we ask for just 1 page of solution.
+			let paged = BaseMiner::<Runtime>::mine_solution(2).unwrap();
+
+			// this solution must be feasible and submittable.
+			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+
+			// assert_eq!(
+			// 	paged.solution_pages,
+			// 	vec![TestNposSolution {
+			// 		// voter 1 (index 0) is backing 10 (index 0)
+			// 		// voter 2 (index 1) is backing 40 (index 3)
+			// 		// voter 3 (index 2) is backing 40 (index 3)
+			// 		votes1: vec![(0, 0), (1, 3), (2, 3)],
+			// 		// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
+			// 		votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
+			// 		..Default::default()
+			// 	}]
+			// );
+
+			// // convert ot supports
+			// let supports = paged
+			// 	.solution_pages
+			// 	.pagify(Pages::get())
+			// 	.map(|(i, p)| {
+			// 		let page_index = i as PageIndex;
+			// 		VerifierPallet::feasibility_check_page(p.clone(), page_index)
+			// 			.expect("feasibility has already been checked; qed.")
+			// 	})
+			// 	.collect::<Vec<_>>();
+
+			// assert_eq!(
+			// 	supports,
+			// 	vec![
+			// 		// page1 supports from voters 1, 2, 3, 4
+			// 		vec![
+			// 			(10, Support { total: 15, voters: vec![(1, 10), (4, 5)] }),
+			// 			(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
+			// 		]
+			// 	]
+			// );
+
+			// assert_eq!(paged.score, [15, 40, 850]);
 		})
 	}
 

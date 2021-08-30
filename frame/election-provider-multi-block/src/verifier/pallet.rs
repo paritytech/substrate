@@ -290,6 +290,10 @@ mod pallet {
 		) {
 			// TODO: would be nice if we could consume `Vec<_>.pagify` as well, but rustc is not
 			// cooperating.
+			// TODO: for example if the emergency solution sets something which is just one page,
+			// and we have 3 snapshot pages, it is going to be stored in index 2 of the valid
+			// variant. We need to make sure that page 2 (aka msp) of the valid variant is read
+			// first from staking during export.
 			for (page_index, supports) in paged_supports.pagify(T::Pages::get()) {
 				match Self::valid() {
 					ValidSolution::X => QueuedSolutionX::<T>::insert(page_index, supports),

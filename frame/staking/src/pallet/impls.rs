@@ -268,6 +268,11 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 
+			// we should be able to detect that now is `T::ElectionProvider::PAGES` blocks before
+			// the next call to `try_trigger_new_era`. At this point, given `x =
+			// T::ElectionProvider::PAGES`, start calling `T::ElectionProvider::elect(x)`, then `x -
+			// 1`, all the way to `0`, and store the results in some map.
+
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
 			if maybe_new_era_validators.is_some() &&
@@ -280,6 +285,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			// Set initial era.
 			log!(debug, "Starting the first era.");
+			// TODO: `integrity test: T::ElectionProvider::PAGES == 0`
 			Self::try_trigger_new_era(session_index, is_genesis)
 		}
 	}
@@ -473,8 +479,11 @@ impl<T: Config> Pallet<T> {
 		let mut total_stake: BalanceOf<T> = Zero::zero();
 		exposures.into_iter().for_each(|(stash, exposure)| {
 			total_stake = total_stake.saturating_add(exposure.total);
+			// TODO: here we should not just write the exposure, if one already exists for key
+			// (`new_planned_era, stash`), then we should read it, merge and write.
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
+			// TODO: to be fair clipping should now happen at the very end.
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 			if exposure_clipped.others.len() > clipped_max_len {
