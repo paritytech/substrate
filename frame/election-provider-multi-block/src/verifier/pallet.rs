@@ -847,7 +847,7 @@ mod feasibility_check {
 #[cfg(test)]
 mod verifier_trait {
 	use super::*;
-	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier};
+	use crate::{mock::*, types::Pagify, unsigned::miner::BaseMiner, verifier::Verifier};
 
 	#[test]
 	fn setting_unverified_and_sealing_it() {
@@ -1154,11 +1154,11 @@ mod verifier_trait {
 			assert!(good_score > ok_score);
 
 			// set
-			for (page_index, solution_page) in good_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in good_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
@@ -1177,23 +1177,20 @@ mod verifier_trait {
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
 
 			// set
-			for (page_index, solution_page) in ok_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
-			// and seal the ok solution against the verifier
-			assert_ok!(
+			// and the solution will not be successfully sealed because the score is too low
+			assert!(
 				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
-					ok_paged.score.clone(),
-				)
+					ok_score,
+				).is_err()
 			);
-
-			// finalize the ok solution
-			roll_to(31);
 
 			// the invalid solution is cleared
 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
@@ -1237,11 +1234,11 @@ mod verifier_trait {
 			);
 
 			// set
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
@@ -1256,11 +1253,11 @@ mod verifier_trait {
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
 			// set
-			for (page_index, solution_page) in bad_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in bad_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}

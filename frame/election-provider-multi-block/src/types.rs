@@ -58,7 +58,7 @@ pub struct PagedRawSolution<T: Config> {
 	pub round: u32,
 }
 
-// TODO: we also need a consuming version of this
+// TODO: we also need a consuming version of this!!
 // TODO: write tests for this for better understanding
 pub trait Pagify<T> {
 	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_>;
@@ -66,7 +66,7 @@ pub trait Pagify<T> {
 
 impl<T> Pagify<T> for Vec<T> {
 	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_> {
-		Box::new(self.iter().enumerate().map(|(p, s)| (p.saturated_into::<PageIndex>(), s)).map(
+		Box::new(self.into_iter().enumerate().map(|(p, s)| (p.saturated_into::<PageIndex>(), s)).map(
 			move |(p, s)| {
 				let bound_usize = bound.into();
 				debug_assert!(self.len() <= bound_usize);
