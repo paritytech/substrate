@@ -249,7 +249,8 @@ pub trait StateApi<Hash> {
 	/// 	http://localhost:9933/
 	/// ```
 	///
-	/// - Get tracing events with `storage_keys` ('f0c365c3cf59d671eb72da0e7a4113c4') and method ('Put')
+	/// - Get tracing events with `storage_keys` ('f0c365c3cf59d671eb72da0e7a4113c4') and method
+	///   ('Put')
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
