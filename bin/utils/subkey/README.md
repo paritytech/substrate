@@ -53,7 +53,7 @@ For instance, considering the previous seed `0xa05c75731970cc7868a2fb7cb577353cd
 
 ### Json output
 
-`subkey` can calso generate the output as *json*. This is useful for automation:
+`subkey` can calso generate the output as *json*. This is useful for automation.
 
 command:
 ```
