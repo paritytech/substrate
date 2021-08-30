@@ -87,7 +87,7 @@ output:
 
 ### Inspecting a key
 
-If you have *some data* about a key, `subkey inpsect` will help you discover more information about this key.
+If you have *some data* about a key, `subkey inpsect` will help you discover more information about it.
 
 If you have **secrets** that you would like to verify for instance, you can use:
 
