@@ -114,7 +114,7 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
 
     9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
 
-**NOTE**: Each run of the `sign` command with yield a different output. While each signature is different, they are all valid.
+**NOTE**: Each run of the `sign` command will yield a different output. While each signature is different, they are all valid.
 
 ### Verifying a signature
 
