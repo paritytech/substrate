@@ -172,7 +172,7 @@ Sign a transaction from an encoded `Call`.
         --password <password> \
         --prior-block-hash <prior-block-hash-as-hex>
 
-Will output a signed and encoded `UncheckedMortalCompactExtrinsic` as hex.
+Will output a signed and encoded [`UncheckedExtrinsic`](https://github.com/paritytech/substrate/blob/master/primitives/runtime/src/generic/unchecked_extrinsic.rs#L39-L49) as hex.
 
 ### Inspecting a module ID
 
