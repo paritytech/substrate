@@ -85,6 +85,32 @@ output:
 0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
 ```
 
+### Additional user-defined password
+
+`subkey` supports an additional user-defined secret that will be appended to the seed. Let's see the following example:
+
+    subkey generate --password extra_secret
+
+output:
+
+```
+Secret phrase `soup lyrics media market way crouch elevator put moon useful question wide` is account:
+  Secret seed:      0xe7cfd179d6537a676cb94bac3b5c5c9cb1550e846ac4541040d077dfbac2e7fd
+  Public key (hex): 0xf6a233c3e1de1a2ae0486100b460b3ce3d7231ddfe9dadabbd35ab968c70905d
+  Account ID:       0xf6a233c3e1de1a2ae0486100b460b3ce3d7231ddfe9dadabbd35ab968c70905d
+  SS58 Address:     5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC
+```
+
+Using the `inspect` command (see more details below), we see that knowning only the **secret seed** is no longer sufficient to recover the account:
+
+    subkey inspect "soup lyrics media market way crouch elevator put moon useful question wide"
+
+which recovers the account `5Fe4sqj2K4fRuzEGvToi4KATqZfiDU7TqynjXG6PZE2dxwyh` and not `5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC` as we expected. The additional user-defined **password** (`extra_secret` in our example) is now required to fully recover the account. Let's inspect the the previous mnemonice, this time passing also the required `password` as shown below:
+
+    subkey inspect --password extra_secret "soup lyrics media market way crouch elevator put moon useful question wide"
+
+This time, we properly recovered `5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC`.
+
 ### Inspecting a key
 
 If you have *some data* about a key, `subkey inpsect` will help you discover more information about it.
@@ -119,8 +145,7 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
 
 ### Signing
 
-`subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your 
-**public key**:
+`subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your **public key**:
 
     echo -n <msg> | subkey sign --suri <seed|mnemonic>
 
