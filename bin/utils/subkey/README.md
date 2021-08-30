@@ -194,19 +194,6 @@ Sign a transaction for an encoded `Call`.
 
 Will output a signed and encoded [`UncheckedExtrinsic`](https://github.com/paritytech/substrate/blob/master/primitives/runtime/src/generic/unchecked_extrinsic.rs#L39-L49) as hex.
 
-### Inspecting a module ID
-
-    subkey module-id "py/trsry" --network kusama
-
-*Example Output*:
-
-    Public Key URI `F3opxRbN5ZbjJNU511Kj2TLuzFcDq9BGduA9TgiECafpg29` is account:
-      Network ID/version: kusama
-      Public key (hex):   0x6d6f646c70792f74727372790000000000000000000000000000000000000000
-      Public key (SS58):  F3opxRbN5ZbjJNU511Kj2TLuzFcDq9BGduA9TgiECafpg29
-      Account ID:         0x6d6f646c70792f74727372790000000000000000000000000000000000000000
-      SS58 Address:       F3opxRbN5ZbjJNU511Kj2TLuzFcDq9BGduA9TgiECafpg29
-
 ## License
 
 License: GPL-3.0-or-later WITH Classpath-exception-2.0
