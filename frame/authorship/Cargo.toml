@@ -1,13 +1,13 @@
 [package]
-name = "pallet-authorship"
-version = "4.0.0-dev"
+name        = "pallet-authorship"
+version     = "4.0.0-dev"
 description = "Block and Uncle Author tracking for the FRAME"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-readme = "README.md"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -25,7 +25,7 @@ impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-io   = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

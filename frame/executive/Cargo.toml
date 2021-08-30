@@ -1,13 +1,13 @@
 [package]
-name = "frame-executive"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "frame-executive"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME executives engine"
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -25,13 +25,13 @@ sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primiti
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
-hex-literal = "0.3.1"
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+hex-literal                = "0.3.1"
+sp-core                    = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io                      = { version = "4.0.0-dev", path = "../../primitives/io" }
+pallet-balances            = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
-sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
-sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sp-version                 = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-inherents               = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 
 [features]
 default = ["std"]

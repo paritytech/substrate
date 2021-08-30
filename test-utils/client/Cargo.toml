@@ -1,12 +1,12 @@
 [package]
-name = "substrate-test-client"
-version = "2.0.1"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
+name       = "substrate-test-client"
+version    = "2.0.1"
+authors    = ["Parity Technologies <admin@parity.io>"]
+edition    = "2018"
+license    = "Apache-2.0"
+homepage   = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-publish = false
+publish    = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -19,14 +19,14 @@ serde = "1.0.126"
 serde_json = "1.0.55"
 sc-client-api = { version = "4.0.0-dev", path = "../../client/api" }
 sc-client-db = { version = "0.10.0-dev", features = [
-    "test-helpers",
+	"test-helpers",
 ], path = "../../client/db" }
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
 sc-light = { version = "4.0.0-dev", path = "../../client/light" }
 sc-offchain = { version = "4.0.0-dev", path = "../../client/offchain" }
 sc-service = { version = "0.10.0-dev", default-features = false, features = [
-    "test-helpers",
+	"test-helpers",
 ], path = "../../client/service" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }

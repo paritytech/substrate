@@ -1,21 +1,21 @@
 [package]
-name = "substrate-test-utils"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "substrate-test-utils"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "Substrate test utilities"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.16"
+futures                     = "0.3.16"
 substrate-test-utils-derive = { version = "0.10.0-dev", path = "./derive" }
-tokio = { version = "1.10", features = ["macros", "time"] }
+tokio                       = { version = "1.10", features = ["macros", "time"] }
 
 [dev-dependencies]
 sc-service = { version = "0.10.0-dev", path = "../client/service" }
-trybuild = { version = "1.0.43", features = [ "diff" ] }
+trybuild   = { version = "1.0.43", features = ["diff"] }

@@ -1,26 +1,26 @@
 [package]
-name = "sc-rpc-server"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "sc-rpc-server"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC servers."
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.16"
-jsonrpc-core = "18.0.0"
-pubsub = { package = "jsonrpc-pubsub", version = "18.0.0" }
-log = "0.4.8"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
-serde_json = "1.0.41"
+futures             = "0.3.16"
+jsonrpc-core        = "18.0.0"
+pubsub              = { package = "jsonrpc-pubsub", version = "18.0.0" }
+log                 = "0.4.8"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
+serde_json          = "1.0.41"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 http = { package = "jsonrpc-http-server", version = "18.0.0" }
-ipc = { package = "jsonrpc-ipc-server", version = "18.0.0" }
-ws = { package = "jsonrpc-ws-server", version = "18.0.0" }
+ipc  = { package = "jsonrpc-ipc-server", version = "18.0.0" }
+ws   = { package = "jsonrpc-ws-server", version = "18.0.0" }

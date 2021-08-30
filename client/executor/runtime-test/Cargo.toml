@@ -1,35 +1,35 @@
 [package]
-name = "sc-runtime-test"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-build = "build.rs"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-publish = false
-homepage = "https://substrate.dev"
+name       = "sc-runtime-test"
+version    = "2.0.0"
+authors    = ["Parity Technologies <admin@parity.io>"]
+edition    = "2018"
+build      = "build.rs"
+license    = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+publish    = false
+homepage   = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-core    = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-io      = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
-sp-tasks = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/tasks" }
+sp-std     = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-tasks   = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/tasks" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
 
 [features]
-default = [ "std" ]
+default = ["std"]
 std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-sandbox/std",
 	"sp-std/std",
- 	"sp-tasks/std",
+	"sp-tasks/std",
 ]

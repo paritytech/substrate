@@ -1,14 +1,14 @@
 [package]
-name = "sp-arithmetic"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-description = "Minimal fixed point arithmetic primitives and types for runtime."
+name          = "sp-arithmetic"
+version       = "4.0.0-dev"
+authors       = ["Parity Technologies <admin@parity.io>"]
+edition       = "2018"
+license       = "Apache-2.0"
+homepage      = "https://substrate.dev"
+repository    = "https://github.com/paritytech/substrate/"
+description   = "Minimal fixed point arithmetic primitives and types for runtime."
 documentation = "https://docs.rs/sp-arithmetic"
-readme = "README.md"
+readme        = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -26,8 +26,8 @@ serde = { version = "1.0.126", optional = true, features = ["derive"] }
 sp-debug-derive = { version = "3.0.0", default-features = false, path = "../debug-derive" }
 
 [dev-dependencies]
-rand = "0.7.2"
-criterion = "0.3"
+rand            = "0.7.2"
+criterion       = "0.3"
 primitive-types = "0.10.0"
 
 [features]
@@ -41,5 +41,5 @@ std = [
 ]
 
 [[bench]]
-name = "bench"
+name    = "bench"
 harness = false

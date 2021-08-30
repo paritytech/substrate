@@ -1,0 +1,25 @@
+# Cargo.toml formatting options. Supported by vscode's 'Even better toml' extension.
+# Also available as a cli tool should you wish to add it to a git hook.
+
+include = ["Cargo.toml", "**/Cargo.toml"]
+
+[formatting]
+# See https://taplo.tamasfe.dev/configuration/#formatting-options
+
+# Align consecutive entries vertically.
+align_entries = true
+
+# Maximum column width in characters, affects array expansion and collapse, this doesn't take whitespace into account.
+# Note that this is not set in stone, and works on a best-effort basis.
+column_width = 120
+
+# Alphabetically reorder keys that are not separated by empty lines.
+reorder_keys = false
+
+align_comments = false
+array_auto_collapse = false
+array_auto_expand = false
+array_trailing_comma = true
+
+# The substring that is used for indentation, should be tabs or spaces (but technically can be anything).
+indent_string = '	'

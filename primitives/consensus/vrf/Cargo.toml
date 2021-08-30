@@ -1,22 +1,22 @@
 [package]
-name = "sp-consensus-vrf"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
+name        = "sp-consensus-vrf"
+version     = "0.10.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for VRF based consensus"
-edition = "2018"
-license = "Apache-2.0"
-repository = "https://github.com/paritytech/substrate/"
-homepage = "https://substrate.dev"
-readme = "README.md"
+edition     = "2018"
+license     = "Apache-2.0"
+repository  = "https://github.com/paritytech/substrate/"
+homepage    = "https://substrate.dev"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false }
+codec      = { version = "2.0.0", package = "parity-scale-codec", default-features = false }
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false }
-sp-std = { version = "4.0.0-dev", path = "../../std", default-features = false }
-sp-core = { version = "4.0.0-dev", path = "../../core", default-features = false }
+sp-std     = { version = "4.0.0-dev", path = "../../std", default-features = false }
+sp-core    = { version = "4.0.0-dev", path = "../../core", default-features = false }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
 
 [features]

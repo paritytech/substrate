@@ -1,21 +1,21 @@
 [package]
-name = "sc-consensus-babe"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-description = "BABE consensus algorithm for substrate"
-edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name          = "sc-consensus-babe"
+version       = "0.10.0-dev"
+authors       = ["Parity Technologies <admin@parity.io>"]
+description   = "BABE consensus algorithm for substrate"
+edition       = "2018"
+license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage      = "https://substrate.dev"
+repository    = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-consensus-babe"
-readme = "README.md"
+readme        = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", features = [
-    "derive",
+	"derive",
 ] }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
@@ -54,11 +54,11 @@ retain_mut = "0.1.3"
 async-trait = "0.1.50"
 
 [dev-dependencies]
-sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
-sc-network = { version = "0.10.0-dev", path = "../../network" }
-sc-network-test = { version = "0.8.0", path = "../../network/test" }
+sp-timestamp                  = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-tracing                    = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
+sc-network                    = { version = "0.10.0-dev", path = "../../network" }
+sc-network-test               = { version = "0.8.0", path = "../../network/test" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-rand_chacha = "0.2.2"
-tempfile = "3.1.0"
+sc-block-builder              = { version = "0.10.0-dev", path = "../../block-builder" }
+rand_chacha                   = "0.2.2"
+tempfile                      = "3.1.0"

@@ -1,13 +1,13 @@
 [package]
-name = "sc-executor-wasmtime"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "sc-executor-wasmtime"
+version     = "0.10.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "Defines a `WasmRuntime` that uses the Wasmtime JIT to execute."
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -25,11 +25,11 @@ sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runt
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
 wasmtime = { version = "0.27.0", default-features = false, features = [
-    "cache",
-    "parallel-compilation",
+	"cache",
+	"parallel-compilation",
 ] }
 
 [dev-dependencies]
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-wat = "1.0"
+sp-io           = { version = "4.0.0-dev", path = "../../../primitives/io" }
+wat             = "1.0"

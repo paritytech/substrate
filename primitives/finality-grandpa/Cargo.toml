@@ -1,30 +1,30 @@
 [package]
-name = "sp-finality-grandpa"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-description = "Primitives for GRANDPA integration, suitable for WASM compilation."
+name          = "sp-finality-grandpa"
+version       = "4.0.0-dev"
+authors       = ["Parity Technologies <admin@parity.io>"]
+edition       = "2018"
+license       = "Apache-2.0"
+homepage      = "https://substrate.dev"
+repository    = "https://github.com/paritytech/substrate/"
+description   = "Primitives for GRANDPA integration, suitable for WASM compilation."
 documentation = "https://docs.rs/sp-finality-grandpa"
-readme = "README.md"
+readme        = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-grandpa = { package = "finality-grandpa", version = "0.14.1", default-features = false, features = ["derive-codec"] }
-log = { version = "0.4.8", optional = true }
-serde = { version = "1.0.126", optional = true, features = ["derive"] }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+codec                 = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+grandpa               = { package = "finality-grandpa", version = "0.14.1", default-features = false, features = ["derive-codec"] }
+log                   = { version = "0.4.8", optional = true }
+serde                 = { version = "1.0.126", optional = true, features = ["derive"] }
+sp-api                = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../application-crypto" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
-sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../keystore", optional = true }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
+sp-core               = { version = "4.0.0-dev", default-features = false, path = "../core" }
+sp-keystore           = { version = "0.10.0-dev", default-features = false, path = "../keystore", optional = true }
+sp-runtime            = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
+sp-std                = { version = "4.0.0-dev", default-features = false, path = "../std" }
 
 [features]
 default = ["std"]

@@ -1,25 +1,25 @@
 [package]
-name = "node-testing"
-version = "3.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
+name        = "node-testing"
+version     = "3.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
 description = "Test utilities for Substrate node."
-edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-publish = true
+edition     = "2018"
+license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
+publish     = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-service = { version = "0.10.0-dev", features = [
-    "test-helpers",
-    "db",
+	"test-helpers",
+	"db",
 ], path = "../../../client/service" }
 sc-client-db = { version = "0.10.0-dev", path = "../../../client/db/", features = [
-    "kvdb-rocksdb",
-    "parity-db",
+	"kvdb-rocksdb",
+	"parity-db",
 ] }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api/" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
@@ -32,7 +32,7 @@ sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = [
-    "wasmtime",
+	"wasmtime",
 ] }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }

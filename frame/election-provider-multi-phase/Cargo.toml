@@ -1,13 +1,13 @@
 [package]
-name = "pallet-election-provider-multi-phase"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "pallet-election-provider-multi-phase"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "PALLET two phase election providers"
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -20,14 +20,14 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 log = { version = "0.4.14", default-features = false }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-system  = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
+sp-io                           = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-std                          = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-core                         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-runtime                      = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-npos-elections               = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-arithmetic                   = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
@@ -40,16 +40,15 @@ strum = { optional = true, version = "0.21.0" }
 strum_macros = { optional = true, version = "0.21.1" }
 
 [dev-dependencies]
-parking_lot = "0.11.0"
-rand = { version = "0.7.3" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-frame-election-provider-support = { version = "4.0.0-dev", features = [
-], path = "../election-provider-support" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
+parking_lot                     = "0.11.0"
+rand                            = { version = "0.7.3" }
+sp-core                         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io                           = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-npos-elections               = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-tracing                      = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+frame-election-provider-support = { version = "4.0.0-dev", features = [], path = "../election-provider-support" }
+pallet-balances                 = { version = "4.0.0-dev", path = "../balances" }
+frame-benchmarking              = { version = "4.0.0-dev", path = "../benchmarking" }
 
 [features]
 default = ["std"]

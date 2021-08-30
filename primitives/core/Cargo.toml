@@ -1,12 +1,12 @@
 [package]
-name = "sp-core"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
-description = "Shareable Substrate types."
+name          = "sp-core"
+version       = "4.0.0-dev"
+authors       = ["Parity Technologies <admin@parity.io>"]
+edition       = "2018"
+license       = "Apache-2.0"
+homepage      = "https://substrate.dev"
+repository    = "https://github.com/paritytech/substrate/"
+description   = "Shareable Substrate types."
 documentation = "https://docs.rs/sp-core"
 
 [package.metadata.docs.rs]
@@ -69,13 +69,13 @@ sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path =
 
 [dev-dependencies]
 sp-serializer = { version = "3.0.0", path = "../serializer" }
-hex-literal = "0.3.1"
-rand = "0.7.2"
-criterion = "0.3.3"
-serde_json = "1.0"
+hex-literal   = "0.3.1"
+rand          = "0.7.2"
+criterion     = "0.3.3"
+serde_json    = "1.0"
 
 [[bench]]
-name = "bench"
+name    = "bench"
 harness = false
 
 [lib]

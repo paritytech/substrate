@@ -1,11 +1,11 @@
 [package]
-name = "pallet-contracts-proc-macro"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "pallet-contracts-proc-macro"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "Procedural macros used in pallet_contracts"
 
 [package.metadata.docs.rs]
@@ -16,8 +16,8 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = "1"
-quote = "1"
-syn = "1"
+quote       = "1"
+syn         = "1"
 
 [dev-dependencies]
 

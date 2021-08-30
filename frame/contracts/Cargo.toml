@@ -1,13 +1,13 @@
 [package]
-name = "pallet-contracts"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "pallet-contracts"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for WASM contracts"
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -27,32 +27,32 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-rand = { version = "0.8", optional = true, default-features = false }
+rand     = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
 # Substrate Dependencies
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-benchmarking          = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support               = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system                = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "common" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-core                     = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io                       = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime                  = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-sandbox                  = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
+sp-std                      = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-assert_matches = "1"
-hex-literal = "0.3"
+assert_matches    = "1"
+hex-literal       = "0.3"
 pretty_assertions = "0.7"
-wat = "1"
+wat               = "1"
 
 # Substrate Dependencies
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+pallet-balances                   = { version = "4.0.0-dev", path = "../balances" }
+pallet-timestamp                  = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", path = "../randomness-collective-flip" }
-pallet-utility = { version = "4.0.0-dev", path = "../utility" }
+pallet-utility                    = { version = "4.0.0-dev", path = "../utility" }
 
 [features]
 default = ["std"]

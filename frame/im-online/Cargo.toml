@@ -1,29 +1,29 @@
 [package]
-name = "pallet-im-online"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "pallet-im-online"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME's I'm online pallet"
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
-pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-log = { version = "0.4.14", default-features = false }
+pallet-authorship     = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
+codec                 = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-core               = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-std                = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-io                 = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-staking            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+frame-support         = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system          = { version = "4.0.0-dev", default-features = false, path = "../system" }
+log                   = { version = "0.4.14", default-features = false }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 

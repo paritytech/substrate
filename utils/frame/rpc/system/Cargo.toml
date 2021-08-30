@@ -1,35 +1,35 @@
 [package]
-name = "substrate-frame-rpc-system"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name        = "substrate-frame-rpc-system"
+version     = "4.0.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
+edition     = "2018"
+license     = "Apache-2.0"
+homepage    = "https://substrate.dev"
+repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME's system exposed over Substrate RPC"
-readme = "README.md"
+readme      = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-futures = "0.3.16"
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = "18.0.0"
-jsonrpc-derive = "18.0.0"
-log = "0.4.8"
-sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
-sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
+sc-client-api                = { version = "4.0.0-dev", path = "../../../../client/api" }
+codec                        = { package = "parity-scale-codec", version = "2.0.0" }
+futures                      = "0.3.16"
+jsonrpc-core                 = "18.0.0"
+jsonrpc-core-client          = "18.0.0"
+jsonrpc-derive               = "18.0.0"
+log                          = "0.4.8"
+sp-runtime                   = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
+sp-api                       = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }
-sp-core = { version = "4.0.0-dev", path = "../../../../primitives/core" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../../client/transaction-pool/api" }
-sp-block-builder = { version = "4.0.0-dev", path = "../../../../primitives/block-builder" }
-sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
+sp-core                      = { version = "4.0.0-dev", path = "../../../../primitives/core" }
+sp-blockchain                = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
+sc-transaction-pool-api      = { version = "4.0.0-dev", path = "../../../../client/transaction-pool/api" }
+sp-block-builder             = { version = "4.0.0-dev", path = "../../../../primitives/block-builder" }
+sc-rpc-api                   = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
-sp-tracing = { version = "4.0.0-dev", path = "../../../../primitives/tracing" }
-sc-transaction-pool = { version = "4.0.0-dev", path = "../../../../client/transaction-pool" }
+sp-tracing                    = { version = "4.0.0-dev", path = "../../../../primitives/tracing" }
+sc-transaction-pool           = { version = "4.0.0-dev", path = "../../../../client/transaction-pool" }

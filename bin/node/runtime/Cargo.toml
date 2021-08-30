@@ -1,11 +1,11 @@
 [package]
-name = "node-runtime"
-version = "3.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-build = "build.rs"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
+name       = "node-runtime"
+version    = "3.0.0-dev"
+authors    = ["Parity Technologies <admin@parity.io>"]
+edition    = "2018"
+build      = "build.rs"
+license    = "Apache-2.0"
+homepage   = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
@@ -24,21 +24,21 @@ log = { version = "0.4.14", default-features = false }
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
-sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
-node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
-sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-keyring = { version = "4.0.0-dev", optional = true, path = "../../../primitives/keyring" }
-sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
-sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
+sp-consensus-babe      = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
+sp-block-builder       = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
+sp-inherents           = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
+node-primitives        = { version = "2.0.0", default-features = false, path = "../primitives" }
+sp-offchain            = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
+sp-core                = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-std                 = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-api                 = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
+sp-runtime             = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-staking             = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
+sp-keyring             = { version = "4.0.0-dev", optional = true, path = "../../../primitives/keyring" }
+sp-session             = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
+sp-transaction-pool    = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-version             = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
+sp-npos-elections      = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }

@@ -1,36 +1,36 @@
 [package]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
+name        = "sc-finality-grandpa-rpc"
+version     = "0.10.0-dev"
+authors     = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
-repository = "https://github.com/paritytech/substrate/"
-edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-readme = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+edition     = "2018"
+license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+readme      = "README.md"
 
 [dependencies]
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../" }
-sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-finality-grandpa = { version = "0.14.1", features = ["derive-codec"] }
-jsonrpc-core = "18.0.0"
+sc-rpc              = { version = "4.0.0-dev", path = "../../rpc" }
+sp-blockchain       = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core             = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime          = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+finality-grandpa    = { version = "0.14.1", features = ["derive-codec"] }
+jsonrpc-core        = "18.0.0"
 jsonrpc-core-client = "18.0.0"
-jsonrpc-derive = "18.0.0"
-jsonrpc-pubsub = "18.0.0"
-futures = "0.3.16"
-serde = { version = "1.0.105", features = ["derive"] }
-serde_json = "1.0.50"
-log = "0.4.8"
-derive_more = "0.99.2"
-parity-scale-codec = { version = "2.0.0", features = ["derive"] }
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+jsonrpc-derive      = "18.0.0"
+jsonrpc-pubsub      = "18.0.0"
+futures             = "0.3.16"
+serde               = { version = "1.0.105", features = ["derive"] }
+serde_json          = "1.0.50"
+log                 = "0.4.8"
+derive_more         = "0.99.2"
+parity-scale-codec  = { version = "2.0.0", features = ["derive"] }
+sc-client-api       = { version = "4.0.0-dev", path = "../../api" }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
-    "test-helpers",
+	"test-helpers",
 ] }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
