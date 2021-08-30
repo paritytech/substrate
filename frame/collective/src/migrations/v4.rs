@@ -16,7 +16,10 @@
 // limitations under the License.
 
 use frame_support::{
-	traits::{Get, GetStorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX},
+	traits::{
+		Get, GetStorageVersion, PalletInfoAccess, StorageVersion,
+		STORAGE_VERSION_STORAGE_KEY_POSTFIX,
+	},
 	weights::Weight,
 };
 use sp_core::hexdisplay::HexDisplay;
@@ -31,7 +34,7 @@ use sp_io::hashing::twox_128;
 /// The migration will look into the storage version in order not to trigger a migration on an up
 /// to date storage. Thus the on chain storage version must be less than 4 in order to trigger the
 /// migration.
-pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
+pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
 	old_pallet_name: N,
 	new_pallet_name: N,
 ) -> Weight {
@@ -59,6 +62,7 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
 			old_pallet_name.as_bytes(),
 			new_pallet_name.as_bytes(),
 		);
+		StorageVersion::new(4).put::<P>();
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
 		log::warn!(
