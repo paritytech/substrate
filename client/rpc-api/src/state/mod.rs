@@ -258,6 +258,15 @@ pub trait StateApi<Hash> {
 	/// 	http://localhost:9933/
 	/// ```
 	///
+	/// - Get tracing events with all `storage_keys` and method ('Put')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", "Put"]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
 	/// ### Params
 	///
 	/// - `block` (param index 0): Hash of the block to trace.
