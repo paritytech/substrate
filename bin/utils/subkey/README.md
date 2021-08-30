@@ -181,19 +181,6 @@ Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d66
 
 **Note**: While `Bob`, having a short name (3 chars), got a result rather quickly, it will take much longer for `Alice` who has a much longer name, thus the chances to generate a random address that contains the chain `alice` will be much smaller.
 
-### Signing a transaction
-
-Sign a transaction for an encoded `Call`.
-
-    subkey sign-transaction \
-        --call <call-as-hex> \
-        --nonce 0 \
-        --suri <secret-uri> \
-        --password <password> \
-        --prior-block-hash <prior-block-hash-as-hex>
-
-Will output a signed and encoded [`UncheckedExtrinsic`](https://github.com/paritytech/substrate/blob/master/primitives/runtime/src/generic/unchecked_extrinsic.rs#L39-L49) as hex.
-
 ## License
 
 License: GPL-3.0-or-later WITH Classpath-exception-2.0
