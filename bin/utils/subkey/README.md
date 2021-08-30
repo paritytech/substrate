@@ -87,11 +87,27 @@ output:
 
 ### Inspecting a key
 
-You can inspect a given URI (mnemonic, seed, public key, or address) and recover the public key and the address.
+If you have *some data* about a key, `subkey inpsect` will help you discover more information about this key.
 
-    subkey inspect <mnemonic | seed | pubkey | address>
+If you have **secrets** that you would like to verify for instance, you can use:
 
-*Example Output*:
+    subkey inspect < mnemonic | seed >
+
+If you have only **public data**, you can see a subset of the information:
+
+    subkey inspect --public < pubkey | address >
+
+**NOTE**: While you will be able to recover the secret seed from the mnemonic, the opposite is not possible.
+
+**NOTE**: For obvious reasons, the **secrets** cannot be recovered from passing **public data** such as `pubkey` or `address` as input.
+
+*command*:
+
+```
+subkey inspect 0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+```
+
+*Output*:
 
 ```
 Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` is account:
@@ -100,9 +116,11 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
   Account ID:       0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
   SS58 Address:     5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte
 ```
+
 ### Signing
 
-`subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your **public key**:
+`subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your 
+**public key**:
 
     echo -n <msg> | subkey sign --suri <seed|mnemonic>
 
