@@ -56,8 +56,7 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 
 		ctx.register_method("offchain_localStorageSet", |params, offchain| {
 			offchain.deny_unsafe.check_if_safe()?;
-			let (kind, key, value): (StorageKind, Bytes, Bytes) =
-				params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			let (kind, key, value): (StorageKind, Bytes, Bytes) = params.parse()?;
 			let prefix = match kind {
 				StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 				StorageKind::LOCAL => return Err(to_jsonrpsee_error(Error::UnavailableStorageKind)),
@@ -68,8 +67,7 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 
 		ctx.register_method("offchain_localStorageGet", |params, offchain| {
 			offchain.deny_unsafe.check_if_safe()?;
-			let (kind, key): (StorageKind, Bytes) =
-				params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			let (kind, key): (StorageKind, Bytes) = params.parse()?;
 
 			let prefix = match kind {
 				StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
