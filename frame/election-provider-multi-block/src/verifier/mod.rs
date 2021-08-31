@@ -103,8 +103,7 @@ pub trait Verifier {
 	///
 	/// It is the responsibility of the call site to call this function with all appropriate
 	/// `page` arguments.
-	// TODO maybe rename to get_queued_solution_page
-	fn get_valid_page(page: PageIndex) -> Option<Supports<Self::AccountId>>;
+	fn get_queued_solution_page(page: PageIndex) -> Option<Supports<Self::AccountId>>;
 
 	/// Perform the feasibility check of the given solution page.
 	///
@@ -142,15 +141,17 @@ impl<T: Config> Verifier for Pallet<T> {
 		page_index: PageIndex,
 		page_solution: Self::Solution,
 	) -> Result<(), ()> {
+		log!(trace, "setting unverified solution at page_index {}", page_index);
 		VerifyingSolution::<T>::put_page(page_index, page_solution)
 	}
 
 	fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
+		log!(trace, "sealing unverified solution with score {:?}", claimed_score);
 		VerifyingSolution::<T>::seal_unverified_solution(claimed_score)
 	}
 
 	fn check_claimed_score(claimed_score: ElectionScore) -> bool {
-		Self::ensure_correct_final_score_quality(claimed_score).is_ok()
+		Self::ensure_score_quality(claimed_score).is_ok()
 	}
 
 	fn queued_solution() -> Option<ElectionScore> {
@@ -166,8 +167,8 @@ impl<T: Config> Verifier for Pallet<T> {
 		QueuedSolution::<T>::kill();
 	}
 
-	fn get_valid_page(page: PageIndex) -> Option<Supports<Self::AccountId>> {
-		QueuedSolution::<T>::get_valid_page(page)
+	fn get_queued_solution_page(page: PageIndex) -> Option<Supports<Self::AccountId>> {
+		QueuedSolution::<T>::get_queued_solution_page(page)
 	}
 
 	fn feasibility_check_page(

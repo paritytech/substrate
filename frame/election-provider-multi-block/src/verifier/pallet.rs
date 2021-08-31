@@ -83,8 +83,21 @@ mod pallet {
 
 		/// This should be called after all pages of a verifying solution are loaded with
 		/// [`put_page`].
+		///
+		/// If solution is actively being verified this will exit early andreturn an error.
+		///
+		/// If the score is not adequate the the verify solution will be wiped and an error will
+		/// be returned.
 		pub(crate) fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
 			if Self::exists() {
+				log!(warn, "an attempt was made to overwrite the solution actively be verified. This is a system logic error that should be reported.");
+				return Err(())
+			}
+
+			// this is the first check within this pallet of the score. NOTE: this must be the last
+			// check as it wipes the storage of the verifying solution.
+			if let Err(_) = Pallet::<T>::ensure_score_quality(claimed_score) {
+				Self::kill();
 				return Err(())
 			}
 
@@ -124,7 +137,9 @@ mod pallet {
 
 		// -------------------- non-mutating methods
 
-		/// `true` if a SEALED solution is already exist in the verification queue.
+		/// `true` if a SEALED solution is already exist in the verification queue. No other
+		/// submissions to the verifier should be allowed while this is true, else you risk
+		/// overwriting the solution actively being verified.
 		pub(crate) fn exists() -> bool {
 			VerifyingSolutionScore::<T>::exists()
 		}
@@ -339,7 +354,8 @@ mod pallet {
 			QueuedSolutionScore::<T>::get()
 		}
 
-		pub(crate) fn get_valid_page(page: PageIndex) -> Option<Supports<T::AccountId>> {
+		/// Get a page of the current queued (aka valid) solution.
+		pub(crate) fn get_queued_solution_page(page: PageIndex) -> Option<Supports<T::AccountId>> {
 			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
 				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
@@ -451,7 +467,7 @@ mod pallet {
 		}
 
 		/// Set a solution in the queue, to be handed out to the client of this pallet in the next
-		/// call to [`Verifier::get_valid_page`].
+		/// call to [`Verifier::get_queued_solution_page`].
 		///
 		/// This can only be set by `T::ForceOrigin`, and only when the phase is `Emergency`.
 		///
@@ -537,11 +553,7 @@ impl<T: Config> Pallet<T> {
 		let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
 
 		let desired_targets = crate::Snapshot::<T>::desired_targets().unwrap();
-		if final_score == claimed_score &&
-			// TODO shouldn't checking final_score == claimed_score implicitly
-			// check this?
-			// TODO check score is good when starting verifier
-			Self::ensure_correct_final_score_quality(final_score).is_ok() &&
+		if final_score == claimed_score && // claimed_score checked prior in seal_unverified_solution
 			winner_count == desired_targets
 		{
 			// all good, finalize this solution
@@ -553,35 +565,28 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Once we know that a claimed score is correct, now we check it further to be:
-	///
-	/// 1. more than a potentially queued solution
-	/// 2. more than the minimum untrusted score // TODO shouldn't this be done prior to any
-	/// verification
-	pub(super) fn ensure_correct_final_score_quality(
-		correct_score: ElectionScore,
-	) -> Result<(), FeasibilityError> {
-		ensure!(
+	// Ensure that the given score is:
+	//
+	// - better than the queued solution, if one exists.
+	// - greater than the minimum untrusted score.
+	pub(crate) fn ensure_score_quality(score: ElectionScore) -> Result<(), FeasibilityError> {
+		let is_improvement =
 			<Self as super::Verifier>::queued_solution().map_or(true, |best_score| {
 				sp_npos_elections::is_score_better::<sp_runtime::Perbill>(
-					correct_score,
+					score,
 					best_score,
 					T::SolutionImprovementThreshold::get(),
 				)
-			}),
-			FeasibilityError::ScoreTooLow,
-		);
+			});
+		log!(trace, "Is score is an improvement over queued?: {}", is_improvement);
+		ensure!(is_improvement, FeasibilityError::ScoreTooLow);
 
-		ensure!(
+		let is_greater_than_min_trusted =
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
-				sp_npos_elections::is_score_better(
-					correct_score,
-					min_score,
-					sp_runtime::Perbill::zero(),
-				)
-			}),
-			FeasibilityError::ScoreTooLow
-		);
+				sp_npos_elections::is_score_better(score, min_score, sp_runtime::Perbill::zero())
+			});
+		log!(trace, "Is score > min trusted score?: {}", is_greater_than_min_trusted);
+		ensure!(is_greater_than_min_trusted, FeasibilityError::ScoreTooLow);
 
 		Ok(())
 	}
@@ -596,6 +601,8 @@ impl<T: Config> Pallet<T> {
 			crate::Snapshot::<T>::targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 		let snapshot_voters =
 			crate::Snapshot::<T>::voters(page).ok_or(FeasibilityError::SnapshotUnavailable)?;
+
+		dbg!(&page, &snapshot_voters, &partial_solution);
 
 		// ----- Start building. First, we need some closures.
 		let cache = helpers::generate_voter_cache::<T>(&snapshot_voters);
@@ -836,7 +843,7 @@ mod feasibility_check {
 #[cfg(test)]
 mod verifier_trait {
 	use super::*;
-	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier};
+	use crate::{mock::*, types::Pagify, unsigned::miner::BaseMiner, verifier::Verifier};
 
 	#[test]
 	fn setting_unverified_and_sealing_it() {
@@ -1046,19 +1053,20 @@ mod verifier_trait {
 			// ensure the good solution is actually better than the ok solution
 			assert!(good_score > ok_score);
 
+			use crate::types::Pagify;
 			// set
-			for (page_index, solution_page) in ok_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
 			// and seal the ok solution against the verifier
 			assert_ok!(
 				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
-					ok_paged.score.clone(),
+					ok_score
 				)
 			);
 
@@ -1071,9 +1079,9 @@ mod verifier_trait {
 			roll_to(28);
 
 			// the valid solution and invalid are flipped
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(ok_score));
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
 
 			// everything about the verifying solution is now removed
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
@@ -1083,18 +1091,18 @@ mod verifier_trait {
 			// the queued solutions backings are cleared
 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
 
-			for (page_index, solution_page) in good_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in good_paged.solution_pages.iter().enumerate() {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
 						page_index as PageIndex,
-						solution_page,
+						solution_page.clone(),
 					)
 				);
 			}
 			// and seal the good solution against the verifier
 			assert_ok!(
 				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
-					good_paged.score.clone(),
+					good_score,
 				)
 			);
 
@@ -1119,7 +1127,7 @@ mod verifier_trait {
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
 
-			// everything about the verifying solution is now removed.
+			// the verifying solution is now removed.
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
@@ -1142,11 +1150,11 @@ mod verifier_trait {
 			assert!(good_score > ok_score);
 
 			// set
-			for (page_index, solution_page) in good_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in good_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
@@ -1165,23 +1173,20 @@ mod verifier_trait {
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
 
 			// set
-			for (page_index, solution_page) in ok_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
-			// and seal the ok solution against the verifier
-			assert_ok!(
+			// and the solution will not be successfully sealed because the score is too low
+			assert!(
 				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
-					ok_paged.score.clone(),
-				)
+					ok_score,
+				).is_err()
 			);
-
-			// finalize the ok solution
-			roll_to(31);
 
 			// the invalid solution is cleared
 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
@@ -1208,9 +1213,11 @@ mod verifier_trait {
 
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 			let score = paged.score.clone();
+			assert_eq!(score, [55, 130, 8650,]);
 
 			let mut bad_paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
-			bad_paged.score = [1, 1, 1];
+			bad_paged.score = [54, 129, 8640];
+
 			// change a vote in the 2nd page to out an out-of-bounds target index
 			assert_eq!(
 				bad_paged.solution_pages[1]
@@ -1223,11 +1230,11 @@ mod verifier_trait {
 			);
 
 			// set
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
@@ -1242,26 +1249,22 @@ mod verifier_trait {
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
 			// set
-			for (page_index, solution_page) in bad_paged.solution_pages.into_iter().enumerate() {
+			for (page_index, solution_page) in bad_paged.solution_pages.pagify(Pages::get()) {
 				assert_ok!(
 					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
+						page_index,
+						solution_page.clone(),
 					)
 				);
 			}
-			// and seal the bad solution against the verifier
-			assert_ok!(
-				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
-					bad_paged.score.clone(),
-				)
-			);
+			// and the bad solution cannot be successfully sealed against the verifier because it
+			// has a bad score.
+			assert!(<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
+				bad_paged.score.clone(),
+			)
+			.is_err());
 
-			// finalize (and then discard) the bad solution
-			roll_to(31);
-
-			// the valid solution is unchanged
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+			// then the verifying solution storage is wiped
 			// TODO is there a better way to verify that this is not the bad solution?
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
@@ -1272,6 +1275,13 @@ mod verifier_trait {
 
 			// the queued solutions backings are cleared
 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+			// the valid solution is unchanged
+			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
 		});
+	}
+
+	fn trying_to_use_set_pages_while_verifying_queued_errors() {
+		todo!("");
 	}
 }

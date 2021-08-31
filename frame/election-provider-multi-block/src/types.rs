@@ -65,15 +65,18 @@ pub trait Pagify<T> {
 
 impl<T> Pagify<T> for Vec<T> {
 	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_> {
-		Box::new(self.iter().enumerate().map(|(p, s)| (p.saturated_into::<PageIndex>(), s)).map(
-			move |(p, s)| {
-				let bound_usize = bound.into();
-				debug_assert!(self.len() <= bound_usize);
-				let padding = bound_usize.saturating_sub(self.len());
-				let new_page = p.saturating_add(padding.saturated_into::<PageIndex>());
-				(new_page, s)
-			},
-		))
+		Box::new(
+			self.into_iter()
+				.enumerate()
+				.map(|(p, s)| (p.saturated_into::<PageIndex>(), s))
+				.map(move |(p, s)| {
+					let bound_usize = bound.into();
+					debug_assert!(self.len() <= bound_usize);
+					let padding = bound_usize.saturating_sub(self.len());
+					let new_page = p.saturating_add(padding.saturated_into::<PageIndex>());
+					(new_page, s)
+				}),
+		)
 	}
 }
 

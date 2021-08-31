@@ -871,7 +871,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
-		T::Verifier::get_valid_page(remaining)
+		T::Verifier::get_queued_solution_page(remaining)
 			.ok_or(ElectionError::SupportPageNotAvailable)
 			.or_else(|err| {
 				// if this is the last page, we might use the fallback to do something.
