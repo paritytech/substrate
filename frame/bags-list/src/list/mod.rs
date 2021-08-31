@@ -81,7 +81,7 @@ impl<T: Config> List<T> {
 
 	/// Regenerate all of the data from the given ids.
 	///
-	/// This is expensive and should only ever be performed during a migration a migration, or when
+	/// This is expensive and should only ever be performed during a migration, or when
 	/// the data needs to be generated from scratch again.
 	///
 	/// This may or may not need to be called at genesis as well, based on the configuration of the
@@ -126,7 +126,7 @@ impl<T: Config> List<T> {
 		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
 		let new_set: BTreeSet<_> = T::BagThresholds::get().iter().copied().collect();
 
-		// accounts that need to be rebaged
+		// accounts that need to be rebagged
 		let mut affected_accounts = BTreeSet::new();
 		// track affected old bags to make sure we only iterate them once
 		let mut affected_old_bags = BTreeSet::new();
@@ -165,7 +165,7 @@ impl<T: Config> List<T> {
 
 		// migrate the voters whose bag has changed
 		let weight_of = T::VoteWeightProvider::vote_weight;
-		Self::remove_many(affected_accounts.iter().map(|id| id));
+		Self::remove_many(&affected_accounts);
 		let num_affected = affected_accounts.len() as u32;
 		let _ = Self::insert_many(affected_accounts.into_iter(), weight_of);
 
