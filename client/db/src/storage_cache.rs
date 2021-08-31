@@ -27,6 +27,7 @@ use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
 use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
+use sp_runtime::StateVersion;
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, StorageCollection, StorageKey,
 	StorageValue, TrieBackend,
@@ -673,22 +674,24 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.storage_root(delta)
+		self.state.storage_root(delta, state_hash)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.child_storage_root(child_info, delta)
+		self.state.child_storage_root(child_info, delta, state_hash)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -871,22 +874,24 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.caching_state().storage_root(delta)
+		self.caching_state().storage_root(delta, state_hash)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.caching_state().child_storage_root(child_info, delta)
+		self.caching_state().child_storage_root(child_info, delta, state_hash)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

@@ -74,6 +74,7 @@ use sp_runtime::{
 		Block as BlockT, DigestFor, HashFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
+	StateVersion,
 	BuildStorage, Justification, Justifications,
 };
 use sp_state_machine::{
@@ -326,6 +327,7 @@ where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: &dyn BuildStorage,
+		genesis_state_hash: StateVersion,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
@@ -338,7 +340,7 @@ where
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
-			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis)?;
+			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_hash)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
@@ -825,7 +827,8 @@ where
 							children_default: Default::default(),
 						};
 
-						let state_root = operation.op.reset_storage(storage)?;
+						let state_hash = self.state_hash_at(BlockId::Hash(parent_hash))?;
+						let state_root = operation.op.reset_storage(storage, state_hash)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
@@ -1848,6 +1851,10 @@ where
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
 		self.runtime_version_at(at).map_err(Into::into)
+	}
+
+	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, sp_api::ApiError> {
+		unimplemented!("TODO")
 	}
 }
 

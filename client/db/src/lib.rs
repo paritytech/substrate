@@ -88,7 +88,7 @@ use sp_runtime::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
-	Justification, Justifications, Storage,
+	Justification, Justifications, Storage, StateVersion,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
@@ -243,22 +243,24 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.storage_root(delta)
+		self.state.storage_root(delta, state_hash)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.child_storage_root(child_info, delta)
+		self.state.child_storage_root(child_info, delta, state_hash)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -824,7 +826,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		}
 	}
 
-	fn apply_new_state(&mut self, storage: Storage) -> ClientResult<Block::Hash> {
+	fn apply_new_state(&mut self, storage: Storage, state_hash: StateVersion) -> ClientResult<Block::Hash> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::InvalidState.into())
 		}
@@ -845,6 +847,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				(&k[..], Some(&v[..]))
 			}),
 			child_delta,
+			state_hash,
 		);
 
 		let changes_trie_config = match changes_trie_config {
@@ -896,7 +899,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, storage: Storage) -> ClientResult<Block::Hash> {
+	fn reset_storage(&mut self, storage: Storage, state_hash: StateVersion) -> ClientResult<Block::Hash> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::GenesisInvalid.into())
 		}
@@ -920,6 +923,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 				(&k[..], Some(&v[..]))
 			}),
 			child_delta,
+			state_hash,
 		);
 
 		self.db_updates = transaction;
@@ -928,8 +932,8 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		Ok(root)
 	}
 
-	fn set_genesis_state(&mut self, storage: Storage, commit: bool) -> ClientResult<Block::Hash> {
-		let root = self.apply_new_state(storage)?;
+	fn set_genesis_state(&mut self, storage: Storage, commit: bool, state_hash: StateVersion) -> ClientResult<Block::Hash> {
+		let root = self.apply_new_state(storage, state_hash)?;
 		self.commit_state = commit;
 		Ok(root)
 	}

@@ -171,10 +171,11 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_hash: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash>;
+	fn reset_storage(&mut self, storage: Storage, state_hash: StateVersion) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.
 	fn update_storage(
@@ -472,7 +473,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		&self,
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
-		state_hash: StateVersion,
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.

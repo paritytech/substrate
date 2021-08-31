@@ -583,7 +583,6 @@ pub struct BlockImportOperation<Block: BlockT> {
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
-	state_hash: Option<StateVersion>,
 }
 
 impl<Block: BlockT> BlockImportOperation<Block>
@@ -594,14 +593,10 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
-		state_hash: Option<StateVersion>,
+		state_hash: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let state_hash = match self.state_hash {
-			Some(state_hash) => state_hash,
-			None => return Err(sp_blockchain::Error::Application(Box::from(format!("{:?}", "Missing call to begin state operation")))),
-		};
 		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
 			(
 				&child_content.child_info,
@@ -667,12 +662,13 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_hash: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, commit)
+		self.apply_storage(storage, commit, state_hash)
 	}
 
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, true)
+	fn reset_storage(&mut self, storage: Storage, state_hash: StateVersion) -> sp_blockchain::Result<Block::Hash> {
+		self.apply_storage(storage, true, state_hash)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>
@@ -782,7 +778,6 @@ where
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
-			state_hash: None,
 		})
 	}
 
@@ -790,10 +785,8 @@ where
 		&self,
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
-		state_hash: StateVersion,
 	) -> sp_blockchain::Result<()> {
 		operation.old_state = self.state_at(block)?;
-		operation.state_hash = Some(state_hash);
 		Ok(())
 	}
 

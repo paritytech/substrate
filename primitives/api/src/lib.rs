@@ -92,8 +92,10 @@ pub use sp_runtime::{
 		Header as HeaderT, NumberFor,
 	},
 	transaction_validity::TransactionValidity,
-	RuntimeString, TransactionOutcome, StateVersion,
+	RuntimeString, TransactionOutcome,
 };
+#[cfg(feature = "std")]
+pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
@@ -507,9 +509,6 @@ pub trait ApiExt<Block: BlockT> {
 	/// Returns the current active proof recorder.
 	fn proof_recorder(&self) -> Option<ProofRecorder<Block>>;
 
-	/// Returns the current state trie inner hashing configuration.
-	fn state_hash(&self) -> StateVersion;
-
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
 	///
@@ -567,6 +566,9 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;
+
+	/// Returns the state version at the given block.
+	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
