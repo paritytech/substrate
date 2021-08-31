@@ -2674,7 +2674,7 @@ dependencies = [
  "itoa",
  "pin-project-lite 0.2.7",
  "socket2 0.4.1",
- "tokio 1.10.0",
+ "tokio",
  "tower-service",
  "tracing",
  "want",
@@ -10377,7 +10377,7 @@ checksum = "7b2f3f698253f03119ac0102beaa64f67a67e08074d03a22d18784104543727f"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.7",
- "tokio 1.10.0",
+ "tokio",
 ]
 
 [[package]]
@@ -10427,7 +10427,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.2.7",
- "tokio 1.10.0",
+ "tokio",
 ]
 
 [[package]]
