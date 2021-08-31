@@ -129,11 +129,11 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 
+	let type_impl_gen = &def.type_impl_generics(event.attr_span);
+	let type_use_gen = &def.type_use_generics(event.attr_span);
+
 	let deposit_event = if let Some((fn_vis, fn_span)) = &event.deposit_event {
-		let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 		let trait_use_gen = &def.trait_use_generics(event.attr_span);
-		let type_impl_gen = &def.type_impl_generics(event.attr_span);
-		let type_use_gen = &def.type_use_generics(event.attr_span);
 
 		quote::quote_spanned!(*fn_span =>
 			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
@@ -167,6 +167,14 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub use #macro_ident as is_event_part_defined;
+		}
+
+		pub trait SubstratePalletEvent {
+			type Event;
+		}
+
+		impl<#type_impl_gen> SubstratePalletEvent for Pallet<#type_use_gen> #completed_where_clause {
+			type Event = #event_ident<#event_use_gen>;
 		}
 
 		#deposit_event

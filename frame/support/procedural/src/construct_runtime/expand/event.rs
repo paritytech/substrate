@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use crate::construct_runtime::Pallet;
+use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Generics, Ident};
+use syn::Ident;
 
 pub fn expand_outer_event(
 	runtime: &Ident,
@@ -30,37 +30,24 @@ pub fn expand_outer_event(
 	let mut query_event_part_macros = Vec::new();
 
 	for pallet_decl in pallet_decls {
-		if let Some(pallet_entry) = pallet_decl.find_part("Event") {
+		if pallet_decl.exists_part("Event") {
 			let path = &pallet_decl.path;
 			let pallet_name = &pallet_decl.name;
 			let index = pallet_decl.index;
-			let instance = pallet_decl.instance.as_ref();
-			let generics = &pallet_entry.generics;
 
-			if instance.is_some() && generics.params.is_empty() {
-				let msg = format!(
-					"Instantiable pallet with no generic `Event` cannot \
-					 be constructed: pallet `{}` must have generic `Event`",
-					pallet_name,
-				);
-				return Err(syn::Error::new(pallet_name.span(), msg))
-			}
-
-			let part_is_generic = !generics.params.is_empty();
-			let pallet_event = match (instance, part_is_generic) {
-				(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
-				(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
-				(None, true) => quote!(#path::Event::<#runtime>),
-				(None, false) => quote!(#path::Event),
+			let pallet_event = if pallet_decl.name == SYSTEM_PALLET_NAME {
+				// Note: for some reason, the compiler recognizes
+				// `<frame_system::Pallet<Runtime> as frame_system::SubstratePalletEvent>::Event` as essentially
+				// the same as the outer/runtime Event type, which then causes an error about conflicting
+				// implementations of the From<Event> trait for the Event type, and thereby necessitating a special
+				// case for the system pallet.
+				quote!(#path::Event<#runtime>)
+			} else {
+				let instance = pallet_decl.instance.as_ref().into_iter();
+				quote!(<#path::Pallet<#runtime #(, #path::#instance)*> as #path::SubstratePalletEvent>::Event)
 			};
 
-			event_variants.extend(expand_event_variant(
-				runtime,
-				pallet_decl,
-				index,
-				instance,
-				generics,
-			));
+			event_variants.extend(quote!(#[codec(index = #index)] #pallet_name(#pallet_event),));
 			event_conversions.extend(expand_event_conversion(scrate, pallet_decl, &pallet_event));
 			query_event_part_macros.push(quote! {
 				#path::__substrate_event_check::is_event_part_defined!(#pallet_name);
@@ -84,33 +71,6 @@ pub fn expand_outer_event(
 
 		#event_conversions
 	})
-}
-
-fn expand_event_variant(
-	runtime: &Ident,
-	pallet: &Pallet,
-	index: u8,
-	instance: Option<&Ident>,
-	generics: &Generics,
-) -> TokenStream {
-	let path = &pallet.path;
-	let variant_name = &pallet.name;
-	let part_is_generic = !generics.params.is_empty();
-
-	match instance {
-		Some(inst) if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
-		},
-		Some(inst) => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
-		},
-		None if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
-		},
-		None => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
-		},
-	}
 }
 
 fn expand_event_conversion(
