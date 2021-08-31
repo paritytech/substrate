@@ -576,11 +576,11 @@ pub const MINER_MAX_ITERATIONS: u32 = 10;
 use frame_election_provider_support::SequentialPhragmen;
 use frame_support::pallet_prelude::Get;
 use sp_npos_elections::ExtendedBalance;
-/// A source of random balance for PhragMMS, which is mean to be run by the OCW election miner.
+/// A source of random balance for NposSolver, which is mean to be run by the OCW election miner.
 pub struct OffchainRandomBalance;
 impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalance {
 	fn get() -> Option<(usize, ExtendedBalance)> {
-		 use sp_runtime::traits::TrailingZeroInput;
+		use sp_runtime::traits::TrailingZeroInput;
 		let iters = match MINER_MAX_ITERATIONS {
 			0 => 0,
 			max @ _ => {

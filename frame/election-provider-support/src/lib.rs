@@ -314,18 +314,6 @@ pub trait NposSolver {
 		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 }
-
-// TODO: zeke: get this to compile, then we need:
-
-// 1. `type Solver: Solver` in `election-provider-multi-phase`
-// 2. `fn mine_solution` and `mind_and_check` need to both become generic over `<S: Solver>` and use
-// that instead of a hardcoded call into `seq_phragmen`
-// 3. in offchain worker call path (`mine_checked_call` and above), use the `T::Solver` for this new
-// generic. 4. in staking-miner, we call directly into `mine_solution` and `mine_and_check`, so we
-// have the freedom to diverge from the runtime
-// 5. proper companion and fixing of top level runtimes.
-// 6. add very minimal config to the staking miner to be capable of running phragmms
-
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
 /// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
 pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
@@ -364,7 +352,7 @@ impl<
 {
 	type AccountId = AccountId;
 	type Accuracy = Accuracy;
-	type Error = sp_npos_elections::Error; // TODO: move phragmms also into `sp_npos_elections::Error`
+	type Error = sp_npos_elections::Error;
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
