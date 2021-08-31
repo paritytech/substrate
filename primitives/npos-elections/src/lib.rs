@@ -134,7 +134,7 @@ pub enum Error {
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
 	// TODO this should be removed once PhragMMS no longer uses &str errors and is migrated to
-	// this error type.
+	// this error type. https://github.com/paritytech/substrate/issues/9666
 	/// An opaque error that could be anything.
 	Opaque,
 }
