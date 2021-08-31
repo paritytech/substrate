@@ -46,7 +46,7 @@ mod upgrade;
 mod utils;
 
 use linked_hash_map::LinkedHashMap;
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -88,7 +88,7 @@ use sp_runtime::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
-	Justification, Justifications, StateVersion, StateVersions, Storage, MigrateState,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
@@ -2075,91 +2075,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
-
-		if let Some(pending_block) = operation.pending_block.as_mut() {
-			let number = pending_block.header.number().clone();
-
-			if let Some((migration_from, migration_to)) = self.state_versions.need_migrate(number) {
-				use std::time;
-				if let Some(prev_block_state) = operation.old_state.as_trie_backend() {
-					let limit_size: Option<u64> = None;
-					let limit_items: Option<u64> = None;
-					let init_root = pending_block.header.state_root().clone();
-					let mut current_root = init_root.clone();
-					let mut start_top = None;
-					let mut start_child = None;
-
-					let timer = time::SystemTime::now();
-
-					info!(
-						"Starting migrating from state root {:x?} at block {:?}",
-						&current_root, &number
-					);
-					loop {
-						let sp_state_machine::MigrateProgress { current_top, current_child, root } =
-							prev_block_state
-								.migrate(
-									migration_from,
-									migration_to,
-									limit_size,
-									limit_items,
-									Some(&mut operation.db_updates),
-									(&operation.storage_updates, &operation.child_storage_updates),
-									sp_state_machine::MigrateProgress {
-										current_top: start_top.take(),
-										current_child: start_child.take(),
-										root: Some(current_root), // TODO non optional rather?
-									},
-								)
-								.map_err(|err| {
-									sp_blockchain::Error::Backend(format!(
-										"error migrating: {}",
-										err
-									))
-								})?;
-
-						start_top = current_top;
-						start_child = current_child;
-						current_root =
-							root.unwrap_or_else(|| pending_block.header.state_root().clone());
-						info!("Finished migration iteration, new state root: {:x?}, elapsed time: {:?}.", &current_root, timer.elapsed());
-						if start_top.is_none() {
-							break
-						}
-					}
-
-					if start_top.is_some() {
-						unreachable!("TODO save progress in dest state in migrate fn and put a differnt progress digest");
-					}
-
-					// TODO ensure no duplicate when setting.
-					let has_finished_digest = match StateVersions::<Block>::migrate_digest(pending_block.header.digest()) {
-						Some(sp_runtime::StateMigrationDigest {
-							from,
-							to,
-							state_root,
-							progress,
-						}) => from == &migration_from
-							&& to == &migration_to
-							&& state_root == &current_root
-							&& progress == &sp_runtime::StateMigrationProgress::Finished,
-						_ => false,
-					};
-
-					if !has_finished_digest {
-						info!("Migration state mismatch with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
-						return Err(ClientError::InvalidMigrationState("No finished digest found on chainspec switch".to_string()));
-					}
-
-					info!("Finished processing migration with final block state hash {:x?}, elapsed time: {:?}", &current_root, timer.elapsed());
-				} else {
-					panic!("Could not migrate at block: {:?}", number);
-				}
-			}
-		}
 
 		match self.try_commit_operation(operation) {
 			Ok(_) => {
@@ -2487,26 +2405,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			})?,
 		};
 
-		// TODO remove this to cache result and use from header_metadata instead.
-		let mut override_state_root = None;
-		let state_version = if let Some(parent_header) = self.blockchain.header(BlockId::Hash(hash))? {
-			match self.state_versions.resolve_migrate(parent_header.number().clone() + 1u32.into(), parent_header.digest(), None)
-				.map_err(|err| sp_blockchain::Error::InvalidMigrationState(format!("{}", err)))? {
-				MigrateState::None(v) => v,
-				MigrateState::Switch(v, dest_root) => {
-					override_state_root = Some(dest_root);
-					v
-				},
-				MigrateState::Start(v, _) => v,
-				MigrateState::Pending(v, _, _) => v,
-			}
-		} else {
-			return Err(sp_blockchain::Error::UnknownBlock(format!(
-				"No header found for {:?}",
-				block
-			)))
-		};
-
 		match self.blockchain.header_metadata(hash) {
 			Ok(ref hdr) => {
 				if !self.have_state_at(&hash, hdr.number) {
@@ -2516,7 +2414,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					)))
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
-					let root = override_state_root.unwrap_or_else(|| hdr.state_root);
+					let root = hdr.state_root;
+					let state_version = self.state_versions.state_version_at(hdr.number);
 					let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));

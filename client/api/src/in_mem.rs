@@ -26,7 +26,7 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
-	Justification, Justifications, MigrateState, StateVersion, StateVersions, Storage,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -113,11 +113,6 @@ struct BlockchainStorage<Block: BlockT> {
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
 	state_versions: StateVersions<Block>,
-	/*
-	// TODO not sure if migration support. TODO replace () by StateMigration.
-	state_migration: Vec<(NumberFor<Block>, ())>,
-	* Probably not (client/api).
-	*/
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -826,33 +821,6 @@ where
 				Some(state) => old_state.update_backend(*header.state_root(), state),
 				None => old_state.clone(),
 			};
-
-			if let Some(parent_header) =
-				self.blockchain.header(BlockId::Hash(header.parent_hash().clone()))?
-			{
-				match self
-					.blockchain
-					.storage
-					.read()
-					.state_versions
-					.resolve_migrate(
-						parent_header.number().clone() + 1u32.into(),
-						parent_header.digest(),
-						None,
-					)
-					.map_err(|err| {
-						sp_blockchain::Error::InvalidMigrationState(format!("{}", err))
-					})? {
-					MigrateState::None(..) => (),
-					MigrateState::Start(..)
-					| MigrateState::Pending(..)
-					| MigrateState::Switch(..) => {
-						return Err(sp_blockchain::Error::InvalidMigrationState(
-							"Migration unsupported for in memory client".to_string(),
-						));
-					}
-				}
-			}
 
 			self.states.write().insert(hash, new_state);
 
