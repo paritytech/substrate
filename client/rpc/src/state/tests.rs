@@ -117,11 +117,13 @@ fn should_return_storage_entries() {
 
 	let keys = &[StorageKey(KEY1.to_vec()), StorageKey(KEY2.to_vec())];
 	assert_eq!(
-		child
-			.storage_entries(prefixed_storage_key(), keys.to_vec(), Some(genesis_hash).into())
-			.wait()
-			.map(|x| x.into_iter().map(|x| x.map(|x| x.0.len()).unwrap()).sum::<usize>())
-			.unwrap(),
+		executor::block_on(child.storage_entries(
+			prefixed_storage_key(),
+			keys.to_vec(),
+			Some(genesis_hash).into()
+		))
+		.map(|x| x.into_iter().map(|x| x.map(|x| x.0.len()).unwrap()).sum::<usize>())
+		.unwrap(),
 		CHILD_VALUE1.len() + CHILD_VALUE2.len()
 	);
 
@@ -129,10 +131,12 @@ fn should_return_storage_entries() {
 	let mut failing_keys = vec![StorageKey(b":soup".to_vec())];
 	failing_keys.extend_from_slice(keys);
 	assert_matches!(
-		child
-			.storage_entries(prefixed_storage_key(), failing_keys, Some(genesis_hash).into())
-			.wait()
-			.map(|x| x.iter().all(|x| x.is_some())),
+		executor::block_on(child.storage_entries(
+			prefixed_storage_key(),
+			failing_keys,
+			Some(genesis_hash).into()
+		))
+		.map(|x| x.iter().all(|x| x.is_some())),
 		Ok(false)
 	);
 }
@@ -163,10 +167,12 @@ fn should_return_child_storage() {
 	// should fail if key does not exist.
 	let failing_key = StorageKey(b":soup".to_vec());
 	assert_matches!(
-		child
-			.storage(prefixed_storage_key(), failing_key, Some(genesis_hash).into())
-			.wait()
-			.map(|x| x.is_some()),
+		executor::block_on(child.storage(
+			prefixed_storage_key(),
+			failing_key,
+			Some(genesis_hash).into()
+		))
+		.map(|x| x.is_some()),
 		Ok(false)
 	);
 
@@ -200,10 +206,12 @@ fn should_return_child_storage_entries() {
 	let child_key = prefixed_storage_key();
 	let keys = vec![StorageKey(b"key1".to_vec()), StorageKey(b"key2".to_vec())];
 
-	let res = child
-		.storage_entries(child_key.clone(), keys.clone(), Some(genesis_hash).into())
-		.wait()
-		.unwrap();
+	let res = executor::block_on(child.storage_entries(
+		child_key.clone(),
+		keys.clone(),
+		Some(genesis_hash).into(),
+	))
+	.unwrap();
 
 	assert_matches!(
 		res[0],
@@ -216,14 +224,16 @@ fn should_return_child_storage_entries() {
 			if d[0] == 43 && d[1] == 44 && d.len() == 2
 	);
 	assert_matches!(
-		child
-			.storage_hash(child_key.clone(), keys[0].clone(), Some(genesis_hash).into(),)
-			.wait()
-			.map(|x| x.is_some()),
+		executor::block_on(child.storage_hash(
+			child_key.clone(),
+			keys[0].clone(),
+			Some(genesis_hash).into()
+		))
+		.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		child.storage_size(child_key.clone(), keys[0].clone(), None).wait(),
+		executor::block_on(child.storage_size(child_key.clone(), keys[0].clone(), None)),
 		Ok(Some(1))
 	);
 }

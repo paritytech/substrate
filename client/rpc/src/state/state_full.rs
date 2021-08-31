@@ -18,16 +18,14 @@
 
 //! State API backend for full nodes.
 
-use futures::{future, stream, FutureExt, SinkExt, StreamExt};
+use futures::{
+	future,
+	future::{err, try_join_all},
+	stream, FutureExt, SinkExt, StreamExt,
+};
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
-use rpc::{
-	futures::{
-		future::{join_all, result},
-		stream, Future, Sink, Stream,
-	},
-	Result as RpcResult,
-};
+use rpc::Result as RpcResult;
 use std::{
 	collections::{BTreeMap, HashMap},
 	ops::Range,
@@ -369,13 +367,15 @@ where
 	) -> FutureResult<Vec<Option<StorageData>>> {
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
-			Err(e) => return Box::new(result(Err(client_err(e)))),
+			Err(e) => return Box::pin(err(client_err(e))),
 		};
 		let client = self.client.clone();
-		Box::new(join_all(
-			keys.into_iter()
-				.map(move |key| client.storage(&BlockId::Hash(block), &key).map_err(client_err)),
-		))
+		try_join_all(keys.into_iter().map(move |key| {
+			let client = client.clone();
+
+			async move { client.clone().storage(&BlockId::Hash(block), &key).map_err(client_err) }
+		}))
+		.boxed()
 	}
 
 	fn storage_size(
@@ -743,22 +743,27 @@ where
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<Option<StorageData>>> {
+		let child_info = match ChildType::from_prefixed_key(&storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) =>
+				Arc::new(ChildInfo::new_default(storage_key)),
+			None => return Box::pin(err(client_err(sp_blockchain::Error::InvalidChildStorageKey))),
+		};
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
-			Err(e) => return Box::new(result(Err(client_err(e)))),
+			Err(e) => return Box::pin(err(client_err(e))),
 		};
 		let client = self.client.clone();
-		Box::new(
-			join_all(keys.into_iter().map(move |key| {
-				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) =>
-						ChildInfo::new_default(storage_key),
-					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
-				};
-				client.child_storage(&BlockId::Hash(block), &child_info, &key)
-			}))
-			.map_err(client_err),
-		)
+		try_join_all(keys.into_iter().map(move |key| {
+			let client = client.clone();
+			let child_info = child_info.clone();
+			async move {
+				client
+					.clone()
+					.child_storage(&BlockId::Hash(block), &child_info, &key)
+					.map_err(client_err)
+			}
+		}))
+		.boxed()
 	}
 
 	fn storage_hash(
