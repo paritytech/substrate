@@ -1,12 +1,12 @@
 [package]
-name        = "pallet-example-parallel"
-version     = "3.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Unlicense"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME example pallet using runtime worker threads"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Unlicense"
+name        = "pallet-example-parallel"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "3.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

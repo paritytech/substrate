@@ -1,13 +1,13 @@
 [package]
-name        = "try-runtime-cli"
-version     = "0.10.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Cli command runtime testing and dry-running"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "try-runtime-cli"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,13 +18,13 @@ parity-scale-codec = { version = "2.0.0" }
 serde              = "1.0.126"
 structopt          = "0.3.8"
 
-sc-service       = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
+sc-chain-spec    = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
 sc-cli           = { version = "0.10.0-dev", path = "../../../../client/cli" }
 sc-executor      = { version = "0.10.0-dev", path = "../../../../client/executor" }
-sc-chain-spec    = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../../../primitives/state-machine" }
-sp-runtime       = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
+sc-service       = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sp-core          = { version = "4.0.0-dev", path = "../../../../primitives/core" }
 sp-keystore      = { version = "0.10.0-dev", path = "../../../../primitives/keystore" }
+sp-runtime       = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
+sp-state-machine = { version = "0.10.0-dev", path = "../../../../primitives/state-machine" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }

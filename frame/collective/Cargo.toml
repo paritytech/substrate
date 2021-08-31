@@ -1,35 +1,39 @@
 [package]
-name        = "pallet-collective"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Collective system: Members of a set of account IDs can make their collective feelings known through dispatched calls from one of two specialized origins."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-collective"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 log = { version = "0.4.14", default-features = false }
+
+codec              = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support      = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system       = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-core            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io              = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std             = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"sp-runtime/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"sp-core/std",
@@ -39,10 +43,5 @@ std = [
 	"sp-runtime/std",
 	"frame-system/std",
 	"log/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"sp-runtime/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

@@ -1,38 +1,40 @@
 [package]
-name       = "sp-api-test"
-version    = "2.0.1"
 authors    = ["Parity Technologies <admin@parity.io>"]
 edition    = "2018"
-license    = "Apache-2.0"
-publish    = false
 homepage   = "https://substrate.dev"
+license    = "Apache-2.0"
+name       = "sp-api-test"
+publish    = false
 repository = "https://github.com/paritytech/substrate/"
+version    = "2.0.1"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-api                        = { version = "4.0.0-dev", path = "../" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sp-version                    = { version = "4.0.0-dev", path = "../../version" }
-sp-tracing                    = { version = "4.0.0-dev", path = "../../tracing" }
-sp-runtime                    = { version = "4.0.0-dev", path = "../../runtime" }
-sp-consensus                  = { version = "0.10.0-dev", path = "../../consensus/common" }
-sc-block-builder              = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+rustversion = "1.0.0"
+trybuild    = "1.0.43"
+
 codec                         = { package = "parity-scale-codec", version = "2.0.0" }
+sc-block-builder              = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+sp-api                        = { version = "4.0.0-dev", path = "../" }
+sp-consensus                  = { version = "0.10.0-dev", path = "../../consensus/common" }
+sp-runtime                    = { version = "4.0.0-dev", path = "../../runtime" }
 sp-state-machine              = { version = "0.10.0-dev", path = "../../state-machine" }
-trybuild                      = "1.0.43"
-rustversion                   = "1.0.0"
+sp-tracing                    = { version = "4.0.0-dev", path = "../../tracing" }
+sp-version                    = { version = "4.0.0-dev", path = "../../version" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 
 [dev-dependencies]
 criterion = "0.3.0"
 futures   = "0.3.9"
 log       = "0.4.14"
-sp-core   = { version = "4.0.0-dev", path = "../../core" }
+
+sp-core = { version = "4.0.0-dev", path = "../../core" }
 
 [[bench]]
-name    = "bench"
 harness = false
+name    = "bench"
 
 # We only need this to generate the correct code.
 [features]

@@ -1,13 +1,13 @@
 [package]
-name        = "sp-session"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Primitives for sessions"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "sp-session"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -16,9 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec      = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-api     = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-core    = { version = "4.0.0-dev", default-features = false, path = "../core" }
-sp-std     = { version = "4.0.0-dev", default-features = false, path = "../std" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
 sp-runtime = { version = "4.0.0-dev", optional = true, path = "../runtime" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
+sp-std     = { version = "4.0.0-dev", default-features = false, path = "../std" }
 
 [features]
 default = ["std"]

@@ -1,33 +1,31 @@
 [package]
-name        = "sc-executor-wasmtime"
-version     = "0.10.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Defines a `WasmRuntime` that uses the Wasmtime JIT to execute."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+name        = "sc-executor-wasmtime"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-libc = "0.2.90"
-cfg-if = "1.0"
-log = "0.4.8"
+cfg-if     = "1.0"
+libc       = "0.2.90"
+log        = "0.4.8"
 scoped-tls = "1.0"
-parity-wasm = "0.42.0"
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-executor-common = { version = "0.10.0-dev", path = "../common" }
-sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
+
+codec                = { package = "parity-scale-codec", version = "2.0.0" }
+parity-wasm          = "0.42.0"
+sc-allocator         = { version = "4.0.0-dev", path = "../../allocator" }
+sc-executor-common   = { version = "0.10.0-dev", path = "../common" }
+sp-core              = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
-wasmtime = { version = "0.27.0", default-features = false, features = [
-	"cache",
-	"parallel-compilation",
-] }
+sp-wasm-interface    = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
+wasmtime             = { version = "0.27.0", default-features = false, features = ["cache", "parallel-compilation"] }
 
 [dev-dependencies]
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }

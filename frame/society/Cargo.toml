@@ -1,33 +1,38 @@
 [package]
-name        = "pallet-society"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME society pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-society"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+rand_chacha = { version = "0.2", default-features = false }
+
 codec         = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system  = { version = "4.0.0-dev", default-features = false, path = "../system" }
-rand_chacha   = { version = "0.2", default-features = false }
+sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core            = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-io              = { version = "4.0.0-dev", path = "../../primitives/io" }
 frame-support-test = { version = "3.0.0", path = "../support/test" }
 pallet-balances    = { version = "4.0.0-dev", path = "../balances" }
+sp-core            = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io              = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"sp-runtime/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"sp-runtime/std",
@@ -35,9 +40,5 @@ std = [
 	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
-]
-runtime-benchmarks = [
-	"sp-runtime/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

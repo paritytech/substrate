@@ -1,26 +1,27 @@
 [package]
-name        = "sp-transaction-storage-proof"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
 description = "Transaction storage proof primitives"
 edition     = "2018"
-license     = "Apache-2.0"
 homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
+license     = "Apache-2.0"
+name        = "sp-transaction-storage-proof"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait = { version = "0.1.50", optional = true }
+log         = { version = "0.4.8", optional = true }
+
+codec        = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-core      = { version = "4.0.0-dev", path = "../core", optional = true }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
 sp-runtime   = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
 sp-std       = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-trie      = { version = "4.0.0-dev", optional = true, path = "../trie" }
-sp-core      = { version = "4.0.0-dev", path = "../core", optional = true }
-codec        = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-log          = { version = "0.4.8", optional = true }
-async-trait  = { version = "0.1.50", optional = true }
 
 [features]
 default = ["std"]

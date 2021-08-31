@@ -1,30 +1,29 @@
 [package]
-name        = "pallet-elections-phragmen"
-version     = "5.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet based on seq-Phragmén election method."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-elections-phragmen"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "5.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 log = { version = "0.4.14", default-features = false }
+
+codec              = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support      = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system       = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-core            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io              = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-npos-elections  = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-runtime         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std             = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances      = { version = "4.0.0-dev", path = "../balances" }
@@ -33,6 +32,11 @@ substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -43,10 +47,5 @@ std = [
 	"sp-io/std",
 	"sp-core/std",
 	"log/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"frame-support/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

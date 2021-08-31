@@ -1,13 +1,13 @@
 [package]
-name        = "pallet-assets"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME asset management pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-assets"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -20,17 +20,22 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 # Needed for type-safe access to storage DB.
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
-frame-system       = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-system       = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core         = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-std          = { version = "4.0.0-dev", path = "../../primitives/std" }
-sp-io           = { version = "4.0.0-dev", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-core         = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io           = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-std          = { version = "4.0.0-dev", path = "../../primitives/std" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"sp-runtime/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"sp-std/std",
@@ -38,10 +43,5 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"sp-runtime/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

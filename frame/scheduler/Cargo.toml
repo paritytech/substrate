@@ -1,22 +1,22 @@
 [package]
-name        = "pallet-scheduler"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Unlicense"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME example pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Unlicense"
+name        = "pallet-scheduler"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [dependencies]
 codec         = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system  = { version = "4.0.0-dev", default-features = false, path = "../system" }
+log           = { version = "0.4.14", default-features = false }
+sp-io         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-log           = { version = "0.4.14", default-features = false }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
@@ -26,6 +26,11 @@ substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"sp-runtime/std",
@@ -35,10 +40,5 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"log/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"frame-support/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

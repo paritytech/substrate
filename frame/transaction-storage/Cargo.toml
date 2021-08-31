@@ -1,34 +1,35 @@
 [package]
-name        = "pallet-transaction-storage"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Unlicense"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Storage chain pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Unlicense"
+name        = "pallet-transaction-storage"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde                        = { version = "1.0.126", optional = true }
-hex-literal                  = { version = "0.3.1", optional = true }
+hex-literal = { version = "0.3.1", optional = true }
+serde       = { version = "1.0.126", optional = true }
+
 codec                        = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+frame-benchmarking           = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support                = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system                 = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances              = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-inherents                 = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-io                        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime                   = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std                       = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io                        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-inherents                 = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-storage-proof" }
-frame-benchmarking           = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
 sp-core                      = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
 
 [features]
 default = ["std"]

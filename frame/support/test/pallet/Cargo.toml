@@ -1,12 +1,12 @@
 [package]
-name       = "frame-support-test-pallet"
-version    = "4.0.0-dev"
 authors    = ["Parity Technologies <admin@parity.io>"]
 edition    = "2018"
-license    = "Apache-2.0"
-publish    = false
 homepage   = "https://substrate.dev"
+license    = "Apache-2.0"
+name       = "frame-support-test-pallet"
+publish    = false
 repository = "https://github.com/paritytech/substrate/"
+version    = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

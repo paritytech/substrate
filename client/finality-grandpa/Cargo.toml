@@ -1,61 +1,60 @@
 [package]
-name          = "sc-finality-grandpa"
-version       = "0.10.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "Integration of the GRANDPA finality gadget into substrate."
 documentation = "https://docs.rs/sc-finality-grandpa"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+name          = "sc-finality-grandpa"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-derive_more           = "0.99.2"
-dyn-clone             = "1.0"
+async-trait   = "0.1.50"
+derive_more   = "0.99.2"
+dyn-clone     = "1.0"
+futures       = "0.3.9"
+futures-timer = "3.0.1"
+log           = "0.4.8"
+parking_lot   = "0.11.1"
+rand          = "0.8.4"
+serde_json    = "1.0.41"
+
+finality-grandpa      = { version = "0.14.1", features = ["derive-codec"] }
 fork-tree             = { version = "3.0.0", path = "../../utils/fork-tree" }
-futures               = "0.3.9"
-futures-timer         = "3.0.1"
-log                   = "0.4.8"
-parking_lot           = "0.11.1"
-rand                  = "0.8.4"
 parity-scale-codec    = { version = "2.0.0", features = ["derive"] }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-sp-arithmetic         = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
-sp-runtime            = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils              = { version = "4.0.0-dev", path = "../../primitives/utils" }
-sp-consensus          = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sc-consensus          = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-core               = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-keystore           = { version = "0.10.0-dev", path = "../../primitives/keystore" }
-sp-api                = { version = "4.0.0-dev", path = "../../primitives/api" }
-sc-telemetry          = { version = "4.0.0-dev", path = "../telemetry" }
-sc-keystore           = { version = "4.0.0-dev", path = "../keystore" }
-serde_json            = "1.0.41"
-sc-client-api         = { version = "4.0.0-dev", path = "../api" }
-sp-blockchain         = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sc-network            = { version = "0.10.0-dev", path = "../network" }
-sc-network-gossip     = { version = "0.10.0-dev", path = "../network-gossip" }
-sp-finality-grandpa   = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
 prometheus-endpoint   = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
 sc-block-builder      = { version = "0.10.0-dev", path = "../block-builder" }
-finality-grandpa      = { version = "0.14.1", features = ["derive-codec"] }
-async-trait           = "0.1.50"
+sc-client-api         = { version = "4.0.0-dev", path = "../api" }
+sc-consensus          = { version = "0.10.0-dev", path = "../consensus/common" }
+sc-keystore           = { version = "4.0.0-dev", path = "../keystore" }
+sc-network            = { version = "0.10.0-dev", path = "../network" }
+sc-network-gossip     = { version = "0.10.0-dev", path = "../network-gossip" }
+sc-telemetry          = { version = "4.0.0-dev", path = "../telemetry" }
+sp-api                = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
+sp-arithmetic         = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
+sp-blockchain         = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus          = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-core               = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-finality-grandpa   = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
+sp-keystore           = { version = "0.10.0-dev", path = "../../primitives/keystore" }
+sp-runtime            = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-utils              = { version = "4.0.0-dev", path = "../../primitives/utils" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-finality-grandpa = { version = "0.14.1", features = [
-	"derive-codec",
-	"test-helpers",
-] }
-sc-network = { version = "0.10.0-dev", path = "../network" }
-sc-network-test = { version = "0.8.0", path = "../network/test" }
-sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
+tempfile       = "3.1.0"
+tokio          = "1.10"
+
+finality-grandpa              = { version = "0.14.1", features = ["derive-codec", "test-helpers"] }
+sc-network                    = { version = "0.10.0-dev", path = "../network" }
+sc-network-test               = { version = "0.8.0", path = "../network/test" }
+sp-keyring                    = { version = "4.0.0-dev", path = "../../primitives/keyring" }
+sp-tracing                    = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-tokio = "1.10"
-tempfile = "3.1.0"

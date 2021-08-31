@@ -1,13 +1,13 @@
 [package]
-name        = "sp-tracing"
-version     = "4.0.0-dev"
-license     = "Apache-2.0"
 authors     = ["Parity Technologies <admin@parity.io>"]
+description = "Instrumentation primitives and macros for Substrate."
 edition     = "2018"
 homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
-description = "Instrumentation primitives and macros for Substrate."
+license     = "Apache-2.0"
+name        = "sp-tracing"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 # let's default to wasm32
@@ -18,25 +18,21 @@ features = ["with-tracing"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
+erased-serde       = { version = "0.3.9", optional = true }
+log                = { version = "0.4.8", optional = true }
+parking_lot        = { version = "0.10.0", optional = true }
+serde              = { version = "1.0.126", optional = true }
+serde_json         = { version = "1.0.41", optional = true }
+slog               = { version = "2.5.2", features = ["nested-values"], optional = true }
+tracing            = { version = "0.1.25", default-features = false }
+tracing-core       = { version = "0.1.17", default-features = false }
+tracing-subscriber = { version = "0.2.19", optional = true, features = ["tracing-log"] }
+
+codec  = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", path = "../std", default-features = false }
-codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = [
-	"derive",
-] }
-tracing = { version = "0.1.25", default-features = false }
-tracing-core = { version = "0.1.17", default-features = false }
-log = { version = "0.4.8", optional = true }
-tracing-subscriber = { version = "0.2.19", optional = true, features = [
-	"tracing-log",
-] }
-parking_lot = { version = "0.10.0", optional = true }
-erased-serde = { version = "0.3.9", optional = true }
-serde = { version = "1.0.126", optional = true }
-serde_json = { version = "1.0.41", optional = true }
-slog = { version = "2.5.2", features = ["nested-values"], optional = true }
 
 [features]
 default = ["std"]
-with-tracing = ["codec/derive", "codec/full"]
 std = [
 	"with-tracing",
 	"tracing/std",
@@ -51,3 +47,4 @@ std = [
 	"serde_json",
 	"slog",
 ]
+with-tracing = ["codec/derive", "codec/full"]

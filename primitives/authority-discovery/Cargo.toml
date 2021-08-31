@@ -1,23 +1,23 @@
 [package]
-name        = "sp-authority-discovery"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
 description = "Authority discovery primitives"
 edition     = "2018"
-license     = "Apache-2.0"
 homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
+license     = "Apache-2.0"
+name        = "sp-authority-discovery"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../application-crypto" }
 codec                 = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
-sp-std                = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-api                = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../application-crypto" }
 sp-runtime            = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
+sp-std                = { version = "4.0.0-dev", default-features = false, path = "../std" }
 
 [features]
 default = ["std"]

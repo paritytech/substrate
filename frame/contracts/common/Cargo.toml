@@ -1,13 +1,13 @@
 [package]
-name        = "pallet-contracts-primitives"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "A crate that hosts a common definitions that are relevant for the pallet-contracts."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-contracts-primitives"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -19,8 +19,8 @@ serde    = { version = "1", features = ["derive"], optional = true }
 
 # Substrate Dependencies (This crate should not rely on frame)
 sp-core    = { version = "4.0.0-dev", path = "../../../primitives/core", default-features = false }
-sp-std     = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-std     = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 
 [features]
 default = ["std"]

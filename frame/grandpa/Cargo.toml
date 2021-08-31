@@ -1,47 +1,49 @@
 [package]
-name        = "pallet-grandpa"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for GRANDPA finality gadget"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-grandpa"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+log = { version = "0.4.14", default-features = false }
+
 codec                 = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
-sp-core               = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-finality-grandpa   = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-io                 = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-session            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
-sp-std                = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-runtime            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-staking            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-benchmarking    = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support         = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system          = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship     = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session        = { version = "4.0.0-dev", default-features = false, path = "../session" }
-log                   = { version = "0.4.14", default-features = false }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
+sp-core               = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-finality-grandpa   = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-io                 = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-session            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-staking            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-std                = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 frame-benchmarking              = { version = "4.0.0-dev", path = "../benchmarking" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 grandpa                         = { package = "finality-grandpa", version = "0.14.1", features = ["derive-codec"] }
-sp-keyring                      = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 pallet-balances                 = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences                 = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking                  = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve     = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 pallet-timestamp                = { version = "4.0.0-dev", path = "../timestamp" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+sp-keyring                      = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = ["frame-benchmarking"]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
@@ -58,5 +60,4 @@ std = [
 	"pallet-session/std",
 	"log/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

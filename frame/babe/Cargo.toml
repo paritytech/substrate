@@ -1,18 +1,20 @@
 [package]
-name        = "pallet-babe"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Consensus extension module for BABE consensus. Collects on-chain randomness from VRF outputs and manages epoch transitions."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-babe"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+log = { version = "0.4.14", default-features = false }
+
 codec                 = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-benchmarking    = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support         = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -28,18 +30,18 @@ sp-runtime            = { version = "4.0.0-dev", default-features = false, path 
 sp-session            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std                = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-log                   = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 pallet-balances                 = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences                 = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking                  = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve     = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 sp-core                         = { version = "4.0.0-dev", path = "../../primitives/core" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = ["frame-benchmarking"]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
@@ -58,5 +60,4 @@ std = [
 	"sp-std/std",
 	"log/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

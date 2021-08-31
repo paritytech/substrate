@@ -1,13 +1,13 @@
 [package]
-name        = "frame-metadata"
-version     = "14.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Decodable variant of the RuntimeMetadata."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "frame-metadata"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "14.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,8 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec   = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 serde   = { version = "1.0.126", optional = true, features = ["derive"] }
-sp-std  = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-std  = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [features]
 default = ["std"]

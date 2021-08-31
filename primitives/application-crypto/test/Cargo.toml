@@ -1,21 +1,21 @@
 [package]
-name        = "sp-application-crypto-test"
-version     = "2.0.0"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
 description = "Integration tests for application-crypto"
-license     = "Apache-2.0"
-publish     = false
+edition     = "2018"
 homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "sp-application-crypto-test"
+publish     = false
 repository  = "https://github.com/paritytech/substrate/"
+version     = "2.0.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core                       = { version = "4.0.0-dev", default-features = false, path = "../../core" }
-sp-keystore                   = { version = "0.10.0-dev", path = "../../keystore", default-features = false }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sp-runtime                    = { version = "4.0.0-dev", path = "../../runtime" }
 sp-api                        = { version = "4.0.0-dev", path = "../../api" }
 sp-application-crypto         = { version = "4.0.0-dev", path = "../" }
+sp-core                       = { version = "4.0.0-dev", default-features = false, path = "../../core" }
+sp-keystore                   = { version = "0.10.0-dev", path = "../../keystore", default-features = false }
+sp-runtime                    = { version = "4.0.0-dev", path = "../../runtime" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

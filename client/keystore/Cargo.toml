@@ -1,28 +1,29 @@
 [package]
-name          = "sc-keystore"
-version       = "4.0.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "Keystore (and session key management) for ed25519 based chains like Polkadot."
 documentation = "https://docs.rs/sc-keystore"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+name          = "sc-keystore"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-async-trait           = "0.1.50"
-derive_more           = "0.99.2"
+async-trait = "0.1.50"
+derive_more = "0.99.2"
+hex         = "0.4.0"
+parking_lot = "0.11.1"
+serde_json  = "1.0.41"
+
 sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
 sp-core               = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-keystore           = { version = "0.10.0-dev", path = "../../primitives/keystore" }
-hex                   = "0.4.0"
-parking_lot           = "0.11.1"
-serde_json            = "1.0.41"
 
 [dev-dependencies]
 tempfile = "3.1.0"

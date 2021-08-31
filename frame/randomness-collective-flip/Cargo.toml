@@ -1,20 +1,20 @@
 [package]
-name        = "pallet-randomness-collective-flip"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME randomness collective flip pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-randomness-collective-flip"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-safe-mix   = { version = "1.0", default-features = false }
 codec      = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+safe-mix   = { version = "1.0", default-features = false }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std     = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 

@@ -1,26 +1,26 @@
 [package]
-name        = "pallet-indices"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME indices management pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-indices"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec         = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-keyring    = { version = "4.0.0-dev", optional = true, path = "../../primitives/keyring" }
-sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-core       = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system  = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-core       = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-keyring    = { version = "4.0.0-dev", optional = true, path = "../../primitives/keyring" }
+sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
@@ -29,6 +29,10 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+]
 std = [
 	"sp-keyring",
 	"codec/std",
@@ -38,9 +42,5 @@ std = [
 	"frame-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"frame-support/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

@@ -1,28 +1,26 @@
 [package]
-name        = "pallet-aura"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME AURA consensus pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-aura"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+codec                 = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-support         = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system          = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-timestamp      = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-sp-consensus-aura = { version = "0.10.0-dev", path = "../../primitives/consensus/aura", default-features = false }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
+sp-consensus-aura     = { version = "0.10.0-dev", path = "../../primitives/consensus/aura", default-features = false }
+sp-runtime            = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std                = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }

@@ -1,33 +1,38 @@
 [package]
-name        = "pallet-uniques"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME NFT asset management pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-uniques"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec              = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-sp-std             = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-runtime         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support      = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system       = { version = "4.0.0-dev", default-features = false, path = "../system" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+sp-runtime         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std             = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-std          = { version = "4.0.0-dev", path = "../../primitives/std" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-core         = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-io           = { version = "4.0.0-dev", path = "../../primitives/io" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-std          = { version = "4.0.0-dev", path = "../../primitives/std" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"sp-runtime/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"sp-std/std",
@@ -35,10 +40,5 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"sp-runtime/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

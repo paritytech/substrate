@@ -1,21 +1,21 @@
 [package]
-name        = "frame-try-runtime"
-version     = "0.10.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for democracy"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "frame-try-runtime"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-api     = { version = "4.0.0-dev", path = "../../primitives/api", default-features = false }
-sp-std     = { version = "4.0.0-dev", path = "../../primitives/std", default-features = false }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
+sp-std     = { version = "4.0.0-dev", path = "../../primitives/std", default-features = false }
 
 frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
 

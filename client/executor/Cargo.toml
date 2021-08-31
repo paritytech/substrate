@@ -1,58 +1,60 @@
 [package]
-name          = "sc-executor"
-version       = "0.10.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "A crate that provides means of executing/dispatching calls into the runtime."
 documentation = "https://docs.rs/sc-executor"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+name          = "sc-executor"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+lazy_static  = "1.4.0"
+libsecp256k1 = "0.6"
+log          = "0.4.8"
+parking_lot  = "0.11.1"
+wasmi        = "0.9.0"
+
 codec                = { package = "parity-scale-codec", version = "2.0.0" }
-sp-io                = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core              = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-tasks             = { version = "4.0.0-dev", path = "../../primitives/tasks" }
-sp-trie              = { version = "4.0.0-dev", path = "../../primitives/trie" }
-sp-version           = { version = "4.0.0-dev", path = "../../primitives/version" }
-sp-panic-handler     = { version = "3.0.0", path = "../../primitives/panic-handler" }
-wasmi                = "0.9.0"
-lazy_static          = "1.4.0"
-sp-api               = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-wasm-interface    = { version = "4.0.0-dev", path = "../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "4.0.0-dev", path = "../../primitives/runtime-interface" }
-sp-externalities     = { version = "0.10.0-dev", path = "../../primitives/externalities" }
 sc-executor-common   = { version = "0.10.0-dev", path = "common" }
 sc-executor-wasmi    = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = true }
-parking_lot          = "0.11.1"
-log                  = "0.4.8"
-libsecp256k1         = "0.6"
+sp-api               = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-core              = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-externalities     = { version = "0.10.0-dev", path = "../../primitives/externalities" }
+sp-io                = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-panic-handler     = { version = "3.0.0", path = "../../primitives/panic-handler" }
+sp-runtime-interface = { version = "4.0.0-dev", path = "../../primitives/runtime-interface" }
+sp-tasks             = { version = "4.0.0-dev", path = "../../primitives/tasks" }
+sp-trie              = { version = "4.0.0-dev", path = "../../primitives/trie" }
+sp-version           = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-wasm-interface    = { version = "4.0.0-dev", path = "../../primitives/wasm-interface" }
 
 [dev-dependencies]
-wat                      = "1.0"
-hex-literal              = "0.3.1"
+hex-literal        = "0.3.1"
+paste              = "1.0"
+regex              = "1"
+tracing            = "0.1.25"
+tracing-subscriber = "0.2.19"
+wat                = "1.0"
+
 sc-runtime-test          = { version = "2.0.0", path = "runtime-test" }
-substrate-test-runtime   = { version = "2.0.0", path = "../../test-utils/runtime" }
-sp-state-machine         = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
-sp-runtime               = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-maybe-compressed-blob = { version = "4.0.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing               = { version = "4.0.0-dev", path = "../tracing" }
-tracing                  = "0.1.25"
-tracing-subscriber       = "0.2.19"
-paste                    = "1.0"
-regex                    = "1"
+sp-maybe-compressed-blob = { version = "4.0.0-dev", path = "../../primitives/maybe-compressed-blob" }
+sp-runtime               = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-state-machine         = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
+substrate-test-runtime   = { version = "2.0.0", path = "../../test-utils/runtime" }
 
 [features]
 default = ["std"]
 # This crate does not have `no_std` support, we just require this for tests
 std               = []
 wasm-extern-trace = []
-wasmtime          = ["sc-executor-wasmtime"]
-wasmi-errno       = ["wasmi/errno"]
 wasmer-sandbox    = ["sc-executor-common/wasmer-sandbox"]
+wasmi-errno       = ["wasmi/errno"]
+wasmtime          = ["sc-executor-wasmtime"]

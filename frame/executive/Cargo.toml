@@ -1,41 +1,39 @@
 [package]
-name        = "frame-executive"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME executives engine"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "frame-executive"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
+codec         = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "4.0.0-dev", default-features = false, path = "../../primitives/tracing" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+frame-system  = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-core       = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-tracing    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/tracing" }
 
 [dev-dependencies]
-hex-literal                = "0.3.1"
-sp-core                    = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-io                      = { version = "4.0.0-dev", path = "../../primitives/io" }
+hex-literal = "0.3.1"
+
 pallet-balances            = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
-sp-version                 = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-core                    = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-inherents               = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sp-io                      = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-version                 = { version = "4.0.0-dev", path = "../../primitives/version" }
 
 [features]
 default = ["std"]
-with-tracing = ["sp-tracing/with-tracing"]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -46,3 +44,4 @@ std = [
 	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
+with-tracing = ["sp-tracing/with-tracing"]

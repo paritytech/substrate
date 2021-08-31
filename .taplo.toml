@@ -14,7 +14,7 @@ align_entries = true
 column_width = 120
 
 # Alphabetically reorder keys that are not separated by empty lines.
-reorder_keys = false
+reorder_keys = true
 
 align_comments = false
 array_auto_collapse = false

@@ -1,15 +1,15 @@
 [package]
-name          = "sp-database"
-version       = "4.0.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "Apache-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "Substrate database trait."
 documentation = "https://docs.rs/sp-database"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "Apache-2.0"
+name          = "sp-database"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "4.0.0-dev"
 
 [dependencies]
-parking_lot = "0.11.1"
 kvdb        = "0.10.0"
+parking_lot = "0.11.1"

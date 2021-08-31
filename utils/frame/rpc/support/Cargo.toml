@@ -1,28 +1,30 @@
 [package]
-name = "substrate-frame-rpc-support"
-version = "3.0.0"
 authors = [
 	"Parity Technologies <admin@parity.io>",
 	"Andrew Dirksen <andrew@dirksen.com>",
 ]
-edition = "2018"
-license = "Apache-2.0"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC for FRAME's support"
+edition = "2018"
+homepage = "https://substrate.dev"
+license = "Apache-2.0"
+name = "substrate-frame-rpc-support"
+repository = "https://github.com/paritytech/substrate/"
+version = "3.0.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures                   = "0.3.16"
-jsonrpc-client-transports = { version = "18.0.0", features = ["http"] }
+futures = "0.3.16"
+serde   = "1"
+
 codec                     = { package = "parity-scale-codec", version = "2.0.0" }
-serde                     = "1"
 frame-support             = { version = "4.0.0-dev", path = "../../../../frame/support" }
-sp-storage                = { version = "4.0.0-dev", path = "../../../../primitives/storage" }
+jsonrpc-client-transports = { version = "18.0.0", features = ["http"] }
 sc-rpc-api                = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
+sp-storage                = { version = "4.0.0-dev", path = "../../../../primitives/storage" }
 
 [dev-dependencies]
+tokio = "1.10"
+
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
-tokio        = "1.10"

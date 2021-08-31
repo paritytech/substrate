@@ -1,12 +1,12 @@
 [package]
-name        = "sp-npos-elections-solution-type"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "NPoS Solution Type"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "sp-npos-elections-solution-type"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,14 +15,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn              = { version = "1.0.58", features = ["full", "visit"] }
-quote            = "1.0"
-proc-macro2      = "1.0.28"
 proc-macro-crate = "1.0.0"
+proc-macro2      = "1.0.28"
+quote            = "1.0"
+syn              = { version = "1.0.58", features = ["full", "visit"] }
 
 [dev-dependencies]
+trybuild = "1.0.43"
+
 parity-scale-codec = "2.0.1"
 sp-arithmetic      = { path = "../../arithmetic", version = "4.0.0-dev" }
 # used by generate_solution_type:
 sp-npos-elections = { path = "..", version = "4.0.0-dev" }
-trybuild          = "1.0.43"

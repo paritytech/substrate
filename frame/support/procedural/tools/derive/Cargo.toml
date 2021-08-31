@@ -1,12 +1,12 @@
 [package]
-name        = "frame-support-procedural-tools-derive"
-version     = "3.0.0"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Use to derive parsing for parsing struct."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "frame-support-procedural-tools-derive"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "3.0.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

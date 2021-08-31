@@ -1,30 +1,31 @@
 [package]
-name       = "frame-support-test"
-version    = "3.0.0"
 authors    = ["Parity Technologies <admin@parity.io>"]
 edition    = "2018"
-license    = "Apache-2.0"
-publish    = false
 homepage   = "https://substrate.dev"
+license    = "Apache-2.0"
+name       = "frame-support-test"
+publish    = false
 repository = "https://github.com/paritytech/substrate/"
+version    = "3.0.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde             = { version = "1.0.126", default-features = false, features = ["derive"] }
-codec             = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-io             = { version = "4.0.0-dev", path = "../../../primitives/io", default-features = false }
-sp-state-machine  = { version = "0.10.0-dev", optional = true, path = "../../../primitives/state-machine" }
-frame-support     = { version = "4.0.0-dev", default-features = false, path = "../" }
-sp-runtime        = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
-sp-core           = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-std            = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
-trybuild          = "1.0.43"
 pretty_assertions = "0.6.1"
 rustversion       = "1.0.0"
-frame-metadata    = { version = "14.0.0-dev", default-features = false, path = "../../metadata" }
-frame-system      = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+serde             = { version = "1.0.126", default-features = false, features = ["derive"] }
+trybuild          = "1.0.43"
+
+codec            = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-metadata   = { version = "14.0.0-dev", default-features = false, path = "../../metadata" }
+frame-support    = { version = "4.0.0-dev", default-features = false, path = "../" }
+frame-system     = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+sp-core          = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-io            = { version = "4.0.0-dev", path = "../../../primitives/io", default-features = false }
+sp-runtime       = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../../../primitives/state-machine" }
+sp-std           = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 # The "std" feature for this pallet is never activated on purpose, in order to test construct_runtime error message
 test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
 

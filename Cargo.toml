@@ -232,8 +232,8 @@ curve25519-dalek  = { opt-level = 3 }
 ed25519-dalek     = { opt-level = 3 }
 flate2            = { opt-level = 3 }
 futures-channel   = { opt-level = 3 }
-hashbrown         = { opt-level = 3 }
 hash-db           = { opt-level = 3 }
+hashbrown         = { opt-level = 3 }
 hmac              = { opt-level = 3 }
 httparse          = { opt-level = 3 }
 integer-sqrt      = { opt-level = 3 }

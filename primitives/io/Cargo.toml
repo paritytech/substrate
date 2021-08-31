@@ -1,38 +1,39 @@
 [package]
-name          = "sp-io"
-version       = "4.0.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "Apache-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "I/O for Substrate runtimes"
 documentation = "https://docs.rs/sp-io"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "Apache-2.0"
+name          = "sp-io"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+futures      = { version = "0.3.1", features = ["thread-pool"], optional = true }
+hash-db      = { version = "0.15.2", default-features = false }
+libsecp256k1 = { version = "0.6", optional = true }
+log          = { version = "0.4.8", optional = true }
+parking_lot  = { version = "0.11.1", optional = true }
+tracing      = { version = "0.1.25", default-features = false }
+tracing-core = { version = "0.1.17", default-features = false }
+
 codec                    = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-hash-db                  = { version = "0.15.2", default-features = false }
 sp-core                  = { version = "4.0.0-dev", default-features = false, path = "../core" }
-sp-keystore              = { version = "0.10.0-dev", default-features = false, optional = true, path = "../keystore" }
-sp-std                   = { version = "4.0.0-dev", default-features = false, path = "../std" }
-libsecp256k1             = { version = "0.6", optional = true }
-sp-state-machine         = { version = "0.10.0-dev", optional = true, path = "../state-machine" }
-sp-wasm-interface        = { version = "4.0.0-dev", path = "../wasm-interface", default-features = false }
-sp-runtime-interface     = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
-sp-maybe-compressed-blob = { version = "4.0.0-dev", optional = true, path = "../maybe-compressed-blob" }
-sp-trie                  = { version = "4.0.0-dev", optional = true, path = "../trie" }
 sp-externalities         = { version = "0.10.0-dev", optional = true, path = "../externalities" }
+sp-keystore              = { version = "0.10.0-dev", default-features = false, optional = true, path = "../keystore" }
+sp-maybe-compressed-blob = { version = "4.0.0-dev", optional = true, path = "../maybe-compressed-blob" }
+sp-runtime-interface     = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
+sp-state-machine         = { version = "0.10.0-dev", optional = true, path = "../state-machine" }
+sp-std                   = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-tracing               = { version = "4.0.0-dev", default-features = false, path = "../tracing" }
-log                      = { version = "0.4.8", optional = true }
-futures                  = { version = "0.3.1", features = ["thread-pool"], optional = true }
-parking_lot              = { version = "0.11.1", optional = true }
-tracing                  = { version = "0.1.25", default-features = false }
-tracing-core             = { version = "0.1.17", default-features = false }
+sp-trie                  = { version = "4.0.0-dev", optional = true, path = "../trie" }
+sp-wasm-interface        = { version = "4.0.0-dev", path = "../wasm-interface", default-features = false }
 
 [features]
 default = ["std"]
@@ -65,6 +66,6 @@ with-tracing = [
 # `#[panic_handler]`, `#[alloc_error_handler]` and `#[global_allocator]`.
 #
 # For the regular wasm runtime builds those are not used.
-disable_panic_handler = []
-disable_oom           = []
 disable_allocator     = []
+disable_oom           = []
+disable_panic_handler = []

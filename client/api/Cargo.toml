@@ -1,42 +1,41 @@
 [package]
-name          = "sc-client-api"
-version       = "4.0.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "Substrate client interfaces."
 documentation = "https://docs.rs/sc-client-api"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+name          = "sc-client-api"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sc-executor = { version = "0.10.0-dev", path = "../executor" }
-sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }
-fnv = "1.0.6"
-futures = "0.3.1"
-hash-db = { version = "0.15.2", default-features = false }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-log = "0.4.8"
+fnv         = "1.0.6"
+futures     = "0.3.1"
+hash-db     = { version = "0.15.2", default-features = false }
+log         = "0.4.8"
 parking_lot = "0.11.1"
-sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
-sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
-sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
+
+codec                   = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+prometheus-endpoint     = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
+sc-executor             = { version = "0.10.0-dev", path = "../executor" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
+sp-api                  = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-blockchain           = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus            = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-core                 = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-database             = { version = "4.0.0-dev", path = "../../primitives/database" }
+sp-externalities        = { version = "0.10.0-dev", path = "../../primitives/externalities" }
+sp-keystore             = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
+sp-runtime              = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-state-machine        = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
+sp-storage              = { version = "4.0.0-dev", path = "../../primitives/storage" }
+sp-trie                 = { version = "4.0.0-dev", path = "../../primitives/trie" }
+sp-utils                = { version = "4.0.0-dev", path = "../../primitives/utils" }
 
 [dev-dependencies]
 sp-test-primitives     = { version = "2.0.0", path = "../../primitives/test-primitives" }

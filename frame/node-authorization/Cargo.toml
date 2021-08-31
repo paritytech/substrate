@@ -1,17 +1,19 @@
 [package]
-name        = "pallet-node-authorization"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for node authorization"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-node-authorization"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+log = { version = "0.4.14", default-features = false }
+
 codec         = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system  = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -19,7 +21,6 @@ sp-core       = { version = "4.0.0-dev", default-features = false, path = "../..
 sp-io         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-log           = { version = "0.4.14", default-features = false }
 
 [features]
 default = ["std"]

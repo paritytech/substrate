@@ -1,22 +1,23 @@
 [package]
-name          = "substrate-frame-cli"
-version       = "4.0.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "Apache-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "cli interface for FRAME"
 documentation = "https://docs.rs/substrate-frame-cli"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "Apache-2.0"
+name          = "substrate-frame-cli"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "4.0.0-dev"
 
 [dependencies]
-sp-core       = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sc-cli        = { version = "0.10.0-dev", path = "../../../client/cli" }
-sp-runtime    = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-structopt     = "0.3.8"
-frame-system  = { version = "4.0.0-dev", path = "../../../frame/system" }
+structopt = "0.3.8"
+
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
+frame-system  = { version = "4.0.0-dev", path = "../../../frame/system" }
+sc-cli        = { version = "0.10.0-dev", path = "../../../client/cli" }
+sp-core       = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime    = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 

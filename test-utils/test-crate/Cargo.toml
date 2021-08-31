@@ -1,17 +1,18 @@
 [package]
-name       = "substrate-test-utils-test-crate"
-version    = "0.1.0"
 authors    = ["Parity Technologies <admin@parity.io>"]
 edition    = "2018"
-license    = "Apache-2.0"
 homepage   = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+license    = "Apache-2.0"
+name       = "substrate-test-utils-test-crate"
 publish    = false
+repository = "https://github.com/paritytech/substrate/"
+version    = "0.1.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
-tokio      = { version = "1.10", features = ["macros"] }
-test-utils = { version = "4.0.0-dev", path = "..", package = "substrate-test-utils" }
+tokio = { version = "1.10", features = ["macros"] }
+
 sc-service = { version = "0.10.0-dev", path = "../../client/service" }
+test-utils = { version = "4.0.0-dev", path = "..", package = "substrate-test-utils" }

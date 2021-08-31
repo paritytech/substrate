@@ -1,34 +1,36 @@
 [package]
-name        = "pallet-offences"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME offences pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "pallet-offences"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+log   = { version = "0.4.14", default-features = false }
+serde = { version = "1.0.126", optional = true }
+
 codec           = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std          = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-serde           = { version = "1.0.126", optional = true }
-sp-runtime      = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-staking      = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support   = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system    = { version = "4.0.0-dev", default-features = false, path = "../system" }
-log             = { version = "0.4.14", default-features = false }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-runtime      = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-staking      = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-std          = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-io   = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io   = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = []
 std = [
 	"pallet-balances/std",
 	"codec/std",
@@ -40,5 +42,4 @@ std = [
 	"frame-system/std",
 	"log/std",
 ]
-runtime-benchmarks = []
 try-runtime = ["frame-support/try-runtime"]

@@ -1,22 +1,22 @@
 [package]
-name       = "sp-runtime-interface-test-wasm"
-version    = "2.0.0"
 authors    = ["Parity Technologies <admin@parity.io>"]
-edition    = "2018"
 build      = "build.rs"
-license    = "Apache-2.0"
+edition    = "2018"
 homepage   = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+license    = "Apache-2.0"
+name       = "sp-runtime-interface-test-wasm"
 publish    = false
+repository = "https://github.com/paritytech/substrate/"
+version    = "2.0.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+sp-core              = { version = "4.0.0-dev", default-features = false, path = "../../core" }
+sp-io                = { version = "4.0.0-dev", default-features = false, path = "../../io" }
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../" }
 sp-std               = { version = "4.0.0-dev", default-features = false, path = "../../std" }
-sp-io                = { version = "4.0.0-dev", default-features = false, path = "../../io" }
-sp-core              = { version = "4.0.0-dev", default-features = false, path = "../../core" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }

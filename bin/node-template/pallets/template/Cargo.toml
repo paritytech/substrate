@@ -1,25 +1,23 @@
 [package]
 authors     = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
-edition     = '2018'
-name        = 'pallet-template'
-version     = "3.0.0"
-license     = "Unlicense"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/substrate-developer-hub/substrate-node-template/"
 description = "FRAME pallet template for defining custom runtime logic."
-readme      = "README.md"
+edition     = '2018'
+homepage    = "https://substrate.dev"
+license     = "Unlicense"
+name        = 'pallet-template'
 publish     = false
+readme      = "README.md"
+repository  = "https://github.com/substrate-developer-hub/substrate-node-template/"
+version     = "3.0.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
-frame-support = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/support" }
-frame-system = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/system" }
+codec              = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-benchmarking = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/benchmarking", optional = true }
+frame-support      = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/support" }
+frame-system       = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/system" }
 
 [dev-dependencies]
 sp-core    = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/core" }

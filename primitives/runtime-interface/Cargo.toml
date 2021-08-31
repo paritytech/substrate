@@ -1,37 +1,39 @@
 [package]
-name          = "sp-runtime-interface"
-version       = "4.0.0-dev"
 authors       = ["Parity Technologies <admin@parity.io>"]
-edition       = "2018"
-license       = "Apache-2.0"
-homepage      = "https://substrate.dev"
-repository    = "https://github.com/paritytech/substrate/"
 description   = "Substrate runtime interface"
 documentation = "https://docs.rs/sp-runtime-interface/"
+edition       = "2018"
+homepage      = "https://substrate.dev"
+license       = "Apache-2.0"
+name          = "sp-runtime-interface"
 readme        = "README.md"
+repository    = "https://github.com/paritytech/substrate/"
+version       = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-wasm-interface               = { version = "4.0.0-dev", path = "../wasm-interface", default-features = false }
-sp-std                          = { version = "4.0.0-dev", default-features = false, path = "../std" }
-sp-tracing                      = { version = "4.0.0-dev", default-features = false, path = "../tracing" }
-sp-runtime-interface-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
-sp-externalities                = { version = "0.10.0-dev", optional = true, path = "../externalities" }
+impl-trait-for-tuples = "0.2.1"
+primitive-types       = { version = "0.10.0", default-features = false }
+static_assertions     = "1.0.0"
+
 codec                           = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-static_assertions               = "1.0.0"
-primitive-types                 = { version = "0.10.0", default-features = false }
+sp-externalities                = { version = "0.10.0-dev", optional = true, path = "../externalities" }
+sp-runtime-interface-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
+sp-std                          = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-storage                      = { version = "4.0.0-dev", default-features = false, path = "../storage" }
-impl-trait-for-tuples           = "0.2.1"
+sp-tracing                      = { version = "4.0.0-dev", default-features = false, path = "../tracing" }
+sp-wasm-interface               = { version = "4.0.0-dev", path = "../wasm-interface", default-features = false }
 
 [dev-dependencies]
-sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
-sp-state-machine               = { version = "0.10.0-dev", path = "../state-machine" }
+rustversion = "1.0.0"
+trybuild    = "1.0.43"
+
 sp-core                        = { version = "4.0.0-dev", path = "../core" }
 sp-io                          = { version = "4.0.0-dev", path = "../io" }
-rustversion                    = "1.0.0"
-trybuild                       = "1.0.43"
+sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
+sp-state-machine               = { version = "0.10.0-dev", path = "../state-machine" }
 
 [features]
 default = ["std"]

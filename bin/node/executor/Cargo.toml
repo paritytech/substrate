@@ -1,18 +1,19 @@
 [package]
-name        = "node-executor"
-version     = "3.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 edition     = "2018"
-license     = "Apache-2.0"
 homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "node-executor"
 repository  = "https://github.com/paritytech/substrate/"
+version     = "3.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec              = { package = "parity-scale-codec", version = "2.0.0" }
+frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 node-primitives    = { version = "2.0.0", path = "../primitives" }
 node-runtime       = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor        = { version = "0.10.0-dev", path = "../../../client/executor" }
@@ -20,10 +21,12 @@ sp-core            = { version = "4.0.0-dev", path = "../../../primitives/core" 
 sp-keystore        = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 sp-state-machine   = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
 sp-trie            = { version = "4.0.0-dev", path = "../../../primitives/trie" }
-frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
-criterion             = "0.3.0"
+criterion = "0.3.0"
+futures   = "0.3.9"
+wat       = "1.0"
+
 frame-support         = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system          = { version = "4.0.0-dev", path = "../../../frame/system" }
 node-testing          = { version = "3.0.0-dev", path = "../testing" }
@@ -34,16 +37,15 @@ pallet-timestamp      = { version = "4.0.0-dev", path = "../../../frame/timestam
 pallet-treasury       = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
 sp-consensus-babe     = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-runtime            = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-externalities      = { version = "0.10.0-dev", path = "../../../primitives/externalities" }
-wat                   = "1.0"
-futures               = "0.3.9"
+sp-runtime            = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+
 
 [features]
-wasmtime    = ["sc-executor/wasmtime"]
-wasmi-errno = ["sc-executor/wasmi-errno"]
 stress-test = []
+wasmi-errno = ["sc-executor/wasmi-errno"]
+wasmtime    = ["sc-executor/wasmtime"]
 
 [[bench]]
-name    = "bench"
 harness = false
+name    = "bench"

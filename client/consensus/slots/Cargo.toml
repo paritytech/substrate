@@ -1,38 +1,39 @@
 [package]
-name        = "sc-consensus-slots"
-version     = "0.10.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
+build       = "build.rs"
 description = "Generic slots-based utilities for consensus"
 edition     = "2018"
-build       = "build.rs"
-license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
+license     = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+name        = "sc-consensus-slots"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait   = "0.1.50"
+futures       = "0.3.9"
+futures-timer = "3.0.1"
+log           = "0.4.11"
+thiserror     = "1.0.21"
+
 codec              = { package = "parity-scale-codec", version = "2.0.0" }
 sc-client-api      = { version = "4.0.0-dev", path = "../../api" }
-sp-core            = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sc-consensus       = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-telemetry       = { version = "4.0.0-dev", path = "../../telemetry" }
+sp-api             = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-arithmetic      = { version = "4.0.0-dev", path = "../../../primitives/arithmetic" }
 sp-blockchain      = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sc-consensus       = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sp-consensus       = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
+sp-core            = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-inherents       = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-runtime         = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-state-machine   = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
-sp-api             = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sc-telemetry       = { version = "4.0.0-dev", path = "../../telemetry" }
-sp-consensus       = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-inherents       = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-timestamp       = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-futures            = "0.3.9"
-futures-timer      = "3.0.1"
-log                = "0.4.11"
-thiserror          = "1.0.21"
-async-trait        = "0.1.50"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

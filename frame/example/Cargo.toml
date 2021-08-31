@@ -1,33 +1,35 @@
 [package]
-name        = "pallet-example"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Unlicense"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME example pallet"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Unlicense"
+name        = "pallet-example"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec              = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+log   = { version = "0.4.14", default-features = false }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support      = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system       = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances    = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-io              = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime         = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std             = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io              = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-log                = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]
+runtime-benchmarks = ["frame-benchmarking"]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
@@ -39,5 +41,4 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

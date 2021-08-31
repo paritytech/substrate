@@ -1,35 +1,41 @@
 [package]
-name        = "frame-system"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "FRAME system module"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "frame-system"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde         = { version = "1.0.126", optional = true, features = ["derive"] }
+log   = { version = "0.4.14", default-features = false }
+serde = { version = "1.0.126", optional = true, features = ["derive"] }
+
 codec         = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 sp-core       = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io         = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
 sp-runtime    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std        = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-version    = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-log           = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-criterion                     = "0.3.3"
+criterion = "0.3.3"
+
 sp-externalities              = { version = "0.10.0-dev", path = "../../primitives/externalities" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"sp-runtime/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+]
 std = [
 	"serde",
 	"codec/std",
@@ -41,12 +47,8 @@ std = [
 	"sp-version/std",
 	"log/std",
 ]
-runtime-benchmarks = [
-	"sp-runtime/runtime-benchmarks",
-	"frame-support/runtime-benchmarks",
-]
 try-runtime = ["frame-support/try-runtime"]
 
 [[bench]]
-name    = "bench"
 harness = false
+name    = "bench"

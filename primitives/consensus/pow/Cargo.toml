@@ -1,23 +1,23 @@
 [package]
-name        = "sp-consensus-pow"
-version     = "0.10.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 edition     = "2018"
-license     = "Apache-2.0"
 homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
+license     = "Apache-2.0"
+name        = "sp-consensus-pow"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "0.10.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-api     = { version = "4.0.0-dev", default-features = false, path = "../../api" }
-sp-std     = { version = "4.0.0-dev", default-features = false, path = "../../std" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
-sp-core    = { version = "4.0.0-dev", default-features = false, path = "../../core" }
 codec      = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-api     = { version = "4.0.0-dev", default-features = false, path = "../../api" }
+sp-core    = { version = "4.0.0-dev", default-features = false, path = "../../core" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
+sp-std     = { version = "4.0.0-dev", default-features = false, path = "../../std" }
 
 [features]
 default = ["std"]

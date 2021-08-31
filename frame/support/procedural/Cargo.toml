@@ -1,12 +1,12 @@
 [package]
-name        = "frame-support-procedural"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "Proc macro of Support code for the runtime."
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "frame-support-procedural"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,11 +15,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
+Inflector   = "0.11.4"
+proc-macro2 = "1.0.28"
+quote       = "1.0.3"
+syn         = { version = "1.0.58", features = ["full"] }
+
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
-proc-macro2                    = "1.0.28"
-quote                          = "1.0.3"
-Inflector                      = "0.11.4"
-syn                            = { version = "1.0.58", features = ["full"] }
 
 [features]
 default = ["std"]

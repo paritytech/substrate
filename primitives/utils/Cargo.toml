@@ -1,19 +1,19 @@
 [package]
-name        = "sp-utils"
-version     = "4.0.0-dev"
 authors     = ["Parity Technologies <admin@parity.io>"]
-edition     = "2018"
-license     = "Apache-2.0"
-homepage    = "https://substrate.dev"
-repository  = "https://github.com/paritytech/substrate/"
 description = "I/O for Substrate runtimes"
+edition     = "2018"
+homepage    = "https://substrate.dev"
+license     = "Apache-2.0"
+name        = "sp-utils"
 readme      = "README.md"
+repository  = "https://github.com/paritytech/substrate/"
+version     = "4.0.0-dev"
 
 [dependencies]
 futures       = "0.3.9"
+futures-timer = "3.0.2"
 lazy_static   = "1.4.0"
 prometheus    = { version = "0.11.0", default-features = false }
-futures-timer = "3.0.2"
 
 [features]
 default = ["metered"]
