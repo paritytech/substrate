@@ -20,15 +20,16 @@
 //! ## Overall idea
 //!
 //! [`pallet_election_provider_multi_phase`] provides the basic ability for NPoS solutions to be
-//! computed offchain (anywhere) and submitted back to the chain as signed or unsigned transaction,
-//! with sensible configurations and fail-safe mechanisms to ensure system safety. Nonetheless, it
-//! has a limited capacity in terms of number of voters it can process in a single block.
+//! computed offchain (essentially anywhere) and submitted back to the chain as signed or unsigned
+//! transaction, with sensible configurations and fail-safe mechanisms to ensure system safety.
+//! Nonetheless, it has a limited capacity in terms of number of voters it can process in a **single
+//! block**.
 //!
-//! This pallet takes [`pallet_election_provider_multi_phase`], keeps most of ides core premises,
-//! and extends it to support paginated, multi-block operations. The final goal of this pallet is
-//! scale linearly with the number of blocks allocated to the elections. In principle, with large
-//! enough blocks (in a dedicated parachain), the number of voters included in the NPoS system can
-//! grow significantly (yet, obviously not indefinitely).
+//! This pallet takes [`pallet_election_provider_multi_phase`], keeps most of its ideas and core
+//! premises, and extends it to support paginated, multi-block operations. The final goal of this
+//! pallet is scale linearly with the number of blocks allocated to the elections. In principle,
+//! with large enough blocks (in a dedicated parachain), the number of voters included in the NPoS
+//! system can grow significantly (yet, obviously not indefinitely).
 //!
 //! ## Companion pallets
 //!
@@ -101,11 +102,11 @@
 //! origin can not bail out in any way, if their solution is queued.
 //!
 //! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
-//! until drained). Each solution undergoes an expensive `Pallet::feasibility_check`, which
-//! ensures the score claimed by this score was correct, and it is valid based on the election data
-//! (i.e. votes and candidates). At each step, if the current best solution passes the feasibility
-//! check, it is considered to be the best one. The sender of the origin is rewarded, and the rest
-//! of the queued solutions get their deposit back and are discarded, without being checked.
+//! until drained). Each solution undergoes an expensive `Pallet::feasibility_check`, which ensures
+//! the score claimed by this score was correct, and it is valid based on the election data (i.e.
+//! votes and candidates). At each step, if the current best solution passes the feasibility check,
+//! it is considered to be the best one. The sender of the origin is rewarded, and the rest of the
+//! queued solutions get their deposit back and are discarded, without being checked.
 //!
 //! The following example covers all of the cases at the end of the signed phase:
 //!
@@ -192,7 +193,7 @@ use codec::Encode;
 use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider, PageIndex};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{ConstU8, Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 };
 use sp_arithmetic::{
@@ -255,11 +256,11 @@ pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmergencyPhase<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
+	type Pages = ConstU8<1>;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
 		ensure!(remaining == 0, "fallback should only have 1 page");
 		log!(warn, "Entering emergency phase.");
-		CurrentPhase::<T>::put(Phase::Emergency);
 		Err("Emergency phase started.")
 	}
 }
@@ -869,17 +870,27 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
+	type Pages = T::Pages;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
 		T::Verifier::get_queued_solution_page(remaining)
 			.ok_or(ElectionError::SupportPageNotAvailable)
 			.or_else(|err| {
-				// if this is the last page, we might use the fallback to do something.
+				// if this is the last page, we might use the fallback to recover something.
 				if remaining.is_zero() {
 					T::Fallback::elect(remaining).map_err(|fe| ElectionError::<T>::Fallback(fe))
 				} else {
 					Err(err)
 				}
+			})
+			.map_err(|err| {
+				// if any pages returns an error, we go into the emergency phase and don't do
+				// anything else anymore. This will prevent any new submissions to signed and
+				// unsigned pallet, and thus the verifier will also be almost stuck, except for the
+				// submission of emergency solutions.
+				log!(error, "fetching page {} failed. entering emergency mode.", remaining);
+				<CurrentPhase<T>>::put(Phase::Emergency);
+				err
 			})
 			.map(|supports| {
 				// if either of `Verifier` or `Fallback` was okay, and if this is the last page,

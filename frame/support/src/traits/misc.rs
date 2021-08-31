@@ -73,7 +73,7 @@ impl<const T: u32> Get<Option<u32>> for ConstU32<T> {
 }
 
 /// Implement `Get<u8>` and `Get<Option<u8>>` using the given const.
-pub struct ConstNumber<N, const T: u8>;
+pub struct ConstU8<const T: u8>;
 
 impl<const T: u8> Get<u8> for ConstU8<T> {
 	fn get() -> u8 {

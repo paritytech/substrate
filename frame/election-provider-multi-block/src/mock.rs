@@ -129,7 +129,7 @@ fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 }
 
 pub(crate) fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
-	PagedRawSolution { score, solution_pages: Default::default(), ..Default::default() }
+	PagedRawSolution { score, solution_pages: vec![Default::default()], ..Default::default() }
 }
 
 pub(crate) fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
@@ -364,6 +364,7 @@ pub struct MockFallback;
 impl ElectionProvider<AccountId, u64> for MockFallback {
 	type Error = &'static str;
 	type DataProvider = MockStaking;
+	type Pages = frame_support::traits::ConstU8<1>;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
 		if OnChianFallback::get() {
