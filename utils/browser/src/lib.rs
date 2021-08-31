@@ -117,6 +117,7 @@ where
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat { enable_color: false },
 		disable_log_reloading: false,
+		block_production: None,
 	};
 
 	Ok(config)

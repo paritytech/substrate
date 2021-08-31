@@ -77,12 +77,30 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
+			use std::sync::Arc;
+			use std::cell::RefCell;
+			let clean_shutdown = Arc::new(RefCell::new(false));
+			let clean_copy = clean_shutdown.clone();
 			runner.async_run(|config| {
-				match config.role {
-					// Role::Light => service::new_light(config),
-					_ => service::new_full(config).map(|v| (v.1.map(Ok), v.0)),
+				let mut config = config;
+				config.block_production = Some("Babe".to_owned());
+				service::new_full(config).map(|v| (
+					v.1.inspect(|()| { clean_copy.replace(true); }).map(Ok),
+					v.0
+				)).map_err(sc_cli::Error::Service)
+			}).and_then(|()| {
+				if *clean_shutdown.borrow() {
+					log::debug!("shut down cleanly because of block production change");
+					let runner = cli.create_runner(&cli.run)?;
+					runner.async_run(|config| {
+						let mut config = config;
+						config.block_production = Some("Aura".to_owned());
+						service::new_full(config).map(|v| (v.1.map(Ok), v.0))
+							.map_err(sc_cli::Error::Service)
+					})
+				} else {
+					Ok(())
 				}
-				.map_err(sc_cli::Error::Service)
 			})
 		},
 		Some(Subcommand::Inspect(cmd)) => {

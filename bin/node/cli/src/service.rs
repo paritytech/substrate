@@ -57,6 +57,7 @@ use sc_consensus::{BlockImportParams, Verifier};
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_consensus::CacheKeyId;
 use sc_consensus_babe::BabeApi;
+// use sc_consensus_aura::AuraApi;
 use sc_client_api::AuxStore;
 use sc_client_api::HeaderBackend;
 use sp_api::ApiExt;
@@ -71,6 +72,7 @@ impl<V> Verifier<Block>
 where
 	V: Verifier<Block>,
 {
+	// Will bail (signal the exit future) if a certain runtime API is detected.
 	async fn verify(
 		&mut self,
 		mut block_import: BlockImportParams<Block, ()>,
