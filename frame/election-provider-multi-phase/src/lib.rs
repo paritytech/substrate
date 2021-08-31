@@ -114,7 +114,7 @@
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
 //! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
 //! determine what needs to be done. The on-chain election is slow, and contains no balancing or
-//! reduction post-processing. [`NoFallback`] does nothing enables the [`Phase::Emergency`] which is
+//! reduction post-processing. [`NoFallback`] does nothing and enables [`Phase::Emergency`], which is
 //! a more *fail-safe* approach.
 //!
 //! ### Emergency Phase
