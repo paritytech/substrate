@@ -46,7 +46,7 @@ use sp_core::{
 	ChangesTrieConfiguration,
 };
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, StateVersion,
 	traits::{Block as BlockT, HashFor, Header, NumberFor, Zero},
 	Justification, Justifications, Storage,
 };
@@ -75,6 +75,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
+	state_hash: Option<StateVersion>,
 	_phantom: std::marker::PhantomData<S>,
 }
 
@@ -140,15 +141,18 @@ where
 			set_head: None,
 			storage_update: None,
 			changes_trie_config_update: None,
+			state_hash: None,
 			_phantom: Default::default(),
 		})
 	}
 
 	fn begin_state_operation(
 		&self,
-		_operation: &mut Self::BlockImportOperation,
+		operation: &mut Self::BlockImportOperation,
 		_block: BlockId<Block>,
+		state_hash: StateVersion,
 	) -> ClientResult<()> {
+		operation.state_hash = Some(state_hash);
 		Ok(())
 	}
 
@@ -522,12 +526,13 @@ where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.storage_root(delta),
+			GenesisOrUnavailableState::Genesis(ref state) => state.storage_root(delta, state_hash),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
@@ -536,13 +541,14 @@ where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_hash: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(child_info, delta);
+				let (root, is_equal, _) = state.child_storage_root(child_info, delta, state_hash);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable => (H::Out::default(), true, Default::default()),

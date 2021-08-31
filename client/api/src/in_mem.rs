@@ -24,7 +24,7 @@ use sp_core::{
 	offchain::storage::InMemOffchainStorage as OffchainStorage, storage::well_known_keys,
 };
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, StateVersion,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications, Storage,
 };
@@ -583,6 +583,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
+	state_hash: Option<StateVersion>,
 }
 
 impl<Block: BlockT> BlockImportOperation<Block>
@@ -593,9 +594,14 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_hash: Option<StateVersion>,
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
+		let state_hash = match self.state_hash {
+			Some(state_hash) => state_hash,
+			None => return Err(sp_blockchain::Error::Application(Box::from(format!("{:?}", "Missing call to begin state operation")))),
+		};
 		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
 			(
 				&child_content.child_info,
@@ -606,6 +612,7 @@ where
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
+			state_hash,
 		);
 
 		if commit {
@@ -775,6 +782,7 @@ where
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
+			state_hash: None,
 		})
 	}
 
@@ -782,8 +790,10 @@ where
 		&self,
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
+		state_hash: StateVersion,
 	) -> sp_blockchain::Result<()> {
 		operation.old_state = self.state_at(block)?;
+		operation.state_hash = Some(state_hash);
 		Ok(())
 	}
 

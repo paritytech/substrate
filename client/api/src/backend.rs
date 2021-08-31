@@ -28,7 +28,7 @@ use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use sp_core::{offchain::OffchainStorage, ChangesTrieConfigurationRange};
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, StateVersion,
 	traits::{Block as BlockT, HashFor, NumberFor},
 	Justification, Justifications, Storage,
 };
@@ -472,6 +472,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		&self,
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
+		state_hash: StateVersion,
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.

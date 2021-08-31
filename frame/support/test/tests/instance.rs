@@ -345,8 +345,6 @@ fn storage_instance_independence() {
 		top: std::collections::BTreeMap::new(),
 		children_default: std::collections::HashMap::new(),
 	};
-	storage
-		.modify_trie_alt_hashing_threshold(Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD));
 	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
@@ -362,7 +360,7 @@ fn storage_instance_independence() {
 		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
 	// 12 storage values and threshold.
-	assert_eq!(storage.top.len(), 13);
+	assert_eq!(storage.top.len(), 12);
 }
 
 #[test]
