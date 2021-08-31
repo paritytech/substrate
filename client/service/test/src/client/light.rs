@@ -383,7 +383,8 @@ fn execution_proof_is_generated_and_checked_inner(hashed_value: bool) {
 	}
 
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new(hashed_value);
+	let mut remote_client = substrate_test_runtime_client::new_with_state(hashed_value);
+
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
@@ -459,7 +460,7 @@ type TestChecker = LightDataChecker<
 
 fn prepare_for_read_proof_check(hashed_value: bool) -> (TestChecker, Header, StorageProof, u32) {
 	// prepare remote client
-	let remote_client = substrate_test_runtime_client::new(hashed_value);
+	let remote_client = substrate_test_runtime_client::new_with_state(hashed_value);
 	let remote_block_id = BlockId::Number(0);
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 	let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
@@ -540,7 +541,7 @@ fn prepare_for_header_proof_check(
 	hashed_value: bool,
 ) -> (TestChecker, Hash, Header, StorageProof) {
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new(hashed_value);
+	let mut remote_client = substrate_test_runtime_client::new_with_state(hashed_value);
 	let mut local_headers_hashes = Vec::new();
 	for i in 0..4 {
 		let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;

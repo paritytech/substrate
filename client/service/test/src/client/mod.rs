@@ -362,7 +362,7 @@ fn client_initializes_from_genesis_ok() {
 	client_initializes_from_genesis_ok_inner(true);
 }
 fn client_initializes_from_genesis_ok_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new_with_state(hashed_value);
 
 	assert_eq!(
 		client
@@ -388,7 +388,7 @@ fn client_initializes_from_genesis_ok_inner(hashed_value: bool) {
 
 #[test]
 fn block_builder_works_with_no_transactions() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
@@ -403,7 +403,7 @@ fn block_builder_works_with_transactions() {
 	block_builder_works_with_transactions_inner(false);
 }
 fn block_builder_works_with_transactions_inner(hashed_value: bool) {
-	let mut client = substrate_test_runtime_client::new(hashed_value);
+	let mut client = substrate_test_runtime_client::new_with_state(hashed_value);
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -448,7 +448,7 @@ fn block_builder_works_with_transactions_inner(hashed_value: bool) {
 
 #[test]
 fn block_builder_does_not_include_invalid() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -518,7 +518,7 @@ fn best_containing_with_hash_not_found() {
 fn uncles_with_only_ancestors() {
 	// block tree:
 	// G -> A1 -> A2
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -538,7 +538,7 @@ fn uncles_with_multiple_forks() {
 	//      A1 -> B2 -> B3 -> B4
 	//	          B2 -> C3
 	//	    A1 -> D2
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1213,7 +1213,7 @@ fn key_changes_works() {
 
 #[test]
 fn import_with_justification() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1250,7 +1250,7 @@ fn import_with_justification() {
 
 #[test]
 fn importing_diverged_finalized_block_should_trigger_reorg() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1 -> A2
 	//   \
@@ -1298,7 +1298,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
 	let (mut client, select_chain) =
-		TestClientBuilder::new().state_hashed_value().build_with_longest_chain();
+		TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \
@@ -1371,7 +1371,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 #[test]
 fn get_header_by_block_number_doesnt_panic() {
-	let client = substrate_test_runtime_client::new(true);
+	let client = substrate_test_runtime_client::new();
 
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
@@ -1382,7 +1382,7 @@ fn get_header_by_block_number_doesnt_panic() {
 #[test]
 fn state_reverted_on_reorg() {
 	sp_tracing::try_init_simple();
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let current_balance = |client: &substrate_test_runtime_client::TestClient| {
 		client
@@ -2044,7 +2044,7 @@ fn storage_keys_iter_works() {
 	storage_keys_iter_works_inner(false);
 }
 fn storage_keys_iter_works_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new_with_state(hashed_value);
 
 	let prefix = StorageKey(hex!("").to_vec());
 

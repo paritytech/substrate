@@ -34,7 +34,7 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use futures::executor;
-use node_primitives::{Block, BlockNumber};
+use node_primitives::Block;
 use node_runtime::{
 	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
 	Signature, SystemCall, UncheckedExtrinsic,
@@ -55,7 +55,7 @@ use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, IdentifyAccount, Verify, Zero},
-	OpaqueExtrinsic, StateVersion, StateVersions,
+	OpaqueExtrinsic,
 };
 
 /// Keyring full of accounts for benching.

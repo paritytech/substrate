@@ -34,7 +34,7 @@ use substrate_test_runtime_client::{
 };
 
 fn prepare_good_block(hashed_value: bool) -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
-	let mut client = substrate_test_runtime_client::new(hashed_value);
+	let mut client = substrate_test_runtime_client::new_with_state(hashed_value);
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	block_on(client.import(BlockOrigin::File, block)).unwrap();
 
@@ -73,8 +73,9 @@ fn import_single_good_block_works_inner(hashed_value: bool) {
 	let mut expected_aux = ImportedAux::default();
 	expected_aux.is_new_best = true;
 
+	let mut client = substrate_test_runtime_client::new_with_state(hashed_value);
 	match block_on(import_single_block(
-		&mut substrate_test_runtime_client::new(hashed_value),
+		&mut client,
 		BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier::new(true),
@@ -104,7 +105,7 @@ fn import_single_good_block_without_header_fails() {
 	let (_, _, _, peer_id, mut block) = prepare_good_block(true);
 	block.header = None;
 	match block_on(import_single_block(
-		&mut substrate_test_runtime_client::new(true),
+		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier::new(true),
@@ -123,7 +124,7 @@ fn async_import_queue_drops() {
 
 		let queue = BasicQueue::new(
 			verifier,
-			Box::new(substrate_test_runtime_client::new(true)),
+			Box::new(substrate_test_runtime_client::new()),
 			None,
 			&executor,
 			None,

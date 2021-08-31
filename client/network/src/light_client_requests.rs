@@ -179,7 +179,7 @@ mod tests {
 		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 
 	fn send_receive(request: sender::Request<Block>, pool: &LocalPool, hashed_value: bool) {
-		let client = Arc::new(substrate_test_runtime_client::new(hashed_value));
+		let client = Arc::new(substrate_test_runtime_client::new_with_state(hashed_value));
 		let (handler, protocol_config) =
 			handler::LightClientRequestHandler::new(&protocol_id(), client);
 		pool.spawner().spawn_obj(handler.run().boxed().into()).unwrap();

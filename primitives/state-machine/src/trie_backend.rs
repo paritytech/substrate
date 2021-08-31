@@ -34,8 +34,6 @@ use sp_trie::{
 	trie_types::{TrieDB, TrieError},
 	Layout, Trie,
 };
-#[cfg(feature = "std")]
-use log::info;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -384,26 +382,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
 		self
 	}
-}
-
-#[cfg(feature = "std")]
-fn error_version() -> crate::DefaultError {
-	"Cannot migrate for given state versions".into()
-}
-
-#[cfg(not(feature = "std"))]
-fn error_version() -> crate::DefaultError {
-	crate::DefaultError
-}
-
-#[cfg(feature = "std")]
-fn trie_error<H: Hasher>(e: &sp_trie::TrieError<Layout<H>>) -> crate::DefaultError {
-	format!("Migrate trieDB error: {}", e)
-}
-
-#[cfg(not(feature = "std"))]
-fn trie_error<H: Hasher>(_e: &sp_trie::TrieError<Layout<H>>) -> crate::DefaultError {
-	crate::DefaultError
 }
 
 #[cfg(test)]

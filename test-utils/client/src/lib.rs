@@ -80,7 +80,6 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: Genesi
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
-	state_hashed_value: bool, // TODO useless ?
 	state_versions: StateVersions<Block>,
 	no_genesis: bool,
 }
@@ -167,7 +166,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			fork_blocks: None,
 			bad_blocks: None,
 			enable_offchain_indexing_api: false,
-			state_hashed_value: false,
 			no_genesis: false,
 			state_versions,
 		}
@@ -230,13 +228,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	/// Enable the offchain indexing api.
 	pub fn enable_offchain_indexing_api(mut self) -> Self {
 		self.enable_offchain_indexing_api = true;
-		self
-	}
-
-	/// Enable the internal value hash of state.
-	/// TODO remove and use state_versions instead
-	pub fn state_hashed_value(mut self) -> Self {
-		self.state_hashed_value = true;
 		self
 	}
 

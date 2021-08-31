@@ -734,16 +734,12 @@ where
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
 		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
 			(Some(keep_blocks), true) =>
-				TestClientBuilder::with_tx_storage(keep_blocks, self.state_versions())
-					.state_hashed_value(),
-			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX, self.state_versions())
-				.state_hashed_value(),
+				TestClientBuilder::with_tx_storage(keep_blocks, self.state_versions()),
+			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX, self.state_versions()),
 			(Some(keep_blocks), false) =>
-				TestClientBuilder::with_pruning_window(keep_blocks, self.state_versions())
-					.state_hashed_value(),
+				TestClientBuilder::with_pruning_window(keep_blocks, self.state_versions()),
 			(None, false) =>
-				TestClientBuilder::with_default_backend_and_state_versions(self.state_versions())
-					.state_hashed_value(),
+				TestClientBuilder::with_default_backend_and_state_versions(self.state_versions()),
 		};
 		if matches!(config.sync_mode, SyncMode::Fast { .. }) {
 			test_client_builder = test_client_builder.set_no_genesis();
@@ -878,7 +874,7 @@ where
 
 	/// Add a light peer.
 	fn add_light_peer(&mut self) {
-		let (c, backend) = substrate_test_runtime_client::new_light(true);
+		let (c, backend) = substrate_test_runtime_client::new_light();
 		let client = Arc::new(c);
 		let (block_import, justification_import, data) =
 			self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
