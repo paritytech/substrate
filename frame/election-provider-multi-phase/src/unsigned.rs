@@ -730,7 +730,6 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use codec::Decode;
 	use super::*;
 	use crate::{
 		mock::{
@@ -741,6 +740,7 @@ mod tests {
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
 	};
+	use codec::Decode;
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_npos_elections::IndexAssignment;
@@ -1042,7 +1042,9 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				let (solution, witness) = MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result).unwrap();
+				let (solution, witness) =
+					MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result)
+						.unwrap();
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
 					Origin::none(),
@@ -1063,7 +1065,9 @@ mod tests {
 						},
 					],
 				};
-				let (solution, _) = MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result).unwrap();
+				let (solution, _) =
+					MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result)
+						.unwrap();
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
 				assert_noop!(
@@ -1085,7 +1089,9 @@ mod tests {
 						},
 					],
 				};
-				let (solution, witness) = MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result).unwrap();
+				let (solution, witness) =
+					MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result)
+						.unwrap();
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine

@@ -328,7 +328,9 @@ pub trait NposSolver {
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
 /// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
-pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>);
+pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
+	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
+);
 
 impl<
 		AccountId: IdentifierT,

@@ -593,10 +593,6 @@ pub mod pallet {
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		#[pallet::constant]
 		type MinerTxPriority: Get<TransactionPriority>;
-		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
-		/// the pallet.
-		#[pallet::constant]
-		type MinerMaxIterations: Get<u32>;
 
 		/// Maximum weight that the miner should consume.
 		///
@@ -2014,11 +2010,11 @@ mod tests {
 		})
 	}
 
- 	#[test]
+	#[test]
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
-			use sp_npos_elections::ExtendedBalance;
 			use frame_election_provider_support::SequentialPhragmen;
+			use sp_npos_elections::ExtendedBalance;
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
@@ -2027,7 +2023,8 @@ mod tests {
 			}
 
 			let (solution, _) =
-				MultiPhase::mine_solution::<SequentialPhragmen<AccountId, Perbill, TwoBalancing>>().unwrap();
+				MultiPhase::mine_solution::<SequentialPhragmen<AccountId, Perbill, TwoBalancing>>()
+					.unwrap();
 			// Default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
 
