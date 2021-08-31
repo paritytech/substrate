@@ -316,7 +316,7 @@ pub trait SortedListProvider<AccountId> {
 	fn count() -> u32;
 	/// Return true if the list already contains `id`.
 	fn contains(id: &AccountId) -> bool;
-	// Hook for inserting a new id.
+	/// Hook for inserting a new id.
 	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
 	/// Hook for updating a single id.
 	fn on_update(id: &AccountId, weight: VoteWeight);
