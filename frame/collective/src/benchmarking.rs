@@ -19,19 +19,15 @@
 
 use super::*;
 
-use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
-	benchmarks_instance,
-	account,
-	whitelisted_caller,
-	impl_benchmark_test_suite,
+	account, benchmarks_instance, impl_benchmark_test_suite, whitelisted_caller,
 };
+use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_system::Call as SystemCall;
-use frame_system::Pallet as System;
 use crate::Module as Collective;
+use frame_system::{Call as SystemCall, Pallet as System};
 
 const SEED: u32 = 0;
 
@@ -281,7 +277,7 @@ benchmarks_instance! {
 	verify {
 		// All proposals exist and the last proposal has just been updated.
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
-		let voting = Collective::<T, _>::voting(&last_hash).ok_or(Error::<T, I>::ProposalMissing)?;
+		let voting = Collective::<T, _>::voting(&last_hash).ok_or("Proposal Missing")?;
 		assert_eq!(voting.ayes.len(), (m - 3) as usize);
 		assert_eq!(voting.nays.len(), 1);
 	}
@@ -639,8 +635,4 @@ benchmarks_instance! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Collective,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);

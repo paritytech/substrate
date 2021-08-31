@@ -18,7 +18,7 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use sp_arithmetic::traits::{UniqueSaturatedInto, UniqueSaturatedFrom, SaturatedConversion};
+use sp_arithmetic::traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto};
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
@@ -69,7 +69,6 @@ impl CurrencyToVote<u128> for U128CurrencyToVote {
 	}
 }
 
-
 /// A naive implementation of `CurrencyConvert` that simply saturates all conversions.
 ///
 /// # Warning
@@ -77,7 +76,9 @@ impl CurrencyToVote<u128> for U128CurrencyToVote {
 /// This is designed to be used mostly for testing. Use with care, and think about the consequences.
 pub struct SaturatingCurrencyToVote;
 
-impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for SaturatingCurrencyToVote {
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
+	for SaturatingCurrencyToVote
+{
 	fn to_vote(value: B, _: B) -> u64 {
 		value.unique_saturated_into()
 	}

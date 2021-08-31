@@ -18,20 +18,21 @@
 use codec::{Encode, Joiner};
 use frame_support::{
 	traits::Currency,
-	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
-};
-use sp_core::NeverNativeValue;
-use sp_runtime::{Perbill, traits::One};
-use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, Multiplier,
-	TransactionByteFee,
-	constants::{time::SLOT_DURATION, currency::*},
+	weights::{
+		constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFeePolynomial,
+	},
 };
 use node_primitives::Balance;
+use node_runtime::{
+	constants::{currency::*, time::SLOT_DURATION},
+	Balances, Call, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
+};
 use node_testing::keyring::*;
+use sp_core::NeverNativeValue;
+use sp_runtime::{traits::One, Perbill};
 
 pub mod common;
-use self::common::{*, sign};
+use self::common::{sign, *};
 
 #[test]
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
@@ -60,7 +61,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(60))),
-			}
+			},
 		],
 		(time1 / SLOT_DURATION).into(),
 	);
@@ -79,7 +80,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::System(frame_system::Call::remark(vec![0; 1])),
-			}
+			},
 		],
 		(time2 / SLOT_DURATION).into(),
 	);
@@ -97,7 +98,9 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		&block1.0,
 		true,
 		None,
-	).0.unwrap();
+	)
+	.0
+	.unwrap();
 
 	// weight multiplier is increased for next block.
 	t.execute_with(|| {
@@ -114,7 +117,9 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		&block2.0,
 		true,
 		None,
-	).0.unwrap();
+	)
+	.0
+	.unwrap();
 
 	// weight multiplier is increased for next block.
 	t.execute_with(|| {
@@ -131,7 +136,8 @@ fn new_account_info(free_dollars: u128) -> Vec<u8> {
 		providers: 0,
 		sufficients: 0,
 		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS),
-	}.encode()
+	}
+	.encode()
 }
 
 #[test]
@@ -148,7 +154,7 @@ fn transaction_fee_is_correct() {
 	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(bob()), new_account_info(10));
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
-		(110 * DOLLARS).encode()
+		(110 * DOLLARS).encode(),
 	);
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
@@ -164,7 +170,8 @@ fn transaction_fee_is_correct() {
 		&vec![].and(&from_block_number(1u32)),
 		true,
 		None,
-	).0;
+	)
+	.0;
 
 	assert!(r.is_ok());
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -173,7 +180,8 @@ fn transaction_fee_is_correct() {
 		&vec![].and(&xt.clone()),
 		true,
 		None,
-	).0;
+	)
+	.0;
 	assert!(r.is_ok());
 
 	t.execute_with(|| {
@@ -228,15 +236,20 @@ fn block_weight_capacity_report() {
 
 	loop {
 		let num_transfers = block_number * factor;
-		let mut xts = (0..num_transfers).map(|i| CheckedExtrinsic {
-			signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-			function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
-		}).collect::<Vec<CheckedExtrinsic>>();
+		let mut xts = (0..num_transfers)
+			.map(|i| CheckedExtrinsic {
+				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
+				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
+			})
+			.collect::<Vec<CheckedExtrinsic>>();
 
-		xts.insert(0, CheckedExtrinsic {
-			signed: None,
-			function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
-		});
+		xts.insert(
+			0,
+			CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+			},
+		);
 
 		// NOTE: this is super slow. Can probably be improved.
 		let block = construct_block(
@@ -262,7 +275,8 @@ fn block_weight_capacity_report() {
 			&block.0,
 			true,
 			None,
-		).0;
+		)
+		.0;
 
 		println!(" || Result = {:?}", r);
 		assert!(r.is_ok());
@@ -307,7 +321,11 @@ fn block_length_capacity_report() {
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
-					function: Call::System(frame_system::Call::remark(vec![0u8; (block_number * factor) as usize])),
+					function: Call::System(frame_system::Call::remark(vec![
+						0u8;
+						(block_number * factor)
+							as usize
+					])),
 				},
 			],
 			(time * 1000 / SLOT_DURATION).into(),
@@ -327,7 +345,8 @@ fn block_length_capacity_report() {
 			&block.0,
 			true,
 			None,
-		).0;
+		)
+		.0;
 
 		println!(" || Result = {:?}", r);
 		assert!(r.is_ok());

@@ -22,7 +22,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 
 /// Unit type wrapper that represents a slot.
-#[derive(Debug, Encode, Decode, Eq, Clone, Copy, Default, Ord, MaxEncodedLen)]
+#[derive(Debug, Encode, MaxEncodedLen, Decode, Eq, Clone, Copy, Default, Ord)]
 pub struct Slot(u64);
 
 impl core::ops::Deref for Slot {

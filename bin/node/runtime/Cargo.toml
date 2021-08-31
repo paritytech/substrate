@@ -14,7 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
+codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = [
+	"derive",
+	"max-encoded-len",
+] }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
 log = { version = "0.4.14", default-features = false }
@@ -22,7 +25,7 @@ log = { version = "0.4.14", default-features = false }
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
-sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev"}
+sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
@@ -73,7 +76,9 @@ pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/o
 pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/proxy" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
-pallet-session = { version = "4.0.0-dev", features = ["historical"], path = "../../../frame/session", default-features = false }
+pallet-session = { version = "4.0.0-dev", features = [
+	"historical",
+], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
@@ -98,7 +103,7 @@ sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
-with-tracing = [ "frame-executive/with-tracing" ]
+with-tracing = ["frame-executive/with-tracing"]
 std = [
 	"sp-authority-discovery/std",
 	"pallet-assets/std",
@@ -247,6 +252,4 @@ try-runtime = [
 ]
 # Make contract callable functions marked as __unstable__ available. Do not enable
 # on live chains as those are subject to change.
-contracts-unstable-interface = [
-	"pallet-contracts/unstable-interface"
-]
+contracts-unstable-interface = ["pallet-contracts/unstable-interface"]

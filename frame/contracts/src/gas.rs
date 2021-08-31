@@ -15,17 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Error, exec::ExecError};
-use sp_std::marker::PhantomData;
-use sp_runtime::traits::Zero;
+use crate::{exec::ExecError, Config, Error};
 use frame_support::{
 	dispatch::{
-		DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo, DispatchError,
+		DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo, PostDispatchInfo,
 	},
 	weights::Weight,
 	DefaultNoBound,
 };
 use sp_core::crypto::UncheckedFrom;
+use sp_runtime::traits::Zero;
+use sp_std::marker::PhantomData;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -88,7 +88,7 @@ pub struct GasMeter<T: Config> {
 
 impl<T: Config> GasMeter<T>
 where
-	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
 	pub fn new(gas_limit: Weight) -> Self {
 		GasMeter {
@@ -107,11 +107,7 @@ where
 	///
 	/// Passing `0` as amount is interpreted as "all remaining gas".
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
-		let amount = if amount == 0 {
-			self.gas_left
-		} else {
-			amount
-		};
+		let amount = if amount == 0 { self.gas_left } else { amount };
 
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
@@ -155,10 +151,8 @@ where
 		#[cfg(test)]
 		{
 			// Unconditionally add the token to the storage.
-			let erased_tok = ErasedToken {
-				description: format!("{:?}", token),
-				token: Box::new(token),
-			};
+			let erased_tok =
+				ErasedToken { description: format!("{:?}", token), token: Box::new(token) };
 			self.tokens.push(erased_tok);
 		}
 
@@ -277,7 +271,9 @@ mod tests {
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 	struct SimpleToken(u64);
 	impl Token<Test> for SimpleToken {
-		fn weight(&self) -> u64 { self.0 }
+		fn weight(&self) -> u64 {
+			self.0
+		}
 	}
 
 	#[test]
@@ -317,7 +313,6 @@ mod tests {
 		// The gas meter is emptied at this moment, so this should also fail.
 		assert!(gas_meter.charge(SimpleToken(1)).is_err());
 	}
-
 
 	// Charging the exact amount that the user paid for should be
 	// possible.

@@ -21,9 +21,11 @@
 
 use super::*;
 
+use frame_benchmarking::{
+	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
+};
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelist, impl_benchmark_test_suite};
-use frame_support::{traits::OnInitialize, dispatch::DispatchResultWithPostInfo};
 
 use crate::Pallet as Elections;
 
@@ -62,28 +64,34 @@ fn candidate_count<T: Config>() -> u32 {
 }
 
 /// Add `c` new candidates.
-fn submit_candidates<T: Config>(c: u32, prefix: &'static str)
-	-> Result<Vec<T::AccountId>, &'static str>
-{
-	(0..c).map(|i| {
-		let account = endowed_account::<T>(prefix, i);
-		<Elections<T>>::submit_candidacy(
-			RawOrigin::Signed(account.clone()).into(),
-			candidate_count::<T>(),
-		).map_err(|_| "failed to submit candidacy")?;
-		Ok(account)
-	}).collect::<Result<_, _>>()
+fn submit_candidates<T: Config>(
+	c: u32,
+	prefix: &'static str,
+) -> Result<Vec<T::AccountId>, &'static str> {
+	(0..c)
+		.map(|i| {
+			let account = endowed_account::<T>(prefix, i);
+			<Elections<T>>::submit_candidacy(
+				RawOrigin::Signed(account.clone()).into(),
+				candidate_count::<T>(),
+			)
+			.map_err(|_| "failed to submit candidacy")?;
+			Ok(account)
+		})
+		.collect::<Result<_, _>>()
 }
 
 /// Add `c` new candidates with self vote.
-fn submit_candidates_with_self_vote<T: Config>(c: u32, prefix: &'static str)
-	-> Result<Vec<T::AccountId>, &'static str>
-{
+fn submit_candidates_with_self_vote<T: Config>(
+	c: u32,
+	prefix: &'static str,
+) -> Result<Vec<T::AccountId>, &'static str> {
 	let candidates = submit_candidates::<T>(c, prefix)?;
 	let stake = default_stake::<T>(BALANCE_FACTOR);
-	let _ = candidates.iter().map(|c|
-		submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ())
-	).collect::<Result<_, _>>()?;
+	let _ = candidates
+		.iter()
+		.map(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))
+		.collect::<Result<_, _>>()?;
 	Ok(candidates)
 }
 
@@ -98,18 +106,16 @@ fn submit_voter<T: Config>(
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
 /// available.
-fn distribute_voters<T: Config>(mut all_candidates: Vec<T::AccountId>, num_voters: u32, votes: usize)
-	-> Result<(), &'static str>
-{
+fn distribute_voters<T: Config>(
+	mut all_candidates: Vec<T::AccountId>,
+	num_voters: u32,
+	votes: usize,
+) -> Result<(), &'static str> {
 	let stake = default_stake::<T>(BALANCE_FACTOR);
 	for i in 0..num_voters {
 		// to ensure that votes are different
 		all_candidates.rotate_left(1);
-		let votes = all_candidates
-			.iter()
-			.cloned()
-			.take(votes)
-			.collect::<Vec<_>>();
+		let votes = all_candidates.iter().cloned().take(votes).collect::<Vec<_>>();
 		let voter = endowed_account::<T>("voter", i);
 		submit_voter::<T>(voter, votes, stake)?;
 	}
@@ -128,13 +134,11 @@ fn fill_seats_up_to<T: Config>(m: u32) -> Result<Vec<T::AccountId>, &'static str
 		m as usize,
 		"wrong number of members and runners-up",
 	);
-	Ok(
-		<Elections<T>>::members()
-			.into_iter()
-			.map(|m| m.who)
-			.chain(<Elections<T>>::runners_up().into_iter().map(|r| r.who))
-			.collect()
-	)
+	Ok(<Elections<T>>::members()
+		.into_iter()
+		.map(|m| m.who)
+		.chain(<Elections<T>>::runners_up().into_iter().map(|r| r.who))
+		.collect())
 }
 
 /// removes all the storage items to reverse any genesis state.
@@ -330,9 +334,16 @@ benchmarks! {
 		}
 	}
 
+	// We use the max block weight for this extrinsic for now. See below.
+	remove_member_without_replacement {}: {
+		Err(BenchmarkError::Override(
+			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
+		))?;
+	}
+
 	// -- Root ones
 	#[extra] // this calls into phragmen and consumes a full block for now.
-	remove_member_without_replacement {
+	remove_member_without_replacement_extra {
 		// worse case is when we remove a member and we have no runner as a replacement. This
 		// triggers phragmen again. The only parameter is how many candidates will compete for the
 		// new slot.

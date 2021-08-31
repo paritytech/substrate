@@ -18,7 +18,7 @@
 //! Transaction pool errors.
 
 use sp_runtime::transaction_validity::{
-	TransactionPriority as Priority, InvalidTransaction, UnknownTransaction,
+	InvalidTransaction, TransactionPriority as Priority, UnknownTransaction,
 };
 
 /// Transaction pool result.
@@ -52,7 +52,7 @@ pub enum Error {
 		/// Transaction already in the pool.
 		old: Priority,
 		/// Transaction entering the pool.
-		new: Priority
+		new: Priority,
 	},
 	#[error("Transaction with cyclic dependency")]
 	CycleDetected,
@@ -78,9 +78,13 @@ pub trait IntoPoolError: std::error::Error + Send + Sized {
 	/// This implementation is optional and used only to
 	/// provide more descriptive error messages for end users
 	/// of RPC API.
-	fn into_pool_error(self) -> std::result::Result<Error, Self> { Err(self) }
+	fn into_pool_error(self) -> std::result::Result<Error, Self> {
+		Err(self)
+	}
 }
 
 impl IntoPoolError for Error {
-	fn into_pool_error(self) -> std::result::Result<Error, Self> { Ok(self) }
+	fn into_pool_error(self) -> std::result::Result<Error, Self> {
+		Ok(self)
+	}
 }
