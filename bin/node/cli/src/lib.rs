@@ -40,6 +40,8 @@ mod browser;
 mod cli;
 #[cfg(feature = "cli")]
 mod command;
+#[cfg(feature = "cli")]
+mod aura_rpc;
 
 #[cfg(feature = "browser")]
 pub use browser::*;
