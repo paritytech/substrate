@@ -18,7 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider};
+use frame_election_provider_support::{onchain, PageIndex, SortedListProvider, Supports};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -266,6 +266,67 @@ impl onchain::Config for Test {
 	type VoterPageSize = ();
 }
 
+/// A mock election provider that only does a simple on-chain seq-phragmen, but can return the
+/// result in a paginated, or non-paginated way.
+///
+/// Perfect tool to test staking against multi-block elections.
+pub struct MockElectionProvider;
+
+parameter_types! {
+	pub static ElectionPages: PageIndex = 1;
+	pub static PaginatedElection: Option<Vec<Supports<AccountId>>> = None;
+}
+
+impl MockElectionProvider {
+	fn multi_block(remaining: PageIndex) -> Result<Supports<AccountId>, &'static str> {
+		let first_page = ElectionPages::get() - 1;
+		if remaining == first_page {
+			// this is the first page of the election.
+			let all_supports = Self::single_block()?;
+			let page_size = (all_supports.len() / (ElectionPages::get() as usize)).max(1);
+			let mut paginated_supports =
+				all_supports.chunks(page_size).map(|x| x.to_vec()).collect::<Vec<_>>();
+			paginated_supports.resize(ElectionPages::get() as usize, Default::default());
+			PaginatedElection::set(Some(paginated_supports.clone()));
+			Ok(paginated_supports.get(remaining as usize).unwrap().to_vec())
+		} else if remaining < first_page {
+			// this is NOT the first page anymore.
+			let paginated = PaginatedElection::get().expect("PaginatedElection not found");
+			let supports =
+				paginated.get(remaining as usize).expect("page of PaginatedElection not found");
+			if remaining == 0 {
+				PaginatedElection::set(None);
+			}
+			Ok(supports.to_vec())
+		} else {
+			unreachable!()
+		}
+	}
+
+	fn single_block() -> Result<Supports<AccountId>, &'static str> {
+		PaginatedElection::set(None);
+		onchain::OnChainSequentialPhragmen::<Test>::elect(0)
+			.map_err(|_| "OnChainSequentialPhragmen")
+	}
+}
+
+impl ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
+	type DataProvider = Staking;
+	type Error = &'static str;
+	type Pages = ElectionPages;
+
+	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
+		match ElectionPages::get() {
+			1 => {
+				assert_eq!(remaining, 0);
+				Self::single_block()
+			},
+			p @ 2..=255 if remaining < p => Self::multi_block(remaining),
+			_ => unreachable!(),
+		}
+	}
+}
+
 impl crate::pallet::pallet::Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -283,8 +344,8 @@ impl crate::pallet::pallet::Config for Test {
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
-	type GenesisElectionProvider = Self::ElectionProvider;
+	type ElectionProvider = MockElectionProvider;
+	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Test>;
 	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
@@ -339,6 +400,10 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(self, existential_deposit: Balance) -> Self {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = existential_deposit);
+		self
+	}
+	pub fn election_pages(self, pages: PageIndex) -> Self {
+		ElectionPages::set(pages);
 		self
 	}
 	pub fn nominate(mut self, nominate: bool) -> Self {

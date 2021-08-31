@@ -291,6 +291,7 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
+use frame_election_provider_support::ElectionProvider;
 use frame_support::{
 	traits::{Currency, Get},
 	weights::Weight,
@@ -338,6 +339,12 @@ type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+
+/// The number of pages that the election provider of staking is expected to provide.
+pub(crate) type PagesOf<T> = <<T as Config>::ElectionProvider as ElectionProvider<
+	<T as frame_system::Config>::AccountId,
+	<T as frame_system::Config>::BlockNumber,
+>>::Pages;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]

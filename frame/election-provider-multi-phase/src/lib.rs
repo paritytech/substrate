@@ -1547,6 +1547,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
+	type Pages = T::Pages;
 
 	fn elect(page: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {

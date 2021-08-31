@@ -75,6 +75,7 @@ pub trait Config {
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
+	type Pages = frame_support::traits::ConstU8<1>;
 
 	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
 		if remaining != 0 {

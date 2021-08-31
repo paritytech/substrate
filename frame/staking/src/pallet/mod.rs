@@ -17,9 +17,8 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{ElectionProvider, PageIndex, SortedListProvider};
 use frame_support::{
-	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
 		LockableCurrency, OnUnbalanced, UnixTime,
@@ -51,6 +50,7 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -454,6 +454,25 @@ pub mod pallet {
 	pub(crate) type LastIteratedNominator<T: Config> =
 		StorageValue<_, Option<T::AccountId>, ValueQuery>;
 
+	/// The next page index upon which we should call `T::ElectionProvider::elect`.
+	#[pallet::storage]
+	#[pallet::getter(fn next_elect_page)]
+	pub(crate) type NextElectPage<T: Config> = StorageValue<_, Option<PageIndex>, ValueQuery>;
+
+	/// The next validators that should be handed in to the session pallet.
+	///
+	/// This is set once and ONLY once in `finalize_staker_info_collection`, at the end of the
+	/// election process. Thereafter, this should NEVER be read except for once, where we `::take`
+	/// from it and pass the data to the session pallet.
+	///
+	/// Upon a new session, the existence of this storage item as `Some(_)` signifies that we have
+	/// had a successful election process, [`ErasStakers`], [`ErasStakersClipped`] and
+	/// [`ErasValidatorPrefs`] have been updated. The lack thereof signifies that an error must have
+	/// happened.
+	#[pallet::storage]
+	pub(crate) type NextValidators<T: Config> =
+		StorageValue<_, Option<Vec<T::AccountId>>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,
@@ -650,7 +669,14 @@ pub mod pallet {
 			}
 		}
 
-		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
+			let next_era = CurrentEra::<T>::get().unwrap_or_default().saturating_add(1);
+
+			// note: we use error just for expressive logging, not much we can do about failures in
+			// `on_initialize`.
+			let _ = Self::maybe_start_support_collection_for_era(now, next_era)
+				.map_err(|err| log!(error, "error in collection exposure task: {:?}", err))
+				.map(|outcome| log!(trace, "status of collection exposure = {:?}", outcome));
 			// just return the weight of the on_finalize.
 			T::DbWeight::get().reads(1)
 		}
@@ -667,6 +693,15 @@ pub mod pallet {
 				}
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
+		}
+
+		fn integrity_test() {
+			assert_eq!(
+				<T::GenesisElectionProvider as ElectionProvider<T::AccountId, T::BlockNumber>>::Pages::get(),
+				1,
+				"Genesis election provider must have single page. Use `OnChainSequentialPhragmen` \
+				for an easy example.",
+			);
 		}
 	}
 

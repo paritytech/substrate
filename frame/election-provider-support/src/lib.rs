@@ -283,6 +283,11 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
 
+	/// The number of pages of support that this election provider can return.
+	///
+	/// All calls to `elect` must therefore be in the range of `PAGES-1 .. 0`.
+	type Pages: frame_support::traits::Get<PageIndex>;
+
 	/// Elect a new set of winners.
 	///
 	/// The result is returned in a target major format, namely as vector of supports.
@@ -296,6 +301,7 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	type Error = &'static str;
 	type DataProvider = ();
+	type Pages = frame_support::traits::ConstU8<1>;
 
 	fn elect(_: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")

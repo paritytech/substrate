@@ -4306,3 +4306,237 @@ mod sorted_list_provider {
 		});
 	}
 }
+
+mod multi_block_election {
+	use super::*;
+	// use crate::mock::*;
+
+	fn assert_stakers_in_era(whos: impl Iterator<Item = AccountId>, exists: bool, era: EraIndex) {
+		for who in whos {
+			assert!(
+				exists ^ !<ErasStakers<Test>>::contains_key(era, who),
+				"contains_key not matching {} for era {} of {:?}",
+				exists,
+				era,
+				who
+			);
+			assert!(
+				exists ^ !<ErasStakersClipped<Test>>::contains_key(era, who),
+				"contains_key not matching {} for era {} of {:?}",
+				exists,
+				era,
+				who
+			);
+			assert!(
+				exists ^ !<ErasValidatorPrefs<Test>>::contains_key(era, who),
+				"contains_key not matching {} for era {} of {:?}",
+				exists,
+				era,
+				who
+			);
+		}
+	}
+
+	#[test]
+	fn mock_election_single_page() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.election_pages(1)
+			.initialize_first_session(false)
+			.build_and_execute(|| {
+				assert_eq!(
+					MockElectionProvider::elect(0)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![11, 21, 31, 41]
+				);
+			});
+	}
+
+	#[test]
+	#[should_panic(expected = "PaginatedElection not found")]
+	fn mock_election_double_page_invalid() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.election_pages(2)
+			.build_and_execute(|| {
+				MockElectionProvider::elect(0).unwrap();
+			});
+	}
+
+	#[test]
+	fn mock_election_double_page_valid() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.election_pages(2)
+			.build_and_execute(|| {
+				assert_eq!(
+					MockElectionProvider::elect(1)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![31, 41]
+				);
+
+				assert_eq!(
+					MockElectionProvider::elect(0)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![11, 21]
+				);
+			});
+	}
+
+	#[test]
+	fn mock_election_empty_pages() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.election_pages(6)
+			.build_and_execute(|| {
+				assert!(MockElectionProvider::elect(5).unwrap().is_empty());
+				assert!(MockElectionProvider::elect(4).unwrap().is_empty());
+				assert_eq!(
+					MockElectionProvider::elect(3)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![41]
+				);
+				assert_eq!(
+					MockElectionProvider::elect(2)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![31]
+				);
+				assert_eq!(
+					MockElectionProvider::elect(1)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![21]
+				);
+				assert_eq!(
+					MockElectionProvider::elect(0)
+						.unwrap()
+						.into_iter()
+						.map(|(x, _)| x)
+						.collect::<Vec<_>>(),
+					vec![11]
+				);
+			});
+	}
+
+	#[test]
+	fn era_progress_single_page_election() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.session_per_era(2)
+			.period(5)
+			.election_pages(1)
+			.build_and_execute(|| {
+				// These storage items do not exists.
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// stakers of era 0 have already been initialized..
+				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), true, 0);
+				// .. but not 1.
+				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), false, 1);
+				assert_eq!(current_era(), 0);
+
+				run_to_block(4);
+				assert_eq!(current_era(), 0);
+				// we do the first single page election now, at which point `NextValidators` is
+				// populated:
+				assert!(<NextValidators<Test>>::get().is_some());
+				// .. but this is never set:
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// .. and era is not yet updated..
+				assert_eq!(current_era(), 0);
+
+				// ..next block we trigger the new era and ::take `NextValidators`
+				run_to_block(5);
+				assert_eq!(current_era(), 1);
+				assert!(<NextValidators<Test>>::get().is_none());
+
+				// some ordeal is repeated around block 15.
+				run_to_block(14);
+				assert_eq!(current_era(), 1);
+				assert!(<NextValidators<Test>>::get().is_some());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				run_to_block(15);
+				assert_eq!(current_era(), 2);
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert!(<NextElectPage<Test>>::get().is_none());
+			});
+	}
+
+	#[test]
+	fn era_progress_double_page_election() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.session_per_era(2)
+			.period(5)
+			.election_pages(2)
+			.build_and_execute(|| {
+				// These storage items do not exists.
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// genesis election has worked as expected, that one uses a simpler election
+				// provider.
+				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), true, 0);
+				// .. but not 1.
+				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), false, 1);
+				assert_eq!(current_era(), 0);
+
+				run_to_block(3);
+				// we have scraped page 1, and page 0 is next.
+				assert_eq!(<NextElectPage<Test>>::get(), Some(0));
+				// not set yet.
+				assert!(<NextValidators<Test>>::get().is_none());
+
+				// TODO: staking should always have some grace period: pad this entire timeline by a
+				// configurable number of blocks, in case blocks are missed.
+
+				run_to_block(4);
+				// no more pages schedules..
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// and validators ready for era trigger.
+				assert!(<NextValidators<Test>>::get().is_some());
+				assert_eq!(current_era(), 0);
+
+				run_to_block(5);
+				assert!(<NextElectPage<Test>>::get().is_none());
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert_eq!(current_era(), 1);
+
+				// some ordeal is repeated around block 15.
+				run_to_block(13);
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert_eq!(<NextElectPage<Test>>::get(), Some(0));
+				run_to_block(14);
+				assert!(<NextValidators<Test>>::get().is_some());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				assert_eq!(current_era(), 1);
+				run_to_block(15);
+				assert_eq!(current_era(), 2);
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				assert_eq!(current_era(), 2);
+			});
+	}
+}

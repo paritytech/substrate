@@ -59,7 +59,6 @@ pub struct PagedRawSolution<T: Config> {
 }
 
 // TODO: we also need a consuming version of this
-// TODO: write tests for this for better understanding
 pub trait Pagify<T> {
 	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_>;
 }
@@ -201,5 +200,20 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 	/// Whether the phase is off or not.
 	pub fn is_off(&self) -> bool {
 		matches!(self, Phase::Off)
+	}
+}
+
+#[cfg(test)]
+mod pagify {
+	use super::Pagify;
+
+	#[cfg(test)]
+	fn pagify_works() {
+		// is a noop when you have the same length
+		assert_eq!(vec![10, 11, 12].pagify(3).collect::<Vec<_>>(), vec![(0, 10), (1, 11), (2, 12)]);
+
+		// pads the values otherwise
+		assert_eq!(vec![10, 11].pagify(3).collect::<Vec<_>>(), vec![(1, 10), (2, 11)]);
+		assert_eq!(vec![10].pagify(3).collect::<Vec<_>>(), vec![(2, 10)]);
 	}
 }
