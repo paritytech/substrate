@@ -92,15 +92,7 @@ impl StorageVersion {
 	/// See [`STORAGE_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
 	pub fn storage_key<P: PalletInfoAccess>() -> [u8; 32] {
 		let pallet_name = P::name();
-
-		let pallet_name = sp_io::hashing::twox_128(pallet_name.as_bytes());
-		let postfix = sp_io::hashing::twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX);
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&pallet_name);
-		final_key[16..].copy_from_slice(&postfix);
-
-		final_key
+		crate::storage::storage_prefix(pallet_name.as_bytes(), STORAGE_VERSION_STORAGE_KEY_POSTFIX)
 	}
 
 	/// Put this storage version for the given pallet into the storage.
