@@ -581,12 +581,14 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		let block_executor = sc_tracing::block::BlockExecutor::new(
 			self.client.clone(),
 			block,
 			targets,
 			storage_keys,
+			methods,
 			self.rpc_max_payload,
 		);
 		let r = block_executor
