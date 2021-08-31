@@ -133,6 +133,9 @@ pub enum Error {
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
+	// TODO this should be replaced once PhragMMS no longer uses &str errors.
+	/// An opaque error that could be anything.
+	Opaque,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the

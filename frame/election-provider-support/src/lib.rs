@@ -364,12 +364,13 @@ impl<
 {
 	type AccountId = AccountId;
 	type Accuracy = Accuracy;
-	type Error = &'static str; // TODO: probably best to move phragmms also into `sp_npos_elections::Error`
+	type Error = sp_npos_elections::Error; // TODO: move phragmms also into `sp_npos_elections::Error`
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
 		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+			.map_err(|_| sp_npos_elections::Error::Opaque)
 	}
 }
