@@ -92,7 +92,6 @@ output:
     subkey generate --password extra_secret
 
 output:
-
 ```
 Secret phrase `soup lyrics media market way crouch elevator put moon useful question wide` is account:
   Secret seed:      0xe7cfd179d6537a676cb94bac3b5c5c9cb1550e846ac4541040d077dfbac2e7fd
@@ -127,14 +126,12 @@ If you have only **public data**, you can see a subset of the information:
 
 **NOTE**: For obvious reasons, the **secrets** cannot be recovered from passing **public data** such as `pubkey` or `address` as input.
 
-*command*:
-
+command:
 ```
 subkey inspect 0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
 ```
 
-*Output*:
-
+output:
 ```
 Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` is account:
   Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
@@ -149,13 +146,13 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
 
     echo -n <msg> | subkey sign --suri <seed|mnemonic>
 
-*Example*:
+example:
 
     MESSAGE=hello
     SURI=0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
     echo -n $MESSAGE | subkey sign --suri $SURI
 
-*outputs*:
+output:
 
     9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
 
@@ -167,14 +164,14 @@ Given a message, a signature and an address, `subkey` can verify whether the **m
 
     echo -n <msg> | subkey verify <sig> <address>
 
-*Example*:
+example:
 
     MESSAGE=hello
     URI=0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
     SIGNATURE=9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
     echo -n $MESSAGE | subkey verify $SIGNATURE $URI
 
-*outputs*:
+output:
 
     Signature verifies correctly.
 
