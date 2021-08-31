@@ -387,10 +387,8 @@ impl BenchDb {
 		};
 		let task_executor = TaskExecutor::new();
 
-		let mut state_versions = StateVersions::default();
-		state_versions.add((BlockNumber::zero(), StateVersion::V0)); // TODO switch to default (more recent).
 		let backend =
-			sc_service::new_db_backend(db_config, state_versions).expect("Should not fail");
+			sc_service::new_db_backend(db_config, Default::default()).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
 			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8),

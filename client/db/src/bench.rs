@@ -120,9 +120,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			state: RefCell::new(None),
 			db: Cell::new(None),
 			root: Cell::new(root.clone()),
-			// use old state for now to keep similar benches.
-			// TODO will need update to heavier of both world before migrating.
-			state_version: Cell::new(StateVersion::V0),
+			state_version: Cell::new(Default::default()),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),

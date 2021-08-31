@@ -145,7 +145,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
-			sp_core::state_version::StateVersion::V0, // TODO switch to v1 or default
+			Default::default(),
 		);
 
 		Box::new(TrieReadBenchmark {
@@ -258,7 +258,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
-			sp_core::state_version::StateVersion::V0, // TODO switch to v1 or default
+			Default::default(),
 		);
 
 		Box::new(TrieWriteBenchmark {

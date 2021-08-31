@@ -34,43 +34,6 @@ impl<B: Block> Default for StateVersions<B> {
 	}
 }
 
-/// Different block specific migrate and state
-/// behavior. This is read from chainspec and
-/// header block digest.
-pub enum MigrateState<H> {
-	/// Use current define state version.
-	None(StateVersion),
-	/// Use state root from digest log.
-	Switch(StateVersion, H),
-	/// Start migrate between two version.
-	Start(StateVersion, StateVersion),
-	/// Pending migration between two version
-	/// with pending root of destination version.
-	Pending(StateVersion, StateVersion, H),
-}
-
-/// Error related to migration digest from parent block header
-/// and on import current block header.
-pub enum InvalidErrorDigest {
-	/// Parent migrate do not match chainspec digest declaration.
-	InvalidParent,
-	/// Missing digest in parent header when expected.
-	MissingParentDigest,
-	/// Parent migrate switch to a state different than current one.
-	/// This is a bug.
-	InvalidParentSwitchState,
-	/// Imported digest do not match chainspec declaration.
-	InvalidImportedHeaderDigest,
-}
-
-#[cfg(feature = "std")]
-impl std::fmt::Display for InvalidErrorDigest {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		let msg = " TODO implement with comments";
-		write!(f, "{}", msg)
-	}
-}
-
 impl<B: Block> StateVersions<B> {
 	/// Access genesis state version.
 	/// This uses default state if undefined.

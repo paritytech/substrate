@@ -162,10 +162,6 @@ where
 		inherent_digests: DigestFor<Block>,
 		backend: &'a B,
 	) -> Result<Self, Error> {
-		// TODO call need_migration here and remove inner field
-		// then also compare (or init from) with parent header migration state.
-		// TODO pass parent header as param instead of hash and number
-	
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
 			Default::default(),

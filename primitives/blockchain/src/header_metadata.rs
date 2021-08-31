@@ -258,7 +258,6 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 	pub state_root: Block::Hash,
 	/// Hash of an ancestor header. Used to jump through the tree.
 	ancestor: Block::Hash,
-	// TODO add migration progress!! to query this instead of full header.
 }
 
 impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {

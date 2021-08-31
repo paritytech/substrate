@@ -211,7 +211,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 			wasm_runtime_overrides: None,
 			no_genesis: false,
 			wasm_runtime_substitutes: HashMap::new(),
-			state_versions: Default::default(), // TODO check usage or remove default impl
+			state_versions: Default::default(),
 		}
 	}
 }
