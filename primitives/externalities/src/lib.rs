@@ -227,7 +227,7 @@ pub trait Externalities: ExtensionStore {
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	///
 	/// Commits all changes to the database and clears all caches.
-	fn commit(&mut self, state_hashing: StateVersion);
+	fn commit(&mut self);
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!

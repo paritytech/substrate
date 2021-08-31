@@ -24,7 +24,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 use sp_core::{
-	hexdisplay::HexDisplay, StateVersion,
+	hexdisplay::HexDisplay, StateVersion, DEFAULT_STATE_HASHING,
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions, Externalities};
@@ -728,7 +728,9 @@ where
 			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
-	fn commit(&mut self, state_threshold: StateVersion) {
+	fn commit(&mut self) {
+		// Bench always use latest state.
+		let state_threshold = DEFAULT_STATE_HASHING;
 		for _ in 0..self.overlay.transaction_depth() {
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
@@ -952,7 +954,7 @@ mod tests {
 	use hex_literal::hex;
 	use num_traits::Zero;
 	use sp_core::{
-		map, DEFAULT_STATE_HASHING,
+		map,
 		storage::{well_known_keys::EXTRINSIC_INDEX, Storage, StorageChild},
 		Blake2Hasher, H256,
 	};

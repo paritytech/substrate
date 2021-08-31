@@ -92,7 +92,7 @@ pub use sp_runtime::{
 		Header as HeaderT, NumberFor,
 	},
 	transaction_validity::TransactionValidity,
-	RuntimeString, TransactionOutcome,
+	RuntimeString, TransactionOutcome, StateVersion,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -506,6 +506,9 @@ pub trait ApiExt<Block: BlockT> {
 
 	/// Returns the current active proof recorder.
 	fn proof_recorder(&self) -> Option<ProofRecorder<Block>>;
+
+	/// Returns the current state trie inner hashing configuration.
+	fn state_hash(&self) -> StateVersion;
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.

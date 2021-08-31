@@ -152,7 +152,7 @@ impl Externalities for AsyncExternalities {
 
 	fn wipe(&mut self) {}
 
-	fn commit(&mut self, _state_hashing: StateVersion) {}
+	fn commit(&mut self) {}
 
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		unimplemented!("read_write_count is not supported in AsyncExternalities")
