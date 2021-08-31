@@ -83,6 +83,7 @@ pub fn expand_runtime_metadata(
 								})
 								.collect(),
 					},
+					#scrate::scale_info::meta_type::<#runtime>()
 				).into()
 			}
 		}
