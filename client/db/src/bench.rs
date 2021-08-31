@@ -538,7 +538,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 				if tracker.writes > 0 {
 					writes += 1;
-					repeat_writes += tracker.reads - 1;
+					repeat_writes += tracker.writes - 1;
 				}
 			}
 		});
