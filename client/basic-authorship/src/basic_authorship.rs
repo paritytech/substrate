@@ -367,7 +367,8 @@ where
 		let mut hit_block_size_limit = false;
 
 		for pending_tx in pending_iterator {
-			if (self.now)() > deadline {
+			let now = (self.now)();
+			if now > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \
 					proceeding with proposing."
@@ -504,6 +505,7 @@ mod tests {
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
+	use sp_core::Pair;
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client::{
 		prelude::*,
@@ -522,6 +524,22 @@ mod tests {
 		}
 		.into_signed_tx()
 	}
+
+	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
+		let pair = AccountKeyring::numeric(who);
+		let transfer = Transfer {
+			// increase the amount to bump priority
+			amount: 1,
+			nonce: 0,
+			from: pair.public(),
+			to: Default::default(),
+		};
+		let signature = pair
+			.sign(&transfer.encode())
+			.into();
+		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
+	}
+
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 	where
@@ -568,7 +586,7 @@ mod tests {
 					return value.1
 				}
 				let old = value.1;
-				let new = old + time::Duration::from_secs(2);
+				let new = old + time::Duration::from_secs(1);
 				*value = (true, new);
 				old
 			}),
@@ -862,7 +880,7 @@ mod tests {
 	}
 
 	#[test]
-	fn should_continue_skipping_transactions_up_until_soft_deadline_is_reached() {
+	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -875,9 +893,16 @@ mod tests {
 		);
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE,
+			// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
 			(0..MAX_SKIPPED_TRANSACTIONS * 2)
 				.into_iter()
-				.map(|i| extrinsic(i as _))
+				.map(|i| exhausts_resources_extrinsic_from(i))
+				// and some transactions that are okay.
+				.chain(
+					(0..MAX_SKIPPED_TRANSACTIONS)
+					.into_iter()
+					.map(|i| extrinsic(i as _))
+				)
 				.collect()
 		)).unwrap();
 
@@ -889,46 +914,103 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
-		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 
-		let cell = Mutex::new((false, time::Instant::now()));
+		let cell = Mutex::new(time::Instant::now());
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
-				if !value.0 {
-					value.0 = true;
-					return value.1
-				}
-				let old = value.1;
-				let new = old + time::Duration::from_secs(2);
-				*value = (true, new);
+				let old = *value;
+				*value = old + time::Duration::from_secs(1);
 				old
 			}),
 		);
 
 		// when
-		let deadline = time::Duration::from_secs((MAX_SKIPPED_TRANSACTIONS * 4) as u64);
+		let deadline = time::Duration::from_secs(300);
 		let block =
 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
 				.map(|r| r.block)
 				.unwrap();
 
-		// then
-		// block should have some extrinsics although we have some more in the pool.
-		assert!(
-			block.extrinsics().len() > MAX_SKIPPED_TRANSACTIONS,
-			"Got {}, expected more than {}",
-			block.extrinsics().len(),
-			MAX_SKIPPED_TRANSACTIONS
-		);
+		// then block should have all non-exhaust resources extrinsics (+ the first one).
+		assert_eq!(block.extrinsics().len(), MAX_SKIPPED_TRANSACTIONS + 1);
 	}
 
 	#[test]
-	fn should_add_more_transactions_when_soft_deadline_is_not_reached() {
-		assert_eq!(true, false);
+	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE,
+			(0..MAX_SKIPPED_TRANSACTIONS + 2)
+				.into_iter()
+				.map(|i| exhausts_resources_extrinsic_from(i))
+				// and some transactions that are okay.
+				.chain(
+					(0..MAX_SKIPPED_TRANSACTIONS)
+					.into_iter()
+					.map(|i| extrinsic(i as _))
+				)
+				.collect()
+		)).unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let deadline = time::Duration::from_secs(600);
+		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
+		let cell2 = cell.clone();
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let (called, old) = *value;
+				// add time after deadline is calculated internally (hence 1)
+				let increase = if called == 1 {
+					// we start after the soft_deadline should have already been reached.
+					deadline / 2
+				} else {
+					// but we make sure to never reach the actual deadline
+					time::Duration::from_millis(0)
+				};
+				*value = (called + 1, old + increase);
+				old
+			}),
+		);
+
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then the block should have no transactions despite some in the pool
+		assert_eq!(block.extrinsics().len(), 1);
+		assert!(
+			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
+			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
+		);
 	}
 }
