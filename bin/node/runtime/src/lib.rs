@@ -569,17 +569,16 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfi
 	const MAXIMUM_TARGETS: u32 = 2000;
 }
 
-/// Maximum number of iteration of balancing that will be executed in the embedded miner of
+/// Maximum number of iterations for balancing that will be executed in the embedded miner of
 /// the pallet.
 pub const MINER_MAX_ITERATIONS: u32 = 10;
 
-use frame_election_provider_support::SequentialPhragmen;
-use frame_support::pallet_prelude::Get;
-use sp_npos_elections::ExtendedBalance;
-/// A source of random balance for NposSolver, which is mean to be run by the OCW election miner.
+/// A source of random balance for NposSolver, which is meant to be run by the OCW election miner.
 pub struct OffchainRandomBalance;
-impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalance {
-	fn get() -> Option<(usize, ExtendedBalance)> {
+impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::ExtendedBalance)>>
+	for OffchainRandomBalance
+{
+	fn get() -> Option<(usize, sp_npos_elections::ExtendedBalance)> {
 		use sp_runtime::traits::TrailingZeroInput;
 		let iters = match MINER_MAX_ITERATIONS {
 			0 => 0,
@@ -619,7 +618,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type OnChainAccuracy = Perbill;
 	type Solution = NposSolution16;
 	type Fallback = Fallback;
-	type Solver = SequentialPhragmen<
+	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
 		OffchainRandomBalance,
