@@ -42,7 +42,6 @@ use super::*;
 // 		);
 
 // 		T::WeightInfo::regenerate(
-// 			CounterForValidators::<T>::get(),
 // 			CounterForNominators::<T>::get(),
 // 		)
 // 		.saturating_add(T::DbWeight::get().reads(2))

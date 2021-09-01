@@ -425,10 +425,6 @@ impl<T: Config> Bag<T> {
 
 	/// Get a bag by its upper vote weight.
 	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
-		// debug_assert!( TODO this breaks when we attempt to migrate because thresholds change
-		// 	T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
-		// 	"it is a logic error to attempt to get a bag which is not in the thresholds list"
-		// );
 		crate::ListBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
 			bag.bag_upper = bag_upper;
 			bag
