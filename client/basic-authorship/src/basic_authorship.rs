@@ -534,12 +534,9 @@ mod tests {
 			from: pair.public(),
 			to: Default::default(),
 		};
-		let signature = pair
-			.sign(&transfer.encode())
-			.into();
+		let signature = pair.sign(&transfer.encode()).into();
 		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
 	}
-
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 	where
@@ -892,19 +889,20 @@ mod tests {
 			client.clone(),
 		);
 
-		block_on(txpool.submit_at(&BlockId::number(0), SOURCE,
-			// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
-			(0..MAX_SKIPPED_TRANSACTIONS * 2)
-				.into_iter()
-				.map(|i| exhausts_resources_extrinsic_from(i))
-				// and some transactions that are okay.
-				.chain(
-					(0..MAX_SKIPPED_TRANSACTIONS)
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
+				(0..MAX_SKIPPED_TRANSACTIONS * 2)
 					.into_iter()
-					.map(|i| extrinsic(i as _))
-				)
-				.collect()
-		)).unwrap();
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
 
 		block_on(
 			txpool.maintain(chain_event(
@@ -954,18 +952,19 @@ mod tests {
 			client.clone(),
 		);
 
-		block_on(txpool.submit_at(&BlockId::number(0), SOURCE,
-			(0..MAX_SKIPPED_TRANSACTIONS + 2)
-				.into_iter()
-				.map(|i| exhausts_resources_extrinsic_from(i))
-				// and some transactions that are okay.
-				.chain(
-					(0..MAX_SKIPPED_TRANSACTIONS)
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				(0..MAX_SKIPPED_TRANSACTIONS + 2)
 					.into_iter()
-					.map(|i| extrinsic(i as _))
-				)
-				.collect()
-		)).unwrap();
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
 
 		block_on(
 			txpool.maintain(chain_event(

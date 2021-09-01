@@ -96,8 +96,7 @@ impl Keyring {
 
 	/// Create a crypto `Pair` from a numeric value.
 	pub fn numeric(idx: usize) -> Pair {
-		Pair::from_string(&format!("//{}", idx), None)
-			.expect("numeric values are known good; qed")
+		Pair::from_string(&format!("//{}", idx), None).expect("numeric values are known good; qed")
 	}
 
 	/// Get account id of a `numeric` account.
