@@ -141,7 +141,7 @@ mod tests {
 		type BlockLength = ();
 		type BlockWeights = ();
 		type Version = ();
-		type PalletInfo = frame_support_test::PanicPalletInfo;
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -185,12 +185,14 @@ mod tests {
 
 	#[test]
 	fn onchain_seq_phragmen_works() {
-		assert_eq!(
-			OnChainPhragmen::elect().unwrap(),
-			vec![
-				(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
-				(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
-			]
-		);
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(
+				OnChainPhragmen::elect().unwrap(),
+				vec![
+					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
+					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
+				]
+			);
+		})
 	}
 }
