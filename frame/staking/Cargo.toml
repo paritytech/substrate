@@ -43,9 +43,7 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
-frame-election-provider-support = { version = "4.0.0-dev", features = [
-	"runtime-benchmarks",
-], path = "../election-provider-support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 rand_chacha = { version = "0.2" }
 
 [features]

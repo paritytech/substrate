@@ -276,9 +276,9 @@ async fn build_network_future<
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 // TODO(niklasad1): WsSocket server is not fully "closeable" at the moment.
+#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 
@@ -345,8 +345,9 @@ where
 fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>>(
 	_: &Configuration,
 	_: H,
-	_: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send>, error::Error> {
+	_: Option<sc_rpc_server::RpcMetrics>,
+	_: sc_rpc_server::ServerMetrics,
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
 
