@@ -36,25 +36,37 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	#[method(name = "getBlockHash")]
+	#[method(name = "getBlockHash", aliases = "chain_getHead")]
 	fn block_hash(&self, hash: Option<ListOrValue<NumberOrHex>>) -> JsonRpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
-	#[method(name = "getFinalizedHead")]
+	#[method(name = "getFinalizedHead", aliases = "chain_getFinalisedHead")]
 	fn finalized_head(&self) -> JsonRpcResult<Hash>;
 
-	/// All head subscription
-	// TODO(): support alias: subscribeAllHeads.
-	#[subscription(name = "allHead", unsub = "unsubscribeAllHeads", item = Header)]
+	/// All head subscription.
+	#[subscription(
+		name = "allHead",
+		aliases = "chain_subscribeAllHeads",
+		unsubscribe_aliases = "unsubscribeAllHeads",
+		item = Header
+	)]
 	fn subscribe_all_heads(&self);
 
-	/// New head subscription
-	// TODO(): support alias in jsonrpsee subscribeNewHeads.
-	#[subscription(name = "newHead", unsub = "unsubscribeNewHeads", item = Header)]
+	/// New head subscription.
+	#[subscription(
+		name = "newHead",
+		aliases = "subscribe_newHead, chain_subscribeNewHead, chain_subscribeNewHeads",
+		unsubscribe_aliases = "unsubscribe_newHead, chain_unsubscribeNewHead, chain_unsubscribeNewHeads",
+		item = Header
+	)]
 	fn subscribe_new_heads(&self);
 
-	/// Finalized head subscription
-	// TODO(): support alias in jsonrpsee subscribeFinalizedHeads/subscribeFinalisedHeads
-	#[subscription(name = "finalizedHead", unsub = "unsubscribeFinalizedHeads", item = Header)]
+	/// Finalized head subscription.
+	#[subscription(
+		name = "finalizedHead",
+		aliases = "chain_subscribeFinalisedHeads, chain_subscribeFinalizedHeads",
+		unsubscribe_aliases = "chain_unsubscribeFinalizedHeads, chain_unsubscribeFinalisedHeads",
+		item = Header
+	)]
 	fn subscribe_finalized_heads(&self);
 }
