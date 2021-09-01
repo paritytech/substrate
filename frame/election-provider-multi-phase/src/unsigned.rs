@@ -282,8 +282,8 @@ impl<T: Config> Pallet<T> {
 	/// is ready to be submitted to the chain.
 	///
 	/// Will always reduce the solution as well.
-	pub fn prepare_election_result<S: NposSolver>(
-		election_result: ElectionResult<T::AccountId, S::Accuracy>,
+	pub fn prepare_election_result(
+		election_result: ElectionResult<T::AccountId, SolutionAccuracyOf<T>>,
 	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>> {
 		// NOTE: This code path is generally not optimized as it is run offchain. Could use some at
 		// some point though.
@@ -1042,9 +1042,7 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				let (solution, witness) =
-					MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result)
-						.unwrap();
+				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
 					Origin::none(),
@@ -1065,9 +1063,7 @@ mod tests {
 						},
 					],
 				};
-				let (solution, _) =
-					MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result)
-						.unwrap();
+				let (solution, _) = MultiPhase::prepare_election_result(result).unwrap();
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
 				assert_noop!(
@@ -1089,9 +1085,7 @@ mod tests {
 						},
 					],
 				};
-				let (solution, witness) =
-					MultiPhase::prepare_election_result::<<Runtime as Config>::Solver>(result)
-						.unwrap();
+				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine
