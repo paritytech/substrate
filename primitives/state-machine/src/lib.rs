@@ -127,7 +127,7 @@ pub use crate::{
 		StorageTransactionCache, StorageValue,
 	},
 	stats::{StateMachineStats, UsageInfo, UsageUnit},
-	trie_backend::{MigrateProgress, TrieBackend},
+	trie_backend::TrieBackend,
 	trie_backend_essence::{Storage, TrieBackendStorage},
 };
 
@@ -929,19 +929,6 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		read_proof_check_on_proving_backend_generic(proving_backend, key)
-	}
-
-	/// Check storage read proof on pre-created proving backend.
-	pub fn read_proof_check_on_proving_backend_generic<H, KF>(
-		proving_backend: &TrieBackend<sp_trie::GenericMemoryDB<H, KF>, H>,
-		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Box<dyn Error>>
-	where
-		H: Hasher,
-		H::Out: Ord + Codec,
-		KF: sp_trie::KeyFunction<H> + Send + Sync,
-	{
 		proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}
 
@@ -1642,7 +1629,6 @@ mod tests {
 		assert_eq!(completed, true);
 	}
 
-	// TODO test does not make lot of sense with migration.
 	#[test]
 	fn inner_state_hashing_switch_proofs() {
 		let mut layout = Layout::default();

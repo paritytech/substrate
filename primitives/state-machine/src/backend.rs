@@ -176,6 +176,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
+
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
@@ -316,7 +317,7 @@ where
 		for (key, value) in input {
 			if let Err(e) = trie.insert(&key, &value) {
 				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None
+				return None;
 			}
 		}
 	}

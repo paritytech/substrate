@@ -291,7 +291,7 @@ impl<G, E> ChainSpec<G, E> {
 		use std::str::FromStr;
 		self.state_versions()
 			.get(0)
-			// This is incorrect (can have number representation not compatible with u64
+			// This is can be incorrect (if number representation incompatible with u64)
 			.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
 			.and_then(|(n, s)| (n == 0).then(|| s.clone()))
 			.unwrap_or_default()

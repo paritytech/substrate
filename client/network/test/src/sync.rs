@@ -158,7 +158,7 @@ fn sync_from_two_peers_works() {
 }
 
 #[test]
-fn sync_from_two_peers_with_migrate_works() {
+fn sync_from_two_peers_with_versioning_switch_works() {
 	sp_tracing::try_init_simple();
 	let mut state_versions = sp_runtime::StateVersions::<Block>::default();
 	state_versions.add((0, sp_runtime::StateVersion::V0));
