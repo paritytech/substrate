@@ -352,7 +352,7 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 }
 
 parameter_types! {
-	pub const RandomBalancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
+	pub const Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
 }
 
 impl crate::Config for Runtime {
