@@ -449,6 +449,7 @@ fn no_candidate_emergency_condition() {
 		.validator_count(15)
 		.set_status(41, StakerStatus::Validator)
 		.nominate(false)
+		.session_per_era(1)
 		.build_and_execute(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
@@ -459,19 +460,20 @@ fn no_candidate_emergency_condition() {
 			<Staking as crate::Store>::MinimumValidatorCount::put(10);
 
 			// try to chill
-			let res = Staking::chill(Origin::signed(10));
-			assert_ok!(res);
+			assert_ok!(Staking::chill(Origin::signed(10)));
 
 			let current_era = CurrentEra::<Test>::get();
 
 			// try trigger new era
-			mock::run_to_block(20);
+			advance_session();
 			assert_eq!(*staking_events().last().unwrap(), Event::StakingElectionFailed);
 			// No new era is created
 			assert_eq!(current_era, CurrentEra::<Test>::get());
 
 			// Go to far further session to see if validator have changed
-			mock::run_to_block(100);
+			advance_session();
+			advance_session();
+			advance_session();
 
 			// Previous ones are elected. chill is not effective in active era (as era hasn't
 			// changed)
@@ -4320,6 +4322,22 @@ mod multi_block_election {
 				era,
 				who
 			);
+		}
+	}
+
+	fn assert_stakers_in_era_with_clipped(
+		whos: impl Iterator<Item = AccountId>,
+		exists: bool,
+		era: EraIndex,
+	) {
+		for who in whos {
+			assert!(
+				exists ^ !<ErasStakers<Test>>::contains_key(era, who),
+				"contains_key not matching {} for era {} of {:?}",
+				exists,
+				era,
+				who
+			);
 			assert!(
 				exists ^ !<ErasStakersClipped<Test>>::contains_key(era, who),
 				"contains_key not matching {} for era {} of {:?}",
@@ -4335,6 +4353,11 @@ mod multi_block_election {
 				who
 			);
 		}
+	}
+
+	#[test]
+	fn paginate_supports_nominators_works() {
+		todo!();
 	}
 
 	#[test]
@@ -4452,9 +4475,9 @@ mod multi_block_election {
 				assert!(<NextValidators<Test>>::get().is_none());
 				assert!(<NextElectPage<Test>>::get().is_none());
 				// stakers of era 0 have already been initialized..
-				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), true, 0);
+				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), true, 0);
 				// .. but not 1.
-				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), false, 1);
+				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), false, 1);
 				assert_eq!(current_era(), 0);
 
 				run_to_block(4);
@@ -4498,9 +4521,17 @@ mod multi_block_election {
 				assert!(<NextElectPage<Test>>::get().is_none());
 				// genesis election has worked as expected, that one uses a simpler election
 				// provider.
-				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), true, 0);
+				assert_stakers_in_era_with_clipped(
+					vec![11 as AccountId, 21, 31, 41].into_iter(),
+					true,
+					0,
+				);
 				// .. but not 1.
-				assert_stakers_in_era(vec![11 as AccountId, 21, 31, 41].into_iter(), false, 1);
+				assert_stakers_in_era_with_clipped(
+					vec![11 as AccountId, 21, 31, 41].into_iter(),
+					false,
+					1,
+				);
 				assert_eq!(current_era(), 0);
 
 				run_to_block(3);
@@ -4508,6 +4539,9 @@ mod multi_block_election {
 				assert_eq!(<NextElectPage<Test>>::get(), Some(0));
 				// not set yet.
 				assert!(<NextValidators<Test>>::get().is_none());
+				// but exposures for 2 of the validators have been set already.
+				assert_stakers_in_era(vec![31 as AccountId, 41].into_iter(), true, 1);
+				assert_stakers_in_era(vec![11 as AccountId, 21].into_iter(), false, 1);
 
 				// TODO: staking should always have some grace period: pad this entire timeline by a
 				// configurable number of blocks, in case blocks are missed.
@@ -4517,6 +4551,8 @@ mod multi_block_election {
 				assert!(<NextElectPage<Test>>::get().is_none());
 				// and validators ready for era trigger.
 				assert!(<NextValidators<Test>>::get().is_some());
+				// and the entire exposures are set
+				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), true, 1);
 				assert_eq!(current_era(), 0);
 
 				run_to_block(5);
@@ -4528,15 +4564,184 @@ mod multi_block_election {
 				run_to_block(13);
 				assert!(<NextValidators<Test>>::get().is_none());
 				assert_eq!(<NextElectPage<Test>>::get(), Some(0));
+				assert_stakers_in_era(vec![31 as AccountId, 41].into_iter(), true, 2);
+				assert_stakers_in_era(vec![11 as AccountId, 21].into_iter(), false, 2);
+
 				run_to_block(14);
 				assert!(<NextValidators<Test>>::get().is_some());
 				assert!(<NextElectPage<Test>>::get().is_none());
 				assert_eq!(current_era(), 1);
+				assert_stakers_in_era_with_clipped(
+					vec![11 as AccountId, 21, 31, 41].into_iter(),
+					true,
+					2,
+				);
+
 				run_to_block(15);
 				assert_eq!(current_era(), 2);
 				assert!(<NextValidators<Test>>::get().is_none());
 				assert!(<NextElectPage<Test>>::get().is_none());
 				assert_eq!(current_era(), 2);
+			});
+	}
+
+	#[test]
+	fn exposure_merging_works() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.nominate(false)
+			.validator_count(4)
+			.session_per_era(2)
+			.period(5)
+			.election_pages(2)
+			.build_and_execute(|| {
+				PaginateNominators::set(true);
+				for i in 1..=8 {
+					bond_nominator(i, i, 1000, vec![11, 21, 31, 41]);
+				}
+
+				run_to_block(3);
+				// only exposures from nominator 7 8 are collected. Note that self votes are also
+				// here, but don't show up!
+				assert_eq!(
+					<ErasStakers<Test>>::iter_prefix(1).collect::<Vec<_>>(),
+					vec![
+						(
+							31,
+							Exposure {
+								total: 1002,
+								own: 500,
+								others: vec![
+									IndividualExposure { who: 7, value: 251 },
+									IndividualExposure { who: 8, value: 251 }
+								]
+							}
+						),
+						(
+							41,
+							Exposure {
+								total: 1558,
+								own: 1000,
+								others: vec![
+									IndividualExposure { who: 7, value: 279 },
+									IndividualExposure { who: 8, value: 279 }
+								]
+							}
+						),
+						(
+							21,
+							Exposure {
+								total: 1496,
+								own: 1000,
+								others: vec![
+									IndividualExposure { who: 7, value: 248 },
+									IndividualExposure { who: 8, value: 248 }
+								]
+							}
+						),
+						(
+							11,
+							Exposure {
+								total: 1444,
+								own: 1000,
+								others: vec![
+									IndividualExposure { who: 7, value: 222 },
+									IndividualExposure { who: 8, value: 222 }
+								]
+							}
+						)
+					]
+				);
+				run_to_block(4);
+
+				// the other 6 voter groups are squashed in.
+				assert_eq!(
+					<ErasStakers<Test>>::iter_prefix(1).collect::<Vec<_>>(),
+					vec![
+						(
+							31,
+							Exposure {
+								total: 2508,
+								own: 500,
+								others: vec![
+									IndividualExposure { who: 7, value: 251 },
+									IndividualExposure { who: 8, value: 251 },
+									IndividualExposure { who: 1, value: 251 },
+									IndividualExposure { who: 2, value: 251 },
+									IndividualExposure { who: 3, value: 251 },
+									IndividualExposure { who: 4, value: 251 },
+									IndividualExposure { who: 5, value: 251 },
+									IndividualExposure { who: 6, value: 251 }
+								]
+							}
+						),
+						(
+							41,
+							Exposure {
+								total: 3232,
+								own: 1000,
+								others: vec![
+									IndividualExposure { who: 7, value: 279 },
+									IndividualExposure { who: 8, value: 279 },
+									IndividualExposure { who: 1, value: 279 },
+									IndividualExposure { who: 2, value: 279 },
+									IndividualExposure { who: 3, value: 279 },
+									IndividualExposure { who: 4, value: 279 },
+									IndividualExposure { who: 5, value: 279 },
+									IndividualExposure { who: 6, value: 279 }
+								]
+							}
+						),
+						(
+							21,
+							Exposure {
+								total: 2984,
+								own: 1000,
+								others: vec![
+									IndividualExposure { who: 7, value: 248 },
+									IndividualExposure { who: 8, value: 248 },
+									IndividualExposure { who: 1, value: 248 },
+									IndividualExposure { who: 2, value: 248 },
+									IndividualExposure { who: 3, value: 248 },
+									IndividualExposure { who: 4, value: 248 },
+									IndividualExposure { who: 5, value: 248 },
+									IndividualExposure { who: 6, value: 248 }
+								]
+							}
+						),
+						(
+							11,
+							Exposure {
+								total: 2776,
+								own: 1000,
+								others: vec![
+									IndividualExposure { who: 7, value: 222 },
+									IndividualExposure { who: 8, value: 222 },
+									IndividualExposure { who: 1, value: 222 },
+									IndividualExposure { who: 2, value: 222 },
+									IndividualExposure { who: 3, value: 222 },
+									IndividualExposure { who: 4, value: 222 },
+									IndividualExposure { who: 5, value: 222 },
+									IndividualExposure { who: 6, value: 222 }
+								]
+							}
+						)
+					]
+				);
+				// ensure everything exists.
+				run_to_block(5);
+				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), true, 1);
+				let exposures_nominator_paginated =
+					<ErasStakers<Test>>::iter_prefix(1).collect::<Vec<_>>();
+
+				// no longer do this. Now run till the next election and collect the exposures of
+				// era 2.
+				PaginateNominators::set(false);
+				run_to_block(15);
+				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), true, 2);
+				let exposures_normal = <ErasStakers<Test>>::iter_prefix(1).collect::<Vec<_>>();
+
+				assert_eq!(exposures_normal, exposures_nominator_paginated);
 			});
 	}
 }

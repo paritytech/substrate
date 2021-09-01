@@ -18,7 +18,9 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, PageIndex, SortedListProvider, Supports};
+use frame_election_provider_support::{
+	onchain, ExtendedBalance, PageIndex, SortedListProvider, Support, Supports,
+};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -35,7 +37,10 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
-use std::{cell::RefCell, collections::HashSet};
+use std::{
+	cell::RefCell,
+	collections::{BTreeSet, HashSet},
+};
 use substrate_test_utils::assert_eq_uvec;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -272,21 +277,74 @@ impl onchain::Config for Test {
 /// Perfect tool to test staking against multi-block elections.
 pub struct MockElectionProvider;
 
+// Configurations of the mock election provider.
 parameter_types! {
 	pub static ElectionPages: PageIndex = 1;
 	pub static PaginatedElection: Option<Vec<Supports<AccountId>>> = None;
+	// if set, we paginate the supports by nominators, else by validators.
+	pub static PaginateNominators: bool = false;
 }
 
 impl MockElectionProvider {
+	/// extract the support of this voter group. this code is among those that I now write and 20
+	/// minutes later I don't have any recollect of how it is working..
+	fn extract_support(
+		supports: Supports<AccountId>,
+		voter_group: Vec<AccountId>,
+	) -> Supports<AccountId> {
+		supports
+			.into_iter()
+			.map(|(t, s)| (t, s.voters))
+			.map(|(t, s)| {
+				(
+					t,
+					s.into_iter()
+						.filter(|(v, _)| voter_group.iter().any(|x| x == v))
+						.collect::<Vec<_>>(),
+				)
+			})
+			.map(|(t, s)| (t, Support { total: s.iter().fold(0, |a, (_, x)| a + x), voters: s }))
+			.collect::<Vec<_>>()
+	}
+
+	fn chunk_by_nominators(supports: Supports<AccountId>) -> Vec<Supports<AccountId>> {
+		let all_voters = supports
+			.iter()
+			.map(|(_, s)| s.voters.clone())
+			.flatten()
+			.map(|(n, _)| n)
+			.collect::<BTreeSet<_>>()
+			.into_iter()
+			.collect::<Vec<_>>();
+
+		let chunks = (all_voters.len() / ElectionPages::get() as usize).max(1);
+
+		let voters_chunked = all_voters.chunks(chunks).map(|x| x.to_vec()).collect::<Vec<_>>();
+		let mut supports_chunked = voters_chunked
+			.into_iter()
+			.map(|voter_groups| Self::extract_support(supports.clone(), voter_groups))
+			.collect::<Vec<_>>();
+		supports_chunked.resize(chunks, Default::default());
+		supports_chunked
+	}
+
+	fn chunk_by_validators(supports: Supports<AccountId>) -> Vec<Supports<AccountId>> {
+		let chunks = (supports.len() / (ElectionPages::get() as usize)).max(1);
+		let mut supports_chunked = supports.chunks(chunks).map(|x| x.to_vec()).collect::<Vec<_>>();
+		supports_chunked.resize(ElectionPages::get() as usize, Default::default());
+		supports_chunked
+	}
+
 	fn multi_block(remaining: PageIndex) -> Result<Supports<AccountId>, &'static str> {
 		let first_page = ElectionPages::get() - 1;
 		if remaining == first_page {
 			// this is the first page of the election.
 			let all_supports = Self::single_block()?;
-			let page_size = (all_supports.len() / (ElectionPages::get() as usize)).max(1);
-			let mut paginated_supports =
-				all_supports.chunks(page_size).map(|x| x.to_vec()).collect::<Vec<_>>();
-			paginated_supports.resize(ElectionPages::get() as usize, Default::default());
+			let mut paginated_supports = if PaginateNominators::get() {
+				Self::chunk_by_nominators(all_supports)
+			} else {
+				Self::chunk_by_validators(all_supports)
+			};
 			PaginatedElection::set(Some(paginated_supports.clone()));
 			Ok(paginated_supports.get(remaining as usize).unwrap().to_vec())
 		} else if remaining < first_page {

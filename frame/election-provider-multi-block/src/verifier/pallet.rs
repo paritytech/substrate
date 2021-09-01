@@ -49,6 +49,14 @@ mod pallet {
 		/// "better".
 		#[pallet::constant]
 		type SolutionImprovementThreshold: Get<sp_runtime::Perbill>;
+
+		/// Maximum number of voters that can support a single target, among ALL pages of a
+		/// verifying solution. It can only ever be checked on the last page of any given
+		/// verification.
+		///
+		/// This must be set such that the memory limits in the rest of the system are well
+		/// respected.
+		type MaxTotalBackingsPerTarget: Get<u32>;
 	}
 
 	#[pallet::error]
@@ -836,7 +844,12 @@ mod feasibility_check {
 
 	#[test]
 	fn score() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| todo!())
+		todo!()
+	}
+
+	#[test]
+	fn max_voters_per_target() {
+		todo!()
 	}
 }
 
@@ -1182,11 +1195,10 @@ mod verifier_trait {
 				);
 			}
 			// and the solution will not be successfully sealed because the score is too low
-			assert!(
-				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
-					ok_score,
-				).is_err()
-			);
+			assert!(<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(
+				ok_score,
+			)
+			.is_err());
 
 			// the invalid solution is cleared
 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);

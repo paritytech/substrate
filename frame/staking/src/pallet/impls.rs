@@ -427,9 +427,6 @@ impl<T: Config> Pallet<T> {
 					// good, this can only happen in genesis. If something is about to go wrong, the
 					// chain won't even start.
 					let exposures = Self::collect_exposures(supports);
-					// no era must exist now, we initialize the first one.
-					// TODO: ain't this always valid? seem to fail with session per era == 1
-					debug_assert!(<CurrentEra<T>>::get().is_none());
 					Self::store_intermediary_staker_info(exposures, 0);
 					Self::finalize_staker_info_collection(0)
 				})
@@ -507,7 +504,7 @@ impl<T: Config> Pallet<T> {
 				let _leftover = proceed_page(supports, next_page);
 				log!(
 					info,
-					"continuing to collect exposures, next page {}, leftover? {}",
+					"continuing exposure collection, next page {}, leftover? {}",
 					next_page,
 					_leftover
 				);
@@ -548,6 +545,7 @@ impl<T: Config> Pallet<T> {
 		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 		new_planned_era: EraIndex,
 	) {
+		log!(debug, "storing intermediary staker values for era {}", new_planned_era);
 		let mut total_stake: BalanceOf<T> = Zero::zero();
 		for (validator_stash, exposure) in exposures {
 			total_stake = total_stake.saturating_add(exposure.total);
@@ -557,7 +555,7 @@ impl<T: Config> Pallet<T> {
 				(*current_exposure).total = current_exposure.total.saturating_add(exposure.total);
 				// defensive-only: `own` should only ever be incremented once, not much we can do
 				// about it if otherwise.
-				debug_assert!(!current_exposure.own.is_zero() || !exposure.own.is_zero());
+				debug_assert!(current_exposure.own.is_zero() || exposure.own.is_zero());
 				current_exposure.own = current_exposure.own.saturating_add(exposure.own);
 				current_exposure.others.extend(exposure.others.into_iter());
 			})
@@ -601,6 +599,13 @@ impl<T: Config> Pallet<T> {
 			let pref = Self::validators(stash);
 			<ErasValidatorPrefs<T>>::insert(&new_planned_era, stash, pref);
 		}
+
+		log!(
+			info,
+			"finalizing staker info storage for era {}, {} validators have been elected",
+			new_planned_era,
+			elected_stashes.len()
+		);
 
 		elected_stashes
 	}
