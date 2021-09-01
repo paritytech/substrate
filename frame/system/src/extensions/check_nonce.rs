@@ -22,7 +22,7 @@ use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, One, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionLongevity, TransactionValidity, TransactionValidityError,
-		ValidTransaction,
+		ValidTransaction, UnknownTransaction,
 	},
 };
 use sp_std::vec;
@@ -32,16 +32,16 @@ use sp_std::vec;
 /// Note that this does not set any priority by default. Make sure that AT LEAST one of the signed
 /// extension sets some kind of priority upon validating transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckNonce<T: Config>(#[codec(compact)] T::Index);
+pub struct CheckNonce<T: Config, const MAX_FUTURE_NONCE: u32>(#[codec(compact)] T::Index);
 
-impl<T: Config> CheckNonce<T> {
+impl<T: Config, const MAX_FUTURE_NONCE: u32> CheckNonce<T, MAX_FUTURE_NONCE> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(nonce: T::Index) -> Self {
 		Self(nonce)
 	}
 }
 
-impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
+impl<T: Config, const MAX_FUTURE_NONCE: u32> sp_std::fmt::Debug for CheckNonce<T, MAX_FUTURE_NONCE> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckNonce({})", self.0)
@@ -53,7 +53,7 @@ impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for CheckNonce<T>
+impl<T: Config, const MAX_FUTURE_NONCE: u32> SignedExtension for CheckNonce<T, MAX_FUTURE_NONCE>
 where
 	T::Call: Dispatchable<Info = DispatchInfo>,
 {
@@ -99,6 +99,10 @@ where
 		let account = crate::Account::<T>::get(who);
 		if self.0 < account.nonce {
 			return InvalidTransaction::Stale.into()
+		}
+
+		if MAX_FUTURE_NONCE != 0 && self.0 - account.nonce > MAX_FUTURE_NONCE.into() {
+			return UnknownTransaction::CannotLookup.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
@@ -158,5 +162,10 @@ mod tests {
 				InvalidTransaction::Future
 			);
 		})
+	}
+
+	#[test]
+	fn should_not_validate_very_distant_transactions() {
+		assert_eq!(true, false);
 	}
 }

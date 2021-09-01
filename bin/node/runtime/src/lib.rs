@@ -911,7 +911,7 @@ where
 			frame_system::CheckTxVersion::<Runtime>::new(),
 			frame_system::CheckGenesis::<Runtime>::new(),
 			frame_system::CheckEra::<Runtime>::from(era),
-			frame_system::CheckNonce::<Runtime>::from(nonce),
+			frame_system::CheckNonce::<Runtime, MAX_NONCE_DIFFERENCE>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
@@ -1252,10 +1252,19 @@ pub type SignedExtra = (
 	frame_system::CheckTxVersion<Runtime>,
 	frame_system::CheckGenesis<Runtime>,
 	frame_system::CheckEra<Runtime>,
-	frame_system::CheckNonce<Runtime>,
+	frame_system::CheckNonce<Runtime, MAX_NONCE_DIFFERENCE>,
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
+/// Maximal valid nonce difference between state and transaction.
+///
+/// This constant changes the validity of transactions that are distant
+/// from the transaction currently expected by the state.
+/// Since there is at least `MAX_FUTURE_NONCE - 1` transactions awaiting
+/// to be included before the given one, we consider it difficult to
+/// commit to actual validity of the transaction when it's going to be included,
+/// hence instructing the client to re-check the transaction in the future.
+pub const MAX_NONCE_DIFFERENCE: u32 = 64;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// The payload being signed in transactions.
