@@ -1118,7 +1118,6 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
-	// TODO consider moving this state_version into BlockChainBb
 	state_versions: StateVersions<Block>,
 }
 
