@@ -38,8 +38,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{convert::TryFrom, prelude::*};
-use codec::{Encode, Decode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	BoundedSlice, ConsensusEngineId, Parameter, WeakBoundedVec,
@@ -50,7 +49,7 @@ use sp_runtime::{
 	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
 };
-use sp_std::prelude::*;
+use sp_std::convert::TryFrom;
 
 pub mod migrations;
 mod mock;
@@ -154,7 +153,7 @@ impl<T: Config> Pallet<T> {
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new.into_inner()).encode()
+			ConsensusLog::AuthoritiesChange(new.into_inner()).encode(),
 		);
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
