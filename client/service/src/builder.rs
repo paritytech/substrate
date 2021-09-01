@@ -398,13 +398,6 @@ where
 		};
 		sc_client_db::light::LightStorage::new(db_settings)?
 	};
-	let light_blockchain = sc_light::new_light_blockchain(db_storage);
-	let fetch_checker = Arc::new(sc_light::new_fetch_checker::<_, TBl, _>(
-		light_blockchain.clone(),
-		executor.clone(),
-		Box::new(task_manager.spawn_handle()),
-	));
-	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 
 	let state_versions = StateVersions::from_conf(
 		config
@@ -417,7 +410,15 @@ where
 		Error::Application(Box::from("Invalid state versions for chain spec".to_string()))
 	})?;
 
-	let backend = sc_light::new_light_backend(light_blockchain, state_versions);
+	let light_blockchain = sc_light::new_light_blockchain(db_storage, state_versions);
+	let fetch_checker = Arc::new(sc_light::new_fetch_checker::<_, TBl, _>(
+		light_blockchain.clone(),
+		executor.clone(),
+		Box::new(task_manager.spawn_handle()),
+	));
+	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
+
+	let backend = sc_light::new_light_backend(light_blockchain);
 	let client = Arc::new(light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),

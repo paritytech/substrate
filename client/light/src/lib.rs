@@ -34,7 +34,7 @@ pub use fetcher::*;
 
 /// Create an instance of fetch data checker.
 pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
-	blockchain: Arc<Blockchain<S>>,
+	blockchain: Arc<Blockchain<S, B>>,
 	executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
 ) -> LightDataChecker<E, B, S>
@@ -45,18 +45,17 @@ where
 }
 
 /// Create an instance of light client blockchain backend.
-pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> Arc<Blockchain<S>> {
-	Arc::new(Blockchain::new(storage))
+pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S, state_versions: sp_runtime::StateVersions<B>) -> Arc<Blockchain<S, B>> {
+	Arc::new(Blockchain::new(storage, state_versions))
 }
 
 /// Create an instance of light client backend.
 pub fn new_light_backend<B, S>(
-	blockchain: Arc<Blockchain<S>>,
-	state_versions: sp_runtime::StateVersions<B>,
+	blockchain: Arc<Blockchain<S, B>>,
 ) -> Arc<Backend<S, B>>
 where
 	B: BlockT,
 	S: BlockchainStorage<B>,
 {
-	Arc::new(Backend::new(blockchain, state_versions))
+	Arc::new(Backend::new(blockchain))
 }

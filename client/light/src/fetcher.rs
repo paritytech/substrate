@@ -55,7 +55,7 @@ pub use sc_client_api::{
 
 /// Remote data checker.
 pub struct LightDataChecker<E, B: BlockT, S: BlockchainStorage<B>> {
-	blockchain: Arc<Blockchain<S>>,
+	blockchain: Arc<Blockchain<S, B>>,
 	executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
 	_marker: PhantomData<B>,
@@ -64,7 +64,7 @@ pub struct LightDataChecker<E, B: BlockT, S: BlockchainStorage<B>> {
 impl<E, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, B, S> {
 	/// Create new light data checker.
 	pub fn new(
-		blockchain: Arc<Blockchain<S>>,
+		blockchain: Arc<Blockchain<S, B>>,
 		executor: E,
 		spawn_handle: Box<dyn SpawnNamed>,
 	) -> Self {

@@ -419,10 +419,10 @@ pub fn new_light() -> (
 	>,
 	Arc<LightBackend>,
 ) {
-	let storage = sc_client_db::light::LightStorage::new_test();
-	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
 	let state_versions = Default::default();
-	let backend = Arc::new(LightBackend::new(blockchain, state_versions));
+	let storage = sc_client_db::light::LightStorage::new_test();
+	let blockchain = Arc::new(sc_light::Blockchain::new(storage, state_versions));
+	let backend = Arc::new(LightBackend::new(blockchain));
 	let executor = new_native_executor();
 	let local_call_executor = client::LocalCallExecutor::new(
 		backend.clone(),

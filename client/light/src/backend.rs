@@ -48,7 +48,7 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header, NumberFor, Zero},
-	Justification, Justifications, StateVersion, StateVersions, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -60,11 +60,8 @@ const IN_MEMORY_EXPECT_PROOF: &str =
 
 /// Light client backend.
 pub struct Backend<S, Block: BlockT> {
-	blockchain: Arc<Blockchain<S>>,
+	blockchain: Arc<Blockchain<S, Block>>,
 	genesis_state: RwLock<Option<InMemoryBackend<HashFor<Block>>>>,
-	state_versions: StateVersions<Block>,
-	// TODO consider moving this state_versions into BlockChain (and add N to type) -> would make
-	// better api
 	import_lock: RwLock<()>,
 }
 
@@ -94,17 +91,16 @@ pub enum GenesisOrUnavailableState<H: Hasher> {
 
 impl<S, B: BlockT> Backend<S, B> {
 	/// Create new light backend.
-	pub fn new(blockchain: Arc<Blockchain<S>>, state_versions: StateVersions<B>) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S, B>>) -> Self {
 		Self {
 			blockchain,
 			genesis_state: RwLock::new(None),
 			import_lock: Default::default(),
-			state_versions,
 		}
 	}
 
 	/// Get shared blockchain reference.
-	pub fn blockchain(&self) -> &Arc<Blockchain<S>> {
+	pub fn blockchain(&self) -> &Arc<Blockchain<S, B>> {
 		&self.blockchain
 	}
 }
@@ -136,7 +132,7 @@ where
 	Block::Hash: Ord,
 {
 	type BlockImportOperation = ImportOperation<Block, S>;
-	type Blockchain = Blockchain<S>;
+	type Blockchain = Blockchain<S, Block>;
 	type State = GenesisOrUnavailableState<HashFor<Block>>;
 	type OffchainStorage = InMemOffchainStorage;
 
@@ -151,7 +147,7 @@ where
 			storage_update: None,
 			changes_trie_config_update: None,
 			state_version: None,
-			genesis_state_version: self.state_versions.genesis_state_version(),
+			genesis_state_version: self.blockchain.state_versions().genesis_state_version(),
 			_phantom: Default::default(),
 		})
 	}
@@ -162,7 +158,7 @@ where
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
 		if let Some(number) = self.blockchain.storage().block_number_from_id(&block)? {
-			operation.state_version = Some(self.state_versions.state_version_at(number));
+			operation.state_version = Some(self.blockchain.state_versions().state_version_at(number));
 		}
 		Ok(())
 	}
@@ -228,7 +224,7 @@ where
 		Ok(())
 	}
 
-	fn blockchain(&self) -> &Blockchain<S> {
+	fn blockchain(&self) -> &Blockchain<S, Block> {
 		&self.blockchain
 	}
 
