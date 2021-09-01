@@ -582,11 +582,6 @@ impl<T: Config> Bag<T> {
 
 		Ok(())
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub(crate) fn contains(&self, id: &T::AccountId) -> bool {
-		self.iter().any(|n| n.id() == id)
-	}
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.

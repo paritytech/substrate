@@ -103,7 +103,7 @@
 //! #### Voting
 //!
 //! Staking is closely related to elections; actual validators are chosen from among all potential
-//! validators by election by the potential validators and nominators. To reduce use of the phrase
+//! validators via election by the potential validators and nominators. To reduce use of the phrase
 //! "potential validators and nominators", we often use the term **voters**, who are simply
 //! the union of potential validators and nominators.
 //!

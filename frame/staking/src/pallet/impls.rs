@@ -938,6 +938,9 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Ledger<T>>::remove_all(None);
 		<Validators<T>>::remove_all(None);
 		<Nominators<T>>::remove_all(None);
+		<CounterForNominators<T>>::kill();
+		<CounterForValidators<T>>::kill();
+		T::SortedListProvider::clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
