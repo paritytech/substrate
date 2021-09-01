@@ -1928,9 +1928,11 @@ name = "frame-election-provider-support"
 version = "4.0.0-dev"
 dependencies = [
  "frame-support",
+ "frame-support-test",
  "frame-system",
  "parity-scale-codec",
  "sp-arithmetic",
+ "sp-core",
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",

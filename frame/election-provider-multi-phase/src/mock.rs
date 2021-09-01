@@ -17,7 +17,7 @@
 
 use super::*;
 use crate as multi_phase;
-use frame_election_provider_support::{data_provider, ElectionDataProvider};
+use frame_election_provider_support::{data_provider, onchain, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
@@ -36,7 +36,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	PerU16, RuntimeAppPublic,
+	PerU16,
 };
 use std::{convert::TryFrom, sync::Arc};
 

@@ -107,11 +107,49 @@ mod tests {
 	use sp_runtime::Perbill;
 
 	type AccountId = u64;
-	type BlockNumber = u32;
-	struct Runtime;
-	impl Config for Runtime {
-		type AccountId = AccountId;
+	type BlockNumber = u64;
+
+	pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, (), (), ()>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+
+	frame_support::construct_runtime!(
+		pub enum Runtime where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic
+		{
+			System: frame_system::{Pallet, Call, Event<T>},
+		}
+	);
+
+	impl frame_system::Config for Runtime {
+		type SS58Prefix = ();
+		type BaseCallFilter = frame_support::traits::Everything;
+		type Origin = Origin;
+		type Index = AccountId;
 		type BlockNumber = BlockNumber;
+		type Call = Call;
+		type Hash = sp_core::H256;
+		type Hashing = sp_runtime::traits::BlakeTwo256;
+		type AccountId = AccountId;
+		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
+		type Header = sp_runtime::testing::Header;
+		type Event = ();
+		type BlockHashCount = ();
+		type DbWeight = ();
+		type BlockLength = ();
+		type BlockWeights = ();
+		type Version = ();
+		type PalletInfo = frame_support_test::PanicPalletInfo;
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
+		type OnSetCode = ();
+	}
+
+	impl Config for Runtime {
 		type Accuracy = Perbill;
 		type DataProvider = mock_data_provider::DataProvider;
 	}
