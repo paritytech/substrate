@@ -334,8 +334,7 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 			DigestItemType::ChangesTrieSignal =>
 				Ok(Self::ChangesTrieSignal(Decode::decode(input)?)),
 			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
-			DigestItemType::RuntimeUpdated =>
-				Ok(Self::RuntimeUpdated),
+			DigestItemType::RuntimeUpdated => Ok(Self::RuntimeUpdated),
 		}
 	}
 }
