@@ -36,6 +36,7 @@ use sp_runtime::{
 	DispatchError, SaturatedConversion,
 };
 use sp_std::{boxed::Box, cmp::Ordering, convert::TryFrom, vec::Vec};
+use frame_election_provider_support::PerThing128;
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -267,23 +268,32 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new npos solution.
-	pub fn mine_solution<S: NposSolver<AccountId = T::AccountId, Error = SolverErrorOf<T>>>(
-	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>> {
+	///
+	/// In order to improve code base ergonomics, the Npos Solver type,`S`, must have the same
+	/// AccountId and Error type as the [`crate::Config::Solver`].
+	pub fn mine_solution<S>(
+	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>>
+	where
+		S: NposSolver<
+			AccountId = T::AccountId,
+			Error = SolverErrorOf<T>,
+		>,
+	{
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
 		S::solve(desired_targets as usize, targets, voters)
 			.map_err(|e| MinerError::Solver::<T>(e))
-			.and_then(|e| Self::prepare_election_result::<S>(e))
+			.and_then(|e| Self::prepare_election_result::<S::Accuracy>(e))
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
 	/// is ready to be submitted to the chain.
 	///
 	/// Will always reduce the solution as well.
-	pub fn prepare_election_result(
-		election_result: ElectionResult<T::AccountId, SolutionAccuracyOf<T>>,
+	pub fn prepare_election_result<Accuracy: PerThing128>(
+		election_result: ElectionResult<T::AccountId, Accuracy>,
 	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>> {
 		// NOTE: This code path is generally not optimized as it is run offchain. Could use some at
 		// some point though.
