@@ -24,7 +24,7 @@ use std::sync::Arc;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
-	Justifications, StateVersions,
+	Justifications,
 };
 
 use crate::fetcher::RemoteHeaderRequest;
@@ -42,29 +42,23 @@ use sp_blockchain::{
 };
 
 /// Light client blockchain.
-pub struct Blockchain<S, Block: BlockT> {
+pub struct Blockchain<S> {
 	storage: S,
-	state_versions: StateVersions<Block>,
 }
 
-impl<S, Block: BlockT> Blockchain<S, Block> {
+impl<S> Blockchain<S> {
 	/// Create new light blockchain backed with given storage.
-	pub fn new(storage: S, state_versions: StateVersions<Block>) -> Self {
-		Self { storage, state_versions }
+	pub fn new(storage: S) -> Self {
+		Self { storage }
 	}
 
 	/// Get storage reference.
 	pub fn storage(&self) -> &S {
 		&self.storage
 	}
-
-	/// Get state versions reference.
-	pub fn state_versions(&self) -> &StateVersions<Block> {
-		&self.state_versions
-	}
 }
 
-impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S, Block>
+impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S>
 where
 	Block: BlockT,
 	S: Storage<Block>,
@@ -97,7 +91,7 @@ where
 	}
 }
 
-impl<S, Block> HeaderMetadata<Block> for Blockchain<S, Block>
+impl<S, Block> HeaderMetadata<Block> for Blockchain<S>
 where
 	Block: BlockT,
 	S: Storage<Block>,
@@ -120,7 +114,7 @@ where
 	}
 }
 
-impl<S, Block> BlockchainBackend<Block> for Blockchain<S, Block>
+impl<S, Block> BlockchainBackend<Block> for Blockchain<S>
 where
 	Block: BlockT,
 	S: Storage<Block>,
@@ -161,13 +155,13 @@ where
 	}
 }
 
-impl<S: Storage<Block>, Block: BlockT> ProvideCache<Block> for Blockchain<S, Block> {
+impl<S: Storage<Block>, Block: BlockT> ProvideCache<Block> for Blockchain<S> {
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
 		self.storage.cache()
 	}
 }
 
-impl<S, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S, Block>
+impl<S, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S>
 where
 	S: Storage<Block>,
 {
@@ -206,7 +200,7 @@ where
 	}
 }
 
-impl<S: Storage<Block>, Block: BlockT> ProvideChtRoots<Block> for Blockchain<S, Block> {
+impl<S: Storage<Block>, Block: BlockT> ProvideChtRoots<Block> for Blockchain<S> {
 	fn header_cht_root(
 		&self,
 		cht_size: NumberFor<Block>,

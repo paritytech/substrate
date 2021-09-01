@@ -64,7 +64,7 @@ use sp_core::{
 };
 use sp_state_machine::Backend as _;
 
-pub type DummyBlockchain = Blockchain<DummyStorage, Block>;
+pub type DummyBlockchain = Blockchain<DummyStorage>;
 
 pub struct DummyStorage {
 	pub changes_tries_cht_roots: HashMap<u64, Hash>,
@@ -270,7 +270,7 @@ fn local_state_is_created_when_genesis_state_is_available() {
 		substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 
 	let backend: Backend<_, Block> =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())));
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = backend.begin_operation().unwrap();
 	op.set_block_data(header0, None, None, None, NewBlockState::Final).unwrap();
 	op.set_genesis_state(Default::default(), true).unwrap();
@@ -285,7 +285,7 @@ fn local_state_is_created_when_genesis_state_is_available() {
 #[test]
 fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 	let backend: Backend<_, Block> =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())));
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 
 	match backend.state_at(BlockId::Number(0)).unwrap() {
 		GenesisOrUnavailableState::Unavailable => (),
@@ -296,7 +296,7 @@ fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 #[test]
 fn light_aux_store_is_updated_via_non_importing_op() {
 	let backend =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())));
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
 	BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
 	ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
@@ -487,7 +487,7 @@ fn prepare_for_read_proof_check(hashed_value: bool) -> (TestChecker, Header, Sto
 		.insert(remote_block_hash, remote_block_header.clone(), None, None, NewBlockState::Final)
 		.unwrap();
 	let local_checker = LightDataChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -529,7 +529,7 @@ fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, V
 		.insert(remote_block_hash, remote_block_header.clone(), None, None, NewBlockState::Final)
 		.unwrap();
 	let local_checker = LightDataChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -566,7 +566,7 @@ fn prepare_for_header_proof_check(
 		local_storage.insert_cht_root(1, local_cht_root);
 	}
 	let local_checker = LightDataChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -698,7 +698,7 @@ fn check_header_proof_fails_if_invalid_header_provided() {
 fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 	let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -784,7 +784,7 @@ fn changes_proof_is_generated_and_checked_when_headers_are_pruned() {
 	let mut local_storage = DummyStorage::new();
 	local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(local_storage, Default::default())),
+		Arc::new(DummyBlockchain::new(local_storage)),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -825,7 +825,7 @@ fn changes_proof_is_generated_and_checked_when_headers_are_pruned() {
 fn check_changes_proof_fails_if_proof_is_wrong() {
 	let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -938,7 +938,7 @@ fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 
 	// fails when changes trie CHT is missing from the local db
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -950,7 +950,7 @@ fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 	let mut local_storage = DummyStorage::new();
 	local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(local_storage, Default::default())),
+		Arc::new(DummyBlockchain::new(local_storage)),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -966,7 +966,7 @@ fn check_body_proof_faulty() {
 	let block = Block::new(header.clone(), Vec::new());
 
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
@@ -987,7 +987,7 @@ fn check_body_proof_of_same_data_should_succeed() {
 	let block = Block::new(header.clone(), extrinsics);
 
 	let local_checker = TestChecker::new(
-		Arc::new(DummyBlockchain::new(DummyStorage::new(), Default::default())),
+		Arc::new(DummyBlockchain::new(DummyStorage::new())),
 		local_executor(),
 		Box::new(TaskExecutor::new()),
 	);
