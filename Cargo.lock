@@ -9271,7 +9271,7 @@ name = "sp-sandbox"
 version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
- "log 0.4.14",
+ "log",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
