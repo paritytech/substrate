@@ -267,7 +267,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new npos solution.
-	///
 	/// In order to improve code base ergonomics, the Npos Solver type,`S`, must have the same
 	/// AccountId and Error type as the [`crate::Config::Solver`].
 	pub fn mine_solution<S>(
