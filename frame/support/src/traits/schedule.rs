@@ -42,8 +42,8 @@ pub enum DispatchTime<BlockNumber> {
 /// The highest priority. We invert the value so that normal sorting will place the highest
 /// priority at the beginning of the list.
 pub const HIGHEST_PRIORITY: Priority = 0;
-/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
-/// if it breaches the `MaximumWeight` limitation.
+/// Anything of this value or lower will definitely be scheduled on the block that they ask for,
+/// even if it breaches the `MaximumWeight` limitation.
 pub const HARD_DEADLINE: Priority = 63;
 /// The lowest priority. Most stuff should be around here.
 pub const LOWEST_PRIORITY: Priority = 255;

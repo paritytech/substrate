@@ -584,7 +584,7 @@ pub fn do_slash<T: Config>(
 		<Pallet<T>>::update_ledger(&controller, &ledger);
 
 		// trigger the event
-		<Pallet<T>>::deposit_event(super::Event::<T>::Slash(stash.clone(), value));
+		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed(stash.clone(), value));
 	}
 }
 

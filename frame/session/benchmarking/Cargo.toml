@@ -19,16 +19,19 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../pri
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
+	"runtime-benchmarks",
+], path = "../../staking" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
 rand = { version = "0.7.2", default-features = false }
 
 [dev-dependencies]
-serde = { version = "1.0.126" }
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = [
+	"derive",
+] }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
-sp-io ={ version = "4.0.0-dev", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }

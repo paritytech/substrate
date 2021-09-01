@@ -38,17 +38,18 @@
 //!
 //! ### Terminology
 //!
-//! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
-//!   "dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
-//!   fall below this, then the account is said to be dead; and it loses its functionality as well as any
-//!   prior history and all information on it is removed from the chain's state.
-//!   No account should ever have a total balance that is strictly between 0 and the existential
-//!   deposit (exclusive). If this ever happens, it indicates either a bug in this pallet or an
-//!   erroneous raw mutation of storage.
+//! - **Existential Deposit:** The minimum balance required to create or keep an account open. This
+//!   prevents "dust accounts" from filling storage. When the free plus the reserved balance (i.e.
+//!   the total balance) fall below this, then the account is said to be dead; and it loses its
+//!   functionality as well as any prior history and all information on it is removed from the
+//!   chain's state. No account should ever have a total balance that is strictly between 0 and the
+//!   existential deposit (exclusive). If this ever happens, it indicates either a bug in this
+//!   pallet or an erroneous raw mutation of storage.
 //!
 //! - **Total Issuance:** The total number of units in existence in a system.
 //!
-//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its
+//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after
+//!   its
 //! total balance has become zero (or, strictly speaking, less than the Existential Deposit).
 //!
 //! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
@@ -57,18 +58,21 @@
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended.
 //!   Reserved balance can still be slashed, but only after all the free balance has been slashed.
 //!
-//! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
-//! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
-//! return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
-//! simply dropped, it should automatically maintain any book-keeping such as total issuance.)
+//! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite
+//!   accounting
+//! (i.e. a difference between total issuance and account balances). Functions that result in an
+//! imbalance will return an object of the `Imbalance` trait that can be managed within your runtime
+//! logic. (If an imbalance is simply dropped, it should automatically maintain any book-keeping
+//! such as total issuance.)
 //!
-//! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
+//! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block
+//!   number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //!
 //! ### Implementations
 //!
-//! The Balances pallet provides implementations for the following traits. If these traits provide the functionality
-//! that you need, then you can avoid coupling with the Balances pallet.
+//! The Balances pallet provides implementations for the following traits. If these traits provide
+//! the functionality that you need, then you can avoid coupling with the Balances pallet.
 //!
 //! - [`Currency`](frame_support::traits::Currency): Functions for dealing with a
 //! fungible assets system.
@@ -78,8 +82,8 @@
 //! - [`LockableCurrency`](frame_support::traits::LockableCurrency): Functions for
 //! dealing with accounts that allow liquidity restrictions.
 //! - [`Imbalance`](frame_support::traits::Imbalance): Functions for handling
-//! imbalances between total issuance in the system and account balances. Must be used when a function
-//! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
+//! imbalances between total issuance in the system and account balances. Must be used when a
+//! function creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
 //!
 //! ## Interface
 //!
@@ -94,7 +98,8 @@
 //!
 //! ### Examples from the FRAME
 //!
-//! The Contract pallet uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
+//! The Contract pallet uses the `Currency` trait to handle gas payment, and its types inherit from
+//! `Currency`:
 //!
 //! ```
 //! use frame_support::traits::Currency;
@@ -249,18 +254,19 @@ pub mod pallet {
 		/// The dispatch origin for this call must be `Signed` by the transactor.
 		///
 		/// # <weight>
-		/// - Dependent on arguments but not critical, given proper implementations for
-		///   input config types. See related functions below.
-		/// - It contains a limited number of reads and writes internally and no complex computation.
+		/// - Dependent on arguments but not critical, given proper implementations for input config
+		///   types. See related functions below.
+		/// - It contains a limited number of reads and writes internally and no complex
+		///   computation.
 		///
 		/// Related functions:
 		///
 		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
 		///   - Transferring balances to accounts that did not exist before will cause
-		///      `T::OnNewAccount::on_new_account` to be called.
+		///     `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
-		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
-		///     check that the transfer will not kill the origin account.
+		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
+		///     that the transfer will not kill the origin account.
 		/// ---------------------------------
 		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
 		/// - DB Weight: 1 Read and 1 Write to destination account
@@ -344,8 +350,8 @@ pub mod pallet {
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
 		/// specified.
 		/// # <weight>
-		/// - Same as transfer, but additional read and write because the source account is
-		///   not assumed to be in the overlay.
+		/// - Same as transfer, but additional read and write because the source account is not
+		///   assumed to be in the overlay.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
@@ -403,8 +409,7 @@ pub mod pallet {
 		/// - `keep_alive`: A boolean to determine if the `transfer_all` operation should send all
 		///   of the funds the account has, causing the sender account to be killed (false), or
 		///   transfer everything except at least the existential deposit, which will guarantee to
-		///   keep the sender account alive (true).
-		///   # <weight>
+		///   keep the sender account alive (true). # <weight>
 		/// - O(1). Just like transfer, but reading the user's transferable balance first.
 		///   #</weight>
 		#[pallet::weight(T::WeightInfo::transfer_all())]
@@ -1052,8 +1057,8 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 		if frame_system::Pallet::<T>::can_dec_provider(who) && !keep_alive {
 			liquid
 		} else {
-			// `must_remain_to_exist` is the part of liquid balance which must remain to keep total over
-			// ED.
+			// `must_remain_to_exist` is the part of liquid balance which must remain to keep total
+			// over ED.
 			let must_remain_to_exist =
 				T::ExistentialDeposit::get().saturating_sub(a.total() - liquid);
 			liquid.saturating_sub(must_remain_to_exist)
@@ -1464,8 +1469,8 @@ where
 							.checked_sub(&value)
 							.ok_or(Error::<T, I>::InsufficientBalance)?;
 
-						// NOTE: total stake being stored in the same type means that this could never overflow
-						// but better to be safe than sorry.
+						// NOTE: total stake being stored in the same type means that this could
+						// never overflow but better to be safe than sorry.
 						to_account.free =
 							to_account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
 
@@ -1480,8 +1485,8 @@ where
 						)
 						.map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
 
-						// TODO: This is over-conservative. There may now be other providers, and this pallet
-						//   may not even be a provider.
+						// TODO: This is over-conservative. There may now be other providers, and
+						// this pallet   may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 						let allow_death =
 							allow_death && system::Pallet::<T>::can_dec_provider(transactor);
@@ -1509,9 +1514,9 @@ where
 	/// Is a no-op if `value` to be slashed is zero or the account does not exist.
 	///
 	/// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
-	/// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
-	/// to draw from reserved funds, however we err on the side of punishment if things are inconsistent
-	/// or `can_slash` wasn't used appropriately.
+	/// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid
+	/// having to draw from reserved funds, however we err on the side of punishment if things are
+	/// inconsistent or `can_slash` wasn't used appropriately.
 	fn slash(who: &T::AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() {
 			return (NegativeImbalance::zero(), Zero::zero())
@@ -1528,7 +1533,8 @@ where
 				 -> Result<(Self::NegativeImbalance, Self::Balance), DispatchError> {
 					// Best value is the most amount we can slash following liveness rules.
 					let best_value = match attempt {
-						// First attempt we try to slash the full amount, and see if liveness issues happen.
+						// First attempt we try to slash the full amount, and see if liveness issues
+						// happen.
 						0 => value,
 						// If acting as a critical provider (i.e. first attempt failed), then slash
 						// as much as possible while leaving at least at ED.
@@ -1548,7 +1554,8 @@ where
 						account.reserved -= reserved_slash; // Safe because of above check
 						Ok((
 							NegativeImbalance::new(free_slash + reserved_slash),
-							value - free_slash - reserved_slash, /* Safe because value is gt or eq total slashed */
+							value - free_slash - reserved_slash, /* Safe because value is gt or
+							                                      * eq total slashed */
 						))
 					} else {
 						// Else we are done!
@@ -1593,8 +1600,10 @@ where
 	///
 	/// This function is a no-op if:
 	/// - the `value` to be deposited is zero; or
-	/// - the `value` to be deposited is less than the required ED and the account does not yet exist; or
-	/// - the deposit would necessitate the account to exist and there are no provider references; or
+	/// - the `value` to be deposited is less than the required ED and the account does not yet
+	///   exist; or
+	/// - the deposit would necessitate the account to exist and there are no provider references;
+	///   or
 	/// - `value` is so large it would cause the balance of `who` to overflow.
 	fn deposit_creating(who: &T::AccountId, value: Self::Balance) -> Self::PositiveImbalance {
 		if value.is_zero() {
@@ -1744,8 +1753,8 @@ where
 		let actual = match Self::mutate_account(who, |account| {
 			let actual = cmp::min(account.reserved, value);
 			account.reserved -= actual;
-			// defensive only: this can never fail since total issuance which is at least free+reserved
-			// fits into the same data type.
+			// defensive only: this can never fail since total issuance which is at least
+			// free+reserved fits into the same data type.
 			account.free = account.free.saturating_add(actual);
 			actual
 		}) {
@@ -1991,7 +2000,8 @@ where
 												status,
 											)?;
 
-										// remain should always be zero but just to be defensive here
+										// remain should always be zero but just to be defensive
+										// here
 										let actual = to_change.saturating_sub(remain);
 
 										// this add can't overflow but just to be defensive.
@@ -2009,7 +2019,8 @@ where
 												status,
 											)?;
 
-										// remain should always be zero but just to be defensive here
+										// remain should always be zero but just to be defensive
+										// here
 										let actual = to_change.saturating_sub(remain);
 
 										reserves

@@ -322,7 +322,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 					if !first {
 						promoted.push(current_hash);
 					}
-					// The transactions were removed from the ready pool. We might attempt to re-import them.
+					// The transactions were removed from the ready pool. We might attempt to
+					// re-import them.
 					removed.append(&mut replaced);
 				},
 				// transaction failed to be imported.
@@ -382,9 +383,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 
 	/// Makes sure that the transactions in the queues stay within provided limits.
 	///
-	/// Removes and returns worst transactions from the queues and all transactions that depend on them.
-	/// Technically the worst transaction should be evaluated by computing the entire pending set.
-	/// We use a simplified approach to remove the transaction that occupies the pool for the longest time.
+	/// Removes and returns worst transactions from the queues and all transactions that depend on
+	/// them. Technically the worst transaction should be evaluated by computing the entire pending
+	/// set. We use a simplified approach to remove the transaction that occupies the pool for the
+	/// longest time.
 	pub fn enforce_limits(
 		&mut self,
 		ready: &Limit,

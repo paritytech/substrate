@@ -274,7 +274,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	}
 
 	fn as_trie_backend(
-		&mut self,
+		&self,
 	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.state.as_trie_backend()
 	}
@@ -297,7 +297,7 @@ pub struct DatabaseSettings {
 	/// State pruning mode.
 	pub state_pruning: PruningMode,
 	/// Where to find the database.
-	pub source: DatabaseSettingsSrc,
+	pub source: DatabaseSource,
 	/// Block pruning mode.
 	pub keep_blocks: KeepBlocks,
 	/// Block body/Transaction storage scheme.
@@ -325,7 +325,17 @@ pub enum TransactionStorageMode {
 
 /// Where to find the database..
 #[derive(Debug, Clone)]
-pub enum DatabaseSettingsSrc {
+pub enum DatabaseSource {
+	/// Check given path, and see if there is an existing database there. If it's either `RocksDb`
+	/// or `ParityDb`, use it. If there is none, create a new instance of `ParityDb`.
+	Auto {
+		/// Path to the paritydb database.
+		paritydb_path: PathBuf,
+		/// Path to the rocksdb database.
+		rocksdb_path: PathBuf,
+		/// Cache size in MiB. Used only by `RocksDb` variant of `DatabaseSource`.
+		cache_size: usize,
+	},
 	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {
 		/// Path to the database.
@@ -344,27 +354,28 @@ pub enum DatabaseSettingsSrc {
 	Custom(Arc<dyn Database<DbHash>>),
 }
 
-impl DatabaseSettingsSrc {
+impl DatabaseSource {
 	/// Return dabase path for databases that are on the disk.
 	pub fn path(&self) -> Option<&Path> {
 		match self {
-			DatabaseSettingsSrc::RocksDb { path, .. } => Some(path.as_path()),
-			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
-			DatabaseSettingsSrc::Custom(_) => None,
+			// as per https://github.com/paritytech/substrate/pull/9500#discussion_r684312550
+			//
+			// IIUC this is needed for polkadot to create its own dbs, so until it can use parity db
+			// I would think rocksdb, but later parity-db.
+			DatabaseSource::Auto { paritydb_path, .. } => Some(&paritydb_path),
+			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(&path),
+			DatabaseSource::Custom(..) => None,
 		}
-	}
-	/// Check if database supports internal ref counting for state data.
-	pub fn supports_ref_counting(&self) -> bool {
-		matches!(self, DatabaseSettingsSrc::ParityDb { .. })
 	}
 }
 
-impl std::fmt::Display for DatabaseSettingsSrc {
+impl std::fmt::Display for DatabaseSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let name = match self {
-			DatabaseSettingsSrc::RocksDb { .. } => "RocksDb",
-			DatabaseSettingsSrc::ParityDb { .. } => "ParityDb",
-			DatabaseSettingsSrc::Custom(_) => "Custom",
+			DatabaseSource::Auto { .. } => "Auto",
+			DatabaseSource::RocksDb { .. } => "RocksDb",
+			DatabaseSource::ParityDb { .. } => "ParityDb",
+			DatabaseSource::Custom(_) => "Custom",
 		};
 		write!(f, "{}", name)
 	}
@@ -692,7 +703,10 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 						header_metadata
 					})
 					.ok_or_else(|| {
-						ClientError::UnknownBlock(format!("header not found in db: {}", hash))
+						ClientError::UnknownBlock(format!(
+							"Header was not found in the database: {:?}",
+							hash
+						))
 					})
 			},
 			Ok,
@@ -1053,8 +1067,8 @@ impl<T: Clone> FrozenForDuration<T> {
 
 /// Disk backend.
 ///
-/// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
-/// Otherwise, trie nodes are kept only from some recent blocks.
+/// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
+/// blocks. Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
@@ -1103,7 +1117,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
 			state_pruning: PruningMode::keep_blocks(keep_blocks),
-			source: DatabaseSettingsSrc::Custom(db),
+			source: DatabaseSource::Custom(db),
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 			transaction_storage,
 		};
@@ -1122,15 +1136,12 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.state_pruning.clone(),
-			!config.source.supports_ref_counting(),
+			!db.supports_ref_counting(),
 			&StateMetaDb(&*db),
 		)
 		.map_err(map_e)?;
-		let storage_db = StorageDb {
-			db: db.clone(),
-			state_db,
-			prefix_keys: !config.source.supports_ref_counting(),
-		};
+		let storage_db =
+			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
 			db,
@@ -1210,8 +1221,11 @@ impl<Block: BlockT> Backend<Block> {
 			return Err(sp_blockchain::Error::SetHeadTooOld.into())
 		}
 
-		// cannot find tree route with empty DB.
-		if meta.best_hash != Default::default() {
+		let parent_exists =
+			self.blockchain.status(BlockId::Hash(route_to))? == sp_blockchain::BlockStatus::InChain;
+
+		// Cannot find tree route with empty DB or when imported a detached block.
+		if meta.best_hash != Default::default() && parent_exists {
 			let tree_route = sp_blockchain::tree_route(&self.blockchain, meta.best_hash, route_to)?;
 
 			// uncanonicalize: check safety violations and ensure the numbers no longer
@@ -1261,8 +1275,10 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<()> {
 		let last_finalized =
 			last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
-		if *header.parent_hash() != last_finalized {
-			return Err(::sp_blockchain::Error::NonSequentialFinalization(format!(
+		if last_finalized != self.blockchain.meta.read().genesis_hash &&
+			*header.parent_hash() != last_finalized
+		{
+			return Err(sp_blockchain::Error::NonSequentialFinalization(format!(
 				"Last finalized {:?} not parent of {:?}",
 				last_finalized,
 				header.hash()
@@ -1443,8 +1459,9 @@ impl<Block: BlockT> Backend<Block> {
 				if operation.commit_state {
 					transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
 				} else {
-					// When we don't want to commit the genesis state, we still preserve it in memory
-					// to bootstrap consensus. It is queried for an initial list of authorities, etc.
+					// When we don't want to commit the genesis state, we still preserve it in
+					// memory to bootstrap consensus. It is queried for an initial list of
+					// authorities, etc.
 					*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
 						pending_block.header.state_root().clone(),
 						operation.db_updates.clone(),
@@ -1588,7 +1605,7 @@ impl<Block: BlockT> Backend<Block> {
 						columns::META,
 						meta_keys::LEAF_PREFIX,
 					);
-				};
+				}
 
 				let mut children = children::read_children(
 					&*self.storage.db,
@@ -1598,14 +1615,14 @@ impl<Block: BlockT> Backend<Block> {
 				)?;
 				if !children.contains(&hash) {
 					children.push(hash);
+					children::write_children(
+						&mut transaction,
+						columns::META,
+						meta_keys::CHILDREN_PREFIX,
+						parent_hash,
+						children,
+					);
 				}
-				children::write_children(
-					&mut transaction,
-					columns::META,
-					meta_keys::CHILDREN_PREFIX,
-					parent_hash,
-					children,
-				);
 			}
 
 			meta_updates.push(MetaUpdate {
@@ -1615,7 +1632,6 @@ impl<Block: BlockT> Backend<Block> {
 				is_finalized: finalized,
 				with_state: operation.commit_state,
 			});
-
 			Some((pending_block.header, number, hash, enacted, retracted, is_best, cache))
 		} else {
 			None
@@ -2509,7 +2525,7 @@ pub(crate) mod tests {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
 				state_pruning: PruningMode::keep_blocks(1),
-				source: DatabaseSettingsSrc::Custom(backing),
+				source: DatabaseSource::Custom(backing),
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},
@@ -3388,7 +3404,8 @@ pub(crate) mod tests {
 		let block5 = insert_header(&backend, 5, block4, None, Default::default());
 		assert_eq!(backend.blockchain().info().best_hash, block5);
 
-		// Insert 1 as best again. This should fail because canonicalization_delay == 3 and best == 5
+		// Insert 1 as best again. This should fail because canonicalization_delay == 3 and best ==
+		// 5
 		let header = Header {
 			number: 1,
 			parent_hash: block0,

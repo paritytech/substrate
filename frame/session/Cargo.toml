@@ -13,7 +13,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
@@ -26,10 +28,6 @@ pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "..
 sp-trie = { version = "4.0.0-dev", optional = true, default-features = false, path = "../../primitives/trie" }
 log = { version = "0.4.0", default-features = false }
 impl-trait-for-tuples = "0.2.1"
-
-[dev-dependencies]
-sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-lazy_static = "1.4.0"
 
 [features]
 default = ["std", "historical"]

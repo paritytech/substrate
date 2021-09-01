@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Network packet message types. These get serialized and put into the lower level protocol payload.
+//! Network packet message types. These get serialized and put into the lower level protocol
+//! payload.
 
 pub use self::generic::{
 	BlockAnnounce, FromBlock, RemoteCallRequest, RemoteChangesRequest, RemoteChangesResponse,
@@ -392,7 +393,8 @@ pub mod generic {
 		pub to: Option<Hash>,
 		/// Sequence direction.
 		pub direction: Direction,
-		/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
+		/// Maximum number of blocks to return. An implementation defined maximum is used when
+		/// unspecified.
 		pub max: Option<u32>,
 	}
 
