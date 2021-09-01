@@ -142,11 +142,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		assert_eq!(warmup_keys.len(), SAMPLE_SIZE);
 		assert_eq!(query_keys.len(), SAMPLE_SIZE);
 
-		let root = generate_trie(
-			database.open(self.database_type),
-			key_values,
-			Default::default(),
-		);
+		let root = generate_trie(database.open(self.database_type), key_values, Default::default());
 
 		Box::new(TrieReadBenchmark {
 			database,
@@ -255,11 +251,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 
 		assert_eq!(warmup_keys.len(), SAMPLE_SIZE);
 
-		let root = generate_trie(
-			database.open(self.database_type),
-			key_values,
-			Default::default(),
-		);
+		let root = generate_trie(database.open(self.database_type), key_values, Default::default());
 
 		Box::new(TrieWriteBenchmark {
 			database,

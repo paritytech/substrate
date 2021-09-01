@@ -2368,7 +2368,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		let is_genesis= match &block {
+		let is_genesis = match &block {
 			BlockId::Number(n) => n.is_zero(),
 			BlockId::Hash(h) => h == &self.blockchain.meta.read().genesis_hash,
 		};

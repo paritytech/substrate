@@ -34,7 +34,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-pub use sp_runtime::{Storage, StorageChild, StateVersions};
+pub use sp_runtime::{StateVersions, Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{
@@ -155,7 +155,10 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 
 	/// Create a new instance of the test client builder with specific state versions.
-	pub fn with_backend_and_state_versions(backend: Arc<Backend>, state_versions: StateVersions<Block>) -> Self {
+	pub fn with_backend_and_state_versions(
+		backend: Arc<Backend>,
+		state_versions: StateVersions<Block>,
+	) -> Self {
 		TestClientBuilder {
 			backend,
 			execution_strategies: ExecutionStrategies::default(),

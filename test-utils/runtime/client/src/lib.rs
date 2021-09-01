@@ -406,9 +406,7 @@ pub fn new_with_state(inner_hashing: bool) -> Client<Backend> {
 	if !inner_hashing {
 		state_versions.add((0, sp_core::state_version::StateVersion::V0));
 	}
-	TestClientBuilder::with_default_backend_and_state_versions(
-		Some(state_versions)
-	).build()
+	TestClientBuilder::with_default_backend_and_state_versions(Some(state_versions)).build()
 }
 
 /// Creates new light client instance used for tests.

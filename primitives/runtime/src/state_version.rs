@@ -40,7 +40,7 @@ impl<B: Block> StateVersions<B> {
 	pub fn genesis_state_version(&self) -> StateVersion {
 		if let Some((number, version)) = self.canonical_states.get(0) {
 			if number.is_zero() {
-				return *version;
+				return *version
 			}
 		}
 		DEFAULT_STATE_VERSION
@@ -52,7 +52,7 @@ impl<B: Block> StateVersions<B> {
 		let mut version = DEFAULT_STATE_VERSION;
 		for (number, state) in self.canonical_states.iter() {
 			if number > &at {
-				break;
+				break
 			}
 			version = *state;
 		}
@@ -66,10 +66,10 @@ impl<B: Block> StateVersions<B> {
 		for (i, (number, _)) in self.canonical_states.iter().enumerate() {
 			if number == &at {
 				replace = Some(i);
-				break;
+				break
 			}
 			if number > &at {
-				break;
+				break
 			}
 			insert = Some(i + 1);
 		}
@@ -95,7 +95,7 @@ impl<B: Block> StateVersions<B> {
 			if let Ok(number) = NumberFor::<B>::from_str(number) {
 				canonical_states.push((number.into(), version));
 			} else {
-				return None;
+				return None
 			}
 		}
 		Some(StateVersions { canonical_states })

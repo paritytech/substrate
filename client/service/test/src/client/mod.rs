@@ -1297,8 +1297,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
-	let (mut client, select_chain) =
-		TestClientBuilder::new().build_with_longest_chain();
+	let (mut client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \

@@ -116,7 +116,7 @@ where
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
-	 config: ClientConfig<Block>,
+	config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }

@@ -94,7 +94,7 @@ impl<B: BlockT> StoredBlock<B> {
 			StoredBlock::Full(block, just) => {
 				let (header, body) = block.deconstruct();
 				(header, Some(body), just)
-			}
+			},
 		}
 	}
 }
@@ -145,13 +145,12 @@ impl<Block: BlockT> Blockchain<Block> {
 	/// Get version of state.
 	pub fn state_version(&self, id: BlockId<Block>) -> StateVersion {
 		let number = match id {
-			BlockId::Hash(h) => {
+			BlockId::Hash(h) =>
 				if let Ok(Some(header)) = self.header(BlockId::Hash(h)) {
 					header.number().clone()
 				} else {
 					0u32.into()
-				}
-			}
+				},
 			BlockId::Number(n) => n,
 		};
 		self.storage.read().state_versions.state_version_at(number)
@@ -221,7 +220,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn equals_to(&self, other: &Self) -> bool {
 		// Check ptr equality first to avoid double read locks.
 		if ptr::eq(self, other) {
-			return true;
+			return true
 		}
 		self.canon_equals_to(other) && self.storage.read().blocks == other.storage.read().blocks
 	}
@@ -230,14 +229,14 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn canon_equals_to(&self, other: &Self) -> bool {
 		// Check ptr equality first to avoid double read locks.
 		if ptr::eq(self, other) {
-			return true;
+			return true
 		}
 		let this = self.storage.read();
 		let other = other.storage.read();
-		this.hashes == other.hashes
-			&& this.best_hash == other.best_hash
-			&& this.best_number == other.best_number
-			&& this.genesis_hash == other.genesis_hash
+		this.hashes == other.hashes &&
+			this.best_hash == other.best_hash &&
+			this.best_number == other.best_number &&
+			this.genesis_hash == other.genesis_hash
 	}
 
 	/// Insert header CHT root.
@@ -342,7 +341,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			if !stored_justifications.append(justification) {
 				return Err(sp_blockchain::Error::BadJustification(
 					"Duplicate consensus engine ID".into(),
-				));
+				))
 			}
 		} else {
 			*block_justifications = Some(Justifications::from(justification));
@@ -872,10 +871,9 @@ where
 
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
-			BlockId::Hash(h) if h == Default::default() => {
-				return Ok(self.blockchain.state_version(BlockId::Hash(h)).into())
-			}
-			_ => {}
+			BlockId::Hash(h) if h == Default::default() =>
+				return Ok(self.blockchain.state_version(BlockId::Hash(h)).into()),
+			_ => {},
 		}
 
 		self.blockchain
@@ -922,7 +920,7 @@ where
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(sp_blockchain::Error::InvalidState.into());
+		return Err(sp_blockchain::Error::InvalidState.into())
 	}
 
 	if storage
@@ -930,7 +928,7 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 		.keys()
 		.any(|child_key| !well_known_keys::is_child_storage_key(&child_key))
 	{
-		return Err(sp_blockchain::Error::InvalidState.into());
+		return Err(sp_blockchain::Error::InvalidState.into())
 	}
 
 	Ok(())
