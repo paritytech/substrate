@@ -1724,8 +1724,9 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
-/// When implementating the storage info, the size of the storage will be declared as
-/// unbounded. This can be useful for storage which can never go into PoV (Proof of Validity).
+/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
+/// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
 ///
