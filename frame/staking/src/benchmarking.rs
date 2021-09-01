@@ -21,7 +21,7 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
@@ -133,14 +133,10 @@ pub fn create_validator_with_nominators<T: Config>(
 }
 
 struct ListScenario<T: Config> {
-	dest_stash1: T::AccountId,
 	/// Stash that is expected to be moved.
 	origin_stash1: T::AccountId,
 	/// Controller of the Stash that is expected to be moved.
 	origin_controller1: T::AccountId,
-	origin_stash2: T::AccountId,
-	origin_weight_as_vote: VoteWeight,
-	dest_weight_as_vote: VoteWeight,
 	dest_weight: BalanceOf<T>,
 }
 
@@ -179,7 +175,7 @@ impl<T: Config> ListScenario<T> {
 			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
 		)?;
 
-		let (origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
+		let (_origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 3,
 			origin_weight,
 			Default::default(),
@@ -199,7 +195,7 @@ impl<T: Config> ListScenario<T> {
 			T::CurrencyToVote::to_currency(dest_weight_as_vote as u128, total_issuance);
 
 		// create an account with the worst case destination weight
-		let (dest_stash1, dest_controller1) = create_stash_controller_with_balance::<T>(
+		let (_dest_stash1, dest_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 1,
 			dest_weight,
 			Default::default(),
@@ -209,15 +205,7 @@ impl<T: Config> ListScenario<T> {
 			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
 		)?;
 
-		Ok(ListScenario {
-			dest_stash1,
-			origin_stash1,
-			origin_controller1,
-			origin_stash2,
-			origin_weight_as_vote: T::CurrencyToVote::to_vote(origin_weight, total_issuance),
-			dest_weight_as_vote,
-			dest_weight,
-		})
+		Ok(ListScenario { origin_stash1, origin_controller1, dest_weight })
 	}
 }
 

@@ -29,11 +29,6 @@ pallet-session = { version = "4.0.0-dev", default-features = false, features = [
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core", optional = true }
-pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp", optional = true }
-pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve", optional = true }
-pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true }
 log = { version = "0.4.14", default-features = false }
 
 # Optional imports for benchmarking
@@ -46,7 +41,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
-pallet-staking-reward-curve = { version = "4.0.0-dev",  path = "../staking/reward-curve" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 pallet-bags-list = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }

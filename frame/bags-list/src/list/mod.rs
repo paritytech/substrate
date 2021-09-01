@@ -20,9 +20,8 @@
 //! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
 //! [`CounterForListNodes`] and [`ListBags`] for more information.
 //!
-//!
 //! The outer API of this module is the [`List`] struct. It wraps all acceptable operations on top
-//! of the aggregate linked list. All operations with the linked list should happen through this
+//! of the aggregate linked list. All operations with the bags list should happen through this
 //! interface.
 
 use crate::Config;
@@ -490,7 +489,8 @@ impl<T: Config> Bag<T> {
 	fn insert_node_unchecked(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
-				// this should never happen, but this check prevents a worst case infinite loop.
+				// this should never happen, but this check prevents one path to a worst case
+				// infinite loop.
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
 				return
@@ -546,7 +546,7 @@ impl<T: Config> Bag<T> {
 
 	/// Sanity check this bag.
 	///
-	/// Should be called by the call-site, after each mutating operation on a bag. The call site of
+	/// Should be called by the call-site, after any mutating operation on a bag. The call site of
 	/// this struct is always `List`.
 	///
 	/// * Ensures head has no prev.
