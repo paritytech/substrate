@@ -2013,18 +2013,13 @@ mod tests {
 	#[test]
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
-			use frame_election_provider_support::SequentialPhragmen;
-			use sp_npos_elections::ExtendedBalance;
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
-			frame_support::parameter_types! {
-				static TwoBalancing: Option<(usize, ExtendedBalance)> = Some((2, 0));
-			}
+			// set the solution balancing to get the desired score.
+			mock::set_balancing(Some((2, 0)));
 
-			let (solution, _) =
-				MultiPhase::mine_solution::<SequentialPhragmen<AccountId, Perbill, TwoBalancing>>()
-					.unwrap();
+			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
 			// Default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
 
