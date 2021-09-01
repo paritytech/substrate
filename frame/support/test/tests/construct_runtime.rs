@@ -730,7 +730,7 @@ fn test_metadata() {
 	};
 
 	let expected_metadata: RuntimeMetadataPrefixed =
-		RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
 	let actual_metadata = Runtime::metadata();
 	pretty_assertions::assert_eq!(actual_metadata, expected_metadata);
 }

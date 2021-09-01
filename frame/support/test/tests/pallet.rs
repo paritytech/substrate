@@ -1447,7 +1447,7 @@ fn metadata() {
 	};
 
 	let expected_metadata: RuntimeMetadataPrefixed =
-		RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
 	let expected_metadata = match expected_metadata.1 {
 		RuntimeMetadata::V14(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
