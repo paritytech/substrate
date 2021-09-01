@@ -46,7 +46,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	balancing: Option<(usize, ExtendedBalance)>,
-) -> Result<ElectionResult<AccountId, P>, &'static str> {
+) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, mut voters) = setup_inputs(candidates, voters);
 
 	let mut winners = vec![];
@@ -68,7 +68,11 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 
 	let mut assignments =
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
-	let _ = assignments.iter_mut().map(|a| a.try_normalize()).collect::<Result<(), _>>()?;
+	let _ = assignments
+		.iter_mut()
+		.map(|a| a.try_normalize())
+		.collect::<Result<(), _>>()
+		.map_err(|e| crate::Error::ArithmeticError(e))?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))

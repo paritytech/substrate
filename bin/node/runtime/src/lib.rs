@@ -576,7 +576,7 @@ pub const MINER_MAX_ITERATIONS: u32 = 10;
 /// A source of random balance for NposSolver, which is meant to be run by the OCW election miner.
 pub struct OffchainRandomBalancing;
 impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::ExtendedBalance)>>
-	for OffchainRandomBalance
+	for OffchainRandomBalancing
 {
 	fn get() -> Option<(usize, sp_npos_elections::ExtendedBalance)> {
 		use sp_runtime::traits::TrailingZeroInput;
@@ -621,7 +621,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
-		OffchainRandomBalance,
+		OffchainRandomBalancing,
 	>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;

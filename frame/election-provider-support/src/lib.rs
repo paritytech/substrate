@@ -360,6 +360,5 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
-			.map_err(|_| sp_npos_elections::Error::Opaque)
 	}
 }

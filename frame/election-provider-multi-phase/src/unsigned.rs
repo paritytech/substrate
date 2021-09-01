@@ -23,7 +23,7 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::NposSolver;
+use frame_election_provider_support::{NposSolver, PerThing128};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
@@ -36,7 +36,6 @@ use sp_runtime::{
 	DispatchError, SaturatedConversion,
 };
 use sp_std::{boxed::Box, cmp::Ordering, convert::TryFrom, vec::Vec};
-use frame_election_provider_support::PerThing128;
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -274,10 +273,7 @@ impl<T: Config> Pallet<T> {
 	pub fn mine_solution<S>(
 	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>>
 	where
-		S: NposSolver<
-			AccountId = T::AccountId,
-			Error = SolverErrorOf<T>,
-		>,
+		S: NposSolver<AccountId = T::AccountId, Error = SolverErrorOf<T>>,
 	{
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
