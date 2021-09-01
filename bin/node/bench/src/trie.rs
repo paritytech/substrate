@@ -145,7 +145,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
-			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
+			Default::default(),
 		);
 
 		Box::new(TrieReadBenchmark {
@@ -186,7 +186,8 @@ impl core::Benchmark for TrieReadBenchmark {
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 
-		let trie_backend = sp_state_machine::TrieBackend::new(storage, self.root);
+		let state_version = Default::default();
+		let trie_backend = sp_state_machine::TrieBackend::new(storage, self.root, state_version);
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_backend
 				.storage(&warmup_key[..])
@@ -257,7 +258,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
-			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
+			Default::default(),
 		);
 
 		Box::new(TrieWriteBenchmark {

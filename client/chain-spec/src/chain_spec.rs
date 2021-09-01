@@ -28,7 +28,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::BuildStorage;
+use sp_runtime::{BuildStorage, StateVersion};
 use std::{borrow::Cow, collections::HashMap, fs::File, path::PathBuf, sync::Arc};
 
 enum GenesisSource<G> {
@@ -99,6 +99,10 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
+	fn state_version(&self) -> StateVersion {
+		self.genesis_state_version()
+	}
+
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
@@ -170,6 +174,9 @@ struct ClientSpec<E> {
 	/// block hash onwards.
 	#[serde(default)]
 	code_substitutes: HashMap<String, Bytes>,
+	/// Ordered sequence of block number and their associated state version.
+	#[serde(default)]
+	state_versions: Vec<(String, StateVersion)>,
 }
 
 /// A type denoting empty extensions.
@@ -248,6 +255,7 @@ impl<G, E> ChainSpec<G, E> {
 		protocol_id: Option<&str>,
 		properties: Option<Properties>,
 		extensions: E,
+		state_version: StateVersion,
 	) -> Self {
 		let client_spec = ClientSpec {
 			name: name.to_owned(),
@@ -261,6 +269,7 @@ impl<G, E> ChainSpec<G, E> {
 			consensus_engine: (),
 			genesis: Default::default(),
 			code_substitutes: HashMap::new(),
+			state_versions: vec![("0".to_string(), state_version)],
 		};
 
 		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }
@@ -269,6 +278,23 @@ impl<G, E> ChainSpec<G, E> {
 	/// Type of the chain.
 	fn chain_type(&self) -> ChainType {
 		self.client_spec.chain_type.clone()
+	}
+
+	/// Defined state version for the chain.
+	/// Return None on invalid definition.
+	fn state_versions(&self) -> &Vec<(String, StateVersion)> {
+		&self.client_spec.state_versions
+	}
+
+	/// Return genesis state version.
+	fn genesis_state_version(&self) -> StateVersion {
+		use std::str::FromStr;
+		self.state_versions()
+			.get(0)
+			// This is incorrect (can have number representation not compatible with u64
+			.and_then(|(n, s)| u64::from_str(n).ok().map(|n| (n, s)))
+			.and_then(|(n, s)| (n == 0).then(|| s.clone()))
+			.unwrap_or_default()
 	}
 }
 
@@ -401,6 +427,10 @@ where
 			.map(|(h, c)| (h.clone(), c.0.clone()))
 			.collect()
 	}
+
+	fn state_versions(&self) -> &Vec<(String, StateVersion)> {
+		ChainSpec::state_versions(self)
+	}
 }
 
 #[cfg(test)]
@@ -411,6 +441,10 @@ mod tests {
 	struct Genesis(HashMap<String, String>);
 
 	impl BuildStorage for Genesis {
+		fn state_version(&self) -> StateVersion {
+			Default::default()
+		}
+
 		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
 			storage.top.extend(
 				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),

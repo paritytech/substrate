@@ -357,13 +357,13 @@ impl<B: Block> LightClientRequestHandler<B> {
 				Ok(proof) => proof,
 				Err(error) => {
 					log::trace!(
-					"Remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}.",
-					peer,
-					format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&key.0)),
-					request.first,
-					request.last,
-					error,
-				);
+						"Remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}.",
+						peer,
+						format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&key.0)),
+						request.first,
+						request.last,
+						error,
+					);
 
 					light::ChangesProof::<B::Header> {
 						max_block: Zero::zero(),

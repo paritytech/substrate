@@ -136,8 +136,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	/// `alt_hashing` indicate if trie state should apply alternate hashing
-	/// scheme (inner value hashed).
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
@@ -263,19 +261,13 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		unimplemented!()
 	}
 
-	/// Read current trie hashing threshold.
-	/// Please do not change default implementation when implementing this trait.
-	fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
-		self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG)
-			.ok()
-			.flatten()
-			.and_then(|encoded| sp_core::storage::trie_threshold_decode(&mut encoded.as_slice()))
-	}
-
 	/// Extend storage info for benchmarking db
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()
 	}
+
+	/// Get current state version in use.
+	fn state_version(&self) -> sp_core::state_version::StateVersion;
 }
 
 /// Trait that allows consolidate two transactions together.

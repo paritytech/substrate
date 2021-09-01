@@ -26,7 +26,7 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -94,7 +94,7 @@ impl<B: BlockT> StoredBlock<B> {
 			StoredBlock::Full(block, just) => {
 				let (header, body) = block.deconstruct();
 				(header, Some(body), just)
-			},
+			}
 		}
 	}
 }
@@ -112,6 +112,7 @@ struct BlockchainStorage<Block: BlockT> {
 	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
+	state_versions: StateVersions<Block>,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -141,6 +142,21 @@ impl<Block: BlockT> Blockchain<Block> {
 		}
 	}
 
+	/// Get version of state.
+	pub fn state_version(&self, id: BlockId<Block>) -> StateVersion {
+		let number = match id {
+			BlockId::Hash(h) => {
+				if let Ok(Some(header)) = self.header(BlockId::Hash(h)) {
+					header.number().clone()
+				} else {
+					0u32.into()
+				}
+			}
+			BlockId::Number(n) => n,
+		};
+		self.storage.read().state_versions.state_version_at(number)
+	}
+
 	/// Create new in-memory blockchain storage.
 	pub fn new() -> Blockchain<Block> {
 		let storage = Arc::new(RwLock::new(BlockchainStorage {
@@ -155,6 +171,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			changes_trie_cht_roots: HashMap::new(),
 			leaves: LeafSet::new(),
 			aux: HashMap::new(),
+			state_versions: StateVersions::default(),
 		}));
 		Blockchain { storage }
 	}
@@ -204,7 +221,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn equals_to(&self, other: &Self) -> bool {
 		// Check ptr equality first to avoid double read locks.
 		if ptr::eq(self, other) {
-			return true
+			return true;
 		}
 		self.canon_equals_to(other) && self.storage.read().blocks == other.storage.read().blocks
 	}
@@ -213,14 +230,14 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn canon_equals_to(&self, other: &Self) -> bool {
 		// Check ptr equality first to avoid double read locks.
 		if ptr::eq(self, other) {
-			return true
+			return true;
 		}
 		let this = self.storage.read();
 		let other = other.storage.read();
-		this.hashes == other.hashes &&
-			this.best_hash == other.best_hash &&
-			this.best_number == other.best_number &&
-			this.genesis_hash == other.genesis_hash
+		this.hashes == other.hashes
+			&& this.best_hash == other.best_hash
+			&& this.best_number == other.best_number
+			&& this.genesis_hash == other.genesis_hash
 	}
 
 	/// Insert header CHT root.
@@ -325,7 +342,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			if !stored_justifications.append(justification) {
 				return Err(sp_blockchain::Error::BadJustification(
 					"Duplicate consensus engine ID".into(),
-				))
+				));
 			}
 		} else {
 			*block_justifications = Some(Justifications::from(justification));
@@ -855,8 +872,10 @@ where
 
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
-			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),
-			_ => {},
+			BlockId::Hash(h) if h == Default::default() => {
+				return Ok(self.blockchain.state_version(BlockId::Hash(h)).into())
+			}
+			_ => {}
 		}
 
 		self.blockchain
@@ -903,7 +922,7 @@ where
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(sp_blockchain::Error::InvalidState.into())
+		return Err(sp_blockchain::Error::InvalidState.into());
 	}
 
 	if storage
@@ -911,7 +930,7 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 		.keys()
 		.any(|child_key| !well_known_keys::is_child_storage_key(&child_key))
 	{
-		return Err(sp_blockchain::Error::InvalidState.into())
+		return Err(sp_blockchain::Error::InvalidState.into());
 	}
 
 	Ok(())

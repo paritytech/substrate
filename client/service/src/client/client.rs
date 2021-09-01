@@ -116,7 +116,7 @@ where
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
-	config: ClientConfig<Block>,
+	 config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
@@ -199,6 +199,8 @@ pub struct ClientConfig<Block: BlockT> {
 	/// Map of WASM runtime substitute starting at the child of the given block until the runtime
 	/// version doesn't match anymore.
 	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
+	/// State version to use with chain.
+	pub state_versions: sp_runtime::StateVersions<Block>,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {
@@ -209,6 +211,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 			wasm_runtime_overrides: None,
 			no_genesis: false,
 			wasm_runtime_substitutes: HashMap::new(),
+			state_versions: Default::default(),
 		}
 	}
 }
@@ -334,6 +337,7 @@ where
 		config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
 		let info = backend.blockchain().info();
+
 		if info.finalized_state.is_none() {
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
@@ -1261,6 +1265,11 @@ where
 		}
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
+	}
+
+	/// Access to configured state versions.
+	pub fn state_versions(&self) -> &sp_runtime::StateVersions<Block> {
+		&self.config.state_versions
 	}
 }
 

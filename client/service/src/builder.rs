@@ -58,8 +58,8 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, HashFor, Zero},
-	BuildStorage,
+	traits::{Block as BlockT, BlockIdTo, Zero},
+	BuildStorage, StateVersions,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
@@ -143,15 +143,14 @@ pub type TLightClient<TBl, TRtApi, TExec> =
 	TLightClientWithBackend<TBl, TRtApi, TExec, TLightBackend<TBl>>;
 
 /// Light client backend type.
-pub type TLightBackend<TBl> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>;
+pub type TLightBackend<TBl> = sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>;
 
 /// Light call executor type.
 pub type TLightCallExecutor<TBl, TExec> = sc_light::GenesisCallExecutor<
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
+	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>,
 	crate::client::LocalCallExecutor<
 		TBl,
-		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
+		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, TBl>,
 		TExec,
 	>,
 >;
@@ -309,7 +308,18 @@ where
 			transaction_storage: config.transaction_storage.clone(),
 		};
 
-		let backend = new_db_backend(db_config)?;
+		let state_versions = StateVersions::from_conf(
+			config
+				.chain_spec
+				.state_versions()
+				.iter()
+				.map(|(number, version)| (number.as_str(), *version)),
+		)
+		.ok_or_else(|| {
+			Error::Application(Box::from("Invalid state versions for chain spec".to_string()))
+		})?;
+
+		let backend = new_db_backend(db_config, state_versions.clone())?;
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
@@ -351,6 +361,7 @@ where
 					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
 				),
 				wasm_runtime_substitutes,
+				state_versions,
 			},
 		)?;
 
@@ -394,7 +405,19 @@ where
 		Box::new(task_manager.spawn_handle()),
 	));
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-	let backend = sc_light::new_light_backend(light_blockchain);
+
+	let state_versions = StateVersions::from_conf(
+		config
+			.chain_spec
+			.state_versions()
+			.iter()
+			.map(|(number, version)| (number.as_str(), *version)),
+	)
+	.ok_or_else(|| {
+		Error::Application(Box::from("Invalid state versions for chain spec".to_string()))
+	})?;
+
+	let backend = sc_light::new_light_backend(light_blockchain, state_versions);
 	let client = Arc::new(light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),
@@ -410,13 +433,14 @@ where
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
+	state_versions: StateVersions<Block>,
 ) -> Result<Arc<Backend<Block>>, sp_blockchain::Error>
 where
 	Block: BlockT,
 {
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
-	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?))
+	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY, state_versions)?))
 }
 
 /// Create an instance of client backed by given backend.

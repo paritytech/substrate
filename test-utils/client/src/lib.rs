@@ -34,7 +34,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-pub use sp_runtime::{Storage, StorageChild};
+pub use sp_runtime::{Storage, StorageChild, StateVersions};
 pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{
@@ -45,11 +45,7 @@ use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::{
-	codec::Encode,
-	traits::{BlakeTwo256, Block as BlockT},
-	OpaqueExtrinsic,
-};
+use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
@@ -57,8 +53,7 @@ use std::{
 };
 
 /// Test client light database backend.
-pub type LightBackend<Block> =
-	sc_light::Backend<sc_client_db::light::LightStorage<Block>, BlakeTwo256>;
+pub type LightBackend<Block> = sc_light::Backend<sc_client_db::light::LightStorage<Block>, Block>;
 
 /// A genesis storage initialization trait.
 pub trait GenesisInit: Default {
@@ -85,7 +80,7 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: Genesi
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
-	state_hashed_value: bool,
+	state_versions: StateVersions<Block>,
 	no_genesis: bool,
 }
 
@@ -106,20 +101,48 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 		Self::with_backend(backend)
 	}
 
+	/// Create new `TestClientBuilder` with default backend and state versions.
+	pub fn with_default_backend_and_state_versions(
+		state_versions: Option<sp_runtime::StateVersions<Block>>,
+	) -> Self {
+		let state_versions = state_versions.unwrap_or_default();
+		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
+			std::u32::MAX,
+			std::u64::MAX,
+			sc_client_db::TransactionStorageMode::BlockBody,
+			state_versions.clone(),
+		));
+		Self::with_backend_and_state_versions(backend, state_versions)
+	}
+
 	/// Create new `TestClientBuilder` with default backend and pruning window size
-	pub fn with_pruning_window(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
-		Self::with_backend(backend)
+	pub fn with_pruning_window(
+		keep_blocks: u32,
+		state_versions: Option<sp_runtime::StateVersions<Block>>,
+	) -> Self {
+		let state_versions = state_versions.unwrap_or_default();
+		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
+			keep_blocks,
+			0,
+			sc_client_db::TransactionStorageMode::BlockBody,
+			state_versions.clone(),
+		));
+		Self::with_backend_and_state_versions(backend, state_versions)
 	}
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
-	pub fn with_tx_storage(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(
+	pub fn with_tx_storage(
+		keep_blocks: u32,
+		state_versions: Option<sp_runtime::StateVersions<Block>>,
+	) -> Self {
+		let state_versions = state_versions.unwrap_or_default();
+		let backend = Arc::new(Backend::new_test_with_tx_storage_and_state_versions(
 			keep_blocks,
 			0,
 			sc_client_db::TransactionStorageMode::StorageChain,
+			state_versions.clone(),
 		));
-		Self::with_backend(backend)
+		Self::with_backend_and_state_versions(backend, state_versions)
 	}
 }
 
@@ -128,6 +151,11 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 {
 	/// Create a new instance of the test client builder.
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
+		Self::with_backend_and_state_versions(backend, Default::default())
+	}
+
+	/// Create a new instance of the test client builder with specific state versions.
+	pub fn with_backend_and_state_versions(backend: Arc<Backend>, state_versions: StateVersions<Block>) -> Self {
 		TestClientBuilder {
 			backend,
 			execution_strategies: ExecutionStrategies::default(),
@@ -138,8 +166,8 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			fork_blocks: None,
 			bad_blocks: None,
 			enable_offchain_indexing_api: false,
-			state_hashed_value: false,
 			no_genesis: false,
+			state_versions,
 		}
 	}
 
@@ -203,12 +231,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		self
 	}
 
-	/// Enable the internal value hash of state.
-	pub fn state_hashed_value(mut self) -> Self {
-		self.state_hashed_value = true;
-		self
-	}
-
 	/// Disable writing genesis.
 	pub fn set_no_genesis(mut self) -> Self {
 		self.no_genesis = true;
@@ -230,12 +252,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
-			if self.state_hashed_value {
-				storage.modify_trie_alt_hashing_threshold(Some(
-					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-				));
-			}
-
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(
@@ -247,7 +263,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 				);
 			}
 
-			storage
+			(storage, sp_runtime::StateVersion::default())
 		};
 
 		let client = client::Client::new(
@@ -266,6 +282,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			ClientConfig {
 				offchain_indexing_api: self.enable_offchain_indexing_api,
 				no_genesis: self.no_genesis,
+				state_versions: self.state_versions.clone(),
 				..Default::default()
 			},
 		)
@@ -306,11 +323,13 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		let executor = executor.into().unwrap_or_else(|| {
 			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		});
+		let mut client_config = ClientConfig::default();
+		client_config.state_versions = self.state_versions.clone();
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
-			Default::default(),
+			client_config,
 		)
 		.expect("Creates LocalCallExecutor");
 

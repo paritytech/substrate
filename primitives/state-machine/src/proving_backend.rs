@@ -26,7 +26,7 @@ use codec::{Codec, Decode, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
-use sp_core::storage::ChildInfo;
+use sp_core::{state_version::StateVersion, storage::ChildInfo};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
@@ -111,6 +111,8 @@ struct ProofRecorderInner<Hash> {
 	records: HashMap<Hash, Option<(DBValue, Meta, bool)>>,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
+	/// State version in use.
+	state_version: StateVersion,
 }
 
 /// Global proof recorder, act as a layer over a hash db for recording queried data.
@@ -124,7 +126,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	pub fn record<H: Hasher>(&self, key: Hash, val: Option<DBValue>) {
 		let mut inner = self.inner.write();
 
-		let ProofRecorderInner { encoded_size, records } = &mut *inner;
+		let ProofRecorderInner { encoded_size, records, .. } = &mut *inner;
 		records.entry(key).or_insert_with(|| {
 			val.map(|val| {
 				let mut val = (val, Meta::default(), false);
@@ -168,19 +170,25 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// encoded proof.
 	pub fn estimate_encoded_size(&self) -> usize {
 		let inner = self.inner.read();
-		inner.encoded_size + codec::Compact(inner.records.len() as u32).encoded_size()
+		inner.encoded_size +
+			codec::Compact(inner.records.len() as u32).encoded_size() +
+			inner.state_version.encoded_size()
 	}
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
-		let trie_nodes = self
-			.inner
-			.read()
+		let inner = self.inner.read();
+		let try_inner_hashing = match inner.state_version {
+			StateVersion::V0 => None,
+			StateVersion::V1 { threshold } => Some(threshold),
+		};
+		let trie_nodes = inner
 			.records
 			.iter()
 			.filter_map(|(_k, v)| {
 				v.as_ref().map(|v| {
 					let mut meta = v.1.clone();
+					meta.try_inner_hashing = try_inner_hashing.clone();
 					if let Some(hashed) =
 						sp_trie::to_hashed_variant::<H>(v.0.as_slice(), &mut meta, v.2)
 					{
@@ -192,7 +200,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 			})
 			.collect();
 
-		StorageProof::new(trie_nodes)
+		StorageProof::new(trie_nodes, inner.state_version)
 	}
 
 	/// Reset the internal state.
@@ -217,7 +225,7 @@ pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hashe
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 where
-	H::Out: Codec,
+	H::Out: Codec + Ord,
 {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
@@ -233,7 +241,7 @@ where
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend { backend: essence.backend_storage(), proof_recorder };
-		ProvingBackend(TrieBackend::new(recorder, root))
+		ProvingBackend(TrieBackend::new(recorder, root, backend.state_version()))
 	}
 
 	/// Extracting the gathered unordered proof.
@@ -387,6 +395,10 @@ where
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
 	}
+
+	fn state_version(&self) -> StateVersion {
+		self.0.state_version()
+	}
 }
 
 /// Create proof check backend.
@@ -398,10 +410,11 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
+	let state_version = proof.state_version();
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		Ok(TrieBackend::new(db, root, state_version))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -480,23 +493,23 @@ mod tests {
 	fn proof_recorded_and_checked_inner(flagged: bool) {
 		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
-		let contents = value_range
-			.clone()
-			.map(|i| (vec![i], Some(vec![i; size_content])))
-			.collect::<Vec<_>>();
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		if flagged {
-			in_memory = in_memory.update(vec![(
-				None,
-				vec![(
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					Some(sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					)),
-				)],
-			)]);
-		}
-		let in_memory = in_memory.update(vec![(None, contents)]);
+
+		let contents = vec![(
+			None,
+			value_range
+				.clone()
+				.map(|i| (vec![i], Some(vec![i; size_content])))
+				.collect::<Vec<_>>(),
+		)];
+		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
+			(
+				contents,
+				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD },
+			)
+				.into()
+		} else {
+			(contents, StateVersion::V0).into()
+		};
 		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
 		value_range.clone().for_each(|i| {
 			assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content])
@@ -534,19 +547,15 @@ mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		if flagged {
-			in_memory = in_memory.update(vec![(
-				None,
-				vec![(
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					Some(sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					)),
-				)],
-			)]);
-		}
-		in_memory = in_memory.update(contents);
+		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
+			(
+				contents,
+				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD },
+			)
+				.into()
+		} else {
+			(contents, StateVersion::V0).into()
+		};
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
 			.full_storage_root(

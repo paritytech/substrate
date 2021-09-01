@@ -39,7 +39,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage, StorageChild},
 	ChangesTrieConfiguration,
 };
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 
 /// A prelude to import in tests.
@@ -94,7 +94,7 @@ pub type LightExecutor = sc_light::GenesisCallExecutor<
 		substrate_test_runtime::Block,
 		sc_light::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
-			HashFor<substrate_test_runtime::Block>,
+			substrate_test_runtime::Block,
 		>,
 		NativeElseWasmExecutor<LocalExecutorDispatch>,
 	>,
@@ -395,18 +395,24 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 }
 
 /// Creates new client instance used for tests.
-pub fn new(hashed_state: bool) -> Client<Backend> {
-	let mut builder = TestClientBuilder::new();
-	if hashed_state {
-		builder = builder.state_hashed_value();
+pub fn new() -> Client<Backend> {
+	TestClientBuilder::new().build()
+}
+
+/// Creates new client instance used for tests, using
+/// optionally inner state hashing.
+pub fn new_with_state(inner_hashing: bool) -> Client<Backend> {
+	let mut state_versions = StateVersions::default();
+	if !inner_hashing {
+		state_versions.add((0, sp_core::state_version::StateVersion::V0));
 	}
-	builder.build()
+	TestClientBuilder::with_default_backend_and_state_versions(
+		Some(state_versions)
+	).build()
 }
 
 /// Creates new light client instance used for tests.
-pub fn new_light(
-	hashed_state: bool,
-) -> (
+pub fn new_light() -> (
 	client::Client<
 		LightBackend,
 		LightExecutor,
@@ -417,7 +423,8 @@ pub fn new_light(
 ) {
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
-	let backend = Arc::new(LightBackend::new(blockchain));
+	let state_versions = Default::default();
+	let backend = Arc::new(LightBackend::new(blockchain, state_versions));
 	let executor = new_native_executor();
 	let local_call_executor = client::LocalCallExecutor::new(
 		backend.clone(),
@@ -428,11 +435,12 @@ pub fn new_light(
 	.expect("Creates LocalCallExecutor");
 	let call_executor = LightExecutor::new(backend.clone(), local_call_executor);
 
-	let mut builder = TestClientBuilder::with_backend(backend.clone());
-	if hashed_state {
-		builder = builder.state_hashed_value();
-	}
-	(builder.build_with_executor(call_executor).0, backend)
+	(
+		TestClientBuilder::with_backend(backend.clone())
+			.build_with_executor(call_executor)
+			.0,
+		backend,
+	)
 }
 
 /// Creates new light client fetcher used for tests.

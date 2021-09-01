@@ -705,6 +705,10 @@ mod tests {
 		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
+		fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>> {
+			// Currently no support for aura test net with stateversion update.
+			None
+		}
 	}
 
 	#[test]
@@ -788,7 +792,7 @@ mod tests {
 
 	#[test]
 	fn authorities_call_works() {
-		let client = substrate_test_runtime_client::new(true);
+		let client = substrate_test_runtime_client::new();
 
 		assert_eq!(client.chain_info().best_number, 0);
 		assert_eq!(

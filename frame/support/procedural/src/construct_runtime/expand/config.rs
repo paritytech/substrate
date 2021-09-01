@@ -75,6 +75,10 @@ pub fn expand_outer_config(
 
 		#[cfg(any(feature = "std", test))]
 		impl #scrate::sp_runtime::BuildStorage for GenesisConfig {
+			fn state_version(&self) -> #scrate::sp_runtime::StateVersion {
+				unimplemented!("Genesis build storage do not support state version");
+			}
+
 			fn assimilate_storage(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,

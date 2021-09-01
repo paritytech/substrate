@@ -204,10 +204,6 @@ pub mod well_known_keys {
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
-	/// Configuration for trie internal hashing of value is stored
-	/// under this key.
-	pub const TRIE_HASHING_CONFIG: &'static [u8] = b":trie_hashing_conf";
-
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
@@ -248,42 +244,7 @@ pub fn trie_threshold_decode(mut encoded: &[u8]) -> Option<u32> {
 }
 
 /// Default value to use as a threshold for testing.
-pub const TEST_DEFAULT_ALT_HASH_THRESHOLD: u32 = 34;
-
-#[cfg(feature = "std")]
-impl Storage {
-	/// Utility function to get trie inner value hash threshold from
-	/// backend state or pending changes.
-	pub fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
-		alt_hashing::get_trie_alt_hashing_threshold(&self.top)
-	}
-
-	/// Utility function to modify trie inner value hash threshold.
-	pub fn modify_trie_alt_hashing_threshold(&mut self, threshold: Option<u32>) {
-		match threshold {
-			Some(threshold) => {
-				let encoded = trie_threshold_encode(threshold);
-				self.top.insert(well_known_keys::TRIE_HASHING_CONFIG.to_vec(), encoded);
-			},
-			None => {
-				self.top.remove(well_known_keys::TRIE_HASHING_CONFIG);
-			},
-		}
-	}
-}
-
-/// alt hashing related utils.
-#[cfg(feature = "std")]
-pub mod alt_hashing {
-	use super::*;
-
-	/// Utility function to get trie inner value hash threshold from
-	/// backend state or pending changes.
-	pub fn get_trie_alt_hashing_threshold(map: &StorageMap) -> Option<u32> {
-		map.get(well_known_keys::TRIE_HASHING_CONFIG)
-			.and_then(|encoded| trie_threshold_decode(&mut encoded.as_slice()))
-	}
-}
+pub const TEST_DEFAULT_ALT_HASH_THRESHOLD: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]

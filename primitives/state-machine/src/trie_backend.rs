@@ -24,7 +24,10 @@ use crate::{
 };
 use codec::{Codec, Decode};
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::{
+	state_version::StateVersion,
+	storage::{ChildInfo, ChildType},
+};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
@@ -35,10 +38,7 @@ use sp_trie::{
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub(crate) essence: TrieBackendEssence<S, H>,
-	// Allows setting alt hashing at start for testing only
-	// (mainly for in_memory_backend when it cannot read it from
-	// state).
-	pub(crate) force_alt_hashing: Option<Option<u32>>,
+	state_version: StateVersion,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
@@ -46,8 +46,8 @@ where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root), force_alt_hashing: None }
+	pub fn new(storage: S, root: H::Out, state_version: StateVersion) -> Self {
+		TrieBackend { essence: TrieBackendEssence::new(storage, root), state_version }
 	}
 
 	/// Get backend essence reference.
@@ -199,21 +199,15 @@ where
 	where
 		H::Out: Ord,
 	{
-		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
-			force.clone()
-		} else {
-			self.get_trie_alt_hashing_threshold()
-		};
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
-				let layout = if let Some(threshold) = use_inner_hash_value {
-					sp_trie::Layout::with_alt_hashing(threshold)
-				} else {
-					sp_trie::Layout::default()
+				let layout = match self.state_version {
+					StateVersion::V0 => sp_trie::Layout::default(),
+					StateVersion::V1 { threshold } => sp_trie::Layout::with_alt_hashing(threshold),
 				};
 				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
 			};
@@ -235,19 +229,12 @@ where
 	where
 		H::Out: Ord,
 	{
-		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
-			force.clone()
-		} else {
-			self.get_trie_alt_hashing_threshold()
-		};
-
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
 		};
-		let layout = if let Some(threshold) = use_inner_hash_value {
-			sp_trie::Layout::with_alt_hashing(threshold)
-		} else {
-			sp_trie::Layout::default()
+		let layout = match self.state_version {
+			StateVersion::V0 => sp_trie::Layout::default(),
+			StateVersion::V1 { threshold } => sp_trie::Layout::with_alt_hashing(threshold),
 		};
 
 		let mut write_overlay = S::Overlay::default();
@@ -295,6 +282,106 @@ where
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
+
+	fn state_version(&self) -> StateVersion {
+		self.state_version.clone()
+	}
+}
+
+/// Migration progress.
+pub struct MigrateProgress<H> {
+	/// Next key to migrate for top.
+	pub current_top: Option<Vec<u8>>,
+	/// Current migrated root of top trie.
+	pub root: Option<H>,
+	/// Next key to migrate with current migrated root for a child
+	/// trie.
+	/// When defined, `current_top` always point to the
+	/// child trie root top location.
+	pub current_child: Option<(Vec<u8>, H)>,
+}
+
+/// Migration storage.
+pub struct MigrateStorage<'a, S, H>
+where
+	H: Hasher,
+{
+	overlay: &'a mut sp_trie::PrefixedMemoryDB<H>,
+	storage: &'a S,
+}
+
+use hash_db::{self, AsHashDB, HashDB, HashDBRef, Prefix};
+use sp_trie::DBValue;
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
+	for MigrateStorage<'a, S, H>
+{
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
+			Some(val)
+		} else {
+			match self.storage.get(&key, prefix) {
+				Ok(x) => x,
+				Err(e) => {
+					warn!(target: "trie", "Failed to read from DB: {}", e);
+					None
+				},
+			}
+		}
+	}
+
+	fn access_from(&self, key: &H::Out, _at: Option<&H::Out>) -> Option<DBValue> {
+		// call back to storage even if the overlay was hit.
+		self.storage.access_from(key);
+		None
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		HashDB::get(self, key, prefix).is_some()
+	}
+
+	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
+		HashDB::insert(self.overlay, prefix, value)
+	}
+
+	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
+		HashDB::emplace(self.overlay, key, prefix, value)
+	}
+
+	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
+		HashDB::emplace_ref(self.overlay, key, prefix, value)
+	}
+
+	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
+		HashDB::remove(self.overlay, key, prefix)
+	}
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue>
+	for MigrateStorage<'a, S, H>
+{
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		HashDB::get(self, key, prefix)
+	}
+
+	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<DBValue> {
+		HashDB::access_from(self, key, at)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		HashDB::contains(self, key, prefix)
+	}
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
+	for MigrateStorage<'a, S, H>
+{
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
 }
 
 #[cfg(test)]
@@ -335,13 +422,6 @@ pub mod tests {
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
 			trie.insert(b":code", b"return 42").expect("insert failed");
-			if hashed_value {
-				trie.insert(
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG,
-					sp_core::storage::trie_threshold_encode(TRESHOLD).as_slice(),
-				)
-				.unwrap();
-			}
 			for i in 128u8..255u8 {
 				trie.insert(&[i], &[i]).unwrap();
 			}
@@ -353,7 +433,13 @@ pub mod tests {
 		hashed_value: bool,
 	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
-		TrieBackend::new(mdb, root)
+		let state_version = if hashed_value {
+			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }
+		} else {
+			StateVersion::V0
+		};
+
+		TrieBackend::new(mdb, root, state_version)
 	}
 
 	#[test]
@@ -418,6 +504,7 @@ pub mod tests {
 	fn pairs_are_empty_on_empty_storage() {
 		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
 			PrefixedMemoryDB::default(),
+			Default::default(),
 			Default::default(),
 		)
 		.pairs()

@@ -158,6 +158,21 @@ fn sync_from_two_peers_works() {
 }
 
 #[test]
+fn sync_from_two_peers_with_migrate_works() {
+	sp_tracing::try_init_simple();
+	let mut state_versions = sp_runtime::StateVersions::<Block>::default();
+	state_versions.add((0, sp_runtime::StateVersion::V0));
+	state_versions.add((10, sp_runtime::StateVersion::default()));
+	let mut net = TestNet::new_with_state_versions(3, state_versions);
+	net.peer(1).push_blocks(100, false);
+	net.peer(2).push_blocks(100, false);
+	net.block_until_sync();
+	let peer1 = &net.peers()[1];
+	assert!(net.peers()[0].blockchain_canon_equals(peer1));
+	assert!(!net.peer(0).is_major_syncing());
+}
+
+#[test]
 fn sync_from_two_peers_with_ancestry_search_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);

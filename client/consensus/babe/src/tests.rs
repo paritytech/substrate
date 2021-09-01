@@ -365,6 +365,11 @@ impl TestNetFactory for BabeTestNet {
 	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
+
+	fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>> {
+		// Currently no support for consensus test net with stateversion update.
+		None
+	}
 }
 
 #[test]

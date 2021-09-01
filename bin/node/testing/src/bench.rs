@@ -387,7 +387,8 @@ impl BenchDb {
 		};
 		let task_executor = TaskExecutor::new();
 
-		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
+		let backend =
+			sc_service::new_db_backend(db_config, Default::default()).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
 			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8),

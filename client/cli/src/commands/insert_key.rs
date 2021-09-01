@@ -143,6 +143,7 @@ mod tests {
 				None,
 				None,
 				NoExtension::None,
+				Default::default(),
 			)))
 		}
 	}

@@ -72,6 +72,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		None,
 		// Extensions
 		None,
+		// StateVersion
+		Default::default(),
 	))
 }
 
@@ -119,6 +121,8 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		None,
 		// Extensions
 		None,
+		// StateVersion
+		Default::default(),
 	))
 }
 

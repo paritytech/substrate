@@ -48,7 +48,7 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -59,9 +59,12 @@ const IN_MEMORY_EXPECT_PROOF: &str =
 	"InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, H: Hasher> {
+pub struct Backend<S, Block: BlockT> {
 	blockchain: Arc<Blockchain<S>>,
-	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
+	genesis_state: RwLock<Option<InMemoryBackend<HashFor<Block>>>>,
+	state_versions: StateVersions<Block>,
+	// TODO consider moving this state_versions into BlockChain (and add N to type) -> would make
+	// better api
 	import_lock: RwLock<()>,
 }
 
@@ -75,6 +78,8 @@ pub struct ImportOperation<Block: BlockT, S> {
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
+	state_version: Option<StateVersion>,
+	genesis_state_version: StateVersion,
 	_phantom: std::marker::PhantomData<S>,
 }
 
@@ -87,10 +92,15 @@ pub enum GenesisOrUnavailableState<H: Hasher> {
 	Unavailable,
 }
 
-impl<S, H: Hasher> Backend<S, H> {
+impl<S, B: BlockT> Backend<S, B> {
 	/// Create new light backend.
-	pub fn new(blockchain: Arc<Blockchain<S>>) -> Self {
-		Self { blockchain, genesis_state: RwLock::new(None), import_lock: Default::default() }
+	pub fn new(blockchain: Arc<Blockchain<S>>, state_versions: StateVersions<B>) -> Self {
+		Self {
+			blockchain,
+			genesis_state: RwLock::new(None),
+			import_lock: Default::default(),
+			state_versions,
+		}
 	}
 
 	/// Get shared blockchain reference.
@@ -99,7 +109,7 @@ impl<S, H: Hasher> Backend<S, H> {
 	}
 }
 
-impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
+impl<S: AuxStore, B: BlockT> AuxStore for Backend<S, B> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -119,7 +129,7 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 	}
 }
 
-impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
+impl<S, Block> ClientBackend<Block> for Backend<S, Block>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
@@ -140,15 +150,20 @@ where
 			set_head: None,
 			storage_update: None,
 			changes_trie_config_update: None,
+			state_version: None,
+			genesis_state_version: self.state_versions.genesis_state_version(),
 			_phantom: Default::default(),
 		})
 	}
 
 	fn begin_state_operation(
 		&self,
-		_operation: &mut Self::BlockImportOperation,
-		_block: BlockId<Block>,
+		operation: &mut Self::BlockImportOperation,
+		block: BlockId<Block>,
 	) -> ClientResult<()> {
+		if let Some(number) = self.blockchain.storage().block_number_from_id(&block)? {
+			operation.state_version = Some(self.state_versions.state_version_at(number));
+		}
 		Ok(())
 	}
 
@@ -261,7 +276,7 @@ where
 	}
 }
 
-impl<S, Block> RemoteBackend<Block> for Backend<S, HashFor<Block>>
+impl<S, Block> RemoteBackend<Block> for Backend<S, Block>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block> + 'static,
@@ -355,7 +370,7 @@ where
 			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
-		let storage_update = InMemoryBackend::from(storage);
+		let storage_update = InMemoryBackend::from((storage, self.genesis_state_version));
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		if commit {
 			self.storage_update = Some(storage_update);
@@ -573,6 +588,13 @@ where
 		match self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
+		}
+	}
+
+	fn state_version(&self) -> StateVersion {
+		match self {
+			GenesisOrUnavailableState::Genesis(state) => state.state_version(),
+			GenesisOrUnavailableState::Unavailable => StateVersion::default(),
 		}
 	}
 }

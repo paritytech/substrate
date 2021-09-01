@@ -18,6 +18,7 @@
 use crate::{Layout, TrieLayout};
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
+use sp_core::state_version::StateVersion;
 use sp_std::vec::Vec;
 use trie_db::NodeCodec;
 
@@ -28,21 +29,54 @@ use trie_db::NodeCodec;
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode)]
 pub struct StorageProof {
-	trie_nodes: Vec<Vec<u8>>,
+	// TODO decode no more bytes to V0 for compatibility  and remove pub(crate)
+	pub(crate) trie_nodes: Vec<Vec<u8>>,
+	pub(crate) state_version: StateVersion,
 }
 
 /// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
+	pub state_version: StateVersion,
+}
+
+mod decode_impl {
+	use super::*;
+	use codec::{Error, Input};
+	impl Decode for StorageProof {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+			let trie_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
+			let state_version = if let Ok(Some(0)) = input.remaining_len() {
+				// for compatibility with existing proof decoded from sized buffer
+				StateVersion::V0
+			} else {
+				Decode::decode(input)?
+			};
+			Ok(StorageProof { trie_nodes, state_version })
+		}
+	}
+
+	impl Decode for CompactProof {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+			let encoded_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
+			let state_version = if let Ok(Some(0)) = input.remaining_len() {
+				// for compatibility with existing proof decoded from sized buffer
+				StateVersion::V0
+			} else {
+				Decode::decode(input)?
+			};
+			Ok(CompactProof { encoded_nodes, state_version })
+		}
+	}
 }
 
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
+	pub fn new(trie_nodes: Vec<Vec<u8>>, state_version: StateVersion) -> Self {
+		StorageProof { trie_nodes, state_version }
 	}
 
 	/// Returns a new empty proof.
@@ -50,12 +84,17 @@ impl StorageProof {
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
 	pub fn empty() -> Self {
-		StorageProof { trie_nodes: Vec::new() }
+		StorageProof { trie_nodes: Vec::new(), state_version: StateVersion::default() }
 	}
 
 	/// Returns whether this is an empty proof.
 	pub fn is_empty(&self) -> bool {
 		self.trie_nodes.is_empty()
+	}
+
+	/// State version used in the proof.
+	pub fn state_version(&self) -> StateVersion {
+		self.state_version
 	}
 
 	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
@@ -90,14 +129,23 @@ impl StorageProof {
 	where
 		I: IntoIterator<Item = Self>,
 	{
+		let mut state_version = StateVersion::default();
+		let state_version = &mut state_version;
 		let trie_nodes = proofs
 			.into_iter()
-			.flat_map(|proof| proof.iter_nodes())
+			.flat_map(|proof| {
+				debug_assert!(
+					state_version == &StateVersion::default() ||
+						state_version == &proof.state_version
+				);
+				*state_version = proof.state_version;
+				proof.iter_nodes()
+			})
 			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
 			.into_iter()
 			.collect();
 
-		Self { trie_nodes }
+		Self { trie_nodes, state_version: *state_version }
 	}
 
 	/// Encode as a compact proof with default
@@ -134,6 +182,7 @@ impl CompactProof {
 		&self,
 		expected_root: Option<&H::Out>,
 	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
+		let state_version = self.state_version;
 		let mut db = crate::MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
@@ -146,6 +195,7 @@ impl CompactProof {
 					.into_iter()
 					.filter_map(|kv| if (kv.1).1 > 0 { Some((kv.1).0) } else { None })
 					.collect(),
+				state_version,
 			),
 			root,
 		))
@@ -176,7 +226,11 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
 		for item in proof.trie_nodes.iter() {
-			let mut meta = Default::default();
+			let mut meta = crate::Meta::default();
+			meta.try_inner_hashing = match proof.state_version {
+				StateVersion::V0 => None,
+				StateVersion::V1 { threshold, .. } => Some(threshold),
+			};
 			// Read meta from state (required for value layout).
 			let _ = <Layout<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
 			db.alt_insert(

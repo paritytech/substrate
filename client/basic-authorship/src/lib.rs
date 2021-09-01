@@ -30,7 +30,7 @@
 //! #     DefaultTestClientBuilderExt, TestClientBuilderExt,
 //! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
-//! # let client = Arc::new(substrate_test_runtime_client::new(true));
+//! # let client = Arc::new(substrate_test_runtime_client::new());
 //! # let spawner = sp_core::testing::TaskExecutor::new();
 //! # let txpool = BasicPool::new_full(
 //! #     Default::default(),

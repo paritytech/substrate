@@ -34,7 +34,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	traits::{Block as BlockT, HashFor},
-	Storage,
+	StateVersion, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
@@ -82,6 +82,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
+	state_version: Cell<StateVersion>,
 	genesis_root: B::Hash,
 	state: RefCell<Option<State<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
@@ -119,6 +120,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			state: RefCell::new(None),
 			db: Cell::new(None),
 			root: Cell::new(root.clone()),
+			state_version: Cell::new(Default::default()),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -169,7 +171,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			_block: Default::default(),
 		});
 		*self.state.borrow_mut() = Some(State::new(
-			DbState::<B>::new(storage_db, self.root.get()),
+			DbState::<B>::new(storage_db, self.root.get(), self.state_version.get()),
 			self.shared_cache.clone(),
 			None,
 		));
@@ -544,7 +546,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 				if tracker.writes > 0 {
 					writes += 1;
-					repeat_writes += tracker.reads - 1;
+					repeat_writes += tracker.writes - 1;
 				}
 			}
 		});
@@ -627,6 +629,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				}
 			}
 		})
+	}
+
+	fn state_version(&self) -> StateVersion {
+		self.state_version.get()
 	}
 }
 

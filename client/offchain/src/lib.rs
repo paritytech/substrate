@@ -279,7 +279,7 @@ mod tests {
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		sp_tracing::try_init_simple();
 
-		let client = Arc::new(substrate_test_runtime_client::new(true));
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = TestPool(BasicPool::new_full(
 			Default::default(),

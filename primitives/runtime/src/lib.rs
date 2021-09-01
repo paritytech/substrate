@@ -57,6 +57,7 @@ mod multiaddress;
 pub mod offchain;
 pub mod runtime_logger;
 mod runtime_string;
+pub mod state_version;
 #[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
@@ -92,6 +93,8 @@ pub use sp_arithmetic::{
 };
 
 pub use either::Either;
+
+pub use state_version::{StateVersion, StateVersions};
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -169,6 +172,8 @@ pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
+	/// State version to use with storage.
+	fn state_version(&self) -> StateVersion;
 	/// Build the storage out of this builder.
 	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
 		let mut storage = Default::default();
@@ -190,10 +195,14 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for sp_core::storage::Storage {
+impl BuildStorage for (sp_core::storage::Storage, StateVersion) {
+	fn state_version(&self) -> StateVersion {
+		self.1
+	}
+
 	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
-		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.children_default.iter() {
+		storage.top.extend(self.0.top.iter().map(|(k, v)| (k.clone(), v.clone())));
+		for (k, other_map) in self.0.children_default.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -210,6 +219,11 @@ impl BuildStorage for sp_core::storage::Storage {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
+	fn state_version(&self) -> StateVersion {
+		// Warning just a stub implementation, should not be use.
+		StateVersion::default()
+	}
+
 	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
@@ -992,7 +1006,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
+		let mut ext = sp_state_machine::BasicExternalities::new_empty(Default::default());
 		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
 			sp_core::testing::TaskExecutor::new(),
 		));
@@ -1006,7 +1020,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Hey, I'm an error")]
 	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
+		let mut ext = sp_state_machine::BasicExternalities::new_empty(Default::default());
 		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
 			sp_core::testing::TaskExecutor::new(),
 		));

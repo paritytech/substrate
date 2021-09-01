@@ -250,6 +250,7 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 
 #[test]
 fn construct_genesis_should_work_with_native() {
+	let state_version = Default::default();
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -261,7 +262,7 @@ fn construct_genesis_should_work_with_native() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, state_version));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -285,6 +286,7 @@ fn construct_genesis_should_work_with_native() {
 
 #[test]
 fn construct_genesis_should_work_with_wasm() {
+	let state_version = Default::default();
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -296,7 +298,7 @@ fn construct_genesis_should_work_with_wasm() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, state_version));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -320,6 +322,7 @@ fn construct_genesis_should_work_with_wasm() {
 
 #[test]
 fn construct_genesis_with_bad_transaction_should_panic() {
+	let state_version = Default::default();
 	let mut storage = GenesisConfig::new(
 		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
@@ -331,7 +334,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, state_version));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -359,7 +362,7 @@ fn client_initializes_from_genesis_ok() {
 	client_initializes_from_genesis_ok_inner(true);
 }
 fn client_initializes_from_genesis_ok_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new_with_state(hashed_value);
 
 	assert_eq!(
 		client
@@ -385,7 +388,7 @@ fn client_initializes_from_genesis_ok_inner(hashed_value: bool) {
 
 #[test]
 fn block_builder_works_with_no_transactions() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
@@ -400,7 +403,7 @@ fn block_builder_works_with_transactions() {
 	block_builder_works_with_transactions_inner(false);
 }
 fn block_builder_works_with_transactions_inner(hashed_value: bool) {
-	let mut client = substrate_test_runtime_client::new(hashed_value);
+	let mut client = substrate_test_runtime_client::new_with_state(hashed_value);
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -445,7 +448,7 @@ fn block_builder_works_with_transactions_inner(hashed_value: bool) {
 
 #[test]
 fn block_builder_does_not_include_invalid() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -515,7 +518,7 @@ fn best_containing_with_hash_not_found() {
 fn uncles_with_only_ancestors() {
 	// block tree:
 	// G -> A1 -> A2
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -535,7 +538,7 @@ fn uncles_with_multiple_forks() {
 	//      A1 -> B2 -> B3 -> B4
 	//	          B2 -> C3
 	//	    A1 -> D2
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1210,7 +1213,7 @@ fn key_changes_works() {
 
 #[test]
 fn import_with_justification() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1247,7 +1250,7 @@ fn import_with_justification() {
 
 #[test]
 fn importing_diverged_finalized_block_should_trigger_reorg() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1 -> A2
 	//   \
@@ -1295,7 +1298,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
 	let (mut client, select_chain) =
-		TestClientBuilder::new().state_hashed_value().build_with_longest_chain();
+		TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \
@@ -1368,7 +1371,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 #[test]
 fn get_header_by_block_number_doesnt_panic() {
-	let client = substrate_test_runtime_client::new(true);
+	let client = substrate_test_runtime_client::new();
 
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
@@ -1379,7 +1382,7 @@ fn get_header_by_block_number_doesnt_panic() {
 #[test]
 fn state_reverted_on_reorg() {
 	sp_tracing::try_init_simple();
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let current_balance = |client: &substrate_test_runtime_client::TestClient| {
 		client
@@ -1452,6 +1455,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
+			Default::default(),
 		)
 		.unwrap(),
 	);
@@ -1667,6 +1671,7 @@ fn returns_status_for_pruned_blocks() {
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
+			Default::default(),
 		)
 		.unwrap(),
 	);
@@ -2039,7 +2044,7 @@ fn storage_keys_iter_works() {
 	storage_keys_iter_works_inner(false);
 }
 fn storage_keys_iter_works_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new_with_state(hashed_value);
 
 	let prefix = StorageKey(hex!("").to_vec());
 
@@ -2064,25 +2069,14 @@ fn storage_keys_iter_works_inner(hashed_value: bool) {
 		.take(3)
 		.map(|x| x.0)
 		.collect();
-	if hashed_value {
-		assert_eq!(
-			res,
-			[
-				hex!("3a686561707061676573").to_vec(),
-				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-				hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-			]
-		);
-	} else {
-		assert_eq!(
-			res,
-			[
-				hex!("3a686561707061676573").to_vec(),
-				hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-				hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
-			]
-		);
-	}
+	assert_eq!(
+		res,
+		[
+			hex!("3a686561707061676573").to_vec(),
+			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+		]
+	);
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
@@ -2116,7 +2110,10 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		substrate_test_runtime_client::runtime::RuntimeApi,
 	>(
 		substrate_test_runtime_client::new_native_executor(),
-		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		&(
+			substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			sp_runtime::StateVersion::default(),
+		),
 		None,
 		None,
 		None,

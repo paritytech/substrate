@@ -291,7 +291,7 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		// given
-		let client = Arc::new(substrate_test_runtime_client::new(true));
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
@@ -326,7 +326,7 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		// given
-		let client = Arc::new(substrate_test_runtime_client::new(true));
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
@@ -345,7 +345,7 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		// given
-		let client = Arc::new(substrate_test_runtime_client::new(true));
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
@@ -374,7 +374,7 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		// given
-		let client = Arc::new(substrate_test_runtime_client::new(true));
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());

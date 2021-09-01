@@ -22,6 +22,7 @@ use codec::Encode;
 use hash_db::Hasher;
 use log::warn;
 use sp_core::{
+	state_version::StateVersion,
 	storage::{
 		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey,
 	},
@@ -33,7 +34,6 @@ use sp_trie::{empty_child_trie_root, Layout, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
-	iter::FromIterator,
 	ops::Bound,
 };
 
@@ -42,19 +42,22 @@ use std::{
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	alt_hashing: Option<u32>,
+	state_version: Option<StateVersion>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
-	pub fn new(inner: Storage) -> Self {
-		let alt_hashing = inner.get_trie_alt_hashing_threshold();
-		BasicExternalities { inner, extensions: Default::default(), alt_hashing }
+	pub fn new(inner: Storage, state_version: StateVersion) -> Self {
+		BasicExternalities {
+			inner,
+			extensions: Default::default(),
+			state_version: Some(state_version),
+		}
 	}
 
 	/// New basic externalities with empty storage.
-	pub fn new_empty() -> Self {
-		Self::new(Storage::default())
+	pub fn new_empty(state_version: StateVersion) -> Self {
+		Self::new(Storage::default(), state_version)
 	}
 
 	/// Insert key/value
@@ -70,18 +73,41 @@ impl BasicExternalities {
 	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
+	///
+	/// Do not support runtime transaction. TODO useless??
+	pub fn execute_with_storage_and_state<R>(
+		storage: &mut sp_core::storage::Storage,
+		state_version: StateVersion,
+		f: impl FnOnce() -> R,
+	) -> R {
+		Self::execute_with_storage_inner(storage, Some(state_version), f)
+	}
+
+	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
+	///
+	/// Returns the result of the closure and updates `storage` with all changes.
+	///
+	/// Do not support runtime transaction and root calculation.
+	/// This limitation is fine for most genesis runtime storage initialization.
 	pub fn execute_with_storage<R>(
 		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
-		let alt_hashing = storage.get_trie_alt_hashing_threshold();
+		Self::execute_with_storage_inner(storage, None, f)
+	}
+
+	fn execute_with_storage_inner<R>(
+		storage: &mut sp_core::storage::Storage,
+		state_version: Option<StateVersion>,
+		f: impl FnOnce() -> R,
+	) -> R {
 		let mut ext = Self {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
 				children_default: std::mem::take(&mut storage.children_default),
 			},
 			extensions: Default::default(),
-			alt_hashing,
+			state_version,
 		};
 
 		let r = ext.execute_with(f);
@@ -116,27 +142,18 @@ impl PartialEq for BasicExternalities {
 	}
 }
 
-impl FromIterator<(StorageKey, StorageValue)> for BasicExternalities {
-	fn from_iter<I: IntoIterator<Item = (StorageKey, StorageValue)>>(iter: I) -> Self {
-		let mut t = Self::default();
-		t.inner.top.extend(iter);
-		t
+impl From<StateVersion> for BasicExternalities {
+	fn from(state_version: StateVersion) -> Self {
+		Self::new(Default::default(), state_version)
 	}
 }
 
-impl Default for BasicExternalities {
-	fn default() -> Self {
-		Self::new(Default::default())
-	}
-}
-
-impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
-	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
-		let alt_hashing = sp_core::storage::alt_hashing::get_trie_alt_hashing_threshold(&hashmap);
+impl From<(BTreeMap<StorageKey, StorageValue>, StateVersion)> for BasicExternalities {
+	fn from((hashmap, state_version): (BTreeMap<StorageKey, StorageValue>, StateVersion)) -> Self {
 		BasicExternalities {
 			inner: Storage { top: hashmap, children_default: Default::default() },
 			extensions: Default::default(),
-			alt_hashing,
+			state_version: Some(state_version),
 		}
 	}
 }
@@ -300,19 +317,23 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if let Some(threshold) = self.alt_hashing.as_ref() {
-			Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
-		} else {
-			Layout::<Blake2Hasher>::default()
+		let layout = match self
+			.state_version
+			.expect("Unsupported state calculation for genesis storage build.")
+		{
+			StateVersion::V0 => Layout::<Blake2Hasher>::default(),
+			StateVersion::V1 { threshold } => Layout::<Blake2Hasher>::with_alt_hashing(threshold),
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
 	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
+		let state_version = self
+			.state_version
+			.expect("Unsupported state calculation for genesis storage build.");
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let mut in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>();
-			in_mem.force_alt_hashing(self.alt_hashing.clone());
+			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>(state_version);
 			in_mem.child_storage_root(&child.child_info, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
@@ -397,7 +418,7 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: BasicExternalities = StateVersion::default().into();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -409,7 +430,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext = BasicExternalities::default();
+		let mut ext: BasicExternalities = StateVersion::default().into();
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
@@ -421,15 +442,18 @@ mod tests {
 	fn children_works() {
 		let child_info = ChildInfo::new_default(b"storage_key");
 		let child_info = &child_info;
-		let mut ext = BasicExternalities::new(Storage {
-			top: Default::default(),
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
-					child_info: child_info.to_owned(),
-				}
-			],
-		});
+		let mut ext = BasicExternalities::new(
+			Storage {
+				top: Default::default(),
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		);
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
 
@@ -447,19 +471,22 @@ mod tests {
 	fn kill_child_storage_returns_num_elements_removed() {
 		let child_info = ChildInfo::new_default(b"storage_key");
 		let child_info = &child_info;
-		let mut ext = BasicExternalities::new(Storage {
-			top: Default::default(),
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![
-						b"doe".to_vec() => b"reindeer".to_vec(),
-						b"dog".to_vec() => b"puppy".to_vec(),
-						b"hello".to_vec() => b"world".to_vec(),
-					],
-					child_info: child_info.to_owned(),
-				}
-			],
-		});
+		let mut ext = BasicExternalities::new(
+			Storage {
+				top: Default::default(),
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![
+							b"doe".to_vec() => b"reindeer".to_vec(),
+							b"dog".to_vec() => b"puppy".to_vec(),
+							b"hello".to_vec() => b"world".to_vec(),
+						],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		);
 
 		let res = ext.kill_child_storage(child_info, None);
 		assert_eq!(res, (true, 3));
@@ -468,7 +495,7 @@ mod tests {
 	#[test]
 	fn basic_externalities_is_empty() {
 		// Make sure no values are set by default in `BasicExternalities`.
-		let storage = BasicExternalities::new_empty().into_storages();
+		let storage = BasicExternalities::new_empty(StateVersion::default()).into_storages();
 		assert!(storage.top.is_empty());
 		assert!(storage.children_default.is_empty());
 	}

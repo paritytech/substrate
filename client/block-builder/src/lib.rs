@@ -234,9 +234,9 @@ where
 			),
 		);
 
-		let proof = self.api.extract_proof();
-
 		let state = self.backend.state_at(self.block_id)?;
+		let proof = { self.api.extract_proof() };
+
 		let changes_trie_state = backend::changes_tries_state_at_block(
 			&self.block_id,
 			self.backend.changes_trie_storage(),
@@ -301,7 +301,7 @@ mod tests {
 
 	#[test]
 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
-		let builder = substrate_test_runtime_client::TestClientBuilder::new().state_hashed_value();
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let backend = builder.backend();
 		let client = builder.build();
 

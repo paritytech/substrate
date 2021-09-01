@@ -854,7 +854,7 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 fn should_not_accept_old_signatures() {
 	use std::convert::TryFrom;
 
-	let client = Arc::new(substrate_test_runtime_client::new(true));
+	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
 		BasicPool::new_test(Arc::new(FullChainApi::new(
@@ -895,7 +895,7 @@ fn should_not_accept_old_signatures() {
 
 #[test]
 fn import_notification_to_pool_maintain_works() {
-	let mut client = Arc::new(substrate_test_runtime_client::new(true));
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
 		BasicPool::new_test(Arc::new(FullChainApi::new(

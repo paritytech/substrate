@@ -119,7 +119,7 @@ pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{de::DeserializeOwned, Serialize};
-use sp_core::storage::Storage;
+use sp_core::{state_version::StateVersion, storage::Storage};
 use sp_runtime::BuildStorage;
 
 /// The type of a chain.
@@ -187,6 +187,9 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	fn set_storage(&mut self, storage: Storage);
 	/// Returns code substitutes that should be used for the on chain wasm.
 	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>>;
+	/// State versions for the chain.
+	/// Uses default state version when no definition from block 0.
+	fn state_versions(&self) -> &Vec<(String, StateVersion)>;
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

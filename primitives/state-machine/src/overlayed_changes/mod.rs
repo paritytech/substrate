@@ -931,7 +931,7 @@ mod tests {
 		]
 		.into_iter()
 		.collect();
-		let backend = InMemoryBackend::<Blake2Hasher>::from(initial);
+		let backend = InMemoryBackend::<Blake2Hasher>::from((initial, Default::default()));
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_collect_extrinsics(false);
 

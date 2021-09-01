@@ -88,7 +88,7 @@ use sp_runtime::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, StateVersions, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
@@ -285,6 +285,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
+	}
+
+	fn state_version(&self) -> StateVersion {
+		self.state.state_version()
 	}
 }
 
@@ -1114,15 +1118,22 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
+	// TODO consider moving this state_version into BlockChainBb
+	state_versions: StateVersions<Block>,
 }
 
 impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
+	pub fn new(
+		config: DatabaseSettings,
+		canonicalization_delay: u64,
+		state_versions: StateVersions<Block>,
+	) -> ClientResult<Self> {
+		// TODO state_versions could also be part of database settings
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
-		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
+		Self::from_database(db as Arc<_>, canonicalization_delay, &config, state_versions)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1142,6 +1153,23 @@ impl<Block: BlockT> Backend<Block> {
 		canonicalization_delay: u64,
 		transaction_storage: TransactionStorageMode,
 	) -> Self {
+		let state_versions = Default::default();
+		Self::new_test_with_tx_storage_and_state_versions(
+			keep_blocks,
+			canonicalization_delay,
+			transaction_storage,
+			state_versions,
+		)
+	}
+
+	/// Create new memory-backed client backend for tests.
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test_with_tx_storage_and_state_versions(
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+		transaction_storage: TransactionStorageMode,
+		state_versions: StateVersions<Block>,
+	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
@@ -1153,13 +1181,15 @@ impl<Block: BlockT> Backend<Block> {
 			transaction_storage,
 		};
 
-		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+		Self::new(db_setting, canonicalization_delay, state_versions)
+			.expect("failed to create test-db")
 	}
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
+		state_versions: StateVersions<Block>, // TODO could also be part of database settings
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
@@ -1203,6 +1233,7 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
 			genesis_state: RwLock::new(None),
+			state_versions,
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1870,7 +1901,9 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+										   // state_version for genesis in empty state.
+		let state_version = self.state_versions.genesis_state_version();
+		let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 		Ok(SyncingCachingState::new(
@@ -2335,15 +2368,15 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		let is_genesis = match &block {
-			BlockId::Number(n) if n.is_zero() => true,
-			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => true,
-			_ => false,
+		let is_genesis= match &block {
+			BlockId::Number(n) => n.is_zero(),
+			BlockId::Hash(h) => h == &self.blockchain.meta.read().genesis_hash,
 		};
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
 				let root = genesis_state.root.clone();
-				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
+				let state_version = self.state_versions.genesis_state_version();
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root, state_version);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 				let mut state = SyncingCachingState::new(
@@ -2374,7 +2407,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = DbState::<Block>::new(self.storage.clone(), root);
+					let state_version = self.state_versions.state_version_at(hdr.number);
+					let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					let caching_state =
@@ -2561,6 +2595,7 @@ pub(crate) mod tests {
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},
 			0,
+			Default::default(),
 		)
 		.unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
@@ -2575,7 +2610,13 @@ pub(crate) mod tests {
 		set_state_data_inner(false);
 	}
 	fn set_state_data_inner(alt_hashing: bool) {
-		let db = Backend::<Block>::new_test(2, 0);
+		let state_version = if alt_hashing {
+			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }
+		} else {
+			StateVersion::V0
+		};
+		let mut db = Backend::<Block>::new_test(2, 0);
+		db.state_versions.add((0, state_version));
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
 			let mut header = Header {
@@ -2586,16 +2627,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let mut storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
-
-			if alt_hashing {
-				storage.push((
-					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-					sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					),
-				));
-			}
+			let storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
 
 			header.state_root = op
 				.old_state

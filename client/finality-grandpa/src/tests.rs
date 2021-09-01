@@ -172,6 +172,11 @@ impl TestNetFactory for GrandpaTestNet {
 	fn mut_peers<F: FnOnce(&mut Vec<GrandpaPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
+
+	fn state_versions(&self) -> Option<sp_runtime::StateVersions<Block>> {
+		// Currently no support for grandpa test net with stateversion update.
+		None
+	}
 }
 
 #[derive(Default, Clone)]

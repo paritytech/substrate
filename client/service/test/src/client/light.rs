@@ -269,8 +269,8 @@ fn local_state_is_created_when_genesis_state_is_available() {
 	let header0 =
 		substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 
-	let backend: Backend<_, BlakeTwo256> =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+	let backend: Backend<_, Block> =
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = backend.begin_operation().unwrap();
 	op.set_block_data(header0, None, None, None, NewBlockState::Final).unwrap();
 	op.set_genesis_state(Default::default(), true).unwrap();
@@ -284,8 +284,8 @@ fn local_state_is_created_when_genesis_state_is_available() {
 
 #[test]
 fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
-	let backend: Backend<_, BlakeTwo256> =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+	let backend: Backend<_, Block> =
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 
 	match backend.state_at(BlockId::Number(0)).unwrap() {
 		GenesisOrUnavailableState::Unavailable => (),
@@ -295,7 +295,8 @@ fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 
 #[test]
 fn light_aux_store_is_updated_via_non_importing_op() {
-	let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+	let backend =
+		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), Default::default());
 	let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
 	BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
 	ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
@@ -382,7 +383,8 @@ fn execution_proof_is_generated_and_checked_inner(hashed_value: bool) {
 	}
 
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new(hashed_value);
+	let mut remote_client = substrate_test_runtime_client::new_with_state(hashed_value);
+
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
@@ -458,7 +460,7 @@ type TestChecker = LightDataChecker<
 
 fn prepare_for_read_proof_check(hashed_value: bool) -> (TestChecker, Header, StorageProof, u32) {
 	// prepare remote client
-	let remote_client = substrate_test_runtime_client::new(hashed_value);
+	let remote_client = substrate_test_runtime_client::new_with_state(hashed_value);
 	let remote_block_id = BlockId::Number(0);
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 	let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
@@ -539,7 +541,7 @@ fn prepare_for_header_proof_check(
 	hashed_value: bool,
 ) -> (TestChecker, Hash, Header, StorageProof) {
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new(hashed_value);
+	let mut remote_client = substrate_test_runtime_client::new_with_state(hashed_value);
 	let mut local_headers_hashes = Vec::new();
 	for i in 0..4 {
 		let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;

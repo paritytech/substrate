@@ -66,6 +66,7 @@ mod hasher;
 pub mod offchain;
 pub mod sandbox;
 pub mod sr25519;
+pub mod state_version;
 pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
