@@ -1130,7 +1130,6 @@ impl<Block: BlockT> Backend<Block> {
 		canonicalization_delay: u64,
 		state_versions: StateVersions<Block>,
 	) -> ClientResult<Self> {
-		// TODO state_versions could also be part of database settings
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
 		Self::from_database(db as Arc<_>, canonicalization_delay, &config, state_versions)
 	}
@@ -1188,7 +1187,7 @@ impl<Block: BlockT> Backend<Block> {
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
-		state_versions: StateVersions<Block>, // TODO could also be part of database settings
+		state_versions: StateVersions<Block>,
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
