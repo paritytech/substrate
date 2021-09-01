@@ -63,8 +63,6 @@ pub struct Backend<S, Block: BlockT> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryBackend<HashFor<Block>>>>,
 	state_versions: StateVersions<Block>,
-	// TODO consider moving this state_versions into BlockChain (and add N to type) -> would make
-	// better api
 	import_lock: RwLock<()>,
 }
 
