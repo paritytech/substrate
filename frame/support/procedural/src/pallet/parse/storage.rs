@@ -26,6 +26,7 @@ mod keyword {
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(getter);
 	syn::custom_keyword!(storage_prefix);
+	syn::custom_keyword!(unbounded);
 	syn::custom_keyword!(OptionQuery);
 	syn::custom_keyword!(ValueQuery);
 }
@@ -36,12 +37,13 @@ mod keyword {
 pub enum PalletStorageAttr {
 	Getter(syn::Ident, proc_macro2::Span),
 	StorageName(syn::LitStr, proc_macro2::Span),
+	Unbounded(proc_macro2::Span),
 }
 
 impl PalletStorageAttr {
 	fn attr_span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Getter(_, span) | Self::StorageName(_, span) => *span,
+			Self::Getter(_, span) | Self::StorageName(_, span) | Self::Unbounded(span) => *span,
 		}
 	}
 }
@@ -75,9 +77,42 @@ impl syn::parse::Parse for PalletStorageAttr {
 			})?;
 
 			Ok(Self::StorageName(renamed_prefix, attr_span))
+		} else if lookahead.peek(keyword::unbounded) {
+			content.parse::<keyword::unbounded>()?;
+
+			Ok(Self::Unbounded(attr_span))
 		} else {
 			Err(lookahead.error())
 		}
+	}
+}
+
+struct PalletStorageAttrInfo {
+	getter: Option<syn::Ident>,
+	rename_as: Option<syn::LitStr>,
+	unbounded: bool,
+}
+
+impl PalletStorageAttrInfo {
+	fn from_attrs(attrs: Vec<PalletStorageAttr>) -> syn::Result<Self> {
+		let mut getter = None;
+		let mut rename_as = None;
+		let mut unbounded = None;
+		for attr in attrs {
+			match attr {
+				PalletStorageAttr::Getter(ident, ..) if getter.is_none() => getter = Some(ident),
+				PalletStorageAttr::StorageName(name, ..) if rename_as.is_none() =>
+					rename_as = Some(name),
+				PalletStorageAttr::Unbounded(..) if unbounded.is_none() => unbounded = Some(()),
+				attr =>
+					return Err(syn::Error::new(
+						attr.attr_span(),
+						"Invalid attribute: Duplicate attribute",
+					)),
+			}
+		}
+
+		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded: unbounded.is_some() })
 	}
 }
 
@@ -129,6 +164,8 @@ pub struct StorageDef {
 	/// generics of the storage.
 	/// If generics are not named, this is none.
 	pub named_generics: Option<StorageGenerics>,
+	/// If the value stored in this storage is unbounded.
+	pub unbounded: bool,
 }
 
 /// The parsed generic from the
@@ -583,25 +620,8 @@ impl StorageDef {
 		};
 
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
-		let (mut getters, mut names) = attrs
-			.into_iter()
-			.partition::<Vec<_>, _>(|attr| matches!(attr, PalletStorageAttr::Getter(..)));
-		if getters.len() > 1 {
-			let msg = "Invalid pallet::storage, multiple argument pallet::getter found";
-			return Err(syn::Error::new(getters[1].attr_span(), msg))
-		}
-		if names.len() > 1 {
-			let msg = "Invalid pallet::storage, multiple argument pallet::storage_prefix found";
-			return Err(syn::Error::new(names[1].attr_span(), msg))
-		}
-		let getter = getters.pop().map(|attr| match attr {
-			PalletStorageAttr::Getter(ident, _) => ident,
-			_ => unreachable!(),
-		});
-		let rename_as = names.pop().map(|attr| match attr {
-			PalletStorageAttr::StorageName(lit, _) => lit,
-			_ => unreachable!(),
-		});
+		let PalletStorageAttrInfo { getter, rename_as, unbounded } =
+			PalletStorageAttrInfo::from_attrs(attrs)?;
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
@@ -658,6 +678,7 @@ impl StorageDef {
 			where_clause,
 			cfg_attrs,
 			named_generics,
+			unbounded,
 		})
 	}
 }

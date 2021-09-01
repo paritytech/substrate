@@ -322,6 +322,10 @@ pub mod pallet {
 	pub type ConditionalNMap<T> =
 		StorageNMap<_, (storage::Key<Blake2_128Concat, u8>, storage::Key<Twox64Concat, u16>), u32>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type Unbounded<T> = StorageValue<Value = Vec<u8>>;
+
 	#[pallet::genesis_config]
 	#[derive(Default)]
 	pub struct GenesisConfig {
@@ -889,6 +893,10 @@ fn storage_expand() {
 			pallet::ConditionalDoubleMap::<Runtime>::insert(1, 2, 3);
 			pallet::ConditionalNMap::<Runtime>::insert((1, 2), 3);
 		}
+
+		pallet::Unbounded::<Runtime>::put(vec![1, 2]);
+		let k = [twox_128(b"Example"), twox_128(b"Unbounded")].concat();
+		assert_eq!(unhashed::get::<Vec<u8>>(&k), Some(vec![1, 2]));
 	})
 }
 
@@ -1123,6 +1131,13 @@ fn metadata() {
 						]),
 						value: DecodeDifferent::Decoded("u32".to_string()),
 					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("Unbounded".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("Vec<u8>".to_string())),
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
@@ -1377,6 +1392,13 @@ fn test_storage_info() {
 					max_size: Some(7 + 16 + 8),
 				}
 			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Unbounded".to_vec(),
+				prefix: prefix(b"Example", b"Unbounded").to_vec(),
+				max_values: Some(1),
+				max_size: None,
+			}
 		],
 	);
 
