@@ -196,7 +196,7 @@ impl frame_system::Config for Runtime {
 impl pallet_randomness_collective_flip::Config for Runtime {}
 
 parameter_types! {
-	pub const MaxAuthorities: u32 = 10;
+	pub const MaxAuthorities: u32 = 32;
 }
 
 impl pallet_aura::Config for Runtime {
