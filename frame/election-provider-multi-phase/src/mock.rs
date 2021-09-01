@@ -381,7 +381,7 @@ impl crate::Config for Runtime {
 	type Fallback = Fallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
-	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, RandomBalancing>;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
