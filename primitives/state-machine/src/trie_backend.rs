@@ -348,10 +348,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 		HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
-	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
-		HashDB::emplace_ref(self.overlay, key, prefix, value)
-	}
-
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
 		HashDB::remove(self.overlay, key, prefix)
 	}

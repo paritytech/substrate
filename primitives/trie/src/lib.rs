@@ -484,11 +484,6 @@ where
 		self.0.emplace(key, (&derived_prefix.0, derived_prefix.1), value)
 	}
 
-	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.emplace_ref(key, (&derived_prefix.0, derived_prefix.1), value)
-	}
-
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.remove(key, (&derived_prefix.0, derived_prefix.1))
