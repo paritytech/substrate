@@ -22,7 +22,8 @@ use std::{fmt::Display, marker::PhantomData, sync::Arc};
 use codec::{self, Codec, Decode, Encode};
 use futures::{future, FutureExt};
 use jsonrpsee::{
-	types::{error::CallError, Error as JsonRpseeError},
+	proc_macros::rpc,
+	types::{async_trait, error::CallError, Error as JsonRpseeError, JsonRpcResult},
 	RpcModule,
 };
 use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
@@ -36,11 +37,35 @@ use sp_runtime::{generic::BlockId, traits};
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// System RPC methods.
+#[rpc(client, server, namespace = "system")]
+pub trait SystemApi<BlockHash, AccountId, Index> {
+	/// Returns the next valid index (aka nonce) for given account.
+	///
+	/// This method takes into consideration all pending transactions
+	/// currently in the pool and if no transactions are found in the pool
+	/// it fallbacks to query the index from the runtime (aka. state nonce).
+	#[method(name = "system_accountNextIndex", aliases = "system_nextIndex")]
+	async fn nonce(&self, account: AccountId) -> JsonRpcResult<Index>;
+
+	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
+	#[method(name = "system_dryRun", aliases = "system_dryRunAt")]
+	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> JsonRpcResult<Bytes>;
+}
+
+/// System RPC methods.
 pub struct SystemRpc<BlockHash, AccountId, Index> {
 	backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>,
 }
 
-impl<BlockHash, AccountId, Index> SystemRpc<BlockHash, AccountId, Index>
+impl<BlockHash, AccountId, Index> SystemRpc<BlockHash, AccountId, Index> {
+	pub fn new(backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>) -> Self {
+		Self { backend }
+	}
+}
+
+#[async_trait]
+impl<BlockHash, AccountId, Index> SystemApiServer<BlockHash, AccountId, Index>
+	for SystemRpc<BlockHash, AccountId, Index>
 where
 	AccountId: Clone + Display + Codec + traits::MaybeSerializeDeserialize + Send + 'static,
 	BlockHash: Send + traits::MaybeSerializeDeserialize + 'static,
@@ -53,54 +78,17 @@ where
 		+ traits::MaybeSerialize
 		+ 'static,
 {
-	pub fn new(backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>) -> Self {
-		Self { backend }
+	async fn nonce(&self, account: AccountId) -> JsonRpcResult<Index> {
+		self.backend.nonce(account).await
 	}
 
-	/// Convert this [`SystemRpc`] to an [`RpcModule`].
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
-
-		// Returns the next valid index (aka nonce) for given account.
-		//
-		// This method takes into consideration all pending transactions
-		// currently in the pool and if no transactions are found in the pool
-		// it fallbacks to query the index from the runtime (aka. state nonce).
-		module.register_async_method("system_accountNextIndex", |params, system| {
-			let account = match params.one() {
-				Ok(a) => a,
-				Err(e) => return Box::pin(future::err(e.into())),
-			};
-
-			async move { system.backend.nonce(account).await }.boxed()
-		})?;
-
-		// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
-		module.register_async_method("system_dryRun", |params, system| {
-			let mut seq = params.sequence();
-
-			let extrinsic = match seq.next() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e.into())),
-			};
-
-			let at = match seq.optional_next() {
-				Ok(at) => at,
-				Err(e) => return Box::pin(future::err(e.into())),
-			};
-
-			async move { system.backend.dry_run(extrinsic, at).await }.boxed()
-		})?;
-
-		module.register_alias("account_nextIndex", "system_accountNextIndex")?;
-		module.register_alias("system_dryRunAt", "system_dryRun")?;
-
-		Ok(module)
+	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> JsonRpcResult<Bytes> {
+		self.backend.dry_run(extrinsic, at).await
 	}
 }
 
 /// Blockchain backend API
-#[async_trait::async_trait]
+#[async_trait]
 pub trait SystemRpcBackend<BlockHash, AccountId, Index>: Send + Sync + 'static
 where
 	AccountId: Clone + Display + Codec,
@@ -197,7 +185,7 @@ where
 	}
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl<Client, Pool, Fetcher, Block, AccountId, Index>
 	SystemRpcBackend<<Block as traits::Block>::Hash, AccountId, Index>
 	for SystemRpcBackendLight<Client, Pool, Fetcher, Block>
