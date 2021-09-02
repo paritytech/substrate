@@ -1796,7 +1796,8 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.14.4"
-source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info-1.0.0#abcf579a1c3738eaa300573be579f7a796bbb98b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8ac3ff5224ef91f3c97e03eb1de2db82743427e91aaa5ac635f454f0b164f5a"
 dependencies = [
  "either",
  "futures 0.3.16",

@@ -263,6 +263,3 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-finality-grandpa = { git = "https://github.com/paritytech/finality-grandpa", branch = "aj-scale-info-1.0.0" }
