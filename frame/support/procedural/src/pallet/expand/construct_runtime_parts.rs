@@ -18,11 +18,11 @@
 use crate::{pallet::Def, COUNTER};
 use syn::spanned::Spanned;
 
-/// Generate the `construct_runtime_args` macro.
-pub fn expand_construct_runtime_args(def: &mut Def) -> proc_macro2::TokenStream {
+/// Generate the `construct_runtime_parts` macro.
+pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
-	let construct_runtime_args_unique_id =
-		syn::Ident::new(&format!("__construct_runtime_args_{}", count), def.item.span());
+	let construct_runtime_parts_unique_id =
+		syn::Ident::new(&format!("__construct_runtime_parts_{}", count), def.item.span());
 
 	let call_part = def.call.as_ref().map(|_| quote::quote!(Call,));
 
@@ -49,7 +49,7 @@ pub fn expand_construct_runtime_args(def: &mut Def) -> proc_macro2::TokenStream 
 		def.validate_unsigned.as_ref().map(|_| quote::quote!(ValidateUnsigned,));
 
 	quote::quote!(
-		// Export the construct runtime args macro with a unique name to avoid conflict.
+		// Export the construct runtime parts macro with a unique name to avoid conflict.
 		//
 		// macro args are:
 		// ```
@@ -62,7 +62,7 @@ pub fn expand_construct_runtime_args(def: &mut Def) -> proc_macro2::TokenStream 
 		// `::{Part1, Part2, ..}`.
 		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #construct_runtime_args_unique_id {
+		macro_rules! #construct_runtime_parts_unique_id {
 			(
 				{ $frame_support:tt }
 				{ $( $pattern:tt )* }
@@ -85,6 +85,6 @@ pub fn expand_construct_runtime_args(def: &mut Def) -> proc_macro2::TokenStream 
 		///
 		/// This macro is expected to be called by `construct_runtime` when the pallet parts are
 		/// not explicitly provided.
-		pub use #construct_runtime_args_unique_id as construct_runtime_args;
+		pub use #construct_runtime_parts_unique_id as construct_runtime_parts;
 	)
 }
