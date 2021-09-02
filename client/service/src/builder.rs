@@ -47,8 +47,8 @@ use sc_network::{
 	NetworkService,
 };
 use sc_rpc::{
-	author::AuthorApiServer, chain::ChainApiServer, system::SystemApiServer, DenyUnsafe,
-	SubscriptionTaskExecutor,
+	author::AuthorApiServer, chain::ChainApiServer, state::StateApiServer, system::SystemApiServer,
+	DenyUnsafe, SubscriptionTaskExecutor,
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
@@ -704,43 +704,40 @@ where
 
 	let mut rpc_api = RpcModule::new(());
 
-	let (chain, state, child_state) =
-		if let (Some(remote_blockchain), Some(on_demand)) = (remote_blockchain, on_demand) {
-			// Light clients
-			let chain = sc_rpc::chain::new_light(
-				client.clone(),
-				task_executor.clone(),
-				remote_blockchain.clone(),
-				on_demand.clone(),
-			)
-			.into_rpc();
-			let (state, child_state) = sc_rpc::state::new_light(
-				client.clone(),
-				task_executor.clone(),
-				remote_blockchain.clone(),
-				on_demand,
-				deny_unsafe,
-			);
-			(
-				chain,
-				state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
-				child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
-			)
-		} else {
-			// Full nodes
-			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
+	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+		(remote_blockchain, on_demand)
+	{
+		// Light clients
+		let chain = sc_rpc::chain::new_light(
+			client.clone(),
+			task_executor.clone(),
+			remote_blockchain.clone(),
+			on_demand.clone(),
+		)
+		.into_rpc();
+		let (state, child_state) = sc_rpc::state::new_light(
+			client.clone(),
+			task_executor.clone(),
+			remote_blockchain.clone(),
+			on_demand,
+			deny_unsafe,
+		);
+		(chain, state.into_rpc(), child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF))
+	} else {
+		// Full nodes
+		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
 
-			let (state, child_state) = sc_rpc::state::new_full(
-				client.clone(),
-				task_executor.clone(),
-				deny_unsafe,
-				config.rpc_max_payload,
-			);
-			let state = state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
-			let child_state = child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			task_executor.clone(),
+			deny_unsafe,
+			config.rpc_max_payload,
+		);
+		let state = state.into_rpc();
+		let child_state = child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
 
-			(chain, state, child_state)
-		};
+		(chain, state, child_state)
+	};
 
 	let author = sc_rpc::author::Author::new(
 		client.clone(),

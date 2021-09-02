@@ -50,7 +50,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "allHead",
 		aliases = "chain_subscribeAllHeads",
-		unsubscribe_aliases = "unsubscribeAllHeads",
+		unsubscribe_aliases = "chain_unsubscribeAllHeads",
 		item = Header
 	)]
 	fn subscribe_all_heads(&self);
@@ -59,7 +59,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "newHead",
 		aliases = "subscribe_newHead, chain_subscribeNewHead, chain_subscribeNewHeads",
-		unsubscribe_aliases = "unsubscribe_newHead, chain_unsubscribeNewHead, chain_unsubscribeNewHeads",
+		unsubscribe_aliases = "chain_unsubscribeNewHead, chain_unsubscribeNewHeads",
 		item = Header
 	)]
 	fn subscribe_new_heads(&self);
