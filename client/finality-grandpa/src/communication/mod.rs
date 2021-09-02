@@ -59,7 +59,7 @@ use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
-use sp_utils::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 
 pub mod gossip;
 mod periodic;

@@ -82,7 +82,7 @@ use sp_state_machine::{
 	ChangesTrieConfigurationRange, ChangesTrieRootsStorage, ChangesTrieStorage, DBValue,
 };
 use sp_trie::StorageProof;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	marker::PhantomData,

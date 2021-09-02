@@ -30,7 +30,7 @@ use sp_runtime::{
 	traits::{SaturatedConversion, Zero},
 	transaction_validity::TransactionValidityError,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use futures::prelude::*;
 use std::time::Duration;

@@ -23,7 +23,7 @@ use futures::{channel::oneshot, FutureExt};
 use sc_rpc_api::{DenyUnsafe, Receiver};
 use sc_tracing::logging;
 use sp_runtime::traits::{self, Header as HeaderT};
-use sp_utils::mpsc::TracingUnboundedSender;
+use sc_utils::mpsc::TracingUnboundedSender;
 
 pub use self::{
 	gen_client::Client as SystemClient,

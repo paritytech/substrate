@@ -45,7 +45,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
-use sp_utils::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 
 pub use self::{
 	builder::{

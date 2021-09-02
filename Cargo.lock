@@ -7362,6 +7362,7 @@ dependencies = [
  "sc-service",
  "sc-telemetry",
  "sc-tracing",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-blockchain",
@@ -7370,7 +7371,6 @@ dependencies = [
  "sp-keystore",
  "sp-panic-handler",
  "sp-runtime",
- "sp-utils",
  "sp-version",
  "structopt",
  "tempfile",
@@ -7391,6 +7391,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "sc-executor",
  "sc-transaction-pool-api",
+ "sc-utils",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -7403,7 +7404,6 @@ dependencies = [
  "sp-storage",
  "sp-test-primitives",
  "sp-trie",
- "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "thiserror",
@@ -7448,6 +7448,7 @@ dependencies = [
  "log 0.4.14",
  "parking_lot 0.11.1",
  "sc-client-api",
+ "sc-utils",
  "serde",
  "sp-api",
  "sp-blockchain",
@@ -7456,7 +7457,6 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-test-primitives",
- "sp-utils",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -7802,6 +7802,7 @@ dependencies = [
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
+ "sc-utils",
  "serde_json",
  "sp-api",
  "sp-application-crypto",
@@ -7814,7 +7815,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-tracing",
- "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
@@ -7931,6 +7931,7 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-peerset",
+ "sc-utils",
  "serde",
  "serde_json",
  "smallvec 1.6.1",
@@ -7942,7 +7943,6 @@ dependencies = [
  "sp-runtime",
  "sp-test-primitives",
  "sp-tracing",
- "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
@@ -8021,13 +8021,13 @@ dependencies = [
  "sc-network",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "sp-api",
  "sp-consensus",
  "sp-core",
  "sp-offchain",
  "sp-runtime",
  "sp-tracing",
- "sp-utils",
  "substrate-test-runtime-client",
  "threadpool",
  "tokio",
@@ -8041,8 +8041,8 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "rand 0.7.3",
+ "sc-utils",
  "serde_json",
- "sp-utils",
  "wasm-timer",
 ]
 
@@ -8075,6 +8075,7 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde_json",
  "sp-api",
  "sp-blockchain",
@@ -8086,7 +8087,6 @@ dependencies = [
  "sp-rpc",
  "sp-runtime",
  "sp-session",
- "sp-utils",
  "sp-version",
  "substrate-test-runtime-client",
 ]
@@ -8179,6 +8179,7 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-api",
@@ -8198,7 +8199,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
  "sp-trie",
- "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
@@ -8355,6 +8355,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde",
  "sp-api",
  "sp-blockchain",
@@ -8363,7 +8364,6 @@ dependencies = [
  "sp-runtime",
  "sp-tracing",
  "sp-transaction-pool",
- "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
@@ -8382,6 +8382,16 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "thiserror",
+]
+
+[[package]]
+name = "sc-utils"
+version = "4.0.0-dev"
+dependencies = [
+ "futures 0.3.16",
+ "futures-timer 3.0.2",
+ "lazy_static",
+ "prometheus",
 ]
 
 [[package]]
@@ -9527,16 +9537,6 @@ dependencies = [
  "trie-db",
  "trie-root",
  "trie-standardmap",
-]
-
-[[package]]
-name = "sp-utils"
-version = "4.0.0-dev"
-dependencies = [
- "futures 0.3.16",
- "futures-timer 3.0.2",
- "lazy_static",
- "prometheus",
 ]
 
 [[package]]

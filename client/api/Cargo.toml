@@ -30,7 +30,7 @@ sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }

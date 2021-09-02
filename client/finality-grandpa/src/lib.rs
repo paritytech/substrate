@@ -78,7 +78,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, DigestFor, NumberFor, Zero},
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 pub use finality_grandpa::BlockNumberOps;
 use finality_grandpa::{voter, voter_set::VoterSet, Error as GrandpaError};

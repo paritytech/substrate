@@ -37,7 +37,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
-use sp_utils::mpsc::TracingUnboundedSender;
+use sc_utils::mpsc::TracingUnboundedSender;
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},

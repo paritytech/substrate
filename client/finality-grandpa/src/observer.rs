@@ -34,7 +34,7 @@ use sp_consensus::SelectChain;
 use sp_finality_grandpa::AuthorityId;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use sp_utils::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 
 use crate::{
 	authorities::SharedAuthoritySet,
@@ -404,7 +404,7 @@ mod tests {
 	use assert_matches::assert_matches;
 	use sc_network::PeerId;
 	use sp_blockchain::HeaderBackend as _;
-	use sp_utils::mpsc::tracing_unbounded;
+	use sc_utils::mpsc::tracing_unbounded;
 	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 
 	use futures::executor;

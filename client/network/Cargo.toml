@@ -55,7 +55,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
 thiserror = "1"
 unsigned-varint = { version = "0.6.0", features = [
