@@ -1197,7 +1197,7 @@ construct_runtime!(
 		Indices: pallet_indices,
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
-		ElectionProviderMultiPhase: pallet_election_provider_multi_phase exclude_parts { Origin },
+		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
 		Staking: pallet_staking,
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Democracy: pallet_democracy,
