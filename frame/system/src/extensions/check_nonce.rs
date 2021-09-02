@@ -145,20 +145,20 @@ mod tests {
 			let len = 0_usize;
 			// stale
 			assert_noop!(
-				CheckNonce::<Test>(0).validate(&1, CALL, &info, len),
+				CheckNonce::<Test, 0>(0).validate(&1, CALL, &info, len),
 				InvalidTransaction::Stale
 			);
 			assert_noop!(
-				CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len),
+				CheckNonce::<Test, 0>(0).pre_dispatch(&1, CALL, &info, len),
 				InvalidTransaction::Stale
 			);
 			// correct
-			assert_ok!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len));
-			assert_ok!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len));
+			assert_ok!(CheckNonce::<Test, 0>(1).validate(&1, CALL, &info, len));
+			assert_ok!(CheckNonce::<Test, 0>(1).pre_dispatch(&1, CALL, &info, len));
 			// future
-			assert_ok!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len));
+			assert_ok!(CheckNonce::<Test, 0>(5).validate(&1, CALL, &info, len));
 			assert_noop!(
-				CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len),
+				CheckNonce::<Test, 0>(5).pre_dispatch(&1, CALL, &info, len),
 				InvalidTransaction::Future
 			);
 		})
@@ -166,6 +166,30 @@ mod tests {
 
 	#[test]
 	fn should_not_validate_very_distant_transactions() {
-		assert_eq!(true, false);
+		const MAX_FUTURE_NONCE: u32 = 256;
+
+		new_test_ext().execute_with(|| {
+			crate::Account::<Test>::insert(
+				1,
+				crate::AccountInfo {
+					nonce: 0,
+					consumers: 0,
+					providers: 0,
+					sufficients: 0,
+					data: 0,
+				},
+			);
+			let info = DispatchInfo::default();
+			let len = 0_usize;
+			// unknown
+			assert_noop!(
+				CheckNonce::<Test, MAX_FUTURE_NONCE>(MAX_FUTURE_NONCE as u64 + 1).validate(&1, CALL, &info, len),
+				UnknownTransaction::CannotLookup
+			);
+			// okay
+			assert_ok!(
+				CheckNonce::<Test, MAX_FUTURE_NONCE>(MAX_FUTURE_NONCE as u64).validate(&1, CALL, &info, len)
+			);
+		});
 	}
 }
