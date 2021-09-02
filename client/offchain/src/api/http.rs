@@ -34,8 +34,8 @@ use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
 use log::error;
-use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
 use std::{
 	convert::TryFrom,
 	fmt,

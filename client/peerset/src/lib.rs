@@ -36,8 +36,8 @@ mod peersstate;
 
 use futures::prelude::*;
 use log::{debug, error, trace};
-use serde_json::json;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use serde_json::json;
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	pin::Pin,

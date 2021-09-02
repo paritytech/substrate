@@ -21,12 +21,12 @@ use futures::{
 use futures_timer::Delay;
 use log::{debug, trace};
 use prometheus_endpoint::Registry;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification, Justifications,
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{marker::PhantomData, pin::Pin, time::Duration};
 
 use crate::{
