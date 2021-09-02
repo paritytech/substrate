@@ -1241,7 +1241,8 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	}
 }
 
-/// A simple voter list implementation that does not require any additional pallets.
+/// A simple voter list implementation that does not require any additional pallets. Note, this
+/// does not provided nominators in sorted ordered.
 pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();

@@ -26,15 +26,19 @@ pub mod v8 {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-		ensure!(StorageVersion::<T>::get() == crate::Releases::V7_0_0, "must upgrade linearly");
-		ensure!(T::SortedListProvider::iter().count() == 0, "voter list already exists");
+		frame_support::ensure!(
+			StorageVersion::<T>::get() == crate::Releases::V7_0_0,
+			"must upgrade linearly"
+		);
+		frame_support::ensure!(
+			T::SortedListProvider::iter().count() == 0,
+			"voter list already exists"
+		);
 		crate::log!(info, "👜 staking bags-list migration passes PRE migrate checks ✅",);
 		Ok(())
 	}
 
 	/// Migration to sorted [`SortedListProvider`].
-	/// NOTE: this migration makes the assumption that pallet-bags-list is used as the
-	/// [`SortedListProvider`].
 	pub fn migrate<T: Config>() -> Weight {
 		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
 			crate::log!(info, "migrating staking to Releases::V8_0_0");
@@ -59,9 +63,11 @@ pub mod v8 {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_migrate<T: Config>() -> Result<(), &'static str> {
-		T::SortedListProvider::sanity_check();
+	pub fn post_migrate<T: Config>() -> Result<(), &'static str> {
+		T::SortedListProvider::sanity_check()
+			.map_err(|_| "SortedListProvider is not in a sane state.")?;
 		crate::log!(info, "👜 staking bags-list migration passes POST migrate checks ✅",);
+		Ok(())
 	}
 }
 

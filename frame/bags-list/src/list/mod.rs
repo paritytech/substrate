@@ -643,7 +643,8 @@ impl<T: Config> Node<T> {
 	}
 
 	/// Get the underlying voter.
-	pub(crate) fn id(&self) -> &T::AccountId {
+	// TODO: this is public for remote-ext test
+	pub fn id(&self) -> &T::AccountId {
 		&self.id
 	}
 }

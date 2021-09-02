@@ -141,7 +141,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
-		/// Something that can provide a sorted list of voters is a somewhat sorted way.
+		/// Something that can provide a sorted list of voters is a somewhat sorted way. The original
+		/// use case for this was designed with [`pallet-bags-list::Pallet`] in mind. If the
+		/// bags-list is not desired 
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -631,9 +633,6 @@ pub mod pallet {
 			if StorageVersion::<T>::get() == Releases::V6_0_0 {
 				migrations::v7::migrate::<T>()
 			} else if StorageVersion::<T>::get() == Releases::V7_0_0 {
-				// NOTE: this migration assumes that pallet-bags-list is being used as the
-				// [`SortedListProvider`]. If not using pallet-bags-list the runtime author should
-				// carefully consider if this migration is necessary.
 				migrations::v8::migrate::<T>()
 			} else {
 				T::DbWeight::get().reads(1)
@@ -652,7 +651,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_migrate() -> Result<(), &'static str> {
+		fn post_upgrade() -> Result<(), &'static str> {
 			if StorageVersion::<T>::get() == Releases::V7_0_0 {
 				migrations::v8::post_migrate::<T>()
 			} else {
