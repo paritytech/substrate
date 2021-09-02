@@ -56,7 +56,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListNodes (r:4 w:4)
 	// Storage: BagsList ListBags (r:1 w:1)
 	fn rebag() -> Weight {
-		(76_182_000 as Weight)
+		(74_954_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -69,7 +69,7 @@ impl WeightInfo for () {
 	// Storage: BagsList ListNodes (r:4 w:4)
 	// Storage: BagsList ListBags (r:1 w:1)
 	fn rebag() -> Weight {
-		(76_182_000 as Weight)
+		(74_954_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
