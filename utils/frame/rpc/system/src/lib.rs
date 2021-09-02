@@ -20,11 +20,9 @@
 use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
 use codec::{self, Codec, Decode, Encode};
-use futures::{future, FutureExt};
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, error::CallError, Error as JsonRpseeError, JsonRpcResult},
-	RpcModule,
 };
 use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;

@@ -36,7 +36,7 @@ use std::sync::Arc;
 use jsonrpsee::RpcModule;
 use pallet_contracts_rpc::ContractsRpc;
 use pallet_mmr_rpc::MmrRpc;
-use pallet_transaction_payment_rpc::TransactionPaymentRpc;
+use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
 use sc_consensus_babe_rpc::BabeRpc;
 use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_sync_state_rpc::SyncStateRpc;
@@ -203,9 +203,7 @@ pub fn new_partial(
 		.expect("TODO: error handling")
 		.into_rpc_module()
 		.expect("TODO: error handling");
-		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone())
-			.into_rpc_module()
-			.expect("TODO: error handling");
+		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc();
 		let system_rpc_backend =
 			SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
 		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc();
