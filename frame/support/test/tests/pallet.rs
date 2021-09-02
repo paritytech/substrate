@@ -24,6 +24,7 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
+use scale_info::{meta_type, TypeInfo};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
@@ -80,14 +81,14 @@ impl From<SomeType7> for u64 {
 }
 
 pub trait SomeAssociation1 {
-	type _1: Parameter + codec::MaxEncodedLen + scale_info::TypeInfo;
+	type _1: Parameter + codec::MaxEncodedLen + TypeInfo;
 }
 impl SomeAssociation1 for u64 {
 	type _1 = u64;
 }
 
 pub trait SomeAssociation2 {
-	type _2: Parameter + codec::MaxEncodedLen + scale_info::TypeInfo;
+	type _2: Parameter + codec::MaxEncodedLen + TypeInfo;
 }
 impl SomeAssociation2 for u64 {
 	type _2 = u64;
@@ -124,7 +125,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam3: Get<<Self::AccountId as SomeAssociation1>::_1>;
 
-		type Balance: Parameter + Default + scale_info::TypeInfo;
+		type Balance: Parameter + Default + TypeInfo;
 
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
@@ -340,13 +341,7 @@ pub mod pallet {
 
 	#[pallet::origin]
 	#[derive(
-		EqNoBound,
-		RuntimeDebugNoBound,
-		CloneNoBound,
-		PartialEqNoBound,
-		Encode,
-		Decode,
-		scale_info::TypeInfo,
+		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, TypeInfo,
 	)]
 	pub struct Origin<T>(PhantomData<T>);
 
@@ -990,47 +985,47 @@ fn metadata() {
 			index: 0,
 			name: "System",
 			storage: None,
-			calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
-			event: Some(scale_info::meta_type::<frame_system::Event<Runtime>>().into()),
+			calls: Some(meta_type::<frame_system::Call<Runtime>>().into()),
+			event: Some(meta_type::<frame_system::Event<Runtime>>().into()),
 			constants: vec![
 				PalletConstantMetadata {
 					name: "BlockWeights",
-					ty: scale_info::meta_type::<frame_system::limits::BlockWeights>(),
+					ty: meta_type::<frame_system::limits::BlockWeights>(),
 					value: vec![],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "BlockLength",
-					ty: scale_info::meta_type::<frame_system::limits::BlockLength>(),
+					ty: meta_type::<frame_system::limits::BlockLength>(),
 					value: vec![],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "BlockHashCount",
-					ty: scale_info::meta_type::<u32>(),
+					ty: meta_type::<u32>(),
 					value: vec![],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "DbWeight",
-					ty: scale_info::meta_type::<frame_support::weights::RuntimeDbWeight>(),
+					ty: meta_type::<frame_support::weights::RuntimeDbWeight>(),
 					value: vec![],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "Version",
-					ty: scale_info::meta_type::<sp_version::RuntimeVersion>(),
+					ty: meta_type::<sp_version::RuntimeVersion>(),
 					value: vec![],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "SS58Prefix",
-					ty: scale_info::meta_type::<u16>(),
+					ty: meta_type::<u16>(),
 					value: vec![],
 					docs: vec![],
 				},
 			],
-			error: Some(scale_info::meta_type::<frame_system::Error<Runtime>>().into()),
+			error: Some(meta_type::<frame_system::Error<Runtime>>().into()),
 		},
 		PalletMetadata {
 			index: 1,
@@ -1041,21 +1036,21 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "ValueWhereClause",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
 						default: vec![0],
 						docs: vec![],
 					},
 					StorageEntryMetadata {
 						name: "Value",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0],
 						docs: vec![],
 					},
 					StorageEntryMetadata {
 						name: "Value2",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
 						default: vec![0],
 						docs: vec![],
 					},
@@ -1063,8 +1058,8 @@ fn metadata() {
 						name: "Map",
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u8>(),
-							value: scale_info::meta_type::<u16>(),
+							key: meta_type::<u8>(),
+							value: meta_type::<u16>(),
 							hashers: vec![StorageHasher::Blake2_128Concat],
 						},
 						default: vec![4, 0],
@@ -1074,8 +1069,8 @@ fn metadata() {
 						name: "Map2",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u16>(),
-							value: scale_info::meta_type::<u32>(),
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
 							hashers: vec![StorageHasher::Twox64Concat],
 						},
 						default: vec![0],
@@ -1085,12 +1080,12 @@ fn metadata() {
 						name: "DoubleMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							value: scale_info::meta_type::<u32>(),
+							value: meta_type::<u32>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
 							],
-							key: scale_info::meta_type::<(u8, u16)>(),
+							key: meta_type::<(u8, u16)>(),
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1099,8 +1094,8 @@ fn metadata() {
 						name: "DoubleMap2",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							value: scale_info::meta_type::<u64>(),
-							key: scale_info::meta_type::<(u16, u32)>(),
+							value: meta_type::<u64>(),
+							key: meta_type::<(u16, u32)>(),
 							hashers: vec![
 								StorageHasher::Twox64Concat,
 								StorageHasher::Blake2_128Concat,
@@ -1113,9 +1108,9 @@ fn metadata() {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u8>(),
+							key: meta_type::<u8>(),
 							hashers: vec![StorageHasher::Blake2_128Concat],
-							value: scale_info::meta_type::<u32>(),
+							value: meta_type::<u32>(),
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1124,12 +1119,12 @@ fn metadata() {
 						name: "NMap2",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<(u16, u32)>(),
+							key: meta_type::<(u16, u32)>(),
 							hashers: vec![
 								StorageHasher::Twox64Concat,
 								StorageHasher::Blake2_128Concat,
 							],
-							value: scale_info::meta_type::<u64>(),
+							value: meta_type::<u64>(),
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1138,7 +1133,7 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "ConditionalValue",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0],
 						docs: vec![],
 					},
@@ -1147,8 +1142,8 @@ fn metadata() {
 						name: "ConditionalMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u16>(),
-							value: scale_info::meta_type::<u32>(),
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
 							hashers: vec![StorageHasher::Twox64Concat],
 						},
 						default: vec![0],
@@ -1159,8 +1154,8 @@ fn metadata() {
 						name: "ConditionalDoubleMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							value: scale_info::meta_type::<u32>(),
-							key: scale_info::meta_type::<(u8, u16)>(),
+							value: meta_type::<u32>(),
+							key: meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
@@ -1174,55 +1169,53 @@ fn metadata() {
 						name: "ConditionalNMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<(u8, u16)>(),
+							key: meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
 							],
-							value: scale_info::meta_type::<u32>(),
+							value: meta_type::<u32>(),
 						},
 						default: vec![0],
 						docs: vec![],
 					},
 				],
 			}),
-			calls: Some(scale_info::meta_type::<pallet::Call<Runtime>>().into()),
-			event: Some(scale_info::meta_type::<pallet::Event<Runtime>>().into()),
+			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
+			event: Some(meta_type::<pallet::Event<Runtime>>().into()),
 			constants: vec![
 				PalletConstantMetadata {
 					name: "MyGetParam",
-					ty: scale_info::meta_type::<u32>(),
+					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
 					docs: vec![" Some comment", " Some comment"],
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
-					ty: scale_info::meta_type::<u32>(),
+					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
 					docs: vec![" Some comment", " Some comment"],
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
-					ty: scale_info::meta_type::<u64>(),
+					ty: meta_type::<u64>(),
 					value: vec![12, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "some_extra",
-					ty: scale_info::meta_type::<u64>(),
+					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![" Some doc", " Some doc"],
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
-					ty: scale_info::meta_type::<u64>(),
+					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![" Some doc"],
 				},
 			],
-			error: Some(PalletErrorMetadata {
-				ty: scale_info::meta_type::<pallet::Error<Runtime>>(),
-			}),
+			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
 		},
 		PalletMetadata {
 			index: 1,
@@ -1233,21 +1226,21 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "ValueWhereClause",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
 						default: vec![0],
 						docs: vec![],
 					},
 					StorageEntryMetadata {
 						name: "Value",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0],
 						docs: vec![],
 					},
 					StorageEntryMetadata {
 						name: "Value2",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
 						default: vec![0],
 						docs: vec![],
 					},
@@ -1255,8 +1248,8 @@ fn metadata() {
 						name: "Map",
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u8>(),
-							value: scale_info::meta_type::<u16>(),
+							key: meta_type::<u8>(),
+							value: meta_type::<u16>(),
 							hashers: vec![StorageHasher::Blake2_128Concat],
 						},
 						default: vec![4, 0],
@@ -1266,8 +1259,8 @@ fn metadata() {
 						name: "Map2",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u16>(),
-							value: scale_info::meta_type::<u32>(),
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
 							hashers: vec![StorageHasher::Twox64Concat],
 						},
 						default: vec![0],
@@ -1277,8 +1270,8 @@ fn metadata() {
 						name: "DoubleMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							value: scale_info::meta_type::<u32>(),
-							key: scale_info::meta_type::<(u8, u16)>(),
+							value: meta_type::<u32>(),
+							key: meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
@@ -1291,8 +1284,8 @@ fn metadata() {
 						name: "DoubleMap2",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							value: scale_info::meta_type::<u64>(),
-							key: scale_info::meta_type::<(u16, u32)>(),
+							value: meta_type::<u64>(),
+							key: meta_type::<(u16, u32)>(),
 							hashers: vec![
 								StorageHasher::Twox64Concat,
 								StorageHasher::Blake2_128Concat,
@@ -1305,9 +1298,9 @@ fn metadata() {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u8>(),
+							key: meta_type::<u8>(),
 							hashers: vec![StorageHasher::Blake2_128Concat],
-							value: scale_info::meta_type::<u32>(),
+							value: meta_type::<u32>(),
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1316,12 +1309,12 @@ fn metadata() {
 						name: "NMap2",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<(u16, u32)>(),
+							key: meta_type::<(u16, u32)>(),
 							hashers: vec![
 								StorageHasher::Twox64Concat,
 								StorageHasher::Blake2_128Concat,
 							],
-							value: scale_info::meta_type::<u64>(),
+							value: meta_type::<u64>(),
 						},
 						default: vec![0],
 						docs: vec![],
@@ -1330,7 +1323,7 @@ fn metadata() {
 					StorageEntryMetadata {
 						name: "ConditionalValue",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0],
 						docs: vec![],
 					},
@@ -1339,8 +1332,8 @@ fn metadata() {
 						name: "ConditionalMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<u16>(),
-							value: scale_info::meta_type::<u32>(),
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
 							hashers: vec![StorageHasher::Twox64Concat],
 						},
 						default: vec![0],
@@ -1351,8 +1344,8 @@ fn metadata() {
 						name: "ConditionalDoubleMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							value: scale_info::meta_type::<u32>(),
-							key: scale_info::meta_type::<(u8, u16)>(),
+							value: meta_type::<u32>(),
+							key: meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
@@ -1366,55 +1359,53 @@ fn metadata() {
 						name: "ConditionalNMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							key: scale_info::meta_type::<(u8, u16)>(),
+							key: meta_type::<(u8, u16)>(),
 							hashers: vec![
 								StorageHasher::Blake2_128Concat,
 								StorageHasher::Twox64Concat,
 							],
-							value: scale_info::meta_type::<u32>(),
+							value: meta_type::<u32>(),
 						},
 						default: vec![0],
 						docs: vec![],
 					},
 				],
 			}),
-			calls: Some(scale_info::meta_type::<pallet::Call<Runtime>>().into()),
-			event: Some(scale_info::meta_type::<pallet::Event<Runtime>>().into()),
+			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
+			event: Some(meta_type::<pallet::Event<Runtime>>().into()),
 			constants: vec![
 				PalletConstantMetadata {
 					name: "MyGetParam",
-					ty: scale_info::meta_type::<u32>(),
+					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
 					docs: vec![" Some comment", " Some comment"],
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
-					ty: scale_info::meta_type::<u32>(),
+					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
 					docs: vec![" Some comment", " Some comment"],
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
-					ty: scale_info::meta_type::<u64>(),
+					ty: meta_type::<u64>(),
 					value: vec![12, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
 				PalletConstantMetadata {
 					name: "some_extra",
-					ty: scale_info::meta_type::<u64>(),
+					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![" Some doc", " Some doc"],
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
-					ty: scale_info::meta_type::<u64>(),
+					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![" Some doc"],
 				},
 			],
-			error: Some(PalletErrorMetadata {
-				ty: scale_info::meta_type::<pallet::Error<Runtime>>(),
-			}),
+			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
 		},
 		PalletMetadata {
 			index: 2,
@@ -1424,25 +1415,25 @@ fn metadata() {
 				entries: vec![StorageEntryMetadata {
 					name: "SomeValue",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<Vec<u32>>()),
+					ty: StorageEntryType::Plain(meta_type::<Vec<u32>>()),
 					default: vec![0],
 					docs: vec![],
 				}],
 			}),
-			calls: Some(scale_info::meta_type::<pallet2::Call<Runtime>>().into()),
-			event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet2::Event>() }),
+			calls: Some(meta_type::<pallet2::Call<Runtime>>().into()),
+			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,
 		},
 	];
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
+		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",
-			ty: scale_info::meta_type::<()>(),
-			additional_signed: scale_info::meta_type::<()>(),
+			ty: meta_type::<()>(),
+			additional_signed: meta_type::<()>(),
 		}],
 	};
 
