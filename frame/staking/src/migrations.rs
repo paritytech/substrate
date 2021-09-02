@@ -18,35 +18,52 @@
 
 use super::*;
 
-// pub mod v8 {
-// 	use super::{voter_bags::VoterList, *};
-// 	use frame_support::ensure;
+pub mod v8 {
+	use frame_election_provider_support::SortedListProvider;
+	use frame_support::traits::Get;
 
-// 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-// 		ensure!(StorageVersion::<T>::get() == Releases::V7_0_0, "must upgrade linearly");
-// 		ensure!(VoterList::<T>::iter().count() == 0, "voter list already exists");
-// 		Ok(())
-// 	}
+	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
 
-// 	pub fn migrate<T: Config>() -> Weight {
-// 		log!(info, "Migrating staking to Releases::V8_0_0");
+	#[cfg(feature = "try-runtime")]
+	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+		ensure!(StorageVersion::<T>::get() == crate::Releases::V7_0_0, "must upgrade linearly");
+		ensure!(T::SortedListProvider::iter().count() == 0, "voter list already exists");
+		crate::log!(info, "👜 staking bags-list migration passes PRE migrate checks ✅",);
+		Ok(())
+	}
 
-// 		let migrated = VoterList::<T>::regenerate();
-// 		debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
+	/// Migration to sorted [`SortedListProvider`].
+	/// NOTE: this migration makes the assumption that pallet-bags-list is used as the
+	/// [`SortedListProvider`].
+	pub fn migrate<T: Config>() -> Weight {
+		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
+			crate::log!(info, "migrating staking to Releases::V8_0_0");
 
-// 		StorageVersion::<T>::put(Releases::V8_0_0);
-// 		log!(
-// 			info,
-// 			"Completed staking migration to Releases::V8_0_0 with {} voters migrated",
-// 			migrated,
-// 		);
+			let migrated = T::SortedListProvider::regenerate(
+				Nominators::<T>::iter().map(|(id, _)| id),
+				Pallet::<T>::weight_of_fn(),
+			);
+			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 
-// 		T::WeightInfo::regenerate(
-// 			CounterForNominators::<T>::get(),
-// 		)
-// 		.saturating_add(T::DbWeight::get().reads(2))
-// 	}
-// }
+			StorageVersion::<T>::put(crate::Releases::V8_0_0);
+			crate::log!(
+				info,
+				"👜 completed staking migration to Releases::V8_0_0 with {} voters migrated",
+				migrated,
+			);
+
+			T::BlockWeights::get().max_block
+		} else {
+			T::DbWeight::get().reads(1)
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_migrate<T: Config>() -> Result<(), &'static str> {
+		T::SortedListProvider::sanity_check();
+		crate::log!(info, "👜 staking bags-list migration passes POST migrate checks ✅",);
+	}
+}
 
 pub mod v7 {
 	use super::*;
