@@ -173,11 +173,17 @@ where
 		self.backend.block(hash).await.map_err(Into::into)
 	}
 
-	fn block_hash(&self, number: Option<ListOrValue<NumberOrHex>>) -> JsonRpcResult<ListOrValue<Option<Block::Hash>>> {
+	fn block_hash(
+		&self,
+		number: Option<ListOrValue<NumberOrHex>>,
+	) -> JsonRpcResult<ListOrValue<Option<Block::Hash>>> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value).map_err(Into::into),
-			Some(ListOrValue::Value(number)) =>
-				self.backend.block_hash(Some(number)).map(ListOrValue::Value).map_err(Into::into),
+			Some(ListOrValue::Value(number)) => self
+				.backend
+				.block_hash(Some(number))
+				.map(ListOrValue::Value)
+				.map_err(Into::into),
 			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(
 				list.into_iter()
 					.map(|number| self.backend.block_hash(Some(number)))

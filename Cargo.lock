@@ -2810,7 +2810,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tokio 1.10.0",
+ "tokio",
  "url",
 ]
 
@@ -2959,9 +2959,9 @@ dependencies = [
  "serde_json",
  "soketto 0.6.0",
  "thiserror",
- "tokio 1.10.0",
- "tokio-rustls 0.22.0",
- "tokio-util 0.6.7",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
  "url",
 ]
 

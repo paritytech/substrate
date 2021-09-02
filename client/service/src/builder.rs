@@ -46,7 +46,10 @@ use sc_network::{
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
-use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor, chain::ChainApiServer};
+use sc_rpc::{
+	author::AuthorApiServer, chain::ChainApiServer, system::SystemApiServer, DenyUnsafe,
+	SubscriptionTaskExecutor,
+};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -143,8 +146,9 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } =>
-				LocalKeystore::open(path.clone(), password.clone())?,
+			KeystoreConfig::Path { path, password } => {
+				LocalKeystore::open(path.clone(), password.clone())?
+			}
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
@@ -745,12 +749,9 @@ where
 		deny_unsafe,
 		task_executor.clone(),
 	)
-	.into_rpc_module()
-	.expect(UNIQUE_METHOD_NAMES_PROOF);
+	.into_rpc();
 
-	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
-		.into_rpc_module()
-		.expect(UNIQUE_METHOD_NAMES_PROOF);
+	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe).into_rpc();
 
 	if let Some(storage) = offchain_storage {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
@@ -852,8 +853,8 @@ where
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
 			protocol_config
@@ -869,8 +870,8 @@ where
 			let (handler, protocol_config) = StateRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("state_request_handler", handler.run());
 			protocol_config
@@ -984,7 +985,7 @@ where
 			);
 			// This `return` might seem unnecessary, but we don't want to make it look like
 			// everything is working as normal even though the user is clearly misusing the API.
-			return
+			return;
 		}
 
 		future.await

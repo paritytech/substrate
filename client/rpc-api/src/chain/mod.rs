@@ -37,7 +37,10 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	///
 	/// By default returns latest block hash.
 	#[method(name = "getBlockHash", aliases = "chain_getHead")]
-	fn block_hash(&self, hash: Option<ListOrValue<NumberOrHex>>) -> JsonRpcResult<ListOrValue<Option<Hash>>>;
+	fn block_hash(
+		&self,
+		hash: Option<ListOrValue<NumberOrHex>>,
+	) -> JsonRpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
 	#[method(name = "getFinalizedHead", aliases = "chain_getFinalisedHead")]
