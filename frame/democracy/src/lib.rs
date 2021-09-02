@@ -282,7 +282,7 @@ pub mod pallet {
 		/// The minimum period of vote locking.
 		///
 		/// It should be no shorter than enactment period to ensure that in the case of an approval,
-		/// those successful voters are locked intto their coonsequence that their votes entail.
+		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
 		type VoteLockingPeriod: Get<Self::BlockNumber>;
 
