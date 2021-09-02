@@ -34,7 +34,7 @@ const MEGABYTE: usize = 1024 * 1024;
 pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
 /// Default maximum number of connections for WS RPC servers.
-const WS_MAX_CONNECTIONS: usize = 100;
+const WS_MAX_CONNECTIONS: usize = 1024;
 
 /// Default thread pool size for RPC HTTP servers.
 const HTTP_THREADS: usize = 4;
