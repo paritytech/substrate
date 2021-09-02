@@ -1668,24 +1668,10 @@ mod tests {
 
 		// do switch
 		layout = Layout::with_alt_hashing(TRESHOLD);
-		// update with same value do not change
+		// update with same value do change
 		{
 			let mut trie =
 				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
-			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
-				.expect("insert failed");
-		}
-		let root3 = root.clone();
-		assert!(root1 == root3);
-		// different value then same is enough to update
-		// from triedbmut persipective (do not
-		// work with state machine as only changes do makes
-		// it to payload (would require a special host function).
-		{
-			let mut trie =
-				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
-			trie.insert(b"foo222", vec![4u8].as_slice()) // inner hash
-				.expect("insert failed");
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
 		}
