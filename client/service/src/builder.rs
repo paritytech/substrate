@@ -47,7 +47,11 @@ use sc_network::{
 	NetworkService,
 };
 use sc_rpc::{
-	author::AuthorApiServer, chain::ChainApiServer, state::StateApiServer, system::SystemApiServer,
+	author::AuthorApiServer,
+	chain::ChainApiServer,
+	offchain::OffchainApiServer,
+	state::{ChildStateApiServer, StateApiServer},
+	system::SystemApiServer,
 	DenyUnsafe, SubscriptionTaskExecutor,
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
@@ -146,9 +150,8 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } => {
-				LocalKeystore::open(path.clone(), password.clone())?
-			}
+			KeystoreConfig::Path { path, password } =>
+				LocalKeystore::open(path.clone(), password.clone())?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
@@ -656,7 +659,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 // Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
 // specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
-	_deny_unsafe: DenyUnsafe,
+	deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -690,9 +693,6 @@ where
 {
 	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
 
-	// TODO(niklasad1): expose CORS to jsonrpsee to handle this propely.
-	let deny_unsafe = DenyUnsafe::No;
-
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
 		impl_name: config.impl_name.clone(),
@@ -704,40 +704,39 @@ where
 
 	let mut rpc_api = RpcModule::new(());
 
-	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
-		(remote_blockchain, on_demand)
-	{
-		// Light clients
-		let chain = sc_rpc::chain::new_light(
-			client.clone(),
-			task_executor.clone(),
-			remote_blockchain.clone(),
-			on_demand.clone(),
-		)
-		.into_rpc();
-		let (state, child_state) = sc_rpc::state::new_light(
-			client.clone(),
-			task_executor.clone(),
-			remote_blockchain.clone(),
-			on_demand,
-			deny_unsafe,
-		);
-		(chain, state.into_rpc(), child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF))
-	} else {
-		// Full nodes
-		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
+	let (chain, state, child_state) =
+		if let (Some(remote_blockchain), Some(on_demand)) = (remote_blockchain, on_demand) {
+			// Light clients
+			let chain = sc_rpc::chain::new_light(
+				client.clone(),
+				task_executor.clone(),
+				remote_blockchain.clone(),
+				on_demand.clone(),
+			)
+			.into_rpc();
+			let (state, child_state) = sc_rpc::state::new_light(
+				client.clone(),
+				task_executor.clone(),
+				remote_blockchain.clone(),
+				on_demand,
+				deny_unsafe,
+			);
+			(chain, state.into_rpc(), child_state.into_rpc())
+		} else {
+			// Full nodes
+			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
 
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			task_executor.clone(),
-			deny_unsafe,
-			config.rpc_max_payload,
-		);
-		let state = state.into_rpc();
-		let child_state = child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
+			let (state, child_state) = sc_rpc::state::new_full(
+				client.clone(),
+				task_executor.clone(),
+				deny_unsafe,
+				config.rpc_max_payload,
+			);
+			let state = state.into_rpc();
+			let child_state = child_state.into_rpc();
 
-		(chain, state, child_state)
-	};
+			(chain, state, child_state)
+		};
 
 	let author = sc_rpc::author::Author::new(
 		client.clone(),
@@ -751,9 +750,7 @@ where
 	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe).into_rpc();
 
 	if let Some(storage) = offchain_storage {
-		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
-			.into_rpc_module()
-			.expect(UNIQUE_METHOD_NAMES_PROOF);
+		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
 
 		rpc_api.merge(offchain).expect(UNIQUE_METHOD_NAMES_PROOF);
 	}
@@ -850,8 +847,8 @@ where
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize
-					+ config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize +
+					config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
 			protocol_config
@@ -867,8 +864,8 @@ where
 			let (handler, protocol_config) = StateRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize
-					+ config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize +
+					config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("state_request_handler", handler.run());
 			protocol_config
@@ -982,7 +979,7 @@ where
 			);
 			// This `return` might seem unnecessary, but we don't want to make it look like
 			// everything is working as normal even though the user is clearly misusing the API.
-			return;
+			return
 		}
 
 		future.await
