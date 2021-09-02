@@ -130,7 +130,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
 #[frame_support::pallet]
 pub mod pallet {
