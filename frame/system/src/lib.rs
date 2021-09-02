@@ -205,7 +205,8 @@ pub mod pallet {
 			+ sp_std::hash::Hash
 			+ sp_std::str::FromStr
 			+ MaybeMallocSizeOf
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// The output of the `Hashing` function.
 		type Hash: Parameter
