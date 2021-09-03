@@ -140,6 +140,7 @@ parameter_types! {
 	pub const FastTrackVotingPeriod: u64 = 2;
 	pub const MinimumDeposit: u64 = 1;
 	pub const EnactmentPeriod: u64 = 2;
+	pub const VoteLockingPeriod: u64 = 3;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
 	pub const MaxProposals: u32 = MAX_PROPOSALS;
@@ -170,6 +171,7 @@ impl Config for Test {
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
+	type VoteLockingPeriod = VoteLockingPeriod;
 	type FastTrackVotingPeriod = FastTrackVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
