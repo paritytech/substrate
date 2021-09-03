@@ -23,7 +23,11 @@ use futures::{future, FutureExt, StreamExt};
 use log::warn;
 use std::sync::Arc;
 
-use jsonrpsee::{types::error::Error as JsonRpseeError, RpcModule, SubscriptionSink};
+use jsonrpsee::{
+	proc_macros::rpc,
+	types::{async_trait, error::Error as JsonRpseeError, JsonRpcResult},
+	SubscriptionSink,
+};
 
 mod error;
 mod finality;
@@ -34,9 +38,32 @@ use sc_finality_grandpa::GrandpaJustificationStream;
 use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use finality::RpcFinalityProofProvider;
+use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use notification::JustificationNotification;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+
+/// Provides RPC methods for interacting with GRANDPA.
+#[rpc(client, server, namespace = "grandpa")]
+pub trait GrandpaApi<Notification, Hash, Number> {
+	/// Returns the state of the current best round state as well as the
+	/// ongoing background rounds.
+	#[method(name = "roundState")]
+	async fn round_state(&self) -> JsonRpcResult<ReportedRoundStates>;
+
+	/// Returns the block most recently finalized by Grandpa, alongside
+	/// side its justification.
+	#[subscription(
+		name = "subscribeJustifications"
+		aliases = "grandpa_justifications"
+		item = Notification
+	)]
+	fn subscribe_justifications(&self);
+
+	/// Prove finality for the given block number by returning the Justification for the last block
+	/// in the set and all the intermediary headers to link them together.
+	#[method(name = "proveFinality")]
+	async fn prove_finality(&self, block: Number) -> JsonRpcResult<Option<EncodedFinalityProof>>;
+}
 
 /// Provides RPC methods for interacting with GRANDPA.
 pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
@@ -46,14 +73,8 @@ pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	justification_stream: GrandpaJustificationStream<Block>,
 	finality_proof_provider: Arc<ProofProvider>,
 }
-
-impl<AuthoritySet, VoterState, Block, ProofProvider>
+impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 	GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
-where
-	VoterState: ReportVoterState + Send + Sync + 'static,
-	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
-	Block: BlockT,
-	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
 	/// Prepare a new [`GrandpaApi`]
 	pub fn new(
@@ -65,63 +86,58 @@ where
 	) -> Self {
 		Self { executor, authority_set, voter_state, justification_stream, finality_proof_provider }
 	}
+}
 
-	/// Convert this [`GrandpaApi`] to an [`RpcModule`].
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
+#[async_trait]
+impl<AuthoritySet, VoterState, Block, ProofProvider>
+	GrandpaApiServer<JustificationNotification, Block::Hash, NumberFor<Block>>
+	for GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
+where
+	VoterState: ReportVoterState + Send + Sync + 'static,
+	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
+	Block: BlockT,
+	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
+{
+	async fn round_state(&self) -> JsonRpcResult<ReportedRoundStates> {
+		ReportedRoundStates::from(&self.authority_set, &self.voter_state)
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		// Returns the state of the current best round state as well as the
-		// ongoing background rounds.
-		module.register_method("grandpa_roundState", |_params, grandpa| {
-			ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state)
-				.map_err(|e| JsonRpseeError::to_call_error(e))
-		})?;
-
-		// Prove finality for the given block number by returning the [`Justification`] for the last
-		// block in the set and all the intermediary headers to link them together.
-		module.register_method("grandpa_proveFinality", |params, grandpa| {
-			let block: NumberFor<Block> = params.one()?;
-			grandpa
-				.finality_proof_provider
-				.rpc_prove_finality(block)
-				.map_err(|finality_err| error::Error::ProveFinalityFailed(finality_err))
-				.map_err(|e| JsonRpseeError::to_call_error(e))
-		})?;
-
-		// Returns the block most recently finalized by Grandpa, alongside its justification.
-		module.register_subscription(
-			"grandpa_subscribeJustifications",
-			"grandpa_unsubscribeJustifications",
-			|_params, mut sink: SubscriptionSink, ctx: Arc<GrandpaRpc<_, _, _, _>>| {
-				let stream = ctx.justification_stream.subscribe().map(
-					|x: sc_finality_grandpa::GrandpaJustification<Block>| {
-						JustificationNotification::from(x)
-					},
-				);
-
-				fn log_err(err: JsonRpseeError) -> bool {
-					log::error!(
-						"Could not send data to grandpa_justifications subscription. Error: {:?}",
-						err
-					);
-					false
-				}
-
-				let fut = async move {
-					stream
-						.take_while(|justification| {
-							future::ready(sink.send(justification).map_or_else(log_err, |_| true))
-						})
-						.for_each(|_| future::ready(()))
-						.await;
-				}
-				.boxed();
-				ctx.executor.execute(fut);
-				Ok(())
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) {
+		let stream = self.justification_stream.subscribe().map(
+			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
+				JustificationNotification::from(x)
 			},
-		)?;
+		);
 
-		Ok(module)
+		fn log_err(err: JsonRpseeError) -> bool {
+			log::error!(
+				"Could not send data to grandpa_justifications subscription. Error: {:?}",
+				err
+			);
+			false
+		}
+
+		let fut = async move {
+			stream
+				.take_while(|justification| {
+					future::ready(sink.send(justification).map_or_else(log_err, |_| true))
+				})
+				.for_each(|_| future::ready(()))
+				.await;
+		}
+		.boxed();
+		self.executor.execute(fut);
+	}
+
+	async fn prove_finality(
+		&self,
+		block: NumberFor<Block>,
+	) -> JsonRpcResult<Option<EncodedFinalityProof>> {
+		self.finality_proof_provider
+			.rpc_prove_finality(block)
+			.map_err(|finality_err| error::Error::ProveFinalityFailed(finality_err))
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }
 

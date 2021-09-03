@@ -38,7 +38,7 @@ use pallet_contracts_rpc::{ContractsApiServer, ContractsRpc};
 use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
 use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
 use sc_consensus_babe_rpc::{BabeApiServer, BabeRpc};
-use sc_finality_grandpa_rpc::GrandpaRpc;
+use sc_finality_grandpa_rpc::{GrandpaApiServer, GrandpaRpc};
 use sc_sync_state_rpc::SyncStateRpc;
 use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
 
@@ -180,8 +180,7 @@ pub fn new_partial(
 				Some(shared_authority_set.clone()),
 			),
 		)
-		.into_rpc_module()
-		.expect("TODO: error handling");
+		.into_rpc();
 
 		let babe_rpc = BabeRpc::new(
 			client2.clone(),
