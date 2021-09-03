@@ -300,7 +300,7 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 /// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
 /// entity.
 ///
-/// On the contrary, to simplify the trait, the `VoteWeight` is hardcoded as the weight of each
+/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each
 /// entity. The weights are ascending, the higher, the better. In the long term, if this trait ends
 /// up having use cases outside of the election context, it is easy enough to make it generic over
 /// the `VoteWeight`.
@@ -311,10 +311,10 @@ pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error;
 
-	/// Returns iterator over the list, which can have `take` called on it.
+	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 
-	/// get the current count of ids in the list.
+	/// The current count of ids in the list.
 	fn count() -> u32;
 
 	/// Return true if the list already contains `id`.

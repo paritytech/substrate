@@ -130,8 +130,15 @@ pub fn create_stash_and_dead_controller<T: Config>(
 	return Ok((stash, controller))
 }
 
-/// create `max` validators.
 pub fn create_validators<T: Config>(
+	max: u32,
+	balance_factor: u32,
+) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+	create_validators_with_seed::<T>(max, balance_factor, 0)
+}
+
+/// create `max` validators.
+pub fn create_validators_with_seed<T: Config>(
 	max: u32,
 	balance_factor: u32,
 	seed: u32,

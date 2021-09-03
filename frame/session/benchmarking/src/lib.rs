@@ -126,7 +126,7 @@ fn check_membership_proof_setup<T: Config>(
 	pallet_staking::ValidatorCount::<T>::put(n);
 
 	// create validators and set random session keys
-	for (n, who) in create_validators::<T>(n, 1000, 0).unwrap().into_iter().enumerate() {
+	for (n, who) in create_validators::<T>(n, 1000).unwrap().into_iter().enumerate() {
 		use rand::{RngCore, SeedableRng};
 
 		let validator = T::Lookup::lookup(who).unwrap();

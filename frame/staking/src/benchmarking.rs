@@ -358,7 +358,7 @@ benchmarks! {
 
 		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
 		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators::<T>(T::MAX_NOMINATIONS - 1, 100, 0)?;
+		let rest_of_validators = create_validators_with_seed::<T>(T::MAX_NOMINATIONS - 1, 100)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
@@ -432,7 +432,7 @@ benchmarks! {
 		assert!(!Nominators::<T>::contains_key(&stash));
 		assert!(!T::SortedListProvider::contains(&stash));
 
-		let validators = create_validators::<T>(n, 100, 0).unwrap();
+		let validators = create_validators::<T>(n, 100).unwrap();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), validators)
 	verify {
