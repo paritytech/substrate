@@ -592,6 +592,8 @@ ss58_address_format!(
 		(77, "manta", "Manta Network, standard account (*25519).")
 	CalamariAccount =>
 		(78, "calamari", "Manta Canary Network, standard account (*25519).")
+	Anmol =>
+		(92, "anmol", "Anmol standard account (*25519).")
 	PolkaSmith =>
 		(98, "polkasmith", "PolkaSmith Canary Network, standard account (*25519).")
 	PolkaFoundry =>
@@ -600,6 +602,8 @@ ss58_address_format!(
 		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
 	HeikoAccount =>
 		(110, "heiko", "Heiko, session key (*25519).")
+	Ibtida =>
+		(128, "ibtida", "Anmol testnet standard account (*25519).")
 	ParallelAccount =>
 		(172, "parallel", "Parallel, session key (*25519).")
 	SocialAccount =>
