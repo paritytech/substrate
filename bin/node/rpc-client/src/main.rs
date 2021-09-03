@@ -33,7 +33,7 @@ async fn main() -> Result<(), Error> {
 
 	// TODO(niklasad1):  https://github.com/paritytech/jsonrpsee/issues/448 
 	// changed this to the WS client because the jsonrpsee proc macros
-	// requires the trait bound `SubscriptionClient` that is not implemented is not implemented for HTTP client.
+	// requires the trait bound `SubscriptionClient` which is not implemented for the HTTP client.
 	WsClientBuilder::default()
 		.build("ws://localhost:9944")
 		.and_then(|client| remove_all_extrinsics(client))
