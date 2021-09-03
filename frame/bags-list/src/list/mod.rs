@@ -657,4 +657,10 @@ impl<T: Config> Node<T> {
 	pub fn std_id(&self) -> &T::AccountId {
 		&self.id
 	}
+
+	/// The bag this nodes belongs to (publicly accessible for testing and benchmarks).
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn bag_upper(&self) -> VoteWeight {
+		self.bag_upper
+	}
 }

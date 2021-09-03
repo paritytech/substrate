@@ -274,7 +274,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		let current_bag_idx = thresholds
 			.iter()
 			.chain(sp_std::iter::once(&VoteWeight::MAX))
-			.position(|w| w == &node.bag_upper)
+			.position(|w| w == &node.bag_upper())
 			.unwrap();
 
 		if is_increase {
