@@ -133,13 +133,13 @@ where
 				match claim {
 					PreDigest::Primary { .. } => {
 						claims.entry(key).or_default().primary.push(slot);
-					}
+					},
 					PreDigest::SecondaryPlain { .. } => {
 						claims.entry(key).or_default().secondary.push(slot);
-					}
+					},
 					PreDigest::SecondaryVRF { .. } => {
 						claims.entry(key).or_default().secondary_vrf.push(slot.into());
-					}
+					},
 				};
 			}
 		}

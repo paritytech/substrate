@@ -39,7 +39,7 @@ use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
 use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
 use sc_consensus_babe_rpc::{BabeApiServer, BabeRpc};
 use sc_finality_grandpa_rpc::{GrandpaApiServer, GrandpaRpc};
-use sc_sync_state_rpc::SyncStateRpc;
+use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
 use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
 
 type FullClient =
@@ -199,8 +199,7 @@ pub fn new_partial(
 			deny_unsafe,
 		)
 		.expect("TODO: error handling")
-		.into_rpc_module()
-		.expect("TODO: error handling");
+		.into_rpc();
 		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc();
 		let system_rpc_backend =
 			SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
@@ -753,7 +752,7 @@ mod tests {
 						sc_consensus_babe::authorship::claim_slot(slot.into(), &epoch, &keystore)
 							.map(|(digest, _)| digest)
 					{
-						break (babe_pre_digest, epoch_descriptor);
+						break (babe_pre_digest, epoch_descriptor)
 					}
 
 					slot += 1;
