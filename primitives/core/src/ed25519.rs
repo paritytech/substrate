@@ -474,7 +474,7 @@ impl TraitPair for Pair {
 
 	/// Make a new key pair from secret seed material.
 	///
-	/// You should never need to use this; generate(), generate_with_phrase
+	/// You should never need to use this directly; generate(), generate_with_phrase
 	fn from_seed(seed: Seed) -> Pair {
 		Self::from_seed_slice(&seed[..]).expect("seed has valid length; qed")
 	}
@@ -482,7 +482,7 @@ impl TraitPair for Pair {
 	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
 	/// will return `None`.
 	///
-	/// You should never need to use this; generate(), generate_with_phrase
+	/// You should never need to use this directly; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;

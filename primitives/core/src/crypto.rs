@@ -978,7 +978,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn generate() -> (Self, Self::Seed) {
 		let mut seed = Self::Seed::default();
 		OsRng.fill_bytes(seed.as_mut());
-		(Self::from_seed(seed.clone()), seed)
+		(Self::from_seed_slice(seed.as_ref()).expect("seed has valid length; qed"), seed)
 	}
 
 	/// Generate new secure (random) key pair and provide the recovery phrase.
@@ -1077,7 +1077,10 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 					let mut seed = Self::Seed::default();
 					if seed.as_ref().len() == seed_vec.len() {
 						seed.as_mut().copy_from_slice(&seed_vec);
-						Some((Self::from_seed(seed.clone()), seed))
+						Some((
+							Self::from_seed_slice(&seed_vec).expect("seed has valid length; qed"),
+							seed,
+						))
 					} else {
 						None
 					}
