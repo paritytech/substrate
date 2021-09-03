@@ -460,8 +460,7 @@ impl<T: Config> Bag<T> {
 	}
 
 	/// Iterate over the nodes in this bag.
-	// TODO: we make this public for the remote-ext test.
-	pub fn iter(&self) -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
@@ -582,6 +581,12 @@ impl<T: Config> Bag<T> {
 
 		Ok(())
 	}
+
+	/// Iterate over the nodes in this bag (publicly accessible for testing and benchmarks).
+	#[cfg(feature = "std")]
+	pub fn std_iter(&self) -> impl Iterator<Item = Node<T>> {
+		sp_std::iter::successors(self.head(), |prev| prev.next())
+	}
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
@@ -592,7 +597,7 @@ pub struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
-	pub(crate) bag_upper: VoteWeight,
+	bag_upper: VoteWeight,
 }
 
 impl<T: Config> Node<T> {
@@ -643,8 +648,13 @@ impl<T: Config> Node<T> {
 	}
 
 	/// Get the underlying voter.
-	// TODO: this is public for remote-ext test
-	pub fn id(&self) -> &T::AccountId {
+	pub(crate) fn id(&self) -> &T::AccountId {
+		&self.id
+	}
+
+	/// Get the underlying voter (publicly accessible for testing and benchmarks).
+	#[cfg(feature = "std")]
+	pub fn std_id(&self) -> &T::AccountId {
 		&self.id
 	}
 }
