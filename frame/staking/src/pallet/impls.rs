@@ -891,7 +891,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
-				.unwrap_or(MinNominatorBond::<T>::get() * 100u32.into());
+				.unwrap_or_else(|| MinNominatorBond::<T>::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
