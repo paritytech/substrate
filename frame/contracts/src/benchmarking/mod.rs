@@ -1770,7 +1770,7 @@ benchmarks! {
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-        		use secp256k1::{SecretKey, Message, sign};
+				use secp256k1::{SecretKey, Message, sign};
 				use rand::SeedableRng;
 				let mut rng = rand_pcg::Pcg32::seed_from_u64(i as u64);
 

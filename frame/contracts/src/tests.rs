@@ -2799,52 +2799,42 @@ fn gas_estimation_call_runtime() {
 fn ecdsa_recovery() {
 	let (wasm, code_hash) = compile_module::<Test>("ecdsa_recovery").unwrap();
 
-	ExtBuilder::default()
-		.existential_deposit(50)
-		.build()
-		.execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
-			// Instantiate the ecdsa_recovery contract.
-			assert_ok!(Contracts::instantiate_with_code(
-				Origin::signed(ALICE),
-				100_000,
-				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
-			));
-			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		// Instantiate the ecdsa_recovery contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			100_000,
+			GAS_LIMIT,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
-			let signature: [u8; 65] = [
-			    161, 234, 203,  74, 147, 96,  51, 212,   5, 174, 231,   9, 142,  48, 137, 201,
-			    162, 118, 192,  67, 239, 16,  71, 216, 125,  86, 167, 139,  70,   7,  86, 241,
-			     33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
-			    211, 234, 100, 115, 230, 47,  80,  44, 152, 166,  62,  50,   8,  13,  86, 175,
-			     28,
-			];
-			let message_hash: [u8; 32] = [
-			    162, 28, 244, 179, 96, 76, 244, 178, 188,  83, 230, 248, 143, 106,  77, 117,
-			    239, 95, 244, 171, 65, 95,  62, 153, 174, 166, 182,  28, 130,  73, 196, 208
-			];
-			const EXPECTED_COMPRESSED_PUBLIC_KEY: [u8; 33] = [
-			      2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160,  98, 149, 206, 135, 11,
-			      7,   2, 155, 252, 219,  45, 206,  40, 217, 89, 242, 129,  91,  22, 248, 23,
-			    152,
-			];
-			let mut params = vec![];
-			params.extend_from_slice(&signature);
-			params.extend_from_slice(&message_hash);
-			assert!(params.len() == 65 + 32);
-			let result = <Pallet<Test>>::bare_call(
-				ALICE,
-				addr.clone(),
-				0,
-				GAS_LIMIT,
-				params,
-				false,
-			).result.unwrap();
-			assert!(result.is_success());
-			assert_eq!(&result.data[..33], &EXPECTED_COMPRESSED_PUBLIC_KEY);
-		})
+		let signature: [u8; 65] = [
+			161, 234, 203, 74, 147, 96, 51, 212, 5, 174, 231, 9, 142, 48, 137, 201, 162, 118, 192,
+			67, 239, 16, 71, 216, 125, 86, 167, 139, 70, 7, 86, 241, 33, 87, 154, 251, 81, 29, 160,
+			4, 176, 239, 88, 211, 244, 232, 232, 52, 211, 234, 100, 115, 230, 47, 80, 44, 152, 166,
+			62, 50, 8, 13, 86, 175, 28,
+		];
+		let message_hash: [u8; 32] = [
+			162, 28, 244, 179, 96, 76, 244, 178, 188, 83, 230, 248, 143, 106, 77, 117, 239, 95,
+			244, 171, 65, 95, 62, 153, 174, 166, 182, 28, 130, 73, 196, 208,
+		];
+		const EXPECTED_COMPRESSED_PUBLIC_KEY: [u8; 33] = [
+			2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160, 98, 149, 206, 135, 11, 7, 2, 155,
+			252, 219, 45, 206, 40, 217, 89, 242, 129, 91, 22, 248, 23, 152,
+		];
+		let mut params = vec![];
+		params.extend_from_slice(&signature);
+		params.extend_from_slice(&message_hash);
+		assert!(params.len() == 65 + 32);
+		let result = <Pallet<Test>>::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, params, false)
+			.result
+			.unwrap();
+		assert!(result.is_success());
+		assert_eq!(&result.data[..33], &EXPECTED_COMPRESSED_PUBLIC_KEY);
+	})
 }
