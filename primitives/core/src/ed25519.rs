@@ -461,8 +461,10 @@ impl TraitPair for Pair {
 	/// Make a new key pair from secret seed material.
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
-	fn from_seed(seed: &Seed) -> Pair {
-		Self::from_seed_slice(&seed[..]).expect("seed has valid length; qed")
+	fn from_seed(seed: Seed) -> Pair {
+		let secret = SigningKey::from(seed);
+		let public = VerificationKey::from(&secret);
+		Pair {secret, public}
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
@@ -488,7 +490,7 @@ impl TraitPair for Pair {
 				DeriveJunction::Hard(cc) => acc = derive_hard_junction(&acc, &cc),
 			}
 		}
-		Ok((Self::from_seed(&acc), Some(acc)))
+		Ok((Self::from_seed(acc.clone()), Some(acc)))
 	}
 
 	/// Get the public key.
@@ -549,7 +551,7 @@ impl Pair {
 			let mut padded_seed: Seed = [b' '; 32];
 			let len = s.len().min(32);
 			padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);
-			Self::from_seed(&padded_seed)
+			Self::from_seed(padded_seed)
 		})
 	}
 }
@@ -587,7 +589,7 @@ mod test {
 	#[test]
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
-		let pair = Pair::from_seed(&seed);
+		let pair = Pair::from_seed(seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
@@ -600,7 +602,7 @@ mod test {
 	#[test]
 	fn test_vector_should_work() {
 		let pair = Pair::from_seed(
-			&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+			hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
 		);
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
@@ -642,7 +644,7 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
 			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")
@@ -680,7 +682,7 @@ mod test {
 
 	#[test]
 	fn ss58check_roundtrip_works() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let public = pair.public();
 		let s = public.to_ss58check();
 		println!("Correct: {}", s);
@@ -690,7 +692,7 @@ mod test {
 
 	#[test]
 	fn signature_serialization_works() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
 		let serialized_signature = serde_json::to_string(&signature).unwrap();

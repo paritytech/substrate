@@ -646,7 +646,7 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	let seal = {
 		// sign the pre-sealed hash of the block and then
 		// add it to a digest item.
-		let pair = AuthorityPair::from_seed(&[1; 32]);
+		let pair = AuthorityPair::from_seed([1; 32]);
 		let pre_hash = block.header.hash();
 		let signature = pair.sign(pre_hash.as_ref());
 		Item::babe_seal(signature)

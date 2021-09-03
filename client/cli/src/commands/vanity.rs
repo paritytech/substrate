@@ -97,14 +97,14 @@ fn generate_key<Pair>(
 			next_seed(seed.as_mut());
 		}
 
-		let p = Pair::from_seed(&seed);
+		let p = Pair::from_seed(seed.clone());
 		let ss58 = p.public().into_account().to_ss58check_with_version(network_override);
 		let score = calculate_score(&desired, &ss58);
 		if score > best || desired.len() < 2 {
 			best = score;
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(utils::format_seed::<Pair>(seed.clone()));
+				return Ok(utils::format_seed::<Pair>(seed))
 			}
 		}
 		done += 1;

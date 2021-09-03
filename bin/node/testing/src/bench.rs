@@ -554,7 +554,7 @@ impl BenchKeyring {
 					(account_id, BenchPair::Sr25519(pair))
 				},
 				KeyTypes::Ed25519 => {
-					let pair = ed25519::Pair::from_seed(&blake2_256(seed.as_bytes()));
+					let pair = ed25519::Pair::from_seed(blake2_256(seed.as_bytes()));
 					let account_id = AccountPublic::from(pair.public()).into_account();
 					(account_id, BenchPair::Ed25519(pair))
 				},

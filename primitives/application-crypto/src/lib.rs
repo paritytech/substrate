@@ -118,7 +118,9 @@ macro_rules! app_crypto_pair {
 			>(&self, path: Iter, seed: Option<Self::Seed>) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
 				self.0.derive(path, seed).map(|x| (Self(x.0), x.1))
 			}
-			fn from_seed(seed: &Self::Seed) -> Self { Self(<$pair>::from_seed(seed)) }
+			
+			fn from_seed(seed: Self::Seed) -> Self { Self(<$pair>::from_seed(seed)) }
+
 			fn from_seed_slice(seed: &[u8]) -> Result<Self, $crate::SecretStringError> {
 				<$pair>::from_seed_slice(seed).map(Self)
 			}

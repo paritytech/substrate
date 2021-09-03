@@ -470,7 +470,7 @@ impl TraitPair for Pair {
 	/// This is generated using schnorrkel's Mini-Secret-Keys.
 	///
 	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
-	fn from_seed(seed: &Seed) -> Pair {
+	fn from_seed(seed: Seed) -> Pair {
 		Self::from_seed_slice(&seed[..])
 			.expect("32 bytes can always build a key; qed")
 	}
@@ -737,7 +737,7 @@ mod test {
 
 	#[test]
 	fn derive_soft_should_work() {
-		let pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter(), None).unwrap().0;
@@ -749,7 +749,7 @@ mod test {
 
 	#[test]
 	fn derive_hard_should_work() {
-		let pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter(), None).unwrap().0;
@@ -761,7 +761,7 @@ mod test {
 
 	#[test]
 	fn derive_soft_public_should_work() {
-		let pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
@@ -772,7 +772,7 @@ mod test {
 
 	#[test]
 	fn derive_hard_public_should_fail() {
-		let pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::hard(1));
@@ -781,7 +781,7 @@ mod test {
 
 	#[test]
 	fn sr_test_vector_should_work() {
-		let pair = Pair::from_seed(&hex!(
+		let pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let public = pair.public();
@@ -828,7 +828,7 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
 			public,
@@ -857,7 +857,7 @@ mod test {
 		//
 		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(
-			&hex!("0000000000000000000000000000000000000000000000000000000000000000")
+			hex!("0000000000000000000000000000000000000000000000000000000000000000")
 		);
 		let public = pk.public();
 		let js_signature = Signature::from_raw(hex!(
@@ -869,7 +869,7 @@ mod test {
 
 	#[test]
 	fn signature_serialization_works() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
 		let serialized_signature = serde_json::to_string(&signature).unwrap();

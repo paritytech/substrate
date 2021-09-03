@@ -367,7 +367,7 @@ pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 
 pub fn new_test_ext_with_pairs(authorities_len: usize) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
 	let pairs = (0..authorities_len).map(|i| {
-		AuthorityPair::from_seed(&U256::from(i).into())
+		AuthorityPair::from_seed(U256::from(i).into())
 	}).collect::<Vec<_>>();
 
 	let public = pairs.iter().map(|p| p.public()).collect();

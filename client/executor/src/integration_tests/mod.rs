@@ -385,7 +385,7 @@ test_wasm_execution!(ed25519_verify_should_work);
 fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
+	let key = ed25519::Pair::from_seed(blake2_256(b"test"));
 	let sig = key.sign(b"all ok!");
 	let mut calldata = vec![];
 	calldata.extend_from_slice(key.public().as_ref());
@@ -421,7 +421,7 @@ test_wasm_execution!(sr25519_verify_should_work);
 fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
-	let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
+	let key = sr25519::Pair::from_seed(blake2_256(b"test"));
 	let sig = key.sign(b"all ok!");
 	let mut calldata = vec![];
 	calldata.extend_from_slice(key.public().as_ref());
