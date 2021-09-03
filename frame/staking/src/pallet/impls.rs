@@ -653,14 +653,12 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		let nominator_count = CounterForNominators::<T>::get() as usize;
-		let validator_count = CounterForValidators::<T>::get() as usize;
-		let all_voter_count = validator_count.saturating_add(nominator_count);
-		drop(validator_count);
-		drop(nominator_count);
-
-		let max_allowed_len = maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count);
-		drop(all_voter_count);
+		let max_allowed_len = {
+			let nominator_count = CounterForNominators::<T>::get() as usize;
+			let validator_count = CounterForValidators::<T>::get() as usize;
+			let all_voter_count = validator_count.saturating_add(nominator_count);
+			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
+		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
 
@@ -697,7 +695,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == all_voters.len());
+		debug_assert!(all_voters.capacity() >= all_voters.len());
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(
 			validators_taken,

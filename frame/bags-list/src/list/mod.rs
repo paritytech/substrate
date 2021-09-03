@@ -584,7 +584,7 @@ impl<T: Config> Bag<T> {
 
 	/// Iterate over the nodes in this bag (public for tests).
 	#[cfg(feature = "std")]
-	#[allow(dead_code)] 
+	#[allow(dead_code)]
 	pub fn std_iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
@@ -656,13 +656,14 @@ impl<T: Config> Node<T> {
 
 	/// Get the underlying voter (public fo tests).
 	#[cfg(feature = "std")]
+	#[allow(dead_code)]
 	pub fn std_id(&self) -> &T::AccountId {
 		&self.id
 	}
 
 	/// The bag this nodes belongs to (public for benchmarks).
 	#[cfg(feature = "runtime-benchmarks")]
-	#[allow(dead_code)] 
+	#[allow(dead_code)]
 	pub fn bag_upper(&self) -> VoteWeight {
 		self.bag_upper
 	}
