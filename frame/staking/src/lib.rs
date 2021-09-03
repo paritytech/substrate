@@ -732,7 +732,7 @@ enum Releases {
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
-	V8_0_0, // Populate `SortedListProvider` with the assumption that it is pallet-bags-list
+	V8_0_0, // populate `SortedListProvider`.
 }
 
 impl Default for Releases {
