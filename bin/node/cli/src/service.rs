@@ -34,7 +34,7 @@ use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
-use pallet_contracts_rpc::ContractsRpc;
+use pallet_contracts_rpc::{ContractsApiServer, ContractsRpc};
 use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
 use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
 use sc_consensus_babe_rpc::{BabeApiServer, BabeRpc};
@@ -207,10 +207,7 @@ pub fn new_partial(
 			SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
 		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc();
 		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc();
-		let contracts_rpc = ContractsRpc::new(client2.clone())
-			.into_rpc_module()
-			.expect("TODO: error handling");
-
+		let contracts_rpc = ContractsRpc::new(client2.clone()).into_rpc();
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
 		module.merge(babe_rpc).expect("TODO: error handling");

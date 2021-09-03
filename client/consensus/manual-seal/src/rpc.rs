@@ -21,14 +21,14 @@
 use crate::error::Error;
 use futures::{
 	channel::{mpsc, oneshot},
-	FutureExt, SinkExt,
+	SinkExt,
 };
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, Error as JsonRpseeError, JsonRpcResult},
 };
 use sc_consensus::ImportedAux;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use sp_runtime::EncodedJustification;
 
 /// Sender passed to the authorship task to report errors or successes.
