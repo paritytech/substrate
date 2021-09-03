@@ -78,10 +78,10 @@ impl<T: Config> Pallet<T> {
 		era: EraIndex,
 	) -> DispatchResultWithPostInfo {
 		// Validate input data
-		let current_era = CurrentEra::<T>::get().ok_or(
+		let current_era = CurrentEra::<T>::get().ok_or_else(|| {
 			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)),
-		)?;
+				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		})?;
 		let history_depth = Self::history_depth();
 		ensure!(
 			era <= current_era && era >= current_era.saturating_sub(history_depth),
@@ -96,10 +96,10 @@ impl<T: Config> Pallet<T> {
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
 
-		let controller = Self::bonded(&validator_stash).ok_or(
-			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)),
-		)?;
-		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
+		let controller = Self::bonded(&validator_stash).ok_or_else(|| {
+			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		})?;
+		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger
 			.claimed_rewards
