@@ -126,7 +126,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 
 /// The stream of transaction events.
 pub type TransactionStatusStream<Hash, BlockHash> =
-	dyn Stream<Item = TransactionStatus<Hash, BlockHash>> + Send + Unpin;
+	dyn Stream<Item = TransactionStatus<Hash, BlockHash>> + Send;
 
 /// The import notification event stream.
 pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
@@ -203,13 +203,14 @@ pub trait TransactionPool: Send + Sync {
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
-	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
+	/// Returns a future that import a single transaction and starts to watch their progress in the
+	/// pool.
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
 		xt: TransactionFor<Self>,
-	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
+	) -> PoolFuture<Pin<Box<TransactionStatusStreamFor<Self>>>, Self::Error>;
 
 	// *** Block production / Networking
 	/// Get an iterator for ready transactions ordered by priority.

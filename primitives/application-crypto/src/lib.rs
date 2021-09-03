@@ -259,6 +259,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
+				$crate::codec::MaxEncodedLen,
 			)]
 			pub struct Public($public);
 		}

@@ -22,7 +22,7 @@
 use super::*;
 
 use crate as pallet_multisig;
-use frame_support::{assert_noop, assert_ok, parameter_types, traits::Filter};
+use frame_support::{assert_noop, assert_ok, parameter_types, traits::Contains};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -94,8 +94,8 @@ parameter_types! {
 	pub const MaxSignatories: u16 = 3;
 }
 pub struct TestBaseCallFilter;
-impl Filter<Call> for TestBaseCallFilter {
-	fn filter(c: &Call) -> bool {
+impl Contains<Call> for TestBaseCallFilter {
+	fn contains(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
 			// Needed for benchmarking
@@ -812,8 +812,9 @@ fn weight_check_works() {
 
 #[test]
 fn multisig_handles_no_preimage_after_all_approve() {
-	// This test checks the situation where everyone approves a multi-sig, but no-one provides the call data.
-	// In the end, any of the multisig callers can approve again with the call data and the call will go through.
+	// This test checks the situation where everyone approves a multi-sig, but no-one provides the
+	// call data. In the end, any of the multisig callers can approve again with the call data and
+	// the call will go through.
 	new_test_ext().execute_with(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
 		assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));

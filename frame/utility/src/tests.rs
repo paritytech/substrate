@@ -26,7 +26,7 @@ use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok, decl_module,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	parameter_types, storage,
-	traits::Filter,
+	traits::Contains,
 	weights::{Pays, Weight},
 };
 use sp_core::H256;
@@ -66,6 +66,9 @@ pub mod example {
 					Ok(end_weight.into())
 				}
 			}
+
+			#[weight = 0]
+			fn big_variant(_origin, _arg: [u8; 400]) {}
 		}
 	}
 }
@@ -139,8 +142,8 @@ parameter_types! {
 impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
-impl Filter<Call> for TestBaseCallFilter {
-	fn filter(c: &Call) -> bool {
+impl Contains<Call> for TestBaseCallFilter {
+	fn contains(c: &Call) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
 			Call::Balances(pallet_balances::Call::transfer(..)) => true,
@@ -279,7 +282,7 @@ fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		let k = b"a".to_vec();
 		let call = Call::System(frame_system::Call::set_storage(vec![(k.clone(), k.clone())]));
-		assert!(!TestBaseCallFilter::filter(&call));
+		assert!(!TestBaseCallFilter::contains(&call));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch(
@@ -576,7 +579,8 @@ fn batch_all_does_not_nest() {
 		);
 
 		// And for those who want to get a little fancy, we check that the filter persists across
-		// other kinds of dispatch wrapping functions... in this case `batch_all(batch(batch_all(..)))`
+		// other kinds of dispatch wrapping functions... in this case
+		// `batch_all(batch(batch_all(..)))`
 		let batch_nested = Call::Utility(UtilityCall::batch(vec![batch_all]));
 		// Batch will end with `Ok`, but does not actually execute as we can see from the event
 		// and balances.
@@ -586,5 +590,14 @@ fn batch_all_does_not_nest() {
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
+	});
+}
+
+#[test]
+fn batch_limit() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::System(SystemCall::remark(vec![])); 40_000];
+		assert_noop!(Utility::batch(Origin::signed(1), calls.clone()), Error::<Test>::TooManyCalls);
+		assert_noop!(Utility::batch_all(Origin::signed(1), calls), Error::<Test>::TooManyCalls);
 	});
 }
