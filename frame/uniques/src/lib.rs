@@ -202,9 +202,9 @@ pub mod pallet {
 		ForceCreated(T::ClassId, T::AccountId),
 		/// An asset `class` was destroyed. \[ class \]
 		Destroyed(T::ClassId),
-		/// An asset `instace` was issued. \[ class, instance, owner \]
+		/// An asset `instance` was issued. \[ class, instance, owner \]
 		Issued(T::ClassId, T::InstanceId, T::AccountId),
-		/// An asset `instace` was transferred. \[ class, instance, from, to \]
+		/// An asset `instance` was transferred. \[ class, instance, from, to \]
 		Transferred(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
 		/// An asset `instance` was destroyed. \[ class, instance, owner \]
 		Burned(T::ClassId, T::InstanceId, T::AccountId),
@@ -316,28 +316,14 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
-
-			let deposit = T::ClassDeposit::get();
-			T::Currency::reserve(&owner, deposit)?;
-
-			Class::<T, I>::insert(
+			Self::do_create_class(
 				class,
-				ClassDetails {
-					owner: owner.clone(),
-					issuer: admin.clone(),
-					admin: admin.clone(),
-					freezer: admin.clone(),
-					total_deposit: deposit,
-					free_holding: false,
-					instances: 0,
-					instance_metadatas: 0,
-					attributes: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::Created(class, owner, admin));
-			Ok(())
+				owner.clone(),
+				admin.clone(),
+				T::ClassDeposit::get(),
+				false,
+				Event::Created(class, owner, admin),
+			)
 		}
 
 		/// Issue a new class of non-fungible assets from a privileged origin.
@@ -366,25 +352,14 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
-
-			Class::<T, I>::insert(
+			Self::do_create_class(
 				class,
-				ClassDetails {
-					owner: owner.clone(),
-					issuer: owner.clone(),
-					admin: owner.clone(),
-					freezer: owner.clone(),
-					total_deposit: Zero::zero(),
-					free_holding,
-					instances: 0,
-					instance_metadatas: 0,
-					attributes: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::ForceCreated(class, owner));
-			Ok(())
+				owner.clone(),
+				owner.clone(),
+				Zero::zero(),
+				free_holding,
+				Event::ForceCreated(class, owner),
+			)
 		}
 
 		/// Destroy a class of fungible assets.
@@ -438,7 +413,8 @@ pub mod pallet {
 
 				Self::deposit_event(Event::Destroyed(class));
 
-				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
+				// NOTE: could use postinfo to reflect the actual number of
+				// accounts/sufficient/approvals
 				Ok(())
 			})
 		}

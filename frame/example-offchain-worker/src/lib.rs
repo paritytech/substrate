@@ -131,7 +131,8 @@ pub mod pallet {
 
 		/// Number of blocks of cooldown after unsigned transaction is included.
 		///
-		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
+		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval`
+		/// blocks.
 		#[pallet::constant]
 		type UnsignedInterval: Get<Self::BlockNumber>;
 
@@ -439,9 +440,9 @@ impl<T: Config> Pallet<T> {
 		// Submit signed will return a vector of results for all accounts that were found in the
 		// local keystore with expected `KEY_TYPE`.
 		let results = signer.send_signed_transaction(|_account| {
-			// Received price is wrapped into a call to `submit_price` public function of this pallet.
-			// This means that the transaction, when executed, will simply call that function passing
-			// `price` as an argument.
+			// Received price is wrapped into a call to `submit_price` public function of this
+			// pallet. This means that the transaction, when executed, will simply call that
+			// function passing `price` as an argument.
 			Call::submit_price(price)
 		});
 

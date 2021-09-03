@@ -255,8 +255,8 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		let (prefix_len, ident) = match data[0] {
 			0..=63 => (1, data[0] as u16),
 			64..=127 => {
-				// weird bit manipulation owing to the combination of LE encoding and missing two bits
-				// from the left.
+				// weird bit manipulation owing to the combination of LE encoding and missing two
+				// bits from the left.
 				// d[0] d[1] are: 01aaaaaa bbcccccc
 				// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
 				// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
@@ -1029,9 +1029,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
 
-	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an optional seed, in the
-	/// case that the pair can be expressed as a direct derivation from a seed (some cases, such as Sr25519 derivations
-	/// with path components, cannot).
+	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an
+	/// optional seed, in the case that the pair can be expressed as a direct derivation from a seed
+	/// (some cases, such as Sr25519 derivations with path components, cannot).
 	///
 	/// This takes a helper function to do the key generation from a phrase, password and
 	/// junction iterator.
@@ -1043,7 +1043,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///   - the phrase may be followed by one or more items delimited by `/` characters.
 	///   - the path may be followed by `///`, in which case everything after the `///` is treated
 	/// as a password.
-	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE` and
+	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE`
+	///   and
 	/// interpreted as above.
 	///
 	/// In this case they are interpreted as HDKD junctions; purely numeric items are interpreted as
@@ -1053,8 +1054,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// There is no correspondence mapping between SURI strings and the keys they represent.
 	/// Two different non-identical strings can actually lead to the same secret being derived.
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
-	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will generally
-	/// be equivalent to no password at all.
+	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
+	/// generally be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]

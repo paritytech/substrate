@@ -39,10 +39,10 @@ pub use value::{StorageValue, StorageValueMetadata};
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///
 /// It is implemented by:
-/// * `OptionQuery` which convert an optional value to an optional value, user when querying
-///   storage will get an optional value.
-/// * `ValueQuery` which convert an optional value to a value, user when querying storage will get
-///   a value.
+/// * `OptionQuery` which convert an optional value to an optional value, user when querying storage
+///   will get an optional value.
+/// * `ValueQuery` which convert an optional value to a value, user when querying storage will get a
+///   value.
 pub trait QueryKindTrait<Value, OnEmpty> {
 	/// Metadata for the storage kind.
 	const METADATA: StorageEntryModifier;

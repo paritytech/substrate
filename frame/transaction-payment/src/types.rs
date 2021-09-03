@@ -36,8 +36,9 @@ pub struct InclusionFee<Balance> {
 	pub base_fee: Balance,
 	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
 	pub len_fee: Balance,
-	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
-	///     the congestion of the network.
+	///
+	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on the
+	///   congestion of the network.
 	/// - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
 	/// accounts for the execution time of a transaction.
 	///
@@ -60,8 +61,8 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 
 /// The `FeeDetails` is composed of:
 ///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
-///   - `tip`: If included in the transaction, the tip will be added on top. Only
-///     signed transactions can have a tip.
+///   - `tip`: If included in the transaction, the tip will be added on top. Only signed
+///     transactions can have a tip.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -88,7 +89,8 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 	}
 }
 
-/// Information related to a dispatchable's class, weight, and fee that can be queried from the runtime.
+/// Information related to a dispatchable's class, weight, and fee that can be queried from the
+/// runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
