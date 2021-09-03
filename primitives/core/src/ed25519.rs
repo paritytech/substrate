@@ -476,9 +476,7 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed(seed: Seed) -> Pair {
-		let secret = SigningKey::from(seed);
-		let public = VerificationKey::from(&secret);
-		Pair {secret, public}
+		Self::from_seed_slice(&seed[..]).expect("seed has valid length; qed")
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it

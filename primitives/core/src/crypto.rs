@@ -1358,8 +1358,8 @@ mod tests {
 				None,
 			))
 		}
-		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self {
-			TestPair::Seed(_seed.as_ref().to_owned())
+		fn from_seed(seed: <TestPair as Pair>::Seed) -> Self {
+			TestPair::Seed(seed.as_ref().to_owned())
 		}
 		fn sign(&self, _message: &[u8]) -> Self::Signature {
 			[]
