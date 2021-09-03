@@ -22,21 +22,21 @@
 //! This module shows how you can write a Rust RPC client that connects to a running
 //! substrate node and use statically typed RPC wrappers.
 
-use futures::{Future, TryFutureExt};
-use jsonrpc_core_client::{transports::http, RpcError};
+use futures::TryFutureExt;
+use jsonrpsee::{types::Error, ws_client::WsClientBuilder};
 use node_primitives::Hash;
-use sc_rpc::author::{hash::ExtrinsicOrHash, AuthorClient};
+use sc_rpc::author::{hash::ExtrinsicOrHash, AuthorApiClient};
 
-fn main() -> Result<(), RpcError> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
 	sp_tracing::try_init_simple();
 
-	futures::executor::block_on(async {
-		let uri = "http://localhost:9933";
-
-		http::connect(uri)
-			.and_then(|client: AuthorClient<Hash, Hash>| remove_all_extrinsics(client))
-			.await
-	})
+	// NOTE(niklasad1): changed this to the WS client because that jsonrpsee proc macros
+	// requires trait bound `SubscriptionClient` that is not implemented.
+	WsClientBuilder::default()
+		.build("ws://localhost:9944")
+		.and_then(|client| remove_all_extrinsics(client))
+		.await
 }
 
 /// Remove all pending extrinsics from the node.
@@ -47,17 +47,19 @@ fn main() -> Result<(), RpcError> {
 ///
 /// As the result of running the code the entire content of the transaction pool is going
 /// to be removed and the extrinsics are going to be temporarily banned.
-fn remove_all_extrinsics(
-	client: AuthorClient<Hash, Hash>,
-) -> impl Future<Output = Result<(), RpcError>> {
-	client
-		.pending_extrinsics()
-		.and_then(move |pending| {
-			client.remove_extrinsic(
-				pending.into_iter().map(|tx| ExtrinsicOrHash::Extrinsic(tx.into())).collect(),
-			)
-		})
-		.map_ok(|removed| {
-			println!("Removed extrinsics: {:?}", removed);
-		})
+async fn remove_all_extrinsics<C>(client: C) -> Result<(), Error>
+where
+	C: AuthorApiClient<Hash, Hash> + Sync,
+{
+	let pending_exts = client.pending_extrinsics().await?;
+	let removed = client
+		.remove_extrinsic(
+			pending_exts
+				.into_iter()
+				.map(|tx| ExtrinsicOrHash::Extrinsic(tx.into()))
+				.collect(),
+		)
+		.await?;
+	println!("Removed extrinsics: {:?}", removed);
+	Ok(())
 }

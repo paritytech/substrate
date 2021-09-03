@@ -4246,6 +4246,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-rpc-client"
+version = "2.0.0"
+dependencies = [
+ "futures 0.3.16",
+ "jsonrpsee",
+ "node-primitives",
+ "sc-rpc",
+ "sp-tracing",
+ "tokio",
+]
+
+[[package]]
 name = "node-runtime"
 version = "3.0.0-dev"
 dependencies = [
@@ -9258,6 +9270,21 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "structopt",
+]
+
+[[package]]
+name = "substrate-frame-rpc-support"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "futures 0.3.16",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sc-rpc-api",
+ "serde",
+ "sp-storage",
+ "tokio",
 ]
 
 [[package]]
