@@ -358,7 +358,7 @@ benchmarks! {
 
 		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
 		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators_with_seed::<T>(T::MAX_NOMINATIONS - 1, 100)?;
+		let rest_of_validators = create_validators_with_seed::<T>(T::MAX_NOMINATIONS - 1, 100, 415)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
@@ -421,7 +421,8 @@ benchmarks! {
 
 		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
 
-		// setup a worst case list scenario.
+		// setup a worst case list scenario. Note we don't care about the destination position, because
+		// we are just doing an insert into the origin position.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
 			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
@@ -620,18 +621,20 @@ benchmarks! {
 
 		let origin_weight = MinNominatorBond::<T>::get()
 			.max(T::Currency::minimum_balance())
-			// we use 100 to play friendly with the bags, list threshold values in the mock.
+			// we use 100 to play friendly with the list threshold values in the mock
 			.max(100u32.into());
 
 		// setup a worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let dest_weight = scenario.dest_weight.clone();
 
-		// rebond an amount that will give the use dest_weight
+		// rebond an amount that will give the user dest_weight
 		let rebond_amount = dest_weight - origin_weight;
 
 		// spread that amount to rebond across `l` unlocking chunks,
 		let value = rebond_amount / l.into();
+		// if `value` is zero, we need a greater delta between dest <=> origin weight
+		assert_ne!(value, Zero::zero());
 		// so the sum of unlocking chunks puts voter into the dest bag.
 		assert!(value * l.into() + origin_weight > origin_weight);
 		assert!(value * l.into() + origin_weight <= dest_weight);

@@ -640,17 +640,17 @@ impl<T: Config> Pallet<T> {
 	/// Get all of the voters that are eligible for the npos election.
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned; First all the validator
-	/// are included in no particular order, then the nominator in the order returned by the
-	/// configured [`Config::SortedListProvider`].
+	/// are included in no particular order, then remainder is taken from the nominators, as returned
+	/// by [`Config::SortedListProvider`].
 	///
-	/// This will use on-chain nominators, and all the validators will inject a self vote.
+	/// This will use nominators, and all the validators will inject a self vote.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
 	/// ### Slashing
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
-	/// auto-chilled.
+	/// auto-chilled, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
@@ -663,7 +663,7 @@ impl<T: Config> Pallet<T> {
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
 
-		// first, grab all validators, capped by the maximum allowed length.
+		// first, grab all validators in no particular order, capped by the maximum allowed length.
 		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
@@ -732,7 +732,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
-	/// and keep track of the `CounterForNominators`.
+	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
@@ -744,7 +744,7 @@ impl<T: Config> Pallet<T> {
 			// maybe update the counter.
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
 
-			// maybe update sorted list. Defensive-only: this should never fail.
+			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
 				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
 				debug_assert!(false, "attempt to insert duplicate nominator");
@@ -757,7 +757,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// and keep track of the `CounterForNominators`.
+	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///

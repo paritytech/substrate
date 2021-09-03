@@ -130,6 +130,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 	return Ok((stash, controller))
 }
 
+/// create `max` validators.
 pub fn create_validators<T: Config>(
 	max: u32,
 	balance_factor: u32,
@@ -137,7 +138,7 @@ pub fn create_validators<T: Config>(
 	create_validators_with_seed::<T>(max, balance_factor, 0)
 }
 
-/// create `max` validators.
+/// create `max` validators, with a seed to help unintentional prevent account collisions.
 pub fn create_validators_with_seed<T: Config>(
 	max: u32,
 	balance_factor: u32,

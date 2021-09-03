@@ -141,9 +141,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
-		/// Something that can provide a sorted list of voters is a somewhat sorted way. The
-		/// original use case for this was designed with [`pallet-bags-list::Pallet`] in mind. If
-		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely a good option.
+		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
+		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
+		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -796,7 +796,7 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				// ledger must be updated prior to calling `Self::weight_of`.
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&stash) {
@@ -862,6 +862,7 @@ pub mod pallet {
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
 				// update this staker in the sorted list, if they exist in it.
@@ -1364,6 +1365,8 @@ pub mod pallet {
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
+
+			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
 			if T::SortedListProvider::contains(&ledger.stash) {
 				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
