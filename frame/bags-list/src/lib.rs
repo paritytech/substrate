@@ -43,9 +43,9 @@
 //!   it will worsen its position in list iteration; this reduces incentives for some types of spam
 //!   that involve consistently removing and inserting for better position. Further, ordering
 //!   granularity is thus dictated by range between each bag threshold.
-//! - if an items weight changes to a value no longer within the range of its current bag the item's
-//!   position will need to be updated by an external actor with rebag (update), or removal and
-//!   insertion.
+//! - if an item's weight changes to a value no longer within the range of its current bag the
+//!   item's position will need to be updated by an external actor with rebag (update), or removal
+//!   and insertion.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -77,7 +77,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("[{:?}] ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+			concat!("[{:?}] 👜", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
 }
@@ -164,7 +164,7 @@ pub mod pallet {
 	// TODO: we make this public for now only for the sake of the remote-ext tests, find another way
 	// around it.
 	#[pallet::storage]
-	pub type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -183,7 +183,7 @@ pub mod pallet {
 		/// Anyone can call this function about any potentially dislocated account.
 		///
 		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
-		/// it is a noop and only fees are collected from `origin`.
+		/// it is a noop and fees are still collected from `origin`.
 		#[pallet::weight(T::WeightInfo::rebag())]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;

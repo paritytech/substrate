@@ -273,7 +273,7 @@ impl<T: Config> List<T> {
 		Ok(())
 	}
 
-	/// Remove a id from the list.
+	/// Remove an id from the list.
 	pub(crate) fn remove(id: &T::AccountId) {
 		Self::remove_many(sp_std::iter::once(id));
 	}
@@ -369,7 +369,7 @@ impl<T: Config> List<T> {
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
 	/// * there are no duplicate ids,
-	/// * length of this list are in sync with `CounterForListNodes`.
+	/// * length of this list is in sync with `CounterForListNodes`,
 	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
 	///   are checked per *any* update to `List`.
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
@@ -380,7 +380,7 @@ impl<T: Config> List<T> {
 			"duplicate identified",
 		);
 
-		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
+		let iter_count = Self::iter().count() as u32;
 		let stored_count = crate::CounterForListNodes::<T>::get();
 		ensure!(iter_count == stored_count, "iter_count != stored_count",);
 
@@ -430,7 +430,8 @@ impl<T: Config> Bag<T> {
 		})
 	}
 
-	/// Get a bag by its upper vote weight or make it, appropriately initialized.
+	/// Get a bag by its upper vote weight or make it, appropriately initialized. Does not check if
+	/// if `bag_upper` is a valid threshold.
 	fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
@@ -474,7 +475,7 @@ impl<T: Config> Bag<T> {
 	fn insert_unchecked(&mut self, id: T::AccountId) {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
-		// correct [`notional_bag_for`], getting the bag, and then `bag.insert_unchecked`.
+		// correct [`notional_bag_for`].
 		self.insert_node_unchecked(Node::<T> { id, prev: None, next: None, bag_upper: 0 });
 	}
 
@@ -500,7 +501,6 @@ impl<T: Config> Bag<T> {
 		// to be `self.bag_upper`.
 		node.bag_upper = self.bag_upper;
 
-		// update this node now, making it the new tail.
 		let id = node.id.clone();
 		// update this node now, treating it as the new tail.
 		node.prev = self.tail.clone();
@@ -582,8 +582,9 @@ impl<T: Config> Bag<T> {
 		Ok(())
 	}
 
-	/// Iterate over the nodes in this bag (publicly accessible for testing and benchmarks).
+	/// Iterate over the nodes in this bag (public for tests).
 	#[cfg(feature = "std")]
+	#[allow(dead_code)] 
 	pub fn std_iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
@@ -613,7 +614,8 @@ impl<T: Config> Node<T> {
 
 	/// Update neighboring nodes to point to reach other.
 	///
-	/// Does _not_ update storage, so the user may need to call `self.put`.
+	/// Only updates storage for adjacent nodes, but not `self`; so the user may need to call
+	/// `self.put`.
 	fn excise(&self) {
 		// Update previous node.
 		if let Some(mut prev) = self.prev() {
@@ -652,14 +654,15 @@ impl<T: Config> Node<T> {
 		&self.id
 	}
 
-	/// Get the underlying voter (publicly accessible for testing and benchmarks).
+	/// Get the underlying voter (public fo tests).
 	#[cfg(feature = "std")]
 	pub fn std_id(&self) -> &T::AccountId {
 		&self.id
 	}
 
-	/// The bag this nodes belongs to (publicly accessible for testing and benchmarks).
+	/// The bag this nodes belongs to (public for benchmarks).
 	#[cfg(feature = "runtime-benchmarks")]
+	#[allow(dead_code)] 
 	pub fn bag_upper(&self) -> VoteWeight {
 		self.bag_upper
 	}

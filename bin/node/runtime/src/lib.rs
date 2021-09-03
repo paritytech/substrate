@@ -517,7 +517,7 @@ impl pallet_staking::Config for Runtime {
 		pallet_election_provider_multi_phase::OnChainConfig<Self>,
 	>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
-	// Note that this method does not scale to a very large number of nominators.
+	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }

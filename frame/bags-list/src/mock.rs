@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Mock runtime for pallet-bags-lists tests.
+
 use super::*;
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;

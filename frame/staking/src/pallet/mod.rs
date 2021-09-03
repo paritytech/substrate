@@ -141,9 +141,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
-		/// Something that can provide a sorted list of voters is a somewhat sorted way. The original
-		/// use case for this was designed with [`pallet-bags-list::Pallet`] in mind. If the
-		/// bags-list is not desired 
+		/// Something that can provide a sorted list of voters is a somewhat sorted way. The
+		/// original use case for this was designed with [`pallet-bags-list::Pallet`] in mind. If
+		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely a good option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -676,6 +676,19 @@ pub mod pallet {
 				}
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
+		}
+
+		fn integrity_test() {
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(||
+					assert!(
+						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+						T::SlashDeferDuration::get(),
+						T::BondingDuration::get(),
+					)
+				);
+			}
 		}
 	}
 

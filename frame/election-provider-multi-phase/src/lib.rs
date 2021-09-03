@@ -638,7 +638,7 @@ pub mod pallet {
 
 		/// The number of snapshot voters to fetch per block.
 		///
-		/// In the future, this value will make more sense with multi-block snapshot.
+		/// In the future, once m
 		///
 		/// Also, note the data type: If the voters are represented by a `u32` in `type
 		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
