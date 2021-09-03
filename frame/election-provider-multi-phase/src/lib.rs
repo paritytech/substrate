@@ -1072,9 +1072,6 @@ pub mod pallet {
 		CallNotAllowed,
 	}
 
-	#[pallet::origin]
-	pub struct Origin<T>(PhantomData<T>);
-
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
