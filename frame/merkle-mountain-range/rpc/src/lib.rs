@@ -24,8 +24,8 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Encode};
 use jsonrpsee::{
-	types::{error::CallError, Error as JsonRpseeError},
-	RpcModule,
+	proc_macros::rpc,
+	types::{async_trait, error::CallError, JsonRpcResult},
 };
 use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
@@ -65,53 +65,64 @@ impl<BlockHash> LeafProof<BlockHash> {
 }
 
 /// MMR RPC methods.
+#[rpc(client, server, namespace = "mmr")]
+pub trait MmrApi<BlockHash> {
+	/// Generate MMR proof for given leaf index.
+	///
+	/// This method calls into a runtime with MMR pallet included and attempts to generate
+	/// MMR proof for leaf at given `leaf_index`.
+	/// Optionally, a block hash at which the runtime should be queried can be specified.
+	///
+	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
+	/// the leaf). Both parameters are SCALE-encoded.
+	#[method(name = "generateProof")]
+	fn generate_proof(
+		&self,
+		leaf_index: u64,
+		at: Option<BlockHash>,
+	) -> JsonRpcResult<LeafProof<BlockHash>>;
+}
+
+/// MMR RPC methods.
 pub struct MmrRpc<Client, Block> {
 	client: Arc<Client>,
 	_marker: PhantomData<Block>,
 }
 
-impl<Client, Block, MmrHash> MmrRpc<Client, (Block, MmrHash)>
+impl<C, B> MmrRpc<C, B> {
+	/// Create new `Mmr` with the given reference to the client.
+	pub fn new(client: Arc<C>) -> Self {
+		Self { client, _marker: Default::default() }
+	}
+}
+
+#[async_trait]
+impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash>
+	for MmrRpc<Client, (Block, MmrHash)>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	Client::Api: MmrRuntimeApi<Block, MmrHash>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
-	/// Create a new [`MmrRpc`].
-	pub fn new(client: Arc<Client>) -> Self {
-		MmrRpc { client, _marker: Default::default() }
-	}
+	fn generate_proof(
+		&self,
+		leaf_index: u64,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> JsonRpcResult<LeafProof<Block::Hash>> {
+		let api = self.client.runtime_api();
+		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
-	/// Convert this [`MmrRpc`] to an [`RpcModule`].
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
+		let (leaf, proof) = api
+			.generate_proof_with_context(
+				&BlockId::hash(block_hash),
+				sp_core::ExecutionContext::OffchainCall(None),
+				leaf_index,
+			)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
 
-		// Generate MMR proof for given leaf index.
-		//
-		// This method calls into a runtime with MMR pallet included and attempts to generate
-		// MMR proof for leaf at given `leaf_index`.
-		// Optionally, a block hash at which the runtime should be queried can be specified.
-		//
-		// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
-		// the leaf). Both parameters are SCALE-encoded.
-		module.register_method("mmr_generateProof", |params, mmr| {
-			let (leaf_index, at): (u64, Option<<Block as BlockT>::Hash>) = params.parse()?;
-			let api = mmr.client.runtime_api();
-			let block_hash = at.unwrap_or_else(|| mmr.client.info().best_hash);
-
-			let (leaf, proof) = api
-				.generate_proof_with_context(
-					&BlockId::hash(block_hash),
-					sp_core::ExecutionContext::OffchainCall(None),
-					leaf_index,
-				)
-				.map_err(runtime_error_into_rpc_error)?
-				.map_err(mmr_error_into_rpc_error)?;
-
-			Ok(LeafProof::new(block_hash, leaf, proof))
-		})?;
-
-		Ok(module)
+		Ok(LeafProof::new(block_hash, leaf, proof))
 	}
 }
 

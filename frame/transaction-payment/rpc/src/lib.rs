@@ -21,8 +21,12 @@ use std::{convert::TryInto, sync::Arc};
 
 use codec::{Codec, Decode};
 use jsonrpsee::{
-	types::error::{CallError, Error as JsonRpseeError},
-	RpcModule,
+	proc_macros::rpc,
+	types::{
+		async_trait,
+		error::{CallError, Error as JsonRpseeError},
+		JsonRpcResult,
+	},
 };
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
@@ -35,6 +39,19 @@ use sp_runtime::{
 	traits::{Block as BlockT, MaybeDisplay},
 };
 
+#[rpc(client, server, namespace = "payment")]
+pub trait TransactionPaymentApi<BlockHash, ResponseType> {
+	#[method(name = "queryInfo")]
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> JsonRpcResult<ResponseType>;
+
+	#[method(name = "queryFeeDetails")]
+	fn query_fee_details(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<BlockHash>,
+	) -> JsonRpcResult<FeeDetails<NumberOrHex>>;
+}
+
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
 pub struct TransactionPaymentRpc<C, Block, Balance> {
 	/// Shared reference to the client.
@@ -43,72 +60,69 @@ pub struct TransactionPaymentRpc<C, Block, Balance> {
 	_balance_marker: std::marker::PhantomData<Balance>,
 }
 
-impl<C, Block, Balance> TransactionPaymentRpc<C, Block, Balance>
+impl<C, Block, Balance> TransactionPaymentRpc<C, Block, Balance> {
+	/// Creates a new instance of the TransactionPaymentRpc helper.
+	pub fn new(client: Arc<C>) -> Self {
+		Self { client, _block_marker: Default::default(), _balance_marker: Default::default() }
+	}
+}
+
+#[async_trait]
+impl<C, Block, Balance>
+	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+	for TransactionPaymentRpc<C, Block, Balance>
 where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
 	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex> + Send + Sync + 'static,
 {
-	/// Creates a new instance of the TransactionPaymentRpc helper.
-	pub fn new(client: Arc<C>) -> Self {
-		Self { client, _block_marker: Default::default(), _balance_marker: Default::default() }
+	fn query_info(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<Block::Hash>,
+	) -> JsonRpcResult<RuntimeDispatchInfo<Balance>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+
+		let encoded_len = encoded_xt.len() as u32;
+
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
+			.map_err(|codec_err| CallError::from_std_error(codec_err))?;
+		api.query_info(&at, uxt, encoded_len)
+			.map_err(|api_err| JsonRpseeError::to_call_error(api_err))
 	}
 
-	/// Convert this [`TransactionPaymentRpc`] to an [`RpcModule`].
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
+	fn query_fee_details(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<Block::Hash>,
+	) -> JsonRpcResult<FeeDetails<NumberOrHex>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
-		module.register_method::<RuntimeDispatchInfo<Balance>, _>(
-			"payment_queryInfo",
-			|params, trx_payment| {
-				let (encoded_xt, at): (Bytes, Option<<Block as BlockT>::Hash>) = params.parse()?;
+		let encoded_len = encoded_xt.len() as u32;
 
-				let api = trx_payment.client.runtime_api();
-				let at = BlockId::hash(at.unwrap_or_else(|| trx_payment.client.info().best_hash));
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
+			.map_err(|codec_err| CallError::from_std_error(codec_err))?;
+		let fee_details = api
+			.query_fee_details(&at, uxt, encoded_len)
+			.map_err(|api_err| CallError::from_std_error(api_err))?;
 
-				let encoded_len = encoded_xt.len() as u32;
+		let try_into_rpc_balance =
+			|value: Balance| value.try_into().map_err(|_try_err| CallError::InvalidParams);
 
-				let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-					.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
-				api.query_info(&at, uxt, encoded_len)
-					.map_err(|api_err| CallError::Failed(Box::new(api_err)))
+		Ok(FeeDetails {
+			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
+				Some(InclusionFee {
+					base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
+					len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
+					adjusted_weight_fee: try_into_rpc_balance(inclusion_fee.adjusted_weight_fee)?,
+				})
+			} else {
+				None
 			},
-		)?;
-
-		module.register_method("payment_queryFeeDetails", |params, trx_payment| {
-			let (encoded_xt, at): (Bytes, Option<<Block as BlockT>::Hash>) = params.parse()?;
-
-			let api = trx_payment.client.runtime_api();
-			let at = BlockId::hash(at.unwrap_or_else(|| trx_payment.client.info().best_hash));
-
-			let encoded_len = encoded_xt.len() as u32;
-
-			let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-				.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
-			let fee_details = api
-				.query_fee_details(&at, uxt, encoded_len)
-				.map_err(|api_err| CallError::Failed(Box::new(api_err)))?;
-
-			let try_into_rpc_balance =
-				|value: Balance| value.try_into().map_err(|_try_err| CallError::InvalidParams);
-
-			Ok(FeeDetails {
-				inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
-					Some(InclusionFee {
-						base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
-						len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
-						adjusted_weight_fee: try_into_rpc_balance(
-							inclusion_fee.adjusted_weight_fee,
-						)?,
-					})
-				} else {
-					None
-				},
-				tip: Default::default(),
-			})
-		})?;
-
-		Ok(module)
+			tip: Default::default(),
+		})
 	}
 }

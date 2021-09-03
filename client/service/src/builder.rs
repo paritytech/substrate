@@ -46,7 +46,14 @@ use sc_network::{
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
-use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
+use sc_rpc::{
+	author::AuthorApiServer,
+	chain::ChainApiServer,
+	offchain::OffchainApiServer,
+	state::{ChildStateApiServer, StateApiServer},
+	system::SystemApiServer,
+	DenyUnsafe, SubscriptionTaskExecutor,
+};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -686,7 +693,7 @@ where
 {
 	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
 
-	// TODO(niklasad1): expose CORS to jsonrpsee to handle this propely.
+	// TODO(niklasad1): fix CORS.
 	let deny_unsafe = DenyUnsafe::No;
 
 	let system_info = sc_rpc::system::SystemInfo {
@@ -709,8 +716,7 @@ where
 				remote_blockchain.clone(),
 				on_demand.clone(),
 			)
-			.into_rpc_module()
-			.expect(UNIQUE_METHOD_NAMES_PROOF);
+			.into_rpc();
 			let (state, child_state) = sc_rpc::state::new_light(
 				client.clone(),
 				task_executor.clone(),
@@ -718,16 +724,10 @@ where
 				on_demand,
 				deny_unsafe,
 			);
-			(
-				chain,
-				state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
-				child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF),
-			)
+			(chain, state.into_rpc(), child_state.into_rpc())
 		} else {
 			// Full nodes
-			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
-				.into_rpc_module()
-				.expect(UNIQUE_METHOD_NAMES_PROOF);
+			let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
 
 			let (state, child_state) = sc_rpc::state::new_full(
 				client.clone(),
@@ -735,8 +735,8 @@ where
 				deny_unsafe,
 				config.rpc_max_payload,
 			);
-			let state = state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
-			let child_state = child_state.into_rpc_module().expect(UNIQUE_METHOD_NAMES_PROOF);
+			let state = state.into_rpc();
+			let child_state = child_state.into_rpc();
 
 			(chain, state, child_state)
 		};
@@ -748,17 +748,12 @@ where
 		deny_unsafe,
 		task_executor.clone(),
 	)
-	.into_rpc_module()
-	.expect(UNIQUE_METHOD_NAMES_PROOF);
+	.into_rpc();
 
-	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
-		.into_rpc_module()
-		.expect(UNIQUE_METHOD_NAMES_PROOF);
+	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe).into_rpc();
 
 	if let Some(storage) = offchain_storage {
-		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
-			.into_rpc_module()
-			.expect(UNIQUE_METHOD_NAMES_PROOF);
+		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
 
 		rpc_api.merge(offchain).expect(UNIQUE_METHOD_NAMES_PROOF);
 	}

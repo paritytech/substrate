@@ -2783,18 +2783,41 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
 dependencies = [
+ "jsonrpsee-http-client",
  "jsonrpsee-http-server",
+ "jsonrpsee-proc-macros 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "jsonrpsee-utils",
+ "jsonrpsee-ws-client 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "jsonrpsee-ws-server",
+]
+
+[[package]]
+name = "jsonrpsee-http-client"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
+dependencies = [
+ "async-trait",
+ "fnv",
+ "futures 0.3.16",
+ "hyper",
+ "hyper-rustls",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-utils",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
 ]
 
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2827,6 +2850,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
+dependencies = [
+ "Inflector",
+ "bae",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "jsonrpsee-types"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2847,8 +2883,9 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
 dependencies = [
+ "anyhow",
  "async-trait",
  "beef",
  "futures-channel",
@@ -2864,7 +2901,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
 dependencies = [
  "beef",
  "futures-channel",
@@ -2906,9 +2943,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-ws-client"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
+dependencies = [
+ "async-trait",
+ "fnv",
+ "futures 0.3.16",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "log",
+ "pin-project 1.0.5",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "soketto 0.6.0",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "jsonrpsee-ws-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c69e0dd871cf25104f827da5da1f1832641419af"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#3ad1cc215e0788121a36116bb5f2d38cc3d8a4cb"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -4183,6 +4243,18 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-api",
  "sp-keystore",
+]
+
+[[package]]
+name = "node-rpc-client"
+version = "2.0.0"
+dependencies = [
+ "futures 0.3.16",
+ "jsonrpsee",
+ "node-primitives",
+ "sc-rpc",
+ "sp-tracing",
+ "tokio",
 ]
 
 [[package]]
@@ -6549,8 +6621,8 @@ name = "remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
  "env_logger 0.9.0",
- "jsonrpsee-proc-macros",
- "jsonrpsee-ws-client",
+ "jsonrpsee-proc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-ws-client 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
@@ -9198,6 +9270,21 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "structopt",
+]
+
+[[package]]
+name = "substrate-frame-rpc-support"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "futures 0.3.16",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sc-rpc-api",
+ "serde",
+ "sp-storage",
+ "tokio",
 ]
 
 [[package]]

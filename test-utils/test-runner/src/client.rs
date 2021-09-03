@@ -22,7 +22,7 @@ use jsonrpsee::types::RpcModule;
 use manual_seal::{
 	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
 	import_queue,
-	rpc::ManualSeal,
+	rpc::{ManualSeal, ManualSealApiServer},
 	run_manual_seal, EngineCommand, ManualSealParams,
 };
 use sc_client_api::backend::Backend;
@@ -187,9 +187,9 @@ where
 	let rpc_sink = command_sink.clone();
 
 	let rpc_builder = Box::new(move |_, _| -> RpcModule<()> {
-		let seal = ManualSeal::new(rpc_sink).into_rpc_module().expect("TODO; error handling");
+		let seal = ManualSeal::new(rpc_sink).into_rpc();
 		let mut module = RpcModule::new(());
-		module.merge(seal).expect("TODO: error handling");
+		module.merge(seal).expect("only one module; qed");
 		module
 	});
 

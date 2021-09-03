@@ -23,8 +23,12 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
 use jsonrpsee::{
-	types::error::{CallError, Error as JsonRpseeError},
-	RpcModule,
+	proc_macros::rpc,
+	types::{
+		async_trait,
+		error::{CallError, Error as JsonRpseeError},
+		JsonRpcResult,
+	},
 };
 use pallet_contracts_primitives::{
 	Code, ContractExecResult, ContractInstantiateResult, RentProjection,
@@ -65,20 +69,22 @@ const GAS_LIMIT: Weight = 5 * GAS_PER_SECOND;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
 struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
-impl From<ContractAccessError> for CallError {
-	fn from(e: ContractAccessError) -> CallError {
+impl From<ContractAccessError> for JsonRpseeError {
+	fn from(e: ContractAccessError) -> Self {
 		use pallet_contracts_primitives::ContractAccessError::*;
 		match e.0 {
 			DoesntExist => CallError::Custom {
 				code: CONTRACT_DOESNT_EXIST,
 				message: "The specified contract doesn't exist.".into(),
 				data: None,
-			},
+			}
+			.into(),
 			IsTombstone => CallError::Custom {
 				code: CONTRACT_IS_A_TOMBSTONE,
 				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
-			},
+			}
+			.into(),
 		}
 	}
 }
@@ -109,6 +115,59 @@ pub struct InstantiateRequest<AccountId, Hash> {
 }
 
 /// Contracts RPC methods.
+#[rpc(client, server, namespace = "contracts")]
+pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
+	/// Executes a call to a contract.
+	///
+	/// This call is performed locally without submitting any transactions. Thus executing this
+	/// won't change any state. Nonetheless, the calling state-changing contracts is still possible.
+	///
+	/// This method is useful for calling getter-like methods on contracts.
+	#[method(name = "call")]
+	fn call(
+		&self,
+		call_request: CallRequest<AccountId>,
+		at: Option<BlockHash>,
+	) -> JsonRpcResult<ContractExecResult>;
+
+	/// Instantiate a new contract.
+	///
+	/// This call is performed locally without submitting any transactions. Thus the contract
+	/// is not actually created.
+	///
+	/// This method is useful for UIs to dry-run contract instantiations.
+	#[method(name = "instantiate")]
+	fn instantiate(
+		&self,
+		instantiate_request: InstantiateRequest<AccountId, Hash>,
+		at: Option<BlockHash>,
+	) -> JsonRpcResult<ContractInstantiateResult<AccountId, BlockNumber>>;
+
+	/// Returns the value under a specified storage `key` in a contract given by `address` param,
+	/// or `None` if it is not set.
+	#[method(name = "getStorage")]
+	fn get_storage(
+		&self,
+		address: AccountId,
+		key: H256,
+		at: Option<BlockHash>,
+	) -> JsonRpcResult<Option<Bytes>>;
+
+	/// Returns the projected time a given contract will be able to sustain paying its rent.
+	///
+	/// The returned projection is relevant for the given block, i.e. it is as if the contract was
+	/// accessed at the beginning of that block.
+	///
+	/// Returns `None` if the contract is exempted from rent.
+	#[method(name = "rentProjection")]
+	fn rent_projection(
+		&self,
+		address: AccountId,
+		at: Option<BlockHash>,
+	) -> JsonRpcResult<Option<BlockNumber>>;
+}
+
+/// Contracts RPC methods.
 pub struct ContractsRpc<Client, Block, AccountId, Balance, Hash> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
@@ -117,7 +176,30 @@ pub struct ContractsRpc<Client, Block, AccountId, Balance, Hash> {
 	_hash: PhantomData<Hash>,
 }
 
-impl<Client, Block, AccountId, Balance, Hash> ContractsRpc<Client, Block, AccountId, Balance, Hash>
+impl<Client, Block, AccountId, Balance, Hash>
+	ContractsRpc<Client, Block, AccountId, Balance, Hash>
+{
+	/// Create new `Contracts` with the given reference to the client.
+	pub fn new(client: Arc<Client>) -> Self {
+		Self {
+			client,
+			_block: Default::default(),
+			_account_id: Default::default(),
+			_balance: Default::default(),
+			_hash: Default::default(),
+		}
+	}
+}
+
+#[async_trait]
+impl<Client, Block, AccountId, Balance, Hash>
+	ContractsApiServer<
+		<Block as BlockT>::Hash,
+		<<Block as BlockT>::Header as HeaderT>::Number,
+		AccountId,
+		Balance,
+		Hash,
+	> for ContractsRpc<Client, Block, AccountId, Balance, Hash>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
@@ -132,169 +214,112 @@ where
 	Balance: Codec + TryFrom<NumberOrHex> + Send + Sync + 'static,
 	Hash: traits::MaybeSerializeDeserialize + Codec + Send + Sync + 'static,
 {
-	pub fn new(client: Arc<Client>) -> Self {
-		Self {
-			client,
-			_block: Default::default(),
-			_account_id: Default::default(),
-			_balance: Default::default(),
-			_hash: Default::default(),
-		}
+	fn call(
+		&self,
+		call_request: CallRequest<AccountId>,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> JsonRpcResult<ContractExecResult> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+
+		let CallRequest { origin, dest, value, gas_limit, input_data } = call_request;
+
+		let value: Balance = decode_hex(value, "balance")?;
+		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
+		limit_gas(gas_limit)?;
+
+		let exec_result = api
+			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
+			.map_err(runtime_error_into_rpc_err)?;
+
+		Ok(exec_result)
 	}
 
-	/// Convert a [`ContractsRpc`] to an [`RpcModule`]. Registers all the RPC methods available with
-	/// the RPC server.
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
+	fn instantiate(
+		&self,
+		instantiate_request: InstantiateRequest<AccountId, Hash>,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> JsonRpcResult<
+		ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>,
+	> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
+			instantiate_request;
 
-		// Executes a call to a contract.
-		//
-		// This call is performed locally without submitting any transactions. Thus executing this
-		// won't change any state. Nonetheless, calling state-changing contracts is still possible.
-		//
-		// This method is useful for calling getter-like methods on contracts.
-		module.register_method(
-			"contracts_call",
-			|params, contracts| -> Result<ContractExecResult, CallError> {
-				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) =
-					params.parse()?;
-				let api = contracts.client.runtime_api();
-				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
+		let endowment: Balance = decode_hex(endowment, "balance")?;
+		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
+		limit_gas(gas_limit)?;
 
-				let CallRequest { origin, dest, value, gas_limit, input_data } = call_request;
+		let exec_result = api
+			.instantiate(&at, origin, endowment, gas_limit, code, data.to_vec(), salt.to_vec())
+			.map_err(runtime_error_into_rpc_err)?;
 
-				let value: Balance = decode_hex(value, "balance")?;
-				let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
-				limit_gas(gas_limit)?;
+		Ok(exec_result)
+	}
 
-				let exec_result = api
-					.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
-					.map_err(runtime_error_into_rpc_err)?;
+	fn get_storage(
+		&self,
+		address: AccountId,
+		key: H256,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> JsonRpcResult<Option<Bytes>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let result = api
+			.get_storage(&at, address, key.into())
+			.map_err(runtime_error_into_rpc_err)?
+			.map_err(ContractAccessError)?
+			.map(Bytes);
 
-				Ok(exec_result)
-			},
-		)?;
+		Ok(result)
+	}
 
-		// Instantiate a new contract.
-		//
-		// This call is performed locally without submitting any transactions. Thus the contract
-		// is not actually created.
-		//
-		// This method is useful for UIs to dry-run contract instantiations.
-		module.register_method(
-			"contracts_instantiate",
-			|params,
-			 contracts|
-			 -> Result<
-				ContractInstantiateResult<
-					AccountId,
-					<<Block as BlockT>::Header as HeaderT>::Number,
-				>,
-				CallError,
-			> {
-				let (instantiate_request, at): (
-					InstantiateRequest<AccountId, Hash>,
-					Option<<Block as BlockT>::Hash>,
-				) = params.parse()?;
+	fn rent_projection(
+		&self,
+		address: AccountId,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> JsonRpcResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
-				let api = contracts.client.runtime_api();
-				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
-				let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
-					instantiate_request;
+		let result = api
+			.rent_projection(&at, address)
+			.map_err(runtime_error_into_rpc_err)?
+			.map_err(ContractAccessError)?;
 
-				let endowment: Balance = decode_hex(endowment, "balance")?;
-				let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
-				limit_gas(gas_limit)?;
-
-				let exec_result = api
-					.instantiate(
-						&at,
-						origin,
-						endowment,
-						gas_limit,
-						code,
-						data.to_vec(),
-						salt.to_vec(),
-					)
-					.map_err(runtime_error_into_rpc_err)?;
-
-				Ok(exec_result)
-			},
-		)?;
-
-		// Returns the value under a specified storage `key` in a contract given by `address` param,
-		// or `None` if it is not set.
-		module.register_method(
-			"contracts_getStorage",
-			|params, contracts| -> Result<Option<Bytes>, CallError> {
-				let (address, key, at): (AccountId, H256, Option<<Block as BlockT>::Hash>) =
-					params.parse()?;
-
-				let api = contracts.client.runtime_api();
-				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
-				let result = api
-					.get_storage(&at, address, key.into())
-					.map_err(runtime_error_into_rpc_err)?
-					.map_err(ContractAccessError)?
-					.map(Bytes);
-
-				Ok(result)
-			},
-		)?;
-
-		// Returns the projected time a given contract will be able to sustain paying its rent.
-		//
-		// The returned projection is relevant for the given block, i.e. it is as if the contract
-		// was accessed at the beginning of that block.
-		//
-		// Returns `None` if the contract is exempted from rent.
-		module.register_method(
-			"contracts_rentProjection",
-			|params,
-			 contracts|
-			 -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>, CallError> {
-				let (address, at): (AccountId, Option<<Block as BlockT>::Hash>) = params.parse()?;
-
-				let api = contracts.client.runtime_api();
-				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
-
-				let result = api
-					.rent_projection(&at, address)
-					.map_err(runtime_error_into_rpc_err)?
-					.map_err(ContractAccessError)?;
-
-				Ok(match result {
-					RentProjection::NoEviction => None,
-					RentProjection::EvictionAt(block_num) => Some(block_num),
-				})
-			},
-		)?;
-
-		Ok(module)
+		Ok(match result {
+			RentProjection::NoEviction => None,
+			RentProjection::EvictionAt(block_num) => Some(block_num),
+		})
 	}
 }
 
 /// Converts a runtime trap into an RPC error.
-fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> CallError {
+fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> JsonRpseeError {
 	CallError::Custom {
 		code: RUNTIME_ERROR,
 		message: "Runtime error".into(),
 		data: to_raw_value(&format!("{:?}", err)).ok(),
 	}
+	.into()
 }
 
 fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(
 	from: H,
 	name: &str,
-) -> Result<T, CallError> {
-	from.try_into().map_err(|_| CallError::Custom {
-		code: -32602, // TODO: was `ErrorCode::InvalidParams`
-		message: format!("{:?} does not fit into the {} type", from, name),
-		data: None,
+) -> Result<T, JsonRpseeError> {
+	from.try_into().map_err(|_| {
+		CallError::Custom {
+			code: -32602, // TODO: was `ErrorCode::InvalidParams`
+			message: format!("{:?} does not fit into the {} type", from, name),
+			data: None,
+		}
+		.into()
 	})
 }
 
-fn limit_gas(gas_limit: Weight) -> Result<(), CallError> {
+fn limit_gas(gas_limit: Weight) -> Result<(), JsonRpseeError> {
 	if gas_limit > GAS_LIMIT {
 		Err(CallError::Custom {
 			code: -32602, // TODO: was `ErrorCode::InvalidParams,`
@@ -303,7 +328,8 @@ fn limit_gas(gas_limit: Weight) -> Result<(), CallError> {
 				gas_limit, GAS_LIMIT
 			),
 			data: None,
-		})
+		}
+		.into())
 	} else {
 		Ok(())
 	}
