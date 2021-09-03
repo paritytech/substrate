@@ -48,6 +48,8 @@ pub struct CallMetadata {
 	pub function_name: &'static str,
 	/// Name of the pallet to which the function belongs.
 	pub pallet_name: &'static str,
+	/// Index of the pallet specified in `construct_runtime`.
+	pub index: u8,
 }
 
 /// Gets the function name of the Call.
