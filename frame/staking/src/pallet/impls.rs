@@ -640,8 +640,8 @@ impl<T: Config> Pallet<T> {
 	/// Get all of the voters that are eligible for the npos election.
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned; First all the validator
-	/// are included in no particular order, then remainder is taken from the nominators, as returned
-	/// by [`Config::SortedListProvider`].
+	/// are included in no particular order, then remainder is taken from the nominators, as
+	/// returned by [`Config::SortedListProvider`].
 	///
 	/// This will use nominators, and all the validators will inject a self vote.
 	///

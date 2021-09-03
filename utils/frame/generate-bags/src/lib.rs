@@ -30,15 +30,15 @@
 //!         pub const BagThresholds: &'static [u64] = &[];
 //!    }
 //!
-//!    impl pallet_staking::Config for Runtime {
+//!    impl pallet_bags_list::Config for Runtime {
 //!         // <snip>
 //!         type BagThresholds = BagThresholds;
 //!    }
 //!    ```
 //!
-//! 2. Write a little program to generate the definitions. This can be a near-identical copy of
-//!    `substrate/frame/bags-list/generate-bags`. This program exists only to hook together the
-//!    runtime definitions with the various calculations here.
+//! 2. Write a little program to generate the definitions. This program exists only to hook together
+//! the runtime definitions with the various calculations here. Take a look at
+//! _utils/frame/node-runtime_ for an example.
 //!
 //! 3. Run that program:
 //!

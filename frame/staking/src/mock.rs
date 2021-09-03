@@ -410,7 +410,6 @@ impl ExtBuilder {
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-
 		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Test> {
@@ -553,7 +552,7 @@ fn check_count() {
 	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
 	assert_eq!(validator_count, CounterForValidators::<Test>::get());
 
-	// the voters that the voter list is storing for us.
+	// the voters that the `SortedListProvider` list is storing for us.
 	let external_voters = <Test as Config>::SortedListProvider::count();
 	assert_eq!(external_voters, nominator_count);
 }
