@@ -97,6 +97,7 @@ pub trait WeightInfo {
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight;
 	fn seal_hash_blake2_128(r: u32, ) -> Weight;
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight;
+	fn seal_ecdsa_recovery(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
 	fn instr_i64load(r: u32, ) -> Weight;
 	fn instr_i64store(r: u32, ) -> Weight;
@@ -797,6 +798,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(515_967_000 as Weight)
 			// Standard Error: 33_000
 			.saturating_add((176_423_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: System Account (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_ecdsa_recovery(r: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 150_978_000
+			.saturating_add((20_645_792_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -1703,6 +1715,17 @@ impl WeightInfo for () {
 		(515_967_000 as Weight)
 			// Standard Error: 33_000
 			.saturating_add((176_423_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: System Account (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_ecdsa_recovery(r: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 150_978_000
+			.saturating_add((20_645_792_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
