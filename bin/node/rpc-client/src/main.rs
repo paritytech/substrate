@@ -32,7 +32,7 @@ async fn main() -> Result<(), Error> {
 	sp_tracing::try_init_simple();
 
 	// NOTE(niklasad1): changed this to the WS client because the jsonrpsee proc macros
-	// requires trait bound `SubscriptionClient` that is not implemented.
+	// requires the trait bound `SubscriptionClient` that is not implemented is not implemented for HTTP client.
 	WsClientBuilder::default()
 		.build("ws://localhost:9944")
 		.and_then(|client| remove_all_extrinsics(client))
