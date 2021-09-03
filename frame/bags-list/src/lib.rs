@@ -161,8 +161,6 @@ pub mod pallet {
 
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
-	// TODO: we make this public for now only for the sake of the remote-ext tests, find another way
-	// around it.
 	#[pallet::storage]
 	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
@@ -221,6 +219,12 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
 		};
 		maybe_movement
+	}
+
+	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
+	#[cfg(feature = "std")]
+	pub fn list_bags_get(weight: VoteWeight) -> Option<list::Bag<T>> {
+		ListBags::get(weight)
 	}
 }
 
