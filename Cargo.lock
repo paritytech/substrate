@@ -8978,7 +8978,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
-6
+]
 
 [[package]]
 name = "sp-core"
