@@ -3,7 +3,7 @@
 The Session module allows validators to manage their session keys, provides a function for changing
 the session length, and handles session rotation.
 
-- [`session::Trait`](https://docs.rs/pallet-session/latest/pallet_session/trait.Trait.html)
+- [`session::Trait`](https://docs.rs/pallet-session/latest/pallet_session/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-session/latest/pallet_session/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-session/latest/pallet_session/struct.Module.html)
 

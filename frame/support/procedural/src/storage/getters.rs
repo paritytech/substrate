@@ -17,15 +17,17 @@
 
 //! Implementation of getters on module structure.
 
+use super::{DeclStorageDefExt, StorageLineTypeDef};
 use proc_macro2::TokenStream;
 use quote::quote;
-use super::{DeclStorageDefExt, StorageLineTypeDef};
 
 pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 	let scrate = &def.hidden_crate;
 	let mut getters = TokenStream::new();
 
-	for (get_fn, line) in def.storage_lines.iter()
+	for (get_fn, line) in def
+		.storage_lines
+		.iter()
 		.filter_map(|line| line.getter.as_ref().map(|get_fn| (get_fn, line)))
 	{
 		let attrs = &line.doc_attrs;
@@ -35,7 +37,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 
 		let getter = match &line.storage_type {
 			StorageLineTypeDef::Simple(value) => {
-				quote!{
+				quote! {
 					#( #[ #attrs ] )*
 					pub fn #get_fn() -> #value {
 						<#storage_struct as #scrate::#storage_trait>::get()
@@ -45,7 +47,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 			StorageLineTypeDef::Map(map) => {
 				let key = &map.key;
 				let value = &map.value;
-				quote!{
+				quote! {
 					#( #[ #attrs ] )*
 					pub fn #get_fn<K: #scrate::codec::EncodeLike<#key>>(key: K) -> #value {
 						<#storage_struct as #scrate::#storage_trait>::get(key)
@@ -56,7 +58,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 				let key1 = &map.key1;
 				let key2 = &map.key2;
 				let value = &map.value;
-				quote!{
+				quote! {
 					pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value
 					where
 						KArg1: #scrate::codec::EncodeLike<#key1>,
@@ -69,7 +71,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 			StorageLineTypeDef::NMap(map) => {
 				let keygen = map.to_keygen_struct(&def.hidden_crate);
 				let value = &map.value;
-				quote!{
+				quote! {
 					pub fn #get_fn<KArg>(key: KArg) -> #value
 					where
 						KArg: #scrate::storage::types::EncodeLikeTuple<
@@ -80,7 +82,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 						<#storage_struct as #scrate::#storage_trait>::get(key)
 					}
 				}
-			}
+			},
 		};
 		getters.extend(getter);
 	}

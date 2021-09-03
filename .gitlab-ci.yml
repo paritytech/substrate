@@ -40,7 +40,7 @@ variables:                         &default-vars
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.11"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 default:
@@ -55,9 +55,15 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   tags:
     - kubernetes-parity-build
-  interruptible:                   true
 
 .rust-info-script:                 &rust-info-script
   - rustup show
@@ -97,6 +103,7 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
 
 .test-refs-no-trigger-prs-only:   &test-refs-no-trigger-prs-only
   rules:
@@ -105,6 +112,26 @@ default:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+
+.test-refs-wasmer-sandbox:                        &test-refs-wasmer-sandbox
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+      changes:
+        - client/executor/**/*
+        - frame/contracts/**/*
+        - primitives/sandbox/**/*
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+      changes:
+        - client/executor/**/*
+        - frame/contracts/**/*
+        - primitives/sandbox/**/*
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+      changes:
+        - client/executor/**/*
+        - frame/contracts/**/*
+        - primitives/sandbox/**/*
 
 .build-refs:                       &build-refs
   rules:
@@ -233,6 +260,14 @@ cargo-deny:
   # FIXME: Temorarily allow to fail.
   allow_failure:                   true
 
+cargo-fmt:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - cargo +nightly fmt --all -- --check
+  allow_failure:                   true
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
@@ -265,7 +300,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -283,6 +318,14 @@ cargo-check-try-runtime:
   <<:                              *test-refs
   script:
     - time cargo check --features try-runtime
+    - sccache -s
+
+cargo-check-wasmer-sandbox:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - time cargo check --features wasmer-sandbox
     - sccache -s
 
 test-deterministic-wasm:
@@ -326,14 +369,17 @@ test-linux-stable:                 &test-linux
 unleash-check:
   stage:                           test
   <<:                              *docker-env
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+  <<:                              *test-refs-no-trigger
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash de-dev-deps
+    # Reuse build artifacts when running checks (cuts down check time by 3x)
+    # TODO: Implement this optimization in cargo-unleash rather than here
+    - mkdir -p target/unleash
+    - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+  # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -373,17 +419,11 @@ test-linux-stable-int:
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
-check-web-wasm:
+check-tracing:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    # WASM support is in progress. As more and more crates support WASM, we
-    # should add entries here. See https://github.com/paritytech/substrate/issues/2416
-    # Note: we don't need to test crates imported in `bin/node/cli`
-    - time cargo build --manifest-path=client/consensus/aura/Cargo.toml --target=wasm32-unknown-unknown --features getrandom
-    # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
@@ -404,6 +444,16 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - sccache -s
+
+test-wasmer-sandbox:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs-wasmer-sandbox
+  variables:
+    <<:                            *default-vars
+  script:
+    - time cargo test --release --features runtime-benchmarks,wasmer-sandbox
     - sccache -s
 
 cargo-check-macos:
@@ -440,21 +490,6 @@ check-polkadot-companion-build:
   after_script:
     - cd polkadot && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
-
-test-browser-node:
-  stage:                           build
-  <<:                              *docker-env
-  <<:                              *test-refs
-  needs:
-    - job:                         check-web-wasm
-      artifacts:                   false
-  variables:
-    <<:                                         *default-vars
-    CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
-    CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
-    WASM_BINDGEN_TEST_TIMEOUT:                  120
-  script:
-    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing
 
 build-linux-substrate:             &build-binary
   stage:                           build
@@ -511,13 +546,10 @@ build-macos-subkey:
   tags:
     - osx
 
-build-rust-doc:
+build-rustdoc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
@@ -528,12 +560,15 @@ build-rust-doc:
     paths:
     - ./crate-docs/
   script:
+    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
+    # FIXME: remove me after CI image gets nonroot
+    - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
-  allow_failure:                   true
 
 #### stage:                        publish
 
@@ -568,10 +603,10 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job 
-    - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
+    # pass artifacts to the trigger-simnet job
+    - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
-    - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
+    - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
@@ -622,31 +657,49 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-publish-s3-doc:
+publish-rustdoc:
   stage:                           publish
-  image:                           paritytech/awscli:latest
-  allow_failure:                   true
-  needs:
-    - job:                         build-rust-doc
-      artifacts:                   true
-    - job:                         build-linux-substrate
-      artifacts:                   false
-  <<:                              *build-refs
   <<:                              *kubernetes-env
+  image:                           paritytech/tools:latest
   variables:
-    GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io"
-    PREFIX:                        "substrate-rustdoc"
+    GIT_DEPTH:                     100
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "master"
+  # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
+  # artifacts from being dowloaded by this job.
+  needs:
+    - job:                         build-rustdoc
+      artifacts:                   true
   script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - aws s3 sync --delete --size-only --only-show-errors
-        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
+    - rm -rf /tmp/*
+    # Set git config
+    - rm -rf .git/config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # Save README and docs
+    - cp -r ./crate-docs/ /tmp/doc/
+    - cp README.md /tmp/doc/
+    - git checkout gh-pages
+    # Remove everything and restore generated docs and README
+    - rm -rf ./*
+    - mv /tmp/doc/* .
+    # Upload files
+    - git add --all --force
+    # `git commit` has an exit code of > 0 if there is nothing to commit.
+    # This causes GitLab to exit immediately and marks this job failed.
+    # We don't want to mark the entire job failed if there's nothing to
+    # publish though, hence the `|| true`.
+    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
+        echo "___Nothing to commit___"
+    - git push origin gh-pages --force
   after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
-        --human-readable --summarize
+    - rm -rf .git/ ./*
 
 publish-draft-release:
   stage:                           publish
@@ -658,12 +711,14 @@ publish-draft-release:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
-publish-to-crates-io:
+unleash-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
+    # remove allow_failure: true on the check job
+    # - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -691,9 +746,14 @@ deploy-prometheus-alerting-rules:
         - .gitlab-ci.yml
         - .maintain/monitoring/**/*
 
-trigger-simnet:
+# Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
+# A "quick" test is a smoke test where basic check-expect tests run by
+# checking values from metrics exposed by the app.
+# A "long" test is the load testing where we send 50K transactions into the 
+# network and check if all completed successfully
+simnet-tests:
   stage:                           deploy
-  image:                           paritytech/tools:latest
+  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
@@ -702,13 +762,19 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
-  # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
-  variables:
-    TRGR_PROJECT:                  ${CI_PROJECT_NAME}
-    TRGR_REF:                      ${CI_COMMIT_REF_NAME}
-    # simnet project ID
-    DWNSTRM_ID:                    332
+  # variables:
+  # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
+  # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
+  # ${SIMNET_REF} is a gitlab variable
+  before_script:
+    - echo "Simnet Tests Config
+      docker.io/paritytech/simnet:${SIMNET_REF}
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
   script:
-    # API trigger for a simnet job
-    - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
+    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
+        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
+        --config="simnet_tests/configs/default_local_testnet.toml"
+        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+  retry: 2
+  tags:
+    - parity-simnet

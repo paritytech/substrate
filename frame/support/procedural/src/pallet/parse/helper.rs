@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use quote::ToTokens;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -47,20 +47,15 @@ pub trait MutItemAttrs {
 }
 
 /// Take the first pallet attribute (e.g. attribute like `#[pallet..]`) and decode it to `Attr`
-pub fn take_first_item_pallet_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>> where
+pub fn take_first_item_pallet_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>>
+where
 	Attr: syn::parse::Parse,
 {
-	let attrs = if let Some(attrs) = item.mut_item_attrs() {
-		attrs
-	} else {
-		return Ok(None)
-	};
+	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
 
-	if let Some(index) = attrs.iter()
-		.position(|attr|
-			attr.path.segments.first().map_or(false, |segment| segment.ident == "pallet")
-		)
-	{
+	if let Some(index) = attrs.iter().position(|attr| {
+		attr.path.segments.first().map_or(false, |segment| segment.ident == "pallet")
+	}) {
 		let pallet_attr = attrs.remove(index);
 		Ok(Some(syn::parse2(pallet_attr.into_token_stream())?))
 	} else {
@@ -69,7 +64,8 @@ pub fn take_first_item_pallet_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::R
 }
 
 /// Take all the pallet attributes (e.g. attribute like `#[pallet..]`) and decode them to `Attr`
-pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>> where
+pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>>
+where
 	Attr: syn::parse::Parse,
 {
 	let mut pallet_attrs = Vec::new();
@@ -83,13 +79,16 @@ pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result
 
 /// Get all the cfg attributes (e.g. attribute like `#[cfg..]`) and decode them to `Attr`
 pub fn get_item_cfg_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
-	attrs.iter().filter_map(|attr|  {
-		if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
-			Some(attr.clone())
-		} else {
-			None
-		}
-	}).collect::<Vec<_>>()
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
+				Some(attr.clone())
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<_>>()
 }
 
 impl MutItemAttrs for syn::Item {
@@ -115,7 +114,6 @@ impl MutItemAttrs for syn::Item {
 		}
 	}
 }
-
 
 impl MutItemAttrs for syn::TraitItem {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
@@ -143,7 +141,8 @@ impl MutItemAttrs for syn::ItemMod {
 
 /// Return all doc attributes literals found.
 pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
-	attrs.iter()
+	attrs
+		.iter()
 		.filter_map(|attr| {
 			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
 				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
@@ -166,7 +165,7 @@ impl syn::parse::Parse for Unit {
 		syn::parenthesized!(content in input);
 		if !content.is_empty() {
 			let msg = "unexpected tokens, expected nothing inside parenthesis as `()`";
-			return Err(syn::Error::new(content.span(), msg));
+			return Err(syn::Error::new(content.span(), msg))
 		}
 		Ok(Self)
 	}
@@ -179,7 +178,7 @@ impl syn::parse::Parse for StaticLifetime {
 		let lifetime = input.parse::<syn::Lifetime>()?;
 		if lifetime.ident != "static" {
 			let msg = "unexpected tokens, expected `static`";
-			return Err(syn::Error::new(lifetime.ident.span(), msg));
+			return Err(syn::Error::new(lifetime.ident.span(), msg))
 		}
 		Ok(Self)
 	}
@@ -190,10 +189,7 @@ impl syn::parse::Parse for StaticLifetime {
 /// `span` is used in case generics is empty (empty generics has span == call_site).
 ///
 /// return the instance if found.
-pub fn check_config_def_gen(
-	gen: &syn::Generics,
-	span: proc_macro2::Span,
-) -> syn::Result<()> {
+pub fn check_config_def_gen(gen: &syn::Generics, span: proc_macro2::Span) -> syn::Result<()> {
 	let expected = "expected `I: 'static = ()`";
 	pub struct CheckTraitDefGenerics;
 	impl syn::parse::Parse for CheckTraitDefGenerics {
@@ -208,13 +204,12 @@ pub fn check_config_def_gen(
 		}
 	}
 
-	syn::parse2::<CheckTraitDefGenerics>(gen.params.to_token_stream())
-		.map_err(|e| {
-			let msg = format!("Invalid generics: {}", expected);
-			let mut err = syn::Error::new(span, msg);
-			err.combine(e);
-			err
-		})?;
+	syn::parse2::<CheckTraitDefGenerics>(gen.params.to_token_stream()).map_err(|e| {
+		let msg = format!("Invalid generics: {}", expected);
+		let mut err = syn::Error::new(span, msg);
+		err.combine(e);
+		err
+	})?;
 
 	Ok(())
 }
@@ -234,10 +229,7 @@ pub fn check_type_def_gen_no_bounds(
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			let mut instance_usage = InstanceUsage {
-				has_instance: false,
-				span: input.span(),
-			};
+			let mut instance_usage = InstanceUsage { has_instance: false, span: input.span() };
 
 			input.parse::<keyword::T>()?;
 			if input.peek(syn::Token![,]) {
@@ -258,7 +250,8 @@ pub fn check_type_def_gen_no_bounds(
 			let mut err = syn::Error::new(span, msg);
 			err.combine(e);
 			err
-		})?.0;
+		})?
+		.0;
 
 	Ok(i)
 }
@@ -286,10 +279,7 @@ pub fn check_type_def_optional_gen(
 				return Ok(Self(None))
 			}
 
-			let mut instance_usage = InstanceUsage {
-				span: input.span(),
-				has_instance: false,
-			};
+			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
 			input.parse::<keyword::T>()?;
 
@@ -338,9 +328,13 @@ pub fn check_type_def_optional_gen(
 			let mut err = syn::Error::new(span, msg);
 			err.combine(e);
 			err
-		})?.0
+		})?
+		.0
 		// Span can be call_site if generic is empty. Thus we replace it.
-		.map(|mut i| { i.span = span; i });
+		.map(|mut i| {
+			i.span = span;
+			i
+		});
 
 	Ok(i)
 }
@@ -355,10 +349,7 @@ pub fn check_pallet_struct_usage(type_: &Box<syn::Type>) -> syn::Result<Instance
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			let mut instance_usage = InstanceUsage {
-				span: input.span(),
-				has_instance: false,
-			};
+			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
 			input.parse::<keyword::Pallet>()?;
 			input.parse::<syn::Token![<]>()?;
@@ -380,7 +371,8 @@ pub fn check_pallet_struct_usage(type_: &Box<syn::Type>) -> syn::Result<Instance
 			let mut err = syn::Error::new(type_.span(), msg);
 			err.combine(e);
 			err
-		})?.0;
+		})?
+		.0;
 
 	Ok(i)
 }
@@ -392,18 +384,12 @@ pub fn check_pallet_struct_usage(type_: &Box<syn::Type>) -> syn::Result<Instance
 /// `span` is used in case generics is empty (empty generics has span == call_site).
 ///
 /// return whether it contains instance.
-pub fn check_impl_gen(
-	gen: &syn::Generics,
-	span: proc_macro2::Span
-) -> syn::Result<InstanceUsage> {
+pub fn check_impl_gen(gen: &syn::Generics, span: proc_macro2::Span) -> syn::Result<InstanceUsage> {
 	let expected = "expected `impl<T: Config>` or `impl<T: Config<I>, I: 'static>`";
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			let mut instance_usage = InstanceUsage {
-				span: input.span(),
-				has_instance: false,
-			};
+			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
 			input.parse::<keyword::T>()?;
 			input.parse::<syn::Token![:]>()?;
@@ -428,7 +414,8 @@ pub fn check_impl_gen(
 			let mut err = syn::Error::new(span, format!("Invalid generics: {}", expected));
 			err.combine(e);
 			err
-		})?.0;
+		})?
+		.0;
 
 	Ok(i)
 }
@@ -451,10 +438,7 @@ pub fn check_type_def_gen(
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			let mut instance_usage = InstanceUsage {
-				span: input.span(),
-				has_instance: false,
-			};
+			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
 			input.parse::<keyword::T>()?;
 
@@ -503,7 +487,8 @@ pub fn check_type_def_gen(
 			let mut err = syn::Error::new(span, msg);
 			err.combine(e);
 			err
-		})?.0;
+		})?
+		.0;
 
 	// Span can be call_site if generic is empty. Thus we replace it.
 	i.span = span;
@@ -521,10 +506,7 @@ pub fn check_genesis_builder_usage(type_: &syn::Path) -> syn::Result<InstanceUsa
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			let mut instance_usage = InstanceUsage {
-				span: input.span(),
-				has_instance: false,
-			};
+			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
 			input.parse::<keyword::GenesisBuild>()?;
 			input.parse::<syn::Token![<]>()?;
@@ -546,7 +528,8 @@ pub fn check_genesis_builder_usage(type_: &syn::Path) -> syn::Result<InstanceUsa
 			let mut err = syn::Error::new(type_.span(), msg);
 			err.combine(e);
 			err
-		})?.0;
+		})?
+		.0;
 
 	Ok(i)
 }
@@ -575,10 +558,7 @@ pub fn check_type_value_gen(
 			input.parse::<syn::Token![:]>()?;
 			input.parse::<keyword::Config>()?;
 
-			let mut instance_usage = InstanceUsage {
-				span: input.span(),
-				has_instance: false,
-			};
+			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
 			if input.is_empty() {
 				return Ok(Self(Some(instance_usage)))
@@ -603,17 +583,19 @@ pub fn check_type_value_gen(
 			let mut err = syn::Error::new(span, msg);
 			err.combine(e);
 			err
-		})?.0
+		})?
+		.0
 		// Span can be call_site if generic is empty. Thus we replace it.
-		.map(|mut i| { i.span = span; i });
+		.map(|mut i| {
+			i.span = span;
+			i
+		});
 
 	Ok(i)
 }
 
 /// Check the keyword `DispatchResultWithPostInfo` or `DispatchResult`.
-pub fn check_pallet_call_return_type(
-	type_: &syn::Type,
-) -> syn::Result<()> {
+pub fn check_pallet_call_return_type(type_: &syn::Type) -> syn::Result<()> {
 	pub struct Checker;
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {

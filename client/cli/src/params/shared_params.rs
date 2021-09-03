@@ -16,18 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::arg_enums::TracingReceiver;
 use sc_service::config::BasePath;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use crate::arg_enums::TracingReceiver;
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
 	/// Specify the chain specification.
 	///
-	/// It can be one of the predefined ones (dev, local, or staging) or it can be a path to a file with
-	/// the chainspec (such as one exported by the `build-spec` subcommand).
+	/// It can be one of the predefined ones (dev, local, or staging) or it can be a path to a file
+	/// with the chainspec (such as one exported by the `build-spec` subcommand).
 	#[structopt(long, value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
@@ -88,13 +88,12 @@ impl SharedParams {
 	pub fn chain_id(&self, is_dev: bool) -> String {
 		match self.chain {
 			Some(ref chain) => chain.clone(),
-			None => {
+			None =>
 				if is_dev {
 					"dev".into()
 				} else {
 					"".into()
-				}
-			}
+				},
 		}
 	}
 
