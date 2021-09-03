@@ -37,7 +37,7 @@ use jsonrpsee::RpcModule;
 use pallet_contracts_rpc::ContractsRpc;
 use pallet_mmr_rpc::MmrRpc;
 use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
-use sc_consensus_babe_rpc::BabeRpc;
+use sc_consensus_babe_rpc::{BabeApiServer, BabeRpc};
 use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_sync_state_rpc::SyncStateRpc;
 use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
@@ -191,8 +191,7 @@ pub fn new_partial(
 			select_chain2,
 			deny_unsafe,
 		)
-		.into_rpc_module()
-		.expect("TODO: error handling");
+		.into_rpc();
 		let sync_state_rpc = SyncStateRpc::new(
 			chain_spec,
 			client2.clone(),
@@ -758,7 +757,7 @@ mod tests {
 						sc_consensus_babe::authorship::claim_slot(slot.into(), &epoch, &keystore)
 							.map(|(digest, _)| digest)
 					{
-						break (babe_pre_digest, epoch_descriptor)
+						break (babe_pre_digest, epoch_descriptor);
 					}
 
 					slot += 1;
