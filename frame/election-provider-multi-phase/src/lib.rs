@@ -636,9 +636,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The number of snapshot voters to fetch per block.
-		///
-		/// In the future, once m
+		/// The maximum number of voters to put in the snapshot. At the moment, snapshots are only
+		/// over a single block, but once multi-block elections are introduced they will take place
+		/// over multiple blocks.
 		///
 		/// Also, note the data type: If the voters are represented by a `u32` in `type
 		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
