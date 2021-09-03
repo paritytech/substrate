@@ -49,7 +49,6 @@ mod block_rules;
 mod call_executor;
 mod client;
 pub mod genesis;
-pub mod light;
 mod wasm_override;
 mod wasm_substitutes;
 

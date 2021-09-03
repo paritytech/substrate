@@ -42,6 +42,7 @@ use sc_client_api::{
 		ProvideUncles,
 	},
 	execution_extensions::ExecutionExtensions,
+	light::ChangesProof,
 	notifications::{StorageEventStream, StorageNotifications},
 	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
 };
@@ -49,7 +50,6 @@ use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
 use sc_executor::RuntimeVersion;
-use sc_light::fetcher::ChangesProof;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,

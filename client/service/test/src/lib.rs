@@ -34,7 +34,7 @@ use sc_service::{
 };
 use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use std::{iter, net::Ipv4Addr, pin::Pin, sync::Arc, task::Context, time::Duration};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, time};
@@ -500,94 +500,6 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 		}
 		temp.close().expect("Error removing temp dir");
 	}
-}
-
-pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
-	spec: GenericChainSpec<G, E>,
-	full_builder: Fb,
-	light_builder: Lb,
-	mut make_block_and_import: B,
-	mut extrinsic_factory: ExF,
-) where
-	Fb: Fn(Configuration) -> Result<(F, U), Error>,
-	F: TestNetNode,
-	Lb: Fn(Configuration) -> Result<L, Error>,
-	L: TestNetNode,
-	B: FnMut(&F, &mut U),
-	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
-	U: Clone + Send + 'static,
-	E: ChainSpecExtension + Clone + 'static + Send + Sync,
-	G: RuntimeGenesis + 'static,
-{
-	const NUM_FULL_NODES: usize = 10;
-	// FIXME: BABE light client support is currently not working.
-	const NUM_LIGHT_NODES: usize = 10;
-	const NUM_BLOCKS: usize = 512;
-	let temp = tempdir_with_prefix("substrate-sync-test");
-	let mut network = TestNet::new(
-		&temp,
-		spec,
-		(0..NUM_FULL_NODES).map(|_| |cfg| full_builder(cfg)),
-		(0..NUM_LIGHT_NODES).map(|_| |cfg| light_builder(cfg)),
-		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
-		// the type of the closure cannot be inferred.
-		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg) })),
-		30500,
-	);
-	info!("Checking block sync");
-	let first_address = {
-		let &mut (_, ref first_service, ref mut first_user_data, _) = &mut network.full_nodes[0];
-		for i in 0..NUM_BLOCKS {
-			if i % 128 == 0 {
-				info!("Generating #{}", i + 1);
-			}
-
-			make_block_and_import(&first_service, first_user_data);
-		}
-		let info = network.full_nodes[0].1.client().info();
-		network.full_nodes[0]
-			.1
-			.network()
-			.new_best_block_imported(info.best_hash, info.best_number);
-		network.full_nodes[0].3.clone()
-	};
-
-	info!("Running sync");
-	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
-		service
-			.network()
-			.add_reserved_peer(first_address.to_string())
-			.expect("Error adding reserved peer");
-	}
-	for (_, service, _) in network.light_nodes.iter() {
-		service
-			.network()
-			.add_reserved_peer(first_address.to_string())
-			.expect("Error adding reserved peer");
-	}
-	network.run_until_all_full(
-		|_index, service| service.client().info().best_number == (NUM_BLOCKS as u32).into(),
-		|_index, service| service.client().info().best_number == (NUM_BLOCKS as u32).into(),
-	);
-
-	info!("Checking extrinsic propagation");
-	let first_service = network.full_nodes[0].1.clone();
-	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.client().info().best_number);
-	let extrinsic = extrinsic_factory(&first_service, first_user_data);
-	let source = sc_transaction_pool_api::TransactionSource::External;
-
-	futures::executor::block_on(first_service.transaction_pool().submit_one(
-		&best_block,
-		source,
-		extrinsic,
-	))
-	.expect("failed to submit extrinsic");
-
-	network.run_until_all_full(
-		|_index, service| service.transaction_pool().ready().count() == 1,
-		|_index, _service| true,
-	);
 }
 
 pub fn consensus<G, E, Fb, F, Lb, L>(
