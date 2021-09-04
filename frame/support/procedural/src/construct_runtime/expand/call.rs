@@ -39,7 +39,7 @@ pub fn expand_outer_dispatch(
 		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
 		let pallet_struct = match pallet_declaration.instance.as_ref() {
-			Some(inst) => quote!(#path::Pallet::<#runtime, #inst>),
+			Some(inst) => quote!(#path::Pallet::<#runtime, #path::#inst>),
 			None => quote!(#path::Pallet<#runtime>),
 		};
 
