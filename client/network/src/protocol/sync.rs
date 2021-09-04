@@ -70,7 +70,7 @@ mod state;
 mod warp;
 
 /// Maximum blocks to request in a single packet.
-const MAX_BLOCKS_TO_REQUEST: usize = 128;
+const MAX_BLOCKS_TO_REQUEST: usize = 64;
 
 /// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
