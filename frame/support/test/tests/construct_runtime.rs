@@ -21,7 +21,7 @@
 
 #![recursion_limit = "128"]
 
-use frame_support::traits::PalletInfo as _;
+use frame_support::traits::{CrateVersion, PalletInfo as _};
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic,
@@ -545,7 +545,16 @@ fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
 	let call = Call::Module3(module3::Call::<Runtime>::aux_4());
 	let metadata = call.get_call_metadata();
-	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
+	let expected = CallMetadata {
+		function_name: "aux_4".into(),
+		pallet_name: "Module3".into(),
+		index: 35,
+		crate_version: CrateVersion {
+			major: 3,
+			minor: 0,
+			patch: 0,
+		},
+	};
 	assert_eq!(metadata, expected);
 }
 
