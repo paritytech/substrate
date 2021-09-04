@@ -19,6 +19,7 @@ use crate::pallet::{expand::merge_where_clauses, parse::helper::get_doc_literals
 
 ///
 /// * Add derive trait on Pallet
+/// * Implement GetCrateVersion on Pallet
 /// * Implement GetStorageVersion on Pallet
 /// * Implement OnGenesis on Pallet
 /// * Implement ModuleErrorMetadata on Pallet
@@ -167,6 +168,16 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		#[deprecated(note = "use `Pallet` instead")]
 		#[allow(dead_code)]
 		pub type Module<#type_decl_gen> = #pallet_ident<#type_use_gen>;
+
+		// Implement `GetCrateVersion` for `Pallet`
+		impl<#type_impl_gen> #frame_support::traits::GetCrateVersion
+			for #pallet_ident<#type_use_gen>
+			#config_where_clause
+		{
+			fn crate_version() -> #frame_support::traits::CrateVersion {
+				#frame_support::crate_to_crate_version!()
+			}
+		}
 
 		// Implement `GetStorageVersion` for `Pallet`
 		impl<#type_impl_gen> #frame_support::traits::GetStorageVersion

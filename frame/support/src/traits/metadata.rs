@@ -48,8 +48,10 @@ pub struct CallMetadata {
 	pub function_name: &'static str,
 	/// Name of the pallet to which the function belongs.
 	pub pallet_name: &'static str,
-	/// Index of the pallet specified in `construct_runtime`.
+	/// Index of the containing pallet specified in `construct_runtime`.
 	pub index: u8,
+	/// Version of the crate containing the pallet to which the function belongs.
+	pub crate_version: CrateVersion,
 }
 
 /// Gets the function name of the Call.
@@ -68,6 +70,40 @@ pub trait GetCallMetadata {
 	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
+}
+
+/// The version of a crate.
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy, Default)]
+pub struct CrateVersion {
+	/// The major version of the crate.
+	pub major: u16,
+	/// The minor version of the crate.
+	pub minor: u8,
+	/// The patch version of the crate.
+	pub patch: u8,
+}
+
+impl CrateVersion {
+	pub const fn new(major: u16, minor: u8, patch: u8) -> Self {
+		Self { major, minor, patch }
+	}
+}
+
+impl sp_std::cmp::PartialOrd for CrateVersion {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		let res = self
+			.major
+			.cmp(&other.major)
+			.then_with(|| self.minor.cmp(&other.minor).then_with(|| self.patch.cmp(&other.patch)));
+
+		Some(res)
+	}
+}
+
+/// Provides information about the version of a crate.
+pub trait GetCrateVersion {
+	/// Returns the current version of the crate.
+	fn crate_version() -> CrateVersion;
 }
 
 /// The storage key postfix that is used to store the [`StorageVersion`] per pallet.

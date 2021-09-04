@@ -2168,6 +2168,15 @@ macro_rules! decl_module {
 			}
 		}
 
+		// Implement `GetCrateVersion` for `Module`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetCrateVersion
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn crate_version() -> $crate::traits::CrateVersion {
+				$crate::crate_to_crate_version!()
+			}
+		}
+
 		// Implement `OnGenesis` for `Module`
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
