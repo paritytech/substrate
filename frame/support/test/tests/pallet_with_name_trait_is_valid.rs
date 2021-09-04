@@ -101,7 +101,7 @@ mod tests {
 
 	type SignedExtra = (
 		frame_system::CheckEra<Runtime>,
-		frame_system::CheckNonce<Runtime>,
+		frame_system::CheckNonce<Runtime, 0>,
 		frame_system::CheckWeight<Runtime>,
 	);
 	type TestBlock = sp_runtime::generic::Block<TestHeader, TestUncheckedExtrinsic>;

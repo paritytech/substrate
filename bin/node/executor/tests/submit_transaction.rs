@@ -135,7 +135,10 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 		// now check that the transaction nonces are not equal
 		let s = state.read();
-		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
+		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<
+			Runtime,
+			{ node_runtime::MAX_NONCE_DIFFERENCE }
+		> {
 			let extra = tx.signature.unwrap().2;
 			extra.4
 		}
@@ -184,7 +187,10 @@ fn should_submit_signed_twice_from_all_accounts() {
 
 		// now check that the transaction nonces are not equal
 		let s = state.read();
-		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
+		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<
+			Runtime,
+			{ node_runtime::MAX_NONCE_DIFFERENCE }
+		> {
 			let extra = tx.signature.unwrap().2;
 			extra.4
 		}
