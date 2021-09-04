@@ -268,6 +268,15 @@ cargo-fmt:
     - cargo +nightly fmt --all -- --check
   allow_failure:                   true
 
+cargo-clippy:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - cargo +nightly install cargo-lints
+    - cargo +nightly lints clippy
+  allow_failure:                   true
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
