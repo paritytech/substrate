@@ -872,7 +872,6 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 			ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 		);
 	}
-	
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
