@@ -798,6 +798,7 @@ pub mod tests {
 		DecodeDifferent, DefaultByteGetter, StorageEntryMetadata, StorageEntryModifier,
 		StorageEntryType, StorageHasher, StorageMetadata,
 	};
+	use frame_support::traits::CrateVersion;
 	use sp_io::TestExternalities;
 	use sp_std::{marker::PhantomData, result};
 
@@ -809,6 +810,9 @@ pub mod tests {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 	}

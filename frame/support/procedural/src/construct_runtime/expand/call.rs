@@ -29,8 +29,6 @@ pub fn expand_outer_dispatch(
 	let mut variant_patterns = Vec::new();
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
-	let mut pallet_indices = Vec::new();
-	let mut pallet_structs = Vec::new();
 
 	let pallets_with_call = pallet_decls.iter().filter(|decl| decl.exists_part("Call"));
 
@@ -38,18 +36,12 @@ pub fn expand_outer_dispatch(
 		let name = &pallet_declaration.name;
 		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
-		let pallet_struct = match pallet_declaration.instance.as_ref() {
-			Some(inst) => quote!(#path::Pallet::<#runtime, #path::#inst>),
-			None => quote!(#path::Pallet<#runtime>),
-		};
 
 		variant_defs.extend(
 			quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),),
 		);
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
-		pallet_indices.push(index);
-		pallet_structs.push(pallet_struct);
 		query_call_part_macros.push(quote! {
 			#path::__substrate_call_check::is_call_part_defined!(#name);
 		});
@@ -82,16 +74,7 @@ pub fn expand_outer_dispatch(
 						#variant_patterns => {
 							let function_name = call.get_call_name();
 							let pallet_name = stringify!(#pallet_names);
-							let index = #pallet_indices;
-							let crate_version = <
-								#pallet_structs as #scrate::traits::GetCrateVersion
-							>::crate_version();
-							#scrate::dispatch::CallMetadata {
-								function_name,
-								pallet_name,
-								index,
-								crate_version,
-							}
+							#scrate::dispatch::CallMetadata { function_name, pallet_name }
 						}
 					)*
 				}

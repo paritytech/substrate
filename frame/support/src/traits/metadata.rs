@@ -29,6 +29,8 @@ pub trait PalletInfo {
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
+	/// Convert the given pallet `P` into its containing crate version.
+	fn crate_version<P: 'static>() -> Option<CrateVersion>;
 }
 
 /// Provides information about the pallet setup in the runtime.
@@ -39,6 +41,8 @@ pub trait PalletInfoAccess {
 	fn index() -> usize;
 	/// Name of the pallet as configured in the runtime.
 	fn name() -> &'static str;
+	/// Version of the crate containing the pallet.
+	fn crate_version() -> CrateVersion;
 }
 
 /// The function and pallet name of the Call.
@@ -48,10 +52,6 @@ pub struct CallMetadata {
 	pub function_name: &'static str,
 	/// Name of the pallet to which the function belongs.
 	pub pallet_name: &'static str,
-	/// Index of the containing pallet specified in `construct_runtime`.
-	pub index: u8,
-	/// Version of the crate containing the pallet to which the function belongs.
-	pub crate_version: CrateVersion,
 }
 
 /// Gets the function name of the Call.
@@ -98,12 +98,6 @@ impl sp_std::cmp::PartialOrd for CrateVersion {
 
 		Some(res)
 	}
-}
-
-/// Provides information about the version of a crate.
-pub trait GetCrateVersion {
-	/// Returns the current version of the crate.
-	fn crate_version() -> CrateVersion;
 }
 
 /// The storage key postfix that is used to store the [`StorageVersion`] per pallet.

@@ -35,7 +35,11 @@ use sp_trie::{
 use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
-use frame_support::{parameter_types, traits::KeyOwnerProofSystem, weights::RuntimeDbWeight};
+use frame_support::{
+	parameter_types,
+	traits::{CrateVersion, KeyOwnerProofSystem},
+	weights::RuntimeDbWeight,
+};
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
@@ -517,6 +521,21 @@ impl frame_support::traits::PalletInfo for Runtime {
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
+		}
+
+		None
+	}
+	fn crate_version<P: 'static>() -> Option<CrateVersion> {
+		use frame_support::traits::PalletInfoAccess as _;
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
+			return Some(system::Pallet::<Runtime>::crate_version())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
+			return Some(pallet_timestamp::Pallet::<Runtime>::crate_version())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
+			return Some(pallet_babe::Pallet::<Runtime>::crate_version())
 		}
 
 		None
