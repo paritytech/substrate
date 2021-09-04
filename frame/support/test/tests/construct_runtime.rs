@@ -549,11 +549,7 @@ fn call_metadata() {
 		function_name: "aux_4".into(),
 		pallet_name: "Module3".into(),
 		index: 35,
-		crate_version: CrateVersion {
-			major: 3,
-			minor: 0,
-			patch: 0,
-		},
+		crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
 	};
 	assert_eq!(metadata, expected);
 }
