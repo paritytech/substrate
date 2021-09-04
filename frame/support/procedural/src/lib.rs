@@ -21,12 +21,12 @@
 
 mod clone_no_bound;
 mod construct_runtime;
+mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
 mod key_prefix;
 mod pallet;
-mod crate_version;
 mod partial_eq_no_bound;
 mod storage;
 mod transactional;
