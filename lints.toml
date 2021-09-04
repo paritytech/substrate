@@ -82,7 +82,7 @@ allow = [
 	"clippy::iter_cloned_collect",
 	"clippy::derive_hash_xor_eq",
 	"clippy::if_same_then_else",
-	"clippy::unwrap_or_else_default",
+	#"clippy::unwrap_or_else_default",
 	"clippy::unit_arg",
 	"clippy::op_ref",
 	"clippy::field_reassign_with_default",
