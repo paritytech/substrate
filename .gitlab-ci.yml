@@ -273,6 +273,7 @@ cargo-clippy:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
+    - rustup +nightly component add clippy
     - cargo +nightly install cargo-lints
     - cargo +nightly lints clippy
   allow_failure:                   true
