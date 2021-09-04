@@ -1,4 +1,9 @@
 #
+# To run these specific lints run:
+#
+# cargo install cargo-lints
+# cargo lints clippy
+#
 # For all clippy lints please visit: https://rust-lang.github.io/rust-clippy/master/
 #
 allow = [
