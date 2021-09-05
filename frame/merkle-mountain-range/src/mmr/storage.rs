@@ -18,6 +18,8 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
+use mmr_lib::helper;
+use sp_io::offchain_index;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
 
@@ -83,27 +85,66 @@ where
 		Ok(<Nodes<T, I>>::get(pos).map(Node::Hash))
 	}
 
+	// ? Actually we can move this pruning logic outside
+	// ? and perform the pruning every X blocks
+	// ?
+	// ? commented by Xavier
 	fn append(&mut self, pos: NodeIndex, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
-		let mut leaves = crate::NumberOfLeaves::<T, I>::get();
-		let mut size = crate::mmr::utils::NodesUtils::new(leaves).size();
+		let leaves = crate::NumberOfLeaves::<T, I>::get();
+		let size = crate::mmr::utils::NodesUtils::new(leaves).size();
+
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore)
 		}
 
-		for elem in elems {
-			// on-chain we only store the hash (even if it's a leaf)
-			<Nodes<T, I>>::insert(size, elem.hash());
+		let diff = |a: &[NodeIndex], b: &[NodeIndex]| -> Vec<NodeIndex> {
+			b.iter().filter(|x| !a.contains(x)).cloned().collect()
+		};
+		let elems = elems
+			.into_iter()
+			.enumerate()
+			.map(|(i, elem)| (size + i as NodeIndex, elem))
+			.collect::<Vec<_>>();
+		let leaves = elems.iter().fold(leaves, |acc, (pos, elem)| {
 			// Indexing API is used to store the full leaf content.
-			let key = Pallet::<T, I>::offchain_key(size);
-			elem.using_encoded(|elem| sp_io::offchain_index::set(&key, elem));
-			size += 1;
+			elem.using_encoded(|elem| {
+				offchain_index::set(&Pallet::<T, I>::offchain_key(*pos), elem)
+			});
 
 			if let Node::Data(..) = elem {
-				leaves += 1;
+				acc + 1
+			} else {
+				acc
 			}
-		}
+		});
 
 		NumberOfLeaves::<T, I>::put(leaves);
+
+		let peaks_before = if size == 0 { vec![] } else { helper::get_peaks(size) };
+		let peaks_after = helper::get_peaks(size + elems.len() as NodeIndex);
+		let nodes_to_prune = diff(&peaks_after, &peaks_before);
+		let peaks_to_store = diff(&peaks_before, &peaks_after);
+
+		{
+			log::trace!("elems: {:?}\n", elems);
+			log::trace!("peaks_before: {:?}", peaks_before);
+			log::trace!("peaks_after: {:?}", peaks_after);
+			log::trace!("nodes_to_prune: {:?}", nodes_to_prune);
+			log::trace!("peaks_to_store: {:?}\n", peaks_to_store);
+		}
+
+		for pos in nodes_to_prune {
+			<Nodes<T, I>>::remove(pos);
+		}
+		for pos in peaks_to_store {
+			if let Some((_, elem)) = elems.iter().find(|(pos_, _)| *pos_ == pos) {
+				<Nodes<T, I>>::insert(pos, elem.hash());
+
+				log::trace!("position: {}, elem: {:?}", pos, elem);
+			} else {
+				log::error!("The different must existed in `elems`; qed");
+			}
+		}
 
 		Ok(())
 	}

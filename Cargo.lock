@@ -5361,6 +5361,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "log 0.4.14",
  "pallet-mmr-primitives",
  "parity-scale-codec",
  "sp-core",
