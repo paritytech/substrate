@@ -131,7 +131,7 @@ where
 	/// Get the version of the mining worker.
 	///
 	/// This returns type `Version` which can only compare equality. If `Version` is unchanged, then
-	/// it can be certain that `best_hash` and `metadata` does not changed.
+	/// it can be certain that `best_hash` and `metadata` were not changed.
 	pub fn version(&self) -> Version {
 		Version(self.version.load(Ordering::SeqCst))
 	}
