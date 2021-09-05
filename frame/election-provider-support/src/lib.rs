@@ -297,7 +297,7 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	}
 }
 
-/// Anything that can compute the result to an NPoS solution
+/// Anything that can compute the result to an NPoS solution.
 pub trait NposSolver {
 	/// The account identifier type of this solver.
 	type AccountId: sp_npos_elections::IdentifierT;
@@ -306,8 +306,8 @@ pub trait NposSolver {
 	/// The error type of this implementation.
 	type Error: sp_std::fmt::Debug + sp_std::cmp::PartialEq;
 
-	/// Solve an npos solution with the given `voters`, `targets`, and select `to_elect` from
-	/// `targets`.
+	/// Solve an npos solution with the given `voters`, `targets`, and select `to_elect` count
+	/// of `targets`.
 	fn solve(
 		to_elect: usize,
 		targets: Vec<Self::AccountId>,
