@@ -16,8 +16,8 @@
 
 use std::sync::Arc;
 
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block, NumberFor};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use parking_lot::Mutex;
 
