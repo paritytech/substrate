@@ -21,7 +21,6 @@ use sc_client_db::{
 	TransactionStorageMode,
 };
 use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
-use std::fs;
 use tempfile::tempdir;
 
 pub mod common;
@@ -32,27 +31,22 @@ fn database_role_subdir_migration() {
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	let base_path = tempdir().expect("could not create a temp dir");
-	let dummy_path = base_path.path().join("dummy");
+	let path = base_path.path().join("chains/dev/db");
 	// create a dummy database dir
 	{
 		let _old_db = LightStorage::<Block>::new(DatabaseSettings {
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,
-			source: DatabaseSource::RocksDb { path: dummy_path.to_path_buf(), cache_size: 128 },
+			source: DatabaseSource::RocksDb { path: path.to_path_buf(), cache_size: 128 },
 			keep_blocks: KeepBlocks::All,
 			transaction_storage: TransactionStorageMode::BlockBody,
 		})
 		.unwrap();
 	}
 
-	// copy dummy to a directory resembling the old layout
-	let old_db_path = base_path.path().join("chains/dev/db");
-	fs::create_dir_all(&old_db_path).unwrap();
-	fs::rename(dummy_path.join("light"), &old_db_path).unwrap();
-
-	assert!(old_db_path.join("db_version").exists());
-	assert!(!old_db_path.join("light").exists());
+	assert!(path.join("db_version").exists());
+	assert!(!path.join("light").exists());
 
 	// start a light client
 	common::run_node_for_a_while(
@@ -71,16 +65,17 @@ fn database_role_subdir_migration() {
 	);
 
 	// check if the database dir had been migrated
-	assert!(old_db_path.join("light/db_version").exists());
+	assert!(!path.join("db_version").exists());
+	assert!(path.join("light/db_version").exists());
 }
 
 #[test]
 #[cfg(unix)]
-fn database_role_subdir_migration_not_fail_on_different_role() {
+fn database_role_subdir_migration_fail_on_different_role() {
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	let base_path = tempdir().expect("could not create a temp dir");
-	let dummy_path = base_path.path().join("dummy");
+	let path = base_path.path().join("chains/dev/db");
 
 	// create a database with the old layout
 	{
@@ -88,24 +83,19 @@ fn database_role_subdir_migration_not_fail_on_different_role() {
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,
-			source: DatabaseSource::RocksDb { path: dummy_path.to_path_buf(), cache_size: 128 },
+			source: DatabaseSource::RocksDb { path: path.to_path_buf(), cache_size: 128 },
 			keep_blocks: KeepBlocks::All,
 			transaction_storage: TransactionStorageMode::BlockBody,
 		})
 		.unwrap();
 	}
 
-	// copy dummy to a directory resembling the old layout
-	let old_db_path = base_path.path().join("chains/dev/db/light");
-	fs::create_dir_all(&old_db_path).unwrap();
-	fs::rename(dummy_path.join("light"), &old_db_path).unwrap();
+	assert!(path.join("db_version").exists());
+	assert!(!path.join("light/db_version").exists());
 
-	assert!(old_db_path.join("db_version").exists());
-
-	// start a client with a different role (full), it should not fail but create a db with the
-	// full database next to the light database
-	common::run_node_for_a_while(
-		base_path.path(),
+	// start a client with a different role (full), it should fail and not change any files on disk
+	common::run_node_assert_fail(
+		&base_path.path(),
 		&[
 			"--dev",
 			"--port",
@@ -118,7 +108,8 @@ fn database_role_subdir_migration_not_fail_on_different_role() {
 		],
 	);
 
-	// check if both database dirs coexist
-	assert!(base_path.path().join("chains/dev/db/light/db_version").exists());
-	assert!(base_path.path().join("chains/dev/db/full/db_version").exists());
+	// check if the files are unchanged
+	assert!(path.join("db_version").exists());
+	assert!(!path.join("light/db_version").exists());
+	assert!(!path.join("full/db_version").exists());
 }
