@@ -41,7 +41,7 @@
 
 mod worker;
 
-pub use crate::worker::{MiningBuild, MiningMetadata, MiningHandle};
+pub use crate::worker::{MiningBuild, MiningHandle, MiningMetadata};
 
 use crate::worker::UntilImportedOrTimeout;
 use codec::{Decode, Encode};

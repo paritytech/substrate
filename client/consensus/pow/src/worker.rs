@@ -22,6 +22,7 @@ use futures::{
 };
 use futures_timer::Delay;
 use log::*;
+use parking_lot::Mutex;
 use sc_client_api::ImportNotifications;
 use sc_consensus::{BlockImportParams, BoxBlockImport, StateAction, StorageChanges};
 use sp_consensus::{BlockOrigin, Proposal};
@@ -30,8 +31,16 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	DigestItem,
 };
-use parking_lot::Mutex;
-use std::{borrow::Cow, sync::Arc, sync::atomic::{AtomicUsize, Ordering}, collections::HashMap, pin::Pin, time::Duration};
+use std::{
+	borrow::Cow,
+	collections::HashMap,
+	pin::Pin,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	},
+	time::Duration,
+};
 
 use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, POW_ENGINE_ID};
 
@@ -96,7 +105,7 @@ where
 	pub(crate) fn new(
 		algorithm: Algorithm,
 		block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
-		justification_sync_link: L
+		justification_sync_link: L,
 	) -> Self {
 		Self {
 			version: Arc::new(AtomicUsize::new(0)),
@@ -238,7 +247,8 @@ where
 	}
 }
 
-impl<Block, Algorithm, C, L, Proof> Clone for MiningHandle<Block, Algorithm, C, L, Proof> where
+impl<Block, Algorithm, C, L, Proof> Clone for MiningHandle<Block, Algorithm, C, L, Proof>
+where
 	Block: BlockT,
 	Algorithm: PowAlgorithm<Block>,
 	C: sp_api::ProvideRuntimeApi<Block>,
