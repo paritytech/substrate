@@ -58,19 +58,19 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn addition(_i: u32, ) -> Weight {
-		(369_000 as Weight)
+		(427_000 as Weight)
 	}
 	fn subtraction(_i: u32, ) -> Weight {
-		(380_000 as Weight)
+		(423_000 as Weight)
 	}
 	fn multiplication(_i: u32, ) -> Weight {
-		(377_000 as Weight)
+		(418_000 as Weight)
 	}
 	fn division(_i: u32, ) -> Weight {
-		(372_000 as Weight)
+		(417_000 as Weight)
 	}
 	fn hashing(i: u32, ) -> Weight {
-		(449_000 as Weight)
+		(2_730_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((392_000 as Weight).saturating_mul(i as Weight))
 	}
@@ -78,14 +78,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn storage_read(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 5_000
-			.saturating_add((5_363_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((5_705_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: System Account (r:20 w:20)
 	fn storage_write(i: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((11_822_000 as Weight).saturating_mul(i as Weight))
+		(4_011_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((12_318_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
@@ -94,19 +94,19 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn addition(_i: u32, ) -> Weight {
-		(369_000 as Weight)
+		(427_000 as Weight)
 	}
 	fn subtraction(_i: u32, ) -> Weight {
-		(380_000 as Weight)
+		(423_000 as Weight)
 	}
 	fn multiplication(_i: u32, ) -> Weight {
-		(377_000 as Weight)
+		(418_000 as Weight)
 	}
 	fn division(_i: u32, ) -> Weight {
-		(372_000 as Weight)
+		(417_000 as Weight)
 	}
 	fn hashing(i: u32, ) -> Weight {
-		(449_000 as Weight)
+		(2_730_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((392_000 as Weight).saturating_mul(i as Weight))
 	}
@@ -114,14 +114,14 @@ impl WeightInfo for () {
 	fn storage_read(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 5_000
-			.saturating_add((5_363_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((5_705_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: System Account (r:20 w:20)
 	fn storage_write(i: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((11_822_000 as Weight).saturating_mul(i as Weight))
+		(4_011_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((12_318_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
