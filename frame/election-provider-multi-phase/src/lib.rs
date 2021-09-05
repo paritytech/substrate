@@ -665,7 +665,7 @@ pub mod pallet {
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
 
-		/// Election solution algorithm implementation.
+		/// OCW election solution miner algorithm implementation.
 		type Solver: NposSolver<AccountId = Self::AccountId>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
