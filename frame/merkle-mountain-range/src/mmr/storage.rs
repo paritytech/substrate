@@ -23,7 +23,8 @@ use sp_std::prelude::Vec;
 
 use crate::{
 	mmr::{Node, NodeOf},
-	primitives, Config, Nodes, NumberOfLeaves, Pallet,
+	primitives::{self, NodeIndex},
+	Config, Nodes, NumberOfLeaves, Pallet,
 };
 
 /// A marker type for runtime-specific storage implementation.
@@ -60,14 +61,14 @@ where
 	I: 'static,
 	L: primitives::FullLeaf + codec::Decode,
 {
-	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
+	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
 		let key = Pallet::<T, I>::offchain_key(pos);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
 	}
 
-	fn append(&mut self, _: u64, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
+	fn append(&mut self, _: NodeIndex, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
 		panic!("MMR must not be altered in the off-chain context.")
 	}
 }
@@ -78,11 +79,11 @@ where
 	I: 'static,
 	L: primitives::FullLeaf,
 {
-	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
+	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
 		Ok(<Nodes<T, I>>::get(pos).map(Node::Hash))
 	}
 
-	fn append(&mut self, pos: u64, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
+	fn append(&mut self, pos: NodeIndex, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
 		let mut leaves = crate::NumberOfLeaves::<T, I>::get();
 		let mut size = crate::mmr::utils::NodesUtils::new(leaves).size();
 		if pos != size {

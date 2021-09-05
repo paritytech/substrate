@@ -70,10 +70,10 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub use pallet_mmr_primitives as primitives;
+pub use pallet_mmr_primitives::{self as primitives, NodeIndex};
 
 pub trait WeightInfo {
-	fn on_initialize(peaks: u64) -> Weight;
+	fn on_initialize(peaks: NodeIndex) -> Weight;
 }
 
 #[frame_support::pallet]
@@ -159,7 +159,7 @@ pub mod pallet {
 	/// Current size of the MMR (number of leaves).
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_leaves)]
-	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, u64, ValueQuery>;
+	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, NodeIndex, ValueQuery>;
 
 	/// Hashes of the nodes in the MMR.
 	///
@@ -168,7 +168,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_peak)]
 	pub type Nodes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, u64, <T as Config<I>>::Hash, OptionQuery>;
+		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -227,7 +227,7 @@ where
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn offchain_key(pos: u64) -> sp_std::prelude::Vec<u8> {
+	fn offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
 
@@ -238,7 +238,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(
-		leaf_index: u64,
+		leaf_index: NodeIndex,
 	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)

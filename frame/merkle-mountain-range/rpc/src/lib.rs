@@ -71,7 +71,7 @@ pub trait MmrApi<BlockHash> {
 	#[rpc(name = "mmr_generateProof")]
 	fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: NodeIndex,
 		at: Option<BlockHash>,
 	) -> Result<LeafProof<BlockHash>>;
 }
@@ -98,7 +98,7 @@ where
 {
 	fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: NodeIndex,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<LeafProof<<Block as BlockT>::Hash>> {
 		let api = self.client.runtime_api();
