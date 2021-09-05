@@ -36,7 +36,7 @@ pub use memory_db::prefixed_key;
 pub use memory_db::KeyFunction;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-use sp_std::{borrow::Borrow, boxed::Box, fmt, marker::PhantomData, vec, vec::Vec};
+use sp_std::{borrow::Borrow, boxed::Box, fmt, marker::PhantomData, vec::Vec};
 pub use storage_proof::{CompactProof, StorageProof};
 /// Trie codec reexport, mainly child trie support
 /// for trie compact proof.
@@ -47,7 +47,7 @@ use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::{
 	nibble_ops,
 	node::{NodePlan, ValuePlan},
-	CError, DBValue, Meta, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator,
+	CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator,
 	TrieDBKeyIterator, TrieLayout, TrieMut,
 };
 /// The Substrate format implementation of `TrieStream`.
@@ -88,7 +88,6 @@ where
 {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
-	const USE_META: bool = true;
 
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
@@ -214,9 +213,7 @@ where
 	K: 'a + AsRef<[u8]>,
 	V: 'a + AsRef<[u8]>,
 {
-	// No specific info to read from layout.
-	let layout = Default::default();
-	verify_proof::<Layout<L::Hash>, _, _, _>(root, proof, items, layout)
+	verify_proof::<Layout<L::Hash>, _, _, _>(root, proof, items)
 }
 
 /// Determine a trie root given a hash DB and delta values.
@@ -444,10 +441,6 @@ where
 		self.0.get(key, (&derived_prefix.0, derived_prefix.1))
 	}
 
-	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<T> {
-		self.0.access_from(key, at)
-	}
-
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, (&derived_prefix.0, derived_prefix.1))
@@ -465,10 +458,6 @@ where
 		self.0.get(key, (&derived_prefix.0, derived_prefix.1))
 	}
 
-	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<T> {
-		self.0.access_from(key, at)
-	}
-
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, (&derived_prefix.0, derived_prefix.1))
@@ -482,11 +471,6 @@ where
 	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: T) {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.emplace(key, (&derived_prefix.0, derived_prefix.1), value)
-	}
-
-	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.emplace_ref(key, (&derived_prefix.0, derived_prefix.1), value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
@@ -510,90 +494,9 @@ where
 	}
 }
 
-/// Representation of node with with inner hash instead of value.
-fn inner_hashed_value<H: Hasher>(x: &[u8], range: Option<(usize, usize)>) -> Vec<u8> {
-	if let Some((start, end)) = range {
-		let len = x.len();
-		if start < len && end == len {
-			// terminal inner hash
-			let hash_end = H::hash(&x[start..]);
-			let mut buff = vec![0; x.len() + hash_end.as_ref().len() - (end - start)];
-			buff[..start].copy_from_slice(&x[..start]);
-			buff[start..].copy_from_slice(hash_end.as_ref());
-			return buff
-		}
-		if start == 0 && end < len {
-			// start inner hash
-			let hash_start = H::hash(&x[..start]);
-			let hash_len = hash_start.as_ref().len();
-			let mut buff = vec![0; x.len() + hash_len - (end - start)];
-			buff[..hash_len].copy_from_slice(hash_start.as_ref());
-			buff[hash_len..].copy_from_slice(&x[end..]);
-			return buff
-		}
-		if start < len && end < len {
-			// middle inner hash
-			let hash_middle = H::hash(&x[start..end]);
-			let hash_len = hash_middle.as_ref().len();
-			let mut buff = vec![0; x.len() + hash_len - (end - start)];
-			buff[..start].copy_from_slice(&x[..start]);
-			buff[start..start + hash_len].copy_from_slice(hash_middle.as_ref());
-			buff[start + hash_len..].copy_from_slice(&x[end..]);
-			return buff
-		}
-	}
-	// if anything wrong default to hash
-	x.to_vec()
-}
-
-/// Estimate encoded size of node.
-pub fn estimate_entry_size(entry: &(DBValue, Meta, bool), hash_len: usize) -> usize {
-	use codec::Encode;
-	let mut full_encoded = entry.0.encoded_size();
-	if !entry.2 && entry.1.apply_inner_hashing {
-		if let Some(range) = entry.1.range.as_ref() {
-			let value_size = range.end - range.start;
-			full_encoded -= value_size;
-			full_encoded += hash_len;
-			full_encoded += 1;
-		}
-	}
-
-	full_encoded
-}
-
-/// Switch to hashed value variant.
-pub fn to_hashed_variant<H: Hasher>(
-	value: &[u8],
-	meta: &mut Meta,
-	used_value: bool,
-) -> Option<DBValue> {
-	if !meta.contain_hash && meta.apply_inner_hashing && !used_value && meta.range.is_some() {
-		let mut stored = Vec::with_capacity(value.len() + 1);
-		// Warning this assumes that encoded value cannot start by this,
-		// so it is tightly coupled with the header type of the codec.
-		stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
-		let range = meta.range.as_ref().expect("Tested in condition");
-		// store hash instead of value.
-		let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
-		stored.extend_from_slice(value.as_slice());
-		meta.contain_hash = true;
-		return Some(stored)
-	}
-	None
-}
-
-/// Decode plan in order to update meta early (needed to register proofs).
-pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, Meta, bool)) {
-	use trie_db::NodeCodec;
-	let _ = <Layout<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);
-}
-
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
-	/// In proof this header is used when only hashed value is stored.
-	pub const DEAD_HEADER_META_HASHED_VALUE: u8 = EMPTY_TRIE | 0b_00_01;
 	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
@@ -601,6 +504,7 @@ mod trie_constants {
 	pub const EMPTY_TRIE: u8 = FIRST_PREFIX | (0b_00 << 4);
 	pub const ALT_HASHING_LEAF_PREFIX_MASK: u8 = FIRST_PREFIX | (0b_1 << 5);
 	pub const ALT_HASHING_BRANCH_WITH_MASK: u8 = FIRST_PREFIX | (0b_01 << 4);
+	pub const ESCAPE_COMPACT_HEADER: u8 = EMPTY_TRIE | 0b_00_01;
 }
 
 #[cfg(test)]

@@ -115,7 +115,7 @@ where
 	// Layout does not change trie reading.
 	let layout = L::default();
 	let (top_root, _nb_used) =
-		trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter, &layout)?;
+		trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter)?;
 
 	// Only check root if expected root is passed as argument.
 	if let Some(expected_root) = expected_root {
@@ -166,7 +166,7 @@ where
 	for child_root in child_tries.into_iter() {
 		if previous_extracted_child_trie.is_none() {
 			let (top_root, _) =
-				trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter, &layout)?;
+				trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter)?;
 			previous_extracted_child_trie = Some(top_root);
 		}
 

@@ -29,16 +29,17 @@ pub(crate) enum NodeHeader {
 	Branch(bool, usize),
 	// contains nibble count
 	Leaf(usize),
-	// contains nibble count and wether the value is a hash.
-	AltHashBranch(usize, bool),
-	// contains nibble count and wether the value is a hash.
-	AltHashLeaf(usize, bool),
+	// contains nibble count.
+	AltHashBranch(usize),
+	// contains nibble count.
+	AltHashLeaf(usize),
 }
 
 impl NodeHeader {
 	pub(crate) fn contains_hash_of_value(&self) -> bool {
 		match self {
-			NodeHeader::AltHashBranch(_, true) | NodeHeader::AltHashLeaf(_, true) => true,
+			NodeHeader::AltHashBranch(_)
+			| NodeHeader::AltHashLeaf(_) => true,
 			_ => false,
 		}
 	}
@@ -51,49 +52,22 @@ pub(crate) enum NodeKind {
 	BranchWithValue,
 	AltHashLeaf,
 	AltHashBranchWithValue,
-	AltHashLeafHash,
-	AltHashBranchWithValueHash,
 }
 
 impl Encode for NodeHeader {
 	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
-		if self.contains_hash_of_value() {
-			output.write(&[trie_constants::DEAD_HEADER_META_HASHED_VALUE]);
-		}
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
-			NodeHeader::Branch(true, nibble_count) =>
+			NodeHeader::Branch(true, nibble_count)	=>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, 2, output),
-			NodeHeader::Branch(false, nibble_count) => encode_size_and_prefix(
-				*nibble_count,
-				trie_constants::BRANCH_WITHOUT_MASK,
-				2,
-				output,
-			),
+			NodeHeader::Branch(false, nibble_count) =>
+				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, 2, output),
 			NodeHeader::Leaf(nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, 2, output),
-			NodeHeader::AltHashBranch(nibble_count, _) => encode_size_and_prefix(
-				*nibble_count,
-				trie_constants::ALT_HASHING_BRANCH_WITH_MASK,
-				4,
-				output,
-			),
-			NodeHeader::AltHashLeaf(nibble_count, _) => encode_size_and_prefix(
-				*nibble_count,
-				trie_constants::ALT_HASHING_LEAF_PREFIX_MASK,
-				3,
-				output,
-			),
-		}
-	}
-}
-
-impl NodeHeader {
-	/// Is this header using alternate hashing scheme.
-	pub(crate) fn alt_hashing(&self) -> bool {
-		match self {
-			NodeHeader::Null | NodeHeader::Leaf(..) | NodeHeader::Branch(..) => false,
-			NodeHeader::AltHashBranch(..) | NodeHeader::AltHashLeaf(..) => true,
+			NodeHeader::AltHashBranch(nibble_count)	=>
+				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4, output),
+			NodeHeader::AltHashLeaf(nibble_count)	=>
+				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3, output),
 		}
 	}
 }
@@ -102,27 +76,19 @@ impl codec::EncodeLike for NodeHeader {}
 
 impl Decode for NodeHeader {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let mut i = input.read_byte()?;
+		let i = input.read_byte()?;
 		if i == trie_constants::EMPTY_TRIE {
 			return Ok(NodeHeader::Null)
 		}
-		let contain_hash = if trie_constants::DEAD_HEADER_META_HASHED_VALUE == i {
-			i = input.read_byte()?;
-			true
-		} else {
-			false
-		};
 		match i & (0b11 << 6) {
 			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input, 2)?)),
-			trie_constants::BRANCH_WITH_MASK =>
-				Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
-			trie_constants::BRANCH_WITHOUT_MASK =>
-				Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
 			trie_constants::EMPTY_TRIE => {
 				if i & (0b111 << 5) == trie_constants::ALT_HASHING_LEAF_PREFIX_MASK {
-					Ok(NodeHeader::AltHashLeaf(decode_size(i, input, 3)?, contain_hash))
+					Ok(NodeHeader::AltHashLeaf(decode_size(i, input, 3)?))
 				} else if i & (0b1111 << 4) == trie_constants::ALT_HASHING_BRANCH_WITH_MASK {
-					Ok(NodeHeader::AltHashBranch(decode_size(i, input, 4)?, contain_hash))
+					Ok(NodeHeader::AltHashBranch(decode_size(i, input, 4)?))
 				} else {
 					// do not allow any special encoding
 					Err("Unallowed encoding".into())

@@ -72,13 +72,8 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 				.map_err(|e| format!("Database backend error: {:?}", e))
 		}
 	}
-
-	fn access_from(&self, key: &Block::Hash) {
-		if let Some(recorder) = &self.proof_recorder {
-			recorder.access_from(key, HashFor::<Block>::LENGTH);
-		}
-	}
 }
+
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,

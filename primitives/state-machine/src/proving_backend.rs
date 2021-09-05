@@ -30,9 +30,9 @@ use sp_core::{state_version::StateVersion, storage::ChildInfo};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
-	Layout, MemoryDB, Meta, Recorder, StorageProof,
+	Layout, MemoryDB, Recorder, StorageProof,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{hash_map::Entry, HashMap}, sync::Arc};
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -108,7 +108,7 @@ where
 #[derive(Default)]
 struct ProofRecorderInner<Hash> {
 	/// All the records that we have stored so far.
-	records: HashMap<Hash, Option<(DBValue, Meta, bool)>>,
+	records: HashMap<Hash, Option<DBValue>>,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
 	/// State version in use.
@@ -125,43 +125,21 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
 	pub fn record<H: Hasher>(&self, key: Hash, val: Option<DBValue>) {
 		let mut inner = self.inner.write();
+		let encoded_size = if let Entry::Vacant(entry) = inner.records.entry(key) {
+			let encoded_size = val.as_ref().map(Encode::encoded_size).unwrap_or(0);
 
-		let ProofRecorderInner { encoded_size, records, .. } = &mut *inner;
-		records.entry(key).or_insert_with(|| {
-			val.map(|val| {
-				let mut val = (val, Meta::default(), false);
-				sp_trie::resolve_encoded_meta::<H>(&mut val);
-				*encoded_size += sp_trie::estimate_entry_size(&val, H::LENGTH);
-				val
-			})
-		});
-	}
+			entry.insert(val);
+			encoded_size
+		} else {
+			0
+		};
 
-	/// Record actual trie level value access.
-	pub fn access_from(&self, key: &Hash, hash_len: usize) {
-		let mut inner = self.inner.write();
-		let ProofRecorderInner { encoded_size, records, .. } = &mut *inner;
-		records.entry(key.clone()).and_modify(|entry| {
-			if let Some(entry) = entry.as_mut() {
-				if !entry.2 {
-					let old_size = sp_trie::estimate_entry_size(entry, hash_len);
-					entry.2 = true;
-					let new_size = sp_trie::estimate_entry_size(entry, hash_len);
-					*encoded_size += new_size;
-					*encoded_size -= old_size;
-				}
-			}
-		});
+		inner.encoded_size += encoded_size;
 	}
 
 	/// Returns the value at the given `key`.
 	pub fn get(&self, key: &Hash) -> Option<Option<DBValue>> {
-		self.inner
-			.read()
-			.records
-			.get(key)
-			.as_ref()
-			.map(|v| v.as_ref().map(|v| v.0.clone()))
+		self.inner.read().records.get(key).cloned()
 	}
 
 	/// Returns the estimated encoded size of the proof.
@@ -178,26 +156,10 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
 		let inner = self.inner.read();
-		let try_inner_hashing = match inner.state_version {
-			StateVersion::V0 => None,
-			StateVersion::V1 { threshold } => Some(threshold),
-		};
 		let trie_nodes = inner
 			.records
 			.iter()
-			.filter_map(|(_k, v)| {
-				v.as_ref().map(|v| {
-					let mut meta = v.1.clone();
-					meta.try_inner_hashing = try_inner_hashing.clone();
-					if let Some(hashed) =
-						sp_trie::to_hashed_variant::<H>(v.0.as_slice(), &mut meta, v.2)
-					{
-						hashed
-					} else {
-						v.0.clone()
-					}
-				})
-			})
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 			.collect();
 
 		StorageProof::new(trie_nodes, inner.state_version)
@@ -271,10 +233,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		let backend_value = self.backend.get(key, prefix)?;
 		self.proof_recorder.record::<H>(key.clone(), backend_value.clone());
 		Ok(backend_value)
-	}
-
-	fn access_from(&self, key: &H::Out) {
-		self.proof_recorder.access_from(key, H::LENGTH);
 	}
 }
 

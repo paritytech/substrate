@@ -171,8 +171,6 @@ impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
 		let key = sp_trie::prefixed_key::<sp_core::Blake2Hasher>(key, prefix);
 		self.0.get(0, &key).map_err(|e| format!("Database backend error: {:?}", e))
 	}
-
-	fn access_from(&self, _key: &Hash) {}
 }
 
 impl core::Benchmark for TrieReadBenchmark {

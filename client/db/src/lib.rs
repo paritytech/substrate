@@ -1010,8 +1010,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		}
 		.map_err(|e| format!("Database backend error: {:?}", e))
 	}
-
-	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
@@ -1039,7 +1037,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStora
 		use hash_db::HashDB;
 		Ok(self.storage.get(key, prefix))
 	}
-	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 struct EmptyStorage<Block: BlockT>(pub Block::Hash);
@@ -1057,8 +1054,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<B
 	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
-
-	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 /// Frozen `value` at time `at`.
