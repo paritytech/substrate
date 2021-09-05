@@ -31,7 +31,7 @@ use crate::{
 ///
 /// Allows appending new items to the MMR and proof verification.
 /// MMR nodes are appended to two different storages:
-/// 1. We add nodes (leaves) hashes to the on-chain storge (see [crate::Nodes]).
+/// 1. We add nodes (leaves) hashes to the on-chain storage (see [crate::Nodes]).
 /// 2. We add full leaves (and all inner nodes as well) into the `IndexingAPI` during block
 ///    processing, so the values end up in the Offchain DB if indexing is enabled.
 pub struct RuntimeStorage;
