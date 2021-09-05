@@ -30,7 +30,7 @@ pub trait Config: frame_system::Config {}
 
 benchmarks! {
 	addition {
-		let i in 0 .. 10_000;
+		let i in 0 .. 1_000_000;
 		let mut start = 0;
 	}: {
 		(0..i).for_each(|_| start += 1);
@@ -39,7 +39,7 @@ benchmarks! {
 	}
 
 	subtraction {
-		let i in 0 .. 10_000;
+		let i in 0 .. 1_000_000;
 		let mut start = u32::MAX;
 	}: {
 		(0..i).for_each(|_| start -= 1);
@@ -48,7 +48,7 @@ benchmarks! {
 	}
 
 	multiplication {
-		let i in 0 .. 10_000;
+		let i in 0 .. 1_000_000;
 		let mut out = 0;
 	}:  {
 		(1..=i).for_each(|j| out = i * j);
@@ -57,7 +57,7 @@ benchmarks! {
 	}
 
 	division {
-		let i in 0 .. 10_000;
+		let i in 0 .. 1_000_000;
 		let mut out = 0;
 	}: {
 		(1..=i).for_each(|j| out = i / j);
@@ -66,7 +66,7 @@ benchmarks! {
 	}
 
 	hashing {
-		let i in 0 .. 10_000;
+		let i in 0 .. 100_000;
 		let mut hash = T::Hash::default();
 	}: {
 		(0..=i).for_each(|j| hash = T::Hashing::hash(&j.to_be_bytes()));
@@ -75,7 +75,7 @@ benchmarks! {
 	}
 
 	storage_read {
-		let i in 0 .. 1000;
+		let i in 0 .. 1_000;
 		let mut people = Vec::new();
 		(0..i).for_each(|j| {
 			let who: T::AccountId = account("user", j, SEED);
@@ -90,7 +90,7 @@ benchmarks! {
 	}
 
 	storage_write {
-		let i in 0 .. 1000;
+		let i in 0 .. 1_000;
 		let mut people = Vec::new();
 		(0..i).for_each(|j| {
 			let who: T::AccountId = account("user", j, SEED);
