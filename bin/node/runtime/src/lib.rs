@@ -569,8 +569,8 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfi
 	const MAXIMUM_TARGETS: u32 = 2000;
 }
 
-/// Maximum number of iterations for balancing that will be executed in the embedded miner of
-/// the pallet.
+/// Maximum number of iterations for balancing that will be executed in the embedded OCW
+/// miner of election provider multi phase.
 pub const MINER_MAX_ITERATIONS: u32 = 10;
 
 /// A source of random balance for NposSolver, which is meant to be run by the OCW election miner.
