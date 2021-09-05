@@ -1054,12 +1054,14 @@ impl<B: BlockT> ChainSync<B> {
 			self.pending_requests.add(who);
 			if let Some(request) = request {
 				match &mut peer.state {
-					PeerSyncState::DownloadingNew(start_block) => {
+					PeerSyncState::DownloadingNew(_) => {
 						self.blocks.clear_peer_download(who);
-						let start_block = *start_block;
 						peer.state = PeerSyncState::Available;
-						validate_blocks::<B>(&blocks, who, Some(request))?;
-						self.blocks.insert(start_block, blocks, who.clone());
+						if let Some(start_block) =
+							validate_blocks::<B>(&blocks, who, Some(request))?
+						{
+							self.blocks.insert(start_block, blocks, who.clone());
+						}
 						self.drain_blocks()
 					},
 					PeerSyncState::DownloadingStale(_) => {
@@ -2315,13 +2317,14 @@ where
 }
 
 /// Validate that the given `blocks` are correct.
+/// Returns the number of the first block in the sequence.
 ///
-/// It is expected that `blocks` are in asending order.
+/// It is expected that `blocks` are in ascending order.
 fn validate_blocks<Block: BlockT>(
 	blocks: &Vec<message::BlockData<Block>>,
 	who: &PeerId,
 	request: Option<BlockRequest<Block>>,
-) -> Result<(), BadPeer> {
+) -> Result<Option<NumberFor<Block>>, BadPeer> {
 	if let Some(request) = request {
 		if Some(blocks.len() as _) > request.max {
 			debug!(
@@ -2415,7 +2418,7 @@ fn validate_blocks<Block: BlockT>(
 		}
 	}
 
-	Ok(())
+	Ok(blocks.first().and_then(|b| b.header.as_ref()).map(|h| *h.number()))
 }
 
 #[cfg(test)]
