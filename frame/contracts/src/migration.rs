@@ -53,7 +53,9 @@ mod v4 {
 /// V5: State rent is removed which obsoletes some fields in `ContractInfo`.
 mod v5 {
 	use super::*;
-	use crate::{BalanceOf, CodeHash, ContractInfo, ContractInfoOf, TrieId};
+	use crate::{
+		BalanceOf, CodeHash, ContractInfo, ContractInfoOf, DeletedContract, DeletionQueue, TrieId,
+	};
 	use codec::Decode;
 	use sp_std::marker::PhantomData;
 
@@ -86,6 +88,12 @@ mod v5 {
 	#[derive(Decode)]
 	struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
+	#[derive(Decode)]
+	struct OldDeletedContract {
+		_pair_count: u32,
+		trie_id: TrieId,
+	}
+
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
 
@@ -100,6 +108,12 @@ mod v5 {
 				OldContractInfo::Tombstone(_) => None,
 			}
 		});
+
+		<DeletionQueue<T>>::translate(|old: Option<Vec<OldDeletedContract>>| {
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
+		})
+		.ok();
 
 		weight
 	}

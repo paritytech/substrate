@@ -63,7 +63,7 @@ fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 
 #[derive(Encode, Decode)]
 pub struct DeletedContract {
-	trie_id: TrieId,
+	pub(crate) trie_id: TrieId,
 }
 
 pub struct Storage<T>(PhantomData<T>);
