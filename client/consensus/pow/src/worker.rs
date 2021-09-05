@@ -140,7 +140,7 @@ where
 
 	/// Submit a mined seal. The seal will be validated again. Returns true if the submission is
 	/// successful.
-	pub async fn submit(&mut self, seal: Seal) -> bool {
+	pub async fn submit(&self, seal: Seal) -> bool {
 		if let Some(metadata) = self.metadata() {
 			match self.algorithm.verify(
 				&BlockId::Hash(metadata.best_hash),
