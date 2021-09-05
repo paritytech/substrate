@@ -1562,7 +1562,7 @@ impl_runtime_apis! {
 
 			let mut list = Vec::<BenchmarkList>::new();
 
-			list_benchmark!(list, extra, baseline, BaselineBench::<Runtime>);
+			list_benchmark!(list, extra, frame_benchmarking, BaselineBench::<Runtime>);
 			list_benchmark!(list, extra, pallet_assets, Assets);
 			list_benchmark!(list, extra, pallet_babe, Babe);
 			list_benchmark!(list, extra, pallet_balances, Balances);
@@ -1638,7 +1638,7 @@ impl_runtime_apis! {
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
 
-			add_benchmark!(params, batches, baseline, BaselineBench::<Runtime>);
+			add_benchmark!(params, batches, frame_benchmarking, BaselineBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_assets, Assets);
 			add_benchmark!(params, batches, pallet_babe, Babe);
 			add_benchmark!(params, batches, pallet_balances, Balances);
