@@ -1672,7 +1672,11 @@ mod tests {
 		{
 			let mut trie =
 				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
+			// changed
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
+				.expect("insert failed");
+			// unchange but should also update node.
+			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
 		}
 		let root3 = root.clone();

@@ -94,6 +94,9 @@ where
 
 	/// Get backend storage reference.
 	pub fn backend_storage_mut(&mut self) -> &mut S {
+		#[cfg(std)]
+		self.cache.reset_cache();
+
 		&mut self.storage
 	}
 
