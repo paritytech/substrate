@@ -33,9 +33,6 @@ use sp_std::{
 	prelude::*,
 };
 
-#[cfg(feature = "std")]
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-
 /// Integer types that can be used to interact with `FixedPointNumber` implementations.
 pub trait FixedPointOperand:
 	Copy
@@ -606,32 +603,6 @@ macro_rules! implement_fixed {
 				let inner: <Self as FixedPointNumber>::Inner =
 					s.parse().map_err(|_| "invalid string input for fixed point number")?;
 				Ok(Self::from_inner(inner))
-			}
-		}
-
-		// Manual impl `Serialize` as serde_json does not support i128.
-		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
-		#[cfg(feature = "std")]
-		impl Serialize for $name {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-			where
-				S: Serializer,
-			{
-				serializer.serialize_str(&self.to_string())
-			}
-		}
-
-		// Manual impl `Deserialize` as serde_json does not support i128.
-		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
-		#[cfg(feature = "std")]
-		impl<'de> Deserialize<'de> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-			where
-				D: Deserializer<'de>,
-			{
-				use sp_std::str::FromStr;
-				let s = String::deserialize(deserializer)?;
-				$name::from_str(&s).map_err(de::Error::custom)
 			}
 		}
 
