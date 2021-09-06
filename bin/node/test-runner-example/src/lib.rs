@@ -94,19 +94,14 @@ mod tests {
 	fn test_runner() {
 		let tokio_runtime = build_runtime().unwrap();
 		let task_executor = task_executor(tokio_runtime.handle().clone());
-		let (task_manager, client, pool, command_sink, backend) = client_parts::<
-			NodeTemplateChainInfo,
-		>(
-			ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor),
-		)
-		.unwrap();
-		let node = Node::<NodeTemplateChainInfo>::new(
-			task_manager,
-			client,
-			pool,
-			command_sink,
-			backend,
-		);
+		let (task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(ConfigOrChainSpec::ChainSpec(
+				Box::new(development_config()),
+				task_executor,
+			))
+			.unwrap();
+		let node =
+			Node::<NodeTemplateChainInfo>::new(task_manager, client, pool, command_sink, backend);
 
 		tokio_runtime.block_on(async {
 			// seals blocks
