@@ -27,7 +27,6 @@ use libp2p::{
 	},
 	identity, mplex, noise, PeerId, Transport,
 };
-#[cfg(not(target_os = "unknown"))]
 use libp2p::{dns, tcp, websocket};
 use std::{sync::Arc, time::Duration};
 

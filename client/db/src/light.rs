@@ -65,8 +65,6 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
-
-	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
 }
 
@@ -102,7 +100,6 @@ impl<Block: BlockT> LightStorage<Block> {
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 			header_metadata_cache,
-			#[cfg(not(target_os = "unknown"))]
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 		})
 	}
@@ -589,7 +586,6 @@ where
 		Some(self.cache.clone())
 	}
 
-	#[cfg(not(target_os = "unknown"))]
 	fn usage_info(&self) -> Option<UsageInfo> {
 		use sc_client_api::{IoInfo, MemoryInfo, MemorySize};
 
@@ -618,11 +614,6 @@ where
 				state_writes_nodes: 0,
 			},
 		})
-	}
-
-	#[cfg(target_os = "unknown")]
-	fn usage_info(&self) -> Option<UsageInfo> {
-		None
 	}
 }
 

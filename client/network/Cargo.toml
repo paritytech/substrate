@@ -64,26 +64,7 @@ unsigned-varint = { version = "0.6.0", features = [
 ] }
 void = "1.0.2"
 zeroize = "1.2.0"
-
-[dependencies.libp2p]
-version = "0.39.1"
-
-[target.'cfg(target_os = "unknown")'.dependencies.libp2p]
-version = "0.39.1"
-default-features = false
-features = [
-    "identify",
-    "kad",
-    "mdns",
-    "mplex",
-    "noise",
-    "ping",
-    "request-response",
-    "tcp-async-io",
-    "websocket",
-    "yamux",
-]
-
+libp2p = "0.39.1"
 
 [dev-dependencies]
 assert_matches = "1.3"

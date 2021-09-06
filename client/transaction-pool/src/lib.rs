@@ -138,7 +138,6 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
 	PoolApi: graph::ChainApi<Block = Block>,
