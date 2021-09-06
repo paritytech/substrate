@@ -38,7 +38,7 @@
 //!
 //! 2. Write a little program to generate the definitions. This program exists only to hook together
 //! the runtime definitions with the various calculations here. Take a look at
-//! _utils/frame/node-runtime_ for an example.
+//! _utils/frame/generate_bags/node-runtime_ for an example.
 //!
 //! 3. Run that program:
 //!
