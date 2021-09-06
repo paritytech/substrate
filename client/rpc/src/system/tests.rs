@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::{helpers::SyncState, *};
-use assert_matches::assert_matches;
-use futures::{executor, prelude::*};
+use futures::prelude::*;
 use jsonrpsee::{
 	types::v2::{error::JsonRpcError, response::JsonRpcResponse},
 	RpcModule,
@@ -29,7 +28,6 @@ use serde_json::value::to_raw_value;
 use sp_core::H256;
 use sp_utils::mpsc::tracing_unbounded;
 use std::{
-	borrow::Borrow,
 	env,
 	io::{BufRead, BufReader, Write},
 	process::{Command, Stdio},

@@ -295,10 +295,8 @@ mod waiting {
 
 	impl Drop for WsServer {
 		fn drop(&mut self) {
-			if let Some(mut server) = self.0.take() {
+			if let Some(server) = self.0.take() {
 				let _ = futures::executor::block_on(server.stop().unwrap());
-				// TODO: (dp) not needed anymore for websockets?
-				// let _ = futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
