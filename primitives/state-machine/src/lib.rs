@@ -1619,7 +1619,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
 			vec![
