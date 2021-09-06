@@ -267,11 +267,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_minimum_balance`.
 	pub minimum_balance: Weight,
 
-	/// Weight of calling `seal_tombstone_deposit`.
-	pub tombstone_deposit: Weight,
-
-	/// Weight of calling `seal_rent_allowance`.
-	pub rent_allowance: Weight,
+	/// Weight of calling `seal_contract_deposit`.
+	pub contract_deposit: Weight,
 
 	/// Weight of calling `seal_block_number`.
 	pub block_number: Weight,
@@ -300,12 +297,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_terminate`.
 	pub terminate: Weight,
 
-	/// Weight of calling `seal_restore_to`.
-	pub restore_to: Weight,
-
-	/// Weight per delta key supplied to `seal_restore_to`.
-	pub restore_to_per_delta: Weight,
-
 	/// Weight of calling `seal_random`.
 	pub random: Weight,
 
@@ -320,9 +311,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_debug_message`.
 	pub debug_message: Weight,
-
-	/// Weight of calling `seal_set_rent_allowance`.
-	pub set_rent_allowance: Weight,
 
 	/// Weight of calling `seal_set_storage`.
 	pub set_storage: Weight,
@@ -566,8 +554,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			balance: cost_batched!(seal_balance),
 			value_transferred: cost_batched!(seal_value_transferred),
 			minimum_balance: cost_batched!(seal_minimum_balance),
-			tombstone_deposit: cost_batched!(seal_tombstone_deposit),
-			rent_allowance: cost_batched!(seal_rent_allowance),
+			contract_deposit: cost_batched!(seal_tombstone_deposit),
 			block_number: cost_batched!(seal_block_number),
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),
@@ -577,8 +564,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 			r#return: cost!(seal_return),
 			return_per_byte: cost_byte!(seal_return_per_kb),
 			terminate: cost!(seal_terminate),
-			restore_to: cost!(seal_restore_to),
-			restore_to_per_delta: cost_batched!(seal_restore_to_per_delta),
 			random: cost_batched!(seal_random),
 			deposit_event: cost_batched!(seal_deposit_event),
 			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
@@ -588,7 +573,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 				1
 			),
 			debug_message: cost_batched!(seal_debug_message),
-			set_rent_allowance: cost_batched!(seal_set_rent_allowance),
 			set_storage: cost_batched!(seal_set_storage),
 			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
 			clear_storage: cost_batched!(seal_clear_storage),

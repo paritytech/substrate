@@ -31,7 +31,6 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	rent::Rent,
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
 	storage::Storage,
 	Pallet as Contracts, *,
@@ -39,10 +38,12 @@ use crate::{
 use codec::Encode;
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::weights::Weight;
-use frame_system::{Pallet as System, RawOrigin};
-use pallet_contracts_primitives::RentProjection;
+use frame_system::RawOrigin;
 use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
-use sp_runtime::traits::{Bounded, Hash, Zero};
+use sp_runtime::{
+	traits::{Bounded, Hash},
+	Perbill,
+};
 use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
 
 /// How many batches we do per API benchmark.
@@ -57,26 +58,6 @@ struct Contract<T: Config> {
 	account_id: T::AccountId,
 	addr: <T::Lookup as StaticLookup>::Source,
 	endowment: BalanceOf<T>,
-	code_hash: <T::Hashing as Hash>::Output,
-}
-
-/// Describes how much balance should be transferred on instantiate from the caller.
-enum Endow {
-	/// Endow the contract with a maximum amount of balance. This value is described by
-	/// `Contract::max_endowment`.
-	Max,
-	/// Endow so that the amount of balance that is transferred is big but not so big
-	/// to offset the rent payment. This is needed in order to test rent collection.
-	CollectRent,
-}
-
-impl Endow {
-	/// The maximum amount of balance a caller can transfer without being brought below
-	/// the existential deposit. This assumes that every caller is funded with the amount
-	/// returned by `caller_funding`.
-	fn max<T: Config>() -> BalanceOf<T> {
-		caller_funding::<T>().saturating_sub(T::Currency::minimum_balance())
-	}
 }
 
 impl<T: Config> Contract<T>
@@ -85,12 +66,8 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Create new contract and use a default account id as instantiator.
-	fn new(
-		module: WasmModule<T>,
-		data: Vec<u8>,
-		endowment: Endow,
-	) -> Result<Contract<T>, &'static str> {
-		Self::with_index(0, module, data, endowment)
+	fn new(module: WasmModule<T>, data: Vec<u8>) -> Result<Contract<T>, &'static str> {
+		Self::with_index(0, module, data)
 	}
 
 	/// Create new contract and use an account id derived from the supplied index as instantiator.
@@ -98,9 +75,8 @@ where
 		index: u32,
 		module: WasmModule<T>,
 		data: Vec<u8>,
-		endowment: Endow,
 	) -> Result<Contract<T>, &'static str> {
-		Self::with_caller(account("instantiator", index, 0), module, data, endowment)
+		Self::with_caller(account("instantiator", index, 0), module, data)
 	}
 
 	/// Create new contract and use the supplied `caller` as instantiator.
@@ -108,36 +84,11 @@ where
 		caller: T::AccountId,
 		module: WasmModule<T>,
 		data: Vec<u8>,
-		endowment: Endow,
 	) -> Result<Contract<T>, &'static str> {
-		let (storage_size, endowment) = match endowment {
-			Endow::CollectRent => {
-				// storage_size cannot be zero because otherwise a contract that is just above
-				// the subsistence threshold does not pay rent given a large enough subsistence
-				// threshold. But we need rent payments to occur in order to benchmark for worst
-				// cases.
-				let storage_size = u32::MAX / 10;
-
-				// Endowment should be large but not as large to inhibit rent payments.
-				// Balance will only cover half the storage
-				let endowment = T::DepositPerStorageByte::get()
-					.saturating_mul(<BalanceOf<T>>::from(storage_size) / 2u32.into())
-					.saturating_add(T::DepositPerContract::get());
-
-				(Some(storage_size), endowment)
-			},
-			Endow::Max => (None, Endow::max::<T>()),
-		};
+		let endowment = contract_funding::<T>();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
 		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
-
-		// The default block number is zero. The benchmarking system bumps the block number
-		// to one for the benchmarking closure when it is set to zero. In order to prevent this
-		// undesired implicit bump (which messes with rent collection), we do the bump ourselves
-		// in the setup closure so that both the instantiate and subsequent call are run with the
-		// same block number.
-		System::<T>::set_block_number(1u32.into());
 
 		Contracts::<T>::store_code_raw(module.code)?;
 		Contracts::<T>::instantiate(
@@ -154,130 +105,63 @@ where
 			account_id: addr.clone(),
 			addr: T::Lookup::unlookup(addr),
 			endowment,
-			code_hash: module.hash.clone(),
 		};
 
-		let mut contract = result.alive_info()?;
-		if let Some(size) = storage_size {
-			contract.storage_size = size;
-		}
-		ContractInfoOf::<T>::insert(&result.account_id, ContractInfo::Alive(contract));
+		ContractInfoOf::<T>::insert(&result.account_id, result.info()?);
 
 		Ok(result)
 	}
 
+	/// Create a new contract with the supplied storage item count and size each.
+	fn with_storage(
+		code: WasmModule<T>,
+		stor_num: u32,
+		stor_size: u32,
+	) -> Result<Self, &'static str> {
+		let contract = Contract::<T>::new(code, vec![])?;
+		let storage_items = (0..stor_num)
+			.map(|i| {
+				let hash = T::Hashing::hash_of(&i)
+					.as_ref()
+					.try_into()
+					.map_err(|_| "Hash too big for storage key")?;
+				Ok((hash, vec![42u8; stor_size as usize]))
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		contract.store(&storage_items)?;
+		Ok(contract)
+	}
+
 	/// Store the supplied storage items into this contracts storage.
 	fn store(&self, items: &Vec<(StorageKey, Vec<u8>)>) -> Result<(), &'static str> {
-		let mut info = self.alive_info()?;
+		let mut info = self.info()?;
 		for item in items {
-			Storage::<T>::write(
-				<System<T>>::block_number(),
-				&mut info,
-				&item.0,
-				Some(item.1.clone()),
-			)
-			.map_err(|_| "Failed to write storage to restoration dest")?;
+			Storage::<T>::write(&mut info, &item.0, Some(item.1.clone()))
+				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
-		<ContractInfoOf<T>>::insert(&self.account_id, ContractInfo::Alive(info.clone()));
+		<ContractInfoOf<T>>::insert(&self.account_id, info.clone());
 		Ok(())
 	}
 
-	/// Get the `AliveContractInfo` of the `addr` or an error if it is no longer alive.
-	fn address_alive_info(addr: &T::AccountId) -> Result<AliveContractInfo<T>, &'static str> {
-		ContractInfoOf::<T>::get(addr)
-			.and_then(|c| c.get_alive())
-			.ok_or("Expected contract to be alive at this point.")
+	/// Get the `ContractInfo` of the `addr` or an error if it no longer exists.
+	fn address_info(addr: &T::AccountId) -> Result<ContractInfo<T>, &'static str> {
+		ContractInfoOf::<T>::get(addr).ok_or("Expected contract to exist at this point.")
 	}
 
-	/// Get the `AliveContractInfo` of this contract or an error if it is no longer alive.
-	fn alive_info(&self) -> Result<AliveContractInfo<T>, &'static str> {
-		Self::address_alive_info(&self.account_id)
+	/// Get the `ContractInfo` of this contract or an error if it no longer exists.
+	fn info(&self) -> Result<ContractInfo<T>, &'static str> {
+		Self::address_info(&self.account_id)
 	}
-
-	/// Return an error if this contract is no tombstone.
-	fn ensure_tombstone(&self) -> Result<(), &'static str> {
-		ContractInfoOf::<T>::get(&self.account_id)
-			.and_then(|c| c.get_tombstone())
-			.ok_or("Expected contract to be a tombstone at this point.")
-			.map(|_| ())
-	}
-
-	/// Get the block number when this contract will be evicted. Returns an error when
-	/// the rent collection won't happen because the contract has to much endowment.
-	fn eviction_at(&self) -> Result<T::BlockNumber, &'static str> {
-		let projection = Rent::<T, PrefabWasmModule<T>>::compute_projection(&self.account_id)
-			.map_err(|_| "Invalid acc for rent")?;
-		match projection {
-			RentProjection::EvictionAt(at) => Ok(at),
-			_ => Err("Account does not pay rent.")?,
-		}
-	}
-}
-
-/// A `Contract` that contains some storage items.
-///
-/// This is used to benchmark contract destruction and resurection. Those operations'
-/// weight depend on the amount of storage accumulated.
-struct ContractWithStorage<T: Config> {
-	/// The contract that was evicted.
-	contract: Contract<T>,
-	/// The storage the contract held when it was avicted.
-	storage: Vec<(StorageKey, Vec<u8>)>,
-}
-
-impl<T: Config> ContractWithStorage<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	/// Same as [`Self::with_code`] but with dummy contract code.
-	fn new(stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
-		Self::with_code(WasmModule::dummy(), stor_num, stor_size)
-	}
-
-	/// Create and evict a new contract with the supplied storage item count and size each.
-	fn with_code(code: WasmModule<T>, stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
-		let contract = Contract::<T>::new(code, vec![], Endow::CollectRent)?;
-		let storage_items = create_storage::<T>(stor_num, stor_size)?;
-		contract.store(&storage_items)?;
-		Ok(Self { contract, storage: storage_items })
-	}
-
-	/// Increase the system block number so that this contract is eligible for eviction.
-	fn set_block_num_for_eviction(&self) -> Result<(), &'static str> {
-		System::<T>::set_block_number(
-			self.contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into(),
-		);
-		Ok(())
-	}
-
-	/// Evict this contract.
-	fn evict(&mut self) -> Result<(), &'static str> {
-		self.set_block_num_for_eviction()?;
-		Rent::<T, PrefabWasmModule<T>>::try_eviction(&self.contract.account_id, Zero::zero())?;
-		self.contract.ensure_tombstone()
-	}
-}
-
-/// Generate `stor_num` storage items. Each has the size `stor_size`.
-fn create_storage<T: Config>(
-	stor_num: u32,
-	stor_size: u32,
-) -> Result<Vec<(StorageKey, Vec<u8>)>, &'static str> {
-	(0..stor_num)
-		.map(|i| {
-			let hash = T::Hashing::hash_of(&i)
-				.as_ref()
-				.try_into()
-				.map_err(|_| "Hash too big for storage key")?;
-			Ok((hash, vec![42u8; stor_size as usize]))
-		})
-		.collect::<Result<Vec<_>, &'static str>>()
 }
 
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Config>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2u32.into()
+}
+
+/// The funding used for contracts. It is less than `caller_funding` in purpose.
+fn contract_funding<T: Config>() -> BalanceOf<T> {
+	caller_funding::<T>().saturating_sub(T::Currency::minimum_balance() * 100u32.into())
 }
 
 /// Load the specified contract file from disk by including it into the runtime.
@@ -312,8 +196,8 @@ benchmarks! {
 	#[skip_meta]
 	on_initialize_per_trie_key {
 		let k in 0..1024;
-		let instance = ContractWithStorage::<T>::new(k, T::Schedule::get().limits.payload_len)?;
-		Storage::<T>::queue_trie_for_deletion(&instance.contract.alive_info()?)?;
+		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
+		Storage::<T>::queue_trie_for_deletion(&instance.info()?)?;
 	}: {
 		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
 	}
@@ -321,8 +205,8 @@ benchmarks! {
 	on_initialize_per_queue_item {
 		let q in 0..1024.min(T::DeletionQueueDepth::get());
 		for i in 0 .. q {
-			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![], Endow::Max)?;
-			Storage::<T>::queue_trie_for_deletion(&instance.alive_info()?)?;
+			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
+			Storage::<T>::queue_trie_for_deletion(&instance.info()?)?;
 			ContractInfoOf::<T>::remove(instance.account_id);
 		}
 	}: {
@@ -376,7 +260,7 @@ benchmarks! {
 		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len / 1024);
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = caller_funding::<T>() / 3u32.into();
+		let endowment = contract_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
@@ -386,10 +270,10 @@ benchmarks! {
 	verify {
 		// endowment was removed from the caller
 		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
-		// contract has the full endowment because no rent collection happended
+		// contract has the full endowment
 		assert_eq!(T::Currency::free_balance(&addr), endowment);
-		// instantiate should leave a alive contract
-		Contract::<T>::address_alive_info(&addr)?;
+		// instantiate should leave a contract
+		Contract::<T>::address_info(&addr)?;
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
@@ -397,7 +281,7 @@ benchmarks! {
 	instantiate {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = caller_funding::<T>() / 3u32.into();
+		let endowment = contract_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
@@ -408,13 +292,13 @@ benchmarks! {
 	verify {
 		// endowment was removed from the caller
 		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
-		// contract has the full endowment because no rent collection happended
+		// contract has the full endowment
 		assert_eq!(T::Currency::free_balance(&addr), endowment);
-		// instantiate should leave a alive contract
-		Contract::<T>::address_alive_info(&addr)?;
+		// instantiate should leave a contract
+		Contract::<T>::address_info(&addr)?;
 	}
 
-	// We just call a dummy contract to measure to overhead of the call extrinsic.
+	// We just call a dummy contract to measure the overhead of the call extrinsic.
 	// The size of the data has no influence on the costs of this extrinsic as long as the contract
 	// won't call `seal_input` in its constructor to copy the data to contract memory.
 	// The dummy contract used here does not do this. The costs for the data copy is billed as
@@ -422,14 +306,11 @@ benchmarks! {
 	call {
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy(), vec![], Endow::CollectRent
+			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
-		let value = T::Currency::minimum_balance() * 100u32.into();
+		let value = T::Currency::minimum_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
-
-		// trigger rent collection for worst case performance of call
-		System::<T>::set_block_number(instance.eviction_at()? - 5u32.into());
 		let before = T::Currency::free_balance(&instance.account_id);
 	}: _(origin, callee, value, Weight::max_value(), data)
 	verify {
@@ -438,57 +319,17 @@ benchmarks! {
 			T::Currency::free_balance(&instance.caller),
 			caller_funding::<T>() - instance.endowment - value,
 		);
-		// rent should have lowered the amount of balance of the contract
-		assert!(T::Currency::free_balance(&instance.account_id) < before + value);
-		// but it should not have been evicted by the rent collection
-		instance.alive_info()?;
-	}
-
-	// We benchmark the costs for sucessfully evicting an empty contract.
-	// The actual costs are depending on how many storage items the evicted contract
-	// does have. However, those costs are not to be paid by the sender but
-	// will be distributed over multiple blocks using a scheduler. Otherwise there is
-	// no incentive to remove large contracts when the removal is more expensive than
-	// the reward for removing them.
-	// `c`: Size of the code of the contract that should be evicted.
-	claim_surcharge {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy_with_bytes(c * 1024), vec![], Endow::CollectRent
-		)?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-		let account_id = instance.account_id.clone();
-
-		// instantiate should leave us with an alive contract
-		instance.alive_info()?;
-
-		// generate enough rent so that the contract is evicted
-		System::<T>::set_block_number(
-			instance.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
-		);
-	}: _(origin, account_id, None)
-	verify {
-		// the claim surcharge should have evicted the contract
-		instance.ensure_tombstone()?;
-
-		// the caller should get the reward for being a good snitch
-		// this is capped by the maximum amount of rent paid. So we only now that it should
-		// have increased by at most the surcharge reward.
-		assert!(
-			T::Currency::free_balance(&instance.caller) >
-			caller_funding::<T>() - instance.endowment
-		);
-		assert!(
-			T::Currency::free_balance(&instance.caller) <=
-			caller_funding::<T>() - instance.endowment + <T as Config>::SurchargeReward::get(),
-		);
+		// contract should have received the value
+		assert_eq!(T::Currency::free_balance(&instance.account_id), before + value);
+		// contract should still exist
+		instance.info()?;
 	}
 
 	seal_caller {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_caller", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -496,7 +337,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_address", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -504,7 +345,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -512,7 +353,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_balance", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -520,7 +361,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_value_transferred", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -528,7 +369,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -536,15 +377,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_tombstone_deposit", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-
-	seal_rent_allowance {
-		let r in 0 .. API_BENCHMARK_BATCHES;
-		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_rent_allowance", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -552,7 +385,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_block_number", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -560,7 +393,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_now", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -587,7 +420,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -606,7 +439,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
@@ -637,7 +470,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -667,7 +500,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let data = vec![42u8; (n * 1024).min(buffer_size) as usize];
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), data)
@@ -691,7 +524,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -714,7 +547,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -745,182 +578,16 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
-		assert_eq!(T::Currency::total_balance(&instance.account_id), Endow::max::<T>());
+		assert_eq!(T::Currency::total_balance(&instance.account_id), contract_funding::<T>());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		if r > 0 {
 			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), Endow::max::<T>());
+			assert_eq!(T::Currency::total_balance(&beneficiary), contract_funding::<T>());
 		}
-	}
-
-	seal_restore_to {
-		let r in 0 .. 1;
-
-		// Restore just moves the trie id from origin to destination and therefore
-		// does not depend on the size of the destination contract. However, to not
-		// trigger any edge case we won't use an empty contract as destination.
-		let mut tombstone = ContractWithStorage::<T>::new(10, T::Schedule::get().limits.payload_len)?;
-		tombstone.evict()?;
-
-		let dest = tombstone.contract.account_id.encode();
-		let dest_len = dest.len();
-		let code_hash = tombstone.contract.code_hash.encode();
-		let code_hash_len = code_hash.len();
-		let rent_allowance = BalanceOf::<T>::max_value().encode();
-		let rent_allowance_len = rent_allowance.len();
-
-		let dest_offset = 0;
-		let code_hash_offset = dest_offset + dest_len;
-		let rent_allowance_offset = code_hash_offset + code_hash_len;
-
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_restore_to",
-				params: vec![
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-				],
-				return_type: None,
-			}],
-			data_segments: vec![
-				DataSegment {
-					offset: dest_offset as u32,
-					value: dest,
-				},
-				DataSegment {
-					offset: code_hash_offset as u32,
-					value: code_hash,
-				},
-				DataSegment {
-					offset: rent_allowance_offset as u32,
-					value: rent_allowance,
-				},
-			],
-			call_body: Some(body::repeated(r, &[
-				Instruction::I32Const(dest_offset as i32),
-				Instruction::I32Const(dest_len as i32),
-				Instruction::I32Const(code_hash_offset as i32),
-				Instruction::I32Const(code_hash_len as i32),
-				Instruction::I32Const(rent_allowance_offset as i32),
-				Instruction::I32Const(rent_allowance_len as i32),
-				Instruction::I32Const(0), // delta_ptr
-				Instruction::I32Const(0), // delta_count
-				Instruction::Call(0),
-			])),
-			.. Default::default()
-		});
-
-		let instance = Contract::<T>::with_caller(
-			account("origin", 0, 0), code, vec![], Endow::Max
-		)?;
-		instance.store(&tombstone.storage)?;
-		System::<T>::set_block_number(System::<T>::block_number() + 1u32.into());
-
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-	verify {
-		if r > 0 {
-			tombstone.contract.alive_info()?;
-		}
-	}
-
-	// `d`: Number of supplied delta keys
-	#[skip_meta]
-	seal_restore_to_per_delta {
-		let d in 0 .. API_BENCHMARK_BATCHES;
-		let mut tombstone = ContractWithStorage::<T>::new(0, 0)?;
-		tombstone.evict()?;
-		let delta = create_storage::<T>(
-			d * API_BENCHMARK_BATCH_SIZE,
-			T::Schedule::get().limits.payload_len,
-		)?;
-
-		let dest = tombstone.contract.account_id.encode();
-		let dest_len = dest.len();
-		let code_hash = tombstone.contract.code_hash.encode();
-		let code_hash_len = code_hash.len();
-		let rent_allowance = BalanceOf::<T>::max_value().encode();
-		let rent_allowance_len = rent_allowance.len();
-		let delta_keys = delta.iter().flat_map(|(key, _)| key).cloned().collect::<Vec<_>>();
-
-		let dest_offset = 0;
-		let code_hash_offset = dest_offset + dest_len;
-		let rent_allowance_offset = code_hash_offset + code_hash_len;
-		let delta_keys_offset = rent_allowance_offset + rent_allowance_len;
-
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_restore_to",
-				params: vec![
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-				],
-				return_type: None,
-			}],
-			data_segments: vec![
-				DataSegment {
-					offset: dest_offset as u32,
-					value: dest,
-				},
-				DataSegment {
-					offset: code_hash_offset as u32,
-					value: code_hash,
-				},
-				DataSegment {
-					offset: rent_allowance_offset as u32,
-					value: rent_allowance,
-				},
-				DataSegment {
-					offset: delta_keys_offset as u32,
-					value: delta_keys,
-				},
-			],
-			call_body: Some(body::plain(vec![
-				Instruction::I32Const(dest_offset as i32),
-				Instruction::I32Const(dest_len as i32),
-				Instruction::I32Const(code_hash_offset as i32),
-				Instruction::I32Const(code_hash_len as i32),
-				Instruction::I32Const(rent_allowance_offset as i32),
-				Instruction::I32Const(rent_allowance_len as i32),
-				Instruction::I32Const(delta_keys_offset as i32), // delta_ptr
-				Instruction::I32Const(delta.len() as i32), // delta_count
-				Instruction::Call(0),
-				Instruction::End,
-			])),
-			.. Default::default()
-		});
-
-		let instance = Contract::<T>::with_caller(
-			account("origin", 0, 0), code, vec![], Endow::Max
-		)?;
-		instance.store(&tombstone.storage)?;
-		instance.store(&delta)?;
-		System::<T>::set_block_number(System::<T>::block_number() + 1u32.into());
-
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-	verify {
-		tombstone.contract.alive_info()?;
 	}
 
 	// We benchmark only for the maximum subject length. We assume that this is some lowish
@@ -954,7 +621,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -979,7 +646,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1017,36 +684,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-
-	seal_set_rent_allowance {
-		let r in 0 .. API_BENCHMARK_BATCHES;
-		let allowance = caller_funding::<T>().encode();
-		let allowance_len = allowance.len();
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_set_rent_allowance",
-				params: vec![ValueType::I32, ValueType::I32],
-				return_type: None,
-			}],
-			data_segments: vec![
-				DataSegment {
-					offset: 0,
-					value: allowance,
-				},
-			],
-			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
-				Instruction::I32Const(0), // value_ptr
-				Instruction::I32Const(allowance_len as i32), // value_len
-				Instruction::Call(0),
-			])),
-			.. Default::default()
-		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1072,7 +710,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1109,7 +747,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1139,7 +777,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1174,18 +812,17 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
-		let mut info = instance.alive_info()?;
+		let instance = Contract::<T>::new(code, vec![])?;
+		let mut info = instance.info()?;
 		for key in keys {
 			Storage::<T>::write(
-				<System<T>>::block_number(),
 				&mut info,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
 				Some(vec![42; T::Schedule::get().limits.payload_len as usize])
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, ContractInfo::Alive(info.clone()));
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1222,18 +859,17 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
-		let mut info = instance.alive_info()?;
+		let instance = Contract::<T>::new(code, vec![])?;
+		let mut info = instance.info()?;
 		for key in keys {
 			Storage::<T>::write(
-				<System<T>>::block_number(),
 				&mut info,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
 				Some(vec![])
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, ContractInfo::Alive(info.clone()));
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1269,16 +905,15 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
-		let mut info = instance.alive_info()?;
+		let instance = Contract::<T>::new(code, vec![])?;
+		let mut info = instance.info()?;
 		Storage::<T>::write(
-			<System<T>>::block_number(),
 			&mut info,
 			key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
 			Some(vec![42u8; (n * 1024) as usize])
 		)
 		.map_err(|_| "Failed to write to storage during setup.")?;
-		<ContractInfoOf<T>>::insert(&instance.account_id, ContractInfo::Alive(info.clone()));
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1322,7 +957,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
 			assert_eq!(T::Currency::total_balance(account), 0u32.into());
@@ -1339,7 +974,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
 		let callees = (0..r * API_BENCHMARK_BATCH_SIZE)
-			.map(|i| Contract::with_index(i + 1, dummy_code.clone(), vec![], Endow::Max))
+			.map(|i| Contract::with_index(i + 1, dummy_code.clone(), vec![]))
 			.collect::<Result<Vec<_>, _>>()?;
 		let callee_len = callees.get(0).map(|i| i.account_id.encode().len()).unwrap_or(0);
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect();
@@ -1389,7 +1024,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1419,7 +1054,7 @@ benchmarks! {
 			.. Default::default()
 		});
 		let callees = (0..API_BENCHMARK_BATCH_SIZE)
-			.map(|i| Contract::with_index(i + 1, callee_code.clone(), vec![], Endow::Max))
+			.map(|i| Contract::with_index(i + 1, callee_code.clone(), vec![]))
 			.collect::<Result<Vec<_>, _>>()?;
 		let callee_len = callees.get(0).map(|i| i.account_id.encode().len()).unwrap_or(0);
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect::<Vec<_>>();
@@ -1474,7 +1109,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1501,7 +1136,7 @@ benchmarks! {
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
-		let value = Endow::max::<T>() / (r * API_BENCHMARK_BATCH_SIZE + 2).into();
+		let value = contract_funding::<T>() / (r * API_BENCHMARK_BATCH_SIZE + 2).into();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1568,7 +1203,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let addresses = hashes
@@ -1586,7 +1221,7 @@ benchmarks! {
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		for addr in &addresses {
-			ContractInfoOf::<T>::get(&addr).and_then(|c| c.get_alive())
+			ContractInfoOf::<T>::get(&addr)
 				.ok_or_else(|| "Contract should have been instantiated")?;
 		}
 	}
@@ -1624,7 +1259,7 @@ benchmarks! {
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
 		let inputs_len = input_bytes.len();
-		let value = Endow::max::<T>() / (API_BENCHMARK_BATCH_SIZE + 2).into();
+		let value = contract_funding::<T>() / (API_BENCHMARK_BATCH_SIZE + 2).into();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1706,7 +1341,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1715,7 +1350,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1724,7 +1359,7 @@ benchmarks! {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_sha2_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1733,7 +1368,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1742,7 +1377,7 @@ benchmarks! {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_keccak_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1751,7 +1386,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1760,7 +1395,7 @@ benchmarks! {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1769,7 +1404,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -1778,7 +1413,7 @@ benchmarks! {
 		let n in 0 .. code::max_pages::<T>() * 64;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", API_BENCHMARK_BATCH_SIZE, n * 1024,
-		), vec![], Endow::Max)?;
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -2571,7 +2206,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::new(
-			WasmModule::instrumented(code, gas_metering, true), data, Endow::Max,
+			WasmModule::instrumented(code, gas_metering, true), data,
 		)?;
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
@@ -2616,7 +2251,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::with_caller(
-			caller, WasmModule::instrumented(code, gas_metering, true), data, Endow::Max,
+			caller, WasmModule::instrumented(code, gas_metering, true), data,
 		)?;
 		balance[0] = 1;
 		let data = {
