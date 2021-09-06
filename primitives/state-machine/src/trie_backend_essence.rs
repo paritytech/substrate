@@ -92,14 +92,6 @@ where
 		&self.storage
 	}
 
-	/// Get backend storage reference.
-	pub fn backend_storage_mut(&mut self) -> &mut S {
-		#[cfg(feature = "std")]
-		self.reset_cache();
-
-		&mut self.storage
-	}
-
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		&self.root
