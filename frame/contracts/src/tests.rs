@@ -567,7 +567,7 @@ fn run_out_of_gas() {
 				Origin::signed(ALICE),
 				addr, // newly created account
 				0,
-				67_500_000,
+				1_000_000_000_000,
 				vec![],
 			),
 			Error::<Test>::OutOfGas,
