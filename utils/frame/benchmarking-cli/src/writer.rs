@@ -107,7 +107,7 @@ fn io_error(s: &str) -> std::io::Error {
 }
 
 // This function takes a list of `BenchmarkBatch` and organizes them by pallet into a `HashMap`.
-// So this: `[(p1, b1), (p1, b2), (p1, b3), (p2, b1), (p2, b2)]`
+// So this: `[(p1, b1), (p1, b2), (p2, b1), (p1, b3), (p2, b2)]`
 // Becomes:
 //
 // ```
@@ -124,11 +124,9 @@ fn map_results(
 		return Err(io_error("empty batches"))
 	}
 
-	let mut all_benchmarks = HashMap::new();
-	let mut pallet_benchmarks = Vec::new();
+	let mut all_benchmarks = HashMap::<_, Vec<BenchmarkData>>::new();
 
-	let mut batches_iter = batches.iter().peekable();
-	while let Some(batch) = batches_iter.next() {
+	for batch in batches {
 		// Skip if there are no results
 		if batch.time_results.is_empty() {
 			continue
@@ -137,21 +135,8 @@ fn map_results(
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
 		let benchmark_data = get_benchmark_data(batch, storage_info, analysis_choice);
+		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
-
-		// Check if this is the end of the iterator
-		if let Some(next) = batches_iter.peek() {
-			// Next pallet is different than current pallet, save and create new data.
-			let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
-			let next_instance = String::from_utf8(next.instance.clone()).unwrap();
-			if next_pallet != pallet_string || next_instance != instance_string {
-				all_benchmarks.insert((pallet_string, instance_string), pallet_benchmarks.clone());
-				pallet_benchmarks = Vec::new();
-			}
-		} else {
-			// This is the end of the iterator, so push the final data.
-			all_benchmarks.insert((pallet_string, instance_string), pallet_benchmarks.clone());
-		}
 	}
 	Ok(all_benchmarks)
 }
