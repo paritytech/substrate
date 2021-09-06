@@ -15,6 +15,87 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Implementation of `construct_runtime`.
+//!
+//! `construct_runtime` implementation is recursive and can generate code which will call itself in
+//! order to get all the pallet parts for each pallet.
+//!
+//! Pallets define their parts (`Call`, `Storage`, ..) either explicitly with the syntax
+//! `::{Call, ...}` or implicitly.
+//!
+//! In case a pallet define their part implicitly, then the pallet must provide the macro
+//! `construct_runtime_parts`. `construct_rutime` will generate some code which calls the macro
+//! `construct_runtime_parts` of the pallet. The `construct_runtime_parts` will generate some code
+//! which calls `construct_runtime` again with this time all explicit definition of parts.
+//!
+//! E.g.
+//! ```ignore
+//! construct_runtime!(
+//! 	...
+//! 	{
+//! 		System: frame_system = 0, // Implicit definition of parts
+//! 		Balance: frame_balance = 1, // Implicit definition of parts
+//! 	}
+//! );
+//! ```
+//! This call has some implicit pallet parts, thus it will expand to:
+//! ```ignore
+//! frame_balance::construct_runtime_parts!(
+//! 	// First *argument* is the path to frame_support crate.
+//! 	{ frame_support }
+//! 	// Second *argument* is the token idenfiying the pallet on which `construct_runtime_parts`
+//! 	// must add the parts.
+//! 	{ Balance: frame_balance }
+//! 	// The other tokens are the tokens in which the parts must be added and once the parts are
+//! 	// added it is the tokens the expand into.
+//! 	frame_system::construct_runtime_parts!(
+//! 		{ frame_support }
+//! 		{ System: frame_system }
+//! 		construct_runtime!(
+//! 			...
+//! 			{
+//! 				System: frame_system = 0, // Implicit definition of parts
+//! 				Balance: frame_balance = 1, // Implicit definition of parts
+//! 			}
+//! 		);
+//! 	);
+//! );
+//! ```
+//! `construct_runtime_parts` must be define add the pallet parts inside some tokens and then
+//! expand to those tokens with the parts added.
+//! Thus `frame_balance::construct_runtime_parts` must expand to:
+//! ```ignore
+//! frame_system::construct_runtime_parts!(
+//! 	{ frame_support }
+//! 	{ System: frame_system }
+//! 	construct_runtime!(
+//! 		...
+//! 		{
+//! 			System: frame_system = 0, // Implicit definition of parts
+//! 			Balance: frame_balance::{Pallet, Call} = 1, // Explicit definition of parts
+//! 		}
+//! 	);
+//! );
+//! ```
+//! Then `frame_system::construct_runtime_parts` must expand to:
+//! ```ignore
+//! construct_runtime!(
+//! 	...
+//! 	{
+//! 		System: frame_system::{Pallet, Call} = 0, // Explicit definition of parts
+//! 		Balance: frame_balance::{Pallet, Call} = 1, // Explicit definition of parts
+//! 	}
+//! );
+//! ```
+//! This call has no implicit pallet parts, thus it will expand to the runtime construction:
+//! ```ignore
+//! pub struct Runtime { ... }
+//! pub struct Call { ... }
+//! impl Call ...
+//! pub enum Origin { ... }
+//! ...
+//! ```
+
 mod expand;
 mod parse;
 
@@ -33,6 +114,8 @@ use syn::{Ident, Result};
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
 
+/// Implementation of `construct_runtime` macro. Either expand to some code which will call
+/// `construct_runtime` again, or expand to the final runtime definition.
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let input_copy = input.clone();
 	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
@@ -47,6 +130,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	res.unwrap_or_else(|e| e.to_compile_error()).into()
 }
 
+/// When some pallet have implicit parts definition then the macro will expand into a macro call to
+/// `construct_runtime_args` of each pallets, see root documentation.
 fn construct_runtime_intermediary_expansion(
 	input: TokenStream2,
 	definition: ImplicitRuntimeDeclaration,
@@ -71,6 +156,7 @@ fn construct_runtime_intermediary_expansion(
 	Ok(expansion.into())
 }
 
+/// All pallets have explicit definition of parts, this will expand to the runtime declaration.
 fn construct_runtime_final_expansion(
 	definition: ExplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {

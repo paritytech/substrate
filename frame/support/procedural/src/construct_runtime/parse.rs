@@ -53,7 +53,7 @@ pub enum RuntimeDeclaration {
 	Explicit(ExplicitRuntimeDeclaration),
 }
 
-/// Declaration of a runtime with pallet with implicit declaration of parts.
+/// Declaration of a runtime with some pallet with implicit declaration of parts.
 #[derive(Debug)]
 pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
