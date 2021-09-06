@@ -20,7 +20,7 @@
 
 use crate::keyring::*;
 use node_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AccountId, BabeConfig, BalancesConfig,
+	constants::currency::*, wasm_binary_unwrap, AccountId, AuraConfig, BabeConfig, BalancesConfig,
 	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
 	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
@@ -85,6 +85,7 @@ pub fn config_endowed(
 			invulnerables: vec![alice(), bob(), charlie()],
 			..Default::default()
 		},
+		aura: AuraConfig { authorities: vec![] },
 		babe: BabeConfig { authorities: vec![], epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG) },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		im_online: Default::default(),
