@@ -1894,7 +1894,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		// Using genesis state_version in empty state.
+										   // Using genesis state_version in empty state.
 		let state_version = self.state_versions.genesis_state_version();
 		let db_state = DbState::<Block>::new(self.storage.clone(), root, state_version);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);

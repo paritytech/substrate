@@ -317,7 +317,7 @@ where
 		for (key, value) in input {
 			if let Err(e) = trie.insert(&key, &value) {
 				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None;
+				return None
 			}
 		}
 	}

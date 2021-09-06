@@ -207,7 +207,8 @@ where
 			let res = || {
 				let layout = match self.state_version {
 					StateVersion::V0 => sp_trie::Layout::default(),
-					StateVersion::V1 { threshold } => sp_trie::Layout::with_max_inline_value(threshold),
+					StateVersion::V1 { threshold } =>
+						sp_trie::Layout::with_max_inline_value(threshold),
 				};
 				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
 			};

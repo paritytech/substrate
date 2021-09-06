@@ -47,8 +47,8 @@ use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::{
 	nibble_ops,
 	node::{NodePlan, ValuePlan},
-	CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator,
-	TrieDBKeyIterator, TrieLayout, TrieMut,
+	CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator, TrieDBKeyIterator,
+	TrieLayout, TrieMut,
 };
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
@@ -115,7 +115,10 @@ where
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input, self.max_inline_value())
+		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(
+			input,
+			self.max_inline_value(),
+		)
 	}
 
 	fn encode_index(input: u32) -> Vec<u8> {
@@ -729,7 +732,11 @@ mod tests {
 			}
 			.make_with(seed.as_fixed_bytes_mut());
 
-			let layout = if limit_inline_value { Layout::with_max_inline_value(TRESHOLD) } else { Layout::default() };
+			let layout = if limit_inline_value {
+				Layout::with_max_inline_value(TRESHOLD)
+			} else {
+				Layout::default()
+			};
 			let real = layout.trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
@@ -823,7 +830,11 @@ mod tests {
 		iterator_works_inner(false);
 	}
 	fn iterator_works_inner(limit_inline_value: bool) {
-		let layout = if limit_inline_value { Layout::with_max_inline_value(TRESHOLD) } else { Layout::default() };
+		let layout = if limit_inline_value {
+			Layout::with_max_inline_value(TRESHOLD)
+		} else {
+			Layout::default()
+		};
 
 		let pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),

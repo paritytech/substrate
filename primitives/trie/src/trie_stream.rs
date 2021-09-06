@@ -75,9 +75,7 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 use trie_root::Value as TrieStreamValue;
 impl trie_root::TrieStream for TrieStream {
 	fn new() -> Self {
-		Self {
-			buffer: Vec::new(),
-		}
+		Self { buffer: Vec::new() }
 	}
 
 	fn append_empty_data(&mut self) {
@@ -115,10 +113,10 @@ impl trie_root::TrieStream for TrieStream {
 				TrieStreamValue::Value(..) => NodeKind::BranchWithValue,
 				TrieStreamValue::HashedValue(..) => NodeKind::HashedValueBranch,
 			};
-	
+
 			self.buffer.extend(fuse_nibbles_node(partial, kind));
 			let bm = branch_node_bit_mask(has_children);
-			self.buffer.extend([bm.0,bm.1].iter());
+			self.buffer.extend([bm.0, bm.1].iter());
 		} else {
 			unreachable!("trie stream codec only for no extension trie");
 		}

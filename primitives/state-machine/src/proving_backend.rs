@@ -32,7 +32,10 @@ use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
 	Layout, MemoryDB, Recorder, StorageProof,
 };
-use std::{collections::{hash_map::Entry, HashMap}, sync::Arc};
+use std::{
+	collections::{hash_map::Entry, HashMap},
+	sync::Arc,
+};
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -462,7 +465,9 @@ mod tests {
 		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
 			(
 				contents,
-				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD },
+				StateVersion::V1 {
+					threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD,
+				},
 			)
 				.into()
 		} else {
@@ -508,7 +513,9 @@ mod tests {
 		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
 			(
 				contents,
-				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD },
+				StateVersion::V1 {
+					threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD,
+				},
 			)
 				.into()
 		} else {

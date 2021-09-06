@@ -38,8 +38,7 @@ pub(crate) enum NodeHeader {
 impl NodeHeader {
 	pub(crate) fn contains_hash_of_value(&self) -> bool {
 		match self {
-			NodeHeader::HashedValueBranch(_)
-			| NodeHeader::HashedValueLeaf(_) => true,
+			NodeHeader::HashedValueBranch(_) | NodeHeader::HashedValueLeaf(_) => true,
 			_ => false,
 		}
 	}
@@ -58,16 +57,28 @@ impl Encode for NodeHeader {
 	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
-			NodeHeader::Branch(true, nibble_count)	=>
+			NodeHeader::Branch(true, nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, 2, output),
-			NodeHeader::Branch(false, nibble_count) =>
-				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, 2, output),
+			NodeHeader::Branch(false, nibble_count) => encode_size_and_prefix(
+				*nibble_count,
+				trie_constants::BRANCH_WITHOUT_MASK,
+				2,
+				output,
+			),
 			NodeHeader::Leaf(nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, 2, output),
-			NodeHeader::HashedValueBranch(nibble_count)	=>
-				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4, output),
-			NodeHeader::HashedValueLeaf(nibble_count)	=>
-				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3, output),
+			NodeHeader::HashedValueBranch(nibble_count) => encode_size_and_prefix(
+				*nibble_count,
+				trie_constants::ALT_HASHING_BRANCH_WITH_MASK,
+				4,
+				output,
+			),
+			NodeHeader::HashedValueLeaf(nibble_count) => encode_size_and_prefix(
+				*nibble_count,
+				trie_constants::ALT_HASHING_LEAF_PREFIX_MASK,
+				3,
+				output,
+			),
 		}
 	}
 }
@@ -82,8 +93,10 @@ impl Decode for NodeHeader {
 		}
 		match i & (0b11 << 6) {
 			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input, 2)?)),
-			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITH_MASK =>
+				Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITHOUT_MASK =>
+				Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
 			trie_constants::EMPTY_TRIE => {
 				if i & (0b111 << 5) == trie_constants::ALT_HASHING_LEAF_PREFIX_MASK {
 					Ok(NodeHeader::HashedValueLeaf(decode_size(i, input, 3)?))
