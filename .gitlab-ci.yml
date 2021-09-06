@@ -266,7 +266,6 @@ cargo-fmt:
   <<:                              *test-refs
   script:
     - cargo +nightly fmt --all -- --check
-  allow_failure:                   true
 
 cargo-check-benches:
   stage:                           test
