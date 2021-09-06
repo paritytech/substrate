@@ -449,6 +449,7 @@ where
 		_block: Block::Hash,
 		_targets: Option<String>,
 		_storage_keys: Option<String>,
+		_methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		async move { Err(client_err(ClientError::NotAvailableOnLightClient)) }.boxed()
 	}
