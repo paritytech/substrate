@@ -34,18 +34,18 @@
 //! 	...
 //! 	{
 //! 		System: frame_system = 0, // Implicit definition of parts
-//! 		Balance: frame_balance = 1, // Implicit definition of parts
+//! 		Balances: pallet_balances = 1, // Implicit definition of parts
 //! 	}
 //! );
 //! ```
 //! This call has some implicit pallet parts, thus it will expand to:
 //! ```ignore
-//! frame_balance::construct_runtime_parts!(
+//! pallet_balances::construct_runtime_parts!(
 //! 	// First *argument* is the path to frame_support crate.
 //! 	{ frame_support }
 //! 	// Second *argument* is the token idenfiying the pallet on which `construct_runtime_parts`
 //! 	// must add the parts.
-//! 	{ Balance: frame_balance }
+//! 	{ Balances: pallet_balances }
 //! 	// The other tokens are the tokens in which the parts must be added and once the parts are
 //! 	// added it is the tokens the expand into.
 //! 	frame_system::construct_runtime_parts!(
@@ -55,7 +55,7 @@
 //! 			...
 //! 			{
 //! 				System: frame_system = 0, // Implicit definition of parts
-//! 				Balance: frame_balance = 1, // Implicit definition of parts
+//! 				Balances: pallet_balances = 1, // Implicit definition of parts
 //! 			}
 //! 		);
 //! 	);
@@ -63,7 +63,7 @@
 //! ```
 //! `construct_runtime_parts` must be define add the pallet parts inside some tokens and then
 //! expand to those tokens with the parts added.
-//! Thus `frame_balance::construct_runtime_parts` must expand to:
+//! Thus `pallet_balances::construct_runtime_parts` must expand to:
 //! ```ignore
 //! frame_system::construct_runtime_parts!(
 //! 	{ frame_support }
@@ -72,7 +72,7 @@
 //! 		...
 //! 		{
 //! 			System: frame_system = 0, // Implicit definition of parts
-//! 			Balance: frame_balance::{Pallet, Call} = 1, // Explicit definition of parts
+//! 			Balances: pallet_balances::{Pallet, Call} = 1, // Explicit definition of parts
 //! 		}
 //! 	);
 //! );
@@ -83,7 +83,7 @@
 //! 	...
 //! 	{
 //! 		System: frame_system::{Pallet, Call} = 0, // Explicit definition of parts
-//! 		Balance: frame_balance::{Pallet, Call} = 1, // Explicit definition of parts
+//! 		Balances: pallet_balances::{Pallet, Call} = 1, // Explicit definition of parts
 //! 	}
 //! );
 //! ```
