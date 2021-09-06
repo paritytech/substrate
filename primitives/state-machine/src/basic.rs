@@ -322,7 +322,7 @@ impl Externalities for BasicExternalities {
 			.expect("Unsupported state calculation for genesis storage build.")
 		{
 			StateVersion::V0 => Layout::<Blake2Hasher>::default(),
-			StateVersion::V1 { threshold } => Layout::<Blake2Hasher>::with_alt_hashing(threshold),
+			StateVersion::V1 { threshold } => Layout::<Blake2Hasher>::with_max_inline_value(threshold),
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}

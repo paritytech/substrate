@@ -2602,9 +2602,9 @@ pub(crate) mod tests {
 		set_state_data_inner(true);
 		set_state_data_inner(false);
 	}
-	fn set_state_data_inner(alt_hashing: bool) {
-		let state_version = if alt_hashing {
-			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }
+	fn set_state_data_inner(inner_hashing: bool) {
+		let state_version = if inner_hashing {
+			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD }
 		} else {
 			StateVersion::V0
 		};

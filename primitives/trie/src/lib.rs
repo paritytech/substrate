@@ -75,9 +75,8 @@ impl<H> Default for Layout<H> {
 }
 
 impl<H> Layout<H> {
-	/// Layout with inner hashing active.
-	/// Will flag trie for hashing.
-	pub fn with_alt_hashing(threshold: u32) -> Self {
+	/// Layout with inner hash value size limit active.
+	pub fn with_max_inline_value(threshold: u32) -> Self {
 		Layout(Some(threshold), sp_std::marker::PhantomData)
 	}
 }
@@ -513,7 +512,7 @@ mod tests {
 	use codec::{Compact, Decode, Encode};
 	use hash_db::{HashDB, Hasher};
 	use hex_literal::hex;
-	use sp_core::{storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD, Blake2Hasher};
+	use sp_core::{storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD as TRESHOLD, Blake2Hasher};
 	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
 	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
 
@@ -569,7 +568,7 @@ mod tests {
 		let layout = Layout::default();
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);
-		let layout = Layout::with_alt_hashing(TRESHOLD);
+		let layout = Layout::with_max_inline_value(TRESHOLD);
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);
 	}
@@ -715,7 +714,7 @@ mod tests {
 		random_should_work_inner(true);
 		random_should_work_inner(false);
 	}
-	fn random_should_work_inner(flag: bool) {
+	fn random_should_work_inner(limit_inline_value: bool) {
 		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
 		for test_i in 0..10_000 {
 			if test_i % 50 == 0 {
@@ -730,7 +729,7 @@ mod tests {
 			}
 			.make_with(seed.as_fixed_bytes_mut());
 
-			let layout = if flag { Layout::with_alt_hashing(TRESHOLD) } else { Layout::default() };
+			let layout = if limit_inline_value { Layout::with_max_inline_value(TRESHOLD) } else { Layout::default() };
 			let real = layout.trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
@@ -823,8 +822,8 @@ mod tests {
 		iterator_works_inner(true);
 		iterator_works_inner(false);
 	}
-	fn iterator_works_inner(flag: bool) {
-		let layout = if flag { Layout::with_alt_hashing(TRESHOLD) } else { Layout::default() };
+	fn iterator_works_inner(limit_inline_value: bool) {
+		let layout = if limit_inline_value { Layout::with_max_inline_value(TRESHOLD) } else { Layout::default() };
 
 		let pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),

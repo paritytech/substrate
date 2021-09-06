@@ -48,7 +48,7 @@ pub fn generate_trie(
 			let mut trie_db = match state_version {
 				StateVersion::V0 => TrieDBMut::new(&mut trie, &mut root),
 				StateVersion::V1 { threshold } => {
-					let layout = sp_trie::Layout::with_alt_hashing(threshold);
+					let layout = sp_trie::Layout::with_max_inline_value(threshold);
 					TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(
 						&mut trie, &mut root, layout,
 					)

@@ -988,7 +988,7 @@ mod tests {
 	use sp_core::{
 		map,
 		state_version::StateVersion,
-		storage::{ChildInfo, TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD},
+		storage::{ChildInfo, TEST_DEFAULT_INLINE_VALUE_THESHOLD as TRESHOLD},
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
 		NativeOrEncoded, NeverNativeValue,
@@ -1667,7 +1667,7 @@ mod tests {
 		let root1 = root.clone();
 
 		// do switch
-		layout = Layout::with_alt_hashing(TRESHOLD);
+		layout = Layout::with_max_inline_value(TRESHOLD);
 		// update with same value do change
 		{
 			let mut trie =

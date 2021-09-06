@@ -462,7 +462,7 @@ mod tests {
 		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
 			(
 				contents,
-				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD },
+				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD },
 			)
 				.into()
 		} else {
@@ -508,7 +508,7 @@ mod tests {
 		let in_memory: InMemoryBackend<BlakeTwo256> = if flagged {
 			(
 				contents,
-				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD },
+				StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD },
 			)
 				.into()
 		} else {

@@ -244,7 +244,7 @@ pub fn trie_threshold_decode(mut encoded: &[u8]) -> Option<u32> {
 }
 
 /// Default value to use as a threshold for testing.
-pub const TEST_DEFAULT_ALT_HASH_THRESHOLD: u32 = 33;
+pub const TEST_DEFAULT_INLINE_VALUE_THESHOLD: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]

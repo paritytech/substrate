@@ -207,7 +207,7 @@ where
 			let res = || {
 				let layout = match self.state_version {
 					StateVersion::V0 => sp_trie::Layout::default(),
-					StateVersion::V1 { threshold } => sp_trie::Layout::with_alt_hashing(threshold),
+					StateVersion::V1 { threshold } => sp_trie::Layout::with_max_inline_value(threshold),
 				};
 				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
 			};
@@ -234,7 +234,7 @@ where
 		};
 		let layout = match self.state_version {
 			StateVersion::V0 => sp_trie::Layout::default(),
-			StateVersion::V1 { threshold } => sp_trie::Layout::with_alt_hashing(threshold),
+			StateVersion::V1 { threshold } => sp_trie::Layout::with_max_inline_value(threshold),
 		};
 
 		let mut write_overlay = S::Overlay::default();
@@ -292,7 +292,7 @@ where
 pub mod tests {
 	use super::*;
 	use codec::Encode;
-	use sp_core::{storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD, H256};
+	use sp_core::{storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD as TRESHOLD, H256};
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{trie_types::TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut};
 	use std::{collections::HashSet, iter};
@@ -314,7 +314,7 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = if hashed_value {
-				let layout = Layout::with_alt_hashing(TRESHOLD);
+				let layout = Layout::with_max_inline_value(TRESHOLD);
 				TrieDBMut::new_with_layout(&mut mdb, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut mdb, &mut root)
@@ -338,7 +338,7 @@ pub mod tests {
 	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
 		let state_version = if hashed_value {
-			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD }
+			StateVersion::V1 { threshold: sp_core::storage::TEST_DEFAULT_INLINE_VALUE_THESHOLD }
 		} else {
 			StateVersion::V0
 		};
