@@ -94,7 +94,7 @@ pub trait SystemApi<Hash, Number> {
 	/// Remove a reserved peer. Returns the empty string or an error. The string
 	/// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
 	#[method(name = "removeReservedPeer")]
-	async fn system_remove_reserved_peer(&self, peer_id: String) -> JsonRpcResult<()>;
+	async fn system_remove_reserved_peer(&self, peer: String) -> JsonRpcResult<()>;
 
 	/// Returns the list of reserved peers
 	#[method(name = "reservedPeers")]
