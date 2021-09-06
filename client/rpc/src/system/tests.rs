@@ -293,9 +293,9 @@ async fn system_sync_state() {
 
 #[tokio::test]
 async fn system_network_add_reserved() {
-	let good_peer_id = to_raw_value(
-		&["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"],
-	)
+	let good_peer_id = to_raw_value(&[
+		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+	])
 	.unwrap();
 	let good = api(None).call("system_addReservedPeer", Some(good_peer_id)).await.unwrap();
 
@@ -319,9 +319,9 @@ async fn system_network_remove_reserved() {
 		serde_json::from_str(&good).expect("call with good peer id returns `JsonRpcResponse`");
 	assert_eq!(good.result, ());
 
-	let bad_peer_id = to_raw_value(
-		&["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"],
-	)
+	let bad_peer_id = to_raw_value(&[
+		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+	])
 	.unwrap();
 	let bad = api(None).call("system_removeReservedPeer", Some(bad_peer_id)).await.unwrap();
 	let bad: JsonRpcError = serde_json::from_str(&bad).unwrap();
