@@ -417,9 +417,9 @@ fn maybe_migrate_to_type_subdir<Block: BlockT>(
 		basedir.pop();
 
 		// Do we have to migrate to a database-type-based subdirectory layout:
-		// See if there's a file `db_version` in the parent dir and the target path ends in a role
-		// specific directory
-		if basedir.join("db_version").exists() &&
+		// See if there's a file identifying a rocksdb or paritydb folder in the parent dir and
+		// the target path ends in a role specific directory
+		if (basedir.join("db_version").exists() || basedir.join("metadata").exists()) &&
 			(p.ends_with(DatabaseType::Full.as_str()) ||
 				p.ends_with(DatabaseType::Light.as_str()))
 		{
@@ -624,6 +624,7 @@ mod tests {
 	use codec::Input;
 	use sc_state_db::PruningMode;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use std::path::PathBuf;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -631,34 +632,56 @@ mod tests {
 	fn database_type_subdir_migration() {
 		type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
-		fn check_dir_for_db_type(db_type: DatabaseType) {
+		fn check_dir_for_db_type(
+			db_type: DatabaseType,
+			mut source: DatabaseSource,
+			db_check_file: &str,
+		) {
 			let base_path = tempfile::TempDir::new().unwrap();
 			let old_db_path = base_path.path().join("chains/dev/db");
 
-			let source = DatabaseSource::RocksDb { path: old_db_path.clone(), cache_size: 128 };
-			let settings = db_settings(source);
+			source.set_path(&old_db_path);
+			let settings = db_settings(source.clone());
 
 			{
 				let db_res = open_database::<Block>(&settings, db_type);
 				assert!(db_res.is_ok(), "New database should be created.");
-				assert!(old_db_path.join("db_version").exists());
+				assert!(old_db_path.join(db_check_file).exists());
 				assert!(!old_db_path.join(db_type.as_str()).join("db_version").exists());
 			}
 
-			let source = DatabaseSource::RocksDb {
-				path: old_db_path.join(db_type.as_str()),
-				cache_size: 128,
-			};
+			source.set_path(&old_db_path.join(db_type.as_str()));
 			let settings = db_settings(source);
 			let db_res = open_database::<Block>(&settings, db_type);
 			assert!(db_res.is_ok(), "Reopening the db with the same role should work");
 			// check if the database dir had been migrated
-			assert!(!old_db_path.join("db_version").exists());
-			assert!(old_db_path.join(db_type.as_str()).join("db_version").exists());
+			assert!(!old_db_path.join(db_check_file).exists());
+			assert!(old_db_path.join(db_type.as_str()).join(db_check_file).exists());
 		}
 
-		check_dir_for_db_type(DatabaseType::Light);
-		check_dir_for_db_type(DatabaseType::Full);
+		check_dir_for_db_type(
+			DatabaseType::Light,
+			DatabaseSource::RocksDb { path: PathBuf::new(), cache_size: 128 },
+			"db_version",
+		);
+		check_dir_for_db_type(
+			DatabaseType::Full,
+			DatabaseSource::RocksDb { path: PathBuf::new(), cache_size: 128 },
+			"db_version",
+		);
+
+		#[cfg(feature = "with-parity-db")]
+		check_dir_for_db_type(
+			DatabaseType::Light,
+			DatabaseSource::ParityDb { path: PathBuf::new() },
+			"metadata",
+		);
+		#[cfg(feature = "with-parity-db")]
+		check_dir_for_db_type(
+			DatabaseType::Full,
+			DatabaseSource::ParityDb { path: PathBuf::new() },
+			"metadata",
+		);
 
 		// check failure on reopening with wrong role
 		{
