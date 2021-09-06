@@ -1619,7 +1619,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
 			vec![
@@ -1641,8 +1641,9 @@ mod tests {
 			]
 			.into_iter(),
 		);
-		remote_backend.backend_storage_mut().consolidate(transaction);
-		remote_backend.essence.set_root(remote_root.clone());
+		let mut remote_storage = remote_backend.into_storage();
+		remote_storage.consolidate(transaction);
+		let remote_backend = TrieBackend::new(remote_storage, remote_root);
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
