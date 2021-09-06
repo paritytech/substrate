@@ -629,7 +629,7 @@ impl<B: BlockT> Protocol<B> {
 					} else {
 						None
 					},
-					receipt: if !block_data.message_queue.is_empty() {
+					receipt: if !block_data.receipt.is_empty() {
 						Some(block_data.receipt)
 					} else {
 						None
