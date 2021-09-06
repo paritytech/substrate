@@ -42,11 +42,11 @@ pub trait SystemApi<BlockHash, AccountId, Index> {
 	/// This method takes into consideration all pending transactions
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
-	#[method(name = "system_accountNextIndex", aliases = "system_nextIndex")]
+	#[method(name = "accountNextIndex", aliases = "system_nextIndex")]
 	async fn nonce(&self, account: AccountId) -> JsonRpcResult<Index>;
 
 	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
-	#[method(name = "system_dryRun", aliases = "system_dryRunAt")]
+	#[method(name = "dryRun", aliases = "system_dryRunAt")]
 	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> JsonRpcResult<Bytes>;
 }
 
