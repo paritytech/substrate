@@ -44,11 +44,11 @@ use parity_util_mem::MallocSizeOf;
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 use sc_network::PeerId;
 use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
-use sp_utils::mpsc::TracingUnboundedReceiver;
 
 pub use self::{
 	builder::{
@@ -405,8 +405,8 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
-			},
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
+			}
 		};
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
@@ -420,18 +420,19 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					}
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
-					},
+					}
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						// it is not bad at least, just some internal node logic error, so peer is
 						// innocent.
 						TransactionImport::KnownGood
-					},
+					}
 				},
 			}
 		})

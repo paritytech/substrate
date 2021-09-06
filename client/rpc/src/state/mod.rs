@@ -154,6 +154,7 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
 
 	/// New runtime version subscription
@@ -295,7 +296,7 @@ where
 			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
 				value: count,
 				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			}))
+			}));
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
@@ -391,11 +392,11 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
-		_methods: Option<String>,
+		methods: Option<String>,
 	) -> JsonRpcResult<sp_rpc::tracing::TraceBlockResponse> {
 		self.deny_unsafe.check_if_safe()?;
 		self.backend
-			.trace_block(block, targets, storage_keys)
+			.trace_block(block, targets, storage_keys, methods)
 			.await
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}

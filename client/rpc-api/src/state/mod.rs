@@ -207,7 +207,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "pallet,frame,state", "", ""]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -216,7 +216,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", ""]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -225,7 +225,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", ""]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -235,7 +235,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", "Put"]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -244,7 +244,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", "Put"]}' \
 	/// 	http://localhost:9933/
 	/// ```

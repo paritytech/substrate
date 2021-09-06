@@ -85,7 +85,7 @@ where
 
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
-					Error::from(format!(
+					Error::Other(format!(
 						"`{:?}` > u32::MAX, the max block number is u32.",
 						num_or_hex
 					))
@@ -156,7 +156,6 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-// TODO(niklasad1): check if those DeserializeOwned bounds are really required.
 #[async_trait]
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>

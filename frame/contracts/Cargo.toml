@@ -64,6 +64,7 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"sp-sandbox/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pwasm-utils/std",
@@ -71,6 +72,7 @@ std = [
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
 	"log/std",
+	"rand/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

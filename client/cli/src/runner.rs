@@ -21,7 +21,7 @@ use chrono::prelude::*;
 use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
 use sc_service::{Configuration, Error as ServiceError, TaskManager, TaskType};
-use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
+use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
 
 #[cfg(target_family = "unix")]
