@@ -1220,11 +1220,11 @@ macro_rules! impl_benchmark_test_suite {
 									},
 									$crate::BenchmarkError::Override(_) => {
 										// This is still considered a success condition.
-										$crate::log::error!("WARNING: benchmark error overrided");
+										$crate::log::error!("WARNING: benchmark error overrided - {}", String::from_utf8_lossy(benchmark_name));
 									},
 									$crate::BenchmarkError::Skip => {
 										// This is considered a success condition.
-										$crate::log::error!("WARNING: benchmark error skipped")
+										$crate::log::error!("WARNING: benchmark error skipped - {}", String::from_utf8_lossy(benchmark_name));
 									}
 								}
 							},
@@ -1352,7 +1352,7 @@ macro_rules! add_benchmark {
 				Ok(results) => Some(results),
 				Err($crate::BenchmarkError::Override(mut result)) => {
 					// Insert override warning as the first storage key.
-					$crate::log::error!("WARNING: benchmark error overrided");
+					$crate::log::error!("WARNING: benchmark error overrided - {}", String::from_utf8_lossy(benchmark));
 					result.keys.insert(0,
 						(b"Benchmark Override".to_vec(), 0, 0, false)
 					);
@@ -1369,7 +1369,7 @@ macro_rules! add_benchmark {
 					return Err(e.into());
 				},
 				Err($crate::BenchmarkError::Skip) => {
-					$crate::log::error!("WARNING: benchmark error skipped");
+					$crate::log::error!("WARNING: benchmark error skipped - {}", String::from_utf8_lossy(benchmark));
 					None
 				}
 			};
