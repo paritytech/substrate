@@ -444,11 +444,8 @@ benchmarks! {
 
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// We cannot call seal_input multiple times. Therefore our weight determination is not
-	// as precise as with other APIs. Because this function can only be called once per
-	// contract it cannot be used for Dos.
 	seal_input {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -463,7 +460,7 @@ benchmarks! {
 					value: 0u32.to_le_bytes().to_vec(),
 				},
 			],
-			call_body: Some(body::repeated(r, &[
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(4), // ptr where to store output
 				Instruction::I32Const(0), // ptr to length
 				Instruction::Call(0),
@@ -492,11 +489,10 @@ benchmarks! {
 					value: buffer_size.to_le_bytes().to_vec(),
 				},
 			],
-			call_body: Some(body::plain(vec![
+			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(4), // ptr where to store output
 				Instruction::I32Const(0), // ptr to length
 				Instruction::Call(0),
-				Instruction::End,
 			])),
 			.. Default::default()
 		});
@@ -505,7 +501,9 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), data)
 
-	// The same argument as for `seal_input` is true here.
+	// We cannot call `seal_return` multiple times. Therefore our weight determination is not
+	// as precise as with other APIs. Because this function can only be called once per
+	// contract it cannot be used as an attack vector.
 	seal_return {
 		let r in 0 .. 1;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -551,7 +549,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// The same argument as for `seal_input` is true here.
+	// The same argument as for `seal_return` is true here.
 	seal_terminate {
 		let r in 0 .. 1;
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
