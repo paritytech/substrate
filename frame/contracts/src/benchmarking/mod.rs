@@ -30,7 +30,7 @@ use self::{
 	sandbox::Sandbox,
 };
 use crate::{
-	exec::StorageKey,
+	exec::{AccountIdOf, StorageKey},
 	rent::Rent,
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
 	storage::Storage,
@@ -124,9 +124,9 @@ where
 					.saturating_mul(<BalanceOf<T>>::from(storage_size) / 2u32.into())
 					.saturating_add(T::DepositPerContract::get());
 
-				(storage_size, endowment)
+				(Some(storage_size), endowment)
 			},
-			Endow::Max => (0u32.into(), Endow::max::<T>()),
+			Endow::Max => (None, Endow::max::<T>()),
 		};
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
@@ -158,7 +158,9 @@ where
 		};
 
 		let mut contract = result.alive_info()?;
-		contract.storage_size = storage_size;
+		if let Some(size) = storage_size {
+			contract.storage_size = size;
+		}
 		ContractInfoOf::<T>::insert(&result.account_id, ContractInfo::Alive(contract));
 
 		Ok(result)
@@ -276,6 +278,24 @@ fn create_storage<T: Config>(
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Config>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2u32.into()
+}
+
+/// Load the specified contract file from disk by including it into the runtime.
+///
+/// We need to load a different version of ink! contracts when the benchmark is run as
+/// a test. This is because ink! contracts depend on the sizes of types that are defined
+/// differently in the test environment. Solang is more lax in that regard.
+macro_rules! load_benchmark {
+	($name:expr) => {{
+		#[cfg(not(test))]
+		{
+			include_bytes!(concat!("../../benchmarks/", $name, ".wasm"))
+		}
+		#[cfg(test)]
+		{
+			include_bytes!(concat!("../../benchmarks/", $name, "_test.wasm"))
+		}
+	}};
 }
 
 benchmarks! {
@@ -2536,6 +2556,88 @@ benchmarks! {
 		#[cfg(not(feature = "std"))]
 		return Err("Run this bench with a native runtime in order to see the schedule.");
 	}: {}
+
+	// Execute one erc20 transfer using the ink! erc20 example contract.
+	//
+	// `g` is used to enable gas instrumentation to compare the performance impact of
+	// that instrumentation at runtime.
+	#[extra]
+	ink_erc20_transfer {
+		let g in 0 .. 1;
+		let gas_metering = if g == 0 { false } else { true };
+		let code = load_benchmark!("ink_erc20");
+		let data = {
+			let new: ([u8; 4], BalanceOf<T>) = ([0x9b, 0xae, 0x9d, 0x5e], 1000u32.into());
+			new.encode()
+		};
+		let instance = Contract::<T>::new(
+			WasmModule::instrumented(code, gas_metering, true), data, Endow::Max,
+		)?;
+		let data = {
+			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
+				[0x84, 0xa1, 0x5d, 0xa1],
+				account::<T::AccountId>("receiver", 0, 0),
+				1u32.into(),
+			);
+			transfer.encode()
+		};
+	}: {
+		<Contracts<T>>::bare_call(
+			instance.caller,
+			instance.account_id,
+			0u32.into(),
+			Weight::MAX,
+			data,
+			false,
+		)
+		.result?;
+	}
+
+	// Execute one erc20 transfer using the open zeppelin erc20 contract compiled with solang.
+	//
+	// `g` is used to enable gas instrumentation to compare the performance impact of
+	// that instrumentation at runtime.
+	#[extra]
+	solang_erc20_transfer {
+		let g in 0 .. 1;
+		let gas_metering = if g == 0 { false } else { true };
+		let code = include_bytes!("../../benchmarks/solang_erc20.wasm");
+		let caller = account::<T::AccountId>("instantiator", 0, 0);
+		let mut balance = [0u8; 32];
+		balance[0] = 100;
+		let data = {
+			let new: ([u8; 4], &str, &str, [u8; 32], AccountIdOf<T>) = (
+				[0xa6, 0xf1, 0xf5, 0xe1],
+				"KSM",
+				"K",
+				balance,
+				caller.clone(),
+			);
+			new.encode()
+		};
+		let instance = Contract::<T>::with_caller(
+			caller, WasmModule::instrumented(code, gas_metering, true), data, Endow::Max,
+		)?;
+		balance[0] = 1;
+		let data = {
+			let transfer: ([u8; 4], AccountIdOf<T>, [u8; 32]) = (
+				[0x6a, 0x46, 0x73, 0x94],
+				account::<T::AccountId>("receiver", 0, 0),
+				balance,
+			);
+			transfer.encode()
+		};
+	}: {
+		<Contracts<T>>::bare_call(
+			instance.caller,
+			instance.account_id,
+			0u32.into(),
+			Weight::MAX,
+			data,
+			false,
+		)
+		.result?;
+	}
 }
 
 impl_benchmark_test_suite!(

@@ -27,7 +27,7 @@ serde_json = "1.0.41"
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }

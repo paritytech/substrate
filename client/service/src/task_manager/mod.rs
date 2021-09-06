@@ -33,7 +33,7 @@ use prometheus_endpoint::{
 	exponential_buckets, register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError,
 	Registry, U64,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{panic, pin::Pin, result::Result};
 use tracing_futures::Instrument;
 

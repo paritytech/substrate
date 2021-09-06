@@ -60,14 +60,14 @@ where
 		self.essence.backend_storage()
 	}
 
-	/// Get backend storage reference.
-	pub fn backend_storage_mut(&mut self) -> &mut S {
-		self.essence.backend_storage_mut()
-	}
-
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
+	}
+
+	/// State version define for this backend.
+	pub fn state_version(&self) -> StateVersion {
+		self.state_version
 	}
 
 	/// Consumes self and returns underlying storage.
