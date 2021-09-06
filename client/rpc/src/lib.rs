@@ -67,7 +67,7 @@ macro_rules! unwrap_or_fut_err {
 	( $e:expr ) => {
 		match $e {
 			Ok(x) => x,
-			Err(e) => return Box::pin(future::err(e)),
+			Err(e) => return Box::pin(future::err(e.into())),
 		}
 	};
 }

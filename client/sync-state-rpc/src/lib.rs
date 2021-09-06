@@ -42,8 +42,8 @@
 #![deny(unused_crate_dependencies)]
 
 use jsonrpsee::{
-	types::error::{CallError, Error as JsonRpseeError},
-	RpcModule,
+	proc_macros::rpc,
+	types::{error::Error as JsonRpseeError, JsonRpcResult},
 };
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
@@ -90,7 +90,7 @@ fn serialize_encoded<S: serde::Serializer, T: codec::Encode>(
 /// chain-spec as an extension.
 pub type LightSyncStateExtension = Option<serde_json::Value>;
 
-/// Hardcoded infomation that allows light clients to sync quickly.
+/// Hardcoded information that allows light clients to sync quickly.
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -107,6 +107,16 @@ pub struct LightSyncState<Block: BlockT> {
 	#[serde(serialize_with = "serialize_encoded")]
 	pub grandpa_authority_set:
 		sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
+}
+
+/// An api for sync state RPC calls.
+#[rpc(client, server, namespace = "sync_state")]
+pub trait SyncStateRpcApi {
+	/// Returns the JSON serialized chainspec running the node, with a sync state.
+	// NOTE(niklasad1): I changed to `JsonValue` -> `String` as the chainspec
+	// already returns a JSON String.
+	#[method(name = "genSyncSpec")]
+	fn system_gen_sync_spec(&self, raw: bool) -> JsonRpcResult<String>;
 }
 
 /// An api for sync state RPC calls.
@@ -140,39 +150,6 @@ where
 		}
 	}
 
-	/// Convert this [`SyncStateRpc`] to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
-
-		// Returns the json-serialized chainspec running the node, with a sync state.
-		module.register_method("sync_state_genSyncSpec", |params, sync_state| {
-			sync_state.deny_unsafe.check_if_safe()?;
-
-			let raw = params.one()?;
-			let current_sync_state =
-				sync_state.build_sync_state().map_err(|e| CallError::Failed(Box::new(e)))?;
-			let mut chain_spec = sync_state.chain_spec.cloned_box();
-
-			let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(
-				chain_spec.extensions_mut(),
-			)
-			.ok_or_else(|| {
-				CallError::Failed(
-					anyhow::anyhow!("Could not find `LightSyncState` chain-spec extension!").into(),
-				)
-			})?;
-
-			let val = serde_json::to_value(&current_sync_state)
-				.map_err(|e| CallError::Failed(Box::new(e)))?;
-			*extension = Some(val);
-
-			chain_spec
-				.as_json(raw)
-				.map_err(|e| CallError::Failed(anyhow::anyhow!(e).into()))
-		})?;
-		Ok(module)
-	}
-
 	fn build_sync_state(&self) -> Result<LightSyncState<Block>, Error<Block>> {
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self
@@ -190,5 +167,34 @@ where
 			babe_finalized_block_weight: finalized_block_weight,
 			grandpa_authority_set: self.shared_authority_set.clone_inner(),
 		})
+	}
+}
+
+impl<Block, Backend> SyncStateRpcApiServer for SyncStateRpc<Block, Backend>
+where
+	Block: BlockT,
+	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
+{
+	fn system_gen_sync_spec(&self, raw: bool) -> JsonRpcResult<String> {
+		self.deny_unsafe.check_if_safe()?;
+
+		let current_sync_state =
+			self.build_sync_state().map_err(|e| JsonRpseeError::to_call_error(e))?;
+		let mut chain_spec = self.chain_spec.cloned_box();
+
+		let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(
+			chain_spec.extensions_mut(),
+		)
+		.ok_or_else(|| {
+			JsonRpseeError::from(anyhow::anyhow!(
+				"Could not find `LightSyncState` chain-spec extension!"
+			))
+		})?;
+
+		let val = serde_json::to_value(&current_sync_state)
+			.map_err(|e| JsonRpseeError::to_call_error(e))?;
+		*extension = Some(val);
+
+		chain_spec.as_json(raw).map_err(|e| anyhow::anyhow!(e).into())
 	}
 }

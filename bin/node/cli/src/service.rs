@@ -34,13 +34,13 @@ use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
-use pallet_contracts_rpc::ContractsRpc;
-use pallet_mmr_rpc::MmrRpc;
-use pallet_transaction_payment_rpc::TransactionPaymentRpc;
-use sc_consensus_babe_rpc::BabeRpc;
-use sc_finality_grandpa_rpc::GrandpaRpc;
-use sc_sync_state_rpc::SyncStateRpc;
-use substrate_frame_rpc_system::{SystemRpc, SystemRpcBackendFull};
+use pallet_contracts_rpc::{ContractsApiServer, ContractsRpc};
+use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
+use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
+use sc_consensus_babe_rpc::{BabeApiServer, BabeRpc};
+use sc_finality_grandpa_rpc::{GrandpaApiServer, GrandpaRpc};
+use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
+use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
 
 type FullClient =
 	sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;
@@ -180,8 +180,7 @@ pub fn new_partial(
 				Some(shared_authority_set.clone()),
 			),
 		)
-		.into_rpc_module()
-		.expect("TODO: error handling");
+		.into_rpc();
 
 		let babe_rpc = BabeRpc::new(
 			client2.clone(),
@@ -191,8 +190,7 @@ pub fn new_partial(
 			select_chain2,
 			deny_unsafe,
 		)
-		.into_rpc_module()
-		.expect("TODO: error handling");
+		.into_rpc();
 		let sync_state_rpc = SyncStateRpc::new(
 			chain_spec,
 			client2.clone(),
@@ -201,21 +199,13 @@ pub fn new_partial(
 			deny_unsafe,
 		)
 		.expect("TODO: error handling")
-		.into_rpc_module()
-		.expect("TODO: error handling");
-		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone())
-			.into_rpc_module()
-			.expect("TODO: error handling");
+		.into_rpc();
+		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc();
 		let system_rpc_backend =
 			SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
-		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend))
-			.into_rpc_module()
-			.expect("TODO: error handling");
-		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
-		let contracts_rpc = ContractsRpc::new(client2.clone())
-			.into_rpc_module()
-			.expect("TODO: error handling");
-
+		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc();
+		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc();
+		let contracts_rpc = ContractsRpc::new(client2.clone()).into_rpc();
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
 		module.merge(babe_rpc).expect("TODO: error handling");

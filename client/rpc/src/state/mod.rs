@@ -26,13 +26,11 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::{unwrap_or_fut_err, SubscriptionTaskExecutor};
+use crate::SubscriptionTaskExecutor;
 
-use futures::{future, FutureExt};
 use jsonrpsee::{
-	types::error::{CallError as JsonRpseeCallError, Error as JsonRpseeError},
+	types::{async_trait, error::Error as JsonRpseeError, JsonRpcResult},
 	ws_server::SubscriptionSink,
-	RpcModule,
 };
 
 use sc_client_api::light::{Fetcher, RemoteBlockchain};
@@ -245,203 +243,173 @@ pub struct StateApi<Block, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<Block, Client> StateApi<Block, Client>
+#[async_trait]
+impl<Block, Client> StateApiServer<Block::Hash> for StateApi<Block, Client>
 where
 	Block: BlockT + 'static,
-	Client:
-		BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+	Client: Send + Sync + 'static,
 {
-	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
+	async fn call(
+		&self,
+		method: String,
+		data: Bytes,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Bytes> {
+		self.backend
+			.call(block, method, data)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		module.register_async_method("state_call", |params, state| {
-			let mut seq = params.sequence();
+	async fn storage_keys(
+		&self,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<StorageKey>> {
+		self.backend
+			.storage_keys(block, key_prefix)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			let method = unwrap_or_fut_err!(seq.next());
-			let data = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
+	async fn storage_pairs(
+		&self,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<(StorageKey, StorageData)>> {
+		self.deny_unsafe.check_if_safe()?;
+		self.backend
+			.storage_pairs(block, key_prefix)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			async move { state.backend.call(block, method, data).await.map_err(call_err) }.boxed()
-		})?;
+	async fn storage_keys_paged(
+		&self,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<StorageKey>> {
+		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
+			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
+				value: count,
+				max: STORAGE_KEYS_PAGED_MAX_COUNT,
+			}))
+		}
+		self.backend
+			.storage_keys_paged(block, prefix, count, start_key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		module.register_alias("state_callAt", "state_call")?;
+	async fn storage(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Option<StorageData>> {
+		self.backend
+			.storage(block, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		module.register_async_method("state_getKeys", |params, state| {
-			let mut seq = params.sequence();
+	async fn storage_hash(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Option<Block::Hash>> {
+		self.backend
+			.storage_hash(block, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			let key_prefix = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
+	async fn storage_size(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Option<u64>> {
+		self.backend
+			.storage_size(block, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			async move { state.backend.storage_keys(block, key_prefix).await.map_err(call_err) }
-				.boxed()
-		})?;
+	async fn metadata(&self, block: Option<Block::Hash>) -> JsonRpcResult<Bytes> {
+		self.backend.metadata(block).await.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		module.register_async_method("state_getPairs", |params, state| {
-			let mut seq = params.sequence();
+	async fn runtime_version(&self, at: Option<Block::Hash>) -> JsonRpcResult<RuntimeVersion> {
+		self.deny_unsafe.check_if_safe()?;
+		self.backend
+			.runtime_version(at)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
+	async fn query_storage(
+		&self,
+		keys: Vec<StorageKey>,
+		from: Block::Hash,
+		to: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<StorageChangeSet<Block::Hash>>> {
+		self.deny_unsafe.check_if_safe()?;
+		self.backend
+			.query_storage(from, to, keys)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			async move {
-				state.deny_unsafe.check_if_safe()?;
-				state.backend.storage_pairs(block, key).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
+	async fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<StorageChangeSet<Block::Hash>>> {
+		self.deny_unsafe.check_if_safe()?;
+		self.backend
+			.query_storage_at(keys, at)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		module.register_async_method("state_getKeysPaged", |params, state| {
-			let mut seq = params.sequence();
+	async fn read_proof(
+		&self,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<ReadProof<Block::Hash>> {
+		self.deny_unsafe.check_if_safe()?;
+		self.backend
+			.read_proof(block, keys)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			let prefix = unwrap_or_fut_err!(seq.optional_next());
-			let count = unwrap_or_fut_err!(seq.next());
-			let start_key = unwrap_or_fut_err!(seq.optional_next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
+	// TODO(niklasad1): use methods (goes probably away by merging to master)
+	async fn trace_block(
+		&self,
+		block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>,
+		_methods: Option<String>,
+	) -> JsonRpcResult<sp_rpc::tracing::TraceBlockResponse> {
+		self.deny_unsafe.check_if_safe()?;
+		self.backend
+			.trace_block(block, targets, storage_keys)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			async move {
-				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-					return Err(JsonRpseeCallError::Failed(Box::new(Error::InvalidCount {
-						value: count,
-						max: STORAGE_KEYS_PAGED_MAX_COUNT,
-					})))
-				}
-				state
-					.backend
-					.storage_keys_paged(block, prefix, count, start_key)
-					.await
-					.map_err(call_err)
-			}
-			.boxed()
-		})?;
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) {
+		if let Err(e) = self.backend.subscribe_runtime_version(sink) {
+			log::error!("[subscribe_runtimeVersion]: error {:?}", e);
+		}
+	}
 
-		module.register_alias("state_getKeysPagedAt", "state_getKeysPaged")?;
-
-		module.register_async_method("state_getStorage", |params, state| {
-			let mut seq = params.sequence();
-
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move { state.backend.storage(block, key).await.map_err(call_err) }.boxed()
-		})?;
-
-		module.register_alias("state_getStorageAt", "state_getStorage")?;
-
-		module.register_async_method("state_getStorageHash", |params, state| {
-			let mut seq = params.sequence();
-
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move { state.backend.storage_hash(block, key).await.map_err(call_err) }.boxed()
-		})?;
-
-		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
-
-		module.register_async_method("state_getStorageSize", |params, state| {
-			let mut seq = params.sequence();
-
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move { state.backend.storage_size(block, key).await.map_err(call_err) }.boxed()
-		})?;
-
-		module.register_alias("state_getStorageSizeAt", "state_getStorageSize")?;
-
-		module.register_async_method("state_getMetadata", |params, state| {
-			let maybe_block = params.one().ok();
-			async move { state.backend.metadata(maybe_block).await.map_err(call_err) }.boxed()
-		})?;
-
-		module.register_async_method("state_getRuntimeVersion", |params, state| {
-			let at = params.one().ok();
-			async move {
-				state.deny_unsafe.check_if_safe()?;
-				state.backend.runtime_version(at).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_alias("chain_getRuntimeVersion", "state_getRuntimeVersion")?;
-
-		module.register_async_method("state_queryStorage", |params, state| {
-			let mut seq = params.sequence();
-
-			let keys = unwrap_or_fut_err!(seq.next());
-			let from = unwrap_or_fut_err!(seq.next());
-			let to = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.deny_unsafe.check_if_safe()?;
-				state.backend.query_storage(from, to, keys).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_async_method("state_queryStorageAt", |params, state| {
-			let mut seq = params.sequence();
-
-			let keys = unwrap_or_fut_err!(seq.next());
-			let at = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.deny_unsafe.check_if_safe()?;
-				state.backend.query_storage_at(keys, at).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_async_method("state_getReadProof", |params, state| {
-			let mut seq = params.sequence();
-
-			let keys = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.deny_unsafe.check_if_safe()?;
-				state.backend.read_proof(block, keys).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_async_method("state_traceBlock", |params, state| {
-			let mut seq = params.sequence();
-
-			let block = unwrap_or_fut_err!(seq.next());
-			let targets = unwrap_or_fut_err!(seq.optional_next());
-			let storage_keys = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.deny_unsafe.check_if_safe()?;
-				state.backend.trace_block(block, targets, storage_keys).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_subscription(
-			"state_runtimeVersion",
-			"state_unsubscribeRuntimeVersion",
-			|_params, sink, ctx| ctx.backend.subscribe_runtime_version(sink).map_err(Into::into),
-		)?;
-
-		module.register_alias("chain_subscribeRuntimeVersion", "state_runtimeVersion")?;
-		module.register_alias("state_subscribeRuntimeVersion", "state_runtimeVersion")?;
-		module
-			.register_alias("chain_unsubscribeRuntimeVersion", "state_unsubscribeRuntimeVersion")?;
-
-		module.register_subscription(
-			"state_storage",
-			"state_unsubscribeStorage",
-			|params, sink, ctx| {
-				let keys = params.one::<Vec<StorageKey>>().ok();
-				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
-			},
-		)?;
-		module.register_alias("chain_subscribeStorage", "state_storage")?;
-		module.register_alias("state_subscribeStorage", "state_storage")?;
-
-		Ok(module)
+	fn subscribe_storage(&self, sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
+		if let Err(e) = self.backend.subscribe_storage(sink, keys) {
+			log::error!("[subscribe_storage]: error {:?}", e);
+		}
 	}
 }
 
@@ -511,122 +479,87 @@ pub struct ChildState<Block, Client> {
 	backend: Box<dyn ChildStateBackend<Block, Client>>,
 }
 
-impl<Block, Client> ChildState<Block, Client>
+#[async_trait]
+impl<Block, Client> ChildStateApiServer<Block::Hash> for ChildState<Block, Client>
 where
 	Block: BlockT + 'static,
 	Client: Send + Sync + 'static,
 {
-	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut module = RpcModule::new(self);
+	async fn storage_keys(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<StorageKey>> {
+		self.backend
+			.storage_keys(block, storage_key, key_prefix)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		// DEPRECATED: Please use `childstate_getKeysPaged` with proper paging support.
-		// Returns the keys with prefix from a child storage, leave empty to get all the keys
-		module.register_async_method("childstate_getKeys", |params, state| {
-			let mut seq = params.sequence();
+	async fn storage_keys_paged(
+		&self,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<StorageKey>> {
+		self.backend
+			.storage_keys_paged(block, storage_key, prefix, count, start_key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			let storage_key = unwrap_or_fut_err!(seq.next());
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
+	async fn storage(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Option<StorageData>> {
+		self.backend
+			.storage(block, storage_key, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			async move {
-				state.backend.storage_keys(block, storage_key, key)
-					.await
-					.map_err(call_err)
-			}.boxed()
-		})?;
+	async fn storage_hash(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Option<Block::Hash>> {
+		self.backend
+			.storage_hash(block, storage_key, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-		// Returns the keys with prefix from a child storage with pagination support.
-		// Up to `count` keys will be returned.
-		// If `start_key` is passed, return next keys in storage in lexicographic order.
-		module.register_async_method("childstate_getKeysPaged", |params, state| {
-			// TODO: (dp) what is the order of the params here? https://polkadot.js.org/docs/substrate/rpc/#getkeyspagedkey-storagekey-count-u32-startkey-storagekey-at-blockhash-vecstoragekey is a bit unclear on what the `prefix` is here.
-			let mut seq = params.sequence();
+	async fn storage_size(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Option<u64>> {
+		self.backend
+			.storage_size(block, storage_key, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 
-			let storage_key = unwrap_or_fut_err!(seq.next());
-			let prefix = unwrap_or_fut_err!(seq.optional_next());
-			let count = unwrap_or_fut_err!(seq.next());
-			let start_key = unwrap_or_fut_err!(seq.optional_next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state
-					.backend
-					.storage_keys_paged(block, storage_key, prefix, count, start_key)
-					.await
-					.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_alias("childstate_getKeysPagedAt", "childstate_getKeysPaged")?;
-
-		// Returns a child storage entry at a specific block's state.
-		module.register_async_method("childstate_getStorage", |params, state| {
-			let mut seq = params.sequence();
-
-			let storage_key = unwrap_or_fut_err!(seq.next());
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move { state.backend.storage(block, storage_key, key).await.map_err(call_err) }
-				.boxed()
-		})?;
-
-		// Returns the hash of a child storage entry at a block's state.
-		module.register_async_method("childstate_getStorageHash", |params, state| {
-			let mut seq = params.sequence();
-
-			let storage_key = unwrap_or_fut_err!(seq.next());
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.backend.storage_hash(block, storage_key, key)
-					.await
-					.map_err(call_err)
-			}.boxed()
-		})?;
-
-		// Returns the size of a child storage entry at a block's state.
-		module.register_async_method("childstate_getStorageSize", |params, state| {
-			let mut seq = params.sequence();
-
-			let storage_key = unwrap_or_fut_err!(seq.next());
-			let key = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.backend.storage_size(block, storage_key, key)
-					.await
-					.map_err(call_err)
-			}.boxed()
-		})?;
-
-		// Returns proof of storage for child key entries at a specific block's state.
-		module.register_async_method("state_getChildReadProof", |params, state| {
-			let mut seq = params.sequence();
-
-			let storage_key = unwrap_or_fut_err!(seq.next());
-			let keys = unwrap_or_fut_err!(seq.next());
-			let block = unwrap_or_fut_err!(seq.optional_next());
-
-			async move {
-				state.backend.read_child_proof(block, storage_key, keys).await.map_err(call_err)
-			}
-			.boxed()
-		})?;
-
-		module.register_alias("childstate_getChildReadProof", "state_getChildReadProof")?;
-
-		Ok(module)
+	async fn read_child_proof(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<ReadProof<Block::Hash>> {
+		self.backend
+			.read_child_proof(block, child_storage_key, keys)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }
 
 fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
-}
-
-fn call_err(err: Error) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(err))
 }

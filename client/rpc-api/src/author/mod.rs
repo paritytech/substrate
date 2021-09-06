@@ -18,5 +18,62 @@
 
 //! Substrate block-author/full-node API.
 
+use jsonrpsee::{proc_macros::rpc, types::JsonRpcResult};
+use sc_transaction_pool_api::TransactionStatus;
+use sp_core::Bytes;
+
 pub mod error;
 pub mod hash;
+
+/// Substrate authoring RPC API
+#[rpc(client, server, namespace = "author")]
+pub trait AuthorApi<Hash, BlockHash> {
+	/// Submit hex-encoded extrinsic for inclusion in block.
+	#[method(name = "submitExtrinsic")]
+	async fn submit_extrinsic(&self, extrinsic: Bytes) -> JsonRpcResult<Hash>;
+
+	/// Insert a key into the keystore.
+	#[method(name = "insertKey")]
+	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> JsonRpcResult<()>;
+
+	/// Generate new session keys and returns the corresponding public keys.
+	#[method(name = "rotateKeys")]
+	fn rotate_keys(&self) -> JsonRpcResult<Bytes>;
+
+	/// Checks if the keystore has private keys for the given session public keys.
+	///
+	/// `session_keys` is the SCALE encoded session keys object from the runtime.
+	///
+	/// Returns `true` iff all private keys could be found.
+	#[method(name = "hasSessionKeys")]
+	fn has_session_keys(&self, session_keys: Bytes) -> JsonRpcResult<bool>;
+
+	/// Checks if the keystore has private keys for the given public key and key type.
+	///
+	/// Returns `true` if a private key could be found.
+	#[method(name = "hasKey")]
+	fn has_key(&self, public_key: Bytes, key_type: String) -> JsonRpcResult<bool>;
+
+	/// Returns all pending extrinsics, potentially grouped by sender.
+	#[method(name = "pendingExtrinsics")]
+	fn pending_extrinsics(&self) -> JsonRpcResult<Vec<Bytes>>;
+
+	/// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting.
+	#[method(name = "removeExtrinsic")]
+	fn remove_extrinsic(
+		&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>,
+	) -> JsonRpcResult<Vec<Hash>>;
+
+	/// Submit an extrinsic to watch.
+	///
+	/// See [`TransactionStatus`](sc_transaction_pool_api::TransactionStatus) for details on
+	/// transaction life cycle.
+	#[subscription(
+		name = "submitAndWatchExtrinsic",
+		aliases = "author_extrinsicUpdate",
+		unsubscribe_aliases = "author_unwatchExtrinsic",
+		item = TransactionStatus<Hash, BlockHash>
+	)]
+	fn watch_extrinsic(&self, bytes: Bytes);
+}

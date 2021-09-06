@@ -18,7 +18,10 @@
 
 //! Authoring RPC module errors.
 
-use jsonrpsee::types::{error::CallError, to_json_raw_value, JsonRawValue};
+use jsonrpsee::types::{
+	error::{CallError, Error as JsonRpseeError},
+	to_json_raw_value, JsonRawValue,
+};
 use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.
@@ -99,81 +102,81 @@ const UNSUPPORTED_KEY_TYPE: i32 = POOL_INVALID_TX + 7;
 /// it is not propagable and the local node does not author blocks.
 const POOL_UNACTIONABLE: i32 = POOL_INVALID_TX + 8;
 
-impl From<Error> for CallError {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		use sc_transaction_pool_api::error::Error as PoolError;
 
 		match e {
-			Error::BadFormat(e) => Self::Custom {
+			Error::BadFormat(e) => CallError::Custom {
 				code: BAD_FORMAT,
 				message: format!("Extrinsic has invalid format: {}", e).into(),
 				data: None,
-			},
-			Error::Verification(e) => Self::Custom {
+			}.into(),
+			Error::Verification(e) => CallError::Custom {
 				code: VERIFICATION_ERROR,
 				message: format!("Verification Error: {}", e).into(),
 				data: JsonRawValue::from_string(format!("\"{:?}\"", e)).ok(),
-			},
-			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => CallError::Custom {
 				code: POOL_INVALID_TX,
 				message: "Invalid Transaction".into(),
 				data: JsonRawValue::from_string(format!("\"Custom error: {}\"", e)).ok(),
-			},
+			}.into(),
 			Error::Pool(PoolError::InvalidTransaction(e)) => {
-				Self::Custom {
+				CallError::Custom {
 					code: POOL_INVALID_TX,
 					message: "Invalid Transaction".into(),
 					data: to_json_raw_value(&e).ok(),
 				}
-			},
-			Error::Pool(PoolError::UnknownTransaction(e)) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::UnknownTransaction(e)) => CallError::Custom {
 				code: POOL_UNKNOWN_VALIDITY,
 				message: "Unknown Transaction Validity".into(),
 				data: to_json_raw_value(&e).ok(),
-			},
-			Error::Pool(PoolError::TemporarilyBanned) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::TemporarilyBanned) => CallError::Custom {
 				code: (POOL_TEMPORARILY_BANNED),
 				message: "Transaction is temporarily banned".into(),
 				data: None,
-			},
-			Error::Pool(PoolError::AlreadyImported(hash)) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::AlreadyImported(hash)) => CallError::Custom {
 				code: (POOL_ALREADY_IMPORTED),
 				message: "Transaction Already Imported".into(),
 				data: JsonRawValue::from_string(format!("\"{:?}\"", hash)).ok(),
-			},
-			Error::Pool(PoolError::TooLowPriority { old, new }) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::TooLowPriority { old, new }) => CallError::Custom {
 				code: (POOL_TOO_LOW_PRIORITY),
 				message: format!("Priority is too low: ({} vs {})", old, new),
 				data: to_json_raw_value(&"The transaction has too low priority to replace another transaction already in the pool.").ok(),
-			},
-			Error::Pool(PoolError::CycleDetected) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::CycleDetected) => CallError::Custom {
 				code: (POOL_CYCLE_DETECTED),
 				message: "Cycle Detected".into(),
 				data: None,
-			},
-			Error::Pool(PoolError::ImmediatelyDropped) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::ImmediatelyDropped) => CallError::Custom {
 				code: (POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped".into(),
 				data: to_json_raw_value(&"The transaction couldn't enter the pool because of the limit").ok(),
-			},
-			Error::Pool(PoolError::Unactionable) => Self::Custom {
+			}.into(),
+			Error::Pool(PoolError::Unactionable) => CallError::Custom {
 				code: (POOL_UNACTIONABLE),
 				message: "Unactionable".into(),
 				data: to_json_raw_value(
 					&"The transaction is unactionable since it is not propagable and \
 					 the local node does not author blocks"
 				).ok(),
-			},
-			Error::UnsupportedKeyType => Self::Custom {
+			}.into(),
+			Error::UnsupportedKeyType => CallError::Custom {
 				code: UNSUPPORTED_KEY_TYPE,
 				message: "Unknown key type crypto" .into(),
 				data: to_json_raw_value(
 					&"The crypto for the given key type is unknown, please add the public key to the \
 					request to insert the key successfully."
 				).ok(),
-			},
+			}.into(),
 			Error::UnsafeRpcCalled(e) => e.into(),
-			e => Self::Failed(Box::new(e)),
+			e => e.into(),
 		}
 	}
 }
