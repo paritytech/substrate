@@ -30,16 +30,16 @@ pub(crate) enum NodeHeader {
 	// contains nibble count
 	Leaf(usize),
 	// contains nibble count.
-	AltHashBranch(usize),
+	HashedValueBranch(usize),
 	// contains nibble count.
-	AltHashLeaf(usize),
+	HashedValueLeaf(usize),
 }
 
 impl NodeHeader {
 	pub(crate) fn contains_hash_of_value(&self) -> bool {
 		match self {
-			NodeHeader::AltHashBranch(_)
-			| NodeHeader::AltHashLeaf(_) => true,
+			NodeHeader::HashedValueBranch(_)
+			| NodeHeader::HashedValueLeaf(_) => true,
 			_ => false,
 		}
 	}
@@ -50,8 +50,8 @@ pub(crate) enum NodeKind {
 	Leaf,
 	BranchNoValue,
 	BranchWithValue,
-	AltHashLeaf,
-	AltHashBranchWithValue,
+	HashedValueLeaf,
+	HashedValueBranch,
 }
 
 impl Encode for NodeHeader {
@@ -64,9 +64,9 @@ impl Encode for NodeHeader {
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, 2, output),
 			NodeHeader::Leaf(nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, 2, output),
-			NodeHeader::AltHashBranch(nibble_count)	=>
+			NodeHeader::HashedValueBranch(nibble_count)	=>
 				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4, output),
-			NodeHeader::AltHashLeaf(nibble_count)	=>
+			NodeHeader::HashedValueLeaf(nibble_count)	=>
 				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3, output),
 		}
 	}
@@ -86,9 +86,9 @@ impl Decode for NodeHeader {
 			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
 			trie_constants::EMPTY_TRIE => {
 				if i & (0b111 << 5) == trie_constants::ALT_HASHING_LEAF_PREFIX_MASK {
-					Ok(NodeHeader::AltHashLeaf(decode_size(i, input, 3)?))
+					Ok(NodeHeader::HashedValueLeaf(decode_size(i, input, 3)?))
 				} else if i & (0b1111 << 4) == trie_constants::ALT_HASHING_BRANCH_WITH_MASK {
-					Ok(NodeHeader::AltHashBranch(decode_size(i, input, 4)?))
+					Ok(NodeHeader::HashedValueBranch(decode_size(i, input, 4)?))
 				} else {
 					// do not allow any special encoding
 					Err("Unallowed encoding".into())

@@ -92,7 +92,7 @@ where
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
 
-	fn alt_threshold(&self) -> Option<u32> {
+	fn max_inline_value(&self) -> Option<u32> {
 		self.0
 	}
 }
@@ -107,7 +107,7 @@ where
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input, self.alt_threshold())
+		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input, self.max_inline_value())
 	}
 
 	fn trie_root_unhashed<I, A, B>(&self, input: I) -> Vec<u8>
@@ -116,7 +116,7 @@ where
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input, self.alt_threshold())
+		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input, self.max_inline_value())
 	}
 
 	fn encode_index(input: u32) -> Vec<u8> {
