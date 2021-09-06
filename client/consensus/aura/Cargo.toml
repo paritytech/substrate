@@ -48,4 +48,5 @@ sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 tempfile = "3.1.0"
+tokio = { version = "1.10.0", features = ["rt-multi-thread", "macros"] }
 parking_lot = "0.11.1"

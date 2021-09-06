@@ -95,6 +95,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// justification sync process.
 	type JustificationSyncLink: JustificationSyncLink<B>;
 
+	/// The type of future resolving to the slot claim.
+	type ClaimSlot: Future<Output = Option<Self::Claim>> + Send + Unpin + 'static;
+
 	/// The type of future resolving to the proposer.
 	type CreateProposer: Future<Output = Result<Self::Proposer, sp_consensus::Error>>
 		+ Send
@@ -108,7 +111,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Claim: Send + 'static;
 
 	/// Epoch data necessary for authoring.
-	type EpochData: Send + 'static;
+	type EpochData: Clone + Send + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -130,11 +133,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Tries to claim the given slot, returning an object with claim data if successful.
 	fn claim_slot(
-		&self,
-		header: &B::Header,
+		&mut self,
+		header: B::Header,
 		slot: Slot,
-		epoch_data: &Self::EpochData,
-	) -> Option<Self::Claim>;
+		epoch_data: Self::EpochData,
+	) -> Self::ClaimSlot;
 
 	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
 	/// need to author blocks or not.
@@ -259,7 +262,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data)?;
+		let claim = {
+			// This variable is required as it doesn't compile otherwise
+			let epoch_data = epoch_data.clone();
+
+			self.claim_slot(slot_info.chain_head.clone(), slot, epoch_data).await?
+		};
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None

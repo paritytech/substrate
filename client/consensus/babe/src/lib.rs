@@ -690,6 +690,7 @@ where
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
+	type ClaimSlot = Pin<Box<dyn Future<Output = Option<Self::Claim>> + Send + 'static>>;
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
@@ -731,33 +732,32 @@ where
 	}
 
 	fn claim_slot(
-		&self,
-		_parent_header: &B::Header,
+		&mut self,
+		_parent_header: B::Header,
 		slot: Slot,
-		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
-	) -> Option<Self::Claim> {
+		epoch_descriptor: Self::EpochData,
+	) -> Self::ClaimSlot {
 		debug!(target: "babe", "Attempting to claim slot {}", slot);
-		let s = authorship::claim_slot(
-			slot,
-			self.epoch_changes
-				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))?
-				.as_ref(),
-			&self.keystore,
-		);
+		let maybe_claim = self
+			.epoch_changes
+			.shared_data()
+			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+			.and_then(|viable_epoch| {
+				authorship::claim_slot(slot, viable_epoch.as_ref(), &self.keystore)
+			});
 
-		if s.is_some() {
+		if maybe_claim.is_some() {
 			debug!(target: "babe", "Claimed slot {}", slot);
 		}
 
-		s
+		Box::pin(async move { maybe_claim })
 	}
 
 	fn notify_slot(
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,
-		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+		epoch_descriptor: &Self::EpochData,
 	) {
 		self.slot_notification_sinks.lock().retain_mut(|sink| {
 			match sink.try_send((slot, epoch_descriptor.clone())) {

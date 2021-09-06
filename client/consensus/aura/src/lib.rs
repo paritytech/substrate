@@ -334,6 +334,7 @@ where
 	type CreateProposer =
 		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
 	type Proposer = E::Proposer;
+	type ClaimSlot = Pin<Box<dyn Future<Output = Option<Self::Claim>> + Send + 'static>>;
 	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
 
@@ -358,13 +359,13 @@ where
 	}
 
 	fn claim_slot(
-		&self,
-		_header: &B::Header,
+		&mut self,
+		_header: B::Header,
 		slot: Slot,
-		epoch_data: &Self::EpochData,
-	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot, epoch_data);
-		expected_author.and_then(|p| {
+		epoch_data: Self::EpochData,
+	) -> Self::ClaimSlot {
+		let expected_author = slot_author::<P>(slot, &epoch_data);
+		let maybe_claim = expected_author.and_then(|p| {
 			if SyncCryptoStore::has_keys(
 				&*self.keystore,
 				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
@@ -373,7 +374,9 @@ where
 			} else {
 				None
 			}
-		})
+		});
+
+		Box::pin(async move { maybe_claim })
 	}
 
 	fn pre_digest_data(
@@ -801,8 +804,8 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn current_node_authority_should_claim_slot() {
+	#[tokio::test]
+	async fn current_node_authority_should_claim_slot() {
 		let net = AuraTestNet::new(4);
 
 		let mut authorities = vec![
@@ -824,7 +827,7 @@ mod tests {
 		let client = peer.client().as_full().expect("full clients are created").clone();
 		let environ = DummyFactory(client.clone());
 
-		let worker = AuraWorker {
+		let mut worker = AuraWorker {
 			client: client.clone(),
 			block_import: client,
 			env: environ,
@@ -846,14 +849,14 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(worker.claim_slot(&head, 0.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 1.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 2.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 3.into(), &authorities).is_some());
-		assert!(worker.claim_slot(&head, 4.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
+		assert!(worker.claim_slot(head.clone(), 0.into(), authorities.clone()).await.is_none());
+		assert!(worker.claim_slot(head.clone(), 1.into(), authorities.clone()).await.is_none());
+		assert!(worker.claim_slot(head.clone(), 2.into(), authorities.clone()).await.is_none());
+		assert!(worker.claim_slot(head.clone(), 3.into(), authorities.clone()).await.is_some());
+		assert!(worker.claim_slot(head.clone(), 4.into(), authorities.clone()).await.is_none());
+		assert!(worker.claim_slot(head.clone(), 5.into(), authorities.clone()).await.is_none());
+		assert!(worker.claim_slot(head.clone(), 6.into(), authorities.clone()).await.is_none());
+		assert!(worker.claim_slot(head, 7.into(), authorities).await.is_some());
 	}
 
 	#[test]
