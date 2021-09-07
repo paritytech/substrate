@@ -1419,15 +1419,15 @@ benchmarks! {
 
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world"
-	seal_ecdsa_recovery {
+	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
+		use rand::SeedableRng;
+		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
 				use secp256k1::{SecretKey, Message, sign};
-				use rand::SeedableRng;
-				let mut rng = rand_pcg::Pcg32::seed_from_u64(i as u64);
 
 				let private_key = SecretKey::random(&mut rng);
 				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
@@ -1444,14 +1444,14 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_ecdsa_recovery",
+				name: "seal_ecdsa_recover",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: 	message_hash[..].to_vec(),
+					value: message_hash[..].to_vec(),
 				},
 				DataSegment {
 					offset: 32,
@@ -1467,7 +1467,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 

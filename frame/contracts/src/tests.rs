@@ -1798,13 +1798,13 @@ fn gas_estimation_call_runtime() {
 
 #[test]
 #[cfg(feature = "unstable-interface")]
-fn ecdsa_recovery() {
-	let (wasm, code_hash) = compile_module::<Test>("ecdsa_recovery").unwrap();
+fn ecdsa_recover() {
+	let (wasm, code_hash) = compile_module::<Test>("ecdsa_recover").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
-		// Instantiate the ecdsa_recovery contract.
+		// Instantiate the ecdsa_recover contract.
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
 			100_000,

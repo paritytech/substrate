@@ -1,10 +1,10 @@
 ;; This contract:
 ;; 1) Read signature and message hash from the input
-;; 2) Calls ecdsa_recovery
+;; 2) Calls ecdsa_recover
 ;; 3) Validates that result is Success
 ;; 4) Returns recovered compressed public key
 (module
-	(import "__unstable__" "seal_ecdsa_recovery" (func $seal_ecdsa_recovery (param i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_ecdsa_recover" (func $seal_ecdsa_recover (param i32 i32 i32) (result i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -23,7 +23,7 @@
 	;; [4, 8) len of signature + message hash - 65 bytes + 32 byte = 97 bytes
 	(data (i32.const 4) "\61")
 
-    ;; Memory layout during `call`
+	;; Memory layout during `call`
 	;; [10, 75) signature
 	;; [75, 107) message hash
 	;; [107, 111) result
@@ -36,7 +36,7 @@
 		(call $seal_input (local.get $signature_ptr) (i32.const 4))
 		(i32.store
 			(i32.const 107)
-			(call $seal_ecdsa_recovery
+			(call $seal_ecdsa_recover
 				(local.get $signature_ptr)
 				(local.get $message_hash_ptr)
 				(local.get $signature_ptr) ;; Store output into message signature ptr, because we don't need it anymore

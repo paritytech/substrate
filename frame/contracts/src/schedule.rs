@@ -378,8 +378,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
-	/// Weight of calling `seal_ecdsa_recovery`.
-	pub ecdsa_recovery: Weight,
+	/// Weight of calling `seal_ecdsa_recover`.
+	pub ecdsa_recover: Weight,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -628,7 +628,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-			ecdsa_recovery: cost_batched!(seal_ecdsa_recovery),
+			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			_phantom: PhantomData,
 		}
 	}

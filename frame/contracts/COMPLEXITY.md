@@ -469,7 +469,7 @@ mentioned crypto hashes to have varying gas costs.
 The complexity of each cryptographic hash function highly depends on the underlying
 implementation.
 
-### seal_ecdsa_recovery
+### seal_ecdsa_recover
 
 This function receives the following arguments:
 
