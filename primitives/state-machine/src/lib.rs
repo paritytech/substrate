@@ -1573,9 +1573,9 @@ mod tests {
 
 	#[test]
 	fn child_read_compact_stress_test() {
-		use rand::{RngCore, SeedableRng};
-		use rand::rngs::SmallRng;
-		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = Default::default();
+		use rand::{rngs::SmallRng, RngCore, SeedableRng};
+		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
+			Default::default();
 		let mut seed = [0; 16];
 		for i in 0..50u32 {
 			let mut child_infos = Vec::new();
@@ -1601,7 +1601,7 @@ mod tests {
 				storage.insert(Some(child_info), items);
 			}
 
-			let trie: InMemoryBackend::<BlakeTwo256> = storage.clone().into();
+			let trie: InMemoryBackend<BlakeTwo256> = storage.clone().into();
 			let trie_root = trie.root().clone();
 			let backend = crate::ProvingBackend::new(&trie);
 			let mut queries = Vec::new();
@@ -1614,7 +1614,7 @@ mod tests {
 					rand.fill_bytes(&mut key[..]);
 					ChildInfo::new_default(key.as_slice())
 				} else {
-				 child_infos[rand.next_u32() as usize % nb_child_trie].clone()
+					child_infos[rand.next_u32() as usize % nb_child_trie].clone()
 				};
 
 				if let Some(values) = storage.get(&Some(child_info.clone())) {
@@ -1623,11 +1623,18 @@ mod tests {
 						for (i, (key, value)) in values.iter().enumerate() {
 							if i == ix {
 								assert_eq!(
-									&backend.child_storage(&child_info, key.as_slice()).unwrap().unwrap(),
+									&backend
+										.child_storage(&child_info, key.as_slice())
+										.unwrap()
+										.unwrap(),
 									value
 								);
-								queries.push((child_info.clone(), key.clone(), Some(value.clone())));
-								break;
+								queries.push((
+									child_info.clone(),
+									key.clone(),
+									Some(value.clone()),
+								));
+								break
 							}
 						}
 					}
