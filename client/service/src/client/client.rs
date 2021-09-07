@@ -61,10 +61,11 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
-	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
+	ChangesTrieConfiguration, NativeOrEncoded,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -82,7 +83,6 @@ use sp_state_machine::{
 	ChangesTrieConfigurationRange, ChangesTrieRootsStorage, ChangesTrieStorage, DBValue,
 };
 use sp_trie::StorageProof;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	marker::PhantomData,
@@ -96,7 +96,7 @@ use std::{
 use {
 	super::call_executor::LocalCallExecutor,
 	sc_client_api::in_mem,
-	sc_executor::RuntimeInfo,
+	sc_executor::RuntimeVersionOf,
 	sp_core::traits::{CodeExecutor, SpawnNamed},
 };
 
@@ -169,7 +169,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	Client<in_mem::Backend<Block>, LocalCallExecutor<Block, in_mem::Backend<Block>, E>, Block, RA>,
 >
 where
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 	S: BuildStorage,
 	Block: BlockT,
 {
@@ -227,7 +227,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	config: ClientConfig<Block>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 	S: BuildStorage,
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
@@ -769,6 +769,8 @@ where
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
+		let parent_exists = self.backend.blockchain().status(BlockId::Hash(parent_hash))? ==
+			blockchain::BlockStatus::InChain;
 		match (import_existing, status) {
 			(false, blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			(false, blockchain::BlockStatus::Unknown) => {},
@@ -815,7 +817,6 @@ where
 						if let Some(changes_trie_transaction) = changes_trie_tx {
 							operation.op.update_changes_trie(changes_trie_transaction)?;
 						}
-
 						Some((main_sc, child_sc))
 					},
 					sc_consensus::StorageChanges::Import(changes) => {
@@ -826,18 +827,18 @@ where
 
 						let state_root = operation.op.reset_storage(storage)?;
 						if state_root != *import_headers.post().state_root() {
-							// State root mismatch when importing state. This should not happen in safe fast sync mode,
-							// but may happen in unsafe mode.
+							// State root mismatch when importing state. This should not happen in
+							// safe fast sync mode, but may happen in unsafe mode.
 							warn!("Error imporing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot)
 						}
 						None
 					},
 				};
-
-				// ensure parent block is finalized to maintain invariant that
-				// finality is called sequentially.
-				if finalized {
+				// Ensure parent chain is finalized to maintain invariant that
+				// finality is called sequentially. This will also send finality
+				// notifications for top 250 newly finalized blocks.
+				if finalized && parent_exists {
 					self.apply_finality_with_block_hash(
 						operation,
 						parent_hash,
@@ -868,7 +869,7 @@ where
 			NewBlockState::Normal
 		};
 
-		let tree_route = if is_new_best && info.best_hash != parent_hash {
+		let tree_route = if is_new_best && info.best_hash != parent_hash && parent_exists {
 			let route_from_best =
 				sp_blockchain::tree_route(self.backend.blockchain(), info.best_hash, parent_hash)?;
 			Some(route_from_best)
@@ -932,21 +933,21 @@ where
 		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
 		let (enact_state, storage_changes) = match (self.block_status(&at)?, state_action) {
-			(BlockStatus::Unknown, _) =>
-				return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
 			(BlockStatus::KnownBad, _) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
-			(_, StateAction::Skip) => (false, None),
 			(
 				BlockStatus::InChainPruned,
 				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(_)),
 			) => return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
+			(_, StateAction::ApplyChanges(changes)) => (true, Some(changes)),
+			(BlockStatus::Unknown, _) =>
+				return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
+			(_, StateAction::Skip) => (false, None),
 			(BlockStatus::InChainPruned, StateAction::Execute) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
 			(BlockStatus::InChainPruned, StateAction::ExecuteIfPossible) => (false, None),
 			(_, StateAction::Execute) => (true, None),
 			(_, StateAction::ExecuteIfPossible) => (true, None),
-			(_, StateAction::ApplyChanges(changes)) => (true, Some(changes)),
 		};
 
 		let storage_changes = match (enact_state, storage_changes, &import_block.body) {
@@ -957,11 +958,7 @@ where
 			// block.
 			(true, None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
-				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
-					ExecutionContext::Syncing
-				} else {
-					ExecutionContext::Importing
-				};
+				let execution_context = import_block.origin.into();
 
 				runtime_api.execute_block_with_context(
 					&at,
@@ -1912,8 +1909,14 @@ where
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } =
-			block;
+		let BlockCheckParams {
+			hash,
+			number,
+			parent_hash,
+			allow_missing_state,
+			import_existing,
+			allow_missing_parent,
+		} = block;
 
 		// Check the block against white and black lists if any are defined
 		// (i.e. fork blocks and bad blocks respectively)
@@ -1955,6 +1958,7 @@ where
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
+			BlockStatus::Unknown if allow_missing_parent => {},
 			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 			BlockStatus::InChainPruned if allow_missing_state => {},
 			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),

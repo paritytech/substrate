@@ -185,10 +185,12 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match *self {
 			OffchainErr::TooEarly => write!(fmt, "Too early to send heartbeat."),
-			OffchainErr::WaitingForInclusion(ref block) =>
-				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block),
-			OffchainErr::AlreadyOnline(auth_idx) =>
-				write!(fmt, "Authority {} is already online", auth_idx),
+			OffchainErr::WaitingForInclusion(ref block) => {
+				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block)
+			},
+			OffchainErr::AlreadyOnline(auth_idx) => {
+				write!(fmt, "Authority {} is already online", auth_idx)
+			},
 			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
 			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
 			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),
@@ -222,7 +224,8 @@ pub type ValidatorId<T> = <<T as Config>::ValidatorSet as ValidatorSet<
 	<T as frame_system::Config>::AccountId,
 >>::ValidatorId;
 
-/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of
+/// `ValidatorId`.
 pub type IdentificationTuple<T> = (
 	ValidatorId<T>,
 	<<T as Config>::ValidatorSet as ValidatorSetWithIdentification<
@@ -375,8 +378,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len)
-		///   and E is length of `heartbeat.network_state.external_address`
+		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
+		///   length of `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
 		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
@@ -447,7 +450,8 @@ pub mod pallet {
 		}
 	}
 
-	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
+	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is
+	/// incorrect.
 	pub(crate) const INVALID_VALIDATORS_LEN: u8 = 10;
 
 	#[pallet::validate_unsigned]

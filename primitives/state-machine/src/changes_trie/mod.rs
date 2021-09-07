@@ -153,8 +153,8 @@ pub struct State<'a, H, Number> {
 	/// Configuration that is active at given block.
 	pub config: Configuration,
 	/// Configuration activation block number. Zero if it is the first configuration on the chain,
-	/// or number of the block that have emit NewConfiguration signal (thus activating configuration
-	/// starting from the **next** block).
+	/// or number of the block that have emit NewConfiguration signal (thus activating
+	/// configuration starting from the **next** block).
 	pub zero: Number,
 	/// Underlying changes tries storage reference.
 	pub storage: &'a dyn Storage<H, Number>,
@@ -276,8 +276,8 @@ where
 	let parent = state.storage.build_anchor(parent_hash).map_err(|_| ())?;
 	let block = parent.number.clone() + One::one();
 
-	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
-	// has been changed in this block
+	// prepare configuration range - we already know zero block. Current block may be the end block
+	// if configuration has been changed in this block
 	let is_config_changed =
 		match changes.storage(sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
 			Some(Some(new_config)) => new_config != &state.config.encode()[..],
@@ -290,7 +290,8 @@ where
 		end: if is_config_changed { Some(block.clone()) } else { None },
 	};
 
-	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
+	// storage errors are considered fatal (similar to situations when runtime fetches values from
+	// storage)
 	let (input_pairs, child_input_pairs, digest_input_blocks) = maybe_panic(
 		prepare_input::<B, H, Number>(
 			backend,

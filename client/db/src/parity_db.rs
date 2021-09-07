@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::{
-	columns,
+	columns, light,
 	utils::{DatabaseType, NUM_COLUMNS},
 };
 /// A `Database` adapter for parity-db.
@@ -37,16 +37,42 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 pub fn open<H: Clone + AsRef<[u8]>>(
 	path: &std::path::Path,
 	db_type: DatabaseType,
+	create: bool,
 ) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
-	config.sync = true; // Flush each commit
-	if db_type == DatabaseType::Full {
-		let mut state_col = &mut config.columns[columns::STATE as usize];
-		state_col.ref_counted = true;
-		state_col.preimage = true;
-		state_col.uniform = true;
+
+	match db_type {
+		DatabaseType::Full => {
+			let indexes = [
+				columns::STATE,
+				columns::HEADER,
+				columns::BODY,
+				columns::TRANSACTION,
+				columns::JUSTIFICATIONS,
+			];
+
+			for i in indexes {
+				let mut column = &mut config.columns[i as usize];
+				column.compression = parity_db::CompressionType::Lz4;
+			}
+
+			let mut state_col = &mut config.columns[columns::STATE as usize];
+			state_col.ref_counted = true;
+			state_col.preimage = true;
+			state_col.uniform = true;
+		},
+		DatabaseType::Light => {
+			config.columns[light::columns::HEADER as usize].compression =
+				parity_db::CompressionType::Lz4;
+		},
 	}
-	let db = parity_db::Db::open(&config)?;
+
+	let db = if create {
+		parity_db::Db::open_or_create(&config)?
+	} else {
+		parity_db::Db::open(&config)?
+	};
+
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 
@@ -71,5 +97,9 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 
 	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
 		handle_err(self.0.get_size(col as u8, key)).map(|s| s as usize)
+	}
+
+	fn supports_ref_counting(&self) -> bool {
+		true
 	}
 }

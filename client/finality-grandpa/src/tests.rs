@@ -203,6 +203,10 @@ sp_api::mock_impl_runtime_apis! {
 			self.inner.genesis_authorities.clone()
 		}
 
+		fn current_set_id(&self) -> SetId {
+			0
+		}
+
 		fn submit_report_equivocation_unsigned_extrinsic(
 			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
 			_key_owner_proof: OpaqueKeyOwnershipProof,
@@ -1240,7 +1244,7 @@ fn finalize_3_voters_1_light_observer() {
 #[test]
 fn voter_catches_up_to_latest_round_when_behind() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
+	let runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);

@@ -50,10 +50,7 @@ fn build_test_full_node(
 	impl<B: BlockT> sc_consensus::Verifier<B> for PassThroughVerifier {
 		async fn verify(
 			&mut self,
-			origin: sp_consensus::BlockOrigin,
-			header: B::Header,
-			justifications: Option<sp_runtime::Justifications>,
-			body: Option<Vec<B::Extrinsic>>,
+			mut block: sc_consensus::BlockImportParams<B, ()>,
 		) -> Result<
 			(
 				sc_consensus::BlockImportParams<B, ()>,
@@ -61,7 +58,8 @@ fn build_test_full_node(
 			),
 			String,
 		> {
-			let maybe_keys = header
+			let maybe_keys = block
+				.header
 				.digest()
 				.log(|l| {
 					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
@@ -75,12 +73,9 @@ fn build_test_full_node(
 					vec![(sp_blockchain::well_known_cache_keys::AUTHORITIES, blob.to_vec())]
 				});
 
-			let mut import = sc_consensus::BlockImportParams::new(origin, header);
-			import.body = body;
-			import.finalized = self.0;
-			import.justifications = justifications;
-			import.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
-			Ok((import, maybe_keys))
+			block.finalized = self.0;
+			block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
+			Ok((block, maybe_keys))
 		}
 	}
 
@@ -132,6 +127,7 @@ fn build_test_full_node(
 		block_request_protocol_config,
 		state_request_protocol_config,
 		light_client_request_protocol_config,
+		warp_sync: None,
 	})
 	.unwrap();
 
