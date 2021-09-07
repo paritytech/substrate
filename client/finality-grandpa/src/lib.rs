@@ -223,6 +223,7 @@ impl SharedVoterState {
 		&self,
 		voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>,
 	) -> Option<()> {
+		debug!(target: "afg", "ladi-debug Resetting Voter State");
 		let mut shared_voter_state = self.inner.try_write_for(Duration::from_secs(1))?;
 
 		*shared_voter_state = Some(voter_state);
@@ -231,12 +232,14 @@ impl SharedVoterState {
 
 	/// Get the inner `VoterState` instance.
 	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
+		debug!(target: "afg", "ladi-debug Getting Voter State");
 		self.inner.read().as_ref().map(|vs| vs.get())
 	}
 }
 
 impl Clone for SharedVoterState {
 	fn clone(&self) -> Self {
+		debug!(target: "afg", "ladi-debug Cloning Shared voter state");
 		SharedVoterState { inner: self.inner.clone() }
 	}
 }
@@ -267,6 +270,7 @@ pub struct Config {
 
 impl Config {
 	fn name(&self) -> &str {
+		debug!(target: "afg", "ladi-debug Config name");
 		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
 	}
 }
@@ -318,6 +322,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
+		debug!(target: "afg", "ladi-debug Getting block number");
 		self.block_number_from_id(&BlockId::Hash(hash))
 			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
 	}
@@ -387,6 +392,7 @@ where
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 	) {
+		debug!(target: "afg", "ladi-debug Setting sync fork request");
 		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
 	}
 }
@@ -532,6 +538,7 @@ where
 	BE: Backend<Block> + 'static,
 	Client: ClientForGrandpa<Block, BE> + 'static,
 {
+	debug!(target: "afg", "ladi-debug Importing block with Authority set");
 	block_import_with_authority_set_hard_forks(
 		client,
 		genesis_authorities_provider,
@@ -558,6 +565,7 @@ where
 	BE: Backend<Block> + 'static,
 	Client: ClientForGrandpa<Block, BE> + 'static,
 {
+	debug!(target: "afg", "ladi-debug Importing block with Authority set hard forks");
 	let chain_info = client.info();
 	let genesis_hash = chain_info.genesis_hash;
 
@@ -645,6 +653,7 @@ where
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
+	debug!(target: "afg", "ladi-debug Global comms");
 	let is_voter = local_authority_id(voters, keystore).is_some();
 
 	// verification stream
@@ -731,7 +740,7 @@ where
 		shared_voter_state,
 		telemetry,
 	} = grandpa_params;
-
+	debug!(target: "afg", "ladi-debug Running grandpa voter");
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
 	// API, I felt it is easier to just ignore this field rather than removing
 	// it from the config temporarily. This should be removed after #5013 is
@@ -871,6 +880,7 @@ where
 		justification_sender: GrandpaJustificationSender<Block>,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
+		debug!(target: "afg", "ladi-debug New voterwork");
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
 			Some(Err(e)) => {
@@ -916,7 +926,7 @@ where
 	/// state. This method should be called when we know that the authority set
 	/// has changed (e.g. as signalled by a voter command).
 	fn rebuild_voter(&mut self) {
-		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
+		debug!(target: "afg", "ladi-debug {}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
 		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
@@ -992,6 +1002,7 @@ where
 		&mut self,
 		command: VoterCommand<Block::Hash, NumberFor<Block>>,
 	) -> Result<(), Error> {
+		debug!(target: "afg", "ladi-debug Handling new voter command {:?}", command);
 		match command {
 			VoterCommand::ChangeAuthorities(new) => {
 				let voters: Vec<String> =
