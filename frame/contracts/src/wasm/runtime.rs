@@ -603,6 +603,7 @@ where
 	}
 
 	/// Recovers ECDSA compressed public key from the signature and message hash.
+	#[cfg(feature = "unstable-interface")]
 	fn ecdsa_recover(
 		&mut self,
 		signature_ptr: u32,
