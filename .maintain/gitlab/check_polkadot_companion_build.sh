@@ -95,7 +95,7 @@ load_our_crates() {
   while IFS= read -r crate; do
     # for avoiding duplicate entries
     for our_crate in "${our_crates[@]}"; do
-      if [[ "$crate" == "$our_crate" ]]; then
+      if [ "$crate" == "$our_crate" ]; then
         found=true
         break
       fi
@@ -139,7 +139,7 @@ match_their_crates() {
         next="source"
       ;;
       source)
-        if [[ "$line" == "$our_crates_source" ]] || [[ "$line" == "$our_crates_source?" ]]; then
+        if [ "$line" == "$our_crates_source" ] || [ "$line" == "$our_crates_source?" ]; then
           for our_crate in "${our_crates[@]}"; do
             if [ "$our_crate" == "$crate" ]; then
               found=true
@@ -151,7 +151,7 @@ match_their_crates() {
           else
             # for avoiding duplicate entries
             for crate_not_found in "${crates_not_found[@]}"; do
-              if [[ "$crate_not_found" == "$crate" ]]; then
+              if [ "$crate_not_found" == "$crate" ]; then
                 found=true
                 break
               fi
