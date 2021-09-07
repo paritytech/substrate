@@ -1515,7 +1515,9 @@ mod tests {
 	#[test]
 	fn prove_read_and_proof_check_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
+		let missing_child_info = ChildInfo::new_default(b"sub1sub2"); // key will include other child root to proof.
 		let child_info = &child_info;
+		let missing_child_info = &missing_child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
@@ -1553,11 +1555,20 @@ mod tests {
 			&[b"value2"],
 		)
 		.unwrap();
+		let local_result3 = read_child_proof_check::<BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone(),
+			missing_child_info,
+			&[b"dummy"],
+		)
+		.unwrap();
+
 		assert_eq!(
 			local_result1.into_iter().collect::<Vec<_>>(),
 			vec![(b"value3".to_vec(), Some(vec![142]))],
 		);
 		assert_eq!(local_result2.into_iter().collect::<Vec<_>>(), vec![(b"value2".to_vec(), None)]);
+		assert_eq!(local_result3.into_iter().collect::<Vec<_>>(), vec![(b"dummy".to_vec(), None)]);
 	}
 
 	#[test]
