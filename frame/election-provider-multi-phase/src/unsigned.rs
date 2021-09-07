@@ -61,8 +61,9 @@ pub type Assignment<T> =
 /// runtime `T`.
 pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
 
+/// Error type of the pallet's [`Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
-
+/// Error type for operations related to the OCW npos solution miner.
 #[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
 pub enum MinerError<T: Config> {
 	/// An internal error in the NPoS elections crate.
