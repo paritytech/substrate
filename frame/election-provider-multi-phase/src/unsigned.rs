@@ -268,8 +268,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new npos solution.
-	/// In order to improve ergonomics, the Npos Solver type, `S`, must have the same
-	/// AccountId and Error type as the [`crate::Config::Solver`].
+	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the [`crate::Config::Solver`] in order to create a unified return type.
+	/// 
 	pub fn mine_solution<S>(
 	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>>
 	where
