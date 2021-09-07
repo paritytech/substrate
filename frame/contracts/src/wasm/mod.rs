@@ -61,7 +61,7 @@ pub struct PrefabWasmModule<T: Config> {
 	/// The maximum memory size of a contract's sandbox.
 	#[codec(compact)]
 	maximum: u32,
-	/// The number of alive contracts that use this as their contract code.
+	/// The number of contracts that use this as their contract code.
 	///
 	/// If this number drops to zero this module is removed from storage.
 	#[codec(compact)]
@@ -164,10 +164,6 @@ where
 		code_cache::load(code_hash, None)
 	}
 
-	fn drop_from_storage(self) {
-		code_cache::store_decremented(self);
-	}
-
 	fn add_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>) -> Result<(), DispatchError> {
 		code_cache::increment_refcount::<T>(code_hash, gas_meter)
 	}
@@ -240,11 +236,9 @@ mod tests {
 	use super::*;
 	use crate::{
 		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, RentParams,
-			SeedOf, StorageKey,
+			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, SeedOf, StorageKey,
 		},
 		gas::GasMeter,
-		rent::RentStatus,
 		tests::{Call, Test, ALICE, BOB},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
@@ -260,14 +254,6 @@ mod tests {
 	use sp_core::{Bytes, H256};
 	use sp_runtime::DispatchError;
 	use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap};
-
-	#[derive(Debug, PartialEq, Eq)]
-	struct RestoreEntry {
-		dest: AccountIdOf<Test>,
-		code_hash: H256,
-		rent_allowance: u64,
-		delta: Vec<StorageKey>,
-	}
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct InstantiateEntry {
@@ -299,17 +285,14 @@ mod tests {
 
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
-		rent_allowance: u64,
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
 		calls: Vec<CallEntry>,
 		transfers: Vec<TransferEntry>,
-		restores: Vec<RestoreEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		runtime_calls: RefCell<Vec<Call>>,
 		schedule: Schedule<Test>,
-		rent_params: RentParams<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 	}
@@ -323,16 +306,13 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				storage: Default::default(),
-				rent_allowance: Default::default(),
 				instantiates: Default::default(),
 				terminations: Default::default(),
 				calls: Default::default(),
 				transfers: Default::default(),
-				restores: Default::default(),
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				rent_params: Default::default(),
 				gas_meter: GasMeter::new(10_000_000_000),
 				debug_buffer: Default::default(),
 			}
@@ -381,16 +361,6 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn restore_to(
-			&mut self,
-			dest: AccountIdOf<Self::T>,
-			code_hash: H256,
-			rent_allowance: u64,
-			delta: Vec<StorageKey>,
-		) -> Result<(), DispatchError> {
-			self.restores.push(RestoreEntry { dest, code_hash, rent_allowance, delta });
-			Ok(())
-		}
 		fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
@@ -416,7 +386,7 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn tombstone_deposit(&self) -> u64 {
+		fn contract_deposit(&self) -> u64 {
 			16
 		}
 		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
@@ -424,12 +394,6 @@ mod tests {
 		}
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
 			self.events.push((topics, data))
-		}
-		fn set_rent_allowance(&mut self, rent_allowance: u64) {
-			self.rent_allowance = rent_allowance;
-		}
-		fn rent_allowance(&mut self) -> u64 {
-			self.rent_allowance
 		}
 		fn block_number(&self) -> u64 {
 			121
@@ -442,12 +406,6 @@ mod tests {
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
-		}
-		fn rent_params(&self) -> &RentParams<Self::T> {
-			&self.rent_params
-		}
-		fn rent_status(&mut self, _at_refcount: u32) -> RentStatus<Self::T> {
-			Default::default()
 		}
 		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
@@ -1380,9 +1338,9 @@ mod tests {
 		assert_ok!(execute(CODE_MINIMUM_BALANCE, vec![], MockExt::default()));
 	}
 
-	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
+	const CODE_CONTRACT_DEPOSIT: &str = r#"
 (module
-	(import "seal0" "seal_tombstone_deposit" (func $seal_tombstone_deposit (param i32 i32)))
+	(import "seal0" "seal_contract_deposit" (func $seal_contract_deposit (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1398,7 +1356,7 @@ mod tests {
 	)
 
 	(func (export "call")
-		(call $seal_tombstone_deposit (i32.const 0) (i32.const 32))
+		(call $seal_contract_deposit (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1421,8 +1379,8 @@ mod tests {
 "#;
 
 	#[test]
-	fn tombstone_deposit() {
-		assert_ok!(execute(CODE_TOMBSTONE_DEPOSIT, vec![], MockExt::default()));
+	fn contract_deposit() {
+		assert_ok!(execute(CODE_CONTRACT_DEPOSIT, vec![], MockExt::default()));
 	}
 
 	const CODE_RANDOM: &str = r#"
@@ -1854,81 +1812,6 @@ mod tests {
 		// AccountID implements `MaxEncodeLen` and therefore the supplied length is
 		// no longer needed nor used to determine how much is read from contract memory.
 		assert_ok!(result);
-	}
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn rent_params_work() {
-		const CODE_RENT_PARAMS: &str = r#"
-(module
-	(import "__unstable__" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
-	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; [0, 4) buffer size = 128 bytes
-	(data (i32.const 0) "\80")
-
-	;; [4; inf) buffer where the result is copied
-
-	(func (export "call")
-		;; Load the rent params into memory
-		(call $seal_rent_params
-			(i32.const 4)		;; Pointer to the output buffer
-			(i32.const 0)		;; Pointer to the size of the buffer
-		)
-
-		;; Return the contents of the buffer
-		(call $seal_return
-			(i32.const 0)				;; return flags
-			(i32.const 4)				;; buffer pointer
-			(i32.load (i32.const 0))	;; buffer size
-		)
-	)
-
-	(func (export "deploy"))
-)
-"#;
-		let output = execute(CODE_RENT_PARAMS, vec![], MockExt::default()).unwrap();
-		let rent_params = Bytes(<RentParams<Test>>::default().encode());
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
-	}
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn rent_status_works() {
-		const CODE_RENT_STATUS: &str = r#"
-(module
-	(import "__unstable__" "seal_rent_status" (func $seal_rent_status (param i32 i32 i32)))
-	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; [0, 4) buffer size = 128 bytes
-	(data (i32.const 0) "\80")
-
-	;; [4; inf) buffer where the result is copied
-
-	(func (export "call")
-		;; Load the rent params into memory
-		(call $seal_rent_status
-			(i32.const 1)		;; at_refcount
-			(i32.const 4)		;; Pointer to the output buffer
-			(i32.const 0)		;; Pointer to the size of the buffer
-		)
-
-		;; Return the contents of the buffer
-		(call $seal_return
-			(i32.const 0)				;; return flags
-			(i32.const 4)				;; buffer pointer
-			(i32.load (i32.const 0))	;; buffer size
-		)
-	)
-
-	(func (export "deploy"))
-)
-"#;
-		let output = execute(CODE_RENT_STATUS, vec![], MockExt::default()).unwrap();
-		let rent_status = Bytes(<RentStatus<Test>>::default().encode());
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_status });
 	}
 
 	#[test]

@@ -218,7 +218,7 @@ where
 
 		loop {
 			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
-				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+				NotificationsInSubstreamHandshake::PendingSend(msg) => {
 					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
@@ -231,8 +231,9 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
 							return Poll::Pending
 						},
-					},
-				NotificationsInSubstreamHandshake::Flush =>
+					}
+				},
+				NotificationsInSubstreamHandshake::Flush => {
 					match Sink::poll_flush(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
@@ -240,7 +241,8 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
 							return Poll::Pending
 						},
-					},
+					}
+				},
 
 				st @ NotificationsInSubstreamHandshake::NotSent |
 				st @ NotificationsInSubstreamHandshake::Sent |
@@ -270,7 +272,7 @@ where
 					*this.handshake = NotificationsInSubstreamHandshake::NotSent;
 					return Poll::Pending
 				},
-				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+				NotificationsInSubstreamHandshake::PendingSend(msg) => {
 					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
@@ -283,8 +285,9 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
 							return Poll::Pending
 						},
-					},
-				NotificationsInSubstreamHandshake::Flush =>
+					}
+				},
+				NotificationsInSubstreamHandshake::Flush => {
 					match Sink::poll_flush(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
@@ -292,7 +295,8 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
 							return Poll::Pending
 						},
-					},
+					}
+				},
 
 				NotificationsInSubstreamHandshake::Sent => {
 					match Stream::poll_next(this.socket.as_mut(), cx) {
@@ -381,7 +385,7 @@ where
 
 	fn upgrade_outbound(self, mut socket: TSubstream, negotiated_name: Self::Info) -> Self::Future {
 		Box::pin(async move {
-			upgrade::write_with_len_prefix(&mut socket, &self.initial_message).await?;
+			upgrade::write_length_prefixed(&mut socket, &self.initial_message).await?;
 
 			// Reading handshake.
 			let handshake_len = unsigned_varint::aio::read_usize(&mut socket).await?;

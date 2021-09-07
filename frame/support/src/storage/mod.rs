@@ -18,7 +18,7 @@
 //! Stuff to do with the runtime's storage.
 
 use crate::{
-	hash::{ReversibleStorageHasher, StorageHasher, Twox128},
+	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{
 		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 		ReversibleKeyGenerator, TupleToEncodedIter,
@@ -1108,10 +1108,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 	/// Final full prefix that prefixes all keys.
 	fn final_prefix() -> [u8; 32] {
-		let mut final_key = [0u8; 32];
-		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
-		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
-		final_key
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
 	/// Remove all value of the storage.
@@ -1361,10 +1358,24 @@ where
 	}
 }
 
+/// Returns the storage prefix for a specific pallet name and storage name.
+///
+/// The storage prefix is `concat(twox_128(pallet_name), twox_128(storage_name))`.
+pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
+	let pallet_hash = sp_io::hashing::twox_128(pallet_name);
+	let storage_hash = sp_io::hashing::twox_128(storage_name);
+
+	let mut final_key = [0u8; 32];
+	final_key[..16].copy_from_slice(&pallet_hash);
+	final_key[16..].copy_from_slice(&storage_hash);
+
+	final_key
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity};
+	use crate::{assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
 	use core::convert::{TryFrom, TryInto};
 	use generator::StorageValue as _;
