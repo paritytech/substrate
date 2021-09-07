@@ -17,10 +17,7 @@
 
 use super::{Config, OffenceDetails, Perbill, SessionIndex};
 use frame_support::{
-	generate_storage_alias,
-	pallet_prelude::ValueQuery,
-	traits::Get,
-	weights::Weight
+	generate_storage_alias, pallet_prelude::ValueQuery, traits::Get, weights::Weight,
 };
 use sp_staking::offence::OnOffenceHandler;
 use sp_std::vec::Vec;
