@@ -73,8 +73,7 @@ frame_support::generate_storage_alias!(
 frame_support::generate_storage_alias!(
 	PhragmenElection, Voting<T: V2ToV3> => Map<
 		(Twox64Concat, T::AccountId),
-		Voter<T::AccountId, T::Balance>,
-		ValueQuery
+		Voter<T::AccountId, T::Balance>
 	>
 );
 

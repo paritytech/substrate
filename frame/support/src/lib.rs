@@ -164,7 +164,11 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
-	($pallet:ident, $name:ident => DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>) => {
+	(
+		$pallet:ident,
+		$name:ident
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageDoubleMap<
@@ -178,7 +182,11 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
-	($pallet:ident, $name:ident => NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty $(, $querytype:ty)?>) => {
+	(
+		$pallet:ident,
+		$name:ident
+		=> NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageNMap<
@@ -202,7 +210,11 @@ macro_rules! generate_storage_alias {
 		}
 	};
 	// with generic for $name.
-	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>) => {
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt>
+		=> Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
@@ -218,7 +230,8 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>) => {
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
@@ -235,7 +248,8 @@ macro_rules! generate_storage_alias {
 	};
 	(
 		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt> => NMap<$(($key:ty, $hasher:ty),)+ $value:ty $(, $querytype:ty)?>
+		$name:ident<$t:ident : $bounds:tt>
+		=> NMap<$(($key:ty, $hasher:ty),)+ $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
