@@ -19,9 +19,9 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{convert::TryInto, fmt, io, path::Path, sync::Arc};
+use std::{convert::TryInto, fmt, fs, io, path::Path, sync::Arc};
 
-use log::debug;
+use log::{debug, info};
 
 use crate::{Database, DatabaseSettings, DatabaseSource, DbHash};
 use codec::Decode;
@@ -213,7 +213,21 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	let db: Arc<dyn Database<DbHash>> = match &config.source {
+	// Maybe migrate (copy) the database to a type specific subdirectory to make it
+	// possible that light and full databases coexist
+	// NOTE: This function can be removed in a few releases
+	maybe_migrate_to_type_subdir::<Block>(&config.source, db_type).map_err(|e| {
+		sp_blockchain::Error::Backend(format!("Error in migration to role subdirectory: {}", e))
+	})?;
+
+	open_database_at::<Block>(&config.source, db_type)
+}
+
+fn open_database_at<Block: BlockT>(
+	source: &DatabaseSource,
+	db_type: DatabaseType,
+) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+	let db: Arc<dyn Database<DbHash>> = match &source {
 		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true)?,
 		DatabaseSource::RocksDb { path, cache_size } =>
 			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
@@ -389,6 +403,46 @@ pub fn check_database_type(
 			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
 			db.commit(transaction)?;
 		},
+	}
+
+	Ok(())
+}
+
+fn maybe_migrate_to_type_subdir<Block: BlockT>(
+	source: &DatabaseSource,
+	db_type: DatabaseType,
+) -> io::Result<()> {
+	if let Some(p) = source.path() {
+		let mut basedir = p.to_path_buf();
+		basedir.pop();
+
+		// Do we have to migrate to a database-type-based subdirectory layout:
+		// See if there's a file identifying a rocksdb or paritydb folder in the parent dir and
+		// the target path ends in a role specific directory
+		if (basedir.join("db_version").exists() || basedir.join("metadata").exists()) &&
+			(p.ends_with(DatabaseType::Full.as_str()) ||
+				p.ends_with(DatabaseType::Light.as_str()))
+		{
+			// Try to open the database to check if the current `DatabaseType` matches the type of
+			// database stored in the target directory and close the database on success.
+			let mut old_source = source.clone();
+			old_source.set_path(&basedir);
+			open_database_at::<Block>(&old_source, db_type)
+				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+			info!(
+				"Migrating database to a database-type-based subdirectory: '{:?}' -> '{:?}'",
+				basedir,
+				basedir.join(db_type.as_str())
+			);
+			let mut tmp_dir = basedir.clone();
+			tmp_dir.pop();
+			tmp_dir.push("tmp");
+
+			fs::rename(&basedir, &tmp_dir)?;
+			fs::create_dir_all(&p)?;
+			fs::rename(tmp_dir, &p)?;
+		}
 	}
 
 	Ok(())
@@ -570,7 +624,94 @@ mod tests {
 	use codec::Input;
 	use sc_state_db::PruningMode;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use std::path::PathBuf;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[test]
+	fn database_type_subdir_migration() {
+		type Block = RawBlock<ExtrinsicWrapper<u64>>;
+
+		fn check_dir_for_db_type(
+			db_type: DatabaseType,
+			mut source: DatabaseSource,
+			db_check_file: &str,
+		) {
+			let base_path = tempfile::TempDir::new().unwrap();
+			let old_db_path = base_path.path().join("chains/dev/db");
+
+			source.set_path(&old_db_path);
+			let settings = db_settings(source.clone());
+
+			{
+				let db_res = open_database::<Block>(&settings, db_type);
+				assert!(db_res.is_ok(), "New database should be created.");
+				assert!(old_db_path.join(db_check_file).exists());
+				assert!(!old_db_path.join(db_type.as_str()).join("db_version").exists());
+			}
+
+			source.set_path(&old_db_path.join(db_type.as_str()));
+			let settings = db_settings(source);
+			let db_res = open_database::<Block>(&settings, db_type);
+			assert!(db_res.is_ok(), "Reopening the db with the same role should work");
+			// check if the database dir had been migrated
+			assert!(!old_db_path.join(db_check_file).exists());
+			assert!(old_db_path.join(db_type.as_str()).join(db_check_file).exists());
+		}
+
+		check_dir_for_db_type(
+			DatabaseType::Light,
+			DatabaseSource::RocksDb { path: PathBuf::new(), cache_size: 128 },
+			"db_version",
+		);
+		check_dir_for_db_type(
+			DatabaseType::Full,
+			DatabaseSource::RocksDb { path: PathBuf::new(), cache_size: 128 },
+			"db_version",
+		);
+
+		#[cfg(feature = "with-parity-db")]
+		check_dir_for_db_type(
+			DatabaseType::Light,
+			DatabaseSource::ParityDb { path: PathBuf::new() },
+			"metadata",
+		);
+		#[cfg(feature = "with-parity-db")]
+		check_dir_for_db_type(
+			DatabaseType::Full,
+			DatabaseSource::ParityDb { path: PathBuf::new() },
+			"metadata",
+		);
+
+		// check failure on reopening with wrong role
+		{
+			let base_path = tempfile::TempDir::new().unwrap();
+			let old_db_path = base_path.path().join("chains/dev/db");
+
+			let source = DatabaseSource::RocksDb { path: old_db_path.clone(), cache_size: 128 };
+			let settings = db_settings(source);
+			{
+				let db_res = open_database::<Block>(&settings, DatabaseType::Full);
+				assert!(db_res.is_ok(), "New database should be created.");
+
+				// check if the database dir had been migrated
+				assert!(old_db_path.join("db_version").exists());
+				assert!(!old_db_path.join("light/db_version").exists());
+				assert!(!old_db_path.join("full/db_version").exists());
+			}
+			let source = DatabaseSource::RocksDb {
+				path: old_db_path.join(DatabaseType::Light.as_str()),
+				cache_size: 128,
+			};
+			let settings = db_settings(source);
+			let db_res = open_database::<Block>(&settings, DatabaseType::Light);
+			assert!(db_res.is_err(), "Opening a light database in full role should fail");
+			// assert nothing was changed
+			assert!(old_db_path.join("db_version").exists());
+			assert!(!old_db_path.join("light/db_version").exists());
+			assert!(!old_db_path.join("full/db_version").exists());
+		}
+	}
 
 	#[test]
 	fn number_index_key_doesnt_panic() {
