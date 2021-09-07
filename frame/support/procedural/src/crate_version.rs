@@ -17,10 +17,10 @@
 
 //! Implementation of macros related to crate versioning.
 
+use super::get_cargo_env_var;
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro2::{Span, TokenStream};
 use syn::{Error, Result};
-use super::get_cargo_env_var;
 
 /// Create an error that will be shown by rustc at the call site of the macro.
 fn create_error(message: &str) -> Error {

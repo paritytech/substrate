@@ -241,14 +241,16 @@ fn decl_pallet_runtime_setup(
 	let name_strings = pallet_declarations.iter().map(|d| d.name.to_string());
 	let module_names = pallet_declarations.iter().map(|d| d.path.module_name());
 	let indices = pallet_declarations.iter().map(|pallet| pallet.index as usize);
-	let pallet_structs = pallet_declarations.iter().map(|pallet| {
-		let path = &pallet.path;
-		match pallet.instance.as_ref() {
-			Some(inst) => quote!(#path::Pallet<#runtime, #path::#inst>),
-			None => quote!(#path::Pallet<#runtime>),
-		}
-	})
-	.collect::<Vec<_>>();
+	let pallet_structs = pallet_declarations
+		.iter()
+		.map(|pallet| {
+			let path = &pallet.path;
+			match pallet.instance.as_ref() {
+				Some(inst) => quote!(#path::Pallet<#runtime, #path::#inst>),
+				None => quote!(#path::Pallet<#runtime>),
+			}
+		})
+		.collect::<Vec<_>>();
 
 	quote!(
 		/// Provides an implementation of `PalletInfo` to provide information
