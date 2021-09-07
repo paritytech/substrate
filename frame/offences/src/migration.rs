@@ -31,7 +31,7 @@ type DeferredOffenceOf<T> = (
 // at a later time.
 generate_storage_alias!(
 	Offences,
-	DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>>
+	DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>, ValueQuery>
 );
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
