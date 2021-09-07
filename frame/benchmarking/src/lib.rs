@@ -40,7 +40,7 @@ pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
-pub use sp_std::{self, boxed::Box, prelude::Vec, vec};
+pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
 #[doc(hidden)]
 pub use sp_storage::TrackedStorageKey;
 pub use utils::*;
@@ -774,7 +774,7 @@ macro_rules! impl_benchmark {
 				internal_repeats: u32,
 			) -> Result<$crate::Vec<$crate::BenchmarkResult>, $crate::BenchmarkError> {
 				// Map the input to the selected benchmark.
-				let extrinsic = $crate::sp_std::str::from_utf8(extrinsic)
+				let extrinsic = $crate::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
@@ -894,7 +894,7 @@ macro_rules! impl_benchmark {
 			/// author chooses not to implement benchmarks.
 			#[allow(unused)]
 			fn test_bench_by_name(name: &[u8]) -> Result<(), $crate::BenchmarkError> {
-				let name = $crate::sp_std::str::from_utf8(name)
+				let name = $crate::str::from_utf8(name)
 					.map_err(|_| -> $crate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
 				match name {
 					$( stringify!($name) => {
@@ -1209,17 +1209,40 @@ macro_rules! impl_benchmark_test_suite {
 							$bench_module::<$test>::test_bench_by_name(benchmark_name)
 						}) {
 							Err(err) => {
-								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+								println!(
+									"{}: {:?}",
+									$crate::str::from_utf8(benchmark_name)
+										.expect("benchmark name is always a valid string!"),
+									err,
+								);
 								anything_failed = true;
 							},
 							Ok(Err(err)) => {
 								match err {
 									$crate::BenchmarkError::Stop(err) => {
-										println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+										println!(
+											"{}: {:?}",
+											$crate::str::from_utf8(benchmark_name)
+												.expect("benchmark name is always a valid string!"),
+											err,
+										);
 										anything_failed = true;
 									},
 									$crate::BenchmarkError::Override(_) => {
 										// This is still considered a success condition.
+										$crate::log::error!(
+											"WARNING: benchmark error overrided - {}",
+												$crate::str::from_utf8(benchmark_name)
+													.expect("benchmark name is always a valid string!"),
+											);
+									},
+									$crate::BenchmarkError::Skip => {
+										// This is considered a success condition.
+										$crate::log::error!(
+											"WARNING: benchmark error skipped - {}",
+											$crate::str::from_utf8(benchmark_name)
+												.expect("benchmark name is always a valid string!"),
+										);
 									}
 								}
 							},
@@ -1344,13 +1367,18 @@ macro_rules! add_benchmark {
 			);
 
 			let final_results = match benchmark_result {
-				Ok(results) => results,
+				Ok(results) => Some(results),
 				Err($crate::BenchmarkError::Override(mut result)) => {
 					// Insert override warning as the first storage key.
+					$crate::log::error!(
+						"WARNING: benchmark error overrided - {}",
+						$crate::str::from_utf8(benchmark)
+							.expect("benchmark name is always a valid string!")
+					);
 					result.keys.insert(0,
 						(b"Benchmark Override".to_vec(), 0, 0, false)
 					);
-					$crate::vec![result]
+					Some($crate::vec![result])
 				},
 				Err($crate::BenchmarkError::Stop(e)) => {
 					$crate::show_benchmark_debug_info(
@@ -1362,14 +1390,24 @@ macro_rules! add_benchmark {
 					);
 					return Err(e.into());
 				},
+				Err($crate::BenchmarkError::Skip) => {
+					$crate::log::error!(
+						"WARNING: benchmark error skipped - {}",
+						$crate::str::from_utf8(benchmark)
+							.expect("benchmark name is always a valid string!")
+					);
+					None
+				}
 			};
 
-			$batches.push($crate::BenchmarkBatch {
-				pallet: name_string.to_vec(),
-				instance: instance_string.to_vec(),
-				benchmark: benchmark.clone(),
-				results: final_results,
-			});
+			if let Some(final_results) = final_results {
+				$batches.push($crate::BenchmarkBatch {
+					pallet: name_string.to_vec(),
+					instance: instance_string.to_vec(),
+					benchmark: benchmark.clone(),
+					results: final_results,
+				});
+			}
 		}
 	)
 }

@@ -70,7 +70,6 @@
 //! * [`Pallet::instantiate`] - The same as `instantiate_with_code` but instead of uploading new
 //! code an existing `code_hash` is supplied.
 //! * [`Pallet::call`] - Makes a call to an account, optionally transferring some balance.
-//! * [`Pallet::claim_surcharge`] - Evict a contract that cannot pay rent anymore.
 //!
 //! ## Usage
 //!
@@ -89,7 +88,6 @@ mod gas;
 mod benchmarking;
 mod exec;
 mod migration;
-mod rent;
 mod schedule;
 mod storage;
 mod wasm;
@@ -108,38 +106,31 @@ pub use crate::{
 use crate::{
 	exec::{Executable, Stack as ExecStack},
 	gas::GasMeter,
-	rent::Rent,
-	storage::{AliveContractInfo, ContractInfo, DeletedContract, Storage, TombstoneContractInfo},
+	storage::{ContractInfo, DeletedContract, Storage},
 	wasm::PrefabWasmModule,
 	weights::WeightInfo,
 };
 use frame_support::{
 	dispatch::Dispatchable,
-	traits::{Contains, Currency, Get, OnUnbalanced, Randomness, StorageVersion, Time},
-	weights::{GetDispatchInfo, PostDispatchInfo, Weight, WithPostDispatchInfo},
+	traits::{Contains, Currency, Get, Randomness, StorageVersion, Time},
+	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
 	Code, ContractAccessError, ContractExecResult, ContractInstantiateResult, GetStorageResult,
-	InstantiateReturnValue, RentProjectionResult,
+	InstantiateReturnValue,
 };
 use sp_core::{crypto::UncheckedFrom, Bytes};
-use sp_runtime::{
-	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
-	Perbill,
-};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::prelude::*;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -177,8 +168,7 @@ pub mod pallet {
 		///
 		/// The runtime **must** make sure that any allowed dispatchable makes sure that the
 		/// `total_balance` of the contract stays above [`Pallet::subsistence_threshold()`].
-		/// Otherwise contracts can clutter the storage with their tombstones without
-		/// deposting the correct amount of balance.
+		/// Otherwise users could clutter the storage with contracts.
 		///
 		/// # Stability
 		///
@@ -195,9 +185,6 @@ pub mod pallet {
 		/// be exploited to drive the runtime into a panic.
 		type CallFilter: Contains<<Self as frame_system::Config>::Call>;
 
-		/// Handler for rent payments.
-		type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
 		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
 		type WeightPrice: Convert<Weight, BalanceOf<Self>>;
@@ -213,56 +200,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type Schedule: Get<Schedule<Self>>;
 
-		/// Number of block delay an extrinsic claim surcharge has.
-		///
-		/// When claim surcharge is called by an extrinsic the rent is checked
-		/// for current_block - delay
+		/// The deposit that must be placed into the contract's account to instantiate it.
+		/// This is in **addition** to the [`pallet_balances::Pallet::ExistenialDeposit`].
+		/// The minimum balance for a contract's account can be queried using
+		/// [`Pallet::subsistence_threshold`].
 		#[pallet::constant]
-		type SignedClaimHandicap: Get<Self::BlockNumber>;
-
-		/// The minimum amount required to generate a tombstone.
-		#[pallet::constant]
-		type TombstoneDeposit: Get<BalanceOf<Self>>;
-
-		/// The balance every contract needs to deposit to stay alive indefinitely.
-		///
-		/// This is different from the [`Self::TombstoneDeposit`] because this only needs to be
-		/// deposited while the contract is alive. Costs for additional storage are added to
-		/// this base cost.
-		///
-		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
-		/// by making them pay rent. This creates an incentive to remove them early in order to save
-		/// rent.
-		#[pallet::constant]
-		type DepositPerContract: Get<BalanceOf<Self>>;
-
-		/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
-		///
-		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1
-		/// BU/byte/day, then a contract with 1,000,000 BU that uses 1,000 bytes of storage would
-		/// pay no rent. But if the balance reduced to 500,000 BU and the storage stayed the same at
-		/// 1,000, then it would pay 500 BU/day.
-		#[pallet::constant]
-		type DepositPerStorageByte: Get<BalanceOf<Self>>;
-
-		/// The balance a contract needs to deposit per storage item to stay alive indefinitely.
-		///
-		/// It works the same as [`Self::DepositPerStorageByte`] but for storage items.
-		#[pallet::constant]
-		type DepositPerStorageItem: Get<BalanceOf<Self>>;
-
-		/// The fraction of the deposit that should be used as rent per block.
-		///
-		/// When a contract hasn't enough balance deposited to stay alive indefinitely it needs
-		/// to pay per block for the storage it consumes that is not covered by the deposit.
-		/// This determines how high this rent payment is per block as a fraction of the deposit.
-		#[pallet::constant]
-		type RentFraction: Get<Perbill>;
-
-		/// Reward that is received by the party whose touch has led
-		/// to removal of a contract.
-		#[pallet::constant]
-		type SurchargeReward: Get<BalanceOf<Self>>;
+		type ContractDeposit: Get<BalanceOf<Self>>;
 
 		/// The type of the call stack determines the maximum nesting depth of contract calls.
 		///
@@ -439,50 +382,6 @@ pub mod pallet {
 			gas_meter
 				.into_dispatch_result(result, T::WeightInfo::instantiate(salt.len() as u32 / 1024))
 		}
-
-		/// Allows block producers to claim a small reward for evicting a contract. If a block
-		/// producer fails to do so, a regular users will be allowed to claim the reward.
-		///
-		/// In case of a successful eviction no fees are charged from the sender. However, the
-		/// reward is capped by the total amount of rent that was paid by the contract while
-		/// it was alive.
-		///
-		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
-		/// is returned and the sender is not eligible for the reward.
-		#[pallet::weight(T::WeightInfo::claim_surcharge(T::Schedule::get().limits.code_len / 1024))]
-		pub fn claim_surcharge(
-			origin: OriginFor<T>,
-			dest: T::AccountId,
-			aux_sender: Option<T::AccountId>,
-		) -> DispatchResultWithPostInfo {
-			let origin = origin.into();
-			let (signed, rewarded) = match (origin, aux_sender) {
-				(Ok(frame_system::RawOrigin::Signed(account)), None) => (true, account),
-				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => (false, aux_sender),
-				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
-			};
-
-			// Add some advantage for block producers (who send unsigned extrinsics) by
-			// adding a handicap: for signed extrinsics we use a slightly older block number
-			// for the eviction check. This can be viewed as if we pushed regular users back in
-			// past.
-			let handicap = if signed { T::SignedClaimHandicap::get() } else { Zero::zero() };
-
-			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_paid), code_len) => T::Currency::deposit_into_existing(
-					&rewarded,
-					T::SurchargeReward::get().min(rent_paid),
-				)
-				.map(|_| PostDispatchInfo {
-					actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
-					pays_fee: Pays::No,
-				})
-				.map_err(Into::into),
-				(None, code_len) => Err(Error::<T>::ContractNotEvictable
-					.with_weight(T::WeightInfo::claim_surcharge(code_len / 1024))),
-			}
-		}
 	}
 
 	#[pallet::event]
@@ -492,10 +391,7 @@ pub mod pallet {
 		/// Contract deployed by address at the specified address. \[deployer, contract\]
 		Instantiated(T::AccountId, T::AccountId),
 
-		/// Contract has been evicted and is now in tombstone state. \[contract\]
-		Evicted(T::AccountId),
-
-		/// Contract has been terminated without leaving a tombstone.
+		/// Contract has been removed.
 		/// \[contract, beneficiary\]
 		///
 		/// # Params
@@ -505,20 +401,9 @@ pub mod pallet {
 		///
 		/// # Note
 		///
-		/// The only way for a contract to be removed without a tombstone and emitting
-		/// this event is by calling `seal_terminate`.
+		/// The only way for a contract to be removed and emitting this event is by calling
+		/// `seal_terminate`.
 		Terminated(T::AccountId, T::AccountId),
-
-		/// Restoration of a contract has been successful.
-		/// \[restorer, dest, code_hash, rent_allowance\]
-		///
-		/// # Params
-		///
-		/// - `restorer`: Account ID of the restoring contract.
-		/// - `dest`: Account ID of the restored contract.
-		/// - `code_hash`: Code hash of the restored contract.
-		/// - `rent_allowance`: Rent allowance of the restored contract.
-		Restored(T::AccountId, T::AccountId, T::Hash, BalanceOf<T>),
 
 		/// Code with the specified hash has been stored. \[code_hash\]
 		CodeStored(T::Hash),
@@ -544,7 +429,7 @@ pub mod pallet {
 		/// A code with the specified hash was removed.
 		/// \[code_hash\]
 		///
-		/// This happens when the last contract that uses this code hash was removed or evicted.
+		/// This happens when the last contract that uses this code hash was removed.
 		CodeRemoved(T::Hash),
 	}
 
@@ -552,24 +437,13 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
-		/// An origin must be signed or inherent and auxiliary sender only provided on inherent.
-		InvalidSurchargeClaim,
-		/// Cannot restore from nonexisting or tombstone contract.
-		InvalidSourceContract,
-		/// Cannot restore to nonexisting or alive contract.
-		InvalidDestinationContract,
-		/// Tombstones don't match.
-		InvalidTombstone,
-		/// An origin TrieId written in the current block.
-		InvalidContractOrigin,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
 		OutputBufferTooSmall,
 		/// Performing the requested transfer would have brought the contract below
-		/// the subsistence threshold. No transfer is allowed to do this in order to allow
-		/// for a tombstone to be created. Use `seal_terminate` to remove a contract without
-		/// leaving a tombstone behind.
+		/// the subsistence threshold. No transfer is allowed to do this. Use `seal_terminate`
+		/// to recover a deposit.
 		BelowSubsistenceThreshold,
 		/// The newly created contract is below the subsistence threshold after executing
 		/// its contructor. No contracts are allowed to exist below that threshold.
@@ -583,18 +457,6 @@ pub mod pallet {
 		MaxCallDepthReached,
 		/// No contract was found at the specified address.
 		ContractNotFound,
-		/// A tombstone exist at the specified address.
-		///
-		/// Tombstone cannot be called. Anyone can use `seal_restore_to` in order to revive
-		/// the contract, though.
-		ContractIsTombstone,
-		/// The called contract does not have enough balance to pay for its storage.
-		///
-		/// The contract ran out of balance and is therefore eligible for eviction into a
-		/// tombstone. Anyone can evict the contract by submitting a `claim_surcharge`
-		/// extrinsic. Alternatively, a plain balance transfer can be used in order to
-		/// increase the contracts funds so that it can be called again.
-		RentNotPaid,
 		/// The code supplied to `instantiate_with_code` exceeds the limit specified in the
 		/// current schedule.
 		CodeTooLarge,
@@ -609,7 +471,7 @@ pub mod pallet {
 		/// The size defined in `T::MaxValueSize` was exceeded.
 		ValueTooLarge,
 		/// Termination of a contract is not allowed while the contract is already
-		/// on the call stack. Can be triggered by `seal_terminate` or `seal_restore_to.
+		/// on the call stack. Can be triggered by `seal_terminate`.
 		TerminatedWhileReentrant,
 		/// `seal_call` forwarded this contracts input. It therefore is no longer available.
 		InputForwarded,
@@ -625,15 +487,10 @@ pub mod pallet {
 		NoChainExtension,
 		/// Removal of a contract failed because the deletion queue is full.
 		///
-		/// This can happen when either calling [`Pallet::claim_surcharge`] or `seal_terminate`.
+		/// This can happen when calling `seal_terminate`.
 		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
 		/// Trying again during another block is the only way to resolve this issue.
 		DeletionQueueFull,
-		/// A contract could not be evicted because it has enough balance to pay rent.
-		///
-		/// This can be returned from [`Pallet::claim_surcharge`] because the target
-		/// contract has enough balance to pay for its rent.
-		ContractNotEvictable,
 		/// A storage modification exhausted the 32bit type that holds the storage size.
 		///
 		/// This can either happen when the accumulated storage in bytes is too large or
@@ -643,7 +500,7 @@ pub mod pallet {
 		DuplicateContract,
 		/// A contract self destructed in its constructor.
 		///
-		/// This can be triggered by a call to `seal_terminate` or `seal_restore_to`.
+		/// This can be triggered by a call to `seal_terminate`.
 		TerminatedInConstructor,
 		/// The debug message specified to `seal_debug_message` does contain invalid UTF-8.
 		DebugMessageInvalidUTF8,
@@ -730,9 +587,6 @@ where
 	///
 	/// It returns the execution result, account id and the amount of used weight.
 	///
-	/// If `compute_projection` is set to `true` the result also contains the rent projection.
-	/// This is optional because some non trivial and stateful work is performed to compute
-	/// the projection. See [`Self::rent_projection`].
 	///
 	/// # Note
 	///
@@ -746,9 +600,8 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		compute_projection: bool,
 		debug: bool,
-	) -> ContractInstantiateResult<T::AccountId, T::BlockNumber> {
+	) -> ContractInstantiateResult<T::AccountId> {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let schedule = T::Schedule::get();
 		let executable = match code {
@@ -776,18 +629,7 @@ where
 			&salt,
 			debug_message.as_mut(),
 		)
-		.and_then(|(account_id, result)| {
-			let rent_projection = if compute_projection {
-				Some(
-					Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
-						.map_err(|_| <Error<T>>::NewContractNotFunded)?,
-				)
-			} else {
-				None
-			};
-
-			Ok(InstantiateReturnValue { result, account_id, rent_projection })
-		});
+		.and_then(|(account_id, result)| Ok(InstantiateReturnValue { result, account_id }));
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),
 			gas_consumed: gas_meter.gas_consumed(),
@@ -798,19 +640,11 @@ where
 
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: [u8; 32]) -> GetStorageResult {
-		let contract_info = ContractInfoOf::<T>::get(&address)
-			.ok_or(ContractAccessError::DoesntExist)?
-			.get_alive()
-			.ok_or(ContractAccessError::IsTombstone)?;
+		let contract_info =
+			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
 		let maybe_value = Storage::<T>::read(&contract_info.trie_id, &key);
 		Ok(maybe_value)
-	}
-
-	/// Query how many blocks the contract stays alive given that the amount endowment
-	/// and consumed storage does not change.
-	pub fn rent_projection(address: T::AccountId) -> RentProjectionResult<T::BlockNumber> {
-		Rent::<T, PrefabWasmModule<T>>::compute_projection(&address)
 	}
 
 	/// Determine the address of a contract,
@@ -837,14 +671,13 @@ where
 	}
 
 	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit)
-	/// by the tombstone deposit, required for leaving a tombstone.
+	/// by the contract deposit. It is the minimum balance any contract must hold.
 	///
-	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
-	/// than the subsistence threshold in order to guarantee that a tombstone is created.
-	///
-	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
+	/// Any contract initiated balance transfer mechanism cannot make the balance lower
+	/// than the subsistence threshold. The only way to recover the balance is to remove
+	/// contract using `seal_terminate`.
 	pub fn subsistence_threshold() -> BalanceOf<T> {
-		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
+		T::Currency::minimum_balance().saturating_add(T::ContractDeposit::get())
 	}
 
 	/// The in-memory size in bytes of the data structure associated with each contract.

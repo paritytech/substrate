@@ -26,14 +26,12 @@
 
 use crate::Config;
 use frame_support::traits::Get;
-use pwasm_utils::{
-	parity_wasm::{
-		builder,
-		elements::{
-			self, BlockType, CustomSection, FuncBody, Instruction, Instructions, Section, ValueType,
-		},
+use pwasm_utils::parity_wasm::{
+	builder,
+	elements::{
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+		Section, ValueType,
 	},
-	stack_height::inject_limiter,
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
@@ -241,9 +239,8 @@ where
 
 		let mut code = contract.build();
 
-		// Inject stack height metering
 		if def.inject_stack_metering {
-			code = inject_limiter(code, T::Schedule::get().limits.stack_height).unwrap();
+			code = inject_stack_metering::<T>(code);
 		}
 
 		let code = code.to_bytes().unwrap();
@@ -257,6 +254,34 @@ where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
+	/// Uses the supplied wasm module and instruments it when requested.
+	pub fn instrumented(code: &[u8], inject_gas: bool, inject_stack: bool) -> Self {
+		let module = {
+			let mut module = Module::from_bytes(code).unwrap();
+			if inject_gas {
+				module = inject_gas_metering::<T>(module);
+			}
+			if inject_stack {
+				module = inject_stack_metering::<T>(module);
+			}
+			module
+		};
+		let limits = module
+			.import_section()
+			.unwrap()
+			.entries()
+			.iter()
+			.find_map(|e| if let External::Memory(mem) = e.external() { Some(mem) } else { None })
+			.unwrap()
+			.limits()
+			.clone();
+		let code = module.to_bytes().unwrap();
+		let hash = T::Hashing::hash(&code);
+		let memory =
+			ImportedMemory { min_pages: limits.initial(), max_pages: limits.maximum().unwrap() };
+		Self { code, hash, memory: Some(memory) }
+	}
+
 	/// Creates a wasm module with an empty `call` and `deploy` function and nothing else.
 	pub fn dummy() -> Self {
 		ModuleDefinition::default().into()
@@ -518,4 +543,15 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	T::Schedule::get().limits.memory_pages
+}
+
+fn inject_gas_metering<T: Config>(module: Module) -> Module {
+	let schedule = T::Schedule::get();
+	let gas_rules = schedule.rules(&module);
+	pwasm_utils::inject_gas_counter(module, &gas_rules, "seal0").unwrap()
+}
+
+fn inject_stack_metering<T: Config>(module: Module) -> Module {
+	let height = T::Schedule::get().limits.stack_height;
+	pwasm_utils::stack_height::inject_limiter(module, height).unwrap()
 }
