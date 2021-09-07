@@ -84,6 +84,7 @@ where
 	<P::Block as BlockT>::Hash: Unpin,
 {
 	async fn submit_extrinsic(&self, ext: Bytes) -> JsonRpcResult<TxHash<P>> {
+		log::info!("[submit_extrinsic] hello");
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
 			Err(err) => return Err(JsonRpseeError::to_call_error(err)),

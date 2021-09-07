@@ -1,95 +1,108 @@
-// // This file is part of Substrate.
+// This file is part of Substrate.
 
-// // Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
-// // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
-// // This program is free software: you can redistribute it and/or modify
-// // it under the terms of the GNU General Public License as published by
-// // the Free Software Foundation, either version 3 of the License, or
-// // (at your option) any later version.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 
-// // This program is distributed in the hope that it will be useful,
-// // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// // GNU General Public License for more details.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 
-// // You should have received a copy of the GNU General Public License
-// // along with this program. If not, see <https://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// use super::*;
+use super::*;
 
-// use assert_matches::assert_matches;
-// use codec::Encode;
-// use futures::executor;
-// use sc_transaction_pool::{BasicPool, FullChainApi};
-// use sp_core::{
-// 	blake2_256,
-// 	crypto::{CryptoTypePublicPair, Pair, Public},
-// 	ed25519,
-// 	hexdisplay::HexDisplay,
-// 	sr25519,
-// 	testing::{ED25519, SR25519},
-// 	H256,
-// };
-// use sp_keystore::testing::KeyStore;
-// use std::{mem, sync::Arc};
-// use substrate_test_runtime_client::{
-// 	self,
-// 	runtime::{Block, Extrinsic, SessionKeys, Transfer},
-// 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
-// };
+use assert_matches::assert_matches;
+use codec::Encode;
+use futures::executor;
+use jsonrpsee::types::v2::response::JsonRpcResponse;
+use sc_transaction_pool::{BasicPool, FullChainApi};
+use sp_core::{
+	blake2_256,
+	crypto::{CryptoTypePublicPair, Pair, Public},
+	ed25519,
+	hexdisplay::HexDisplay,
+	sr25519,
+	testing::{ED25519, SR25519},
+	H256,
+};
+use sp_keystore::testing::KeyStore;
+use std::{mem, sync::Arc};
+use substrate_test_runtime_client::{
+	self,
+	runtime::{Block, Extrinsic, SessionKeys, Transfer},
+	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
+};
+use serde_json::value::to_raw_value;
 
-// fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
-// 	let tx =
-// 		Transfer { amount: Default::default(), nonce, from: sender.into(), to: Default::default() };
-// 	tx.into_signed_tx()
-// }
+fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
+	let tx =
+		Transfer { amount: Default::default(), nonce, from: sender.into(), to: Default::default() };
+	tx.into_signed_tx()
+}
 
-// type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;
+type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;
 
-// struct TestSetup {
-// 	pub client: Arc<Client<Backend>>,
-// 	pub keystore: Arc<KeyStore>,
-// 	pub pool: Arc<FullTransactionPool>,
-// }
+struct TestSetup {
+	pub client: Arc<Client<Backend>>,
+	pub keystore: Arc<KeyStore>,
+	pub pool: Arc<FullTransactionPool>,
+}
 
-// impl Default for TestSetup {
-// 	fn default() -> Self {
-// 		let keystore = Arc::new(KeyStore::new());
-// 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
-// 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
+impl Default for TestSetup {
+	fn default() -> Self {
+		let keystore = Arc::new(KeyStore::new());
+		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let pool =
-// 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
-// 		TestSetup { client, keystore, pool }
-// 	}
-// }
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
+		TestSetup { client, keystore, pool }
+	}
+}
 
-// impl TestSetup {
-// 	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
-// 		Author {
-// 			client: self.client.clone(),
-// 			pool: self.pool.clone(),
-// 			keystore: self.keystore.clone(),
-// 			deny_unsafe: DenyUnsafe::No,
-// 			executor: SubscriptionTaskExecutor::default()
-// 		}
-// 	}
-// }
+impl TestSetup {
+	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
+		Author {
+			client: self.client.clone(),
+			pool: self.pool.clone(),
+			keystore: self.keystore.clone(),
+			deny_unsafe: DenyUnsafe::No,
+			executor: Arc::new(SubscriptionTaskExecutor::default()),
+		}
+	}
+}
 
-// #[test]
-// fn submit_transaction_should_not_cause_error() {
-// 	let p = TestSetup::default().author();
-// 	let xt = uxt(AccountKeyring::Alice, 1).encode();
-// 	let h: H256 = blake2_256(&xt).into();
-
-// 	assert_matches!(
-// 		executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
-// 		Ok(h2) if h == h2
-// 	);
-// 	assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
-// }
+#[tokio::test]
+async fn submit_transaction_should_not_cause_error() {
+	env_logger::init();
+	let p = TestSetup::default().author();
+	let api = p.into_rpc();
+	let xt = uxt(AccountKeyring::Alice, 1).encode();
+	let h: H256 = blake2_256(&xt).into();
+	let params = to_raw_value(&xt.clone()).unwrap();
+	let o = api.call("author_submitExtrinsic", Some(params)).await.unwrap();
+	log::debug!("submitExtrinsic result: {:?}", o);
+	let poo: JsonRpcResponse<H256> = serde_json::from_str(&o).unwrap();
+	assert_eq!(
+		poo.result,
+		h,
+	);
+	// let params_again = to_raw_value(&[xt]).unwrap();
+	// assert!(api.call("submitExtrinsic", Some(params_again)).is_err().await.unwrap());
+	// assert_matches!(
+	// 	executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
+	// 	Ok(h2) if h == h2
+	// );
+	// assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
+}
 
 // #[test]
 // fn submit_rich_transaction_should_not_cause_error() {

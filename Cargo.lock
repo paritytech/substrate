@@ -2783,28 +2783,28 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-proc-macros",
+ "jsonrpsee-types",
  "jsonrpsee-utils",
- "jsonrpsee-ws-client 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
 ]
 
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.16",
  "hyper",
  "hyper-rustls",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types",
  "jsonrpsee-utils",
  "log",
  "serde",
@@ -2817,13 +2817,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "futures-channel",
  "futures-util",
  "globset",
  "hyper",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types",
  "jsonrpsee-utils",
  "lazy_static",
  "log",
@@ -2838,52 +2838,21 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f37924e16300e249a52a22cabb5632f846dc9760b39355f5e8bc70cd23dc6300"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "Inflector",
  "bae",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "jsonrpsee-proc-macros"
-version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
-dependencies = [
- "Inflector",
- "bae",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "jsonrpsee-types"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d67724d368c59e08b557a516cf8fcc51100e7a708850f502e1044b151fe89788"
-dependencies = [
- "async-trait",
- "beef",
- "futures-channel",
- "futures-util",
- "hyper",
  "log",
- "serde",
- "serde_json",
- "soketto 0.6.0",
- "thiserror",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
 name = "jsonrpsee-types"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2901,13 +2870,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "beef",
  "futures-channel",
  "futures-util",
  "hyper",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types",
  "log",
  "parking_lot 0.11.1",
  "rand 0.8.4",
@@ -2921,33 +2890,12 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e2834b6e7f57ce9a4412ed4d6dc95125d2c8612e68f86b9d9a07369164e4198"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.16",
- "jsonrpsee-types 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log",
- "pin-project 1.0.5",
- "rustls",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "soketto 0.6.0",
- "thiserror",
- "url",
-]
-
-[[package]]
-name = "jsonrpsee-ws-client"
-version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
-dependencies = [
- "async-trait",
- "fnv",
- "futures 0.3.16",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types",
  "log",
  "pin-project 1.0.5",
  "rustls",
@@ -2965,11 +2913,11 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#ffa504e2b2cf991187ffd4dadb971841df1d2ee8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=dp-debug-substrate-tests#02343c24f77bfada73fdf4e5ddbd617a728260be"
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types",
  "jsonrpsee-utils",
  "log",
  "rustc-hash",
@@ -6567,8 +6515,8 @@ name = "remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
  "env_logger 0.9.0",
- "jsonrpsee-proc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpsee-ws-client 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-proc-macros",
+ "jsonrpsee-ws-client",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
@@ -7580,6 +7528,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
+ "env_logger 0.9.0",
  "futures 0.3.16",
  "hash-db",
  "jsonrpsee",
