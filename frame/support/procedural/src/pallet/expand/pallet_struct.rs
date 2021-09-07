@@ -214,8 +214,12 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 						implemented by the runtime")
 			}
 
-			fn crate_name() -> &'static str {
-				#frame_support::crate_to_crate_name!()
+			fn module_name() -> &'static str {
+				<
+					<T as #frame_system::Config>::PalletInfo as #frame_support::traits::PalletInfo
+				>::module_name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
 			}
 
 			fn crate_version() -> #frame_support::traits::CrateVersion {

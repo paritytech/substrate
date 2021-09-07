@@ -20,7 +20,7 @@
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 
-/// Provides information about the pallet setup in the runtime.
+/// Provides information about the pallet itself and its setup in the runtime.
 ///
 /// An implementor should be able to provide information about each pallet that
 /// is configured in `construct_runtime!`.
@@ -29,22 +29,23 @@ pub trait PalletInfo {
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
-	/// Convert the given pallet `P` into its containing crate name.
-	fn crate_name<P: 'static>() -> Option<&'static str>;
+	/// Convert the given pallet `P` into its Rust module name.
+	fn module_name<P: 'static>() -> Option<&'static str>;
 	/// Convert the given pallet `P` into its containing crate version.
 	fn crate_version<P: 'static>() -> Option<CrateVersion>;
 }
 
-/// Provides information about the pallet setup in the runtime.
+/// Provides information about the pallet itself and its setup in the runtime.
 ///
-/// Access the information provided by [`PalletInfo`] for a specific pallet.
+/// Declare some information and access the information provided by [`PalletInfo`] for a specific
+/// pallet.
 pub trait PalletInfoAccess {
 	/// Index of the pallet as configured in the runtime.
 	fn index() -> usize;
 	/// Name of the pallet as configured in the runtime.
 	fn name() -> &'static str;
-	/// Name of the crate containing the pallet.
-	fn crate_name() -> &'static str;
+	/// Name of the Rust module containing the pallet.
+	fn module_name() -> &'static str;
 	/// Version of the crate containing the pallet.
 	fn crate_version() -> CrateVersion;
 }

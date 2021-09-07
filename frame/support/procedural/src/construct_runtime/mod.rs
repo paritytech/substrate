@@ -239,6 +239,7 @@ fn decl_pallet_runtime_setup(
 ) -> TokenStream2 {
 	let names = pallet_declarations.iter().map(|d| &d.name).collect::<Vec<_>>();
 	let name_strings = pallet_declarations.iter().map(|d| d.name.to_string());
+	let module_names = pallet_declarations.iter().map(|d| d.path.module_name());
 	let indices = pallet_declarations.iter().map(|pallet| pallet.index as usize);
 	let pallet_structs = pallet_declarations.iter().map(|pallet| {
 		let path = &pallet.path;
@@ -277,13 +278,11 @@ fn decl_pallet_runtime_setup(
 				None
 			}
 
-			fn crate_name<P: 'static>() -> Option<&'static str> {
+			fn module_name<P: 'static>() -> Option<&'static str> {
 				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
 				#(
 					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
-						return Some(
-							<#pallet_structs as #scrate::traits::PalletInfoAccess>::crate_name()
-						)
+						return Some(#module_names)
 					}
 				)*
 

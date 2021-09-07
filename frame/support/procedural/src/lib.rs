@@ -21,7 +21,6 @@
 
 mod clone_no_bound;
 mod construct_runtime;
-mod crate_name;
 mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
@@ -477,13 +476,6 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 #[proc_macro]
 pub fn crate_to_crate_version(input: TokenStream) -> TokenStream {
 	crate_version::crate_to_crate_version(input)
-		.unwrap_or_else(|e| e.to_compile_error())
-		.into()
-}
-
-#[proc_macro]
-pub fn crate_to_crate_name(input: TokenStream) -> TokenStream {
-	crate_name::crate_to_crate_name(input)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }

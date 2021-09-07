@@ -49,7 +49,7 @@ impl frame_support::traits::PalletInfo for PanicPalletInfo {
 	fn name<P: 'static>() -> Option<&'static str> {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}
-	fn crate_name<P: 'static>() -> Option<&'static str> {
+	fn module_name<P: 'static>() -> Option<&'static str> {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}
 	fn crate_version<P: 'static>() -> Option<frame_support::traits::CrateVersion> {

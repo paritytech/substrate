@@ -2141,8 +2141,12 @@ macro_rules! decl_module {
 						implemented by the runtime")
 			}
 
-			fn crate_name() -> &'static str {
-				$crate::crate_to_crate_name!()
+			fn module_name() -> &'static str {
+				<
+					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
+				>::module_name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
 			}
 
 			fn crate_version() -> $crate::traits::CrateVersion {
@@ -2771,10 +2775,10 @@ mod tests {
 
 			None
 		}
-		fn crate_name<P: 'static>() -> Option<&'static str> {
+		fn module_name<P: 'static>() -> Option<&'static str> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some(frame_support::crate_to_crate_name!())
+				return Some("tests")
 			}
 
 			None
