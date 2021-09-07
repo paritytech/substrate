@@ -30,9 +30,12 @@ struct Opt {
 	/// Where to write the output.
 	output: PathBuf,
 
+	/// The total issuance of the currency used to create `VoteWeight`.
 	#[structopt(short, long)]
 	total_issuance: u128,
 
+	/// The minimum account balance (i.e. existential deposit) for the currency used to create
+	/// `VoteWeight`.
 	#[structopt(short, long)]
 	minimum_balance: u128,
 }
