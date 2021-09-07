@@ -105,13 +105,13 @@ load_our_crates() {
     else
       our_crates+=("$crate")
     fi
-  done < <(jq -r '
+  done < <(cargo metadata --quiet --format-version=1 | jq -r '
     . as $in |
     paths |
     select(.[-1]=="source" and . as $p | $in | getpath($p)==null) as $path |
     del($path[-1]) as $path |
     $in | getpath($path + ["name"])
-  ' < <(cargo metadata --quiet --format-version=1))
+  ')
 }
 load_our_crates
 
@@ -171,14 +171,14 @@ match_their_crates() {
         exit 1
       ;;
     esac
-  done < <(jq -r '
+  done < <(cargo metadata --quiet --format-version=1 | jq -r '
     . as $in |
     paths(select(type=="string")) |
     select(.[-1]=="source") as $source_path |
     del($source_path[-1]) as $path |
     [$in | getpath($path + ["name"]), getpath($path + ["source"])] |
     .[]
-  ' < <(cargo metadata --quiet --format-version=1))
+  ')
 
   if [ "$crates_not_found" ]; then
     echo "Errors during crate matching"
