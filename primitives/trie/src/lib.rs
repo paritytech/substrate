@@ -37,7 +37,7 @@ pub use memory_db::KeyFunction;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 use sp_std::{borrow::Borrow, boxed::Box, fmt, marker::PhantomData, vec::Vec};
-pub use storage_proof::{CompactProof, StorageProof};
+pub use storage_proof::{CompactProof, StorageProof, state_version_encoded_size};
 /// Trie codec reexport, mainly child trie support
 /// for trie compact proof.
 pub use trie_codec::{decode_compact, encode_compact, Error as CompactProofError};

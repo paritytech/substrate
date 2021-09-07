@@ -151,9 +151,9 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// encoded proof.
 	pub fn estimate_encoded_size(&self) -> usize {
 		let inner = self.inner.read();
-		inner.encoded_size +
-			codec::Compact(inner.records.len() as u32).encoded_size() +
-			inner.state_version.encoded_size()
+		inner.encoded_size
+			+ codec::Compact(inner.records.len() as u32).encoded_size()
+			+ sp_trie::state_version_encoded_size(inner.state_version)
 	}
 
 	/// Convert into a [`StorageProof`].
@@ -230,7 +230,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.get(key) {
-			return Ok(v)
+			return Ok(v);
 		}
 
 		let backend_value = self.backend.get(key, prefix)?;

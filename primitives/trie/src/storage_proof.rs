@@ -17,6 +17,7 @@
 
 use crate::Layout;
 use codec::{Decode, Encode};
+pub use decode_encode_impl::state_version_encoded_size;
 use hash_db::{HashDB, Hasher};
 use sp_core::state_version::StateVersion;
 use sp_std::vec::Vec;
@@ -28,47 +29,144 @@ use sp_std::vec::Vec;
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StorageProof {
-	// TODO decode no more bytes to V0 for compatibility  and remove pub(crate)
-	pub(crate) trie_nodes: Vec<Vec<u8>>,
 	pub(crate) state_version: StateVersion,
+	pub(crate) trie_nodes: Vec<Vec<u8>>,
 }
 
 /// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CompactProof {
-	pub encoded_nodes: Vec<Vec<u8>>,
 	pub state_version: StateVersion,
+	pub encoded_nodes: Vec<Vec<u8>>,
 }
 
-mod decode_impl {
+mod decode_encode_impl {
 	use super::*;
-	use codec::{Error, Input};
+	use codec::{Compact, Error, Input, Output};
+
+	const STATE_V0: &'static [u8] = &[3, 0]; // This is an invalid compact size encoding.
+	const STATE_V1: &'static [u8] = &[7, 1]; // or any correctly sized number of node.
+
+	/// Prefix another input with a byte.
+	struct PrefixInput<'a, T> {
+		prefix1: Option<u8>,
+		prefix2: Option<u8>,
+		input: &'a mut T,
+	}
+
+	struct StateVersionInProof(StateVersion);
+
+	impl<'a, T: 'a + Input> Input for PrefixInput<'a, T> {
+		fn remaining_len(&mut self) -> Result<Option<usize>, Error> {
+			let len = if let Some(len) = self.input.remaining_len()? {
+				Some(len.saturating_add(
+					self.prefix1.iter().count().saturating_add(self.prefix2.iter().count()),
+				))
+			} else {
+				None
+			};
+			Ok(len)
+		}
+
+		fn read(&mut self, buffer: &mut [u8]) -> Result<(), Error> {
+			let mut buff_i = 0;
+			if buffer.is_empty() {
+				return Ok(());
+			}
+			match self.prefix1.take() {
+				Some(v) => {
+					buffer[buff_i] = v;
+					buff_i += 1;
+					if buffer.is_empty() {
+						return Ok(());
+					}
+				}
+				_ => (),
+			}
+
+			match self.prefix2.take() {
+				Some(v) => {
+					buffer[buff_i] = v;
+					buff_i += 1;
+					self.input.read(&mut buffer[buff_i..])
+				}
+				_ => self.input.read(&mut buffer[buff_i..]),
+			}
+		}
+	}
+
+	fn decode_inner<I: Input>(input: &mut I) -> Result<(StateVersion, Vec<Vec<u8>>), Error> {
+		let prefix1 = input.read_byte()?;
+		let (state_version, mut input) = if prefix1 == STATE_V0[0] || prefix1 == STATE_V1[0] {
+			let prefix2 = input.read_byte()?;
+			if prefix2 == STATE_V0[1] {
+				(StateVersion::V0, PrefixInput { prefix1: None, prefix2: None, input })
+			} else if prefix2 == STATE_V1[1] {
+				let threshold = Compact::<u32>::decode(input)?.0;
+				(
+					StateVersion::V1 { threshold },
+					PrefixInput { prefix1: None, prefix2: None, input },
+				)
+			} else {
+				(
+					Default::default(),
+					PrefixInput { prefix1: Some(prefix1), prefix2: Some(prefix2), input },
+				)
+			}
+		} else {
+			(Default::default(), PrefixInput { prefix1: None, prefix2: Some(prefix1), input })
+		};
+		let trie_nodes: Vec<Vec<u8>> = Decode::decode(&mut input)?;
+		Ok((state_version, trie_nodes))
+	}
+
+	impl Encode for StateVersionInProof {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+			if self.0 != Default::default() {
+				match self.0 {
+					StateVersion::V0 => dest.write(STATE_V0),
+					StateVersion::V1 { threshold } => {
+						dest.write(STATE_V1);
+						Compact(threshold).encode_to(dest);
+					}
+				}
+			}
+		}
+	}
+
 	impl Decode for StorageProof {
 		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-			let trie_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
-			let state_version = if let Ok(Some(0)) = input.remaining_len() {
-				// for compatibility with existing proof decoded from sized buffer
-				StateVersion::V0
-			} else {
-				Decode::decode(input)?
-			};
+			let (state_version, trie_nodes) = decode_inner(input)?;
 			Ok(StorageProof { trie_nodes, state_version })
 		}
 	}
 
 	impl Decode for CompactProof {
 		fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-			let encoded_nodes: Vec<Vec<u8>> = Decode::decode(input)?;
-			let state_version = if let Ok(Some(0)) = input.remaining_len() {
-				// for compatibility with existing proof decoded from sized buffer
-				StateVersion::V0
-			} else {
-				Decode::decode(input)?
-			};
+			let (state_version, encoded_nodes) = decode_inner(input)?;
 			Ok(CompactProof { encoded_nodes, state_version })
 		}
+	}
+
+	impl Encode for StorageProof {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+			StateVersionInProof(self.state_version).encode_to(dest);
+			self.trie_nodes.encode_to(dest);
+		}
+	}
+
+	impl Encode for CompactProof {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+			StateVersionInProof(self.state_version).encode_to(dest);
+			self.encoded_nodes.encode_to(dest);
+		}
+	}
+
+	/// Utility to get state version size encoded in proof.
+	pub fn state_version_encoded_size(state_version: StateVersion) -> usize {
+		StateVersionInProof(state_version).encoded_size()
 	}
 }
 
@@ -124,8 +222,8 @@ impl StorageProof {
 			.into_iter()
 			.flat_map(|proof| {
 				debug_assert!(
-					state_version == &StateVersion::default() ||
-						state_version == &proof.state_version
+					state_version == &StateVersion::default()
+						|| state_version == &proof.state_version
 				);
 				*state_version = proof.state_version;
 				proof.iter_nodes()
