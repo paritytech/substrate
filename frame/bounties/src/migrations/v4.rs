@@ -15,12 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{
-	traits::{Get, GetStorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX},
-	weights::Weight,
-};
-use sp_core::hexdisplay::HexDisplay;
-use sp_io::hashing::twox_128;
+use frame_support::{storage::StoragePrefixedMap, traits::{Get, GetStorageVersion, PalletInfoAccess, STORAGE_VERSION_STORAGE_KEY_POSTFIX, StorageVersion}, weights::Weight};
+use sp_std::str;
+use sp_core::{hexdisplay::HexDisplay, twox_128};
+use sp_io::storage;
+
+use crate as pallet_bounties;
 
 /// Migrate the entire storage of this pallet to a new prefix.
 ///
@@ -31,7 +31,7 @@ use sp_io::hashing::twox_128;
 /// The migration will look into the storage version in order not to trigger a migration on an up
 /// to date storage. Thus the on chain storage version must be less than 4 in order to trigger the
 /// migration.
-pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
+pub fn migrate<T: pallet_bounties::Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
 	old_pallet_name: N,
 	new_pallet_name: N,
 ) -> Weight {
@@ -54,11 +54,39 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
 	);
 
 	if on_chain_storage_version < 4 {
-		log::info!(target: "runtime::bounties", "new prefix: {}", new_pallet_name);
-		frame_support::storage::migration::move_pallet(
+		let storage_prefix = pallet_bounties::BountyCount::<T>::storage_prefix();
+		frame_support::storage::migration::move_storage_from_pallet(
+			storage_prefix,
 			old_pallet_name.as_bytes(),
 			new_pallet_name.as_bytes(),
 		);
+		log_migration("migration", storage_prefix, old_pallet_name, new_pallet_name);
+
+		let storage_prefix = pallet_bounties::Bounties::<T>::storage_prefix();
+		frame_support::storage::migration::move_storage_from_pallet(
+			storage_prefix,
+			old_pallet_name.as_bytes(),
+			new_pallet_name.as_bytes(),
+		);
+		log_migration("migration", storage_prefix, old_pallet_name, new_pallet_name);
+
+		let storage_prefix = pallet_bounties::BountyDescriptions::<T>::storage_prefix();
+		frame_support::storage::migration::move_storage_from_pallet(
+			storage_prefix,
+			old_pallet_name.as_bytes(),
+			new_pallet_name.as_bytes(),
+		);
+		log_migration("migration", storage_prefix, old_pallet_name, new_pallet_name);
+
+		let storage_prefix = pallet_bounties::BountyApprovals::<T>::storage_prefix();
+		frame_support::storage::migration::move_storage_from_pallet(
+			storage_prefix,
+			old_pallet_name.as_bytes(),
+			new_pallet_name.as_bytes(),
+		);
+		log_migration("migration", storage_prefix, old_pallet_name, new_pallet_name);
+
+		StorageVersion::new(4).put::<P>();
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
 		log::warn!(
@@ -74,41 +102,42 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion, N: AsRef<str>>(
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N: AsRef<str>>(
+pub fn pre_migration<T: pallet_bounties::Config, P: GetStorageVersion + 'static, N: AsRef<str>>(
 	old_pallet_name: N,
 	new_pallet_name: N,
 ) {
 	let old_pallet_name = old_pallet_name.as_ref();
 	let new_pallet_name = new_pallet_name.as_ref();
-	log::info!(
-		"pre-migration bounties, old prefix = {}, new prefix = {}",
-		old_pallet_name,
-		new_pallet_name,
-	);
+	let storage_prefix_bounties_count = pallet_bounties::BountyCount::<T>::storage_prefix();
+	let storage_prefix_bounties = pallet_bounties::Bounties::<T>::storage_prefix();
+	let storage_prefix_bounties_description = pallet_bounties::BountyDescriptions::<T>::storage_prefix();
+	let storage_prefix_bounties_approvals = pallet_bounties::BountyApprovals::<T>::storage_prefix();
+	log_migration("pre-migration", storage_prefix_bounties_count, old_pallet_name, new_pallet_name);
+	log_migration("pre-migration", storage_prefix_bounties, old_pallet_name, new_pallet_name);
+	log_migration("pre-migration", storage_prefix_bounties_description, old_pallet_name, new_pallet_name);
+	log_migration("pre-migration", storage_prefix_bounties_approvals, old_pallet_name, new_pallet_name);
 
 	// the next key must exist, and start with the hash of old prefix.
 	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	let next_key = sp_io::storage::next_key(&old_pallet_prefix).unwrap();
-	assert!(next_key.starts_with(&old_pallet_prefix));
+	let old_bounties_count_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties_count)[..]].concat();
+	let old_bounties_key= [&old_pallet_prefix, &twox_128(storage_prefix_bounties)[..]].concat();
+	let old_bounties_description_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties_description)[..]].concat();
+	let old_bounties_approvals_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties_approvals)[..]].concat();
+	assert!(storage::next_key(&old_bounties_count_key).map_or(true, |next_key| next_key.starts_with(&old_bounties_key)));
 
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
-	const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
-	let pallet_version_key =
-		[&new_pallet_prefix, &twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
 	let storage_version_key =
 		[&new_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
 
 	// ensure nothing is stored in the new prefix.
 	assert!(
-		sp_io::storage::next_key(&new_pallet_prefix).map_or(
+		storage::next_key(&new_pallet_prefix).map_or(
 			// either nothing is there
 			true,
 			// or we ensure that it has no common prefix with twox_128(new),
 			// or isn't the pallet version that is already stored using the pallet name
 			|next_key| {
-				!next_key.starts_with(&new_pallet_prefix) ||
-					next_key == pallet_version_key ||
-					next_key == storage_version_key
+				!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
 			},
 		),
 		"unexpected next_key({}) = {:?}",
@@ -122,13 +151,41 @@ pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N:
 /// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn post_migration<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N) {
-	log::info!("post-migration bounties");
+pub fn post_migration<T: pallet_bounties::Config, P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_pallet_name: N) {
+	let old_pallet_name = old_pallet_name.as_ref();
+	let new_pallet_name = new_pallet_name.as_ref();
+	let storage_prefix_bounties_count = pallet_bounties::BountyCount::<T>::storage_prefix();
+	let storage_prefix_bounties = pallet_bounties::Bounties::<T>::storage_prefix();
+	let storage_prefix_bounties_description = pallet_bounties::BountyDescriptions::<T>::storage_prefix();
+	let storage_prefix_bounties_approvals = pallet_bounties::BountyApprovals::<T>::storage_prefix();
+	log_migration("post-migration", storage_prefix_bounties_count, old_pallet_name, new_pallet_name);
+	log_migration("post-migration", storage_prefix_bounties, old_pallet_name, new_pallet_name);
+	log_migration("post-migration", storage_prefix_bounties_description, old_pallet_name, new_pallet_name);
+	log_migration("post-migration", storage_prefix_bounties_approvals, old_pallet_name, new_pallet_name);
 
-	let old_pallet_name = old_pallet_name.as_ref().as_bytes();
-	let old_pallet_prefix = twox_128(old_pallet_name);
-	// Assert that nothing remains at the old prefix
-	assert!(sp_io::storage::next_key(&old_pallet_prefix)
-		.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix)));
+	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
+	let old_bounties_count_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties_count)[..]].concat();
+	let old_bounties_key= [&old_pallet_prefix, &twox_128(storage_prefix_bounties)[..]].concat();
+	let old_bounties_description_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties_description)[..]].concat();
+	let old_bounties_approvals_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties_approvals)[..]].concat();
+
+	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
+	let new_bounties_count_key = [&new_pallet_prefix, &twox_128(storage_prefix_bounties_count)[..]].concat();
+	let new_bounties_key = [&new_pallet_prefix, &twox_128(storage_prefix_bounties)[..]].concat();
+	let new_bounties_description_key = [&new_pallet_prefix, &twox_128(storage_prefix_bounties_description)[..]].concat();
+	let new_bounties_approvals_key = [&new_pallet_prefix, &twox_128(storage_prefix_bounties_approvals)[..]].concat();
+	assert!(storage::next_key(&new_bounties_count_key));
+
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
+}
+
+fn log_migration(stage: &str, storage_prefix: &[u8], old_pallet_name: &str, new_pallet_name: &str) {
+	log::info!(
+		target: "runtime::bounties",
+		"{} prefix of storage '{}': '{}' ==> '{}'",
+		stage,
+		str::from_utf8(storage_prefix).unwrap_or("<Invalid UTF8>"),
+		old_pallet_name,
+		new_pallet_name,
+	);
 }

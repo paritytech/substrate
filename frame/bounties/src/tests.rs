@@ -936,6 +936,43 @@ fn extend_expiry() {
 	});
 }
 
+/*
+#[test]
+fn test_migration_v4() {
+	let mut s = Storage::default();
+
+	//let reason1 = BlakeTwo256::hash(b"");
+	//let hash1 = BlakeTwo256::hash_of(&(reason1, 10u64));
+
+	let tip = OpenTip::<u128, u64, u64, H256> {
+		reason: reason1,
+		who: 10,
+		finder: 20,
+		deposit: 30,
+		closes: Some(13),
+		tips: vec![(40, 50), (60, 70)],
+		finders_fee: true,
+	};
+
+	let data = vec![
+		(pallet_tips::Reasons::<Test>::hashed_key_for(hash1), reason1.encode().to_vec()),
+		(pallet_tips::Tips::<Test>::hashed_key_for(hash1), tip.encode().to_vec()),
+	];
+
+	s.top = data.into_iter().collect();
+
+	sp_io::TestExternalities::new(s).execute_with(|| {
+		use frame_support::traits::PalletInfo;
+		let old_pallet_name = <Test as frame_system::Config>::PalletInfo::name::<Tips>()
+			.expect("Tips is part of runtime, so it has a name; qed");
+		let new_pallet_name = "NewTips";
+
+		crate::migrations::v4::pre_migrate::<Test, Tips, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::migrate::<Test, Tips, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::post_migrate::<Test, Tips, _>(old_pallet_name, new_pallet_name);
+	});
+}*/
+
 #[test]
 fn genesis_funding_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
