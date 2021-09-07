@@ -41,7 +41,7 @@ use futures::{stream, Future, FutureExt, Stream, StreamExt};
 use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_network::PeerId;
-use sc_utils::mpsc::TracingUnboundedReceiver;
+use sc_foo::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},

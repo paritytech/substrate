@@ -27,7 +27,7 @@ use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 };
 use sc_telemetry::TelemetryHandle;
-use sc_utils::mpsc::TracingUnboundedSender;
+use sc_foo::mpsc::TracingUnboundedSender;
 use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};

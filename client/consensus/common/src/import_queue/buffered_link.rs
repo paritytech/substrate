@@ -40,7 +40,7 @@
 
 use crate::import_queue::{Link, Origin};
 use futures::prelude::*;
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	pin::Pin,

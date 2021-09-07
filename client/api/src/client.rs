@@ -29,7 +29,7 @@ use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
 
 use crate::{blockchain::Info, notifications::StorageEventStream};
 use sc_transaction_pool_api::ChainEvent;
-use sc_utils::mpsc::TracingUnboundedReceiver;
+use sc_foo::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.

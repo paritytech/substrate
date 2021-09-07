@@ -22,7 +22,7 @@ use self::error::Result;
 use futures::{channel::oneshot, FutureExt};
 use sc_rpc_api::{DenyUnsafe, Receiver};
 use sc_tracing::logging;
-use sc_utils::mpsc::TracingUnboundedSender;
+use sc_foo::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
 
 pub use self::{

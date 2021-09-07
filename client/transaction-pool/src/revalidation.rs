@@ -25,7 +25,7 @@ use std::{
 };
 
 use crate::graph::{ChainApi, ExtrinsicHash, NumberFor, Pool, ValidatedTransaction};
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{SaturatedConversion, Zero},

@@ -20,7 +20,7 @@
 
 use futures::Stream;
 use sc_transaction_pool_api::TransactionStatus;
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 /// Extrinsic watcher.
 ///
