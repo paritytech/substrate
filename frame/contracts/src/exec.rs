@@ -208,11 +208,7 @@ pub trait Ext: sealing::Sealed {
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
 
 	/// Recovers ECDSA compressed public key based on signature and message hash
-	fn ecdsa_recover(
-		&mut self,
-		signature: &[u8; 65],
-		message_hash: &[u8; 32],
-	) -> Result<[u8; 33], DispatchError>;
+	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1042,13 +1038,8 @@ where
 		call.dispatch(origin)
 	}
 
-	fn ecdsa_recover(
-		&mut self,
-		signature: &[u8; 65],
-		message_hash: &[u8; 32],
-	) -> Result<[u8; 33], DispatchError> {
-		secp256k1_ecdsa_recover_compressed(&signature, &message_hash)
-			.map_err(|_| DispatchError::from(Error::<Self::T>::ContractTrapped))
+	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
+		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
 	}
 }
 

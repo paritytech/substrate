@@ -30,12 +30,13 @@
 	(func (export "call")
 		(local $signature_ptr i32)
 		(local $message_hash_ptr i32)
+		(local $result i32)
 		(local.set $signature_ptr (i32.const 10))
 		(local.set $message_hash_ptr (i32.const 75))
 		;; Read signature and message hash - 97 bytes
 		(call $seal_input (local.get $signature_ptr) (i32.const 4))
 		(i32.store
-			(i32.const 107)
+			(local.get $result)
 			(call $seal_ecdsa_recover
 				(local.get $signature_ptr)
 				(local.get $message_hash_ptr)
@@ -44,7 +45,7 @@
 		)
 		(call $assert
 			(i32.eq
-				(i32.load (i32.const 107)) ;; The result of recovery execution
+				(i32.load (local.get $result)) ;; The result of recovery execution
 				(i32.const 0x0) ;; 0x0 - Success result
 			)
 		)

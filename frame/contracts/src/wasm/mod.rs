@@ -295,7 +295,7 @@ mod tests {
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
-		ecdsa_recover: Vec<([u8; 65], [u8; 32])>,
+		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -422,11 +422,11 @@ mod tests {
 		}
 
 		fn ecdsa_recover(
-			&mut self,
+			&self,
 			signature: &[u8; 65],
 			message_hash: &[u8; 32],
-		) -> Result<[u8; 33], DispatchError> {
-			self.ecdsa_recover.push((signature.clone(), message_hash.clone()));
+		) -> Result<[u8; 33], ()> {
+			self.ecdsa_recover.borrow_mut().push((signature.clone(), message_hash.clone()));
 			Ok([3; 33])
 		}
 	}
@@ -903,7 +903,7 @@ mod tests {
 	fn contract_ecdsa_recover() {
 		let mut mock_ext = MockExt::default();
 		assert_ok!(execute(&CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
-		assert_eq!(&mock_ext.ecdsa_recover, &[([1; 65], [1; 32])]);
+		assert_eq!(mock_ext.ecdsa_recover.into_inner(), [([1; 65], [1; 32])]);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"

@@ -1842,6 +1842,6 @@ fn ecdsa_recover() {
 			.result
 			.unwrap();
 		assert!(result.is_success());
-		assert_eq!(&result.data[..33], &EXPECTED_COMPRESSED_PUBLIC_KEY);
+		assert_eq!(result.data.as_ref(), &EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
 }

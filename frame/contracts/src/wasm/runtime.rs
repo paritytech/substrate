@@ -602,35 +602,6 @@ where
 		Ok(())
 	}
 
-	/// Recovers ECDSA compressed public key from the signature and message hash.
-	#[cfg(feature = "unstable-interface")]
-	fn ecdsa_recover(
-		&mut self,
-		signature_ptr: u32,
-		message_hash_ptr: u32,
-		output_ptr: u32,
-	) -> Result<ReturnCode, DispatchError> {
-		self.charge_gas(RuntimeCosts::EcdsaRecovery)?;
-
-		let mut signature: [u8; 65] = [0; 65];
-		self.read_sandbox_memory_into_buf(signature_ptr, &mut signature)?;
-		let mut message_hash: [u8; 32] = [0; 32];
-		self.read_sandbox_memory_into_buf(message_hash_ptr, &mut message_hash)?;
-
-		let result = self.ext.ecdsa_recover(&signature, &message_hash);
-
-		match result {
-			Ok(pub_key) => {
-				// Write the recovered compressed ecdsa public key back into the sandboxed output
-				// buffer.
-				self.write_sandbox_memory(output_ptr, pub_key.as_ref())?;
-
-				Ok(ReturnCode::Success)
-			},
-			Err(_) => Ok(ReturnCode::RecoveryFailed),
-		}
-	}
-
 	/// Fallible conversion of `DispatchError` to `ReturnCode`.
 	fn err_into_return_code(from: DispatchError) -> Result<ReturnCode, DispatchError> {
 		use ReturnCode::*;
@@ -1767,6 +1738,24 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::RecoveryFailed`
 	[__unstable__] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
-		Ok(ctx.ecdsa_recover(signature_ptr, message_hash_ptr, output_ptr)?)
+		ctx.charge_gas(RuntimeCosts::EcdsaRecovery)?;
+
+		let mut signature: [u8; 65] = [0; 65];
+		ctx.read_sandbox_memory_into_buf(signature_ptr, &mut signature)?;
+		let mut message_hash: [u8; 32] = [0; 32];
+		ctx.read_sandbox_memory_into_buf(message_hash_ptr, &mut message_hash)?;
+
+		let result = ctx.ext.ecdsa_recover(&signature, &message_hash);
+
+		match result {
+			Ok(pub_key) => {
+				// Write the recovered compressed ecdsa public key back into the sandboxed output
+				// buffer.
+				ctx.write_sandbox_memory(output_ptr, pub_key.as_ref())?;
+
+				Ok(ReturnCode::Success)
+			},
+			Err(_) => Ok(ReturnCode::RecoveryFailed),
+		}
 	},
 );
