@@ -61,7 +61,7 @@ pub type Assignment<T> =
 /// runtime `T`.
 pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
 
-/// Error type of the pallet's [`Config::Solver`].
+/// Error type of the pallet's [`crate::Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
 /// Error type for operations related to the OCW npos solution miner.
 #[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
@@ -268,8 +268,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new npos solution.
-	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the [`crate::Config::Solver`] in order to create a unified return type.
-	/// 
+	///
+	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the
+	/// [`crate::Config::Solver`] in order to create a unified return type.
 	pub fn mine_solution<S>(
 	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>>
 	where
