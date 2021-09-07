@@ -36,7 +36,7 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// How many instructions are executed in a single batch. The reasoning is the same
 /// as for `API_BENCHMARK_BATCH_SIZE`.
-pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
+pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///

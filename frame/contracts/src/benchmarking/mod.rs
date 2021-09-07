@@ -50,7 +50,7 @@ use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
 const API_BENCHMARK_BATCHES: u32 = 20;
 
 /// How many batches we do per Instruction benchmark.
-const INSTR_BENCHMARK_BATCHES: u32 = 1;
+const INSTR_BENCHMARK_BATCHES: u32 = 50;
 
 /// An instantiated and deployed contract.
 struct Contract<T: Config> {
