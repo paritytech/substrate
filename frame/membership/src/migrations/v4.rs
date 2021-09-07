@@ -80,10 +80,7 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(
-	old_pallet_name: N,
-	new_pallet_name: N,
-) {
+pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_pallet_name: N) {
 	let old_pallet_name = old_pallet_name.as_ref();
 	let new_pallet_name = new_pallet_name.as_ref();
 	log_migration("pre-migration", old_pallet_name, new_pallet_name);
