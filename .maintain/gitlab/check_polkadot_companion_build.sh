@@ -51,6 +51,7 @@ fi
 # Set the user name and email to make merging work
 git config --global user.name 'CI system'
 git config --global user.email '<>'
+git config --global pull.rebase false
 
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
@@ -96,12 +97,12 @@ else
   boldprint "this is not a pull request - building polkadot:master"
 fi
 
-cd "$substrate_dir"
-
 our_crates=()
 our_crates_source="git+https://github.com/paritytech/substrate"
 load_our_crates() {
   local found
+
+  cd "$substrate_dir"
 
   while IFS= read -r crate; do
     # for avoiding duplicate entries
@@ -135,6 +136,7 @@ match_their_crates() {
   local target_name="$(basename "$target_dir")"
   local crates_not_found=()
 
+  echo "$target_dir"
   # output will be provided in the format:
   #   crate
   #   source
@@ -149,7 +151,8 @@ match_their_crates() {
         next="source"
       ;;
       source)
-        if [ "$line" == "$our_crates_source" ] || [ "$line" == "$our_crates_source?" ]; then
+        if [ "$line" == "$our_crates_source" ] || [[ "$line" == "$our_crates_source?"* ]]; then
+          echo "$line"
           for our_crate in "${our_crates[@]}"; do
             if [ "$our_crate" == "$crate" ]; then
               found=true
