@@ -495,7 +495,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			select: cost_instr!(instr_select, 4),
 			r#if: cost_instr!(instr_if, 3),
 			br: cost_instr!(instr_br, 2),
-			br_if: cost_instr!(instr_br_if, 5),
+			br_if: cost_instr!(instr_br_if, 3),
 			br_table: cost_instr!(instr_br_table, 3),
 			br_table_per_entry: cost_instr!(instr_br_table_per_entry, 0),
 			call: cost_instr!(instr_call, 2),

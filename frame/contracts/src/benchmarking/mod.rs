@@ -1507,6 +1507,7 @@ benchmarks! {
 	}
 
 	// w_br = w_bench - 2 * w_param
+	// Block instructions are not counted.
 	instr_br {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -1531,9 +1532,8 @@ benchmarks! {
 		sbox.invoke();
 	}
 
-	// w_br_if = w_bench - 5 * w_param
-	// The two additional pushes + drop are only executed 50% of the time.
-	// Making it: 3 * w_param + (50% * 4 * w_param)
+	// w_br_if = w_bench - 3 * w_param
+	// Block instructions are not counted.
 	instr_br_if {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -1541,7 +1541,7 @@ benchmarks! {
 				Regular(Instruction::Block(BlockType::NoResult)),
 				Regular(Instruction::Block(BlockType::NoResult)),
 				Regular(Instruction::Block(BlockType::NoResult)),
-				RandomI32(0, 2),
+				Regular(Instruction::I32Const(1)),
 				Regular(Instruction::BrIf(1)),
 				RandomI64Repeated(1),
 				Regular(Instruction::Drop),
@@ -1560,11 +1560,11 @@ benchmarks! {
 	}
 
 	// w_br_table = w_bench - 3 * w_param
-	// 1 * w_param + 0.5 * 2 * w_param + 0.25 * 4 * w_param
+	// Block instructions are not counted.
 	instr_br_table {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let table = Box::new(BrTableData {
-			table: Box::new([0, 1, 2]),
+			table: Box::new([1, 1, 1]),
 			default: 1,
 		});
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
