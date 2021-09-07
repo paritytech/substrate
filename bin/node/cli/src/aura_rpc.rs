@@ -9,8 +9,8 @@
 
 use std::sync::Arc;
 
-use node_runtime::{Block, AccountId};
-use node_primitives::{Balance, Index};
+use node_runtime::AccountId;
+use node_primitives::{Block, Balance, Index};
 pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::ProvideRuntimeApi;

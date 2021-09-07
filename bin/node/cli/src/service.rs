@@ -25,12 +25,13 @@ use node_executor::Executor;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
-use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sc_consensus_aura::{ImportQueueParams, SlotProportion as AuraSlotProportion, StartAuraParams};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_network::{Event, NetworkService};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
+use sp_consensus::SlotData;
+use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
@@ -41,36 +42,32 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
-struct BailingVerifier<V>{
+struct BailingVerifier<V> {
 	client: Arc<FullClient>,
 	verifier: V,
 	signal_shutdown: Option<exit_future::Signal>,
 }
 
-impl<V> BailingVerifier<V>
-{
-	fn new(verifier: V, client: Arc<FullClient>, signal_shutdown: exit_future::Signal) -> Self
-	{
+impl<V> BailingVerifier<V> {
+	fn new(verifier: V, client: Arc<FullClient>, signal_shutdown: exit_future::Signal) -> Self {
 		Self { verifier, client, signal_shutdown: Some(signal_shutdown) }
 	}
 }
 
 use sc_consensus::{BlockImportParams, Verifier};
+use sc_consensus_babe::BabeApi;
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_consensus::CacheKeyId;
-use sc_consensus_babe::BabeApi;
 // use sc_consensus_aura::AuraApi;
-use sc_client_api::AuxStore;
-use sc_client_api::HeaderBackend;
-use sp_api::ApiExt;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_client_api::{AuxStore, HeaderBackend};
+use sp_api::ApiExt;
 
 type BlockVerificationResult<Block> =
 	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 
 #[async_trait::async_trait]
-impl<V> Verifier<Block>
-	for BailingVerifier<V>
+impl<V> Verifier<Block> for BailingVerifier<V>
 where
 	V: Verifier<Block>,
 {
@@ -79,15 +76,16 @@ where
 		&mut self,
 		mut block_import: BlockImportParams<Block, ()>,
 	) -> BlockVerificationResult<Block> {
-		use sp_runtime::traits::Header;
 		use sp_api::ApiExt;
+		use sp_runtime::traits::Header;
 
 		let block_id = BlockId::hash(*block_import.header.parent_hash());
 		if self
 			.client
 			.runtime_api()
 			.has_api::<dyn BabeApi<Block>>(&block_id)
-			.unwrap_or(false) {
+			.unwrap_or(false)
+		{
 			log::debug!("shutting down!");
 			self.signal_shutdown.take().map(|s| s.fire());
 			Ok((block_import, None))
@@ -194,7 +192,8 @@ pub fn new_partial(
 		client: client.clone(),
 	};
 
-	let bailing_verifier = BailingVerifier::new(babe_verifier, client.clone(), signal_shutdown.unwrap());
+	let bailing_verifier =
+		BailingVerifier::new(babe_verifier, client.clone(), signal_shutdown.unwrap());
 
 	let import_queue = sc_consensus_babe::import_queue_with_verifier(
 		bailing_verifier,
@@ -227,6 +226,8 @@ pub fn new_partial(
 		let keystore = keystore_container.sync_keystore();
 		let chain_spec = config.chain_spec.cloned_box();
 
+		let shared_voter_state_clone = shared_voter_state.clone();
+
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
@@ -240,7 +241,7 @@ pub fn new_partial(
 					keystore: keystore.clone(),
 				},
 				grandpa: node_rpc::GrandpaDeps {
-					shared_voter_state: shared_voter_state.clone(),
+					shared_voter_state: shared_voter_state_clone.clone(),
 					shared_authority_set: shared_authority_set.clone(),
 					justification_stream: justification_stream.clone(),
 					subscription_executor,
@@ -282,12 +283,7 @@ pub fn new_partial_aura(
 				sc_rpc::SubscriptionTaskExecutor,
 			) -> Result<node_rpc::IoHandler, sc_service::Error>,
 			(
-				grandpa::GrandpaBlockImport<
-					FullBackend,
-					Block,
-					FullClient,
-					FullSelectChain,
-				>,
+				grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
 				grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
 				Option<Telemetry>,
 			),
@@ -374,8 +370,11 @@ pub fn new_partial_aura(
 		let pool = transaction_pool.clone();
 
 		move |deny_unsafe, _| {
-			let deps =
-				crate::aura_rpc::FullDeps { client: client.clone(), pool: pool.clone(), deny_unsafe };
+			let deps = crate::aura_rpc::FullDeps {
+				client: client.clone(),
+				pool: pool.clone(),
+				deny_unsafe,
+			};
 
 			Ok(crate::aura_rpc::create_full(deps))
 		}
@@ -407,7 +406,7 @@ pub fn new_full_base(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
 	),
-	signal_shutdown: exit_future::Signal
+	signal_shutdown: exit_future::Signal,
 ) -> Result<NewFullBase, ServiceError> {
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
 	let force_authoring = config.force_authoring;
@@ -416,7 +415,21 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (client, backend, mut task_manager, import_queue, keystore_container, select_chain, transaction_pool, block_import, grandpa_link, shared_voter_state, mut telemetry, network, network_starter) = if config.block_production == Some("Aura".to_owned()) {
+	let (
+		client,
+		backend,
+		mut task_manager,
+		import_queue,
+		keystore_container,
+		select_chain,
+		transaction_pool,
+		block_import,
+		grandpa_link,
+		shared_voter_state,
+		mut telemetry,
+		network,
+		network_starter,
+	) = if config.block_production == Some("Aura".to_owned()) {
 		let sc_service::PartialComponents {
 			client,
 			backend,
@@ -524,7 +537,21 @@ pub fn new_full_base(
 			task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
 		}
 
-		(client, backend, task_manager, import_queue, keystore_container, select_chain, transaction_pool, block_import, grandpa_link, shared_voter_state, telemetry, network, network_starter)
+		(
+			client,
+			backend,
+			task_manager,
+			import_queue,
+			keystore_container,
+			select_chain,
+			transaction_pool,
+			block_import,
+			grandpa_link,
+			shared_voter_state,
+			telemetry,
+			network,
+			network_starter,
+		)
 	} else if config.block_production == Some("Babe".to_owned()) {
 		let sc_service::PartialComponents {
 			client,
@@ -648,9 +675,23 @@ pub fn new_full_base(
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", babe);
 		}
-		(client, backend, task_manager, import_queue, keystore_container, select_chain, transaction_pool, block_import, grandpa_link, shared_voter_state, telemetry, network, network_starter)
+		(
+			client,
+			backend,
+			task_manager,
+			import_queue,
+			keystore_container,
+			select_chain,
+			transaction_pool,
+			block_import,
+			grandpa_link,
+			shared_voter_state,
+			telemetry,
+			network,
+			network_starter,
+		)
 	} else {
-		return Err(ServiceError::Other("no block production specified".to_owned()));
+		return Err(ServiceError::Other("no block production specified".to_owned()))
 	};
 
 	// Spawn authority discovery module.
@@ -729,7 +770,8 @@ pub fn new_full_base(
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<(TaskManager, exit_future::Exit), ServiceError> {
 	let (signal, exit) = exit_future::signal();
-	new_full_base(config, |_, _| (), signal).map(|NewFullBase { task_manager, .. }| (task_manager, exit))
+	new_full_base(config, |_, _| (), signal)
+		.map(|NewFullBase { task_manager, .. }| (task_manager, exit))
 }
 
 pub fn new_light_base(
