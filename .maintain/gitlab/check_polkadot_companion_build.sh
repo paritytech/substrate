@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
 # check if a pr is compatible with polkadot companion pr or master if not
 # available
@@ -43,15 +43,14 @@ git config --global user.email '<>'
 
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
-git fetch --depth 100 origin
-git merge origin/master
+git pull origin master
 
-# Clone the current Polkadot master branch into ./polkadot.
-# NOTE: we need to pull enough commits to be able to find a common
-# ancestor for successfully performing merges below.
-git clone --depth 20 https://github.com/paritytech/polkadot.git
+substrate_dir="$PWD"
+polkadot_dir="$substrate_dir/polkadot"
 
-cd polkadot
+git clone --depth 1 https://github.com/paritytech/polkadot.git "$polkadot_dir"
+
+cd "$polkadot_dir"
 
 # either it's a pull request then check for a companion otherwise use
 # polkadot:master
@@ -76,7 +75,8 @@ then
     boldprint "companion pr specified/detected: #${pr_companion}"
     git fetch origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
-    git merge origin/master
+    # we want this because `bot merge` will include master into the pr's branch before merging
+    git pull origin master
   else
     boldprint "no companion branch found - building polkadot:master"
   fi
@@ -85,15 +85,107 @@ else
   boldprint "this is not a pull request - building polkadot:master"
 fi
 
-# Patch all Substrate crates in Polkadot
-diener patch --crates-to-patch ../ --substrate --path Cargo.toml
+cd "$substrate_dir"
 
-# We need to update specifically our patched Substrate crates so that other
-# crates that depend on them (e.g. Polkadot, BEEFY) use this unified version
-# NOTE: There's no way to only update patched crates, so we use a heuristic
-# of updating a crucial Substrate crate (`sp-core`) to minimize the impact of
-# updating unrelated dependencies
-cargo update -p sp-core
+our_crates=()
+while IFS= read -r crate; do
+  # for avoiding duplicate entries
+  for our_crate in "${our_crates[@]}"; do
+    if [[ "$crate" == "$our_crate" ]]; then
+      found=true
+      break
+    fi
+  done
+  if [ "${found:-}" ]; then
+    unset found
+  else
+    our_crates+=("$crate")
+  fi
+done < <(jq -r '
+  . as $in |
+  paths |
+  select(.[-1]=="source" and . as $p | $in | getpath($p)==null) as $path |
+  del($path[-1]) as $path |
+  $in | getpath($path + ["name"])
+' < <(cargo metadata --quiet --format-version=1))
+our_crates_source="git+https://github.com/paritytech/substrate"
+
+match_their_crates() {
+  local target_dir="$1"
+  shift
+
+  cd "$target_dir"
+
+  local target_name="$(basename "$target_dir")"
+  local crates_not_found=()
+
+  local found
+
+  # output will be provided in the format:
+  #   crate
+  #   source
+  #   crate
+  #   ...
+  local next="crate"
+  while IFS= read -r line; do
+    case "$next" in
+      crate)
+        crate="$line"
+        next="source"
+      ;;
+      source)
+        if [[ "$line" == "$our_crates_source" ]] || [[ "$line" == "$our_crates_source?" ]]; then
+          for our_crate in "${our_crates[@]}"; do
+            if [ "$our_crate" == "$crate" ]; then
+              found=true
+              break
+            fi
+          done
+          if [ "${found:-}" ]; then
+            unset found
+          else
+            # for avoiding duplicate entries
+            for crate_not_found in "${crates_not_found[@]}"; do
+              if [[ "$crate_not_found" == "$crate" ]]; then
+                found=true
+                break
+              fi
+            done
+            if [ "${found:-}" ]; then
+              unset found
+            else
+              crates_not_found+=("$crate")
+            fi
+          fi
+        fi
+
+        next="crate"
+      ;;
+      *)
+        echo "ERROR: Unknown state $next"
+        exit 1
+      ;;
+    esac
+  done < <(jq -r '
+    . as $in |
+    paths(select(type=="string")) |
+    select(.[-1]=="source") as $source_path |
+    del($source_path[-1]) as $path |
+    [$in | getpath($path + ["name"]), getpath($path + ["source"])] |
+    .[]
+  ' < <(cargo metadata --quiet --format-version=1))
+
+  if [ "$crates_not_found" ]; then
+    echo "Errors during crate matching"
+    printf "Failed to find crate \"%s\" referenced in $target_name\n" "${crates_not_found[@]}"
+    exit 1
+  fi
+}
+match_their_crates "$polkadot_dir"
+
+# Patch all Substrate crates in Polkadot
+cd "$polkadot_dir"
+diener patch --crates-to-patch "$substrate_dir" --substrate --path Cargo.toml
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --workspace --release --verbose --features=runtime-benchmarks
