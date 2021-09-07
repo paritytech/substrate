@@ -34,14 +34,14 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -791,18 +791,10 @@ mod tests {
 
 	#[test]
 	fn migration_v4() {
-		let mut s = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		pallet_membership::GenesisConfig::<Test> {
-			members: vec![10, 20, 30],
-			..Default::default()
-		}
-		.assimilate_storage(&mut s)
-		.unwrap();
-
-		sp_io::TestExternalities::new(s).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			use frame_support::traits::PalletInfo;
-			let old_pallet_name = <Test as frame_system::Config>::PalletInfo::name::<Membership>()
-				.expect("Membership is part of runtime, so it has a name; qed");
+			let old_pallet_name =
+				<Test as frame_system::Config>::PalletInfo::name::<Membership>().unwrap();
 			let new_pallet_name = "NewMembership";
 
 			crate::migrations::v4::pre_migrate::<Membership, _>(old_pallet_name, new_pallet_name);
