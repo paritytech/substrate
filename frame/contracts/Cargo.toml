@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-bitflags = "1.0"
+bitflags = "1.3"
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
@@ -64,6 +64,7 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"sp-sandbox/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pwasm-utils/std",
@@ -71,6 +72,7 @@ std = [
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
 	"log/std",
+	"rand/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

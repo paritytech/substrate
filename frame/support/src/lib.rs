@@ -1693,7 +1693,19 @@ pub mod pallet_prelude {
 /// E.g. if runtime names the pallet "MyExample" then the storage `type Foo<T> = ...` use the
 /// prefix: `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allow to define a
+/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
+/// specific name to use for the prefix.
+///
+/// E.g:
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::storage_prefix = "OtherName"]
+/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// ```
+/// In this case the final prefix used by the map is
+/// `Twox128(b"MyExample") ++ Twox128(b"OtherName")`.
+///
+/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows to define a
 /// getter function on `Pallet`.
 ///
 /// E.g:
@@ -2023,6 +2035,7 @@ pub mod pallet_prelude {
 /// 	// Another storage declaration
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
+/// 	#[pallet::storage_prefix = "SomeOtherName"]
 /// 	pub(super) type MyStorage<T> =
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
@@ -2165,6 +2178,7 @@ pub mod pallet_prelude {
 ///
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
+/// 	#[pallet::storage_prefix = "SomeOtherName"]
 /// 	pub(super) type MyStorage<T, I = ()> =
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///

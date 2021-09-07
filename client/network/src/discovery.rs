@@ -812,7 +812,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						},
 						// We never start any other type of query.
 						e => {
-							warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
+							debug!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 						},
 					},
 					NetworkBehaviourAction::DialAddress { address } =>
