@@ -567,18 +567,18 @@ pub mod pallet {
 
 	/// The current bids, stored ordered by the value of the bid.
 	#[pallet::storage]
-	pub type Bids<T: Config<I>, I: 'static = ()> =
+	pub(super) type Bids<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
 
 	/// Members currently vouching or banned from vouching again
 	#[pallet::storage]
 	#[pallet::getter(fn vouching)]
-	pub type Vouching<T: Config<I>, I: 'static = ()> =
+	pub(super) type Vouching<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, VouchingStatus>;
 
 	/// Pending payouts; ordered by block number, with the amount that should be paid out.
 	#[pallet::storage]
-	pub type Payouts<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(super) type Payouts<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -588,28 +588,28 @@ pub mod pallet {
 
 	/// The ongoing number of losing votes cast by the member.
 	#[pallet::storage]
-	pub type Strikes<T: Config<I>, I: 'static = ()> =
+	pub(super) type Strikes<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, StrikeCount, ValueQuery>;
 
 	/// Double map from Candidate -> Voter -> (Maybe) Vote.
 	#[pallet::storage]
-	pub type Votes<T: Config<I>, I: 'static = ()> =
+	pub(super) type Votes<T: Config<I>, I: 'static = ()> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, T::AccountId, Vote>;
 
 	/// The defending member currently being challenged.
 	#[pallet::storage]
 	#[pallet::getter(fn defender)]
-	pub type Defender<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId>;
+	pub(super) type Defender<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId>;
 
 	/// Votes for the defender.
 	#[pallet::storage]
-	pub type DefenderVotes<T: Config<I>, I: 'static = ()> =
+	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, Vote>;
 
 	/// The max number of members for the society at one time.
 	#[pallet::storage]
 	#[pallet::getter(fn max_members)]
-	pub type MaxMembers<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
+	pub(super) type MaxMembers<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
