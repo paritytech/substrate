@@ -355,10 +355,6 @@ parameter_types! {
 	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
 }
 
-pub(crate) fn set_balancing(balancing: Option<(usize, ExtendedBalance)>) {
-	Balancing::set(balancing);
-}
-
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;

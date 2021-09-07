@@ -2014,7 +2014,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			// set the solution balancing to get the desired score.
-			mock::set_balancing(Some((2, 0)));
+			crate::mock::Balancing::set(Some((2, 0)));
 
 			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
 			// Default solution has a score of [50, 100, 5000].
