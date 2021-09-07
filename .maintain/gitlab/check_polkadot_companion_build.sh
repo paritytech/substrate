@@ -195,7 +195,7 @@ match_their_crates() {
 
   if [ "${crates_not_found[@]}" ]; then
     echo "Errors during crate matching"
-    printf "Failed to find crate \"%s\" referenced in $target_name\n" "${crates_not_found[@]}"
+    printf "Failed to detect our crate \"%s\" referenced in $target_name\n" "${crates_not_found[@]}"
     exit 1
   fi
 }
