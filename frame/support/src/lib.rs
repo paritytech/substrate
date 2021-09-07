@@ -130,7 +130,7 @@ impl TypeId for PalletId {
 /// 	>
 /// );
 ///
-/// // specify the query type
+/// // optionally specify the query type
 /// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
 /// generate_storage_alias!(Prefix, ValueName => Value<u32, OptionQuery>);
 /// generate_storage_alias!(
