@@ -29,11 +29,15 @@ struct Opt {
 
 	/// Where to write the output.
 	output: PathBuf,
+
+	#[structopt(short, long)]
+	total_issuance: u128,
+
+	#[structopt(short, long)]
+	minimum_balance: u128,
 }
 
 fn main() -> Result<(), std::io::Error> {
-	let Opt { n_bags, output } = Opt::from_args();
-	let mut ext = sp_io::TestExternalities::new_empty();
-
-	ext.execute_with(|| generate_thresholds::<node_runtime::Runtime>(n_bags, &output))
+	let Opt { n_bags, output, total_issuance, minimum_balance } = Opt::from_args();
+	generate_thresholds::<node_runtime::Runtime>(n_bags, &output, total_issuance, minimum_balance)
 }

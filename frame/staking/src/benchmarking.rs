@@ -803,10 +803,12 @@ benchmarks! {
 		// total number of slashing spans. Assigned to validators randomly.
 		let s in 1 .. 20;
 
-		let validators = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?
-			.into_iter()
-			.map(|v| T::Lookup::lookup(v).unwrap())
-			.collect::<Vec<_>>();
+		let validators = create_validators_with_nominators_for_era::<T>(
+			v, n, T::MAX_NOMINATIONS as usize, false, None
+		)?
+		.into_iter()
+		.map(|v| T::Lookup::lookup(v).unwrap())
+		.collect::<Vec<_>>();
 
 		(0..s).for_each(|index| {
 			add_slashing_spans::<T>(&validators[index as usize], 10);
@@ -824,7 +826,9 @@ benchmarks! {
 		// number of nominator intention.
 		let n = MAX_NOMINATORS;
 
-		let _ = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?;
+		let _ = create_validators_with_nominators_for_era::<T>(
+			v, n, T::MAX_NOMINATIONS as usize, false, None
+		)?;
 	}: {
 		let targets = <Staking<T>>::get_npos_targets();
 		assert_eq!(targets.len() as u32, v);

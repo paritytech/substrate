@@ -13,11 +13,5 @@ readme = "README.md"
 node-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
 generate-bags = { version = "3.0.0", path = "../" }
 
-# FRAME
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/support" }
-
-# primitives
-sp-io = { version = "4.0.0-dev", path = "../../../../primitives/io" }
-
 # third-party
 structopt = "0.3.21"

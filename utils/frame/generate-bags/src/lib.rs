@@ -66,12 +66,23 @@ use std::{
 /// Note that this value depends on the current issuance, a quantity known to change over time.
 /// This makes the project of computing a static value suitable for inclusion in a static,
 /// generated file _excitingly unstable_.
-fn existential_weight<T: pallet_staking::Config>() -> VoteWeight {
-	use frame_support::traits::{Currency, CurrencyToVote};
+fn existential_weight<T: pallet_staking::Config>(
+	total_issuance: u128,
+	minimum_balance: u128,
+) -> VoteWeight {
+	use frame_support::traits::CurrencyToVote;
+	use std::convert::TryInto;
 
-	let existential_deposit = <T::Currency as Currency<T::AccountId>>::minimum_balance();
-	let issuance = <T::Currency as Currency<T::AccountId>>::total_issuance();
-	T::CurrencyToVote::to_vote(existential_deposit, issuance)
+	T::CurrencyToVote::to_vote(
+		minimum_balance
+			.try_into()
+			.map_err(|_| "failed to convert minimum_balance to type Balance")
+			.unwrap(),
+		total_issuance
+			.try_into()
+			.map_err(|_| "failed to convert total_issuance to type Balance")
+			.unwrap(),
+	)
 }
 
 /// Return the path to a header file used in this repository if is exists.
@@ -162,6 +173,8 @@ pub fn thresholds(
 pub fn generate_thresholds<T: pallet_staking::Config>(
 	n_bags: usize,
 	output: &Path,
+	total_issuance: u128,
+	minimum_balance: u128,
 ) -> Result<(), std::io::Error> {
 	// ensure the file is accessable
 	if let Some(parent) = output.parent() {
@@ -195,7 +208,7 @@ pub fn generate_thresholds<T: pallet_staking::Config>(
 		<T as frame_system::Config>::Version::get().spec_name,
 	)?;
 
-	let existential_weight = existential_weight::<T>();
+	let existential_weight = existential_weight::<T>(total_issuance, minimum_balance);
 	num_buf.write_formatted(&existential_weight, &format);
 	writeln!(buf)?;
 	writeln!(buf, "/// Existential weight for this runtime.")?;
