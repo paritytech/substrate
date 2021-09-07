@@ -1572,6 +1572,90 @@ mod tests {
 	}
 
 	#[test]
+	fn child_read_compact_stress_test() {
+		use rand::{RngCore, SeedableRng};
+		use rand::rngs::SmallRng;
+		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = Default::default();
+		let mut seed = [0; 16];
+		for i in 0..50u32 {
+			let mut child_infos = Vec::new();
+			&seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
+			let mut rand = SmallRng::from_seed(seed);
+
+			let nb_child_trie = rand.next_u32() as usize % 25;
+			for _ in 0..nb_child_trie {
+				let key_len = 1 + (rand.next_u32() % 10);
+				let mut key = vec![0; key_len as usize];
+				rand.fill_bytes(&mut key[..]);
+				let child_info = ChildInfo::new_default(key.as_slice());
+				let nb_item = 1 + rand.next_u32() % 25;
+				let mut items = BTreeMap::new();
+				for item in 0..nb_item {
+					let key_len = 1 + (rand.next_u32() % 10);
+					let mut key = vec![0; key_len as usize];
+					rand.fill_bytes(&mut key[..]);
+					let value = vec![item as u8; item as usize + 28];
+					items.insert(key, value);
+				}
+				child_infos.push(child_info.clone());
+				storage.insert(Some(child_info), items);
+			}
+
+			let trie: InMemoryBackend::<BlakeTwo256> = storage.clone().into();
+			let trie_root = trie.root().clone();
+			let backend = crate::ProvingBackend::new(&trie);
+			let mut queries = Vec::new();
+			for c in 0..(5 + nb_child_trie / 2) {
+				// random existing query
+				let child_info = if c < 5 {
+					// 4 missing child trie
+					let key_len = 1 + (rand.next_u32() % 10);
+					let mut key = vec![0; key_len as usize];
+					rand.fill_bytes(&mut key[..]);
+					ChildInfo::new_default(key.as_slice())
+				} else {
+				 child_infos[rand.next_u32() as usize % nb_child_trie].clone()
+				};
+
+				if let Some(values) = storage.get(&Some(child_info.clone())) {
+					for _ in 0..(1 + values.len() / 2) {
+						let ix = rand.next_u32() as usize % values.len();
+						for (i, (key, value)) in values.iter().enumerate() {
+							if i == ix {
+								assert_eq!(
+									&backend.child_storage(&child_info, key.as_slice()).unwrap().unwrap(),
+									value
+								);
+								queries.push((child_info.clone(), key.clone(), Some(value.clone())));
+								break;
+							}
+						}
+					}
+				}
+				for _ in 0..4 {
+					let key_len = 1 + (rand.next_u32() % 10);
+					let mut key = vec![0; key_len as usize];
+					rand.fill_bytes(&mut key[..]);
+					let result = backend.child_storage(&child_info, key.as_slice()).unwrap();
+					queries.push((child_info.clone(), key, result));
+				}
+			}
+
+			let storage_proof = backend.extract_proof();
+			let remote_proof = test_compact(storage_proof, &trie_root);
+			let proof_check =
+				create_proof_check_backend::<BlakeTwo256>(trie_root, remote_proof).unwrap();
+
+			for (child_info, key, expected) in queries {
+				assert_eq!(
+					proof_check.child_storage(&child_info, key.as_slice()).unwrap(),
+					expected,
+				);
+			}
+		}
+	}
+
+	#[test]
 	fn prove_read_with_size_limit_works() {
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
