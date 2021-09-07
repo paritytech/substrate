@@ -413,7 +413,9 @@ decl_storage! {
 
 		/// Indices of disabled validators.
 		///
-		/// The set is cleared when `on_session_ending` returns a new set of identities.
+		/// The vec is always kept sorted so that we can find whether a given validator is
+		/// disabled using binary search. It gets cleared when `on_session_ending` returns
+		/// a new set of identities.
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
