@@ -167,35 +167,19 @@ decl_module! {
 			T::WeightInfo::set(),
 			DispatchClass::Mandatory
 		)]
-        fn set(origin, #[compact] now: T::Moment) {
-            ensure_none(origin)?;
-            assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-            let prev = Self::now();
+		fn set(origin, #[compact] now: T::Moment) {
+			ensure_none(origin)?;
+			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+			let prev = Self::now();
+			assert!(
+				prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
+				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
+			);
+			<Self as Store>::Now::put(now);
+			<Self as Store>::DidUpdate::put(true);
 
-            // information about block time is stored in inherents that are converted into
-            // extrinsics. Extrinsics from the first block are executed twice:
-            // - 1st time when there is no extrinsics in previous block (1st block)
-            // - 2nd time in second block when extrinsics from the previous block(1st block)
-
-            let timestamp = if prev.is_zero() {
-                // only happens for the first block - in order to have below assertion working
-                // lets modify timestamp of the first block so when it is executed for the second
-                // time assertion will be still correct
-                now - T::MinimumPeriod::get()
-            }else{
-                now
-            };
-
-            assert!(
-                prev.is_zero() || timestamp >= prev + T::MinimumPeriod::get(),
-                "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
-            );
-            <Self as Store>::Now::put(timestamp);
-            <Self as Store>::DidUpdate::put(true);
-
-            <T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(timestamp);
-        }
-
+			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
+		}
 
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
 		fn on_initialize() -> Weight {
@@ -208,7 +192,9 @@ decl_module! {
 		/// - 1 storage deletion (codec `O(1)`).
 		/// # </weight>
 		fn on_finalize() {
-			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+			if <frame_system::Module<T>>::block_number() > 1.into(){
+				assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+			}
 		}
 	}
 }
@@ -298,7 +284,7 @@ impl<T: Trait> UnixTime for Module<T> {
 		// `sp_timestamp::InherentDataProvider`.
 		let now = Self::now();
 		sp_std::if_std! {
-			if now == T::Moment::zero() {
+			if now == T::Moment::zero() && <frame_system::Module<T>>::block_number() > 1.into() {
 				debug::error!(
 					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
 				);

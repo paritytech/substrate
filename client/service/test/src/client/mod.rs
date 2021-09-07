@@ -112,6 +112,10 @@ pub fn prepare_client_with_key_changes() -> (
 		local_roots.push(trie_root);
 	}
 
+	let builder = remote_client.new_block(Default::default()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	remote_client.import(BlockOrigin::Own, block).unwrap();
+
 	// prepare test cases
 	let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
 	let bob = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
@@ -120,21 +124,21 @@ pub fn prepare_client_with_key_changes() -> (
 	let eve = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
 	let ferdie = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
 	let test_cases = vec![
-		(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
-		(1, 3, alice.clone(), vec![(1, 0)]),
-		(2, 4, alice.clone(), vec![(4, 0)]),
-		(2, 3, alice.clone(), vec![]),
-		(1, 4, bob.clone(), vec![(1, 1)]),
-		(1, 1, bob.clone(), vec![(1, 1)]),
-		(2, 4, bob.clone(), vec![]),
-		(1, 4, charlie.clone(), vec![(2, 0)]),
-		(1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
-		(1, 1, dave.clone(), vec![(1, 1), (1, 0)]),
-		(3, 4, dave.clone(), vec![(4, 0)]),
-		(1, 4, eve.clone(), vec![(2, 0)]),
-		(1, 1, eve.clone(), vec![]),
-		(3, 4, eve.clone(), vec![]),
-		(1, 4, ferdie.clone(), vec![]),
+		(1, 5, alice.clone(), vec![(5, 0), (2, 0)]),
+		(2, 4, alice.clone(), vec![(2, 0)]),
+		(3, 5, alice.clone(), vec![(5, 0)]),
+		(3, 4, alice.clone(), vec![]),
+		(2, 5, bob.clone(), vec![(2, 1)]),
+		(2, 2, bob.clone(), vec![(2, 1)]),
+		(3, 5, bob.clone(), vec![]),
+		(2, 5, charlie.clone(), vec![(3, 0)]),
+		(2, 5, dave.clone(), vec![(5, 0), (2, 1), (2, 0)]),
+		(2, 2, dave.clone(), vec![(2, 1), (2, 0)]),
+		(4, 5, dave.clone(), vec![(5, 0)]),
+		(2, 5, eve.clone(), vec![(3, 0)]),
+		(2, 2, eve.clone(), vec![]),
+		(4, 5, eve.clone(), vec![]),
+		(2, 5, ferdie.clone(), vec![]),
 	];
 
 	(remote_client, local_roots, test_cases)
@@ -388,12 +392,21 @@ fn block_builder_works_with_transactions() {
 	}).unwrap();
 
 	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+	assert_eq!(client.chain_info().best_number, 1);
+
+	let builder = client.new_block_at(&BlockId::Hash(block.header().hash()),Default::default(), false).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block).unwrap();
 
-	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
+	assert_eq!(client.chain_info().best_number, 2);
+	assert_eq!(
 		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
 		client.state_at(&BlockId::Number(0)).unwrap().pairs()
+	);
+	assert_ne!(
+		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
+		client.state_at(&BlockId::Number(2)).unwrap().pairs()
 	);
 	assert_eq!(
 		client.runtime_api().balance_of(
@@ -412,7 +425,6 @@ fn block_builder_works_with_transactions() {
 }
 
 #[test]
-#[ignore]
 fn block_builder_does_not_include_invalid() {
 	let mut client = substrate_test_runtime_client::new();
 
@@ -425,22 +437,32 @@ fn block_builder_does_not_include_invalid() {
 		nonce: 0,
 	}).unwrap();
 
-	assert!(
-		builder.push_transfer(Transfer {
-			from: AccountKeyring::Eve.into(),
-			to: AccountKeyring::Alice.into(),
-			amount: 42,
-			nonce: 0,
-		}).is_err()
-	);
+	// In origin impl push_transfer calls BlockBuilder::push that was performing
+	// extrinsic validation. That behaviour was modified and currently
+	// BlockBuilder::consume_valid_transactions is responsible for validation and
+	// it would be a bit tricky incorporate that mechanism in test. Also below assertions
+	// verifies number of extrinsics in blocks so it seems safe to comment out this one
+
+	// assert!(
+	// 	builder.push_transfer(Transfer {
+	// 		from: AccountKeyring::Eve.into(),
+	// 		to: AccountKeyring::Alice.into(),
+	// 		amount: 42,
+	// 		nonce: 0,
+	// 	}).is_err()
+	// );
 
 	let block = builder.build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block).unwrap();
 
-	assert_eq!(client.chain_info().best_number, 1);
+	let builder = client.new_block(Default::default()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block).unwrap();
+
+	assert_eq!(client.chain_info().best_number, 2);
 	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
+		client.state_at(&BlockId::Number(2)).unwrap().pairs(),
+		client.state_at(&BlockId::Number(1)).unwrap().pairs()
 	);
 	assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 }
@@ -493,7 +515,6 @@ fn uncles_with_only_ancestors() {
 }
 
 #[test]
-#[ignore]
 fn uncles_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -646,7 +667,6 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 }
 
 #[test]
-#[ignore]
 fn best_containing_on_longest_chain_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -989,7 +1009,6 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 }
 
 #[test]
-#[ignore]
 fn key_changes_works() {
 	let (client, _, test_cases) = prepare_client_with_key_changes();
 
@@ -1113,7 +1132,6 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 }
 
 #[test]
-#[ignore]
 fn finalizing_diverged_block_should_trigger_reorg() {
 	let (mut client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
@@ -1211,7 +1229,6 @@ fn get_header_by_block_number_doesnt_panic() {
 }
 
 #[test]
-#[ignore]
 fn state_reverted_on_reorg() {
 	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
@@ -1253,6 +1270,11 @@ fn state_reverted_on_reorg() {
 	// Reorg to B1
 	client.import_as_best(BlockOrigin::Own, b1.clone()).unwrap();
 
+	let empty_block = client.new_block(
+		Default::default(),
+	).unwrap().build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, empty_block).unwrap();
+
 	assert_eq!(950, current_balance(&client));
 	let mut a2 = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
@@ -1268,11 +1290,15 @@ fn state_reverted_on_reorg() {
 	let a2 = a2.build(Default::default()).unwrap().block;
 	// Re-org to A2
 	client.import_as_best(BlockOrigin::Own, a2).unwrap();
+
+	let empty_block = client.new_block(
+		Default::default(),
+	).unwrap().build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, empty_block).unwrap();
 	assert_eq!(980, current_balance(&client));
 }
 
 #[test]
-#[ignore]
 fn doesnt_import_blocks_that_revert_finality() {
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
@@ -1577,7 +1603,6 @@ fn returns_status_for_pruned_blocks() {
 }
 
 #[test]
-#[ignore]
 fn imports_blocks_with_changes_tries_config_change() {
 	// create client with initial 4^2 configuration
 	let mut client = TestClientBuilder::with_default_backend()
@@ -1673,7 +1698,8 @@ fn imports_blocks_with_changes_tries_config_change() {
 	// now check that configuration cache works
 	assert_eq!(
 		client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
-		vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
+		//because of delayed block execution changes are applied in following blocks
+		vec![(31, 0), (28, 0), (26, 0), (25, 0), (12, 0)]
 	);
 }
 
@@ -1813,7 +1839,6 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 
 /// Test that ensures that we always send an import notification for re-orgs.
 #[test]
-#[ignore]
 fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifications() {
 	let mut client = TestClientBuilder::new().build();
 

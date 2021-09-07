@@ -821,7 +821,6 @@ fn check_changes_proof_fails_if_proof_is_wrong() {
 }
 
 #[test]
-#[ignore]
 fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 	// we're testing this test case here:
 	// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),

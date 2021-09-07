@@ -34,7 +34,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
 };
-use sp_blockchain::{ApplyExtrinsicFailed, Error};
+use sp_blockchain::Error;
 use sp_core::ExecutionContext;
 use sp_api::{
 	Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof,
@@ -144,7 +144,6 @@ where
 
 		let block_id = BlockId::Hash(parent_hash);
 
-		info!("Api call to initialize the block");
 		api.initialize_block_with_context(
 			&block_id, ExecutionContext::BlockConstruction, &header,
 		)?;
@@ -236,9 +235,7 @@ where
 		mut self,
 		seed: SeedType,
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, ApiErrorFor<A, Block>> {
-		let extrinsics = self.extrinsics.clone();
 		let parent_hash = self.parent_hash;
-
 		let block_id = &self.block_id;
 
 		match self
@@ -248,45 +245,31 @@ where
 			.unwrap()
 		{
 			Some(previous_block_extrinsics) => {
-				if previous_block_extrinsics.is_empty() {
-					info!("No extrinsics found for previous block");
-					extrinsics.into_iter().for_each(|xt| {
-						self.api.execute_in_transaction(|api| {
-							match api.apply_extrinsic_with_context(
-								block_id,
-								ExecutionContext::BlockConstruction,
-								xt.clone(),
-							) {
-								Ok(Ok(_)) => TransactionOutcome::Commit(()),
-								Ok(Err(_tx_validity)) => TransactionOutcome::Rollback(()),
-								Err(_e) => TransactionOutcome::Rollback(()),
-							}
-						})
-					});
-				} else {
-					info!("transaction count {}", previous_block_extrinsics.len());
-
-					let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block, A>(
+				log::debug!(target: "block_builder", "transaction count {}", previous_block_extrinsics.len());
+				let shuffled_extrinsics = if previous_block_extrinsics.len() <= 1 {
+					previous_block_extrinsics
+				}else{
+					extrinsic_shuffler::shuffle::<Block, A>(
 						&self.api,
 						&self.block_id,
 						previous_block_extrinsics,
 						seed,
-					);
+					)
+				};
 
-					for xt in shuffled_extrinsics.iter() {
-						log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
-						self.api.execute_in_transaction(|api| {
-							match api.apply_extrinsic_with_context(
-								block_id,
-								ExecutionContext::BlockConstruction,
-								xt.clone(),
-							) {
-								Ok(Ok(_)) => TransactionOutcome::Commit(()),
-								Ok(Err(_tx_validity)) => TransactionOutcome::Rollback(()),
-								Err(_e) => TransactionOutcome::Rollback(()),
-							}
-						})
-					}
+				for xt in shuffled_extrinsics.iter() {
+					log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
+					self.api.execute_in_transaction(|api| {
+						match api.apply_extrinsic_with_context(
+							block_id,
+							ExecutionContext::BlockConstruction,
+							xt.clone(),
+						) {
+							Ok(Ok(_)) => TransactionOutcome::Commit(()),
+							Ok(Err(_tx_validity)) => TransactionOutcome::Rollback(()),
+							Err(_e) => TransactionOutcome::Rollback(()),
+						}
+					})
 				}
 			}
 			None => {

@@ -867,31 +867,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				};
 
 				match self.backend.blockchain().body(BlockId::Hash(*parent_hash)).unwrap() {
-					Some(previous_block_extrinsics) if previous_block_extrinsics.is_empty() => {
-						info!("previous block extrinsics has 0 length");
-						runtime_api.execute_block_with_context(
-							&at,
-							execution_context,
-							Block::new(import_block.header.clone(), body.clone()),
-						)?;
-					} 
 					Some(previous_block_extrinsics) => {
-						info!("previous block has extrinsics");
 						//TODO include serialize/deserialize seed field in header
 						//and use received seed instead
-						let mut seed = extrinsic_shuffler::apply_inherents_and_fetch_seed::<Block, Self>(
-							&runtime_api,
-							&at,
-							body.clone(),
-						)
-							.map_err(|e| {
-								warn!("cannot fetch shuffling seed from the block");
-								sp_blockchain::Error::Backend(format!("{}", e))
-							})?;
-
 						let mut header = import_block.header.clone();
-						let mut slice: &[u8] = & mut seed.seed;
-						header.set_seed(<Block::Hash>::decode(& mut slice).unwrap());
+
+						if previous_block_extrinsics.len() > 1{
+							let mut seed = extrinsic_shuffler::apply_inherents_and_fetch_seed::<Block, Self>(
+								&runtime_api,
+								&at,
+								body.clone(),
+							)
+								.map_err(|e| {
+									warn!("cannot fetch shuffling seed from the block");
+									sp_blockchain::Error::Backend(format!("{}", e))
+								})?;
+
+							let mut slice: &[u8] = & mut seed.seed;
+							header.set_seed(<Block::Hash>::decode(& mut slice).unwrap());
+						}
 
 						// TODO fail gracefully
 						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
@@ -917,7 +911,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let gen_storage_changes =
 					runtime_api.into_storage_changes(&state, changes_trie_state.as_ref(), *parent_hash)?;
 
-				// TODO not to myself - bring it back in this PR
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
 				{

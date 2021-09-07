@@ -65,6 +65,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 }
 
 /// seals a new block with the given params
+#[allow(dead_code)]
 pub async fn seal_block<B, BI, SC, C, E, P>(
 	SealBlockParams {
 		create_empty,
@@ -113,7 +114,6 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		let proposer = env.init(&parent)
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
-		let inherents_len = id.len();
 
 		let digest = if let Some(digest_provider) = digest_provider {
 			digest_provider.create_digest(&parent, &id)?
@@ -124,9 +124,15 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		let proposal = proposer.propose(id.clone(), digest, Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 
-		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
-			return Err(Error::EmptyTransactionPool)
-		}
+		// bellow assumption is not correct - not every inherent needs to produce extrinsic!
+		// and thats how we are using inherents - just to communicate some informations 
+		// for example if its new epoch block
+		// that function does not seem to be used anywhere in mangata - so its no longer 
+		// exported by manual-seal - just in case
+		
+		// if proposal.block.extrinsics().len() == inherents_len && !create_empty {
+		// 	return Err(Error::EmptyTransactionPool)
+		// }
 
 		let (header, body) = proposal.block.deconstruct();
 		let mut params = BlockImportParams::new(BlockOrigin::Own, header.clone());

@@ -768,7 +768,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
 		new_test_ext(1).execute_with(|| {
@@ -779,7 +778,7 @@ mod tests {
 					state_root: [0u8; 32].into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![] },
-                    seed: Default::default(),
+					seed: Default::default(),
 				},
 				extrinsics: vec![],
 			}, Default::default());
@@ -787,7 +786,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore]
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
 		new_test_ext(1).execute_with(|| {
@@ -798,7 +796,7 @@ mod tests {
 					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
-                    seed: Default::default(),
+					seed: Default::default(),
 				},
 				extrinsics: vec![],
 			}, Default::default());

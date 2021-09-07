@@ -688,10 +688,9 @@ fn inject_inherents<'a>(
 		.sr25519_vrf_sign(<AuthorityId as AppKey>::ID, public, transcript_data)
 		.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
 
-	sp_ignore_tx::IgnoreTXInherentDataProvider({
-		let flag = slot_info.number == (epoch.start_slot + epoch.duration - 1);
-		flag
-	})
+	sp_ignore_tx::IgnoreTXInherentDataProvider(
+		slot_info.number == (epoch.start_slot + epoch.duration - 1)
+	)
 	.provide_inherent_data(&mut slot_info.inherent_data)
 	.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("cannot inject RandomSeed inherent data")))?;
 

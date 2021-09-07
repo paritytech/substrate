@@ -673,7 +673,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore]
 	fn changes_tries_are_pruned_on_finalization() {
 		let mut backend = Backend::<Block>::new_test(1000, 100);
 		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
