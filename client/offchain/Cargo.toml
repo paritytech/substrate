@@ -29,7 +29,7 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

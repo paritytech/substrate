@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 futures = "0.3.9"
 libp2p = { version = "0.39.1", default-features = false }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils"}
+sc-utils = { version = "4.0.0-dev", path = "../utils"}
 log = "0.4.8"
 serde_json = "1.0.41"
 wasm-timer = "0.2"

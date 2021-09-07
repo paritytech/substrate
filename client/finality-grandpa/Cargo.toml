@@ -27,7 +27,7 @@ parity-scale-codec = { version = "2.0.0", features = ["derive"] }
 sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
