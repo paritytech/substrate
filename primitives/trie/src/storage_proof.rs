@@ -46,13 +46,12 @@ mod decode_encode_impl {
 	use super::*;
 	use codec::{Compact, Error, Input, Output};
 
-	const STATE_V0: &'static [u8] = &[3, 0]; // This is an invalid compact size encoding.
-	const STATE_V1: &'static [u8] = &[7, 1]; // or any correctly sized number of node.
+	const STATE_V0: u8 = 251; // This is an invalid compact size encoding.
+	const STATE_V1: u8 = 247; // or any correctly sized number of node.
 
 	/// Prefix another input with a byte.
 	struct PrefixInput<'a, T> {
-		prefix1: Option<u8>,
-		prefix2: Option<u8>,
+		prefix: Option<u8>,
 		input: &'a mut T,
 	}
 
@@ -61,9 +60,7 @@ mod decode_encode_impl {
 	impl<'a, T: 'a + Input> Input for PrefixInput<'a, T> {
 		fn remaining_len(&mut self) -> Result<Option<usize>, Error> {
 			let len = if let Some(len) = self.input.remaining_len()? {
-				Some(len.saturating_add(
-					self.prefix1.iter().count().saturating_add(self.prefix2.iter().count()),
-				))
+				Some(len.saturating_add(self.prefix.iter().count()))
 			} else {
 				None
 			};
@@ -71,52 +68,28 @@ mod decode_encode_impl {
 		}
 
 		fn read(&mut self, buffer: &mut [u8]) -> Result<(), Error> {
-			let mut buff_i = 0;
 			if buffer.is_empty() {
 				return Ok(());
 			}
-			match self.prefix1.take() {
+			match self.prefix.take() {
 				Some(v) => {
-					buffer[buff_i] = v;
-					buff_i += 1;
-					if buffer.is_empty() {
-						return Ok(());
-					}
+					buffer[0] = v;
+					self.input.read(&mut buffer[1..])
 				}
-				_ => (),
-			}
-
-			match self.prefix2.take() {
-				Some(v) => {
-					buffer[buff_i] = v;
-					buff_i += 1;
-					self.input.read(&mut buffer[buff_i..])
-				}
-				_ => self.input.read(&mut buffer[buff_i..]),
+				_ => self.input.read(buffer),
 			}
 		}
 	}
 
 	fn decode_inner<I: Input>(input: &mut I) -> Result<(StateVersion, Vec<Vec<u8>>), Error> {
-		let prefix1 = input.read_byte()?;
-		let (state_version, mut input) = if prefix1 == STATE_V0[0] || prefix1 == STATE_V1[0] {
-			let prefix2 = input.read_byte()?;
-			if prefix2 == STATE_V0[1] {
-				(StateVersion::V0, PrefixInput { prefix1: None, prefix2: None, input })
-			} else if prefix2 == STATE_V1[1] {
-				let threshold = Compact::<u32>::decode(input)?.0;
-				(
-					StateVersion::V1 { threshold },
-					PrefixInput { prefix1: None, prefix2: None, input },
-				)
-			} else {
-				(
-					Default::default(),
-					PrefixInput { prefix1: Some(prefix1), prefix2: Some(prefix2), input },
-				)
-			}
+		let prefix = input.read_byte()?;
+		let (state_version, mut input) = if prefix == STATE_V0 {
+			(StateVersion::V0, PrefixInput { prefix: None, input })
+		} else if prefix == STATE_V1 {
+			let threshold = Compact::<u32>::decode(input)?.0;
+			(StateVersion::V1 { threshold }, PrefixInput { prefix: None, input })
 		} else {
-			(Default::default(), PrefixInput { prefix1: None, prefix2: Some(prefix1), input })
+			(Default::default(), PrefixInput { prefix: Some(prefix), input })
 		};
 		let trie_nodes: Vec<Vec<u8>> = Decode::decode(&mut input)?;
 		Ok((state_version, trie_nodes))
@@ -126,9 +99,9 @@ mod decode_encode_impl {
 		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 			if self.0 != Default::default() {
 				match self.0 {
-					StateVersion::V0 => dest.write(STATE_V0),
+					StateVersion::V0 => dest.push_byte(STATE_V0),
 					StateVersion::V1 { threshold } => {
-						dest.write(STATE_V1);
+						dest.push_byte(STATE_V1);
 						Compact(threshold).encode_to(dest);
 					}
 				}
