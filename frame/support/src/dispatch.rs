@@ -2141,6 +2141,10 @@ macro_rules! decl_module {
 						implemented by the runtime")
 			}
 
+			fn crate_name() -> &'static str {
+				$crate::crate_to_crate_name!()
+			}
+
 			fn crate_version() -> $crate::traits::CrateVersion {
 				$crate::crate_to_crate_version!()
 			}
@@ -2763,6 +2767,14 @@ mod tests {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
 				return Some("Test")
+			}
+
+			None
+		}
+		fn crate_name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(frame_support::crate_to_crate_name!())
 			}
 
 			None

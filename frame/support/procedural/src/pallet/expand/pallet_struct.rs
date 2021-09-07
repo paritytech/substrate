@@ -214,6 +214,10 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 						implemented by the runtime")
 			}
 
+			fn crate_name() -> &'static str {
+				#frame_support::crate_to_crate_name!()
+			}
+
 			fn crate_version() -> #frame_support::traits::CrateVersion {
 				#frame_support::crate_to_crate_version!()
 			}

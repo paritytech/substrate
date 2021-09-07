@@ -246,7 +246,8 @@ fn decl_pallet_runtime_setup(
 			Some(inst) => quote!(#path::Pallet<#runtime, #path::#inst>),
 			None => quote!(#path::Pallet<#runtime>),
 		}
-	});
+	})
+	.collect::<Vec<_>>();
 
 	quote!(
 		/// Provides an implementation of `PalletInfo` to provide information
@@ -270,6 +271,19 @@ fn decl_pallet_runtime_setup(
 				#(
 					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
 						return Some(#name_strings)
+					}
+				)*
+
+				None
+			}
+
+			fn crate_name<P: 'static>() -> Option<&'static str> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
+						return Some(
+							<#pallet_structs as #scrate::traits::PalletInfoAccess>::crate_name()
+						)
 					}
 				)*
 

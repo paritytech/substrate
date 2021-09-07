@@ -29,6 +29,8 @@ pub trait PalletInfo {
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
+	/// Convert the given pallet `P` into its containing crate name.
+	fn crate_name<P: 'static>() -> Option<&'static str>;
 	/// Convert the given pallet `P` into its containing crate version.
 	fn crate_version<P: 'static>() -> Option<CrateVersion>;
 }
@@ -41,6 +43,8 @@ pub trait PalletInfoAccess {
 	fn index() -> usize;
 	/// Name of the pallet as configured in the runtime.
 	fn name() -> &'static str;
+	/// Name of the crate containing the pallet.
+	fn crate_name() -> &'static str;
 	/// Version of the crate containing the pallet.
 	fn crate_version() -> CrateVersion;
 }

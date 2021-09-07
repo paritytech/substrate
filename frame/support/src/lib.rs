@@ -666,6 +666,20 @@ pub use frame_support_procedural::DefaultNoBound;
 /// ```
 pub use frame_support_procedural::require_transactional;
 
+/// Return the name of the current crate.
+///
+/// It uses the `CARGO_PKG_NAME` environment variable to fetch the crate name.
+/// This means that the returned string will correspond to the version of the crate the macro is
+/// called in!
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::crate_to_crate_name;
+/// const Name: &'static str = crate_to_crate_name!();
+/// ```
+pub use frame_support_procedural::crate_to_crate_name;
+
 /// Convert the current crate version into a [`CrateVersion`](crate::traits::CrateVersion).
 ///
 /// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
@@ -810,6 +824,9 @@ pub mod tests {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn crate_name<P: 'static>() -> Option<&'static str> {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 		fn crate_version<P: 'static>() -> Option<CrateVersion> {

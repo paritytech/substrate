@@ -21,6 +21,7 @@
 
 mod clone_no_bound;
 mod construct_runtime;
+mod crate_name;
 mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
@@ -32,7 +33,7 @@ mod storage;
 mod transactional;
 
 use proc_macro::TokenStream;
-use std::cell::RefCell;
+use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
 thread_local! {
@@ -51,6 +52,16 @@ impl Counter {
 		self.0 += 1;
 		ret
 	}
+}
+
+/// Get the value from the given environment variable set by cargo.
+///
+/// The value is parsed into the requested destination type.
+fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()> {
+	let version = std::env::var(version_env)
+		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
+
+	T::from_str(&version).map_err(drop)
 }
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -466,6 +477,13 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 #[proc_macro]
 pub fn crate_to_crate_version(input: TokenStream) -> TokenStream {
 	crate_version::crate_to_crate_version(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
+}
+
+#[proc_macro]
+pub fn crate_to_crate_name(input: TokenStream) -> TokenStream {
+	crate_name::crate_to_crate_name(input)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }

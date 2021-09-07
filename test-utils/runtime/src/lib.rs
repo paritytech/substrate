@@ -525,6 +525,21 @@ impl frame_support::traits::PalletInfo for Runtime {
 
 		None
 	}
+	fn crate_name<P: 'static>() -> Option<&'static str> {
+		use frame_support::traits::PalletInfoAccess as _;
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
+			return Some(system::Pallet::<Runtime>::crate_name())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
+			return Some(pallet_timestamp::Pallet::<Runtime>::crate_name())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
+			return Some(pallet_babe::Pallet::<Runtime>::crate_name())
+		}
+
+		None
+	}
 	fn crate_version<P: 'static>() -> Option<CrateVersion> {
 		use frame_support::traits::PalletInfoAccess as _;
 		let type_id = sp_std::any::TypeId::of::<P>();
