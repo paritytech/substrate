@@ -21,7 +21,7 @@ sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primiti
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
-frame-benchmarking = { version = "4.0.0-dev", optional = true, default-features = false, path = "../benchmarking" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 

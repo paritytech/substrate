@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sp_core::hexdisplay::HexDisplay;
+use sp_io::{hashing::twox_128, storage};
+
 use frame_support::{
 	traits::{
 		Get, GetStorageVersion, PalletInfoAccess, StorageVersion,
@@ -22,8 +25,6 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use sp_core::hexdisplay::HexDisplay;
-use sp_io::hashing::twox_128;
 
 /// Migrate the entire storage of this pallet to a new prefix.
 ///
@@ -57,11 +58,12 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 	);
 
 	if on_chain_storage_version < 4 {
-		log::info!(target: "runtime::membership", "new prefix: {}", new_pallet_name);
 		frame_support::storage::migration::move_pallet(
 			old_pallet_name.as_bytes(),
 			new_pallet_name.as_bytes(),
 		);
+		log_migration("migration", old_pallet_name, new_pallet_name);
+
 		StorageVersion::new(4).put::<P>();
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
@@ -78,46 +80,35 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N: AsRef<str>>(
+pub fn pre_migrate<P: GetStorageVersion + 'static, N: AsRef<str>>(
 	old_pallet_name: N,
 	new_pallet_name: N,
 ) {
 	let old_pallet_name = old_pallet_name.as_ref();
 	let new_pallet_name = new_pallet_name.as_ref();
-	log::info!(
-		"pre-migration membership, old prefix = {}, new prefix = {}",
-		old_pallet_name,
-		new_pallet_name,
-	);
+	log_migration("pre-migration", old_pallet_name, new_pallet_name);
 
-	// the next key must exist, and start with the hash of old prefix.
 	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	let next_key = sp_io::storage::next_key(&old_pallet_prefix).unwrap();
-	assert!(next_key.starts_with(&old_pallet_prefix));
+	assert!(storage::next_key(&old_pallet_prefix)
+		.map_or(true, |next_key| next_key.starts_with(&old_pallet_prefix)));
 
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
-	const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
-	let pallet_version_key =
-		[&new_pallet_prefix, &twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
 	let storage_version_key =
 		[&new_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
-
 	// ensure nothing is stored in the new prefix.
 	assert!(
-		sp_io::storage::next_key(&new_pallet_prefix).map_or(
+		storage::next_key(&new_pallet_prefix).map_or(
 			// either nothing is there
 			true,
 			// or we ensure that it has no common prefix with twox_128(new),
-			// or isn't the pallet version that is already stored using the pallet name
+			// or isn't the storage version that is already stored using the pallet name
 			|next_key| {
-				!next_key.starts_with(&new_pallet_prefix) ||
-					next_key == pallet_version_key ||
-					next_key == storage_version_key
+				!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
 			},
 		),
 		"unexpected next_key({}) = {:?}",
 		new_pallet_name,
-		HexDisplay::from(&sp_io::storage::next_key(&new_pallet_prefix).unwrap()),
+		HexDisplay::from(&storage::next_key(&new_pallet_prefix).unwrap()),
 	);
 	assert!(<P as GetStorageVersion>::on_chain_storage_version() < 4);
 }
@@ -126,13 +117,41 @@ pub fn pre_migration<T: frame_system::Config, P: GetStorageVersion + 'static, N:
 /// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn post_migration<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N) {
-	log::info!("post-migration membership");
+pub fn post_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_pallet_name: N) {
+	let old_pallet_name = old_pallet_name.as_ref();
+	let new_pallet_name = new_pallet_name.as_ref();
+	log_migration("post-migration", old_pallet_name, new_pallet_name);
 
-	let old_pallet_name = old_pallet_name.as_ref().as_bytes();
-	let old_pallet_prefix = twox_128(old_pallet_name);
-	// Assert that nothing remains at the old prefix
-	assert!(sp_io::storage::next_key(&old_pallet_prefix)
-		.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix)));
+	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
+	#[cfg(test)]
+	{
+		let storage_version_key =
+			[&old_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
+		assert!(storage::next_key(&old_pallet_prefix)
+			.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix) ||
+				next_key == storage_version_key));
+	}
+	#[cfg(not(test))]
+	{
+		// Assert that nothing remains at the old prefix
+		assert!(storage::next_key(&old_pallet_prefix)
+			.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix)));
+	}
+
+	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
+	// Assert that the storages have been moved to the new prefix
+	assert!(storage::next_key(&new_pallet_prefix)
+		.map_or(true, |next_key| next_key.starts_with(&new_pallet_prefix)));
+
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
+}
+
+fn log_migration(stage: &str, old_pallet_name: &str, new_pallet_name: &str) {
+	log::info!(
+		target: "runtime::membership",
+		"{}, prefix: '{}' ==> '{}'",
+		stage,
+		old_pallet_name,
+		new_pallet_name,
+	);
 }

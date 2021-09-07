@@ -788,4 +788,26 @@ mod tests {
 		.build_storage()
 		.unwrap();
 	}
+
+	#[test]
+	fn migration_v4() {
+		let mut s = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_membership::GenesisConfig::<Test> {
+			members: vec![10, 20, 30],
+			..Default::default()
+		}
+		.assimilate_storage(&mut s)
+		.unwrap();
+
+		sp_io::TestExternalities::new(s).execute_with(|| {
+			use frame_support::traits::PalletInfo;
+			let old_pallet_name = <Test as frame_system::Config>::PalletInfo::name::<Membership>()
+				.expect("Membership is part of runtime, so it has a name; qed");
+			let new_pallet_name = "NewMembership";
+
+			crate::migrations::v4::pre_migrate::<Membership, _>(old_pallet_name, new_pallet_name);
+			crate::migrations::v4::migrate::<Test, Membership, _>(old_pallet_name, new_pallet_name);
+			crate::migrations::v4::post_migrate::<Membership, _>(old_pallet_name, new_pallet_name);
+		});
+	}
 }
