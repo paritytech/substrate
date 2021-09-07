@@ -88,27 +88,32 @@ fi
 cd "$substrate_dir"
 
 our_crates=()
-while IFS= read -r crate; do
-  # for avoiding duplicate entries
-  for our_crate in "${our_crates[@]}"; do
-    if [[ "$crate" == "$our_crate" ]]; then
-      found=true
-      break
-    fi
-  done
-  if [ "${found:-}" ]; then
-    unset found
-  else
-    our_crates+=("$crate")
-  fi
-done < <(jq -r '
-  . as $in |
-  paths |
-  select(.[-1]=="source" and . as $p | $in | getpath($p)==null) as $path |
-  del($path[-1]) as $path |
-  $in | getpath($path + ["name"])
-' < <(cargo metadata --quiet --format-version=1))
 our_crates_source="git+https://github.com/paritytech/substrate"
+load_our_crates() {
+  local found
+
+  while IFS= read -r crate; do
+    # for avoiding duplicate entries
+    for our_crate in "${our_crates[@]}"; do
+      if [[ "$crate" == "$our_crate" ]]; then
+        found=true
+        break
+      fi
+    done
+    if [ "${found:-}" ]; then
+      unset found
+    else
+      our_crates+=("$crate")
+    fi
+  done < <(jq -r '
+    . as $in |
+    paths |
+    select(.[-1]=="source" and . as $p | $in | getpath($p)==null) as $path |
+    del($path[-1]) as $path |
+    $in | getpath($path + ["name"])
+  ' < <(cargo metadata --quiet --format-version=1))
+}
+load_our_crates
 
 match_their_crates() {
   local target_dir="$1"
