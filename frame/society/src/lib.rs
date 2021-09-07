@@ -396,8 +396,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type WrongSideDeduction: Get<BalanceOf<Self, I>>;
 
-		/// The number of times a member may vote the wrong way (or not at all, when they are a skeptic)
-		/// before they become suspended.
+		/// The number of times a member may vote the wrong way (or not at all, when they are a
+		/// skeptic) before they become suspended.
 		#[pallet::constant]
 		type MaxStrikes: Get<u32>;
 
@@ -481,7 +481,8 @@ pub mod pallet {
 		/// is the second. \[candidate_id, offer\]
 		Bid(T::AccountId, BalanceOf<T, I>),
 		/// A membership bid just happened by vouching. The given account is the candidate's ID and
-		/// their offer is the second. The vouching party is the third. \[candidate_id, offer, vouching\]
+		/// their offer is the second. The vouching party is the third. \[candidate_id, offer,
+		/// vouching\]
 		Vouch(T::AccountId, BalanceOf<T, I>, T::AccountId),
 		/// A \[candidate\] was dropped (due to an excess of bids in the system).
 		AutoUnbid(T::AccountId),
@@ -697,7 +698,8 @@ pub mod pallet {
 		/// 	- One storage read to retrieve all current candidates. O(C)
 		/// 	- One storage read to retrieve all members. O(M)
 		/// - Storage Writes:
-		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization w/ read)
+		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization
+		///    w/ read)
 		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT. O(1)
 		/// - Notable Computation:
 		/// 	- O(B + C + log M) search to check user is not already a part of society.
@@ -806,7 +808,8 @@ pub mod pallet {
 		/// 	- One storage read to retrieve all current candidates. O(C)
 		/// - Storage Writes:
 		/// 	- One storage write to insert vouching status to the member. O(1)
-		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization w/ read)
+		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization
+		///    w/ read)
 		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT. O(1)
 		/// - Notable Computation:
 		/// 	- O(log M) search to check sender is a member.
@@ -895,8 +898,8 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `candidate`: The candidate that the member would like to bid on.
-		/// - `approve`: A boolean which says if the candidate should be
-		///              approved (`true`) or rejected (`false`).
+		/// - `approve`: A boolean which says if the candidate should be approved (`true`) or
+		///   rejected (`false`).
 		///
 		/// # <weight>
 		/// Key: C (len of candidates), M (len of members)
@@ -959,7 +962,8 @@ pub mod pallet {
 
 		/// Transfer the first matured payout for the sender and remove it from the records.
 		///
-		/// NOTE: This extrinsic needs to be called multiple times to claim multiple matured payouts.
+		/// NOTE: This extrinsic needs to be called multiple times to claim multiple matured
+		/// payouts.
 		///
 		/// Payment: The member will receive a payment equal to their first matured
 		/// payout to their free balance.
@@ -1080,13 +1084,14 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `who` - The suspended member to be judged.
-		/// - `forgive` - A boolean representing whether the suspension judgement origin
-		///               forgives (`true`) or rejects (`false`) a suspended member.
+		/// - `forgive` - A boolean representing whether the suspension judgement origin forgives
+		///   (`true`) or rejects (`false`) a suspended member.
 		///
 		/// # <weight>
 		/// Key: B (len of bids), M (len of members)
 		/// - One storage read to check `who` is a suspended member. O(1)
-		/// - Up to one storage write O(M) with O(log M) binary search to add a member back to society.
+		/// - Up to one storage write O(M) with O(log M) binary search to add a member back to
+		///   society.
 		/// - Up to 3 storage removals O(1) to clean up a removed member.
 		/// - Up to one storage write O(B) with O(B) search to remove vouched bid from bids.
 		/// - Up to one additional event if unvouch takes place.
@@ -1214,7 +1219,8 @@ pub mod pallet {
 						}
 					},
 					Judgement::Rebid => {
-						// Founder has taken no judgement, and candidate is placed back into the pool.
+						// Founder has taken no judgement, and candidate is placed back into the
+						// pool.
 						let bids = <Bids<T, I>>::get();
 						Self::put_bid(bids, &who, value, kind);
 					},
