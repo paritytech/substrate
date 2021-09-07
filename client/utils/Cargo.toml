@@ -1,5 +1,5 @@
 [package]
-name = "sp-utils"
+name = "sc-utils"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

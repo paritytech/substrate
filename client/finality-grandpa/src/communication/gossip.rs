@@ -94,7 +94,7 @@ use log::{debug, trace};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use super::{benefit, cost, Round, SetId};
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
