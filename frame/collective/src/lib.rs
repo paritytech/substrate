@@ -155,14 +155,14 @@ pub struct Votes<AccountId, BlockNumber> {
 	end: BlockNumber,
 }
 
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -2257,5 +2257,51 @@ mod tests {
 		}
 		.build_storage()
 		.unwrap();
+	}
+
+	#[test]
+	fn migration_v4() {
+		new_test_ext().execute_with(|| {
+			use frame_support::traits::PalletInfo;
+
+			let old_pallet_name =
+				<Test as frame_system::Config>::PalletInfo::name::<Collective>().unwrap();
+			let new_pallet_name = "NewCollective";
+			crate::migrations::v4::pre_migrate::<Collective, _>(old_pallet_name, new_pallet_name);
+			crate::migrations::v4::migrate::<Test, Collective, _>(old_pallet_name, new_pallet_name);
+			crate::migrations::v4::post_migrate::<Collective, _>(old_pallet_name, new_pallet_name);
+
+			let old_pallet_name =
+				<Test as frame_system::Config>::PalletInfo::name::<CollectiveMajority>().unwrap();
+			let new_pallet_name = "NewCollectiveMajority";
+			crate::migrations::v4::pre_migrate::<CollectiveMajority, _>(
+				old_pallet_name,
+				new_pallet_name,
+			);
+			crate::migrations::v4::migrate::<Test, CollectiveMajority, _>(
+				old_pallet_name,
+				new_pallet_name,
+			);
+			crate::migrations::v4::post_migrate::<CollectiveMajority, _>(
+				old_pallet_name,
+				new_pallet_name,
+			);
+
+			let old_pallet_name =
+				<Test as frame_system::Config>::PalletInfo::name::<DefaultCollective>().unwrap();
+			let new_pallet_name = "NewDefaultCollective";
+			crate::migrations::v4::pre_migrate::<DefaultCollective, _>(
+				old_pallet_name,
+				new_pallet_name,
+			);
+			crate::migrations::v4::migrate::<Test, DefaultCollective, _>(
+				old_pallet_name,
+				new_pallet_name,
+			);
+			crate::migrations::v4::post_migrate::<DefaultCollective, _>(
+				old_pallet_name,
+				new_pallet_name,
+			);
+		});
 	}
 }
