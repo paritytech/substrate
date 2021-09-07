@@ -292,16 +292,15 @@ impl Sandbox for FunctionExecutor {
 			&mut SandboxContext { executor: self, dispatch_thunk: dispatch_thunk.clone() },
 		);
 
-		let instance_idx_or_err_code =
-			match result.map(|i| i.register(&mut store.borrow_mut())) {
-				Ok(instance_idx) => {
-					self.sandbox_dispatch_thunks.borrow_mut().insert(instance_idx, dispatch_thunk);
+		let instance_idx_or_err_code = match result.map(|i| i.register(&mut store.borrow_mut())) {
+			Ok(instance_idx) => {
+				self.sandbox_dispatch_thunks.borrow_mut().insert(instance_idx, dispatch_thunk);
 
-					instance_idx
-				},
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
-			};
+				instance_idx
+			},
+			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+			Err(_) => sandbox_primitives::ERR_MODULE,
+		};
 
 		Ok(instance_idx_or_err_code)
 	}

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::host::{HostState, HostContext};
+use crate::host::{HostContext, HostState};
 
 scoped_tls::scoped_thread_local!(static HOST_STATE: HostState);
 
