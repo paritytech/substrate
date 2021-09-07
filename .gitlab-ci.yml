@@ -365,20 +365,20 @@ test-linux-stable:                 &test-linux
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
-unleash-check:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  script:
-    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash de-dev-deps
+#unleash-check:
+  #stage:                           test
+  #<<:                              *docker-env
+  #<<:                              *test-refs-no-trigger
+  #script:
+    #- cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    #- cargo unleash de-dev-deps
     # Reuse build artifacts when running checks (cuts down check time by 3x)
     # TODO: Implement this optimization in cargo-unleash rather than here
-    - mkdir -p target/unleash
-    - export CARGO_TARGET_DIR=target/unleash
-    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+    #- mkdir -p target/unleash
+    #- export CARGO_TARGET_DIR=target/unleash
+    #- cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
   # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
-  allow_failure:                   true
+  #allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
