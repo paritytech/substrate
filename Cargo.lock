@@ -7307,12 +7307,12 @@ dependencies = [
  "regex",
  "rpassword",
  "sc-client-api",
- "sc-foo",
  "sc-keystore",
  "sc-network",
  "sc-service",
  "sc-telemetry",
  "sc-tracing",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-blockchain",
@@ -7340,8 +7340,8 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-executor",
- "sc-foo",
  "sc-transaction-pool-api",
+ "sc-utils",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -7398,7 +7398,7 @@ dependencies = [
  "log 0.4.14",
  "parking_lot 0.11.1",
  "sc-client-api",
- "sc-foo",
+ "sc-utils",
  "serde",
  "sp-api",
  "sp-blockchain",
@@ -7747,12 +7747,12 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
- "sc-foo",
  "sc-keystore",
  "sc-network",
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
+ "sc-utils",
  "serde_json",
  "sp-api",
  "sp-application-crypto",
@@ -7796,16 +7796,6 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-test-runtime-client",
-]
-
-[[package]]
-name = "sc-foo"
-version = "4.0.0-dev"
-dependencies = [
- "futures 0.3.16",
- "futures-timer 3.0.2",
- "lazy_static",
- "prometheus",
 ]
 
 [[package]]
@@ -7890,8 +7880,8 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
- "sc-foo",
  "sc-peerset",
+ "sc-utils",
  "serde",
  "serde_json",
  "smallvec 1.6.1",
@@ -7978,10 +7968,10 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
- "sc-foo",
  "sc-network",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "sp-api",
  "sp-consensus",
  "sp-core",
@@ -8001,7 +7991,7 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "rand 0.7.3",
- "sc-foo",
+ "sc-utils",
  "serde_json",
  "wasm-timer",
 ]
@@ -8030,12 +8020,12 @@ dependencies = [
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
- "sc-foo",
  "sc-network",
  "sc-rpc-api",
  "sc-tracing",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde_json",
  "sp-api",
  "sp-blockchain",
@@ -8128,7 +8118,6 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-executor",
- "sc-foo",
  "sc-informant",
  "sc-keystore",
  "sc-light",
@@ -8140,6 +8129,7 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-api",
@@ -8312,8 +8302,8 @@ dependencies = [
  "retain_mut",
  "sc-block-builder",
  "sc-client-api",
- "sc-foo",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde",
  "sp-api",
  "sp-blockchain",
@@ -8340,6 +8330,16 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "thiserror",
+]
+
+[[package]]
+name = "sc-utils"
+version = "4.0.0-dev"
+dependencies = [
+ "futures 0.3.16",
+ "futures-timer 3.0.2",
+ "lazy_static",
+ "prometheus",
 ]
 
 [[package]]

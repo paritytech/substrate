@@ -70,7 +70,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
-use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	borrow::Cow,

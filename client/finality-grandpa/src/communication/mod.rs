@@ -58,7 +58,7 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
-use sc_foo::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 
 pub mod gossip;

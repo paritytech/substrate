@@ -61,7 +61,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
-use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},

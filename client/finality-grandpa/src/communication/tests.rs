@@ -28,7 +28,7 @@ use parity_scale_codec::Encode;
 use sc_network::{config::Role, Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
-use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_finality_grandpa::AuthorityList;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::traits::NumberFor;

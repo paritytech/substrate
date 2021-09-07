@@ -19,7 +19,7 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 
 use crate::{justification::GrandpaJustification, Error};

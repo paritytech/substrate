@@ -37,7 +37,7 @@ use log::{debug, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, Gauge, PrometheusError, Registry, U64};
 use sc_client_api::{BlockImportNotification, ImportNotifications};
-use sc_foo::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
@@ -561,7 +561,7 @@ mod tests {
 	use futures::future::Either;
 	use futures_timer::Delay;
 	use sc_client_api::BlockImportNotification;
-	use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedSender};
+	use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 	use sp_consensus::BlockOrigin;
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 

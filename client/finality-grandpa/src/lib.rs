@@ -68,7 +68,7 @@ use sc_client_api::{
 };
 use sc_consensus::BlockImport;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sc_foo::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
