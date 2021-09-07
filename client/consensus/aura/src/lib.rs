@@ -558,6 +558,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::executor;
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
@@ -583,7 +584,6 @@ mod tests {
 		runtime::{Header, H256},
 		TestClient,
 	};
-	use futures::executor;
 
 	type Error = sp_blockchain::Error;
 
