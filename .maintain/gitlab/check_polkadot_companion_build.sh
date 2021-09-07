@@ -37,6 +37,17 @@ from this pull request. otherwise, it will uses master instead
 
 EOT
 
+# FIXME: update jq in the CI file
+
+jq="$PWD/jq16"
+curl -sqL https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -o "$jq"
+chmod +x "$jq"
+jq_sha256sum="af986793a515d500ab2d35f8d2aecd656e764504b789b66d7e1a0b727a124c44  $jq"
+if [ "$(sha256sum "$jq")" != "$jq_sha256sum" ]; then
+  echo "ERROR: jq sha256sum mismatch"
+  exit 1
+fi
+
 # Set the user name and email to make merging work
 git config --global user.name 'CI system'
 git config --global user.email '<>'
@@ -105,7 +116,7 @@ load_our_crates() {
     else
       our_crates+=("$crate")
     fi
-  done < <(cargo metadata --quiet --format-version=1 | jq -r '
+  done < <(cargo metadata --quiet --format-version=1 | "$jq" -r '
     . as $in |
     paths |
     select(.[-1]=="source" and . as $p | $in | getpath($p)==null) as $path |
@@ -124,14 +135,13 @@ match_their_crates() {
   local target_name="$(basename "$target_dir")"
   local crates_not_found=()
 
-  local found
-
   # output will be provided in the format:
   #   crate
   #   source
   #   crate
   #   ...
   local next="crate"
+  local found
   while IFS= read -r line; do
     case "$next" in
       crate)
@@ -171,7 +181,7 @@ match_their_crates() {
         exit 1
       ;;
     esac
-  done < <(cargo metadata --quiet --format-version=1 | jq -r '
+  done < <(cargo metadata --quiet --format-version=1 | "$jq" -r '
     . as $in |
     paths(select(type=="string")) |
     select(.[-1]=="source") as $source_path |
@@ -180,7 +190,7 @@ match_their_crates() {
     .[]
   ')
 
-  if [ "$crates_not_found" ]; then
+  if [ "${crates_not_found[@]}" ]; then
     echo "Errors during crate matching"
     printf "Failed to find crate \"%s\" referenced in $target_name\n" "${crates_not_found[@]}"
     exit 1
