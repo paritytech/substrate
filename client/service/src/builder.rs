@@ -287,7 +287,7 @@ where
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let chain_spec = &config.chain_spec;
@@ -373,7 +373,7 @@ where
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let db_storage = {
