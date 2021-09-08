@@ -50,7 +50,6 @@ use crate::{config::ProtocolId, utils::LruHashSet};
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
-use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
 use libp2p::{
 	core::{
 		connection::{ConnectionId, ListenerId},
@@ -65,6 +64,7 @@ use libp2p::{
 		GetClosestPeersError, Kademlia, KademliaBucketInserts, KademliaConfig, KademliaEvent,
 		QueryId, QueryResult, Quorum, Record,
 	},
+	mdns::{Mdns, MdnsConfig, MdnsEvent},
 	multiaddr::Protocol,
 	swarm::{
 		protocols_handler::multi::IntoMultiHandler, IntoProtocolsHandler, NetworkBehaviour,
