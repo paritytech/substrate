@@ -305,7 +305,7 @@ impl<T: Config> List<T> {
 			}
 
 			// now get rid of the node itself
-			crate::ListNodes::<T>::remove(id);
+			node.remove_from_storage_unchecked()
 		}
 
 		for (_, bag) in bags {
@@ -401,6 +401,7 @@ impl<T: Config> List<T> {
 
 	/// Returns the nodes of all non-empty bags. For testing and benchmarks.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
+	#[allow(dead_code)]
 	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
 		use frame_support::traits::Get as _;
 
@@ -662,7 +663,12 @@ impl<T: Config> Node<T> {
 		}
 	}
 
-	// fn remove_from_storage_unchecked
+	/// This is a naive function that removes a node from the `ListNodes` storage item.
+	///
+	/// It is naive because it does not check if the node has first been removed from its bag.
+	fn remove_from_storage_unchecked(&self) {
+		crate::ListNodes::<T>::remove(&self.id)
+	}
 
 	/// Get the previous node in the bag.
 	fn prev(&self) -> Option<Node<T>> {
