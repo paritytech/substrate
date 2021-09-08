@@ -57,8 +57,8 @@ pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
 
-/// The **only** entry point of this module. All operations to the bags-list should happen through
-/// this interface. No other module members should be directly accessed.
+/// The **ONLY** entry point of this module. All operations to the bags-list should happen through
+/// this interface. It is forbidden to access other module members directly.
 //
 // Data structure providing efficient mostly-accurate selection of the top N id by `VoteWeight`.
 //
