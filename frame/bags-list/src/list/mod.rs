@@ -57,17 +57,20 @@ pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
 
-/// Data structure providing efficient mostly-accurate selection of the top N id by `VoteWeight`.
-///
-/// It's implemented as a set of linked lists. Each linked list comprises a bag of ids of
-/// arbitrary and unbounded length, all having a vote weight within a particular constant range.
-/// This structure means that ids can be added and removed in `O(1)` time.
-///
-/// Iteration is accomplished by chaining the iteration of each bag, from greatest to least. While
-/// the users within any particular bag are sorted in an entirely arbitrary order, the overall vote
-/// weight decreases as successive bags are reached. This means that it is valid to truncate
-/// iteration at any desired point; only those ids in the lowest bag can be excluded. This
-/// satisfies both the desire for fairness and the requirement for efficiency.
+/// The **only** entry point of this module. All operations to the bags-list should happen through
+/// this interface. No other module members should be directly accessed.
+//
+// Data structure providing efficient mostly-accurate selection of the top N id by `VoteWeight`.
+//
+// It's implemented as a set of linked lists. Each linked list comprises a bag of ids of
+// arbitrary and unbounded length, all having a vote weight within a particular constant range.
+// This structure means that ids can be added and removed in `O(1)` time.
+//
+// Iteration is accomplished by chaining the iteration of each bag, from greatest to least. While
+// the users within any particular bag are sorted in an entirely arbitrary order, the overall vote
+// weight decreases as successive bags are reached. This means that it is valid to truncate
+// iteration at any desired point; only those ids in the lowest bag can be excluded. This
+// satisfies both the desire for fairness and the requirement for efficiency.
 pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
