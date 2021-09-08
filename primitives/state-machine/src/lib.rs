@@ -1660,7 +1660,7 @@ mod tests {
 
 		let check_proof = |mdb, root, state_hash| -> StorageProof {
 			let remote_backend = TrieBackend::new(mdb, root);
-			let remote_root = remote_backend.storage_root(::std::iter::empty(), state_hash).0;
+			let remote_root = remote_backend.storage_root(std::iter::empty(), state_hash).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
 			let local_result1 =
@@ -1683,25 +1683,13 @@ mod tests {
 		// do switch
 		layout = Layout::with_max_inline_value(sp_core::storage::DEFAULT_MAX_INLINE_VALUE);
 		state_hash = StateVersion::V1;
-		// update with same value do not change
 		{
 			let mut trie =
 				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
-		}
-		let root3 = root.clone();
-		assert!(root1 == root3);
-		// different value then same is enough to update
-		// from triedbmut persipective (do not
-		// work with state machine as only changes do makes
-		// it to payload (would require a special host function).
-		{
-			let mut trie =
-				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
-			trie.insert(b"foo222", vec![4u8].as_slice()) // inner hash
-				.expect("insert failed");
-			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
+			// update with same value do change
+			trie.insert(b"foo", vec![1u8; 1000].as_slice()) // inner hash
 				.expect("insert failed");
 		}
 		let root3 = root.clone();
@@ -1715,8 +1703,8 @@ mod tests {
 
 	#[test]
 	fn compact_multiple_child_trie() {
-		let size_inner_hash = compact_multiple_child_trie_inner(StateVersion::V0);
-		let size_no_inner_hash = compact_multiple_child_trie_inner(StateVersion::V1);
+		let size_no_inner_hash = compact_multiple_child_trie_inner(StateVersion::V0);
+		let size_inner_hash = compact_multiple_child_trie_inner(StateVersion::V1);
 		assert!(size_inner_hash < size_no_inner_hash);
 	}
 	fn compact_multiple_child_trie_inner(state_hash: StateVersion) -> usize {
