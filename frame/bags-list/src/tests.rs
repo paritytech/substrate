@@ -29,35 +29,50 @@ mod pallet {
 	fn rebag_works() {
 		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
-			assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]
+			);
 
 			// when increasing vote weight to the level of non-existent bag
 			NextVoteWeight::set(2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
+			);
 
 			// when decreasing weight within the range of the current bag
 			NextVoteWeight::set(1001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id does not move
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
+			);
 
 			// when reducing weight to the level of a non-existent bag
 			NextVoteWeight::set(30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
-			assert_eq!(get_bags(), vec![(10, vec![1]), (30, vec![42]), (1_000, vec![2, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (30, vec![42]), (1_000, vec![2, 3, 4])]
+			);
 
 			// when increasing weight to the level of a pre-existing bag
 			NextVoteWeight::set(500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id moves into that bag
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]
+			);
 		});
 	}
 
@@ -67,21 +82,21 @@ mod pallet {
 	fn rebag_tail_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// when
 			NextVoteWeight::set(10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(3), 1_000));
 
 			// when
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![1, 4, 3]), (1_000, vec![2])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3]), (1_000, vec![2])]);
 
 			assert_eq!(Bag::<Runtime>::get(10).unwrap(), Bag::new(Some(1), Some(3), 10));
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(2), 1_000));
@@ -91,7 +106,7 @@ mod pallet {
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![1, 4, 3, 2])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3, 2])]);
 			assert_eq!(Bag::<Runtime>::get(1_000), None);
 		});
 	}
@@ -106,21 +121,21 @@ mod pallet {
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(3), Some(4), 1_000));
 
 			// when
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(4), Some(4), 1_000));
 
 			// when
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
-			assert_eq!(get_bags(), vec![(10, vec![1, 2, 3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3, 4])]);
 			assert_eq!(Bag::<Runtime>::get(1_000), None);
 		});
 	}
@@ -166,12 +181,15 @@ mod pallet {
 
 		ExtBuilder::default().build_and_execute(|| {
 			// everyone in the same bag.
-			assert_eq!(get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
 
 			// any insertion goes there as well.
 			assert_ok!(List::<Runtime>::insert(5, 999));
 			assert_ok!(List::<Runtime>::insert(6, 0));
-			assert_eq!(get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]
+			);
 
 			// any rebag is noop.
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
@@ -223,7 +241,7 @@ mod sorted_list_provider {
 			assert_ok!(BagsList::on_insert(6, 1_000));
 
 			// then the bags
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6])]);
 			// and list correctly include the new id,
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![2, 3, 4, 6, 1]);
 			// and the count is incremented.
@@ -234,7 +252,7 @@ mod sorted_list_provider {
 
 			// then the bags
 			assert_eq!(
-				get_bags(),
+				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4, 6]), (2_000, vec![7])]
 			);
 			// and list correctly include the new id,
@@ -262,14 +280,20 @@ mod sorted_list_provider {
 	fn on_update_works() {
 		ExtBuilder::default().add_ids(vec![(42, 20)]).build_and_execute(|| {
 			// given
-			assert_eq!(get_bags(), vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]
+			);
 			assert_eq!(BagsList::count(), 5);
 
 			// when increasing weight to the level of non-existent bag
 			BagsList::on_update(&42, 2_000);
 
 			// then the bag is created with the id in it,
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]
+			);
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
@@ -277,7 +301,10 @@ mod sorted_list_provider {
 			BagsList::on_update(&42, 1_001);
 
 			// then the id does not change bags,
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2000, vec![42])]
+			);
 			// or change position in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
@@ -286,7 +313,7 @@ mod sorted_list_provider {
 
 			// the the new bag is created with the id in it,
 			assert_eq!(
-				get_bags(),
+				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (VoteWeight::MAX, vec![42])]
 			);
 			// and the id position is updated in the list.
@@ -296,7 +323,10 @@ mod sorted_list_provider {
 			BagsList::on_update(&42, 1_000);
 
 			// then id is moved to the correct bag (as the last member),
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]
+			);
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![2, 3, 4, 42, 1]);
 
@@ -324,7 +354,7 @@ mod sorted_list_provider {
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
-			assert_eq!(get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
 			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node
@@ -332,7 +362,7 @@ mod sorted_list_provider {
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
-			assert_eq!(get_bags(), vec![(1_000, vec![3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(1_000, vec![3, 4])]);
 			ensure_left(1, 2);
 
 			// when removing all remaining ids

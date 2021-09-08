@@ -96,8 +96,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-use super::*;
-
 /// Default AccountIds and their weights.
 pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
 	[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
@@ -143,18 +141,6 @@ impl ExtBuilder {
 pub(crate) mod test_utils {
 	use super::*;
 	use list::Bag;
-
-	/// Returns the nodes of all non-empty bags.
-	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
-		BagThresholds::get()
-			.into_iter()
-			.chain(std::iter::once(&VoteWeight::MAX)) // assumes this is not an explicit threshold
-			.filter_map(|t| {
-				Bag::<Runtime>::get(*t)
-					.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
-			})
-			.collect::<Vec<_>>()
-	}
 
 	/// Returns the ordered ids within the given bag.
 	pub(crate) fn bag_as_ids(bag: &Bag<Runtime>) -> Vec<AccountId> {

@@ -18,21 +18,11 @@
 //! Benchmarks for the bags list pallet.
 
 use super::*;
-use crate::list::{Bag, List};
+use crate::list::List;
 use frame_benchmarking::{account, whitelisted_caller};
 use frame_election_provider_support::VoteWeightProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
-
-fn get_bags<T: Config>() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
-	T::BagThresholds::get()
-		.into_iter()
-		.filter_map(|t| {
-			Bag::<T>::get(*t)
-				.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
-		})
-		.collect::<Vec<_>>()
-}
 
 frame_benchmarking::benchmarks! {
 	rebag {
@@ -71,7 +61,7 @@ frame_benchmarking::benchmarks! {
 
 		// the bags are in the expected state after insertions.
 		assert_eq!(
-			get_bags::<T>(),
+			List::<T>::get_bags(),
 			vec![
 				(origin_bag_thresh, vec![origin_head.clone(), origin_middle.clone(), origin_tail.clone()]),
 				(dest_bag_thresh, vec![dest_head.clone()])
@@ -84,7 +74,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		// check the bags have updated as expected.
 		assert_eq!(
-			get_bags::<T>(),
+			List::<T>::get_bags(),
 			vec![
 				(
 					origin_bag_thresh,

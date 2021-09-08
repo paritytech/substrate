@@ -398,6 +398,27 @@ impl<T: Config> List<T> {
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
+
+	/// Returns the nodes of all non-empty bags. For testing and benchmarks.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
+	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
+		use frame_support::traits::Get as _;
+
+		let thresholds = T::BagThresholds::get();
+		let iter = thresholds.iter().copied();
+		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
+			// in the event that they included it, we can just pass the iterator through unchanged.
+			Box::new(iter)
+		} else {
+			// otherwise, insert it here.
+			Box::new(iter.chain(sp_std::iter::once(VoteWeight::MAX)))
+		};
+
+		iter.filter_map(|t| {
+			Bag::<T>::get(t).map(|bag| (t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
+		})
+		.collect::<Vec<_>>()
+	}
 }
 
 /// A Bag is a doubly-linked list of ids, where each id is mapped to a [`ListNode`].
