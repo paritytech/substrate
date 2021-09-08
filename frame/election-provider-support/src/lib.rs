@@ -354,8 +354,10 @@ pub trait SortedListProvider<AccountId> {
 /// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
 /// `SortedListProvider`.
 pub trait VoteWeightProvider<AccountId> {
+	/// Get the current `VoteWeight` of `who`.
 	fn vote_weight(who: &AccountId) -> VoteWeight;
 
+	/// For tests and benchmarks, set the `VoteWeight`.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
 }
