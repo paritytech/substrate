@@ -91,7 +91,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
-		BagsList: crate::{Pallet, Call, Storage, Event<T>},
+		BagsList: bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
