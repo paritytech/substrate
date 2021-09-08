@@ -350,7 +350,7 @@ mod sorted_list_provider {
 	#[test]
 	fn contains_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert!(ext_builder::GENESIS_IDS.iter().all(|(id, _)| BagsList::contains(id)));
+			assert!(GENESIS_IDS.iter().all(|(id, _)| BagsList::contains(id)));
 
 			let non_existent_ids = vec![&42, &666, &13];
 			assert!(non_existent_ids.iter().all(|id| !BagsList::contains(id)));

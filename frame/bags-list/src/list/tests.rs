@@ -365,7 +365,7 @@ mod list {
 	#[test]
 	fn contains_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert!(ext_builder::GENESIS_IDS.iter().all(|(id, _)| List::<Runtime>::contains(id)));
+			assert!(GENESIS_IDS.iter().all(|(id, _)| List::<Runtime>::contains(id)));
 
 			let non_existent_ids = vec![&42, &666, &13];
 			assert!(non_existent_ids.iter().all(|id| !List::<Runtime>::contains(id)));

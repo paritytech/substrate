@@ -18,6 +18,7 @@
 //! Mock runtime for pallet-bags-lists tests.
 
 use super::*;
+use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
 
@@ -75,7 +76,7 @@ parameter_types! {
 	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
-impl crate::Config for Runtime {
+impl bags_list::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;

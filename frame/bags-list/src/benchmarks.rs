@@ -102,6 +102,6 @@ frame_benchmarking::benchmarks! {
 use frame_benchmarking::impl_benchmark_test_suite;
 impl_benchmark_test_suite!(
 	Pallet,
-	crate::mock::ext_builder::ExtBuilder::default().build(),
+	crate::mock::ExtBuilder::default().build(),
 	crate::mock::Runtime,
 );
