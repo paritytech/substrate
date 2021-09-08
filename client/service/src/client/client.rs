@@ -843,6 +843,7 @@ where
 							children_default: Default::default(),
 						};
 
+						panic!("TODO state_hash for code in changes like genesis.")
 						let state_hash = self.state_hash_at(&BlockId::Hash(parent_hash))?;
 						let state_root = operation.op.reset_storage(storage, state_hash)?;
 						if state_root != *import_headers.post().state_root() {
