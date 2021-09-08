@@ -48,7 +48,7 @@ use sc_client_api::{
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sc_light::fetcher::ChangesProof;
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
@@ -97,7 +97,6 @@ use std::{
 use {
 	super::call_executor::LocalCallExecutor,
 	sc_client_api::in_mem,
-	sc_executor::RuntimeVersionOf,
 	sp_core::traits::{CodeExecutor, SpawnNamed},
 };
 
@@ -240,12 +239,10 @@ where
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
 	);
-	let genesis_state_version = sp_runtime::StateVersion::default(); // TODO resolve from genesis_storage wasm.
 	Client::new(
 		backend,
 		call_executor,
 		build_genesis_storage,
-		genesis_state_version,
 		Default::default(),
 		Default::default(),
 		extensions,
@@ -329,7 +326,6 @@ where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: &dyn BuildStorage,
-		genesis_state_hash: StateVersion,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
@@ -341,8 +337,21 @@ where
 		if info.finalized_state.is_none() {
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
+			let genesis_state_version = if let Some(wasm) = genesis_storage.top.get(well_known_keys::CODE) {
+
+				let ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+				let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone()); 
+				let hash = code_fetcher.hash.clone();
+				let runtime_code = sp_core::traits::RuntimeCode { code_fetcher: &code_fetcher, heap_pages: None, hash }; 
+				let runtime_version = executor
+					.runtime_version(&mut ext, &runtime_code)
+					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())?;
+				runtime_version.state_version()
+			} else {
+				Default::default()
+			};
 			let mut op = backend.begin_operation()?;
-			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_hash)?;
+			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",

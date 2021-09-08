@@ -49,13 +49,13 @@ use std::{
 
 #[derive(Clone, Debug, PartialEq)]
 /// Auxiliary structure that holds a wasm blob and its hash.
-struct WasmBlob {
+pub(crate) struct WasmBlob {
 	code: Vec<u8>,
-	hash: Vec<u8>,
+	pub(crate) hash: Vec<u8>,
 }
 
 impl WasmBlob {
-	fn new(code: Vec<u8>) -> Self {
+	pub(crate) fn new(code: Vec<u8>) -> Self {
 		let hash = make_hash(&code);
 		Self { code, hash }
 	}

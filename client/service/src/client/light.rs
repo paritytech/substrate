@@ -68,12 +68,10 @@ where
 		ClientConfig::default(),
 	)?;
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
-	let genesis_state_version = sp_runtime::StateVersion::default(); // TODO resolve from genesis_storage wasm.
 	Client::new(
 		backend,
 		executor,
 		genesis_storage,
-		genesis_state_version,
 		Default::default(),
 		Default::default(),
 		Default::default(),
