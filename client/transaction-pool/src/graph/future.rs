@@ -24,7 +24,7 @@ use std::{
 
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::transaction_validity::TransactionTag as Tag;
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::base_pool::Transaction;
 

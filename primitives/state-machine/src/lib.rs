@@ -172,7 +172,6 @@ mod execution {
 	use super::*;
 	use codec::{Codec, Decode, Encode};
 	use hash_db::Hasher;
-	use log::{trace, warn};
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::ChildInfo,
@@ -181,6 +180,7 @@ mod execution {
 	};
 	use sp_externalities::Extensions;
 	use std::{collections::HashMap, fmt, panic::UnwindSafe, result};
+	use tracing::{trace, warn};
 
 	const PROOF_CLOSE_TRANSACTION: &str = "\
 		Closing a transaction that was started in this function. Client initiated transactions
@@ -206,7 +206,8 @@ mod execution {
 		NativeWhenPossible,
 		/// Use the given wasm module.
 		AlwaysWasm,
-		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy as an error.
+		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy
+		/// as an error.
 		Both,
 		/// First native, then if that fails or is not possible, wasm.
 		NativeElseWasm,
@@ -230,10 +231,12 @@ mod execution {
 		/// otherwise fall back to the wasm.
 		NativeWhenPossible,
 		/// Use the given wasm module. The backend on which code is executed code could be
-		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
-		/// for all storage queries since the storage entries it has come from an external node).
+		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to
+		/// provide for all storage queries since the storage entries it has come from an external
+		/// node).
 		AlwaysWasm(BackendTrustLevel),
-		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepancy.
+		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of
+		/// any discrepancy.
 		Both(F),
 		/// First native, then if that fails or is not possible, wasm.
 		NativeElseWasm,
@@ -278,12 +281,14 @@ mod execution {
 		ExecutionManager::NativeElseWasm
 	}
 
-	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
+	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out
+	/// the type.
 	fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
 	}
 
-	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
+	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out
+	/// the type.
 	fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 	}
@@ -305,6 +310,10 @@ mod execution {
 		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
 		runtime_code: &'a RuntimeCode<'a>,
 		stats: StateMachineStats,
+		/// The hash of the block the state machine will be executed on.
+		///
+		/// Used for logging.
+		parent_hash: Option<H::Out>,
 	}
 
 	impl<'a, B, H, N, Exec> Drop for StateMachine<'a, B, H, N, Exec>
@@ -352,6 +361,7 @@ mod execution {
 				storage_transaction_cache: None,
 				runtime_code,
 				stats: StateMachineStats::default(),
+				parent_hash: None,
 			}
 		}
 
@@ -368,6 +378,14 @@ mod execution {
 			self
 		}
 
+		/// Set the given `parent_hash` as the hash of the parent block.
+		///
+		/// This will be used for improved logging.
+		pub fn set_parent_hash(mut self, parent_hash: H::Out) -> Self {
+			self.parent_hash = Some(parent_hash);
+			self
+		}
+
 		/// Execute a call using the given state backend, overlayed changes, and call executor.
 		///
 		/// On an error, no prospective changes are written to the overlay.
@@ -377,8 +395,8 @@ mod execution {
 		///
 		/// Returns the SCALE encoded result of the executed function.
 		pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
-			// We are not giving a native call and thus we are sure that the result can never be a native
-			// value.
+			// We are not giving a native call and thus we are sure that the result can never be a
+			// native value.
 			self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 				strategy.get_manager(),
 				None,
@@ -415,13 +433,15 @@ mod execution {
 				Some(&mut self.extensions),
 			);
 
-			let id = ext.id;
+			let ext_id = ext.id;
+
 			trace!(
-				target: "state", "{:04x}: Call {} at {:?}. Input={:?}",
-				id,
-				self.method,
-				self.backend,
-				HexDisplay::from(&self.call_data),
+				target: "state",
+				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
+				method = %self.method,
+				parent_hash = %self.parent_hash.map(|h| format!("{:?}", h)).unwrap_or_else(|| String::from("None")),
+				input = ?HexDisplay::from(&self.call_data),
+				"Call",
 			);
 
 			let (result, was_native) = self.exec.call(
@@ -438,10 +458,11 @@ mod execution {
 				.expect("Runtime is not able to call this function in the overlay; qed");
 
 			trace!(
-				target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
-				id,
-				was_native,
-				result,
+				target: "state",
+				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
+				?was_native,
+				?result,
+				"Return",
 			);
 
 			(result, was_native)
@@ -554,7 +575,7 @@ mod execution {
 
 	/// Prove execution using the given state backend, overlayed changes, and call executor.
 	pub fn prove_execution<B, H, N, Exec, Spawn>(
-		mut backend: B,
+		backend: &mut B,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
 		spawn_handle: Spawn,
@@ -698,7 +719,7 @@ mod execution {
 	}
 
 	/// Generate storage read proof.
-	pub fn prove_read<B, H, I>(mut backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
+	pub fn prove_read<B, H, I>(backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
 	where
 		B: Backend<H>,
 		H: Hasher,
@@ -714,7 +735,7 @@ mod execution {
 
 	/// Generate range storage read proof.
 	pub fn prove_range_read_with_size<B, H>(
-		mut backend: B,
+		backend: B,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		size_limit: usize,
@@ -773,7 +794,7 @@ mod execution {
 
 	/// Generate child storage read proof.
 	pub fn prove_child_read<B, H, I>(
-		mut backend: B,
+		backend: B,
 		child_info: &ChildInfo,
 		keys: I,
 	) -> Result<StorageProof, Box<dyn Error>>
@@ -1137,10 +1158,10 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
+		let mut remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
-			remote_backend,
+			&mut remote_backend,
 			&mut Default::default(),
 			&executor,
 			TaskExecutor::new(),
@@ -1176,7 +1197,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1329,7 +1350,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1351,7 +1372,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1406,7 +1427,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1675,7 +1696,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();

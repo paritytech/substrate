@@ -19,10 +19,9 @@
 
 use codec::alloc::collections::hash_map::HashMap;
 use sc_client_api::{backend::Finalizer, client::BlockBackend};
+use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy};
 use sc_service::client::Client;
-use sp_consensus::{
-	BlockImport, BlockImportParams, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy,
-};
+use sp_consensus::{BlockOrigin, Error as ConsensusError};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT, Justification, Justifications};
 
 /// Extension trait for a test client.

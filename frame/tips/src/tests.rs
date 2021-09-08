@@ -56,7 +56,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -412,8 +412,8 @@ fn test_last_reward_migration() {
 		BlockNumber: Parameter,
 		Hash: Parameter,
 	> {
-		/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
-		/// sensible.
+		/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded
+		/// string. A URL would be sensible.
 		reason: Hash,
 		/// The account to be tipped.
 		who: AccountId,

@@ -74,7 +74,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -194,7 +194,6 @@ parameter_types! {
 impl onchain::Config for Test {
 	type AccountId = <Self as frame_system::Config>::AccountId;
 	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
-	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -238,6 +237,7 @@ impl Config for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = crate::ExternalTrigger;
+	type DisabledValidators = Session;
 
 	type KeyOwnerProofSystem = Historical;
 

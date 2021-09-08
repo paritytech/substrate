@@ -46,6 +46,7 @@ fn check_prefix_duplicates(storage_def: &StorageDef, set: &mut HashSet<String>) 
 	Ok(())
 }
 
+///
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
 /// * if generics are named: reorder the generic, remove their name, and add the missing ones.
 /// * Add `#[allow(type_alias_bounds)]`
@@ -150,6 +151,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 	Ok(())
 }
 
+///
 /// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
 ///   `_GeneratedPrefixForStorage$NameOfStorage` is generated) and implements StorageInstance trait.
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure

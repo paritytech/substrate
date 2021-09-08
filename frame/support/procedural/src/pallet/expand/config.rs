@@ -17,6 +17,7 @@
 
 use crate::pallet::{parse::helper::get_doc_literals, Def};
 
+///
 /// * Generate default rust doc
 pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 	let config = &def.config;

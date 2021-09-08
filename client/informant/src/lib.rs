@@ -21,7 +21,7 @@
 use ansi_term::Colour;
 use futures::prelude::*;
 use futures_timer::Delay;
-use log::{info, trace, warn};
+use log::{debug, info, trace};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network::NetworkService;
@@ -52,11 +52,13 @@ impl Default for OutputFormat {
 	}
 }
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
+/// "unknown")`.
 #[cfg(target_os = "unknown")]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
+/// "unknown")`.
 #[cfg(not(target_os = "unknown"))]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
 
@@ -143,7 +145,7 @@ where
 						ancestor.hash,
 					),
 					Ok(_) => {},
-					Err(e) => warn!("Error computing tree route: {}", e),
+					Err(e) => debug!("Error computing tree route: {}", e),
 				}
 			}
 		}

@@ -118,8 +118,8 @@ pub mod pallet {
 		type FieldDeposit: Get<BalanceOf<Self>>;
 
 		/// The amount held on deposit for a registered subaccount. This should account for the fact
-		/// that one storage item's value will increase by the size of an account ID, and there will be
-		/// another trie item whose value is the size of an account ID plus 32 bytes.
+		/// that one storage item's value will increase by the size of an account ID, and there will
+		/// be another trie item whose value is the size of an account ID plus 32 bytes.
 		#[pallet::constant]
 		type SubAccountDeposit: Get<BalanceOf<Self>>;
 
@@ -335,7 +335,7 @@ pub mod pallet {
 		))]
 		pub fn set_identity(
 			origin: OriginFor<T>,
-			info: IdentityInfo<T::MaxAdditionalFields>,
+			info: Box<IdentityInfo<T::MaxAdditionalFields>>,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
@@ -346,11 +346,14 @@ pub mod pallet {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
 					id.judgements.retain(|j| j.1.is_sticky());
-					id.info = info;
+					id.info = *info;
 					id
 				},
-				None =>
-					Registration { info, judgements: BoundedVec::default(), deposit: Zero::zero() },
+				None => Registration {
+					info: *info,
+					judgements: BoundedVec::default(),
+					deposit: Zero::zero(),
+				},
 			};
 
 			let old_deposit = id.deposit;
@@ -448,7 +451,8 @@ pub mod pallet {
 
 			Ok(Some(
 				T::WeightInfo::set_subs_old(old_ids.len() as u32) // P: Real number of old accounts removed.
-					.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)), /* S: New subs added. */
+					// S: New subs added
+					.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)),
 			)
 			.into())
 		}

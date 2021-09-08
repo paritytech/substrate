@@ -35,7 +35,7 @@
 //! A custom WASM blob will override on-chain WASM if the spec version matches. If it is
 //! required to overrides multiple runtimes, multiple WASM blobs matching each of the spec versions
 //! needed must be provided in the given directory.
-use sc_executor::RuntimeInfo;
+use sc_executor::RuntimeVersionOf;
 use sp_blockchain::Result;
 use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
 use sp_state_machine::BasicExternalities;
@@ -112,7 +112,7 @@ pub struct WasmOverride<E> {
 
 impl<E> WasmOverride<E>
 where
-	E: RuntimeInfo + Clone + 'static,
+	E: RuntimeVersionOf + Clone + 'static,
 {
 	pub fn new<P>(path: P, executor: E) -> Result<Self>
 	where
@@ -192,7 +192,7 @@ where
 #[cfg(test)]
 pub fn dummy_overrides<E>(executor: &E) -> WasmOverride<E>
 where
-	E: RuntimeInfo + Clone + 'static,
+	E: RuntimeVersionOf + Clone + 'static,
 {
 	let mut overrides = HashMap::new();
 	overrides.insert(0, WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0]));
@@ -204,19 +204,20 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use std::fs::{self, File};
-	use substrate_test_runtime_client::LocalExecutor;
+	use substrate_test_runtime_client::LocalExecutorDispatch;
 
 	fn wasm_test<F>(fun: F)
 	where
-		F: Fn(&Path, &[u8], &NativeExecutor<LocalExecutor>),
+		F: Fn(&Path, &[u8], &NativeElseWasmExecutor<LocalExecutorDispatch>),
 	{
-		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-		);
+		let exec =
+			NativeElseWasmExecutor::<substrate_test_runtime_client::LocalExecutorDispatch>::new(
+				WasmExecutionMethod::Interpreted,
+				Some(128),
+				1,
+			);
 		let bytes = substrate_test_runtime::wasm_binary_unwrap();
 		let dir = tempfile::tempdir().expect("Create a temporary directory");
 		fun(dir.path(), bytes, &exec);
@@ -226,8 +227,11 @@ mod tests {
 	#[test]
 	fn should_get_runtime_version() {
 		let wasm = WasmBlob::new(substrate_test_runtime::wasm_binary_unwrap().to_vec());
-		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
 
 		let version = WasmOverride::runtime_version(&executor, &wasm, Some(128))
 			.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");

@@ -294,12 +294,12 @@ impl<B: BlockT> BlockRequestHandler<B> {
 					};
 					(justifications, Vec::new(), false)
 				} else {
-					// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
-					// the first one. When sending we could have just taken the first one, since we don't
-					// expect there to be any other kind currently, but when receiving we need to add the
-					// engine ID tag.
-					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
-					// removed once we remove the backwards compatibility.
+					// For now we keep compatibility by selecting precisely the GRANDPA one, and not
+					// just the first one. When sending we could have just taken the first one,
+					// since we don't expect there to be any other kind currently, but when
+					// receiving we need to add the engine ID tag.
+					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and
+					// will be removed once we remove the backwards compatibility.
 					// See: https://github.com/paritytech/substrate/issues/8172
 					let justification =
 						justifications.and_then(|just| just.into_justification(*b"FRNK"));
@@ -333,7 +333,10 @@ impl<B: BlockT> BlockRequestHandler<B> {
 							target: LOG_TARGET,
 							"Missing indexed block data for block request."
 						);
-						break
+						// If the indexed body is missing we still continue returning headers.
+						// Ideally `None` should distinguish a missing body from the empty body,
+						// but the current protobuf based protocol does not allow it.
+						Vec::new()
 					},
 				}
 			} else {

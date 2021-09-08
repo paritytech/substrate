@@ -21,6 +21,7 @@ use crate::{
 };
 use syn::{spanned::Spanned, Ident};
 
+///
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
