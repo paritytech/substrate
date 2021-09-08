@@ -387,13 +387,38 @@ impl<T: Config> List<T> {
 
 		let iter_count = Self::iter().count() as u32;
 		let stored_count = crate::CounterForListNodes::<T>::get();
-		ensure!(iter_count == stored_count, "iter_count != stored_count",);
+		let nodes_count = crate::ListNodes::<T>::iter().count() as u32;
+		ensure!(iter_count == stored_count, "iter_count != stored_count");
+		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
 
-		let _ = T::BagThresholds::get()
-			.into_iter()
-			.map(|t| Bag::<T>::get(*t).unwrap_or_default())
-			.map(|b| b.sanity_check())
-			.collect::<Result<_, _>>()?;
+		crate::log!(debug, "count of nodes: {}", stored_count);
+
+		let active_bags = {
+			let thresholds = T::BagThresholds::get().iter().copied();
+			let thresholds: Vec<u64> = if thresholds.clone().last() == Some(VoteWeight::MAX) {
+				// in the event that they included it, we don't need to make any changes
+				// Box::new(thresholds.collect()
+				thresholds.collect()
+			} else {
+				// otherwise, insert it here.
+				thresholds.chain(iter::once(VoteWeight::MAX)).collect()
+			};
+			thresholds.into_iter().filter_map(|t| Bag::<T>::get(t))
+		};
+
+		let _ = active_bags.clone().map(|b| b.sanity_check()).collect::<Result<_, _>>()?;
+
+		let nodes_in_bags_count =
+			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
+		ensure!(nodes_count == nodes_in_bags_count, "stored_count != nodes_in_bags_count");
+
+		crate::log!(debug, "count of active bags {}", active_bags.count());
+
+		// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
+		// have some "stale" nodes that are not in a bag.
+		for (_id, node) in crate::ListNodes::<T>::iter() {
+			node.sanity_check()?
+		}
 
 		Ok(())
 	}
@@ -434,7 +459,7 @@ impl<T: Config> List<T> {
 /// iteration so that there's no incentive to churn ids positioning to improve the chances of
 /// appearing within the ids set.
 #[derive(DefaultNoBound, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone))]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Bag<T: Config> {
 	head: Option<T::AccountId>,
@@ -626,12 +651,17 @@ impl<T: Config> Bag<T> {
 	pub fn std_iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
+
+	/// Check if the bag contains a node with `id`.
+	#[cfg(feature = "std")]
+	fn contains(&self, id: &T::AccountId) -> bool {
+		self.iter().find(|n| n.id() == id).is_some()
+	}
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
-#[cfg_attr(test, derive(PartialEq, Clone))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
@@ -711,5 +741,26 @@ impl<T: Config> Node<T> {
 	#[allow(dead_code)]
 	pub fn bag_upper(&self) -> VoteWeight {
 		self.bag_upper
+	}
+
+	#[cfg(feature = "std")]
+	fn sanity_check(&self) -> Result<(), &'static str> {
+		let expected_bag = Bag::<T>::get(self.bag_upper).ok_or("bag not found for node")?;
+
+		let id = self.id();
+
+		frame_support::ensure!(
+			expected_bag.contains(id),
+			"node does not exist in the expected bag"
+		);
+
+		frame_support::ensure!(
+			!self.is_terminal() ||
+				expected_bag.head.as_ref() == Some(id) ||
+				expected_bag.tail.as_ref() == Some(id),
+			"a terminal node is neither its bag head or tail"
+		);
+
+		Ok(())
 	}
 }
