@@ -801,6 +801,7 @@ pub mod pallet {
 				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&stash) {
 					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
+					debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
