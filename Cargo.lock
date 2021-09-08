@@ -8104,7 +8104,6 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
- "sp-storage",
  "sp-tasks",
  "substrate-wasm-builder",
 ]
