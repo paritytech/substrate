@@ -119,14 +119,16 @@ impl BenchmarkResult {
 }
 
 /// Possible errors returned from the benchmarking pipeline.
-///
-/// * Stop: The benchmarking pipeline should stop and return the inner string.
-/// * WeightOverride: The benchmarking pipeline is allowed to fail here, and we should use the
-///   included weight instead.
 #[derive(Clone, PartialEq, Debug)]
 pub enum BenchmarkError {
+	/// The benchmarking pipeline should stop and return the inner string.
 	Stop(&'static str),
+	/// The benchmarking pipeline is allowed to fail here, and we should use the
+	/// included weight instead.
 	Override(BenchmarkResult),
+	/// The benchmarking pipeline is allowed to fail here, and we should simply
+	/// skip processing these results.
+	Skip,
 }
 
 impl From<BenchmarkError> for &'static str {
@@ -134,6 +136,7 @@ impl From<BenchmarkError> for &'static str {
 		match e {
 			BenchmarkError::Stop(s) => s,
 			BenchmarkError::Override(_) => "benchmark override",
+			BenchmarkError::Skip => "benchmark skip",
 		}
 	}
 }
