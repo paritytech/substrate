@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! # Bags-List Pallet
-//! 
+//!
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
 //! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
@@ -153,17 +153,18 @@ pub mod pallet {
 	}
 
 	/// How many ids are registered.
-	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the `CountedMaop` storage. 
+	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the
+	// `CountedMaop` storage.
 	#[pallet::storage]
 	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// A single node, within some bag. 
+	/// A single node, within some bag.
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
 	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
-	/// A bag stored in storage. 
+	/// A bag stored in storage.
 	///
 	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
@@ -267,6 +268,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::regenerate(all, weight_of)
 	}
 
+	#[cfg(any(feature = "std", feature = "debug-assertions"))]
 	fn sanity_check() -> Result<(), &'static str> {
 		List::<T>::sanity_check()
 	}

@@ -341,6 +341,7 @@ pub trait SortedListProvider<AccountId> {
 	fn clear();
 
 	/// Sanity check internal state of list. Only meant for debug compilation.
+	#[cfg(any(feature = "std", feature = "debug-assertions"))]
 	fn sanity_check() -> Result<(), &'static str>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change

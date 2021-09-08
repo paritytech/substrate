@@ -372,6 +372,7 @@ impl<T: Config> List<T> {
 	/// * length of this list is in sync with `CounterForListNodes`,
 	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
 	///   are checked per *any* update to `List`.
+	#[cfg(any(feature = "std", feature = "debug-assertions"))]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
