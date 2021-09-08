@@ -1274,7 +1274,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
-	#[cfg(any(feature = "std", feature = "debug-assertions"))]
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}

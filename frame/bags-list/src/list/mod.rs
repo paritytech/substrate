@@ -372,7 +372,7 @@ impl<T: Config> List<T> {
 	/// * length of this list is in sync with `CounterForListNodes`,
 	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
 	///   are checked per *any* update to `List`.
-	#[cfg(any(feature = "std", feature = "debug-assertions"))]
+	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
@@ -391,6 +391,11 @@ impl<T: Config> List<T> {
 			.map(|b| b.sanity_check())
 			.collect::<Result<_, _>>()?;
 
+		Ok(())
+	}
+
+	#[cfg(not(feature = "std"))]
+	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
 }
@@ -552,6 +557,7 @@ impl<T: Config> Bag<T> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
+	#[cfg(feature = "std")]
 	fn sanity_check(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
@@ -580,6 +586,11 @@ impl<T: Config> Bag<T> {
 			"duplicate found in bag"
 		);
 
+		Ok(())
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn sanity_check(&self) -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -629,6 +640,8 @@ impl<T: Config> Node<T> {
 			next.put();
 		}
 	}
+
+	// fn remove_from_storage_unchecked
 
 	/// Get the previous node in the bag.
 	fn prev(&self) -> Option<Node<T>> {

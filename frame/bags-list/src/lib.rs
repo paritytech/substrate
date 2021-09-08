@@ -268,9 +268,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::regenerate(all, weight_of)
 	}
 
-	#[cfg(any(feature = "std", feature = "debug-assertions"))]
+	#[cfg(feature = "std")]
 	fn sanity_check() -> Result<(), &'static str> {
 		List::<T>::sanity_check()
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn sanity_check() -> Result<(), &'static str> {
+		Ok(())
 	}
 
 	fn clear() {
