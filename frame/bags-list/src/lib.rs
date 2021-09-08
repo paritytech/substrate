@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Bags-List Pallet
+//! 
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
 //! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
@@ -24,7 +26,7 @@
 //! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
-//! the `SortedListProvider` (i.e. `on_insert`) at their genesis.
+//! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
 //!
 //! # Goals
 //!
@@ -129,8 +131,7 @@ pub mod pallet {
 		/// there exists some constant ratio such that `threshold[k + 1] == (threshold[k] *
 		/// constant_ratio).max(threshold[k] + 1)` for all `k`.
 		///
-		/// The helpers in the `generate-bags` module can simplify this calculation. To use them,
-		/// the `generate-bags` feature must be enabled.
+		/// The helpers in the `/utils/frame/generate-bags` module can simplify this calculation.
 		///
 		/// # Examples
 		///
@@ -152,15 +153,19 @@ pub mod pallet {
 	}
 
 	/// How many ids are registered.
+	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the `CountedMaop` storage. 
 	#[pallet::storage]
 	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Nodes store links forward and back within their respective bags, id.
+	/// A single node, within some bag. 
+	///
+	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
 	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
-	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
-	/// mainly exists to store head and tail pointers to the appropriate nodes.
+	/// A bag stored in storage. 
+	///
+	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
 	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
