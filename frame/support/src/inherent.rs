@@ -38,9 +38,9 @@ pub trait ProvideInherent {
 	/// Create an inherent out of the given `InherentData`.
 	///
 	/// NOTE: All checks necessary to ensure that the inherent is correct and that can be done in
-	/// the runtime should happen here.
-	/// E.g. if this provides a block producer, check here that the producer is eligible to create
-	/// the block.
+	/// the runtime should happen in the returned `Call`.
+	/// E.g. if this provides a block producer, check in the returned extrinsic that the producer is
+	/// eligible to create the block.
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
 	/// Determines whether this inherent is required in this block.
@@ -76,8 +76,9 @@ pub trait ProvideInherent {
 	///
 	/// # Warning
 	///
-	/// This check is not guaranteed to be run as part of consensus and cannot be relied upon for
-	/// security. Run security relevant checks in [`Self::create_inherent`].
+	/// This check is not guaranteed to be run by all full nodes and cannot be relied upon for
+	/// ensuring correct block import. Run security relevant checks in the extrinsic returned by
+	/// [`Self::create_inherent`] as much as possible.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}
