@@ -273,7 +273,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::sanity_check()
 	}
 
-	#[écfg(not(feature = "std"))]
+	#[cfg(not(feature = "std"))]
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}

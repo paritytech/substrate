@@ -95,50 +95,47 @@ frame_support::construct_runtime!(
 	}
 );
 
-pub(crate) mod ext_builder {
-	use super::*;
+use super::*;
 
-	/// Default AccountIds and their weights.
-	pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
-		[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
+/// Default AccountIds and their weights.
+pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
+	[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
 
-	#[derive(Default)]
-	pub(crate) struct ExtBuilder {
-		ids: Vec<(AccountId, VoteWeight)>,
+#[derive(Default)]
+pub(crate) struct ExtBuilder {
+	ids: Vec<(AccountId, VoteWeight)>,
+}
+
+impl ExtBuilder {
+	/// Add some AccountIds to insert into `List`.
+	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
+		self.ids = ids;
+		self
 	}
 
-	impl ExtBuilder {
-		/// Add some AccountIds to insert into `List`.
-		pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
-			self.ids = ids;
-			self
-		}
+	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
+		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		pub(crate) fn build(self) -> sp_io::TestExternalities {
-			sp_tracing::try_init_simple();
-			let storage =
-				frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut ext = sp_io::TestExternalities::from(storage);
+		ext.execute_with(|| {
+			for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
+				frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
+			}
+		});
 
-			let mut ext = sp_io::TestExternalities::from(storage);
-			ext.execute_with(|| {
-				for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
-					frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
-				}
-			});
+		ext
+	}
 
-			ext
-		}
+	pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			List::<Runtime>::sanity_check().expect("Sanity check post condition failed")
+		})
+	}
 
-		pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
-			self.build().execute_with(|| {
-				test();
-				List::<Runtime>::sanity_check().expect("Sanity check post condition failed")
-			})
-		}
-
-		pub(crate) fn build_and_execute_no_post_check(self, test: impl FnOnce() -> ()) {
-			self.build().execute_with(test)
-		}
+	pub(crate) fn build_and_execute_no_post_check(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(test)
 	}
 }
 

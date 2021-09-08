@@ -20,7 +20,7 @@ use frame_support::{assert_ok, assert_storage_noop, traits::IntegrityTest};
 use super::*;
 use frame_election_provider_support::SortedListProvider;
 use list::Bag;
-use mock::{ext_builder::*, test_utils::*, *};
+use mock::{test_utils::*, *};
 
 mod pallet {
 	use super::*;
