@@ -968,12 +968,12 @@ fn pallet_in_runtime_is_correct() {
 
 	assert_eq!(PalletInfo::index::<NestedModule3>().unwrap(), 34);
 	assert_eq!(PalletInfo::name::<NestedModule3>().unwrap(), "NestedModule3");
-	assert_eq!(PalletInfo::module_name::<NestedModule3>().unwrap(), "nested_module3");
+	assert_eq!(PalletInfo::module_name::<NestedModule3>().unwrap(), "nested::module3");
 	assert_eq!(PalletInfo::crate_version::<NestedModule3>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module3>().unwrap(), 35);
 	assert_eq!(PalletInfo::name::<Module3>().unwrap(), "Module3");
-	assert_eq!(PalletInfo::module_name::<Module3>().unwrap(), "self_module3");
+	assert_eq!(PalletInfo::module_name::<Module3>().unwrap(), "self::module3");
 	assert_eq!(PalletInfo::crate_version::<Module3>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_3>().unwrap(), 6);

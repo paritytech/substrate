@@ -192,7 +192,7 @@ impl PalletPath {
 	pub fn module_name(&self) -> String {
 		self.inner.segments.iter().fold(String::new(), |mut acc, segment| {
 			if !acc.is_empty() {
-				acc.push('_');
+				acc.push_str("::");
 			}
 			acc.push_str(&segment.ident.to_string());
 			acc
