@@ -526,7 +526,6 @@ impl frame_support::traits::PalletInfo for Runtime {
 		None
 	}
 	fn module_name<P: 'static>() -> Option<&'static str> {
-		use frame_support::traits::PalletInfoAccess as _;
 		let type_id = sp_std::any::TypeId::of::<P>();
 		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some("system")
