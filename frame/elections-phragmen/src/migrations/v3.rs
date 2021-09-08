@@ -19,6 +19,7 @@
 
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{
+	pallet_prelude::ValueQuery,
 	traits::{PalletInfoAccess, StorageVersion},
 	weights::Weight,
 	RuntimeDebug, Twox64Concat,
@@ -52,13 +53,22 @@ pub trait V2ToV3 {
 }
 
 frame_support::generate_storage_alias!(
-	PhragmenElection, Candidates<T: V2ToV3> => Value<Vec<(T::AccountId, T::Balance)>>
+	PhragmenElection, Candidates<T: V2ToV3> => Value<
+		Vec<(T::AccountId, T::Balance)>,
+		ValueQuery
+	>
 );
 frame_support::generate_storage_alias!(
-	PhragmenElection, Members<T: V2ToV3> => Value<Vec<SeatHolder<T::AccountId, T::Balance>>>
+	PhragmenElection, Members<T: V2ToV3> => Value<
+		Vec<SeatHolder<T::AccountId, T::Balance>>,
+		ValueQuery
+	>
 );
 frame_support::generate_storage_alias!(
-	PhragmenElection, RunnersUp<T: V2ToV3> => Value<Vec<SeatHolder<T::AccountId, T::Balance>>>
+	PhragmenElection, RunnersUp<T: V2ToV3> => Value<
+		Vec<SeatHolder<T::AccountId, T::Balance>>,
+		ValueQuery
+	>
 );
 frame_support::generate_storage_alias!(
 	PhragmenElection, Voting<T: V2ToV3> => Map<
