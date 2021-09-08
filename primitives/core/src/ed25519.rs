@@ -542,10 +542,7 @@ impl TraitPair for Pair {
 			Err(_) => return false,
 		};
 
-		match public_key.verify(&sig, message.as_ref()) {
-			Ok(_) => true,
-			_ => false,
-		}
+		public_key.verify(&sig, message.as_ref()).is_ok()
 	}
 
 	/// Return a vec filled with raw data.
