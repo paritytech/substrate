@@ -21,8 +21,9 @@ use super::*;
 use assert_matches::assert_matches;
 use codec::Encode;
 use futures::executor;
-use jsonrpsee::types::v2::response::JsonRpcResponse;
+use jsonrpsee::types::v2::{error::JsonRpcError, response::JsonRpcResponse};
 use sc_transaction_pool::{BasicPool, FullChainApi};
+use serde_json::value::to_raw_value;
 use sp_core::{
 	blake2_256,
 	crypto::{CryptoTypePublicPair, Pair, Public},
@@ -39,7 +40,6 @@ use substrate_test_runtime_client::{
 	runtime::{Block, Extrinsic, SessionKeys, Transfer},
 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
 };
-use serde_json::value::to_raw_value;
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	let tx =
@@ -83,25 +83,22 @@ impl TestSetup {
 #[tokio::test]
 async fn submit_transaction_should_not_cause_error() {
 	env_logger::init();
-	let p = TestSetup::default().author();
-	let api = p.into_rpc();
-	let xt = uxt(AccountKeyring::Alice, 1).encode();
-	let h: H256 = blake2_256(&xt).into();
-	let params = to_raw_value(&xt.clone()).unwrap();
-	let o = api.call("author_submitExtrinsic", Some(params)).await.unwrap();
-	log::debug!("submitExtrinsic result: {:?}", o);
-	let poo: JsonRpcResponse<H256> = serde_json::from_str(&o).unwrap();
-	assert_eq!(
-		poo.result,
-		h,
-	);
-	// let params_again = to_raw_value(&[xt]).unwrap();
-	// assert!(api.call("submitExtrinsic", Some(params_again)).is_err().await.unwrap());
-	// assert_matches!(
-	// 	executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
-	// 	Ok(h2) if h == h2
-	// );
-	// assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
+	let author = TestSetup::default().author();
+	let api = author.into_rpc();
+	let xt: Bytes = uxt(AccountKeyring::Alice, 1).encode().into();
+	let extrinsic_hash: H256 = blake2_256(&xt).into();
+	let params = to_raw_value(&[xt.clone()]).unwrap();
+	let json = api.call("author_submitExtrinsic", Some(params)).await.unwrap();
+	let response: JsonRpcResponse<H256> = serde_json::from_str(&json).unwrap();
+
+	assert_eq!(response.result, extrinsic_hash,);
+
+	// Can't submit the same extrinsic twice
+	let params_again = to_raw_value(&[xt]).unwrap();
+	let json = api.call("author_submitExtrinsic", Some(params_again)).await.unwrap();
+	let response: JsonRpcError = serde_json::from_str(&json).unwrap();
+
+	assert!(response.error.message.contains("Already imported"));
 }
 
 // #[test]
