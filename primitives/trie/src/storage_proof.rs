@@ -45,9 +45,14 @@ pub struct CompactProof {
 mod decode_encode_impl {
 	use super::*;
 	use codec::{Compact, Error, Input, Output};
+	// This is compact size encoding first byte for
+	// length > u128::MAX. In case such big proof
+	// get needed state version could not be omitted.
+	// Use to indicate state V0.
+	const STATE_V0: u8 = 251;
 
-	const STATE_V0: u8 = 251; // This is an invalid compact size encoding.
-	const STATE_V1: u8 = 247; // or any correctly sized number of node.
+	// First byte encoding for state V1.
+	const STATE_V1: u8 = 247;
 
 	/// Prefix another input with a byte.
 	struct PrefixInput<'a, T> {
