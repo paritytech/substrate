@@ -21,7 +21,7 @@ use super::*;
 use assert_matches::assert_matches;
 use futures::{executor, prelude::*};
 use sc_network::{self, config::Role, PeerId};
-use sp_utils::mpsc::tracing_unbounded;
+use sc_utils::mpsc::tracing_unbounded;
 use std::{
 	env,
 	io::{BufRead, BufReader, Write},

@@ -31,6 +31,7 @@ use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pwasm_utils::parity_wasm::elements::ValueType;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
+use sp_runtime::traits::Bounded;
 use sp_std::prelude::*;
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -64,8 +65,7 @@ pub enum ReturnCode {
 	NewContractNotFunded = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
-	/// The contract that was called is either no contract at all (a plain account)
-	/// or is a tombstone.
+	/// The contract that was called is no contract (a plain account).
 	NotCallable = 8,
 	/// The call to `seal_debug_message` had no effect because debug message
 	/// recording was disabled.
@@ -121,8 +121,6 @@ pub enum TrapReason {
 	/// Signals that a trap was generated in response to a successful call to the
 	/// `seal_terminate` host function.
 	Termination,
-	/// Signals that a trap was generated because of a successful restoration.
-	Restoration,
 }
 
 impl<T: Into<DispatchError>> From<T> for TrapReason {
@@ -149,10 +147,8 @@ pub enum RuntimeCosts {
 	ValueTransferred,
 	/// Weight of calling `seal_minimum_balance`.
 	MinimumBalance,
-	/// Weight of calling `seal_tombstone_deposit`.
-	TombstoneDeposit,
-	/// Weight of calling `seal_rent_allowance`.
-	RentAllowance,
+	/// Weight of calling `seal_contract_deposit`.
+	ContractDeposit,
 	/// Weight of calling `seal_block_number`.
 	BlockNumber,
 	/// Weight of calling `seal_now`.
@@ -167,16 +163,12 @@ pub enum RuntimeCosts {
 	Return(u32),
 	/// Weight of calling `seal_terminate`.
 	Terminate,
-	/// Weight of calling `seal_restore_to` per number of supplied delta entries.
-	RestoreTo(u32),
 	/// Weight of calling `seal_random`. It includes the weight for copying the subject.
 	Random,
 	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
 	DepositEvent { num_topic: u32, len: u32 },
 	/// Weight of calling `seal_debug_message`.
 	DebugMessage,
-	/// Weight of calling `seal_set_rent_allowance`.
-	SetRentAllowance,
 	/// Weight of calling `seal_set_storage` for the given storage item size.
 	SetStorage(u32),
 	/// Weight of calling `seal_clear_storage`.
@@ -232,8 +224,7 @@ impl RuntimeCosts {
 			Balance => s.balance,
 			ValueTransferred => s.value_transferred,
 			MinimumBalance => s.minimum_balance,
-			TombstoneDeposit => s.tombstone_deposit,
-			RentAllowance => s.rent_allowance,
+			ContractDeposit => s.contract_deposit,
 			BlockNumber => s.block_number,
 			Now => s.now,
 			WeightToFee => s.weight_to_fee,
@@ -241,15 +232,12 @@ impl RuntimeCosts {
 			InputCopyOut(len) => s.input_per_byte.saturating_mul(len.into()),
 			Return(len) => s.r#return.saturating_add(s.return_per_byte.saturating_mul(len.into())),
 			Terminate => s.terminate,
-			RestoreTo(delta) =>
-				s.restore_to.saturating_add(s.restore_to_per_delta.saturating_mul(delta.into())),
 			Random => s.random,
 			DepositEvent { num_topic, len } => s
 				.deposit_event
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			DebugMessage => s.debug_message,
-			SetRentAllowance => s.set_rent_allowance,
 			SetStorage(len) =>
 				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
 			ClearStorage => s.clear_storage,
@@ -394,8 +382,6 @@ where
 					Ok(ExecReturnValue { flags, data: Bytes(data) })
 				},
 				TrapReason::Termination =>
-					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
-				TrapReason::Restoration =>
 					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
 				TrapReason::SupervisorError(error) => Err(error)?,
 			}
@@ -617,15 +603,13 @@ where
 		let not_funded = Error::<E::T>::NewContractNotFunded.into();
 		let no_code = Error::<E::T>::CodeNotFound.into();
 		let not_found = Error::<E::T>::ContractNotFound.into();
-		let is_tombstone = Error::<E::T>::ContractIsTombstone.into();
-		let rent_not_paid = Error::<E::T>::RentNotPaid.into();
 
 		match from {
 			x if x == below_sub => Ok(BelowSubsistenceThreshold),
 			x if x == transfer_failed => Ok(TransferFailed),
 			x if x == not_funded => Ok(NewContractNotFunded),
 			x if x == no_code => Ok(CodeNotFound),
-			x if (x == not_found || x == is_tombstone || x == rent_not_paid) => Ok(NotCallable),
+			x if x == not_found => Ok(NotCallable),
 			err => Err(err),
 		}
 	}
@@ -736,49 +720,6 @@ where
 			self.read_sandbox_memory_as(beneficiary_ptr)?;
 		self.ext.terminate(&beneficiary)?;
 		Err(TrapReason::Termination)
-	}
-
-	fn restore_to(
-		&mut self,
-		dest_ptr: u32,
-		code_hash_ptr: u32,
-		rent_allowance_ptr: u32,
-		delta_ptr: u32,
-		delta_count: u32,
-	) -> Result<(), TrapReason> {
-		self.charge_gas(RuntimeCosts::RestoreTo(delta_count))?;
-		let dest: <<E as Ext>::T as frame_system::Config>::AccountId =
-			self.read_sandbox_memory_as(dest_ptr)?;
-		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
-		let rent_allowance: BalanceOf<<E as Ext>::T> =
-			self.read_sandbox_memory_as(rent_allowance_ptr)?;
-		let delta = {
-			const KEY_SIZE: usize = 32;
-
-			// We can eagerly allocate because we charged for the complete delta count already
-			// We still need to make sure that the allocation isn't larger than the memory
-			// allocator can handle.
-			let max_memory = self.ext.schedule().limits.max_memory_size();
-			ensure!(
-				delta_count.saturating_mul(KEY_SIZE as u32) <= max_memory,
-				Error::<E::T>::OutOfBounds,
-			);
-			let mut delta = vec![[0; KEY_SIZE]; delta_count as usize];
-			let mut key_ptr = delta_ptr;
-
-			for i in 0..delta_count {
-				// Read the delta into the provided buffer
-				// This cannot panic because of the loop condition
-				self.read_sandbox_memory_into_buf(key_ptr, &mut delta[i as usize])?;
-
-				// Offset key_ptr to the next element.
-				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or(Error::<E::T>::OutOfBounds)?;
-			}
-
-			delta
-		};
-		self.ext.restore_to(dest, code_hash, rent_allowance, delta)?;
-		Err(TrapReason::Restoration)
 	}
 }
 
@@ -1369,7 +1310,20 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the tombstone deposit into the supplied buffer.
+	// Stores the contract deposit into the supplied buffer.
+	//
+	// # Deprecation
+	//
+	// This is equivalent to calling `seal_contract_deposit` and only exists for backwards
+	// compatibility. See that function for documentation.
+	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::ContractDeposit)?;
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.contract_deposit().encode(), false, already_charged
+		)?)
+	},
+
+	// Stores the contract deposit into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
@@ -1380,95 +1334,53 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The tombstone deposit is on top of the existential deposit. So in order for
-	// a contract to leave a tombstone the balance of the contract must not go
-	// below the sum of existential deposit and the tombstone deposit. The sum
-	// is commonly referred as subsistence threshold in code.
-	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::TombstoneDeposit)?;
+	// The contract deposit is on top of the existential deposit. The sum
+	// is commonly referred as subsistence threshold in code. No contract initiated
+	// balance transfer can go below this threshold.
+	[seal0] seal_contract_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::ContractDeposit)?;
 		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false, already_charged
+			out_ptr, out_len_ptr, &ctx.ext.contract_deposit().encode(), false, already_charged
 		)?)
 	},
 
-	// Try to restore the given destination contract sacrificing the caller.
-	//
-	// # Deprecation
-	//
-	// This is equivalent to calling the newer version of this function. The newer version
-	// drops the now unnecessary length fields.
+	// Was used to restore the given destination contract sacrificing the caller.
 	//
 	// # Note
 	//
-	// The values `_dest_len`, `_code_hash_len` and `_rent_allowance_len` are ignored because
-	// the encoded sizes of those types are fixed through `[`MaxEncodedLen`]. The fields
-	// exist for backwards compatibility. Consider switching to the newest version of this function.
+	// The state rent functionality was removed. This is stub only exists for
+	// backwards compatiblity
 	[seal0] seal_restore_to(
 		ctx,
-		dest_ptr: u32,
+		_dest_ptr: u32,
 		_dest_len: u32,
-		code_hash_ptr: u32,
+		_code_hash_ptr: u32,
 		_code_hash_len: u32,
-		rent_allowance_ptr: u32,
+		_rent_allowance_ptr: u32,
 		_rent_allowance_len: u32,
-		delta_ptr: u32,
-		delta_count: u32
+		_delta_ptr: u32,
+		_delta_count: u32
 	) => {
-		ctx.restore_to(
-			dest_ptr,
-			code_hash_ptr,
-			rent_allowance_ptr,
-			delta_ptr,
-			delta_count,
-		)
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		Ok(())
 	},
 
-	// Try to restore the given destination contract sacrificing the caller.
+	// Was used to restore the given destination contract sacrificing the caller.
 	//
-	// This function will compute a tombstone hash from the caller's storage and the given code hash
-	// and if the hash matches the hash found in the tombstone at the specified address - kill
-	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
-	// All caller's funds are transferred to the destination.
+	// # Note
 	//
-	// The tombstone hash is derived as `hash(code_hash, storage_root_hash)`. In order to match
-	// this hash to its own hash the restorer must make its storage equal to the one of the
-	// evicted destination contract. In order to allow for additional storage items in the
-	// restoring contract a delta can be specified to this function. All keys specified as
-	// delta are disregarded when calculating the storage root hash.
-	//
-	// On success, the destination contract is restored. This function is diverging and
-	// stops execution even on success.
-	//
-	// - `dest_ptr` - the pointer to a buffer that encodes `T::AccountId`
-	//    with the address of the to be restored contract.
-	// - `code_hash_ptr` - the pointer to a buffer that encodes
-	//    a code hash of the to be restored contract.
-	// - `rent_allowance_ptr`  - the pointer to a buffer that
-	//    encodes the rent allowance that must be set in the case of successful restoration.
-	// - `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
-	//    laid out sequentially.
-	//
-	// # Traps
-	//
-	// - There is no tombstone at the destination address.
-	// - Tombstone hashes do not match.
-	// - The calling contract is already present on the call stack.
-	// - The supplied code_hash does not exist on-chain.
+	// The state rent functionality was removed. This is stub only exists for
+	// backwards compatiblity
 	[seal1] seal_restore_to(
 		ctx,
-		dest_ptr: u32,
-		code_hash_ptr: u32,
-		rent_allowance_ptr: u32,
-		delta_ptr: u32,
-		delta_count: u32
+		_dest_ptr: u32,
+		_code_hash_ptr: u32,
+		_rent_allowance_ptr: u32,
+		_delta_ptr: u32,
+		_delta_count: u32
 	) => {
-		ctx.restore_to(
-			dest_ptr,
-			code_hash_ptr,
-			rent_allowance_ptr,
-			delta_ptr,
-			delta_count,
-		)
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		Ok(())
 	},
 
 	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
@@ -1536,47 +1448,37 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Set rent allowance of the contract.
-	//
-	// # Deprecation
-	//
-	// This is equivalent to calling the newer version of this function. The newer version
-	// drops the now unnecessary length fields.
+	// Was used to set rent allowance of the contract.
 	//
 	// # Note
 	//
-	// The value `_VALUE_len` is ignored because the encoded sizes
-	// this type is fixed through `[`MaxEncodedLen`]. The field exist for backwards
-	// compatibility. Consider switching to the newest version of this function.
-	[seal0] seal_set_rent_allowance(ctx, value_ptr: u32, _value_len: u32) => {
-		ctx.charge_gas(RuntimeCosts::SetRentAllowance)?;
-		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
-		ctx.ext.set_rent_allowance(value);
+	// The state rent functionality was removed. This is stub only exists for
+	// backwards compatiblity.
+	[seal0] seal_set_rent_allowance(ctx, _value_ptr: u32, _value_len: u32) => {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
 	},
 
-	// Set rent allowance of the contract.
+	// Was used to set rent allowance of the contract.
 	//
-	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
-	//   Should be decodable as a `T::Balance`. Traps otherwise.
-	[seal1] seal_set_rent_allowance(ctx, value_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::SetRentAllowance)?;
-		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
-		ctx.ext.set_rent_allowance(value);
+	// # Note
+	//
+	// The state rent functionality was removed. This is stub only exists for
+	// backwards compatiblity.
+	[seal1] seal_set_rent_allowance(ctx, _value_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
 	},
 
-	// Stores the rent allowance into the supplied buffer.
+	// Was used to store the rent allowance into the supplied buffer.
 	//
-	// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	// `out_len_ptr` must point to a u32 value that describes the available space at
-	// `out_ptr`. This call overwrites it with the size of the value. If the available
-	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	// # Note
 	//
-	// The data is encoded as T::Balance.
+	// The state rent functionality was removed. This is stub only exists for
+	// backwards compatiblity.
 	[seal0] seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::RentAllowance)?;
-		let rent_allowance = ctx.ext.rent_allowance().encode();
+		ctx.charge_gas(RuntimeCosts::Balance)?;
+		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &rent_allowance, false, already_charged
 		)?)
@@ -1755,55 +1657,6 @@ define_env!(Env, <E: Ext>,
 			return Ok(ReturnCode::Success);
 		}
 		Ok(ReturnCode::LoggingDisabled)
-	},
-
-	// Stores the rent params into the supplied buffer.
-	//
-	// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	// `out_len_ptr` must point to a u32 value that describes the available space at
-	// `out_ptr`. This call overwrites it with the size of the value. If the available
-	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	//
-	// The data is encoded as [`crate::exec::RentParams`].
-	//
-	// # Note
-	//
-	// The returned information was collected and cached when the current contract call
-	// started execution. Any change to those values that happens due to actions of the
-	// current call or contracts that are called by this contract are not considered.
-	//
-	// # Unstable
-	//
-	// This function is unstable and subject to change (or removal) in the future. Do not
-	// deploy a contract using it to a production chain.
-	[__unstable__] seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
-		)?)
-	},
-
-	// Stores the rent status into the supplied buffer.
-	//
-	// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	// `out_len_ptr` must point to a u32 value that describes the available space at
-	// `out_ptr`. This call overwrites it with the size of the value. If the available
-	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	//
-	// The data is encoded as [`crate::rent::RentStatus`].
-	//
-	// # Parameters
-	//
-	// - `at_refcount`: The refcount assumed for the returned `custom_refcount_*` fields
-	//
-	// # Unstable
-	//
-	// This function is unstable and subject to change (or removal) in the future. Do not
-	// deploy a contract using it to a production chain.
-	[__unstable__] seal_rent_status(ctx, at_refcount: u32, out_ptr: u32, out_len_ptr: u32) => {
-		let rent_status = ctx.ext.rent_status(at_refcount).encode();
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &rent_status, false, already_charged
-		)?)
 	},
 
 	// Call some dispatchable of the runtime.
