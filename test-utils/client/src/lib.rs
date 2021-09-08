@@ -216,7 +216,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		ExecutorDispatch: sc_client_api::CallExecutor<Block> + 'static,
+		ExecutorDispatch: sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -236,12 +236,10 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			storage
 		};
 
-		let genesis_state_version = sp_runtime::StateVersion::default(); // TODO resolve from genesis_storage wasm.
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
 			&storage,
-			genesis_state_version,
 			self.fork_blocks,
 			self.bad_blocks,
 			ExecutionExtensions::new(

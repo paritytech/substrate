@@ -264,7 +264,7 @@ where
 impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
@@ -303,7 +303,7 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for &Client<B, E, Block, RA>
 where
 	Block: BlockT,
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 {
 	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
 	where
@@ -317,7 +317,7 @@ where
 impl<B, E, Block, RA> Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 	Block::Header: Clone,
 {
@@ -339,13 +339,13 @@ where
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
 			let genesis_state_version = if let Some(wasm) = genesis_storage.top.get(well_known_keys::CODE) {
 
-				let ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+				let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
 				let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone()); 
 				let hash = code_fetcher.hash.clone();
 				let runtime_code = sp_core::traits::RuntimeCode { code_fetcher: &code_fetcher, heap_pages: None, hash }; 
-				let runtime_version = executor
-					.runtime_version(&mut ext, &runtime_code)
-					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())?;
+				let runtime_version = RuntimeVersionOf::runtime_version(
+					&executor, &mut ext, &runtime_code)
+					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
 				runtime_version.state_version()
 			} else {
 				Default::default()
@@ -419,12 +419,12 @@ where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.executor.runtime_version(id)
+		CallExecutor::runtime_version(&self.executor, id)
 	}
 
 	/// Get the StateVersion at a given block.
 	pub fn state_hash_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<StateVersion> {
-		Ok(self.executor.runtime_version(id)?.state_version())
+		Ok(self.runtime_version_at(id)?.state_version())
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -1286,7 +1286,7 @@ where
 impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	/// Get usage info about current client.
@@ -1298,7 +1298,7 @@ where
 impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn read_proof(
@@ -1423,7 +1423,7 @@ where
 impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + RuntimeVersionOf + Send + Sync + 'static,
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
@@ -1481,7 +1481,7 @@ where
 impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn storage_keys(
@@ -1707,7 +1707,7 @@ where
 impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn uncles(
@@ -1866,7 +1866,7 @@ where
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		self.runtime_version_at(at).map_err(Into::into)
+		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
 	}
 
 	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, sp_api::ApiError> {
@@ -1881,7 +1881,7 @@ where
 impl<B, E, Block, RA> sc_consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
+	E: CallExecutor<Block> + RuntimeVersionOf + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
@@ -1996,7 +1996,7 @@ where
 impl<B, E, Block, RA> sc_consensus::BlockImport<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
+	E: CallExecutor<Block> + RuntimeVersionOf + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
@@ -2026,7 +2026,7 @@ where
 impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn apply_finality(
@@ -2062,7 +2062,7 @@ where
 impl<B, E, Block, RA> Finalizer<Block, B> for &Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn apply_finality(
@@ -2116,7 +2116,7 @@ where
 impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn block_body(
@@ -2165,7 +2165,7 @@ where
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
@@ -2197,7 +2197,7 @@ where
 impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	E: CallExecutor<Block> + RuntimeVersionOf,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
@@ -2224,7 +2224,7 @@ where
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
 where
 	BE: backend::Backend<B>,
-	E: CallExecutor<B>,
+	E: CallExecutor<B> + RuntimeVersionOf,
 	B: BlockT,
 {
 	fn block_status(

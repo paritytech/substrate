@@ -93,7 +93,7 @@ where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let spec = self.runtime_version(id)?.spec_version;
+		let spec = CallExecutor::runtime_version(self, id)?.spec_version;
 		let code = if let Some(d) = self
 			.wasm_override
 			.as_ref()
@@ -327,6 +327,20 @@ where
 			&runtime_code,
 		)
 		.map_err(Into::into)
+	}
+}
+
+impl<B, E, Block> RuntimeVersionOf for LocalCallExecutor<Block, B, E>
+where
+	E: RuntimeVersionOf,
+	Block: BlockT,
+{
+	fn runtime_version(
+		&self,
+		ext: &mut dyn sp_externalities::Externalities,
+		runtime_code: &sp_core::traits::RuntimeCode,
+	) -> Result<sp_version::RuntimeVersion, sc_executor::error::Error> {
+		RuntimeVersionOf::runtime_version(&self.executor, ext, runtime_code)
 	}
 }
 

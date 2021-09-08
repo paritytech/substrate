@@ -44,7 +44,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::RemoteBackend, call_executor::CallExecutor, light::RemoteCallRequest,
 };
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -161,6 +161,19 @@ where
 		} else {
 			Err(ClientError::NotAvailableOnLightClient)
 		}
+	}
+}
+
+impl<B, Local> RuntimeVersionOf for GenesisCallExecutor<B, Local>
+where
+	Local: RuntimeVersionOf,
+{
+	fn runtime_version(
+		&self,
+		ext: &mut dyn sp_externalities::Externalities,
+		runtime_code: &sp_core::traits::RuntimeCode,
+	) -> Result<RuntimeVersion, sc_executor::error::Error> {
+		self.local.runtime_version(ext, runtime_code)
 	}
 }
 
