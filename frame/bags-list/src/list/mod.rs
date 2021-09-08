@@ -225,7 +225,7 @@ impl<T: Config> List<T> {
 	/// Insert several ids into the appropriate bags in the list. Continues with insertions
 	/// if duplicates are detected.
 	///
-	/// Return the final count of number of ids inserted.
+	/// Returns the final count of number of ids inserted.
 	fn insert_many(
 		ids: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
@@ -281,7 +281,9 @@ impl<T: Config> List<T> {
 	/// Remove many ids from the list.
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
-	fn remove_many<'a>(ids: impl IntoIterator<Item = &'a T::AccountId>) {
+	///
+	/// Returns the final count of number of ids removed.
+	fn remove_many<'a>(ids: impl IntoIterator<Item = &'a T::AccountId>) -> u32 {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
@@ -315,6 +317,8 @@ impl<T: Config> List<T> {
 		crate::CounterForListNodes::<T>::mutate(|prev_count| {
 			*prev_count = prev_count.saturating_sub(count)
 		});
+
+		count
 	}
 
 	/// Update a node's position in the list.
