@@ -73,7 +73,7 @@ pub enum ReturnCode {
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
-	/// Recovery failed for other reasons. Most probably wrong recovery id or signature.
+	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
 	#[cfg(feature = "unstable-interface")]
 	RecoveryFailed = 11,
 }
@@ -1721,9 +1721,10 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Computes the ECDSA public key on the given hash of message and signature.
+	// Recovers the ECDSA public key from the given message hash and signature.
 	//
-	// Returns the result directly into the given output buffer.
+	// Writes the public key into the given output buffer.
+	// Assumes the secp256k1 curve.
 	//
 	// # Parameters
 	//
