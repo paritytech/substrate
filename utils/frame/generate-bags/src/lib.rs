@@ -43,8 +43,8 @@
 //! 3. Run that program:
 //!
 //!    ```sh,notrust
-//!    $ cargo run -p node-runtime-generate-bags -- output.rs
-//!    ```
+//!    $ cargo run -p node-runtime-generate-bags -- --total-issuance 1234 --minimum-balance 1
+//! output.rs    ```
 //!
 //! 4. Update the runtime definition.
 //!
@@ -162,7 +162,13 @@ pub fn thresholds(
 
 /// Write a thresholds module to the path specified.
 ///
-/// The `output` path should terminate with a Rust module name, i.e. `foo/bar/thresholds.rs`.
+/// Parameters:
+/// - `n_bags` the number of bags to generate.
+/// - `output` the path to write to; should terminate with a Rust module name, i.e.
+///   `foo/bar/thresholds.rs`.
+/// - `total_issuance` the total amount of the currency in the network.
+/// - `minimum_balance` the minimum balance of the currency required for an account to exist (i.e.
+///   existential deposit).
 ///
 /// This generated module contains, in order:
 ///
