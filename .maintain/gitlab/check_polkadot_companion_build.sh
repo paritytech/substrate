@@ -99,7 +99,7 @@ fi
 
 our_crates=()
 our_crates_source="git+https://github.com/paritytech/substrate"
-load_our_crates() {
+discover_our_crates() {
   local found
 
   cd "$substrate_dir"
@@ -117,6 +117,8 @@ load_our_crates() {
     else
       our_crates+=("$crate")
     fi
+  # dependencies with {"source": null} are the ones we own, hence the getpath($p)==null in the jq
+  # script below
   done < <(cargo metadata --quiet --format-version=1 | "$jq" -r '
     . as $in |
     paths |
@@ -125,7 +127,7 @@ load_our_crates() {
     $in | getpath($path + ["name"])
   ')
 }
-load_our_crates
+discover_our_crates
 
 match_their_crates() {
   local target_dir="$1"
@@ -135,24 +137,23 @@ match_their_crates() {
 
   local target_name="$(basename "$target_dir")"
   local crates_not_found=()
+  local found
 
-  echo "$target_dir"
-  # output will be provided in the format:
+  # output will be consumed in the format:
   #   crate
   #   source
   #   crate
   #   ...
   local next="crate"
-  local found
   while IFS= read -r line; do
     case "$next" in
       crate)
-        crate="$line"
         next="source"
+        crate="$line"
       ;;
       source)
+        next="crate"
         if [ "$line" == "$our_crates_source" ] || [[ "$line" == "$our_crates_source?"* ]]; then
-          echo "$line"
           for our_crate in "${our_crates[@]}"; do
             if [ "$our_crate" == "$crate" ]; then
               found=true
@@ -176,8 +177,6 @@ match_their_crates() {
             fi
           fi
         fi
-
-        next="crate"
       ;;
       *)
         echo "ERROR: Unknown state $next"
@@ -194,8 +193,9 @@ match_their_crates() {
   ')
 
   if [ "${crates_not_found[@]}" ]; then
-    echo "Errors during crate matching"
+    echo -e "Errors during crate matching\n"
     printf "Failed to detect our crate \"%s\" referenced in $target_name\n" "${crates_not_found[@]}"
+    echo -e "\nNote: this error generally happens if you have deleted or renamed a crate and did not update it in $target_name"
     exit 1
   fi
 }
