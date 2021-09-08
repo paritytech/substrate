@@ -1010,8 +1010,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		}
 		.map_err(|e| format!("Database backend error: {:?}", e))
 	}
-
-	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
@@ -1039,7 +1037,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStora
 		use hash_db::HashDB;
 		Ok(self.storage.get(key, prefix))
 	}
-	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 struct EmptyStorage<Block: BlockT>(pub Block::Hash);
@@ -1057,8 +1054,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<B
 	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
-
-	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 /// Frozen `value` at time `at`.
@@ -2575,10 +2570,10 @@ pub(crate) mod tests {
 
 	#[test]
 	fn set_state_data() {
-		set_state_data_inner(true);
-		set_state_data_inner(false);
+		set_state_data_inner(StateVersion::V0);
+		set_state_data_inner(StateVersion::V1);
 	}
-	fn set_state_data_inner(alt_hashing: bool) {
+	fn set_state_data_inner(state_version: StateVersion) {
 		let db = Backend::<Block>::new_test(2, 0);
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
@@ -2594,7 +2589,7 @@ pub(crate) mod tests {
 
 			header.state_root = op
 				.old_state
-				.storage_root(storage.iter().map(|(x, y)| (&x[..], Some(&y[..]))))
+				.storage_root(storage.iter().map(|(x, y)| (&x[..], Some(&y[..]))), state_version)
 				.0
 				.into();
 			let hash = header.hash();
@@ -2602,7 +2597,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-			})
+			}, state_version)
 			.unwrap();
 			op.set_block_data(header.clone(), Some(vec![]), None, None, NewBlockState::Best)
 				.unwrap();
@@ -2633,7 +2628,7 @@ pub(crate) mod tests {
 
 			let (root, overlay) = op
 				.old_state
-				.storage_root(storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))));
+				.storage_root(storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))), state_version);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -2654,6 +2649,7 @@ pub(crate) mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		sp_tracing::try_init_simple();
+		let state_version = StateVersion::default();
 		let key;
 		let backend = Backend::<Block>::new_test(1, 0);
 
@@ -2670,13 +2666,13 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			header.state_root = op.old_state.storage_root(std::iter::empty()).0.into();
+			header.state_root = op.old_state.storage_root(std::iter::empty(), state_version).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
 				top: Default::default(),
 				children_default: Default::default(),
-			})
+			}, state_version)
 			.unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
@@ -2710,7 +2706,7 @@ pub(crate) mod tests {
 
 			header.state_root = op
 				.old_state
-				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))))
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))), state_version)
 				.0
 				.into();
 			let hash = header.hash();
@@ -2747,7 +2743,7 @@ pub(crate) mod tests {
 
 			header.state_root = op
 				.old_state
-				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))))
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))), state_version)
 				.0
 				.into();
 			let hash = header.hash();
@@ -2781,7 +2777,7 @@ pub(crate) mod tests {
 
 			header.state_root = op
 				.old_state
-				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))))
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))), state_version)
 				.0
 				.into();
 
@@ -3116,6 +3112,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn storage_hash_is_cached_correctly() {
+		let state_version = StateVersion::default();
 		let backend = Backend::<Block>::new_test(10, 10);
 
 		let hash0 = {
@@ -3135,7 +3132,7 @@ pub(crate) mod tests {
 
 			header.state_root = op
 				.old_state
-				.storage_root(storage.iter().map(|(x, y)| (&x[..], Some(&y[..]))))
+				.storage_root(storage.iter().map(|(x, y)| (&x[..], Some(&y[..]))), state_version)
 				.0
 				.into();
 			let hash = header.hash();
@@ -3143,7 +3140,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-			})
+			}, state_version)
 			.unwrap();
 			op.set_block_data(header.clone(), Some(vec![]), None, None, NewBlockState::Best)
 				.unwrap();
@@ -3174,7 +3171,7 @@ pub(crate) mod tests {
 
 			let (root, overlay) = op
 				.old_state
-				.storage_root(storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))));
+				.storage_root(storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))), state_version);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 			let hash = header.hash();

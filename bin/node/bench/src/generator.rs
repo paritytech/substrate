@@ -23,6 +23,7 @@ use node_primitives::Hash;
 use sp_trie::{trie_types::TrieDBMut, TrieMut};
 
 use crate::simple_trie::SimpleTrie;
+use sp_core::StateVersion;
 
 /// Generate trie from given `key_values`.
 ///
@@ -31,7 +32,7 @@ use crate::simple_trie::SimpleTrie;
 pub fn generate_trie(
 	db: Arc<dyn KeyValueDB>,
 	key_values: impl IntoIterator<Item = (Vec<u8>, Vec<u8>)>,
-	alt_hashing: Option<u32>,
+	state_version: StateVersion,
 ) -> Hash {
 	let mut root = Hash::default();
 
@@ -44,8 +45,8 @@ pub fn generate_trie(
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };
 		{
-			let mut trie_db = if let Some(threshold) = alt_hashing {
-				let layout = sp_trie::Layout::with_alt_hashing(threshold);
+			let mut trie_db = if let Some(threshold) = state_version.state_value_threshold() {
+				let layout = sp_trie::Layout::with_max_inline_value(threshold);
 				TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(
 					&mut trie, &mut root, layout,
 				)

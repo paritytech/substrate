@@ -64,7 +64,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 				.db
 				.get(0, &prefixed_key)
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.record::<HashFor<Block>>(key.clone(), backend_value.clone());
+			recorder.record(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db
@@ -72,13 +72,8 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 				.map_err(|e| format!("Database backend error: {:?}", e))
 		}
 	}
-
-	fn access_from(&self, key: &Block::Hash) {
-		if let Some(recorder) = &self.proof_recorder {
-			recorder.access_from(key, HashFor::<Block>::LENGTH);
-		}
-	}
 }
+
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
@@ -111,7 +106,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		record_proof: bool,
 		enable_tracking: bool,
 	) -> Result<Self, String> {
-		let state_hash = sp_runtime::DEFAULT_STATE_HASHING;
+		let state_hash = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
 		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
@@ -612,7 +607,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| {
 			let proof_size = recorder.estimate_encoded_size() as u32;
-			let proof = recorder.to_storage_proof::<HashFor<B>>();
+			let proof = recorder.to_storage_proof();
 			let proof_recorder_root = self.proof_recorder_root.get();
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie

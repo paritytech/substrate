@@ -674,17 +674,6 @@ pub struct OldRuntimeVersion {
 	pub apis: ApisVec,
 }
 
-#[derive(codec::Encode, codec::Decode)] // TODO same use as OldRuntimeVersion
-pub struct OldRuntimeVersion2 {
-	pub spec_name: RuntimeString,
-	pub impl_name: RuntimeString,
-	pub authoring_version: u32,
-	pub spec_version: u32,
-	pub impl_version: u32,
-	pub apis: ApisVec,
-	pub transaction_version: u32,
-}
-
 impl From<OldRuntimeVersion> for RuntimeVersion {
 	fn from(x: OldRuntimeVersion) -> Self {
 		Self {

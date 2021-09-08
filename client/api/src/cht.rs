@@ -117,7 +117,7 @@ where
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)], None);
+	let storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)], sp_runtime::StateVersion::V0);
 	let trie_storage = storage
 		.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");

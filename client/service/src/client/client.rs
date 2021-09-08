@@ -240,7 +240,7 @@ where
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
 	);
-	let genesis_state_version = Some(33); // TODO resolve from genesis storage wasm
+	let genesis_state_version = sp_runtime::StateVersion::default(); // TODO resolve from genesis_storage wasm.
 	Client::new(
 		backend,
 		call_executor,

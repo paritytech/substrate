@@ -48,9 +48,6 @@ type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-
-	/// Call back when value get accessed in trie.
-	fn access_from(&self, key: &H::Out);
 }
 
 /// Local cache for child root.
@@ -476,12 +473,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 		}
 	}
 
-	fn access_from(&self, key: &H::Out, _at: Option<&H::Out>) -> Option<DBValue> {
-		// call back to storage even if the overlay was hit.
-		self.storage.access_from(key);
-		None
-	}
-
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
 		HashDB::get(self, key, prefix).is_some()
 	}
@@ -494,10 +485,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 		HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
-	fn emplace_ref(&mut self, key: &H::Out, prefix: Prefix, value: &[u8]) {
-		HashDB::emplace_ref(self.overlay, key, prefix, value)
-	}
-
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
 		HashDB::remove(self.overlay, key, prefix)
 	}
@@ -506,10 +493,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for Ephemeral<'a, S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		HashDB::get(self, key, prefix)
-	}
-
-	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<DBValue> {
-		HashDB::access_from(self, key, at)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
@@ -524,9 +507,6 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-
-	/// Call back when value get accessed in trie.
-	fn access_from(&self, key: &H::Out);
 }
 
 // This implementation is used by normal storage trie clients.
@@ -536,10 +516,6 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
-	}
-
-	fn access_from(&self, key: &H::Out) {
-		Storage::<H>::access_from(self.deref(), key)
 	}
 }
 
@@ -552,10 +528,6 @@ where
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-
-	fn access_from(&self, key: &H::Out) {
-		HashDB::access_from(self, key, None);
 	}
 }
 
@@ -582,12 +554,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 		}
 	}
 
-	fn access_from(&self, key: &H::Out, _at: Option<&H::Out>) -> Option<DBValue> {
-		// access storage since this is only to register access for proof.
-		self.storage.access_from(key);
-		None
-	}
-
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
 		HashDB::get(self, key, prefix).is_some()
 	}
@@ -600,10 +566,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 		unimplemented!();
 	}
 
-	fn emplace_ref(&mut self, _key: &H::Out, _prefix: Prefix, _value: &[u8]) {
-		unimplemented!();
-	}
-
 	fn remove(&mut self, _key: &H::Out, _prefix: Prefix) {
 		unimplemented!();
 	}
@@ -612,10 +574,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 impl<S: TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for TrieBackendEssence<S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		HashDB::get(self, key, prefix)
-	}
-
-	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<DBValue> {
-		HashDB::access_from(self, key, at)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {

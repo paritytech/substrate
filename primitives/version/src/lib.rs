@@ -218,9 +218,9 @@ impl RuntimeVersion {
 	pub fn state_version(&self) -> StateVersion {
 		let core_api_id = sp_runtime::hashing::blake2_64(b"Core");
 		if self.has_api_with(&core_api_id, |v| v >= 4) {
-			DEFAULT_STATE_HASHING
+			StateVersion::V1
 		} else {
-			None
+			StateVersion::V0
 		}
 	}
 }

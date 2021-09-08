@@ -85,7 +85,6 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: Genesi
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
-	state_hashed_value: bool,
 	no_genesis: bool,
 }
 
@@ -138,7 +137,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			fork_blocks: None,
 			bad_blocks: None,
 			enable_offchain_indexing_api: false,
-			state_hashed_value: false,
 			no_genesis: false,
 		}
 	}
@@ -203,12 +201,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		self
 	}
 
-	/// Enable the internal value hash of state.
-	pub fn state_hashed_value(mut self) -> Self {
-		self.state_hashed_value = true;
-		self
-	}
-
 	/// Disable writing genesis.
 	pub fn set_no_genesis(mut self) -> Self {
 		self.no_genesis = true;
@@ -244,7 +236,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			storage
 		};
 
-		let genesis_state_version = Some(33); // TODO get from genesis wasm
+		let genesis_state_version = sp_runtime::StateVersion::default(); // TODO resolve from genesis_storage wasm.
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,

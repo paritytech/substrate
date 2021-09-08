@@ -137,13 +137,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	/// `alt_hashing` indicate if trie state should apply alternate hashing
-	/// scheme (inner value hashed).
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord;
@@ -155,7 +153,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord;
@@ -190,7 +188,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_deltas: impl Iterator<
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord + Encode,
@@ -199,7 +197,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
-			let (child_root, empty, child_txs) = self.child_storage_root(&child_info, child_delta, threshold);
+			let (child_root, empty, child_txs) = self.child_storage_root(&child_info, child_delta, state_version);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -212,7 +210,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			delta
 				.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
 				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
-			threshold,
+			state_version,
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)

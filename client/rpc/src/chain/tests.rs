@@ -30,7 +30,7 @@ use substrate_test_runtime_client::{
 
 #[test]
 fn should_return_header() {
-	let client = Arc::new(substrate_test_runtime_client::new(true));
+	let client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
@@ -65,11 +65,7 @@ fn should_return_header() {
 
 #[test]
 fn should_return_a_block() {
-	should_return_a_block_inner(true);
-	should_return_a_block_inner(false);
-}
-fn should_return_a_block_inner(hashed_value: bool) {
-	let mut client = Arc::new(substrate_test_runtime_client::new(hashed_value));
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -117,7 +113,7 @@ fn should_return_a_block_inner(hashed_value: bool) {
 
 #[test]
 fn should_return_block_hash() {
-	let mut client = Arc::new(substrate_test_runtime_client::new(true));
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
@@ -159,7 +155,7 @@ fn should_return_block_hash() {
 
 #[test]
 fn should_return_finalized_hash() {
-	let mut client = Arc::new(substrate_test_runtime_client::new(true));
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
@@ -189,7 +185,7 @@ fn should_notify_about_latest_block() {
 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new(true));
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_all_heads(Default::default(), subscriber);
@@ -211,7 +207,7 @@ fn should_notify_about_best_block() {
 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new(true));
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
@@ -233,7 +229,7 @@ fn should_notify_about_finalized_block() {
 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new(true));
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);

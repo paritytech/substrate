@@ -1000,7 +1000,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
-		DEFAULT_STATE_HASHING, StateVersion,
+		StateVersion,
 		storage::ChildInfo,
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
@@ -1072,8 +1072,8 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		execute_works_inner(None);
-		execute_works_inner(DEFAULT_STATE_HASHING);
+		execute_works_inner(StateVersion::V0);
+		execute_works_inner(StateVersion::V1);
 	}
 	fn execute_works_inner(hashed: StateVersion) {
 		let backend = trie_backend::tests::test_trie(hashed);
@@ -1102,8 +1102,8 @@ mod tests {
 
 	#[test]
 	fn execute_works_with_native_else_wasm() {
-		execute_works_with_native_else_wasm_inner(None);
-		execute_works_with_native_else_wasm_inner(DEFAULT_STATE_HASHING);
+		execute_works_with_native_else_wasm_inner(StateVersion::V0);
+		execute_works_with_native_else_wasm_inner(StateVersion::V1);
 	}
 	fn execute_works_with_native_else_wasm_inner(state_hash: StateVersion) {
 		let backend = trie_backend::tests::test_trie(state_hash);
@@ -1132,8 +1132,8 @@ mod tests {
 
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
-		dual_execution_strategy_detects_consensus_failure_inner(None);
-		dual_execution_strategy_detects_consensus_failure_inner(DEFAULT_STATE_HASHING);
+		dual_execution_strategy_detects_consensus_failure_inner(StateVersion::V0);
+		dual_execution_strategy_detects_consensus_failure_inner(StateVersion::V1);
 	}
 	fn dual_execution_strategy_detects_consensus_failure_inner(state_hash: StateVersion) {
 		let mut consensus_failed = false;
@@ -1172,8 +1172,8 @@ mod tests {
 
 	#[test]
 	fn prove_execution_and_proof_check_works() {
-		prove_execution_and_proof_check_works_inner(DEFAULT_STATE_HASHING);
-		prove_execution_and_proof_check_works_inner(None);
+		prove_execution_and_proof_check_works_inner(StateVersion::V0);
+		prove_execution_and_proof_check_works_inner(StateVersion::V1);
 	}
 	fn prove_execution_and_proof_check_works_inner(state_hash: StateVersion) {
 		let executor = DummyCodeExecutor {
@@ -1223,7 +1223,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let state = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
+		let state = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1304,7 +1304,7 @@ mod tests {
 				b"d".to_vec() => b"3".to_vec()
 			],
 		];
-		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
 
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(&child_info, b"1".to_vec(), Some(b"1312".to_vec()));
@@ -1352,7 +1352,7 @@ mod tests {
 				b"d".to_vec() => b"3".to_vec()
 			],
 		];
-		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
@@ -1540,8 +1540,8 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works() {
-		prove_read_and_proof_check_works_inner(None);
-		prove_read_and_proof_check_works_inner(DEFAULT_STATE_HASHING);
+		prove_read_and_proof_check_works_inner(StateVersion::V0);
+		prove_read_and_proof_check_works_inner(StateVersion::V1);
 	}
 	fn prove_read_and_proof_check_works_inner(state_hash: StateVersion) {
 		let child_info = ChildInfo::new_default(b"sub1");
@@ -1592,7 +1592,7 @@ mod tests {
 
 	#[test]
 	fn prove_read_with_size_limit_works() {
-		let state_hash = None;
+		let state_hash = StateVersion::V0;
 		let remote_backend = trie_backend::tests::test_trie(state_hash);
 		let remote_root = remote_backend.storage_root(::std::iter::empty(), state_hash).0;
 		let (proof, count) =
@@ -1645,7 +1645,7 @@ mod tests {
 	#[test]
 	fn inner_state_hashing_switch_proofs() {
 		let mut layout = Layout::default();
-		let mut state_hash = None;
+		let mut state_hash = StateVersion::V0;
 		let (mut mdb, mut root) = trie_backend::tests::test_db(state_hash);
 		{
 			let mut trie =
@@ -1681,8 +1681,8 @@ mod tests {
 		let root1 = root.clone();
 
 		// do switch
-		layout = Layout::with_alt_hashing(sp_core::storage::DEFAULT_ALT_HASH_THRESHOLD);
-		state_hash = DEFAULT_STATE_HASHING;
+		layout = Layout::with_max_inline_value(sp_core::storage::DEFAULT_MAX_INLINE_VALUE);
+		state_hash = StateVersion::V1;
 		// update with same value do not change
 		{
 			let mut trie =
@@ -1715,8 +1715,8 @@ mod tests {
 
 	#[test]
 	fn compact_multiple_child_trie() {
-		let size_inner_hash = compact_multiple_child_trie_inner(DEFAULT_STATE_HASHING);
-		let size_no_inner_hash = compact_multiple_child_trie_inner(None);
+		let size_inner_hash = compact_multiple_child_trie_inner(StateVersion::V0);
+		let size_no_inner_hash = compact_multiple_child_trie_inner(StateVersion::V1);
 		assert!(size_inner_hash < size_no_inner_hash);
 	}
 	fn compact_multiple_child_trie_inner(state_hash: StateVersion) -> usize {
@@ -1778,7 +1778,7 @@ mod tests {
 
 	#[test]
 	fn child_storage_uuid() {
-		let state_hash = None;
+		let state_hash = StateVersion::V0;
 		let child_info_1 = ChildInfo::new_default(b"sub_test1");
 		let child_info_2 = ChildInfo::new_default(b"sub_test2");
 
@@ -1817,7 +1817,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let state = InMemoryBackend::<BlakeTwo256>::from((initial, DEFAULT_STATE_HASHING));
+		let state = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1849,7 +1849,7 @@ mod tests {
 
 	#[test]
 	fn runtime_registered_extensions_are_removed_after_execution() {
-		let state_hash = DEFAULT_STATE_HASHING;
+		let state_hash = StateVersion::default();
 		use sp_externalities::ExternalitiesExt;
 		sp_externalities::decl_extension! {
 			struct DummyExt(u32);

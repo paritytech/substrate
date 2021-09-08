@@ -1187,7 +1187,7 @@ mod tests {
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
-		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
+		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])), Default::default());
 
 		let mut s = CachingState::new(backend.clone(), shared.clone(), Some(root_parent));
 		s.cache.sync_cache(

@@ -15,11 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Layout, TrieLayout};
+use crate::Layout;
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use sp_std::vec::Vec;
-use trie_db::NodeCodec;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -71,16 +70,6 @@ impl StorageProof {
 	/// Creates a `MemoryDB` from `Self`.
 	pub fn into_memory_db<H: Hasher>(self) -> crate::MemoryDB<H> {
 		self.into()
-	}
-
-	/// Creates a `MemoryDB` from `Self`. In case we do not need
-	/// to check meta (using alt hashing will always be disabled).
-	pub fn into_memory_db_no_meta<H: Hasher>(self) -> crate::MemoryDB<H> {
-		let mut db = crate::MemoryDB::default();
-		for item in self.iter_nodes() {
-			db.insert(crate::EMPTY_PREFIX, &item);
-		}
-		db
 	}
 
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
@@ -175,15 +164,8 @@ impl Iterator for StorageProofNodeIterator {
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
-		for item in proof.trie_nodes.iter() {
-			let mut meta = Default::default();
-			// Read meta from state (required for value layout).
-			let _ = <Layout<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
-			db.alt_insert(
-				crate::EMPTY_PREFIX,
-				item,
-				meta.resolve_alt_hashing::<<Layout<H> as TrieLayout>::Codec>(),
-			);
+		for item in proof.iter_nodes() {
+			db.insert(crate::EMPTY_PREFIX, &item);
 		}
 		db
 	}

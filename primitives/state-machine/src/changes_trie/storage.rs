@@ -211,6 +211,4 @@ where
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
-
-	fn access_from(&self, _key: &H::Out) {}
 }

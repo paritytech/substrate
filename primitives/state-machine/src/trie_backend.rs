@@ -187,7 +187,7 @@ where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
@@ -198,8 +198,8 @@ where
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
-				let layout = if let Some(threshold) = threshold {
-					sp_trie::Layout::with_alt_hashing(threshold)
+				let layout = if let Some(threshold) = state_version.state_value_threshold() {
+					sp_trie::Layout::with_max_inline_value(threshold)
 				} else {
 					sp_trie::Layout::default()
 				};
@@ -219,7 +219,7 @@ where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
@@ -227,8 +227,8 @@ where
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
 		};
-		let layout = if let Some(threshold) = threshold {
-			sp_trie::Layout::with_alt_hashing(threshold)
+		let layout = if let Some(threshold) = state_version.state_value_threshold() {
+			sp_trie::Layout::with_max_inline_value(threshold)
 		} else {
 			sp_trie::Layout::default()
 		};
@@ -284,7 +284,7 @@ where
 pub mod tests {
 	use super::*;
 	use codec::Encode;
-	use sp_core::{H256, DEFAULT_STATE_HASHING};
+	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{trie_types::TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut};
 	use std::{collections::HashSet, iter};
@@ -305,8 +305,8 @@ pub mod tests {
 		{
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
-			let mut trie = if let Some(hash) = hashed_value {
-				let layout = Layout::with_alt_hashing(hash);
+			let mut trie = if let Some(hash) = hashed_value.state_value_threshold() {
+				let layout = Layout::with_max_inline_value(hash);
 				TrieDBMut::new_with_layout(&mut mdb, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut mdb, &mut root)
@@ -334,8 +334,8 @@ pub mod tests {
 
 	#[test]
 	fn read_from_storage_returns_some() {
-		read_from_storage_returns_some_inner(None);
-		read_from_storage_returns_some_inner(DEFAULT_STATE_HASHING);
+		read_from_storage_returns_some_inner(StateVersion::V0);
+		read_from_storage_returns_some_inner(StateVersion::V1);
 	}
 	fn read_from_storage_returns_some_inner(state_hash: StateVersion) {
 		assert_eq!(test_trie(state_hash).storage(b"key").unwrap(), Some(b"value".to_vec()));
@@ -343,8 +343,8 @@ pub mod tests {
 
 	#[test]
 	fn read_from_child_storage_returns_some() {
-		read_from_child_storage_returns_some_inner(None);
-		read_from_child_storage_returns_some_inner(DEFAULT_STATE_HASHING);
+		read_from_child_storage_returns_some_inner(StateVersion::V0);
+		read_from_child_storage_returns_some_inner(StateVersion::V1);
 	}
 	fn read_from_child_storage_returns_some_inner(state_hash: StateVersion) {
 		let test_trie = test_trie(state_hash);
@@ -374,8 +374,8 @@ pub mod tests {
 
 	#[test]
 	fn read_from_storage_returns_none() {
-		read_from_storage_returns_none_inner(None);
-		read_from_storage_returns_none_inner(DEFAULT_STATE_HASHING);
+		read_from_storage_returns_none_inner(StateVersion::V0);
+		read_from_storage_returns_none_inner(StateVersion::V1);
 	}
 	fn read_from_storage_returns_none_inner(state_hash: StateVersion) {
 		assert_eq!(test_trie(state_hash).storage(b"non-existing-key").unwrap(), None);
@@ -383,8 +383,8 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_not_empty_on_non_empty_storage() {
-		pairs_are_not_empty_on_non_empty_storage_inner(None);
-		pairs_are_not_empty_on_non_empty_storage_inner(DEFAULT_STATE_HASHING);
+		pairs_are_not_empty_on_non_empty_storage_inner(StateVersion::V0);
+		pairs_are_not_empty_on_non_empty_storage_inner(StateVersion::V1);
 	}
 	fn pairs_are_not_empty_on_non_empty_storage_inner(state_hash: StateVersion) {
 		assert!(!test_trie(state_hash).pairs().is_empty());
@@ -402,8 +402,8 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		storage_root_is_non_default_inner(None);
-		storage_root_is_non_default_inner(DEFAULT_STATE_HASHING);
+		storage_root_is_non_default_inner(StateVersion::V0);
+		storage_root_is_non_default_inner(StateVersion::V1);
 	}
 	fn storage_root_is_non_default_inner(state_hash: StateVersion) {
 		assert!(test_trie(state_hash).storage_root(iter::empty(), state_hash).0 != H256::repeat_byte(0));
@@ -411,8 +411,8 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		storage_root_transaction_is_non_empty_inner(None);
-		storage_root_transaction_is_non_empty_inner(DEFAULT_STATE_HASHING);
+		storage_root_transaction_is_non_empty_inner(StateVersion::V0);
+		storage_root_transaction_is_non_empty_inner(StateVersion::V1);
 	}
 	fn storage_root_transaction_is_non_empty_inner(state_hash: StateVersion) {
 		let (new_root, mut tx) =
@@ -423,8 +423,8 @@ pub mod tests {
 
 	#[test]
 	fn prefix_walking_works() {
-		prefix_walking_works_inner(None);
-		prefix_walking_works_inner(DEFAULT_STATE_HASHING);
+		prefix_walking_works_inner(StateVersion::V0);
+		prefix_walking_works_inner(StateVersion::V1);
 	}
 	fn prefix_walking_works_inner(state_hash: StateVersion) {
 		let trie = test_trie(state_hash);

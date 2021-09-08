@@ -32,7 +32,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, StateVersion,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
 	ConsensusEngineId, DigestItem, Justifications,
 };
@@ -261,7 +261,7 @@ fn construct_genesis_should_work_with_native() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, StateVersion::default()));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -296,7 +296,7 @@ fn construct_genesis_should_work_with_wasm() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, StateVersion::default())); // TODO state version from runtime code??
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -331,7 +331,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, StateVersion::default()));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -355,11 +355,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 
 #[test]
 fn client_initializes_from_genesis_ok() {
-	client_initializes_from_genesis_ok_inner(false);
-	client_initializes_from_genesis_ok_inner(true);
-}
-fn client_initializes_from_genesis_ok_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new();
 
 	assert_eq!(
 		client
@@ -385,7 +381,7 @@ fn client_initializes_from_genesis_ok_inner(hashed_value: bool) {
 
 #[test]
 fn block_builder_works_with_no_transactions() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
@@ -396,11 +392,7 @@ fn block_builder_works_with_no_transactions() {
 
 #[test]
 fn block_builder_works_with_transactions() {
-	block_builder_works_with_transactions_inner(true);
-	block_builder_works_with_transactions_inner(false);
-}
-fn block_builder_works_with_transactions_inner(hashed_value: bool) {
-	let mut client = substrate_test_runtime_client::new(hashed_value);
+	let mut client = substrate_test_runtime_client::new();
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -445,7 +437,7 @@ fn block_builder_works_with_transactions_inner(hashed_value: bool) {
 
 #[test]
 fn block_builder_does_not_include_invalid() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -515,7 +507,7 @@ fn best_containing_with_hash_not_found() {
 fn uncles_with_only_ancestors() {
 	// block tree:
 	// G -> A1 -> A2
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -535,7 +527,7 @@ fn uncles_with_multiple_forks() {
 	//      A1 -> B2 -> B3 -> B4
 	//	          B2 -> C3
 	//	    A1 -> D2
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1210,7 +1202,7 @@ fn key_changes_works() {
 
 #[test]
 fn import_with_justification() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1247,7 +1239,7 @@ fn import_with_justification() {
 
 #[test]
 fn importing_diverged_finalized_block_should_trigger_reorg() {
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1 -> A2
 	//   \
@@ -1295,7 +1287,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
 	let (mut client, select_chain) =
-		TestClientBuilder::new().state_hashed_value().build_with_longest_chain();
+		TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \
@@ -1368,7 +1360,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 #[test]
 fn get_header_by_block_number_doesnt_panic() {
-	let client = substrate_test_runtime_client::new(true);
+	let client = substrate_test_runtime_client::new();
 
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
@@ -1379,7 +1371,7 @@ fn get_header_by_block_number_doesnt_panic() {
 #[test]
 fn state_reverted_on_reorg() {
 	sp_tracing::try_init_simple();
-	let mut client = substrate_test_runtime_client::new(true);
+	let mut client = substrate_test_runtime_client::new();
 
 	let current_balance = |client: &substrate_test_runtime_client::TestClient| {
 		client
@@ -2035,11 +2027,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 #[test]
 fn storage_keys_iter_works() {
-	storage_keys_iter_works_inner(true);
-	storage_keys_iter_works_inner(false);
-}
-fn storage_keys_iter_works_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new();
 
 	let prefix = StorageKey(hex!("").to_vec());
 

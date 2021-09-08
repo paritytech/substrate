@@ -24,7 +24,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 use sp_core::{
-	hexdisplay::HexDisplay, StateVersion, DEFAULT_STATE_HASHING,
+	hexdisplay::HexDisplay, StateVersion,
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions, Externalities};
@@ -718,7 +718,7 @@ where
 				None,
 				Default::default(),
 				self.storage_transaction_cache,
-				None, // using any state
+				Default::default(), // using any state
 			)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -730,7 +730,7 @@ where
 
 	fn commit(&mut self) {
 		// Bench always use latest state.
-		let state_threshold = DEFAULT_STATE_HASHING;
+		let state_threshold = StateVersion::default();
 		for _ in 0..self.overlay.transaction_depth() {
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
@@ -1038,7 +1038,7 @@ mod tests {
 				vec![40] => vec![40]
 			],
 			children_default: map![],
-		}, DEFAULT_STATE_HASHING)
+		}, StateVersion::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1082,7 +1082,7 @@ mod tests {
 				vec![30] => vec![30]
 			],
 			children_default: map![],
-		}, DEFAULT_STATE_HASHING)
+		}, StateVersion::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1113,7 +1113,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, DEFAULT_STATE_HASHING)
+		}, StateVersion::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1158,7 +1158,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, DEFAULT_STATE_HASHING)
+		}, StateVersion::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1195,7 +1195,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-		}, DEFAULT_STATE_HASHING)
+		}, StateVersion::default())
 		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);

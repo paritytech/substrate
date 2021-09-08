@@ -191,7 +191,7 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root(None)
+		self.storage_root(sp_core::StateVersion::V0)
 	}
 
 	#[version(2)]
@@ -201,7 +201,7 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root(sp_core::DEFAULT_STATE_HASHING)
+		self.storage_root(sp_core::StateVersion::V1)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
@@ -389,7 +389,7 @@ pub trait DefaultChildStorage {
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info, None)
+		self.child_storage_root(&child_info, sp_core::StateVersion::V0)
 	}
 
 	/// Default child root calculation.
@@ -404,7 +404,7 @@ pub trait DefaultChildStorage {
 	#[version(2)]
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info, sp_core::DEFAULT_STATE_HASHING)
+		self.child_storage_root(&child_info, sp_core::StateVersion::V1)
 	}
 
 	/// Child storage key iteration.

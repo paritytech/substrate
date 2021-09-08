@@ -450,7 +450,7 @@ where
 		spawn_handle,
 		config.clone(),
 	)?;
-	let genesis_state_version = Some(33); // TODO resolve from genesis_storage wasm.
+	let genesis_state_version = sp_runtime::StateVersion::default(); // TODO resolve from genesis_storage wasm.
 	Ok(crate::client::Client::new(
 		backend,
 		executor,

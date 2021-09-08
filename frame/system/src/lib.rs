@@ -1441,15 +1441,14 @@ impl<T: Config> Pallet<T> {
 	/// Get the basic externalities for this pallet, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
-		let storage = sp_core::storage::Storage {
+		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
 				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
 			children_default: map![],
-		};
-		TestExternalities::new(storage)
+		})
 	}
 
 	/// Get the current events deposited by the runtime.

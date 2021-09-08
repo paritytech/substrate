@@ -244,7 +244,7 @@ pub fn trie_threshold_decode(mut encoded: &[u8]) -> Option<u32> {
 }
 
 /// Default value to use as a threshold for inner hashing.
-pub const DEFAULT_ALT_HASH_THRESHOLD: u32 = 33;
+pub const DEFAULT_MAX_INLINE_VALUE: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
@@ -415,10 +415,31 @@ impl ChildTrieParentKeyId {
 /// Different state that can be applied. TODO rename to StateValueHashing.
 ///
 /// When a value is define, apply inner hashing over the given threshold.
-pub type StateVersion = Option<u32>;
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum StateVersion {
+	/// Old state version, no value nodes.
+	V0,
+	/// New state version can use value nodes.
+	V1,
+}
+
+impl Default for StateVersion {
+	fn default() -> Self {
+		StateVersion::V1
+	}
+}
+impl StateVersion {
+	/// Threshold to apply for inline value of trie state.
+	pub fn state_value_threshold(&self) -> Option<u32> {
+		match self {
+			StateVersion::V0 => None,
+			StateVersion::V1 => DEFAULT_STATE_HASHING,
+		}
+	}
+}
 
 /// Default threshold value for activated inner hashing of trie state.
-pub const DEFAULT_STATE_HASHING: StateVersion = Some(DEFAULT_ALT_HASH_THRESHOLD);
+pub const DEFAULT_STATE_HASHING: Option<u32> = Some(DEFAULT_MAX_INLINE_VALUE);
 
 #[cfg(test)]
 mod tests {

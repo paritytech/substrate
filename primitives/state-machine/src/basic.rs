@@ -273,7 +273,7 @@ impl Externalities for BasicExternalities {
 		crate::ext::StorageAppend::new(current).append(value);
 	}
 
-	fn storage_root(&mut self, threshold: StateVersion) -> Vec<u8> {
+	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
 		let prefixed_keys: Vec<_> = self
 			.inner
@@ -286,7 +286,7 @@ impl Externalities for BasicExternalities {
 		// type of child trie support.
 		let empty_hash = empty_child_trie_root::<Layout<Blake2Hasher>>();
 		for (prefixed_storage_key, child_info) in prefixed_keys {
-			let child_root = self.child_storage_root(&child_info, threshold);
+			let child_root = self.child_storage_root(&child_info, state_version);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
 			} else {
@@ -294,19 +294,19 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if let Some(threshold) = threshold {
-			Layout::<Blake2Hasher>::with_alt_hashing(threshold)
+		let layout = if let Some(threshold) = state_version.state_value_threshold() {
+			Layout::<Blake2Hasher>::with_max_inline_value(threshold)
 		} else {
 			Layout::<Blake2Hasher>::default()
 		};
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo, threshold: StateVersion) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_info: &ChildInfo, state_version: StateVersion) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
 			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>();
-			in_mem.child_storage_root(&child.child_info, delta, threshold).0
+			in_mem.child_storage_root(&child.child_info, delta, state_version).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}
@@ -397,7 +397,7 @@ mod tests {
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root(None)[..], &ROOT);
+		assert_eq!(&ext.storage_root(StateVersion::default())[..], &ROOT);
 	}
 
 	#[test]

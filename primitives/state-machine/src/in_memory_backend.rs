@@ -44,10 +44,10 @@ where
 	pub fn update<T: IntoIterator<Item = (Option<ChildInfo>, StorageCollection)>>(
 		&self,
 		changes: T,
-		state_threshold: StateVersion,
+		state_version: StateVersion,
 	) -> Self {
 		let mut clone = self.clone();
-		clone.insert(changes, state_threshold);
+		clone.insert(changes, state_version);
 		clone
 	}
 
@@ -55,7 +55,7 @@ where
 	pub fn insert<T: IntoIterator<Item = (Option<ChildInfo>, StorageCollection)>>(
 		&mut self,
 		changes: T,
-		state_threshold: StateVersion,
+		state_version: StateVersion,
 	) {
 		let (top, child) = changes.into_iter().partition::<Vec<_>, _>(|v| v.0.is_none());
 		let (root, transaction) = self.full_storage_root(
@@ -63,7 +63,7 @@ where
 			child.iter().filter_map(|v| {
 				v.0.as_ref().map(|c| (c, v.1.iter().map(|(k, v)| (&k[..], v.as_deref()))))
 			}),
-			state_threshold,
+			state_version,
 		);
 
 		self.apply_transaction(root, transaction);
@@ -187,7 +187,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let state_hash = sp_core::DEFAULT_STATE_HASHING;
+		let state_hash = sp_core::StateVersion::default();
 		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
@@ -201,7 +201,7 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let state_hash = sp_core::DEFAULT_STATE_HASHING;
+		let state_hash = sp_core::StateVersion::default();
 		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 

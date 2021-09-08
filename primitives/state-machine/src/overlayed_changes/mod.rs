@@ -926,7 +926,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let state_hash = None;
+		let state_hash = StateVersion::default();
 		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
