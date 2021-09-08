@@ -32,7 +32,7 @@ use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{
 	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str, sync::Arc};
+use std::{cell::RefCell, rc::Rc, str, sync::Arc};
 use wasmi::{
 	memory_units::Pages,
 	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
@@ -41,9 +41,7 @@ use wasmi::{
 };
 
 struct FunctionExecutor {
-	sandbox_store: Rc<RefCell<sandbox::Store>>,
-	/// The dispatch thunks per sandbox instance.
-	sandbox_dispatch_thunks: RefCell<HashMap<u32, wasmi::FuncRef>>,
+	sandbox_store: Rc<RefCell<sandbox::Store<wasmi::FuncRef>>>,
 	heap: RefCell<sc_allocator::FreeingBumpHeapAllocator>,
 	memory: MemoryRef,
 	table: Option<TableRef>,
@@ -71,7 +69,6 @@ impl FunctionExecutor {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions,
-			sandbox_dispatch_thunks: Default::default(),
 		})
 	}
 }
@@ -223,11 +220,10 @@ impl Sandbox for FunctionExecutor {
 			self.sandbox_store.borrow().instance(instance_id).map_err(|e| e.to_string())?;
 
 		let dispatch_thunk = self
-			.sandbox_dispatch_thunks
+			.sandbox_store
 			.borrow()
-			.get(&instance_id)
-			.ok_or_else(|| "Could not find a dispatch thunk for a sandbox instance")?
-			.clone();
+			.dispatch_thunk(instance_id)
+			.map_err(|e| e.to_string())?;
 
 		match instance.invoke(
 			export_name,
@@ -251,8 +247,6 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_dispatch_thunks.borrow_mut().remove(&instance_id);
-
 		self.sandbox_store
 			.borrow_mut()
 			.instance_teardown(instance_id)
@@ -292,15 +286,12 @@ impl Sandbox for FunctionExecutor {
 			&mut SandboxContext { executor: self, dispatch_thunk: dispatch_thunk.clone() },
 		);
 
-		let instance_idx_or_err_code = match result.map(|i| i.register(&mut store.borrow_mut())) {
-			Ok(instance_idx) => {
-				self.sandbox_dispatch_thunks.borrow_mut().insert(instance_idx, dispatch_thunk);
-
-				instance_idx
-			},
-			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-			Err(_) => sandbox_primitives::ERR_MODULE,
-		};
+		let instance_idx_or_err_code =
+			match result.map(|i| i.register(&mut store.borrow_mut(), dispatch_thunk)) {
+				Ok(instance_idx) => instance_idx,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+				Err(_) => sandbox_primitives::ERR_MODULE,
+			};
 
 		Ok(instance_idx_or_err_code)
 	}

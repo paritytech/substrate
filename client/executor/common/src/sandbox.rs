@@ -534,8 +534,8 @@ impl GuestEnvironment {
 	/// Decodes an environment definition from the given raw bytes.
 	///
 	/// Returns `Err` if the definition cannot be decoded.
-	pub fn decode(
-		store: &Store,
+	pub fn decode<DT>(
+		store: &Store<DT>,
 		raw_env_def: &[u8],
 	) -> std::result::Result<Self, InstantiationError> {
 		let (imports, guest_to_supervisor_mapping) =
@@ -554,9 +554,9 @@ pub struct UnregisteredInstance {
 
 impl UnregisteredInstance {
 	/// Finalizes instantiation of this module.
-	pub fn register(self, store: &mut Store) -> u32 {
+	pub fn register<DT>(self, store: &mut Store<DT>, dispatch_thunk: DT) -> u32 {
 		// At last, register the instance.
-		store.register_sandbox_instance(self.sandbox_instance)
+		store.register_sandbox_instance(self.sandbox_instance, dispatch_thunk)
 	}
 }
 
@@ -673,14 +673,17 @@ impl BackendContext {
 /// This struct keeps track of all sandboxed components.
 ///
 /// This is generic over a supervisor function reference type.
-pub struct Store {
-	// Memories and instances are `Some` until torn down.
-	instances: Vec<Option<Rc<SandboxInstance>>>,
+pub struct Store<DT> {
+	/// Stores the instance and the dispatch thunk associated to per instance.
+	///
+	/// Instances are `Some` until torn down.
+	instances: Vec<Option<(Rc<SandboxInstance>, DT)>>,
+	/// Memories are `Some` until torn down.
 	memories: Vec<Option<Memory>>,
 	backend_context: BackendContext,
 }
 
-impl Store {
+impl<DT: Clone> Store<DT> {
 	/// Create a new empty sandbox store.
 	pub fn new(backend: SandboxBackend) -> Self {
 		Store {
@@ -736,8 +739,25 @@ impl Store {
 	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>> {
 		self.instances
 			.get(instance_idx as usize)
-			.cloned()
 			.ok_or_else(|| "Trying to access a non-existent instance")?
+			.as_ref()
+			.map(|v| v.0.clone())
+			.ok_or_else(|| "Trying to access a torndown instance".into())
+	}
+
+	/// Returns dispatch thunk by `instance_idx`.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` If `instance_idx` isn't a valid index of an instance or
+	/// instance is already torndown.
+	pub fn dispatch_thunk(&self, instance_idx: u32) -> Result<DT> {
+		self.instances
+			.get(instance_idx as usize)
+			.as_ref()
+			.ok_or_else(|| "Trying to access a non-existent instance")?
+			.as_ref()
+			.map(|v| v.1.clone())
 			.ok_or_else(|| "Trying to access a torndown instance".into())
 	}
 
@@ -820,10 +840,14 @@ impl Store {
 }
 
 // Private routines
-impl Store {
-	fn register_sandbox_instance(&mut self, sandbox_instance: Rc<SandboxInstance>) -> u32 {
+impl<DT> Store<DT> {
+	fn register_sandbox_instance(
+		&mut self,
+		sandbox_instance: Rc<SandboxInstance>,
+		dispatch_thunk: DT,
+	) -> u32 {
 		let instance_idx = self.instances.len();
-		self.instances.push(Some(sandbox_instance));
+		self.instances.push(Some((sandbox_instance, dispatch_thunk)));
 		instance_idx as u32
 	}
 

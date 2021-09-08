@@ -30,7 +30,7 @@ use sc_executor_common::{
 };
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 use wasmtime::{Func, Val};
 
 /// The state required to construct a HostContext context. The context only lasts for one host
@@ -46,9 +46,7 @@ pub struct HostState {
 	///
 	/// Basically, most of the interactions should do temporary borrow immediately releasing the
 	/// borrow after performing necessary queries/changes.
-	sandbox_store: Rc<RefCell<sandbox::Store>>,
-	/// The dispatch thunks per sandbox instance.
-	sandbox_dispatch_thunks: RefCell<HashMap<u32, Func>>,
+	sandbox_store: Rc<RefCell<sandbox::Store<Func>>>,
 	allocator: RefCell<FreeingBumpHeapAllocator>,
 	instance: Rc<InstanceWrapper>,
 }
@@ -62,7 +60,6 @@ impl HostState {
 			))),
 			allocator: RefCell::new(allocator),
 			instance,
-			sandbox_dispatch_thunks: Default::default(),
 		}
 	}
 
@@ -199,11 +196,10 @@ impl<'a> Sandbox for HostContext<'a> {
 			self.sandbox_store.borrow().instance(instance_id).map_err(|e| e.to_string())?;
 
 		let dispatch_thunk = self
-			.sandbox_dispatch_thunks
+			.sandbox_store
 			.borrow()
-			.get(&instance_id)
-			.ok_or_else(|| "Could not find a dispatch thunk for a sandbox instance")?
-			.clone();
+			.dispatch_thunk(instance_id)
+			.map_err(|e| e.to_string())?;
 
 		let result = instance.invoke(
 			export_name,
@@ -230,8 +226,6 @@ impl<'a> Sandbox for HostContext<'a> {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> sp_wasm_interface::Result<()> {
-		self.sandbox_dispatch_thunks.borrow_mut().remove(&instance_id);
-
 		self.sandbox_store
 			.borrow_mut()
 			.instance_teardown(instance_id)
@@ -277,14 +271,10 @@ impl<'a> Sandbox for HostContext<'a> {
 				state,
 				&mut SandboxContext { host_context: self, dispatch_thunk: dispatch_thunk.clone() },
 			)
-			.map(|i| i.register(store));
+			.map(|i| i.register(store, dispatch_thunk));
 
 		let instance_idx_or_err_code = match result {
-			Ok(instance_idx) => {
-				self.sandbox_dispatch_thunks.borrow_mut().insert(instance_idx, dispatch_thunk);
-
-				instance_idx
-			},
+			Ok(instance_idx) => instance_idx,
 			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
 			Err(_) => sandbox_primitives::ERR_MODULE,
 		};
