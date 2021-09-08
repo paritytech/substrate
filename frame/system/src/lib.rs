@@ -85,8 +85,8 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
-		Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
-		PalletInfo, SortedMembers, StoredMap,
+		BytesCodecWrapper, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount,
+		OnNewAccount, OriginTrait, PalletInfo, SortedMembers, StoredMap,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -782,7 +782,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
 	/// The event itself.
-	pub event: E,
+	pub event: BytesCodecWrapper<E>,
 	/// The list of the topics this event has.
 	pub topics: Vec<T>,
 }
@@ -1287,8 +1287,11 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
-		let event =
-			EventRecord { phase, event, topics: topics.iter().cloned().collect::<Vec<_>>() };
+		let event = EventRecord {
+			phase,
+			event: BytesCodecWrapper::from(event),
+			topics: topics.iter().cloned().collect::<Vec<_>>(),
+		};
 
 		// Index of the to be added event.
 		let event_idx = {
@@ -1510,13 +1513,13 @@ impl<T: Config> Pallet<T> {
 	/// Assert the given `event` exists.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_has_event(event: T::Event) {
-		assert!(Self::events().iter().any(|record| record.event == event))
+		assert!(Self::events().iter().any(|record| record.event.0 == event))
 	}
 
 	/// Assert the last event equal to the given `event`.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn assert_last_event(event: T::Event) {
-		assert_eq!(Self::events().last().expect("events expected").event, event);
+		assert_eq!(Self::events().last().expect("events expected").event.0, event);
 	}
 
 	/// Return the chain's current runtime version.
