@@ -116,14 +116,23 @@ impl<T: Config> List<T> {
 	///   threshold set.
 	#[allow(dead_code)]
 	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
+		let new_thresholds = T::BagThresholds::get();
+		if new_thresholds == old_thresholds {
+			return 0
+		}
+
 		// we can't check all preconditions, but we can check one
 		debug_assert!(
 			crate::ListBags::<T>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
 			"not all `bag_upper` currently in storage are members of `old_thresholds`",
 		);
+		debug_assert!(
+			crate::ListNodes::<T>::iter().all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
+			"not all `node.bag_upper` currently in storage are members of `old_thresholds`",
+		);
 
 		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
-		let new_set: BTreeSet<_> = T::BagThresholds::get().iter().copied().collect();
+		let new_set: BTreeSet<_> = new_thresholds.iter().copied().collect();
 
 		// accounts that need to be rebagged
 		let mut affected_accounts = BTreeSet::new();
@@ -163,10 +172,12 @@ impl<T: Config> List<T> {
 		}
 
 		// migrate the voters whose bag has changed
-		let weight_of = T::VoteWeightProvider::vote_weight;
-		Self::remove_many(&affected_accounts);
 		let num_affected = affected_accounts.len() as u32;
-		let _ = Self::insert_many(affected_accounts.into_iter(), weight_of);
+		let weight_of = T::VoteWeightProvider::vote_weight;
+		let _removed = Self::remove_many(&affected_accounts);
+		debug_assert_eq!(_removed, num_affected);
+		let _inserted = Self::insert_many(affected_accounts.into_iter(), weight_of);
+		debug_assert_eq!(_inserted, num_affected);
 
 		// we couldn't previously remove the old bags because both insertion and removal assume that
 		// it's always safe to add a bag if it's not present. Now that that's sorted, we can get rid
@@ -182,13 +193,7 @@ impl<T: Config> List<T> {
 			crate::ListBags::<T>::remove(removed_bag);
 		}
 
-		debug_assert!(
-			{
-				let thresholds = T::BagThresholds::get();
-				crate::ListBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
-			},
-			"all `bag_upper` in storage must be members of the new thresholds",
-		);
+		debug_assert_eq!(Self::sanity_check(), Ok(()));
 
 		num_affected
 	}
