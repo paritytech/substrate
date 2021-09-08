@@ -41,6 +41,8 @@ pub use sp_application_crypto as app_crypto;
 #[cfg(feature = "std")]
 pub use sp_core::storage::{Storage, StorageChild};
 pub use sp_core::{StateVersion, DEFAULT_STATE_HASHING};
+#[cfg(feature = "std")]
+pub use sp_core::hashing;
 
 use sp_core::{
 	crypto::{self, Public},

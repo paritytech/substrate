@@ -415,7 +415,7 @@ where
 
 	/// Get the StateVersion at a given block.
 	pub fn state_hash_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<StateVersion> {
-		Ok(self.executor.runtime_version(id)?.state_version)
+		Ok(self.executor.runtime_version(id)?.state_version())
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -1861,7 +1861,7 @@ where
 	}
 
 	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, sp_api::ApiError> {
-		Ok(self.runtime_version_at(at)?.state_version)
+		Ok(self.runtime_version_at(at)?.state_version())
 	}
 }
 

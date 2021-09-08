@@ -695,7 +695,6 @@ impl From<OldRuntimeVersion> for RuntimeVersion {
 			impl_version: x.impl_version,
 			apis: x.apis,
 			transaction_version: 1,
-			state_version: None,
 		}
 	}
 }
@@ -716,7 +715,7 @@ impl From<RuntimeVersion> for OldRuntimeVersion {
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
-	#[api_version(3)] // TODO version to 4 to be able to runtime version decode properly
+	#[api_version(4)]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;

@@ -27,7 +27,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use codec::{Decode, Encode};
-pub use sp_runtime::{create_runtime_str, StateVersion};
+pub use sp_runtime::{create_runtime_str, StateVersion, DEFAULT_STATE_HASHING};
 use sp_runtime::RuntimeString;
 #[doc(hidden)]
 pub use sp_std;
@@ -176,10 +176,6 @@ pub struct RuntimeVersion {
 	///
 	/// It need *not* change when a new module is added or when a dispatchable is added.
 	pub transaction_version: u32,
-
-	/// Trie state version to use when runing updates.
-	/// TODO manage the versioning and encode/decode.
-	pub state_version: StateVersion,
 }
 
 #[cfg(feature = "std")]
@@ -216,6 +212,16 @@ impl RuntimeVersion {
 	/// Returns the api version found for api with `id`.
 	pub fn api_version(&self, id: &ApiId) -> Option<u32> {
 		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
+	}
+
+	/// Returns state version to use for update.
+	pub fn state_version(&self) -> StateVersion {
+		let core_api_id = sp_runtime::hashing::blake2_64(b"Core");
+		if self.has_api_with(&core_api_id, |v| v >= 4) {
+			DEFAULT_STATE_HASHING
+		} else {
+			None
+		}
 	}
 }
 
