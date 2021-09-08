@@ -240,10 +240,12 @@ where
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
 	);
+	let genesis_state_version = Some(33); // TODO resolve from genesis storage wasm
 	Client::new(
 		backend,
 		call_executor,
 		build_genesis_storage,
+		genesis_state_version,
 		Default::default(),
 		Default::default(),
 		extensions,
@@ -409,6 +411,11 @@ where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
+	}
+
+	/// Get the StateVersion at a given block.
+	pub fn state_hash_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<StateVersion> {
+		Ok(self.executor.runtime_version(id)?.state_version)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -827,7 +834,7 @@ where
 							children_default: Default::default(),
 						};
 
-						let state_hash = self.state_hash_at(BlockId::Hash(parent_hash))?;
+						let state_hash = self.state_hash_at(&BlockId::Hash(parent_hash))?;
 						let state_root = operation.op.reset_storage(storage, state_hash)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
@@ -1854,7 +1861,7 @@ where
 	}
 
 	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, sp_api::ApiError> {
-		unimplemented!("TODO")
+		Ok(self.runtime_version_at(at)?.state_version)
 	}
 }
 

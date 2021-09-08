@@ -145,7 +145,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
-			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
+			Some(sp_core::storage::DEFAULT_ALT_HASH_THRESHOLD),
 		);
 
 		Box::new(TrieReadBenchmark {
@@ -257,7 +257,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
-			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
+			Some(sp_core::storage::DEFAULT_ALT_HASH_THRESHOLD),
 		);
 
 		Box::new(TrieWriteBenchmark {

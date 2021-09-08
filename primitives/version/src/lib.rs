@@ -27,7 +27,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use codec::{Decode, Encode};
-pub use sp_runtime::create_runtime_str;
+pub use sp_runtime::{create_runtime_str, StateVersion};
 use sp_runtime::RuntimeString;
 #[doc(hidden)]
 pub use sp_std;
@@ -176,6 +176,10 @@ pub struct RuntimeVersion {
 	///
 	/// It need *not* change when a new module is added or when a dispatchable is added.
 	pub transaction_version: u32,
+
+	/// Trie state version to use when runing updates.
+	/// TODO manage the versioning and encode/decode.
+	pub state_version: StateVersion,
 }
 
 #[cfg(feature = "std")]

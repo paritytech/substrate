@@ -22,7 +22,7 @@ use syn::{
 	parse::{Error, Result},
 	parse_macro_input,
 	spanned::Spanned as _,
-	Expr, ExprLit, FieldValue, ItemConst, Lit,
+	Expr, ExprLit, FieldValue, ItemConst, Lit, ExprCall, ExprPath,
 };
 
 /// This macro accepts a `const` item that has a struct initializer expression of
@@ -63,6 +63,7 @@ struct RuntimeVersion {
 	impl_version: u32,
 	apis: u8,
 	transaction_version: u32,
+	state_version: Option<u32>,
 }
 
 #[derive(Default, Debug)]
@@ -73,6 +74,7 @@ struct ParseRuntimeVersion {
 	spec_version: Option<u32>,
 	impl_version: Option<u32>,
 	transaction_version: Option<u32>,
+	state_version: Option<Option<u32>>, // TODO would actually make sense to force default from core 4 and no declaration here
 }
 
 impl ParseRuntimeVersion {
@@ -122,6 +124,8 @@ impl ParseRuntimeVersion {
 			parse_once(&mut self.impl_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "transaction_version" {
 			parse_once(&mut self.transaction_version, field_value, Self::parse_num_literal)?;
+		} else if field_name == "state_version" {
+			parse_once(&mut self.state_version, field_value, Self::parse_state_verison_literal)?;
 		} else if field_name == "apis" {
 			// Intentionally ignored
 			//
@@ -147,6 +151,44 @@ impl ParseRuntimeVersion {
 		lit.base10_parse::<u32>()
 	}
 
+	fn parse_state_verison_literal(expr: &Expr) -> Result<Option<u32>> {
+		let lit = match &*expr {
+			Expr::Path(ExprPath { path, .. }) if path.is_ident("None") => {
+				return Ok(None);
+			},
+			Expr::Call(ExprCall { func, args, .. }) => {
+				match &**func {
+					Expr::Path(ExprPath { path, .. }) if path.is_ident("Some") => {
+						&args[0]
+					},
+					_ => {
+						return Err(Error::new(
+							expr.span(),
+							"state version Option<u32> is expected here.",
+						))
+					},
+				}
+			},
+			_ => {
+				return Err(Error::new(
+					expr.span(),
+					"state version Option<u32> is expected here.",
+				))
+			},
+		};
+
+		let lit = match &*lit {
+			Expr::Lit(ExprLit { lit: Lit::Int(lit), .. }) => lit,
+			_ =>
+				return Err(Error::new(
+					expr.span(),
+					"state version Option<u32> is expected here.",
+				)),
+		};
+		let threshold = lit.base10_parse::<u32>()?;
+		Ok(Some(threshold))
+	}
+		
 	fn parse_str_literal(expr: &Expr) -> Result<String> {
 		let mac = match *expr {
 			Expr::Macro(syn::ExprMacro { ref mac, .. }) => mac,
@@ -182,6 +224,7 @@ impl ParseRuntimeVersion {
 			spec_version,
 			impl_version,
 			transaction_version,
+			state_version,
 		} = self;
 
 		Ok(RuntimeVersion {
@@ -191,6 +234,7 @@ impl ParseRuntimeVersion {
 			spec_version: required!(spec_version),
 			impl_version: required!(impl_version),
 			transaction_version: required!(transaction_version),
+			state_version: required!(state_version),
 			apis: 0,
 		})
 	}

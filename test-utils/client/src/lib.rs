@@ -230,12 +230,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
-			if self.state_hashed_value {
-				storage.modify_trie_alt_hashing_threshold(Some(
-					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-				));
-			}
-
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(
@@ -250,10 +244,12 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			storage
 		};
 
+		let genesis_state_version = Some(33); // TODO get from genesis wasm
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
 			&storage,
+			genesis_state_version,
 			self.fork_blocks,
 			self.bad_blocks,
 			ExecutionExtensions::new(

@@ -100,6 +100,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
+	state_version: Some(33),
 };
 
 fn version() -> RuntimeVersion {
