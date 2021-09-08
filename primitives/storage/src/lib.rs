@@ -412,9 +412,9 @@ impl ChildTrieParentKeyId {
 	}
 }
 
-/// Different state that can be applied. TODO rename to StateValueHashing.
+/// Different possible state version.
 ///
-/// When a value is define, apply inner hashing over the given threshold.
+/// Currently only enable trie value nodes.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum StateVersion {
 	/// Old state version, no value nodes.
