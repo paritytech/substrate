@@ -25,7 +25,7 @@ Before you submit, please check that:
 - [ ] **Runtime Version:** You bumped the runtime version if there are breaking changes in the **runtime**.
 - [ ] **Docs:** You updated any rustdocs which may need to change.
 - [ ] **Polkadot Companion:** Has the PR altered the external API or interfaces used by Polkadot?
-  - [ ] Do you have the corresponding Polkadot PR ready?
+  - [ ] If so, do you have the corresponding Polkadot PR ready?
   - [ ] Optionally: Do you have a corresponding Cumulus PR?
 
 Refer to [the contributing guide](https://github.com/paritytech/substrate/blob/master/docs/CONTRIBUTING.adoc) for details.
