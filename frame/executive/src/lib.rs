@@ -846,9 +846,17 @@ mod tests {
 		t.into()
 	}
 
+	fn new_test_ext_v0(balance_factor: Balance) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		(t, sp_runtime::StateVersion::V0).into()
+	}
+
 	#[test]
 	fn block_import_works() {
-		new_test_ext(1).execute_with(|| {
+		new_test_ext_v0(1).execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -871,7 +879,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		new_test_ext(1).execute_with(|| {
+		new_test_ext_v0(1).execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -891,7 +899,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
-		new_test_ext(1).execute_with(|| {
+		new_test_ext_v0(1).execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
