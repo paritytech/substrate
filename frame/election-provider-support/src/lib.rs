@@ -300,10 +300,9 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 /// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
 /// entity.
 ///
-/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each
-/// entity. The weights are ascending, the higher, the better. In the long term, if this trait ends
-/// up having use cases outside of the election context, it is easy enough to make it generic over
-/// the `VoteWeight`.
+/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each entity. The weights
+/// are ascending, the higher, the better. In the long term, if this trait ends up having use cases
+/// outside of the election context, it is easy enough to make it generic over the `VoteWeight`.
 ///
 /// Something that implements this trait will do a best-effort sort over ids, and thus can be
 /// used on the implementing side of [`ElectionDataProvider`].
