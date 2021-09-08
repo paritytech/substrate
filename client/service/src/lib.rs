@@ -277,7 +277,6 @@ async fn build_network_future<
 }
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-// TODO(niklasad1): WsSocket server is not fully "closeable" at the moment.
 #[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
@@ -295,9 +294,8 @@ mod waiting {
 
 	impl Drop for WsServer {
 		fn drop(&mut self) {
-			if let Some(mut server) = self.0.take() {
-				let _ = futures::executor::block_on(server.stop());
-				let _ = futures::executor::block_on(server.wait_for_stop());
+			if let Some(server) = self.0.take() {
+				let _ = server.stop().map(|stop| futures::executor::block_on(stop));
 			}
 		}
 	}
