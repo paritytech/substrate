@@ -63,19 +63,10 @@ pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 #[cfg(feature = "full_crypto")]
+#[derive(Clone)]
 pub struct Pair {
 	public: VerificationKey,
 	secret: SigningKey,
-}
-
-#[cfg(feature = "full_crypto")]
-impl Clone for Pair {
-	fn clone(&self) -> Self {
-		Pair {
-			public: self.public.clone(),
-			secret: self.secret.clone(),
-		}
-	}
 }
 
 impl AsRef<[u8; 32]> for Public {
@@ -486,7 +477,6 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		// does try_into consume the seed? can I consume seed_slice here? I think not right?
 		let secret = SigningKey::try_from(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
 		let public = VerificationKey::from(&secret);
@@ -511,7 +501,6 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		// does this consume public? Is that why we used copy_from_slice?
 		let pk: [u8; 32] = self.public.into();
 		Public(pk)
 	}

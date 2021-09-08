@@ -1643,7 +1643,7 @@ mod tests {
 			let pair1 = sr25519::Pair::generate_with_phrase(None).0;
 			let pair2 = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkcel!";
-			let signature = pair.sign(msg);
+			let signature = pair1.sign(msg);
 			
 			crypto::sr25519_batch_verify(&signature, msg, &pair1.public());
 			crypto::sr25519_batch_verify(&signature, msg, &pair2.public());
