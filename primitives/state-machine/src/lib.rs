@@ -1726,7 +1726,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie(state_hash);
+		let remote_backend = trie_backend::tests::test_trie(state_hash);
 		let long_vec: Vec<u8> = (0..1024usize).map(|_| 8u8).collect();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
@@ -1758,8 +1758,9 @@ mod tests {
 			.into_iter(),
 			state_hash,
 		);
-		remote_backend.backend_storage_mut().consolidate(transaction);
-		remote_backend.essence.set_root(remote_root.clone());
+		let mut remote_storage = remote_backend.into_storage();
+		remote_storage.consolidate(transaction);
+		let remote_backend = TrieBackend::new(remote_storage, remote_root);
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let size = remote_proof.encoded_size();
 		let remote_proof = test_compact(remote_proof, &remote_root);
