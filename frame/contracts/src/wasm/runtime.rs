@@ -75,7 +75,7 @@ pub enum ReturnCode {
 	CallRuntimeReturnedError = 10,
 	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
 	#[cfg(feature = "unstable-interface")]
-	RecoveryFailed = 11,
+	EcdsaRecoverFailed = 11,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -1737,7 +1737,7 @@ define_env!(Env, <E: Ext>,
 	// 				   The function will write the result directly into this buffer.
 	// # Errors
 	//
-	// `ReturnCode::RecoveryFailed`
+	// `ReturnCode::EcdsaRecoverFailed`
 	[__unstable__] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::EcdsaRecovery)?;
 
@@ -1756,7 +1756,7 @@ define_env!(Env, <E: Ext>,
 
 				Ok(ReturnCode::Success)
 			},
-			Err(_) => Ok(ReturnCode::RecoveryFailed),
+			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
 	},
 );
