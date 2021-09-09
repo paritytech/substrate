@@ -83,10 +83,17 @@ fn fisher_yates<T>(data: &mut Vec<T>, seed: [u8; 32]) {
 	}
 }
 
-pub fn shuffle_using_seed<Block: BlockT>(
-	extrinsics: Vec<(Option<AccountId32>, Block::Extrinsic)>,
+pub fn shuffle_using_seed<E: Encode>(
+	extrinsics: Vec<(Option<AccountId32>, E)>,
 	seed: [u8; 32],
-) -> Vec<Block::Extrinsic> {
+) -> Vec<E> {
+	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:2X?}", &seed[..]);
+	log::debug!(target: "block_shuffler", "origin order: [");
+	for (_,tx) in extrinsics.iter() {
+		log::debug!(target: "block_shuffler", "{:?}", BlakeTwo256::hash(&tx.encode()));
+	}
+	log::debug!(target: "block_shuffler", "]");
+
 	// generate exact number of slots for each account
 	// [ Alice, Alice, Alice, ... , Bob, Bob, Bob, ... ]
 	let mut slots: Vec<Option<AccountId32>> =
@@ -120,11 +127,12 @@ pub fn shuffle_using_seed<Block: BlockT>(
 		})
 	.collect();
 
-	log::debug!(target: "block_shuffler", "shuffled order");
+	log::debug!(target: "block_shuffler", "shuffled order:[");
 	for tx in shuffled_extrinsics.iter() {
 		let tx_hash = BlakeTwo256::hash(&tx.encode());
-		log::debug!(target: "block_shuffler", "extrinsic:{:?}", tx_hash);
+		log::debug!(target: "block_shuffler", "{:?}", tx_hash);
 	}
+	log::debug!(target: "block_shuffler", "]");
 
 	shuffled_extrinsics
 }
@@ -143,7 +151,6 @@ where
 	Api: ProvideRuntimeApi<Block> + 'a,
 	Api::Api: ExtrinsicInfoRuntimeApi<Block>,
 {
-	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:#X?}", seed.seed );
 
 	let extrinsics: Vec<(Option<AccountId32>, Block::Extrinsic)> = extrinsics
 		.into_iter()
@@ -161,7 +168,7 @@ where
 			(who, tx)
 		}).collect();
 
-	shuffle_using_seed::<Block>(extrinsics, seed.seed)
+	shuffle_using_seed::<Block::Extrinsic>(extrinsics, seed.seed)
 }
 
 #[derive(derive_more::Display, Debug)]
