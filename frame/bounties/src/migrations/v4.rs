@@ -217,15 +217,6 @@ pub fn post_migration<T: pallet_bounties::Config, P: GetStorageVersion, N: AsRef
 	assert!(storage::next_key(&old_bounties_approvals_key)
 		.map_or(true, |next_key| !next_key.starts_with(&old_bounties_approvals_key)));
 
-	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
-	let new_bounties_count_key =
-		[&new_pallet_prefix, &twox_128(storage_prefix_bounties_count)[..]].concat();
-	let new_bounties_key = [&new_pallet_prefix, &twox_128(storage_prefix_bounties)[..]].concat();
-	let new_bounties_description_key =
-		[&new_pallet_prefix, &twox_128(storage_prefix_bounties_description)[..]].concat();
-	let new_bounties_approvals_key =
-		[&new_pallet_prefix, &twox_128(storage_prefix_bounties_approvals)[..]].concat();
-
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }
 
