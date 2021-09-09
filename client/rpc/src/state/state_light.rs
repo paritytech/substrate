@@ -233,6 +233,17 @@ where
 		.boxed()
 	}
 
+	fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let keys = keys.iter().map(|k| k.0.clone()).collect::<Vec<_>>();
+		storage(&*self.remote_blockchain, self.fetcher.clone(), self.block_or_best(block), keys)
+			.map_ok(|v| v.into_iter().map(|x| x.1).collect::<Vec<_>>())
+			.boxed()
+	}
+
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,

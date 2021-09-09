@@ -360,6 +360,24 @@ where
 		async move { r }.boxed()
 	}
 
+	fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let block = match self.block_or_best(block) {
+			Ok(b) => b,
+			Err(e) => return err(client_err(e)).boxed(),
+		};
+		let client = self.client.clone();
+		try_join_all(keys.into_iter().map(move |key| {
+			let res = client.storage(&BlockId::Hash(block), &key).map_err(client_err);
+
+			async move { res }
+		}))
+		.boxed()
+	}
+
 	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
@@ -740,7 +758,7 @@ where
 					.clone()
 					.child_storage(&BlockId::Hash(block), &child_info, &key)
 					.map_err(client_err);
-
+					
 			async move {
 				res
 			}
