@@ -37,7 +37,7 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor,
+		Hash, Block as BlockT, Header as HeaderT, Zero, NumberFor,
 		HashFor, SaturatedConversion, One, DigestFor, UniqueSaturatedInto,
 	},
 };
@@ -870,10 +870,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					Some(previous_block_extrinsics) => {
 						//TODO include serialize/deserialize seed field in header
 						//and use received seed instead
+						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
 						let mut header = import_block.header.clone();
+						header.set_extrinsics_root(*prev_header.extrinsics_root());
 
-						if previous_block_extrinsics.len() > 1{
-							let mut seed = extrinsic_shuffler::apply_inherents_and_fetch_seed::<Block, Self>(
+						let block = if previous_block_extrinsics.len() > 1{
+							let seed = extrinsic_shuffler::apply_inherents_and_fetch_seed::<Block, Self>(
 								&runtime_api,
 								&at,
 								body.clone(),
@@ -883,18 +885,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 									sp_blockchain::Error::Backend(format!("{}", e))
 								})?;
 
-							let mut slice: &[u8] = & mut seed.seed;
-							header.set_seed(<Block::Hash>::decode(& mut slice).unwrap());
-						}
+							let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block,Self>(&runtime_api, &at, previous_block_extrinsics, seed);
+							// temporarly shuffle extrinsics here as we cannot pass shuffling seed to
+							// runtime easily
+							// temporarly update extrinsics_root that stores hash of ordered extrinsics so it can be
+							// validated properly
+							let trie_root = HashFor::<Block>::ordered_trie_root(shuffled_extrinsics.iter().map(codec::Encode::encode).collect());
+							header.set_extrinsics_root(trie_root);
+							Block::new(header.clone(), shuffled_extrinsics)
+						}else{
+							Block::new(header.clone(), previous_block_extrinsics)
+						};
 
-						// TODO fail gracefully
-						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
-						header.set_extrinsics_root(*prev_header.extrinsics_root());
+
+
 
 						runtime_api.execute_block_with_context(
 							&at,
 							execution_context,
-							Block::new(header, previous_block_extrinsics),
+							block,
 						)?;
 					}
 					None => {

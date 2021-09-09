@@ -131,7 +131,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use codec::{Codec, Encode};
-use extrinsic_shuffler::shuffle_using_seed;
+// use extrinsic_shuffler::shuffle_using_seed;
 use frame_system::{extrinsics_root, DigestOf};
 /// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
@@ -297,7 +297,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block(block: Block, info: Vec<Option<AccountId32>>) {
+	pub fn execute_block(block: Block, _info: Vec<Option<AccountId32>>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!( "execute_block", ?block);
@@ -311,14 +311,20 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-			let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
 
-			let mut seed: [u8;32] = Default::default();
-			seed.copy_from_slice(header.seed().as_ref());
-			let shuffled_extrinsics = shuffle_using_seed::<Block>(extrinsics_with_author, seed);
+			// TODO: shuffling temporarly moved to native code.
+			// Motivation:
+			// There is no easy way to pass seed from native to wasm runtime. Shuffling at
+			// runtime can be reverted once we have fully working Header::seed field
+			// (including serialization & deserialization that is currently missing)
 
-			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number()); 
+			// let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
+			// let mut seed: [u8;32] = Default::default();
+			// seed.copy_from_slice(header.seed().as_ref());
+			// let shuffled_extrinsics = shuffle_using_seed::<Block>(extrinsics_with_author, seed);
+			// Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
+			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
 			}
