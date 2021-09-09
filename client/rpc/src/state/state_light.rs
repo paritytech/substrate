@@ -581,7 +581,7 @@ where
 				}
 			});
 
-		Box::pin(child_storage.boxed())
+		child_storage.boxed()
 	}
 
 	fn storage_hash(
