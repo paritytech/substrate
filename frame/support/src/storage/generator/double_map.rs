@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	hash::{ReversibleStorageHasher, StorageHasher, Twox128},
-	storage::{self, unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend},
+	hash::{ReversibleStorageHasher, StorageHasher},
+	storage::{self, storage_prefix, unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend},
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
@@ -62,16 +62,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
 	/// `storage_prefix`.
 	fn prefix_hash() -> Vec<u8> {
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
-
-		let mut result =
-			Vec::with_capacity(module_prefix_hashed.len() + storage_prefix_hashed.len());
-
-		result.extend_from_slice(&module_prefix_hashed[..]);
-		result.extend_from_slice(&storage_prefix_hashed[..]);
-
-		result
+		let result = storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		result.to_vec()
 	}
 
 	/// Convert an optional value retrieved from storage to the type queried.
@@ -85,16 +77,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	where
 		KArg1: EncodeLike<K1>,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
 
-		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len(),
-		);
+		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -106,20 +94,15 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key1_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
 		let key2_hashed = k2.borrow().using_encoded(Self::Hasher2::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() +
-				storage_prefix_hashed.len() +
-				key1_hashed.as_ref().len() +
-				key2_hashed.as_ref().len(),
+			storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
 		);
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key1_hashed.as_ref());
 		final_key.extend_from_slice(key2_hashed.as_ref());
 
@@ -319,20 +302,16 @@ where
 		key2: KeyArg2,
 	) -> Option<V> {
 		let old_key = {
-			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
+
 			let key1_hashed = key1.borrow().using_encoded(OldHasher1::hash);
 			let key2_hashed = key2.borrow().using_encoded(OldHasher2::hash);
 
 			let mut final_key = Vec::with_capacity(
-				module_prefix_hashed.len() +
-					storage_prefix_hashed.len() +
-					key1_hashed.as_ref().len() +
-					key2_hashed.as_ref().len(),
+				storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
 			);
 
-			final_key.extend_from_slice(&module_prefix_hashed[..]);
-			final_key.extend_from_slice(&storage_prefix_hashed[..]);
+			final_key.extend_from_slice(&storage_prefix);
 			final_key.extend_from_slice(key1_hashed.as_ref());
 			final_key.extend_from_slice(key2_hashed.as_ref());
 

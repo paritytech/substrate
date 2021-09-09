@@ -19,10 +19,15 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::{imports::Imports, util};
+use crate::{
+	imports::Imports,
+	util::{from_wasmtime_val, into_wasmtime_val},
+};
 
 use sc_executor_common::{
 	error::{Error, Result},
+	runtime_blob,
+	util::checked_range,
 	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, Value, WordSize};
@@ -106,12 +111,16 @@ impl EntryPoint {
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
+
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to
 	// proof See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
+
+	/// Indirect functions table of the module
 	table: Option<Table>,
+
 	// Make this struct explicitly !Send & !Sync.
 	_not_send_nor_sync: marker::PhantomData<*const ()>,
 }
@@ -317,7 +326,20 @@ fn get_table(instance: &Instance, ctx: impl AsContextMut) -> Option<Table> {
 
 /// Functions related to memory.
 impl InstanceWrapper {
-	/// Read data from a slice of memory into a destination buffer.
+	/// Read data from a slice of memory into a newly allocated buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	pub fn read_memory(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+		let range = checked_range(source_addr.into(), size, self.memory.data_size())
+			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+		let mut buffer = vec![0; range.len()];
+		self.read_memory_into(source_addr, &mut buffer)?;
+
+		Ok(buffer)
+	}
+
+	/// Read data from the instance memory into a slice.
 	///
 	/// Returns an error if the read would go out of the memory bounds.
 	pub fn read_memory_into(
@@ -334,7 +356,7 @@ impl InstanceWrapper {
 		Ok(())
 	}
 
-	/// Write data to a slice of memory.
+	/// Write data to the instance memory from a slice.
 	///
 	/// Returns an error if the write would go out of the memory bounds.
 	pub fn write_memory_from(

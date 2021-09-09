@@ -36,6 +36,8 @@ rand = { version = "0.7.3", default-features = false, optional = true, features 
 	"alloc",
 	"small_rng",
 ] }
+strum = { optional = true, version = "0.21.0" }
+strum_macros = { optional = true, version = "0.21.1" }
 
 [dev-dependencies]
 parking_lot = "0.11.0"
@@ -45,7 +47,6 @@ sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 frame-election-provider-support = { version = "4.0.0-dev", features = [
-	"runtime-benchmarks",
 ], path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
@@ -68,5 +69,11 @@ std = [
 	"frame-election-provider-support/std",
 	"log/std",
 ]
-runtime-benchmarks = ["frame-benchmarking", "rand"]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-election-provider-support/runtime-benchmarks",
+	"rand",
+	"strum",
+	"strum_macros",
+]
 try-runtime = ["frame-support/try-runtime"]

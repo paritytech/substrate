@@ -527,11 +527,12 @@ fn fallback_name_working() {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream1.next().await.unwrap() {
-				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
-					assert_eq!(protocol, NEW_PROTOCOL_NAME);
+				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. }
+					if protocol == NEW_PROTOCOL_NAME =>
+				{
 					assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME));
 					break
-				},
+				}
 				_ => {},
 			};
 		}

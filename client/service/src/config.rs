@@ -23,7 +23,7 @@ pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, Transa
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_network::{
 	config::{
-		ExtTransport, IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
+		IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
 		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
 		TransportConfig,
 	},
@@ -43,7 +43,6 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-#[cfg(not(target_os = "unknown"))]
 use tempfile::TempDir;
 
 /// Service configuration.
@@ -107,9 +106,6 @@ pub struct Configuration {
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
-	/// endpoint, this transport will be tried in priority before all others.
-	pub telemetry_external_transport: Option<ExtTransport>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -256,7 +252,6 @@ impl Default for RpcMethods {
 #[derive(Debug)]
 pub enum BasePath {
 	/// A temporary directory is used as base path and will be deleted when dropped.
-	#[cfg(not(target_os = "unknown"))]
 	Temporary(TempDir),
 	/// A path on the disk.
 	Permanenent(PathBuf),
@@ -268,7 +263,6 @@ impl BasePath {
 	///
 	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
 	/// instance is dropped.
-	#[cfg(not(target_os = "unknown"))]
 	pub fn new_temp_dir() -> io::Result<BasePath> {
 		Ok(BasePath::Temporary(tempfile::Builder::new().prefix("substrate").tempdir()?))
 	}
@@ -282,7 +276,6 @@ impl BasePath {
 	}
 
 	/// Create a base path from values describing the project.
-	#[cfg(not(target_os = "unknown"))]
 	pub fn from_project(qualifier: &str, organization: &str, application: &str) -> BasePath {
 		BasePath::new(
 			directories::ProjectDirs::from(qualifier, organization, application)
@@ -294,7 +287,6 @@ impl BasePath {
 	/// Retrieve the base path.
 	pub fn path(&self) -> &Path {
 		match self {
-			#[cfg(not(target_os = "unknown"))]
 			BasePath::Temporary(temp_dir) => temp_dir.path(),
 			BasePath::Permanenent(path) => path.as_path(),
 		}

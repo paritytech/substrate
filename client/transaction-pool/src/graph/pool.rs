@@ -27,7 +27,7 @@ use sp_runtime::{
 		TransactionSource, TransactionTag as Tag, TransactionValidity, TransactionValidityError,
 	},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::{
 	base_pool as base,
@@ -133,7 +133,6 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
@@ -454,9 +453,11 @@ mod tests {
 		traits::Hash,
 		transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
 	};
-	use std::collections::{HashMap, HashSet};
+	use std::{
+		collections::{HashMap, HashSet},
+		time::Instant,
+	};
 	use substrate_test_runtime::{AccountId, Block, Extrinsic, Hashing, Transfer, H256};
-	use wasm_timer::Instant;
 
 	const INVALID_NONCE: u64 = 254;
 	const SOURCE: TransactionSource = TransactionSource::External;
