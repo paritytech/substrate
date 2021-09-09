@@ -18,10 +18,7 @@
 
 //! Substrate service tasks management module.
 
-use crate::{
-	config::TaskType,
-	Error,
-};
+use crate::{config::TaskType, Error};
 use exit_future::Signal;
 use futures::{
 	future::{join_all, pending, select, try_join_all, BoxFuture, Either},

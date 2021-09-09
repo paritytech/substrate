@@ -27,7 +27,13 @@ use nix::{
 	unistd::Pid,
 };
 use sc_service::Deref;
-use std::{convert::TryInto, ops::DerefMut, process::{Child, Command}, thread, time::Duration};
+use std::{
+	convert::TryInto,
+	ops::DerefMut,
+	process::{Child, Command},
+	thread,
+	time::Duration,
+};
 use tempfile::tempdir;
 
 pub mod common;
