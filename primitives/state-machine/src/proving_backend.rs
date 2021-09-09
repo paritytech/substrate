@@ -434,7 +434,8 @@ mod tests {
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), state_version);
+		let (trie_root, mut trie_mdb) =
+			trie_backend.storage_root(std::iter::empty(), state_version);
 		let (proving_root, mut proving_mdb) =
 			proving_backend.storage_root(std::iter::empty(), state_version);
 		assert_eq!(trie_root, proving_root);

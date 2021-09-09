@@ -409,7 +409,8 @@ pub mod tests {
 	}
 	fn storage_root_is_non_default_inner(state_version: StateVersion) {
 		assert!(
-			test_trie(state_version).storage_root(iter::empty(), state_version).0 != H256::repeat_byte(0)
+			test_trie(state_version).storage_root(iter::empty(), state_version).0 !=
+				H256::repeat_byte(0)
 		);
 	}
 

@@ -548,7 +548,11 @@ where
 		root.encode()
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo, state_version: StateVersion) -> Vec<u8> {
+	fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+		state_version: StateVersion,
+	) -> Vec<u8> {
 		let _guard = guard();
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
