@@ -18,11 +18,11 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
+use frame_support::log;
 use mmr_lib::helper;
 use sp_io::offchain_index;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
-use frame_support::if_std;
 
 use crate::{
 	mmr::{Node, NodeOf},
@@ -122,7 +122,7 @@ where
 		let nodes_to_prune = diff(&peaks_after, &peaks_before);
 		let peaks_to_store = diff(&peaks_before, &peaks_after);
 
-		{
+		sp_std::if_std! {
 			log::trace!("elems: {:?}\n", elems);
 			log::trace!("peaks_before: {:?}", peaks_before);
 			log::trace!("peaks_after: {:?}", peaks_after);
@@ -137,7 +137,9 @@ where
 			if let Some((_, elem)) = elems.iter().find(|(pos_, _)| *pos_ == pos) {
 				<Nodes<T, I>>::insert(pos, elem.hash());
 
-				log::trace!("position: {}, elem: {:?}", pos, elem);
+				sp_std::if_std! {
+					log::trace!("position: {}, elem: {:?}", pos, elem);
+				}
 			} else {
 				log::error!("The different must existed in `elems`; qed");
 			}
