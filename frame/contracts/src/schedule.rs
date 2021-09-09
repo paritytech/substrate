@@ -36,7 +36,7 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// How many instructions are executed in a single batch. The reasoning is the same
 /// as for `API_BENCHMARK_BATCH_SIZE`.
-pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
+pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
@@ -495,7 +495,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			select: cost_instr!(instr_select, 4),
 			r#if: cost_instr!(instr_if, 3),
 			br: cost_instr!(instr_br, 2),
-			br_if: cost_instr!(instr_br_if, 5),
+			br_if: cost_instr!(instr_br_if, 3),
 			br_table: cost_instr!(instr_br_table, 3),
 			br_table_per_entry: cost_instr!(instr_br_table_per_entry, 0),
 			call: cost_instr!(instr_call, 2),
@@ -559,8 +559,8 @@ impl<T: Config> Default for HostFnWeights<T> {
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),
 			gas: cost_batched!(seal_gas),
-			input: cost!(seal_input),
-			input_per_byte: cost_byte!(seal_input_per_kb),
+			input: cost_batched!(seal_input),
+			input_per_byte: cost_byte_batched!(seal_input_per_kb),
 			r#return: cost!(seal_return),
 			return_per_byte: cost_byte!(seal_return_per_kb),
 			terminate: cost!(seal_terminate),
