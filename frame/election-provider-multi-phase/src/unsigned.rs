@@ -236,7 +236,6 @@ impl<T: Config> Pallet<T> {
 	//
 	// Performance: note that it internally clones the provided solution.
 	pub fn basic_checks(
-		
 		raw_solution: &RawSolution<SolutionOf<T>>,
 		solution_type: &str,
 	) -> Result<(), MinerError<T>> {
