@@ -754,13 +754,13 @@ where
 		};
 		let client = self.client.clone();
 		try_join_all(keys.into_iter().map(move |key| {
-			let client = client.clone();
-			let child_info = child_info.clone();
-			async move {
-				client
+			let res = client
 					.clone()
 					.child_storage(&BlockId::Hash(block), &child_info, &key)
-					.map_err(client_err)
+					.map_err(client_err);
+					
+			async move {
+				res
 			}
 		}))
 		.boxed()
