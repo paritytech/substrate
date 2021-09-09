@@ -1630,7 +1630,8 @@ mod tests {
 				storage.insert(Some(child_info), items);
 			}
 
-			let trie: InMemoryBackend<BlakeTwo256> = storage.clone().into();
+			let trie: InMemoryBackend<BlakeTwo256> =
+				(storage.clone(), StateVersion::default()).into();
 			let trie_root = trie.root().clone();
 			let backend = crate::ProvingBackend::new(&trie);
 			let mut queries = Vec::new();
