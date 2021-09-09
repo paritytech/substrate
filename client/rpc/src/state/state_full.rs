@@ -750,7 +750,7 @@ where
 		};
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
-			Err(e) => return Box::pin(err(client_err(e))),
+			Err(e) => return err(client_err(e)).boxed(),
 		};
 		let client = self.client.clone();
 		try_join_all(keys.into_iter().map(move |key| {
