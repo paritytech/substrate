@@ -216,7 +216,8 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		ExecutorDispatch: sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
+		ExecutorDispatch:
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{

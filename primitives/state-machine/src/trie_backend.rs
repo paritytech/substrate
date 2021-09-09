@@ -24,8 +24,10 @@ use crate::{
 };
 use codec::{Codec, Decode};
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, ChildType};
-use sp_core::StateVersion;
+use sp_core::{
+	storage::{ChildInfo, ChildType},
+	StateVersion,
+};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
@@ -406,7 +408,9 @@ pub mod tests {
 		storage_root_is_non_default_inner(StateVersion::V1);
 	}
 	fn storage_root_is_non_default_inner(state_hash: StateVersion) {
-		assert!(test_trie(state_hash).storage_root(iter::empty(), state_hash).0 != H256::repeat_byte(0));
+		assert!(
+			test_trie(state_hash).storage_root(iter::empty(), state_hash).0 != H256::repeat_byte(0)
+		);
 	}
 
 	#[test]
@@ -415,8 +419,8 @@ pub mod tests {
 		storage_root_transaction_is_non_empty_inner(StateVersion::V1);
 	}
 	fn storage_root_transaction_is_non_empty_inner(state_hash: StateVersion) {
-		let (new_root, mut tx) =
-			test_trie(state_hash).storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))), state_hash);
+		let (new_root, mut tx) = test_trie(state_hash)
+			.storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))), state_hash);
 		assert!(!tx.drain().is_empty());
 		assert!(new_root != test_trie(state_hash).storage_root(iter::empty(), state_hash).0);
 	}

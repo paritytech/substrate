@@ -107,8 +107,8 @@ impl BasicExternalities {
 
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
-		self.inner.top.eq(&other.inner.top)
-			&& self.inner.children_default.eq(&other.inner.children_default)
+		self.inner.top.eq(&other.inner.top) &&
+			self.inner.children_default.eq(&other.inner.children_default)
 	}
 }
 
@@ -174,16 +174,16 @@ impl Externalities for BasicExternalities {
 	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to set child storage key via main storage");
-			return;
+			return
 		}
 
 		match maybe_value {
 			Some(value) => {
 				self.inner.top.insert(key, value);
-			}
+			},
 			None => {
 				self.inner.top.remove(&key);
-			}
+			},
 		}
 	}
 
@@ -224,7 +224,7 @@ impl Externalities for BasicExternalities {
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (false, 0);
+			return (false, 0)
 		}
 
 		let to_remove = self
@@ -302,7 +302,11 @@ impl Externalities for BasicExternalities {
 		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo, state_version: StateVersion) -> Vec<u8> {
+	fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+		state_version: StateVersion,
+	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
 			let in_mem = crate::in_memory_backend::new_in_mem::<Blake2Hasher>();

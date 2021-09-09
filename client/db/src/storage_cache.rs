@@ -26,8 +26,10 @@ use linked_hash_map::{Entry, LinkedHashMap};
 use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
-use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
-use sp_runtime::StateVersion;
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor, Header, NumberFor},
+	StateVersion,
+};
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, StorageCollection, StorageKey,
 	StorageValue, TrieBackend,
@@ -1187,7 +1189,10 @@ mod tests {
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
-		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])), Default::default());
+		backend.insert(
+			std::iter::once((None, vec![(key.clone(), Some(vec![1]))])),
+			Default::default(),
+		);
 
 		let mut s = CachingState::new(backend.clone(), shared.clone(), Some(root_parent));
 		s.cache.sync_cache(

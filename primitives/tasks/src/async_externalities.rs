@@ -19,8 +19,9 @@
 //! Async externalities.
 
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey}, StateVersion,
+	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, RuntimeSpawn, RuntimeSpawnExt, SpawnNamed, TaskExecutorExt},
+	StateVersion,
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
 use std::any::{Any, TypeId};
@@ -130,7 +131,11 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
 
-	fn child_storage_root(&mut self, _child_info: &ChildInfo, _state_hashing: StateVersion) -> Vec<u8> {
+	fn child_storage_root(
+		&mut self,
+		_child_info: &ChildInfo,
+		_state_hashing: StateVersion,
+	) -> Vec<u8> {
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
 

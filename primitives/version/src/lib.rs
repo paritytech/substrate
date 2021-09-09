@@ -27,8 +27,8 @@ use std::collections::HashSet;
 use std::fmt;
 
 use codec::{Decode, Encode};
-pub use sp_runtime::{create_runtime_str, StateVersion, DEFAULT_STATE_HASHING};
 use sp_runtime::RuntimeString;
+pub use sp_runtime::{create_runtime_str, StateVersion, DEFAULT_STATE_HASHING};
 #[doc(hidden)]
 pub use sp_std;
 

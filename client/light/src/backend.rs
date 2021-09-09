@@ -46,9 +46,9 @@ use sp_core::{
 	ChangesTrieConfiguration,
 };
 use sp_runtime::{
-	generic::BlockId, StateVersion,
+	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -326,7 +326,12 @@ where
 		Ok(())
 	}
 
-	fn set_genesis_state(&mut self, input: Storage, commit: bool, state_hash: StateVersion) -> ClientResult<Block::Hash> {
+	fn set_genesis_state(
+		&mut self,
+		input: Storage,
+		commit: bool,
+		state_hash: StateVersion,
+	) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
 		// changes trie configuration
@@ -356,7 +361,8 @@ where
 		}
 
 		let storage_update = InMemoryBackend::from((storage, state_hash));
-		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, state_hash);
+		let (storage_root, _) =
+			storage_update.full_storage_root(std::iter::empty(), child_delta, state_hash);
 		if commit {
 			self.storage_update = Some(storage_update);
 		}
@@ -364,7 +370,11 @@ where
 		Ok(storage_root)
 	}
 
-	fn reset_storage(&mut self, _input: Storage, _state_hash: StateVersion) -> ClientResult<Block::Hash> {
+	fn reset_storage(
+		&mut self,
+		_input: Storage,
+		_state_hash: StateVersion,
+	) -> ClientResult<Block::Hash> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 

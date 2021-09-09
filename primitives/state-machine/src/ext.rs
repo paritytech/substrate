@@ -24,8 +24,9 @@ use crate::{
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 use sp_core::{
-	hexdisplay::HexDisplay, StateVersion,
+	hexdisplay::HexDisplay,
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
+	StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions, Externalities};
 use sp_trie::{empty_child_trie_root, trie_types::Layout};
@@ -534,7 +535,9 @@ where
 			return root.encode()
 		}
 
-		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache, threshold);
+		let root =
+			self.overlay
+				.storage_root(self.backend, self.storage_transaction_cache, threshold);
 		trace!(
 			target: "state",
 			method = "StorageRoot",
@@ -1031,15 +1034,18 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(vec![20], None);
 		overlay.set_storage(vec![30], Some(vec![31]));
-		let backend = (Storage {
-			top: map![
-				vec![10] => vec![10],
-				vec![20] => vec![20],
-				vec![40] => vec![40]
-			],
-			children_default: map![],
-		}, StateVersion::default())
-		.into();
+		let backend = (
+			Storage {
+				top: map![
+					vec![10] => vec![10],
+					vec![20] => vec![20],
+					vec![40] => vec![40]
+				],
+				children_default: map![],
+			},
+			StateVersion::default(),
+		)
+			.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
@@ -1077,13 +1083,16 @@ mod tests {
 		overlay.set_storage(vec![27], None);
 		overlay.set_storage(vec![28], None);
 		overlay.set_storage(vec![29], None);
-		let backend = (Storage {
-			top: map![
-				vec![30] => vec![30]
-			],
-			children_default: map![],
-		}, StateVersion::default())
-		.into();
+		let backend = (
+			Storage {
+				top: map![
+					vec![30] => vec![30]
+				],
+				children_default: map![],
+			},
+			StateVersion::default(),
+		)
+			.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
@@ -1101,20 +1110,23 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		let backend = (Storage {
-			top: map![],
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![
-						vec![10] => vec![10],
-						vec![20] => vec![20],
-						vec![40] => vec![40]
-					],
-					child_info: child_info.to_owned(),
-				}
-			],
-		}, StateVersion::default())
-		.into();
+		let backend = (
+			Storage {
+				top: map![],
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![
+							vec![10] => vec![10],
+							vec![20] => vec![20],
+							vec![40] => vec![40]
+						],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		)
+			.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
@@ -1146,20 +1158,23 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		let backend = (Storage {
-			top: map![],
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![
-						vec![10] => vec![10],
-						vec![20] => vec![20],
-						vec![30] => vec![40]
-					],
-					child_info: child_info.to_owned(),
-				}
-			],
-		}, StateVersion::default())
-		.into();
+		let backend = (
+			Storage {
+				top: map![],
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![
+							vec![10] => vec![10],
+							vec![20] => vec![20],
+							vec![30] => vec![40]
+						],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		)
+			.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
@@ -1185,18 +1200,21 @@ mod tests {
 		let child_info = &child_info;
 		let mut cache = StorageTransactionCache::default();
 		let mut overlay = OverlayedChanges::default();
-		let backend = (Storage {
-			top: map![],
-			children_default: map![
-				child_info.storage_key().to_vec() => StorageChild {
-					data: map![
-						vec![30] => vec![40]
-					],
-					child_info: child_info.to_owned(),
-				}
-			],
-		}, StateVersion::default())
-		.into();
+		let backend = (
+			Storage {
+				top: map![],
+				children_default: map![
+					child_info.storage_key().to_vec() => StorageChild {
+						data: map![
+							vec![30] => vec![40]
+						],
+						child_info: child_info.to_owned(),
+					}
+				],
+			},
+			StateVersion::default(),
+		)
+			.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 

@@ -43,7 +43,7 @@ use sp_blockchain::{
 	Result as ClientResult,
 };
 use sp_consensus::BlockOrigin;
-use sp_core::{testing::TaskExecutor, NativeOrEncoded, H256, StateVersion};
+use sp_core::{testing::TaskExecutor, NativeOrEncoded, StateVersion, H256};
 use sp_externalities::Extensions;
 use sp_runtime::{
 	generic::BlockId,
@@ -295,8 +295,7 @@ fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
 
 #[test]
 fn light_aux_store_is_updated_via_non_importing_op() {
-	let backend =
-		Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+	let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 	let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
 	BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
 	ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
@@ -454,7 +453,9 @@ type TestChecker = LightDataChecker<
 	DummyStorage,
 >;
 
-fn prepare_for_read_proof_check(state_version: StateVersion) -> (TestChecker, Header, StorageProof, u32) {
+fn prepare_for_read_proof_check(
+	state_version: StateVersion,
+) -> (TestChecker, Header, StorageProof, u32) {
 	// prepare remote client
 	let remote_client = substrate_test_runtime_client::new();
 	let remote_block_id = BlockId::Number(0);
@@ -490,7 +491,9 @@ fn prepare_for_read_proof_check(state_version: StateVersion) -> (TestChecker, He
 	(local_checker, remote_block_header, remote_read_proof, heap_pages)
 }
 
-fn prepare_for_read_child_proof_check(state_version: StateVersion) -> (TestChecker, Header, StorageProof, Vec<u8>) {
+fn prepare_for_read_child_proof_check(
+	state_version: StateVersion,
+) -> (TestChecker, Header, StorageProof, Vec<u8>) {
 	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
 	let child_info = ChildInfo::new_default(b"child1");
 	let child_info = &child_info;
@@ -532,9 +535,7 @@ fn prepare_for_read_child_proof_check(state_version: StateVersion) -> (TestCheck
 	(local_checker, remote_block_header, remote_read_proof, child_value)
 }
 
-fn prepare_for_header_proof_check(
-	insert_cht: bool,
-) -> (TestChecker, Hash, Header, StorageProof) {
+fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
 	// prepare remote client
 	let mut remote_client = substrate_test_runtime_client::new();
 	let mut local_headers_hashes = Vec::new();

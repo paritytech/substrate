@@ -38,8 +38,9 @@ use crate::{
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use sp_core::{
-	offchain::OffchainOverlayedChange, StateVersion,
+	offchain::OffchainOverlayedChange,
 	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo},
+	StateVersion,
 };
 use sp_externalities::{Extension, Extensions};
 #[cfg(not(feature = "std"))]
@@ -551,7 +552,13 @@ impl OverlayedChanges {
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache, state_threshold)
+		self.drain_storage_changes(
+			backend,
+			changes_trie_state,
+			parent_hash,
+			&mut cache,
+			state_threshold,
+		)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.

@@ -84,6 +84,8 @@ pub use sp_core::NativeOrEncoded;
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
+#[cfg(feature = "std")]
+pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
@@ -94,8 +96,6 @@ pub use sp_runtime::{
 	transaction_validity::TransactionValidity,
 	RuntimeString, TransactionOutcome,
 };
-#[cfg(feature = "std")]
-pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{

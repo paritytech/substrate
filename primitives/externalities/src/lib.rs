@@ -31,7 +31,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-use sp_storage::{ChildInfo, TrackedStorageKey, StateVersion};
+use sp_storage::{ChildInfo, StateVersion, TrackedStorageKey};
 
 pub use extensions::{Extension, ExtensionStore, Extensions};
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
@@ -165,7 +165,11 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
 	/// storage map will be removed.
-	fn child_storage_root(&mut self, child_info: &ChildInfo, state_hashing: StateVersion) -> Vec<u8>;
+	fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+		state_hashing: StateVersion,
+	) -> Vec<u8>;
 
 	/// Append storage item.
 	///

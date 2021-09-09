@@ -64,7 +64,7 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
-	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey, Storage},
+	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, Storage, StorageData, StorageKey},
 	ChangesTrieConfiguration, NativeOrEncoded,
 };
 #[cfg(feature = "test-helpers")]
@@ -75,8 +75,7 @@ use sp_runtime::{
 		Block as BlockT, DigestFor, HashFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
-	StateVersion,
-	BuildStorage, Justification, Justifications,
+	BuildStorage, Justification, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	key_changes, key_changes_proof, prove_child_read, prove_range_read_with_size, prove_read,
@@ -337,9 +336,11 @@ where
 		if info.finalized_state.is_none() {
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
-			let genesis_state_version = Self::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
+			let genesis_state_version =
+				Self::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
 			let mut op = backend.begin_operation()?;
-			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
+			let state_root =
+				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
@@ -831,8 +832,10 @@ where
 							children_default: Default::default(),
 						};
 
-						// This is use by fast sync so runtime version need to be resolve from changes.
-						let state_version = Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
+						// This is use by fast sync so runtime version need to be resolve from
+						// changes.
+						let state_version =
+							Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
 						let state_root = operation.op.reset_storage(storage, state_version)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
@@ -1271,15 +1274,22 @@ where
 		Ok(uncles)
 	}
 
-	fn resolve_state_version_from_wasm(storage: &Storage, executor: &E) -> sp_blockchain::Result<StateVersion> {
+	fn resolve_state_version_from_wasm(
+		storage: &Storage,
+		executor: &E,
+	) -> sp_blockchain::Result<StateVersion> {
 		Ok(if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
 			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
-			let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone()); 
+			let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone());
 			let hash = code_fetcher.hash.clone();
-			let runtime_code = sp_core::traits::RuntimeCode { code_fetcher: &code_fetcher, heap_pages: None, hash }; 
-			let runtime_version = RuntimeVersionOf::runtime_version(
-				executor, &mut ext, &runtime_code)
-				.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
+			let runtime_code = sp_core::traits::RuntimeCode {
+				code_fetcher: &code_fetcher,
+				heap_pages: None,
+				hash,
+			};
+			let runtime_version =
+				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
+					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
 			runtime_version.state_version()
 		} else {
 			Default::default()

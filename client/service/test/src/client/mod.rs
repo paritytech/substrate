@@ -32,9 +32,9 @@ use sp_api::ProvideRuntimeApi;
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
 use sp_runtime::{
-	generic::BlockId, StateVersion,
+	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
-	ConsensusEngineId, DigestItem, Justifications,
+	ConsensusEngineId, DigestItem, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
@@ -1286,8 +1286,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
-	let (mut client, select_chain) =
-		TestClientBuilder::new().build_with_longest_chain();
+	let (mut client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \

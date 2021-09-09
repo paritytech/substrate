@@ -26,8 +26,7 @@ use codec::{Codec, Decode, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
-use sp_core::storage::ChildInfo;
-use sp_core::StateVersion;
+use sp_core::{storage::ChildInfo, StateVersion};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
@@ -436,7 +435,8 @@ mod tests {
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), state_hash);
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty(), state_hash);
+		let (proving_root, mut proving_mdb) =
+			proving_backend.storage_root(std::iter::empty(), state_hash);
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}

@@ -730,11 +730,9 @@ where
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
 		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
-			(Some(keep_blocks), true) =>
-				TestClientBuilder::with_tx_storage(keep_blocks),
+			(Some(keep_blocks), true) => TestClientBuilder::with_tx_storage(keep_blocks),
 			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX),
-			(Some(keep_blocks), false) =>
-				TestClientBuilder::with_pruning_window(keep_blocks),
+			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
 		if matches!(config.sync_mode, SyncMode::Fast { .. }) {

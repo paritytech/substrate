@@ -28,9 +28,9 @@ use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use sp_core::{offchain::OffchainStorage, ChangesTrieConfigurationRange};
 use sp_runtime::{
-	generic::BlockId, StateVersion,
+	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
@@ -175,7 +175,11 @@ pub trait BlockImportOperation<Block: BlockT> {
 	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, storage: Storage, state_hash: StateVersion) -> sp_blockchain::Result<Block::Hash>;
+	fn reset_storage(
+		&mut self,
+		storage: Storage,
+		state_hash: StateVersion,
+	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.
 	fn update_storage(

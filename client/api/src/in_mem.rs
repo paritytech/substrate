@@ -24,9 +24,9 @@ use sp_core::{
 	offchain::storage::InMemOffchainStorage as OffchainStorage, storage::well_known_keys,
 };
 use sp_runtime::{
-	generic::BlockId, StateVersion,
+	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
@@ -667,7 +667,11 @@ where
 		self.apply_storage(storage, commit, state_hash)
 	}
 
-	fn reset_storage(&mut self, storage: Storage, state_hash: StateVersion) -> sp_blockchain::Result<Block::Hash> {
+	fn reset_storage(
+		&mut self,
+		storage: Storage,
+		state_hash: StateVersion,
+	) -> sp_blockchain::Result<Block::Hash> {
 		self.apply_storage(storage, true, state_hash)
 	}
 

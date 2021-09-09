@@ -23,10 +23,12 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use hash_db::Hasher;
-use sp_core::storage::{well_known_keys, ChildInfo, TrackedStorageKey};
-use sp_core::StateVersion;
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
+use sp_core::{
+	storage::{well_known_keys, ChildInfo, TrackedStorageKey},
+	StateVersion,
+};
 use sp_std::vec::Vec;
 
 /// A state backend is used to read state data and can have changes committed
@@ -197,7 +199,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
-			let (child_root, empty, child_txs) = self.child_storage_root(&child_info, child_delta, state_version);
+			let (child_root, empty, child_txs) =
+				self.child_storage_root(&child_info, child_delta, state_version);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {

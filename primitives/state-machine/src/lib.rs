@@ -1000,11 +1000,10 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
-		StateVersion,
 		storage::ChildInfo,
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
-		NativeOrEncoded, NeverNativeValue,
+		NativeOrEncoded, NeverNativeValue, StateVersion,
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use std::{
