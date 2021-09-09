@@ -420,7 +420,7 @@ pub mod pallet {
 				// from Off to snapshot
 				Phase::Off if remaining_blocks <= snapshot_deadline => {
 					let remaining_pages = T::Pages::get().saturating_sub(One::one());
-					log!(info, "starting snapshot creation [{}]", remaining_pages);
+					log!(info, "starting snapshot creation, remaining block: {}", remaining_pages);
 					let _ = Self::create_targets_snapshot().unwrap();
 					let _ = Self::create_voters_snapshot_paged(remaining_pages).unwrap();
 					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
@@ -533,10 +533,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		<T as frame_system::Config>::AccountId = "AccountId",
-		BalanceOf<T> = "Balance"
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// The signed phase of the given round has started.
@@ -701,7 +697,12 @@ pub mod pallet {
 		}
 
 		pub fn voters_iter_flattened() -> impl Iterator<Item = Voter<T>> {
-			PagedVoterSnapshot::<T>::iter().map(|(_, v)| v).flatten()
+			let key_range =
+				(crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp()).collect::<Vec<_>>();
+			key_range
+				.into_iter()
+				.map(|k| PagedVoterSnapshot::<T>::get(k).unwrap())
+				.flatten()
 		}
 
 		pub fn remove_voter_page(page: PageIndex) {
@@ -826,12 +827,6 @@ impl<T: Config> Pallet<T> {
 		Snapshot::<T>::set_voters(remaining, voters);
 		Snapshot::<T>::update_metadata(Some(count), None);
 
-		log!(
-			debug,
-			"created paged voters snapshot with key {}, {} more pages needed",
-			remaining,
-			remaining
-		);
 		Ok(count)
 	}
 
@@ -1174,18 +1169,14 @@ mod tests {
 
 			// put each submitted page
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!(
-					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
-					)
-				);
+				assert_ok!(<Runtime as crate::Config>::Verifier::set_unverified_solution_page(
+					page_index as PageIndex,
+					solution_page,
+				));
 			}
 
 			// "seal" the submission
-			assert_ok!(
-				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(score)
-			);
+			assert_ok!(<Runtime as crate::Config>::Verifier::seal_unverified_solution(score));
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);

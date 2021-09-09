@@ -20,7 +20,7 @@
 //! TODO
 
 // Only these items are public from this pallet.
-pub use pallet::{Config, Pallet};
+pub use pallet::*;
 
 mod pallet;
 
@@ -32,7 +32,7 @@ use sp_npos_elections::ElectionScore;
 use std::fmt::Debug;
 
 /// Errors that can happen in the feasibility check.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, codec::Encode, codec::Decode, Clone)]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,
@@ -42,6 +42,7 @@ pub enum FeasibilityError {
 	/// when no snapshot is present.
 	SnapshotUnavailable,
 	/// Internal error from the election crate.
+	#[codec(skip)]
 	NposElection(sp_npos_elections::Error),
 	/// A vote is invalid.
 	InvalidVote,
@@ -55,6 +56,8 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Solution does not have a good enough score.
 	ScoreTooLow,
+	/// A single target has too many backings
+	TooManyBackings,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -67,6 +70,7 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 pub trait Verifier {
 	type Solution;
 	type AccountId;
+	type MaxBackingCountPerTarget: frame_support::traits::Get<u32>;
 
 	/// This is a page of the solution that we want to verify next, store it.
 	///
@@ -136,6 +140,7 @@ pub trait Verifier {
 impl<T: Config> Verifier for Pallet<T> {
 	type Solution = SolutionOf<T>;
 	type AccountId = T::AccountId;
+	type MaxBackingCountPerTarget = T::MaxBackingCountPerTarget;
 
 	fn set_unverified_solution_page(
 		page_index: PageIndex,
@@ -159,7 +164,7 @@ impl<T: Config> Verifier for Pallet<T> {
 	}
 
 	fn status() -> Option<PageIndex> {
-		todo!()
+		VerifyingSolution::<T>::current_page()
 	}
 
 	fn kill() {

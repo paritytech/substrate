@@ -23,7 +23,7 @@ use frame_election_provider_support::ExtendedBalance;
 use frame_support::{dispatch::Weight, metadata::StorageEntryType, traits::Get};
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	traits::SaturatedConversion,
+	traits::{SaturatedConversion, Saturating},
 };
 
 // TODO: unify naming: everything should be
@@ -95,6 +95,15 @@ impl<T: super::Config> BaseMiner<T> {
 	/// This miner is only capable of mining a solution that either uses all of the pages of the
 	/// snapshot, or the top `pages` thereof.
 	pub fn mine_solution(mut pages: PageIndex) -> Result<PagedRawSolution<T>, MinerError> {
+		// Implementation note: As an easy way to compute both score, and ensure that the final
+		// supports respect `crate::verifier::Config::MaxBackingCountPerTarget`, the overall code
+		// path is as follows:
+		// election_results -> assignments -> staked assignments -> supports (calculate score and
+		// trim) -> staked assignments -> assignments -> solution
+		//
+		// This is by no means the most performant, but is the safest and cleanest way to do this
+		// with our current abstractions.
+
 		pages = pages.min(T::Pages::get());
 
 		// read the appropriate snapshot pages.
@@ -141,26 +150,72 @@ impl<T: super::Config> BaseMiner<T> {
 			.map_err::<MinerError, _>(Into::into)?;
 
 		// compute score from the overall solution before dealing with pages in any way.
-		let score = {
+		let (score, trimmed_assignments) = {
 			use crate::helpers;
 			use sp_npos_elections::{
 				assignment_ratio_to_staked_normalized, to_supports, to_without_backing,
 				EvaluateSupport,
 			};
+
 			// These closures are of no use in the rest of these code, since they only deal with the
 			// overall list of voters.
 			let cache = helpers::generate_voter_cache::<T>(&voters);
 			let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
-			let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of)
+
+			let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
 				.map_err::<MinerError, _>(Into::into)?;
 			let winners = to_without_backing(winners);
-			to_supports(&winners, &staked).map_err::<MinerError, _>(Into::into)?.evaluate()
+
+			// these supports could very well be invalid for score purposes. The reason is that you
+			// might trim out half of an account's stake, but we don't look for this account's other
+			// votes to fix it. Instead, we simply re-convert this back to supports once it has been
+			// converted to the npos solution type, and compute a final score from it. That is
+			// guaranteed to be correct.
+			let mut invalid_supports =
+				to_supports(&winners, &staked).map_err::<MinerError, _>(Into::into)?;
+
+			let _pre_score = (&invalid_supports).evaluate();
+			let _count = Self::trim_supports(&mut invalid_supports);
+
+			// now recreated the assignments and push them out.
+			let staked = sp_npos_elections::supports_to_staked_assignment(invalid_supports);
+			let assignments = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)
+				.map_err::<MinerError, _>(Into::into)?;
+
+			let score = {
+				// to compensate for missing stakes in the `trim_supports` process, we convert this
+				// back to a single page npos solution type and compute its score there. This is
+				// super expensive to do, but fine for offchain, and better be safe than sorry for
+				// now.
+				let voter_index_fn = helpers::voter_index_fn::<T>(&cache);
+				let solution = <SolutionOf<T>>::from_assignment(
+					&assignments,
+					&voter_index_fn,
+					&target_index_fn,
+				)
+				.map_err::<MinerError, _>(Into::into)?;
+				let voter_at = helpers::voter_at_fn::<T>(&voters);
+				let target_at = helpers::target_at_fn::<T>(&targets);
+				solution
+					.score(&winners, &stake_of, voter_at, target_at)
+					.map_err::<MinerError, _>(Into::into)?
+			};
+
+			log!(
+				debug,
+				"score of mined solution before any trimming: {:?}, trimmed {} supports, post_score = {:?}",
+				_pre_score,
+				_count,
+				score
+			);
+
+			(score, assignments)
 		};
 
 		// split the assignments into different pages.
 		let mut paged_assignments: Vec<Vec<AssignmentOf<T>>> = Vec::with_capacity(pages as usize);
 		paged_assignments.resize(pages as usize, vec![]);
-		for assignment in assignments {
+		for assignment in trimmed_assignments {
 			let page = voter_page_fn(&assignment.who).ok_or(MinerError::InvalidPage)?;
 			let mut assignment_page =
 				paged_assignments.get_mut(page as usize).ok_or(MinerError::InvalidPage)?;
@@ -288,6 +343,32 @@ impl<T: super::Config> BaseMiner<T> {
 			removing,
 		);
 		assignments.truncate(maximum_allowed_voters as usize);
+	}
+
+	/// Trim the given supports so that the count of backings in none of them exceeds
+	/// [`crate::verifier::Config::MaxBackingCountPerTarget`].
+	///
+	/// Note that this should only be called on the *global, non-paginated* supports. Calling this
+	/// on a single page of supports is essentially pointless and does not guarantee anything in
+	/// particular.
+	///
+	/// Returns the count of supports trimmed.
+	pub fn trim_supports(supports: &mut Supports<T::AccountId>) -> u32 {
+		let limit =
+			<T::Verifier as crate::verifier::Verifier>::MaxBackingCountPerTarget::get() as usize;
+		let mut count = 0;
+		supports
+			.iter_mut()
+			.filter_map(
+				|(_, support)| if support.voters.len() > limit { Some(support) } else { None },
+			)
+			.for_each(|support| {
+				support.voters.sort_unstable_by(|(_, b1), (_, b2)| b1.cmp(&b2).reverse());
+				support.voters.truncate(limit);
+				support.total = support.voters.iter().fold(0, |acc, (_, x)| acc.saturating_add(*x));
+				count.saturating_inc();
+			});
+		count
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
@@ -660,6 +741,11 @@ mod base_miner {
 	use sp_runtime::PerU16;
 
 	#[test]
+	fn can_reduce_solution() {
+		todo!()
+	}
+
+	#[test]
 	fn pagination_does_not_affect_score() {
 		let score_1 = ExtBuilder::default()
 			.pages(1)
@@ -754,15 +840,9 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
 
-			// convert ot supports
-			let supports = paged
-				.solution_pages
-				.pagify(Pages::get())
-				.map(|(i, p)| {
-					VerifierPallet::feasibility_check_page(p.clone(), i)
-						.expect("feasibility has already been checked; qed.")
-				})
-				.collect::<Vec<_>>();
+			// it must also be verified in the verifier
+			load_solution_for_verification(paged.clone());
+			let supports = roll_to_full_verification();
 
 			assert_eq!(
 				supports,
@@ -1002,43 +1082,113 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
 
-			// assert_eq!(
-			// 	paged.solution_pages,
-			// 	vec![TestNposSolution {
-			// 		// voter 1 (index 0) is backing 10 (index 0)
-			// 		// voter 2 (index 1) is backing 40 (index 3)
-			// 		// voter 3 (index 2) is backing 40 (index 3)
-			// 		votes1: vec![(0, 0), (1, 3), (2, 3)],
-			// 		// voter 4 (index 3) is backing 40 (index 10) and 10 (index 0)
-			// 		votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
-			// 		..Default::default()
-			// 	}]
-			// );
+			assert_eq!(
+				paged.solution_pages,
+				vec![
+					// this can be 'pagified" to snapshot at index 1, which contains 5, 6, 7, 8
+					// in which:
+					// 6 (index:1) votes for 40 (index:3)
+					// 8 (index:1) votes for 10 (index:0)
+					// 5 votes for both 10 and 40
+					TestNposSolution {
+						votes1: vec![(1, 3), (3, 0)],
+						votes2: vec![(0, [(0, PerU16::from_parts(32768))], 3)],
+						..Default::default()
+					},
+					// this can be 'pagified" to snapshot at index 2, which contains 1, 2, 3, 4
+					// in which:
+					// 1 (index:0) votes for 10 (index:0)
+					// 2 (index:1) votes for 40 (index:3)
+					// 3 (index:2) votes for 40 (index:3)
+					// 4 votes for both 10 and 40
+					TestNposSolution {
+						votes1: vec![(0, 0), (1, 3), (2, 3)],
+						votes2: vec![(3, [(0, PerU16::from_parts(32768))], 3)],
+						..Default::default()
+					}
+				]
+			);
 
-			// // convert ot supports
-			// let supports = paged
-			// 	.solution_pages
-			// 	.pagify(Pages::get())
-			// 	.map(|(i, p)| {
-			// 		let page_index = i as PageIndex;
-			// 		VerifierPallet::feasibility_check_page(p.clone(), page_index)
-			// 			.expect("feasibility has already been checked; qed.")
-			// 	})
-			// 	.collect::<Vec<_>>();
+			// convert ot supports
+			let supports = paged
+				.solution_pages
+				.pagify(Pages::get())
+				.map(|(i, p)| {
+					let page_index = i as PageIndex;
+					VerifierPallet::feasibility_check_page(p.clone(), page_index)
+						.expect("feasibility has already been checked; qed.")
+				})
+				.collect::<Vec<_>>();
 
-			// assert_eq!(
-			// 	supports,
-			// 	vec![
-			// 		// page1 supports from voters 1, 2, 3, 4
-			// 		vec![
-			// 			(10, Support { total: 15, voters: vec![(1, 10), (4, 5)] }),
-			// 			(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
-			// 		]
-			// 	]
-			// );
+			assert_eq!(
+				supports,
+				vec![
+					// supports from voters 5, 6, 7, 8
+					vec![
+						(10, Support { total: 15, voters: vec![(8, 10), (5, 5)] }),
+						(40, Support { total: 15, voters: vec![(6, 10), (5, 5)] })
+					],
+					// supports from voters 1, 2, 3, 4
+					vec![
+						(10, Support { total: 15, voters: vec![(1, 10), (4, 5)] }),
+						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
+					]
+				]
+			);
 
-			// assert_eq!(paged.score, [15, 40, 850]);
+			assert_eq!(paged.score, [30, 70, 2500]);
 		})
+	}
+
+	#[test]
+	fn trim_backings_works() {
+		ExtBuilder::default()
+			.max_backing_per_target(5)
+			.voter_per_page(8)
+			.build_and_execute(|| {
+				// 10 and 40 are the default winners, we add a lot more votes to them.
+				for i in 100..105 {
+					VOTERS.with(|v| v.borrow_mut().push((i, i - 96, vec![10])));
+				}
+				roll_to_snapshot_created();
+
+				// 3 pages of 18 voters
+				assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
+				assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 17);
+
+				// now we let the miner mine something for us..
+				let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+				load_solution_for_verification(paged);
+
+				// this must be correct
+				let supports = roll_to_full_verification();
+
+				// 10 has no more than 5 backings, and from the new voters that we added in this
+				// test, the most staked ones stayed (103, 104) and the rest trimmed.
+				assert_eq!(
+					supports,
+					vec![
+						// 1 backing for 10
+						vec![(10, Support { total: 8, voters: vec![(104, 8)] })],
+						// 2 backings for 10
+						vec![
+							(10, Support { total: 17, voters: vec![(10, 10), (103, 7)] }),
+							(40, Support { total: 40, voters: vec![(40, 40)] })
+						],
+						// 20 backings for 10
+						vec![
+							(10, Support { total: 20, voters: vec![(1, 10), (8, 10)] }),
+							(
+								40,
+								Support {
+									total: 40,
+									voters: vec![(2, 10), (3, 10), (4, 10), (6, 10)]
+								}
+							)
+						]
+					]
+				);
+			})
 	}
 
 	#[test]
@@ -1289,11 +1439,6 @@ mod offchain_worker_miner {
 
 	#[test]
 	fn infeasible_cache() {
-		todo!();
-	}
-
-	#[test]
-	fn pre__cache_wipes_it() {
 		todo!();
 	}
 }

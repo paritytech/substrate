@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::{self as multi_block, unsigned as unsigned_pallet, verifier as verifier_pallet};
+use _npos::StakedAssignment;
 use frame_election_provider_support::{
 	data_provider, ElectionDataProvider, ExtendedBalance, Support,
 };
@@ -40,8 +41,11 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16, Perbill,
 };
-use std::{convert::TryFrom, sync::Arc, vec};
+use std::{collections::BTreeMap, convert::TryFrom, sync::Arc, vec};
 use substrate_test_utils::assert_eq_uvec;
+
+// TODO: this mock is basically moving toward the direction of integration tests..maybe someday we
+// need to break it down.
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -56,7 +60,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
 		MultiBlock: multi_block::{Pallet, Event<T>},
-		VerifierPallet: verifier_pallet::{Pallet},
+		VerifierPallet: verifier_pallet::{Pallet, Event<T>},
 		UnsignedPallet: unsigned_pallet::{Pallet, Call, ValidateUnsigned},
 	}
 );
@@ -72,12 +76,19 @@ sp_npos_elections::generate_solution_type!(
 	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
 
-/// All events of this pallet.
-pub(crate) fn multi_block_events() -> Vec<super::Event<Runtime>> {
+pub fn multi_block_events() -> Vec<crate::Event<Runtime>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
 		.filter_map(|e| if let Event::MultiBlock(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
+}
+
+pub fn verifier_events() -> Vec<crate::verifier::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::VerifierPallet(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>()
 }
 
@@ -233,6 +244,9 @@ parameter_types! {
 	pub static EpochLength: u64 = 30;
 	// by default we stick to 3 pages to host our 12 voters.
 	pub static VoterSnapshotPerBlock: VoterIndex = 4;
+	// we have 12 voters in the default setting, this should be enough to make sure they are not
+	// trimmed accidentally in any test.
+	pub static MaxBackingCountPerTarget: u32 = 12;
 	pub static Pages: PageIndex = 3;
 }
 
@@ -315,8 +329,10 @@ impl multi_block::weights::WeightInfo for DualMockWeightInfo {
 }
 
 impl crate::verifier::Config for Runtime {
+	type Event = Event;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+	type MaxBackingCountPerTarget = MaxBackingCountPerTarget;
 }
 
 impl crate::unsigned::Config for Runtime {
@@ -475,6 +491,10 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 pub struct ExtBuilder {}
 
 impl ExtBuilder {
+	pub fn max_backing_per_target(self, c: u32) -> Self {
+		<MaxBackingCountPerTarget>::set(c);
+		self
+	}
 	pub fn miner_tx_priority(self, p: u64) -> Self {
 		<MinerTxPriority>::set(p);
 		self
@@ -573,24 +593,96 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn balances(who: &u64) -> (u64, u64) {
-	(Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
-pub(crate) fn witness() -> SolutionOrSnapshotSize {
-	let voters = Snapshot::<Runtime>::voters_iter_flattened().count() as u32;
-	let targets = Snapshot::<Runtime>::targets().map(|t| t.len() as u32).unwrap_or_default();
-	SolutionOrSnapshotSize { voters, targets }
-}
-
 fn sanity_checks() {
-	// TODO: check phase, and match snapshot to it.
 	let _ = VerifierPallet::sanity_check().unwrap();
 	let _ = UnsignedPallet::sanity_check().unwrap();
 	let _ = MultiBlock::sanity_check().unwrap();
 }
 
-pub(crate) fn ensure_full_snapshot() {
+pub fn balances(who: &u64) -> (u64, u64) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub fn witness() -> SolutionOrSnapshotSize {
+	let voters = Snapshot::<Runtime>::voters_iter_flattened().count() as u32;
+	let targets = Snapshot::<Runtime>::targets().map(|t| t.len() as u32).unwrap_or_default();
+	SolutionOrSnapshotSize { voters, targets }
+}
+
+/// Fully verify a solution.
+///
+/// This will progress the blocks until the verifier pallet is done verifying it.
+///
+/// The solution must have already been loaded via `load_solution_for_verification`.
+///
+/// Return the final supports, which is the outcome. If this succeeds, then the valid variant of the
+/// `QueuedSolution` form `verifier` is ready to be read.
+pub fn roll_to_full_verification() -> Vec<Supports<AccountId>> {
+	// we must be ready to verify.
+	assert_eq!(VerifierPallet::status(), Some(Pages::get() - 1));
+
+	while VerifierPallet::status().is_some() {
+		roll_to(System::block_number() + 1);
+	}
+
+	(MultiBlock::lsp()..=MultiBlock::msp())
+		.map(|p| VerifierPallet::get_queued_solution_page(p).unwrap_or_default())
+		.collect::<Vec<_>>()
+}
+
+/// Load a full raw paged solution for verification.
+pub fn load_solution_for_verification(raw_paged: PagedRawSolution<Runtime>) {
+	// set
+	for (page_index, solution_page) in raw_paged.solution_pages.pagify(Pages::get()) {
+		assert_ok!(
+			VerifierPallet::set_unverified_solution_page(page_index, solution_page.clone(),)
+		);
+	}
+	// and seal the ok solution against the verifier
+	assert_ok!(VerifierPallet::seal_unverified_solution(raw_paged.score));
+}
+
+/// Generate a single page of `TestNposSolution` from the give supports.
+///
+/// All of the voters in this support must live in a single page of the snapshot, noted by
+/// `snapshot_page`.
+pub fn solution_from_supports(
+	supports: Supports<AccountId>,
+	snapshot_page: PageIndex,
+) -> TestNposSolution {
+	let staked = sp_npos_elections::supports_to_staked_assignment(supports);
+	let assignments = sp_npos_elections::assignment_staked_to_ratio_normalized(staked).unwrap();
+
+	let voters = crate::Snapshot::<Runtime>::voters(snapshot_page).unwrap();
+	let targets = crate::Snapshot::<Runtime>::targets().unwrap();
+	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
+	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
+
+	TestNposSolution::from_assignment(&assignments, &voter_index, &target_index).unwrap()
+}
+
+/// Generate a raw paged solution from the given vector of supports.
+///
+/// Given vector must be aligned with the snapshot, at most need to be 'pagified' which we do
+/// internally.
+pub fn raw_paged_from_supports(
+	paged_supports: Vec<Supports<AccountId>>,
+	round: u32,
+) -> PagedRawSolution<Runtime> {
+	let score = {
+		let flattened = paged_supports.iter().cloned().flatten().collect::<Vec<_>>();
+		(&flattened).evaluate()
+	};
+
+	let solution_pages = paged_supports
+		.pagify(Pages::get())
+		.map(|(page_index, page_support)| solution_from_supports(page_support.to_vec(), page_index))
+		.collect::<Vec<_>>();
+
+	PagedRawSolution { solution_pages, score, round }
+}
+
+pub fn ensure_full_snapshot() {
 	Snapshot::<Runtime>::assert_snapshot(true, Pages::get())
 }
 

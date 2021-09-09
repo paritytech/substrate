@@ -118,7 +118,7 @@ pub use sp_std;
 pub use sp_npos_elections_solution_type::generate_solution_type;
 
 /// The errors that might occur in the this crate and solution-type.
-#[derive(Eq, PartialEq, RuntimeDebug)]
+#[derive(Eq, PartialEq, RuntimeDebug, Clone)]
 pub enum Error {
 	/// While going from solution indices to ratio, the weight of all the edges has gone above the
 	/// total.

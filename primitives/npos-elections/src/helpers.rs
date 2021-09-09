@@ -18,10 +18,28 @@
 //! Helper methods for npos-elections.
 
 use crate::{
-	Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight, WithApprovalOf,
+	Assignment, Error, ExtendedBalance, IdentifierT, PerThing128, StakedAssignment, Supports,
+	VoteWeight, WithApprovalOf,
 };
 use sp_arithmetic::PerThing;
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+
+/// Convert some [`Supports`]s into vector of [`StakedAssignment`]
+pub fn supports_to_staked_assignment<A: IdentifierT>(
+	supports: Supports<A>,
+) -> Vec<StakedAssignment<A>> {
+	let mut staked: BTreeMap<A, Vec<(A, ExtendedBalance)>> = BTreeMap::new();
+	for (target, support) in supports {
+		for (voter, amount) in support.voters {
+			staked.entry(voter).or_default().push((target.clone(), amount))
+		}
+	}
+
+	staked
+		.into_iter()
+		.map(|(who, distribution)| StakedAssignment { who, distribution })
+		.collect::<Vec<_>>()
+}
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
 ///
