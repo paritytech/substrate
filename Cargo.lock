@@ -4347,6 +4347,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-cli",
  "sc-client-api",
+ "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
@@ -7745,6 +7746,7 @@ name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
  "derive_more",
+ "environmental",
  "parity-scale-codec",
  "pwasm-utils",
  "sc-allocator",
