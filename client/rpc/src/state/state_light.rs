@@ -569,7 +569,7 @@ where
 										.map(|data| {
 											data.iter()
 												.filter_map(|(k, d)| {
-													keys.contains(k).then(|| d.map(|v| StorageData(v.to_vec())))
+													keys.contains(k).then(|| d.as_ref().map(|v| StorageData(v.to_vec())))
 												})
 												.collect::<Vec<_>>()
 										})
