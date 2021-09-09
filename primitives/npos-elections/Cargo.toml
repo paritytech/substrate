@@ -19,11 +19,11 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-npos-elections-solution-type = { version = "4.0.0-dev", path = "./solution-type" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../arithmetic" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
+sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = false }
 
 [dev-dependencies]
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 rand = "0.7.3"
-sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 [features]
 default = ["std"]
@@ -34,4 +34,5 @@ std = [
 	"sp-std/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
+	"sp-runtime/std",
 ]
