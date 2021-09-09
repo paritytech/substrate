@@ -746,7 +746,7 @@ where
 		let child_info = match ChildType::from_prefixed_key(&storage_key) {
 			Some((ChildType::ParentKeyId, storage_key)) =>
 				Arc::new(ChildInfo::new_default(storage_key)),
-			None => return Box::pin(err(client_err(sp_blockchain::Error::InvalidChildStorageKey))),
+			None => return err(client_err(sp_blockchain::Error::InvalidChildStorageKey)).boxed(),
 		};
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
