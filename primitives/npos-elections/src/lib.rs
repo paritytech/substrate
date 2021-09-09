@@ -133,6 +133,8 @@ pub enum Error {
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
+	/// The solution has more targets than desired.
+	SolutionExceedsDesiredTargets,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -346,7 +348,7 @@ pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,
 	/// Support from voters.
-	pub voters: Vec<(AccountId, ExtendedBalance)>,
+	pub voters: Vec<(AccountId, ExtendedBalance)>, // TODO this needs to Bounded
 }
 
 /// A target-major representation of the the election outcome.
@@ -355,6 +357,9 @@ pub struct Support<AccountId> {
 ///
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
+
+/// Same as [`Supports`], but bounded.
+pub type SupportsBounded<A, B: Get<u32>> = BoundVec<(A, Support<A>), B>;
 
 /// Linkage from a winner to their [`Support`].
 ///
@@ -367,9 +372,10 @@ pub trait FlattenSupportMap<A> {
 	fn flatten(self) -> Supports<A>;
 }
 
-impl<A> FlattenSupportMap<A> for SupportMap<A> {
+impl<A, B> FlattenSupportMap<A, B> for SupportMap<A> {
 	fn flatten(self) -> Supports<A> {
-		self.into_iter().collect::<Vec<_>>()
+		// TODO maybe there is a way to do this as bounded before collecting into a Vec
+		self.into_iter().collect::<Vec<_>>() 
 	}
 }
 
@@ -405,11 +411,14 @@ pub fn to_support_map<AccountId: IdentifierT>(
 /// flat vector.
 ///
 /// Similar to [`to_support_map`], `winners` is used for error checking.
-pub fn to_supports<AccountId: IdentifierT>(
+pub fn to_supports<AccountId: IdentifierT, DesiredTargets: Get<u32>>(
 	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
-) -> Result<Supports<AccountId>, Error> {
-	to_support_map(winners, assignments).map(FlattenSupportMap::flatten)
+) -> Result<SupportsBounded<AccountId, DesiredTargets>, Error> {
+	to_support_map(winners, assignments)
+		.map(FlattenSupportMap::flatten) // TODO should probably bound inside of flatten
+		.try_into()
+		.map_err(|_| Error::SolutionExceedsDesiredTargets)
 }
 
 /// Extension trait for evaluating a support map or vector.
