@@ -737,13 +737,11 @@ where
 		let client = self.client.clone();
 		try_join_all(keys.into_iter().map(move |key| {
 			let res = client
-					.clone()
-					.child_storage(&BlockId::Hash(block), &child_info, &key)
-					.map_err(client_err);
+				.clone()
+				.child_storage(&BlockId::Hash(block), &child_info, &key)
+				.map_err(client_err);
 
-			async move {
-				res
-			}
+			async move { res }
 		}))
 		.boxed()
 	}
