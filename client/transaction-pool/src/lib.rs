@@ -44,7 +44,7 @@ use futures::{
 	future::{self, ready},
 	prelude::*,
 };
-pub use graph::{Options, Transaction};
+pub use graph::{ChainApi, Options, Pool, Transaction};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
@@ -138,7 +138,6 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
 	PoolApi: graph::ChainApi<Block = Block>,
@@ -451,7 +450,7 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use graph::{ChainApi, ValidatedTransaction};
+		use graph::ValidatedTransaction;
 		use sp_runtime::{
 			traits::SaturatedConversion, transaction_validity::TransactionValidityError,
 		};
