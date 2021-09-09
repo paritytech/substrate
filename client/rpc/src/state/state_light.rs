@@ -569,15 +569,7 @@ where
 										.map(|data| {
 											data.iter()
 												.filter_map(|(k, d)| {
-													if keys.contains(k) {
-														if let Some(d) = d {
-															return Some(Some(StorageData(
-																d.to_vec(),
-															)))
-														}
-													};
-
-													None
+													keys.contains(k).then(|| d.map(|v| StorageData(v.to_vec())))
 												})
 												.collect::<Vec<_>>()
 										})
