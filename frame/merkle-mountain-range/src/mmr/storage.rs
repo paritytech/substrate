@@ -22,6 +22,7 @@ use mmr_lib::helper;
 use sp_io::offchain_index;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
+use frame_support::if_std;
 
 use crate::{
 	mmr::{Node, NodeOf},
@@ -85,10 +86,6 @@ where
 		Ok(<Nodes<T, I>>::get(pos).map(Node::Hash))
 	}
 
-	// ? Actually we can move this pruning logic outside
-	// ? and perform the pruning every X blocks
-	// ?
-	// ? commented by Xavier
 	fn append(&mut self, pos: NodeIndex, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
 		let leaves = crate::NumberOfLeaves::<T, I>::get();
 		let size = crate::mmr::utils::NodesUtils::new(leaves).size();
