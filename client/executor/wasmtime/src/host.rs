@@ -19,7 +19,7 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::{instance_wrapper::InstanceWrapper, runtime::StoreData, util};
+use crate::{instance_wrapper::InstanceWrapper, runtime::StoreData};
 use codec::{Decode, Encode};
 use log::trace;
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -64,7 +64,7 @@ impl HostState {
 	}
 
 	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
-	pub fn materialize<'a, 'b, 'c>(
+	pub(crate) fn materialize<'a, 'b, 'c>(
 		&'a self,
 		caller: &'b mut Caller<'c, StoreData>,
 	) -> HostContext<'a, 'b, 'c> {
@@ -87,7 +87,7 @@ impl<'a, 'b, 'c> std::ops::Deref for HostContext<'a, 'b, 'c> {
 	}
 }
 
-impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
+impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> {
 	fn read_memory_into(
 		&self,
 		address: Pointer<u8>,
@@ -143,28 +143,20 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	) -> sp_wasm_interface::Result<u32> {
 		let sandboxed_memory =
 			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
-		sandboxed_memory.with_direct_access(|sandboxed_memory| {
-			let len = buf_len as usize;
-			let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
-			{
-				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			};
-			let supervisor_mem_size = self.instance.memory_size(&self.caller) as usize;
-			let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
-				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			};
-			self.host_state
-				.instance
-				.write_memory_from(
-					&mut self.caller,
-					Pointer::new(dst_range.start as u32),
-					&sandboxed_memory[src_range],
-				)
-				.expect("ranges are checked above; write can't fail; qed");
-			Ok(sandbox_primitives::ERR_OK)
-		})
+
+		let len = buf_len as usize;
+
+		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
+
+		let instance = self.instance.clone();
+		if let Err(_) = instance.write_memory_from(&mut self.caller, buf_ptr, &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_set(
@@ -176,28 +168,19 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	) -> sp_wasm_interface::Result<u32> {
 		let sandboxed_memory =
 			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
-		sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
-			let len = val_len as usize;
-			let supervisor_mem_size = self.instance.memory_size(&self.caller) as usize;
-			let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
-				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			};
-			let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
-			{
-				Some(range) => range,
-				None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			};
-			self.host_state
-				.instance
-				.read_memory_into(
-					&mut self.caller,
-					Pointer::new(src_range.start as u32),
-					&mut sandboxed_memory[dst_range],
-				)
-				.expect("ranges are checked above; read can't fail; qed");
-			Ok(sandbox_primitives::ERR_OK)
-		})
+
+		let len = val_len as usize;
+
+		let buffer = match self.instance.read_memory(&self.caller, val_ptr, len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
+
+		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
@@ -337,12 +320,12 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	}
 }
 
-struct SandboxContext<'a, 'b> {
-	host_context: &'a mut HostContext<'b>,
+struct SandboxContext<'a, 'b, 'c, 'd> {
+	host_context: &'a mut HostContext<'b, 'c, 'd>,
 	dispatch_thunk: Func,
 }
 
-impl<'a, 'b> sandbox::SandboxContext for SandboxContext<'a, 'b> {
+impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> {
 	fn invoke(
 		&mut self,
 		invoke_args_ptr: Pointer<u8>,
@@ -350,12 +333,16 @@ impl<'a, 'b> sandbox::SandboxContext for SandboxContext<'a, 'b> {
 		state: u32,
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
-		let result = self.dispatch_thunk.call(&[
-			Val::I32(u32::from(invoke_args_ptr) as i32),
-			Val::I32(invoke_args_len as i32),
-			Val::I32(state as i32),
-			Val::I32(usize::from(func_idx) as i32),
-		]);
+		let result = self.dispatch_thunk.call(
+			&mut self.host_context.caller,
+			&[
+				Val::I32(u32::from(invoke_args_ptr) as i32),
+				Val::I32(invoke_args_len as i32),
+				Val::I32(state as i32),
+				Val::I32(usize::from(func_idx) as i32),
+			],
+		);
+
 		match result {
 			Ok(ret_vals) => {
 				let ret_val = if ret_vals.len() != 1 {

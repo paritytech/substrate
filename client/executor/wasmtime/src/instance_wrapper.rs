@@ -19,14 +19,10 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::{
-	imports::Imports,
-	util::{from_wasmtime_val, into_wasmtime_val},
-};
+use crate::imports::Imports;
 
 use sc_executor_common::{
 	error::{Error, Result},
-	runtime_blob,
 	util::checked_range,
 	wasm_runtime::InvokeMethod,
 };
@@ -253,11 +249,6 @@ impl InstanceWrapper {
 		self.table.as_ref()
 	}
 
-	/// Returns the byte size of the linear memory instance attached to this instance.
-	pub fn memory_size(&self, ctx: impl AsContext) -> u32 {
-		self.memory.data_size(ctx) as u32
-	}
-
 	/// Reads `__heap_base: i32` global variable and returns it.
 	///
 	/// If it doesn't exist, not a global or of not i32 type returns an error.
@@ -329,12 +320,17 @@ impl InstanceWrapper {
 	/// Read data from a slice of memory into a newly allocated buffer.
 	///
 	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
-		let range = checked_range(source_addr.into(), size, self.memory.data_size())
+	pub fn read_memory(
+		&self,
+		ctx: impl AsContext,
+		source_addr: Pointer<u8>,
+		size: usize,
+	) -> Result<Vec<u8>> {
+		let range = checked_range(source_addr.into(), size, self.memory.data_size(&ctx))
 			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
 
 		let mut buffer = vec![0; range.len()];
-		self.read_memory_into(source_addr, &mut buffer)?;
+		self.read_memory_into(ctx, source_addr, &mut buffer)?;
 
 		Ok(buffer)
 	}
@@ -350,7 +346,7 @@ impl InstanceWrapper {
 	) -> Result<()> {
 		let memory = self.memory.data(ctx.as_context());
 
-		let range = util::checked_range(address.into(), dest.len(), memory.len())
+		let range = checked_range(address.into(), dest.len(), memory.len())
 			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
 		dest.copy_from_slice(&memory[range]);
 		Ok(())
@@ -367,7 +363,7 @@ impl InstanceWrapper {
 	) -> Result<()> {
 		let memory = self.memory.data_mut(ctx.as_context_mut());
 
-		let range = util::checked_range(address.into(), data.len(), memory.len())
+		let range = checked_range(address.into(), data.len(), memory.len())
 			.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
 		memory[range].copy_from_slice(data);
 		Ok(())
