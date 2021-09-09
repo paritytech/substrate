@@ -166,7 +166,7 @@ where
 	/// a BEEFY authority set change and we can't fetch the authority set from the
 	/// BEEFY on-chain state.
 	///
-	/// Such a failure is usually an indication that the BEEFT pallet has not been deployed (yet).
+	/// Such a failure is usually an indication that the BEEFY pallet has not been deployed (yet).
 	fn validator_set(&self, header: &B::Header) -> Option<ValidatorSet<Public>> {
 		let new = if let Some(new) = find_authorities_change::<B>(header) {
 			Some(new)
