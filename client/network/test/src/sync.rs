@@ -1193,3 +1193,32 @@ fn syncs_indexed_blocks() {
 		.unwrap()
 		.is_some());
 }
+
+#[test]
+fn syncs_huge_blocks() {
+	use sp_core::storage::well_known_keys::HEAP_PAGES;
+	use sp_runtime::codec::Encode;
+	use substrate_test_runtime_client::BlockBuilderExt;
+
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(2);
+
+	// Increase heap space for bigger blocks.
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |mut builder| {
+		builder.push_storage_change(HEAP_PAGES.to_vec(), Some(256u64.encode())).unwrap();
+		builder.build().unwrap().block
+	});
+
+	net.peer(0).generate_blocks(32, BlockOrigin::Own, |mut builder| {
+		// Add 32 extrinsics 32k each = 1MiB total
+		for _ in 0..32 {
+			let ex = Extrinsic::IncludeData([42u8; 32 * 1024].to_vec());
+			builder.push(ex).unwrap();
+		}
+		builder.build().unwrap().block
+	});
+
+	net.block_until_sync();
+	assert_eq!(net.peer(0).client.info().best_number, 33);
+	assert_eq!(net.peer(1).client.info().best_number, 33);
+}

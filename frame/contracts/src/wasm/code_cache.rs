@@ -64,22 +64,6 @@ where
 	});
 }
 
-/// Decrement the refcount and store.
-///
-/// Removes the code instead of storing it when the refcount drops to zero.
-pub fn store_decremented<T: Config>(mut prefab_module: PrefabWasmModule<T>)
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	prefab_module.refcount = prefab_module.refcount.saturating_sub(1);
-	if prefab_module.refcount > 0 {
-		<CodeStorage<T>>::insert(prefab_module.code_hash, prefab_module);
-	} else {
-		<CodeStorage<T>>::remove(prefab_module.code_hash);
-		finish_removal::<T>(prefab_module.code_hash);
-	}
-}
-
 /// Increment the refcount of a code in-storage by one.
 pub fn increment_refcount<T: Config>(
 	code_hash: CodeHash<T>,

@@ -111,7 +111,6 @@ pub struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,

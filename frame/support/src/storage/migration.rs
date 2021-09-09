@@ -17,7 +17,11 @@
 
 //! Some utilities for helping access storage with arbitrary key types.
 
-use crate::{hash::ReversibleStorageHasher, storage::unhashed, StorageHasher, Twox128};
+use crate::{
+	hash::ReversibleStorageHasher,
+	storage::{storage_prefix, unhashed},
+	StorageHasher, Twox128,
+};
 use codec::{Decode, Encode};
 use sp_std::prelude::*;
 
@@ -47,8 +51,8 @@ impl<T> StorageIterator<T> {
 	)]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
-		prefix.extend_from_slice(&Twox128::hash(module));
-		prefix.extend_from_slice(&Twox128::hash(item));
+		let storage_prefix = storage_prefix(module, item);
+		prefix.extend_from_slice(&storage_prefix);
 		prefix.extend_from_slice(suffix);
 		let previous_key = prefix.clone();
 		Self { prefix, previous_key, drain: false, _phantom: Default::default() }
@@ -112,8 +116,8 @@ impl<K, T, H: ReversibleStorageHasher> StorageKeyIterator<K, T, H> {
 	)]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
-		prefix.extend_from_slice(&Twox128::hash(module));
-		prefix.extend_from_slice(&Twox128::hash(item));
+		let storage_prefix = storage_prefix(module, item);
+		prefix.extend_from_slice(&storage_prefix);
 		prefix.extend_from_slice(suffix);
 		let previous_key = prefix.clone();
 		Self { prefix, previous_key, drain: false, _phantom: Default::default() }
@@ -173,8 +177,8 @@ pub fn storage_iter_with_suffix<T: Decode + Sized>(
 	suffix: &[u8],
 ) -> PrefixIterator<(Vec<u8>, T)> {
 	let mut prefix = Vec::new();
-	prefix.extend_from_slice(&Twox128::hash(module));
-	prefix.extend_from_slice(&Twox128::hash(item));
+	let storage_prefix = storage_prefix(module, item);
+	prefix.extend_from_slice(&storage_prefix);
 	prefix.extend_from_slice(suffix);
 	let previous_key = prefix.clone();
 	let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
@@ -204,8 +208,9 @@ pub fn storage_key_iter_with_suffix<
 	suffix: &[u8],
 ) -> PrefixIterator<(K, T)> {
 	let mut prefix = Vec::new();
-	prefix.extend_from_slice(&Twox128::hash(module));
-	prefix.extend_from_slice(&Twox128::hash(item));
+	let storage_prefix = storage_prefix(module, item);
+
+	prefix.extend_from_slice(&storage_prefix);
 	prefix.extend_from_slice(suffix);
 	let previous_key = prefix.clone();
 	let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
@@ -225,8 +230,8 @@ pub fn have_storage_value(module: &[u8], item: &[u8], hash: &[u8]) -> bool {
 /// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
 pub fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
 	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
+	let storage_prefix = storage_prefix(module, item);
+	key[0..32].copy_from_slice(&storage_prefix);
 	key[32..].copy_from_slice(hash);
 	frame_support::storage::unhashed::get::<T>(&key)
 }
@@ -234,8 +239,8 @@ pub fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[
 /// Take a particular value in storage by the `module`, the map's `item` name and the key `hash`.
 pub fn take_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
 	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
+	let storage_prefix = storage_prefix(module, item);
+	key[0..32].copy_from_slice(&storage_prefix);
 	key[32..].copy_from_slice(hash);
 	frame_support::storage::unhashed::take::<T>(&key)
 }
@@ -243,8 +248,8 @@ pub fn take_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &
 /// Put a particular value into storage by the `module`, the map's `item` name and the key `hash`.
 pub fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], value: T) {
 	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
+	let storage_prefix = storage_prefix(module, item);
+	key[0..32].copy_from_slice(&storage_prefix);
 	key[32..].copy_from_slice(hash);
 	frame_support::storage::unhashed::put(&key, &value);
 }
@@ -253,8 +258,8 @@ pub fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], val
 /// `hash`.
 pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	let mut key = vec![0u8; 32 + hash.len()];
-	key[0..16].copy_from_slice(&Twox128::hash(module));
-	key[16..32].copy_from_slice(&Twox128::hash(item));
+	let storage_prefix = storage_prefix(module, item);
+	key[0..32].copy_from_slice(&storage_prefix);
 	key[32..].copy_from_slice(hash);
 	frame_support::storage::unhashed::kill_prefix(&key, None);
 }
@@ -293,13 +298,8 @@ pub fn move_storage_from_pallet(
 	old_pallet_name: &[u8],
 	new_pallet_name: &[u8],
 ) {
-	let mut new_prefix = Vec::new();
-	new_prefix.extend_from_slice(&Twox128::hash(new_pallet_name));
-	new_prefix.extend_from_slice(&Twox128::hash(storage_name));
-
-	let mut old_prefix = Vec::new();
-	old_prefix.extend_from_slice(&Twox128::hash(old_pallet_name));
-	old_prefix.extend_from_slice(&Twox128::hash(storage_name));
+	let new_prefix = storage_prefix(new_pallet_name, storage_name);
+	let old_prefix = storage_prefix(old_pallet_name, storage_name);
 
 	move_prefix(&old_prefix, &new_prefix);
 
