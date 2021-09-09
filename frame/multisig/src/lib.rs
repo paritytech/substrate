@@ -672,6 +672,28 @@ impl<T: Config> Pallet<T> {
 		T::Currency::reserve(&who, deposit)?;
 		Calls::<T>::insert(&hash, (data, who, deposit));
 		Ok(())
+
+		pub const fn deposit(items: u32, bytes: u32) -> Balance {
+			items as Balance * 20 * DOLLARS + (bytes as Balance) * 100 * MILLICENTS
+		}
+		pub const DepositBase: Balance = deposit(1, 88);
+		pub const DepositFactor: Balance = deposit(0, 32);
+		pub const UNITS: Balance = 10_000_000_000;
+		pub const DOLLARS: Balance = UNITS; // 10_000_000_000
+		pub const CENTS: Balance = DOLLARS / 100; // 100_000_000
+		pub const MILLICENTS: Balance = CENTS / 1_000; // 100_000
+
+		(
+			T::DepositBase::get() = 1 * 20 * 10_000_000_000 + 88 * 100 * 100_000 = 200880000000
+				+ T::DepositFactor::get() = 0 * 20 * 10_000_000_000 + 32 * 100 * 100_000 = 320000000
+				* threshold.into() = 2
+		)
+			+ T::DepositBase::get() = 1 * 20 * 10_000_000_000 + 88 * 100 * 100_000 = 200880000000
+			+ T::DepositFactor::get() = 0 * 20 * 10_000_000_000 + 32 * 100 * 100_000 = 320000000
+			* BalanceOf::<T>::from(((data.len() + 31) / 32) as u32)
+
+		(200880000000 + 320000000 * 2) + 200880000000 + 320000000 * data
+		402400000000 + 320000000 * data
 	}
 
 	/// Attempt to decode and return the call, provided by the user or from storage.

@@ -26,7 +26,7 @@ use sp_std::prelude::Vec;
 
 use crate::{
 	mmr::{Node, NodeOf},
-	primitives::{self, NodeIndex},
+	primitives::{self, DataOrHash, NodeIndex},
 	Config, Nodes, NumberOfLeaves, Pallet,
 };
 
@@ -91,6 +91,10 @@ where
 			return Ok(())
 		}
 
+		sp_std::if_std! {
+			log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
+		}
+
 		let leaves = crate::NumberOfLeaves::<T, I>::get();
 		let size = crate::mmr::utils::NodesUtils::new(leaves).size();
 
@@ -98,9 +102,6 @@ where
 			return Err(mmr_lib::Error::InconsistentStore)
 		}
 
-		let diff = |a: &[NodeIndex], b: &[NodeIndex]| -> Vec<NodeIndex> {
-			b.iter().filter(|x| !a.contains(x)).cloned().collect()
-		};
 		let elems = elems
 			.into_iter()
 			.enumerate()
@@ -123,30 +124,85 @@ where
 
 		let peaks_before = if size == 0 { vec![] } else { helper::get_peaks(size) };
 		let peaks_after = helper::get_peaks(size + elems.len() as NodeIndex);
-		let nodes_to_prune = diff(&peaks_after, &peaks_before);
-		let peaks_to_store = diff(&peaks_before, &peaks_after);
 
 		sp_std::if_std! {
-			log::trace!("elems: {:?}\n", elems);
 			log::trace!("peaks_before: {:?}", peaks_before);
 			log::trace!("peaks_after: {:?}", peaks_after);
-			log::trace!("nodes_to_prune: {:?}", nodes_to_prune);
-			log::trace!("peaks_to_store: {:?}\n", peaks_to_store);
 		}
+
+		let store = |mut peaks_to_store: Vec<_>, elems: Vec<(_, DataOrHash<_, _>)>| {
+			let mut peak_to_store =
+				peaks_to_store.pop().expect("`peaks_to_store` can not be empty; qed");
+
+			for (pos, elem) in elems.into_iter().rev() {
+				if pos == peak_to_store {
+					<Nodes<T, I>>::insert(peak_to_store, elem.hash());
+
+					if let Some(next_peak_to_store) = peaks_to_store.pop() {
+						peak_to_store = next_peak_to_store;
+					} else {
+						// No more peaks to store.
+						break
+					}
+				}
+			}
+		};
+
+		if peaks_before.is_empty() {
+			store(peaks_after, elems);
+
+			return Ok(())
+		}
+
+		let mut pivot = None;
+
+		// `peaks_before` and `peaks_after` have a same prefix.
+		for i in 0.. {
+			if let Some(peak_before) = peaks_before.get(i) {
+				if let Some(peak_after) = peaks_after.get(i) {
+					if peak_before == peak_after {
+						pivot = Some(i);
+					} else {
+						break
+					}
+				} else {
+					break
+				}
+			} else {
+				break
+			}
+		}
+
+		sp_std::if_std! {
+			log::trace!("pivot: {:?}", pivot);
+		}
+
+		let mut nodes_to_prune = Vec::new();
+		let mut peaks_to_store = Vec::new();
+
+		if let Some(pivot) = pivot {
+			let pivot = pivot + 1;
+
+			if pivot < peaks_before.len() {
+				nodes_to_prune.extend_from_slice(&peaks_before[pivot..]);
+			}
+			if pivot < peaks_after.len() {
+				peaks_to_store.extend_from_slice(&peaks_after[pivot..]);
+			}
+		} else {
+			nodes_to_prune = peaks_before;
+			peaks_to_store = peaks_after;
+		};
+
+		sp_std::if_std! {
+			log::trace!("nodes_to_prune: {:?}", nodes_to_prune);
+			log::trace!("peaks_to_store: {:?}", peaks_to_store);
+		}
+
+		store(peaks_to_store, elems);
 
 		for pos in nodes_to_prune {
 			<Nodes<T, I>>::remove(pos);
-		}
-		for pos in peaks_to_store {
-			if let Some((_, elem)) = elems.iter().find(|(pos_, _)| *pos_ == pos) {
-				<Nodes<T, I>>::insert(pos, elem.hash());
-
-				sp_std::if_std! {
-					log::trace!("position: {}, elem: {:?}", pos, elem);
-				}
-			} else {
-				log::error!("The different must existed in `elems`; qed");
-			}
 		}
 
 		Ok(())
