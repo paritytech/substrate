@@ -87,6 +87,10 @@ where
 	}
 
 	fn append(&mut self, pos: NodeIndex, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
+		if elems.is_empty() {
+			return Ok(())
+		}
+
 		let leaves = crate::NumberOfLeaves::<T, I>::get();
 		let size = crate::mmr::utils::NodesUtils::new(leaves).size();
 
