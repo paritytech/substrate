@@ -50,7 +50,7 @@ use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
 const API_BENCHMARK_BATCHES: u32 = 20;
 
 /// How many batches we do per Instruction benchmark.
-const INSTR_BENCHMARK_BATCHES: u32 = 1;
+const INSTR_BENCHMARK_BATCHES: u32 = 50;
 
 /// An instantiated and deployed contract.
 struct Contract<T: Config> {
@@ -444,11 +444,8 @@ benchmarks! {
 
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// We cannot call seal_input multiple times. Therefore our weight determination is not
-	// as precise as with other APIs. Because this function can only be called once per
-	// contract it cannot be used for Dos.
 	seal_input {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -463,7 +460,7 @@ benchmarks! {
 					value: 0u32.to_le_bytes().to_vec(),
 				},
 			],
-			call_body: Some(body::repeated(r, &[
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(4), // ptr where to store output
 				Instruction::I32Const(0), // ptr to length
 				Instruction::Call(0),
@@ -492,11 +489,10 @@ benchmarks! {
 					value: buffer_size.to_le_bytes().to_vec(),
 				},
 			],
-			call_body: Some(body::plain(vec![
+			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(4), // ptr where to store output
 				Instruction::I32Const(0), // ptr to length
 				Instruction::Call(0),
-				Instruction::End,
 			])),
 			.. Default::default()
 		});
@@ -505,7 +501,9 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), data)
 
-	// The same argument as for `seal_input` is true here.
+	// We cannot call `seal_return` multiple times. Therefore our weight determination is not
+	// as precise as with other APIs. Because this function can only be called once per
+	// contract it cannot be used as an attack vector.
 	seal_return {
 		let r in 0 .. 1;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -551,7 +549,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// The same argument as for `seal_input` is true here.
+	// The same argument as for `seal_return` is true here.
 	seal_terminate {
 		let r in 0 .. 1;
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
@@ -1509,6 +1507,7 @@ benchmarks! {
 	}
 
 	// w_br = w_bench - 2 * w_param
+	// Block instructions are not counted.
 	instr_br {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -1533,9 +1532,8 @@ benchmarks! {
 		sbox.invoke();
 	}
 
-	// w_br_if = w_bench - 5 * w_param
-	// The two additional pushes + drop are only executed 50% of the time.
-	// Making it: 3 * w_param + (50% * 4 * w_param)
+	// w_br_if = w_bench - 3 * w_param
+	// Block instructions are not counted.
 	instr_br_if {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -1543,7 +1541,7 @@ benchmarks! {
 				Regular(Instruction::Block(BlockType::NoResult)),
 				Regular(Instruction::Block(BlockType::NoResult)),
 				Regular(Instruction::Block(BlockType::NoResult)),
-				RandomI32(0, 2),
+				Regular(Instruction::I32Const(1)),
 				Regular(Instruction::BrIf(1)),
 				RandomI64Repeated(1),
 				Regular(Instruction::Drop),
@@ -1562,11 +1560,11 @@ benchmarks! {
 	}
 
 	// w_br_table = w_bench - 3 * w_param
-	// 1 * w_param + 0.5 * 2 * w_param + 0.25 * 4 * w_param
+	// Block instructions are not counted.
 	instr_br_table {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let table = Box::new(BrTableData {
-			table: Box::new([0, 1, 2]),
+			table: Box::new([1, 1, 1]),
 			default: 1,
 		});
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
