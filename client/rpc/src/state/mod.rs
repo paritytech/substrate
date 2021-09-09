@@ -94,13 +94,6 @@ where
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
-	/// Returns storage entries for multiple keys at a specific block's state.
-	fn storage_entries(
-		&self,
-		block: Option<Block::Hash>,
-		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<Option<StorageData>>>;
-
 	/// Returns the hash of a storage entry at a block's state.
 	fn storage_hash(
 		&self,
