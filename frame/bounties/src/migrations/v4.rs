@@ -139,34 +139,6 @@ pub fn pre_migration<T: pallet_bounties::Config, P: GetStorageVersion + 'static,
 		new_pallet_name,
 	);
 
-	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	let old_bounties_count_key =
-		[&old_pallet_prefix, &twox_128(storage_prefix_bounties_count)[..]].concat();
-
-	let old_bounties_key = [&old_pallet_prefix, &twox_128(storage_prefix_bounties)[..]].concat();
-	let old_bounties_description_key =
-		[&old_pallet_prefix, &twox_128(storage_prefix_bounties_description)[..]].concat();
-	let old_bounties_approvals_key =
-		[&old_pallet_prefix, &twox_128(storage_prefix_bounties_approvals)[..]].concat();
-	/*
-	assert!(storage::next_key(&old_bounties_count_key)
-		.map_or(true, |next_key| next_key.starts_with(&old_bounties_key) ||
-			next_key.starts_with(&old_bounties_description_key) ||
-			next_key.starts_with(&old_bounties_approvals_key)));
-	assert!(storage::next_key(&old_bounties_key)
-		.map_or(true, |next_key| next_key.starts_with(&old_bounties_count_key) ||
-			next_key.starts_with(&old_bounties_description_key) ||
-			next_key.starts_with(&old_bounties_approvals_key)));
-	assert!(storage::next_key(&old_bounties_description_key)
-		.map_or(true, |next_key| next_key.starts_with(&old_bounties_count_key) ||
-			next_key.starts_with(&old_bounties_key) ||
-			next_key.starts_with(&old_bounties_approvals_key)));
-	assert!(storage::next_key(&old_bounties_approvals_key)
-		.map_or(true, |next_key| next_key.starts_with(&old_bounties_key) ||
-			next_key.starts_with(&old_bounties_description_key) ||
-			next_key.starts_with(&old_bounties_count_key)));
-			*/
-
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 	let storage_version_key =
 		[&new_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
@@ -176,10 +148,14 @@ pub fn pre_migration<T: pallet_bounties::Config, P: GetStorageVersion + 'static,
 		storage::next_key(&new_pallet_prefix).map_or(
 			// either nothing is there
 			true,
-			// or we ensure that it has no common prefix with twox_128(new),
+			// or we ensure that the next key has no common prefix with twox_128(new),
 			// or isn't the pallet version that is already stored using the pallet name
 			|next_key| {
-				!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
+				storage::next_key(&next_key).map_or(
+					true,
+					|next_key|
+						!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
+				)
 			},
 		),
 		"unexpected next_key({}) = {:?}",
@@ -249,16 +225,6 @@ pub fn post_migration<T: pallet_bounties::Config, P: GetStorageVersion, N: AsRef
 		[&new_pallet_prefix, &twox_128(storage_prefix_bounties_description)[..]].concat();
 	let new_bounties_approvals_key =
 		[&new_pallet_prefix, &twox_128(storage_prefix_bounties_approvals)[..]].concat();
-	/*
-		assert!(storage::next_key(&new_bounties_count_key)
-			.map_or(true, |next_key| next_key.starts_with(&new_bounties_count_key)));
-		assert!(storage::next_key(&new_bounties_key)
-			.map_or(true, |next_key| next_key.starts_with(&new_bounties_key)));
-		assert!(storage::next_key(&new_bounties_description_key)
-			.map_or(true, |next_key| next_key.starts_with(&new_bounties_description_key)));
-		assert!(storage::next_key(&new_bounties_approvals_key)
-			.map_or(true, |next_key| next_key.starts_with(&new_bounties_approvals_key)));
-	*/
 
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }

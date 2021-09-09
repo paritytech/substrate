@@ -31,7 +31,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	Perbill, Storage,
 };
 
@@ -940,7 +940,7 @@ fn extend_expiry() {
 fn test_migration_v4() {
 	let mut s = Storage::default();
 
-	let index: u32 = 0;
+	let index: u32 = 10;
 
 	let bounty = Bounty::<u128, u64, u64> {
 		proposer: 0,
@@ -952,8 +952,10 @@ fn test_migration_v4() {
 	};
 
 	let data = vec![
+		(pallet_bounties::BountyCount::<Test>::hashed_key().to_vec(), 10.encode().to_vec()),
 		(pallet_bounties::Bounties::<Test>::hashed_key_for(index), bounty.encode().to_vec()),
 		(pallet_bounties::BountyDescriptions::<Test>::hashed_key_for(index), vec![0, 0]),
+		(pallet_bounties::BountyApprovals::<Test>::hashed_key().to_vec(), vec![10 as u32].encode().to_vec())
 	];
 
 	s.top = data.into_iter().collect();
