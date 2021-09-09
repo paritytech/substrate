@@ -234,6 +234,7 @@ use frame_support::{
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
+	pallet_prelude::BoundedVec,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_arithmetic::{
@@ -469,6 +470,23 @@ pub struct RoundSnapshot<A> {
 	pub targets: Vec<A>,
 }
 
+// type RoundSnapshotVoters<T: Config, A> = BoundedVec<(A, VoteWeight, Vec<A>),
+// T::VoterSnapshotPerBlock>; type RoundSnapshotTargets<T: Config, A> = BoundedVec<A,
+// T::TargetSnapshotPerBlock>; A snapshot of all the data that is needed for en entire round. They
+// are provided by
+/// [`ElectionDataProvider`] and are kept around until the round is finished.
+///
+/// These are stored together because they are often accessed together.
+// #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+// #[derive(Encode, Decode, Default)]
+// pub struct RoundSnapshot<A> {
+// 	/// All of the voters.
+// 	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+// 	// pub voters: BoundedVec<(A, VoteWeight, Vec<A>), T::VoterSnapshotPerBlock>,
+// 	/// All of the targets.
+// 	pub targets: Vec<A>,
+// }
+
 /// Encodes the length of a solution or a snapshot.
 ///
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
@@ -645,7 +663,7 @@ pub mod pallet {
 		/// Also, note the data type: If the voters are represented by a `u32` in `type
 		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
 		#[pallet::constant]
-		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+		type VoterSnapshotPerBlock: Get<u32>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -688,6 +706,15 @@ pub mod pallet {
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The number of pages.
+		///
+		/// The snapshot is created with this many keys in the storage map.
+		///
+		/// The solutions may contain at MOST this many pages, but less pages are acceptable as
+		/// well.
+		#[pallet::constant]
+		type Pages: Get<PageIndex>;
 	}
 
 	#[pallet::hooks]
@@ -1279,7 +1306,8 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
 		targets: Vec<T::AccountId>,
-		voters: Vec<crate::unsigned::Voter<T>>,
+		// voters: Vec<crate::unsigned::Voter<T>>,
+		voters: BoundedVec<crate::unsigned::Voter<T>, T::VoterSnapshotPerBlock>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1292,7 +1320,7 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot { voters, targets };
+		let snapshot = RoundSnapshot { voters: voters.to_vec(), targets };
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1309,8 +1337,10 @@ impl<T: Config> Pallet<T> {
 	/// Parts of [`create_snapshot`] that happen outside of this pallet.
 	///
 	/// Extracted for easier weight calculation.
-	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError> {
+	fn create_snapshot_external() -> Result<
+		(Vec<T::AccountId>, BoundedVec<crate::unsigned::Voter<T>, T::VoterSnapshotPerBlock>, u32),
+		ElectionError,
+	> {
 		// we don't impose any limits on the targets for now, the assumption is that
 		// `T::DataProvider` will sensibly return small values to use.
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
@@ -1319,8 +1349,13 @@ impl<T: Config> Pallet<T> {
 
 		let targets =
 			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
-		let voters =
-			T::DataProvider::voters(Some(voter_limit), 0).map_err(ElectionError::DataProvider)?;
+		let voters: BoundedVec<_, _> = T::DataProvider::voters(Some(voter_limit), 0)
+			.map_err(ElectionError::DataProvider)?
+			.try_into()
+			.map_err(|_| {
+				debug_assert!(false, "Snapshot voter limit has not been respected.");
+				ElectionError::DataProvider("Snapshot too big for submission.")
+			})?;
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
@@ -1549,7 +1584,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type DataProvider = T::DataProvider;
 	type Pages = T::Pages;
 
-	fn elect(page: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect(_page: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.

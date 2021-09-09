@@ -213,7 +213,10 @@ mod pagify {
 	#[cfg(test)]
 	fn pagify_works() {
 		// is a noop when you have the same length
-		assert_eq!(vec![10, 11, 12].pagify(3).collect::<Vec<_>>(), vec![(0, &10), (1, &11), (2, &12)]);
+		assert_eq!(
+			vec![10, 11, 12].pagify(3).collect::<Vec<_>>(),
+			vec![(0, &10), (1, &11), (2, &12)]
+		);
 
 		// pads the values otherwise
 		assert_eq!(vec![10, 11].pagify(3).collect::<Vec<_>>(), vec![(1, &10), (2, &11)]);
