@@ -158,6 +158,9 @@ use sp_runtime::{
 };
 use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
 
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
+
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -179,10 +182,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaxEncodedLen;
+		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaybeSerializeDeserialize + MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -274,6 +277,45 @@ pub mod pallet {
 		GetDefault,
 		ConstU32<300_000>,
 	>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { assets: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for (id, owner, is_sufficient, min_balance) in &self.assets {
+				assert!(!Asset::<T, I>::contains_key(id), "Asset id already in use");
+				assert!(!min_balance.is_zero(), "Min balance should not be zero");
+				Asset::<T, I>::insert(
+					id,
+					AssetDetails {
+						owner: owner.clone(),
+						issuer: owner.clone(),
+						admin: owner.clone(),
+						freezer: owner.clone(),
+						supply: Zero::zero(),
+						deposit: Zero::zero(),
+						min_balance: *min_balance,
+						is_sufficient: *is_sufficient,
+						accounts: 0,
+						sufficients: 0,
+						approvals: 0,
+						is_frozen: false,
+					},
+				);
+			}
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

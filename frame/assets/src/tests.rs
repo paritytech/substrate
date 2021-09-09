@@ -784,3 +784,10 @@ fn balance_conversion_should_work() {
 		);
 	});
 }
+
+#[test]
+fn assets_from_genesis_should_exist() {
+	new_test_ext().execute_with(|| {
+		assert!(Asset::<Test>::contains_key(999));
+	});
+}
