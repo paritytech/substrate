@@ -642,7 +642,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The number of snapshot voters to fetch per block.
+		/// The number of snapshot voters to fetch per block. In practice this value is bounded by
+		///`SolutionVoterIndexOf::<T>::max_value().min(u32::MAX)`
 		///
 		/// In the future, this value will make more sense with multi-block snapshot.
 		///
@@ -651,7 +652,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type VoterSnapshotPerBlock: Get<u32>;
 
-		/// The number of snapshot voters to fetch per block.
+		/// The number of snapshot voters to fetch per block. In practice, this value is bounded by
+		/// `SolutionTargetIndexOf::<T>::max_value().min(u32::MAX)`
 		///
 		/// (see docs for [`Config::VoterSnapshotPerBlock`])
 		#[pallet::constant]
