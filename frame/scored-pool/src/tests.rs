@@ -20,7 +20,7 @@
 use super::*;
 use mock::*;
 
-use frame_support::{assert_ok, assert_noop, traits::OnInitialize};
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use sp_runtime::traits::BadOrigin;
 
 type ScoredPool = Pallet<Test>;
@@ -142,14 +142,12 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 
 		// when
 		// we remove every scored member
-		ScoredPool::pool()
-			.into_iter()
-			.for_each(|(who, score)| {
-				if let Some(_) = score {
-					let index = find_in_pool(who).expect("entity must be in pool") as u32;
-					assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index));
-				}
-			});
+		ScoredPool::pool().into_iter().for_each(|(who, score)| {
+			if let Some(_) = score {
+				let index = find_in_pool(who).expect("entity must be in pool") as u32;
+				assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index));
+			}
+		});
 
 		// then
 		// the `None` candidates should not have been filled in
@@ -201,7 +199,10 @@ fn withdraw_candidacy_must_only_work_for_members() {
 	new_test_ext().execute_with(|| {
 		let who = 77;
 		let index = 0;
-		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, _>::WrongAccountIndex);
+		assert_noop!(
+			ScoredPool::withdraw_candidacy(Origin::signed(who), index),
+			Error::<Test, _>::WrongAccountIndex
+		);
 	});
 }
 
@@ -210,9 +211,18 @@ fn oob_index_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let oob_index = ScoredPool::pool().len() as u32;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), Error::<Test, _>::InvalidIndex);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), Error::<Test, _>::InvalidIndex);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), Error::<Test, _>::InvalidIndex);
+		assert_noop!(
+			ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index),
+			Error::<Test, _>::InvalidIndex
+		);
+		assert_noop!(
+			ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99),
+			Error::<Test, _>::InvalidIndex
+		);
+		assert_noop!(
+			ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index),
+			Error::<Test, _>::InvalidIndex
+		);
 	});
 }
 
@@ -221,9 +231,18 @@ fn index_mismatches_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = 3;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), Error::<Test, _>::WrongAccountIndex);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), Error::<Test, _>::WrongAccountIndex);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), Error::<Test, _>::WrongAccountIndex);
+		assert_noop!(
+			ScoredPool::withdraw_candidacy(Origin::signed(who), index),
+			Error::<Test, _>::WrongAccountIndex
+		);
+		assert_noop!(
+			ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99),
+			Error::<Test, _>::WrongAccountIndex
+		);
+		assert_noop!(
+			ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index),
+			Error::<Test, _>::WrongAccountIndex
+		);
 	});
 }
 

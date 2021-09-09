@@ -129,12 +129,12 @@
 		},
 		{
 			"prefix": 13,
-			"network": "substratee",
-			"displayName": "SubstraTEE",
-			"symbols": null,
-			"decimals": null,
+			"network": "integritee",
+			"displayName": "Integritee",
+			"symbols": ["TEER"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://www.substratee.com"
+			"website": "https://integritee.network"
 		},
 		{
 			"prefix": 14,
@@ -486,6 +486,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://sora.org"
+    },
+    {
+      "prefix": 73,
+			"network": "zeitgeist",
+			"displayName": "Zeitgeist",
+			"symbols": ["ZTG"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://zeitgeist.pm"
 		},
 		{
 			"prefix": 77,
@@ -532,7 +541,7 @@
 			"standardAccount": "secp256k1",
 			"website": "https://origintrail.io"
 		},
-		{
+    {
 			"prefix": 110,
 			"network": "heiko",
 			"displayName": "Heiko",
@@ -540,7 +549,16 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://parallel.fi/"
-		},
+		},  
+		{
+			"prefix": 113,
+			"network": "integritee-incognito",
+			"displayName": "Integritee Incognito",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://integritee.network"
+    },
 		{
 			"prefix": 136,
 			"network": "altair",
@@ -574,7 +592,7 @@
 			"displayName": "Moonbeam",
 			"symbols": ["GLMR"],
 			"decimals": [18],
-			"standardAccount": "*25519",
+			"standardAccount": "secp256k1",
 			"website": "https://moonbeam.network"
 		},
 		{
@@ -583,7 +601,7 @@
 			"displayName": "Moonriver",
 			"symbols": ["MOVR"],
 			"decimals": [18],
-			"standardAccount": "*25519",
+			"standardAccount": "secp256k1",
 			"website": "https://moonbeam.network"
 		},
 		{

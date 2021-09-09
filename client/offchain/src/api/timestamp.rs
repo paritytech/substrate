@@ -19,8 +19,10 @@
 //! Helper methods dedicated to timestamps.
 
 use sp_core::offchain::Timestamp;
-use std::convert::TryInto;
-use std::time::{SystemTime, Duration};
+use std::{
+	convert::TryInto,
+	time::{Duration, SystemTime},
+};
 
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {
@@ -34,9 +36,12 @@ pub fn now() -> Timestamp {
 		Ok(d) => {
 			let duration = d.as_millis();
 			// Assuming overflow won't happen for a few hundred years.
-			Timestamp::from_unix_millis(duration.try_into()
-				.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"))
-		}
+			Timestamp::from_unix_millis(
+				duration
+					.try_into()
+					.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"),
+			)
+		},
 	}
 }
 
@@ -60,7 +65,6 @@ pub fn deadline_to_future(
 		// Only apply delay if we need to wait a non-zero duration
 		Some(duration) if duration <= Duration::from_secs(0) =>
 			Either::Right(Either::Left(future::ready(()))),
-		Some(duration) =>
-			Either::Right(Either::Right(futures_timer::Delay::new(duration))),
+		Some(duration) => Either::Right(Either::Right(futures_timer::Delay::new(duration))),
 	})
 }

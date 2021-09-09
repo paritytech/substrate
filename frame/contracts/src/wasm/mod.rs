@@ -24,19 +24,19 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use crate::{
-	CodeHash, Schedule, Config,
-	wasm::env_def::FunctionImplProvider,
-	exec::{Ext, Executable, ExportedFunction, ExecResult},
-	gas::GasMeter,
-};
-use sp_std::prelude::*;
-use sp_core::crypto::UncheckedFrom;
-use codec::{Encode, Decode};
-use frame_support::dispatch::DispatchError;
-pub use self::runtime::{ReturnCode, Runtime, RuntimeCosts};
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::reinstrument;
+pub use self::runtime::{ReturnCode, Runtime, RuntimeCosts};
+use crate::{
+	exec::{ExecResult, Executable, ExportedFunction, Ext},
+	gas::GasMeter,
+	wasm::env_def::FunctionImplProvider,
+	CodeHash, Config, Schedule,
+};
+use codec::{Decode, Encode};
+use frame_support::dispatch::DispatchError;
+use sp_core::crypto::UncheckedFrom;
+use sp_std::prelude::*;
 #[cfg(test)]
 pub use tests::MockExt;
 
@@ -61,7 +61,7 @@ pub struct PrefabWasmModule<T: Config> {
 	/// The maximum memory size of a contract's sandbox.
 	#[codec(compact)]
 	maximum: u32,
-	/// The number of alive contracts that use this as their contract code.
+	/// The number of contracts that use this as their contract code.
 	///
 	/// If this number drops to zero this module is removed from storage.
 	#[codec(compact)]
@@ -108,12 +108,12 @@ impl ExportedFunction {
 
 impl<T: Config> PrefabWasmModule<T>
 where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Create the module by checking and instrumenting `original_code`.
 	pub fn from_code(
 		original_code: Vec<u8>,
-		schedule: &Schedule<T>
+		schedule: &Schedule<T>,
 	) -> Result<Self, DispatchError> {
 		prepare::prepare_contract(original_code, schedule).map_err(Into::into)
 	}
@@ -127,7 +127,7 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
-		schedule: &Schedule<T>
+		schedule: &Schedule<T>,
 	) -> Result<(), DispatchError> {
 		let executable = prepare::benchmarking::prepare_contract(original_code, schedule)
 			.map_err::<DispatchError, _>(Into::into)?;
@@ -150,7 +150,7 @@ where
 
 impl<T: Config> Executable<T> for PrefabWasmModule<T>
 where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	fn from_storage(
 		code_hash: CodeHash<T>,
@@ -164,19 +164,14 @@ where
 		code_cache::load(code_hash, None)
 	}
 
-	fn drop_from_storage(self) {
-		code_cache::store_decremented(self);
-	}
-
-	fn add_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>)
-		-> Result<(), DispatchError>
-	{
+	fn add_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>) -> Result<(), DispatchError> {
 		code_cache::increment_refcount::<T>(code_hash, gas_meter)
 	}
 
-	fn remove_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>)
-		-> Result<(), DispatchError>
-	{
+	fn remove_user(
+		code_hash: CodeHash<T>,
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<(), DispatchError> {
 		code_cache::decrement_refcount::<T>(code_hash, gas_meter)
 	}
 
@@ -187,16 +182,15 @@ where
 		input_data: Vec<u8>,
 	) -> ExecResult {
 		let memory =
-			sp_sandbox::Memory::new(self.initial, Some(self.maximum))
-				.unwrap_or_else(|_| {
+			sp_sandbox::Memory::new(self.initial, Some(self.maximum)).unwrap_or_else(|_| {
 				// unlike `.expect`, explicit panic preserves the source location.
 				// Needed as we can't use `RUST_BACKTRACE` in here.
-					panic!(
-						"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
+				panic!(
+					"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
 						thus Memory::new must not fail;
 						qed"
-					)
-				});
+				)
+			});
 
 		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
@@ -204,11 +198,7 @@ where
 			imports.add_host_func(module, name, func_ptr);
 		});
 
-		let mut runtime = Runtime::new(
-			ext,
-			input_data,
-			memory,
-		);
+		let mut runtime = Runtime::new(ext, input_data, memory);
 
 		// We store before executing so that the code hash is available in the constructor.
 		let code = self.code.clone();
@@ -245,35 +235,25 @@ where
 mod tests {
 	use super::*;
 	use crate::{
-		CodeHash, BalanceOf, Error, Pallet as Contracts,
 		exec::{
-			Ext, StorageKey, AccountIdOf, Executable, SeedOf, BlockNumberOf,
-			RentParams, ExecError, ErrorOrigin,
+			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, SeedOf, StorageKey,
 		},
 		gas::GasMeter,
-		rent::RentStatus,
-		tests::{Test, Call, ALICE, BOB},
+		tests::{Call, Test, ALICE, BOB},
+		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
-	use std::collections::HashMap;
-	use sp_core::{Bytes, H256};
-	use hex_literal::hex;
-	use sp_runtime::DispatchError;
-	use frame_support::{assert_ok, dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
+	use frame_support::{
+		assert_ok,
+		dispatch::{DispatchResult, DispatchResultWithPostInfo},
+		weights::Weight,
+	};
+	use hex_literal::hex;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
-	use sp_std::borrow::BorrowMut;
-
-	#[derive(Debug, PartialEq, Eq)]
-	struct DispatchEntry(Call);
-
-	#[derive(Debug, PartialEq, Eq)]
-	struct RestoreEntry {
-		dest: AccountIdOf<Test>,
-		code_hash: H256,
-		rent_allowance: u64,
-		delta: Vec<StorageKey>,
-	}
+	use sp_core::{Bytes, H256};
+	use sp_runtime::DispatchError;
+	use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap};
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct InstantiateEntry {
@@ -305,16 +285,14 @@ mod tests {
 
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
-		rent_allowance: u64,
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
 		calls: Vec<CallEntry>,
 		transfers: Vec<TransferEntry>,
-		restores: Vec<RestoreEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
+		runtime_calls: RefCell<Vec<Call>>,
 		schedule: Schedule<Test>,
-		rent_params: RentParams<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 	}
@@ -328,15 +306,13 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				storage: Default::default(),
-				rent_allowance: Default::default(),
 				instantiates: Default::default(),
 				terminations: Default::default(),
 				calls: Default::default(),
 				transfers: Default::default(),
-				restores: Default::default(),
 				events: Default::default(),
+				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				rent_params: Default::default(),
 				gas_meter: GasMeter::new(10_000_000_000),
 				debug_buffer: Default::default(),
 			}
@@ -354,12 +330,7 @@ mod tests {
 			data: Vec<u8>,
 			allows_reentry: bool,
 		) -> Result<ExecReturnValue, ExecError> {
-			self.calls.push(CallEntry {
-				to,
-				value,
-				data,
-				allows_reentry,
-			});
+			self.calls.push(CallEntry { to, value, data, allows_reentry });
 			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
 		fn instantiate(
@@ -379,45 +350,15 @@ mod tests {
 			});
 			Ok((
 				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
-				ExecReturnValue {
-					flags: ReturnFlags::empty(),
-					data: Bytes(Vec::new()),
-				},
+				ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) },
 			))
 		}
-		fn transfer(
-			&mut self,
-			to: &AccountIdOf<Self::T>,
-			value: u64,
-		) -> Result<(), DispatchError> {
-			self.transfers.push(TransferEntry {
-				to: to.clone(),
-				value,
-			});
+		fn transfer(&mut self, to: &AccountIdOf<Self::T>, value: u64) -> Result<(), DispatchError> {
+			self.transfers.push(TransferEntry { to: to.clone(), value });
 			Ok(())
 		}
-		fn terminate(
-			&mut self,
-			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<(), DispatchError> {
-			self.terminations.push(TerminationEntry {
-				beneficiary: beneficiary.clone(),
-			});
-			Ok(())
-		}
-		fn restore_to(
-			&mut self,
-			dest: AccountIdOf<Self::T>,
-			code_hash: H256,
-			rent_allowance: u64,
-			delta: Vec<StorageKey>,
-		) -> Result<(), DispatchError> {
-			self.restores.push(RestoreEntry {
-				dest,
-				code_hash,
-				rent_allowance,
-				delta,
-			});
+		fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
+			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
 		fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
@@ -445,7 +386,7 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn tombstone_deposit(&self) -> u64 {
+		fn contract_deposit(&self) -> u64 {
 			16
 		}
 		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
@@ -454,25 +395,17 @@ mod tests {
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
 			self.events.push((topics, data))
 		}
-		fn set_rent_allowance(&mut self, rent_allowance: u64) {
-			self.rent_allowance = rent_allowance;
+		fn block_number(&self) -> u64 {
+			121
 		}
-		fn rent_allowance(&mut self) -> u64 {
-			self.rent_allowance
+		fn max_value_size(&self) -> u32 {
+			16_384
 		}
-		fn block_number(&self) -> u64 { 121 }
-		fn max_value_size(&self) -> u32 { 16_384 }
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
-		}
-		fn rent_params(&self) -> &RentParams<Self::T> {
-			&self.rent_params
-		}
-		fn rent_status(&mut self, _at_refcount: u32) -> RentStatus<Self::T> {
-			Default::default()
 		}
 		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
@@ -481,18 +414,17 @@ mod tests {
 			self.debug_buffer.extend(msg.as_bytes());
 			true
 		}
+		fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+			self.runtime_calls.borrow_mut().push(call);
+			Ok(Default::default())
+		}
 	}
 
-	fn execute<E: BorrowMut<MockExt>>(
-		wat: &str,
-		input_data: Vec<u8>,
-		mut ext: E,
-	) -> ExecResult
-	{
+	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let executable = PrefabWasmModule::<<MockExt as Ext>::T>::from_code(wasm, &schedule)
-			.unwrap();
+		let executable =
+			PrefabWasmModule::<<MockExt as Ext>::T>::from_code(wasm, &schedule).unwrap();
 		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
 	}
 
@@ -533,19 +465,9 @@ mod tests {
 	#[test]
 	fn contract_transfer() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(
-			CODE_TRANSFER,
-			vec![],
-			&mut mock_ext,
-		));
+		assert_ok!(execute(CODE_TRANSFER, vec![], &mut mock_ext));
 
-		assert_eq!(
-			&mock_ext.transfers,
-			&[TransferEntry {
-				to: ALICE,
-				value: 153,
-			}]
-		);
+		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: ALICE, value: 153 }]);
 	}
 
 	const CODE_CALL: &str = r#"
@@ -597,20 +519,11 @@ mod tests {
 	#[test]
 	fn contract_call() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(
-			CODE_CALL,
-			vec![],
-			&mut mock_ext,
-		));
+		assert_ok!(execute(CODE_CALL, vec![], &mut mock_ext));
 
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry {
-				to: ALICE,
-				value: 6,
-				data: vec![1, 2, 3, 4],
-				allows_reentry: true,
-			}]
+			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
 		);
 	}
 
@@ -665,12 +578,7 @@ mod tests {
 
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry {
-				to: ALICE,
-				value: 0x2a,
-				data: input,
-				allows_reentry: false,
-			}]
+			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: false }]
 		);
 	}
 
@@ -726,12 +634,7 @@ mod tests {
 		assert_eq!(result.data.0, input);
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry {
-				to: ALICE,
-				value: 0x2a,
-				data: input,
-				allows_reentry: true,
-			}]
+			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: true }]
 		);
 	}
 
@@ -779,12 +682,7 @@ mod tests {
 		assert_eq!(result.data, call_return_data());
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry {
-				to: ALICE,
-				value: 0x2a,
-				data: input,
-				allows_reentry: false,
-			}]
+			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: false }]
 		);
 	}
 
@@ -847,11 +745,7 @@ mod tests {
 	#[test]
 	fn contract_instantiate() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(
-			CODE_INSTANTIATE,
-			vec![],
-			&mut mock_ext,
-		));
+		assert_ok!(execute(CODE_INSTANTIATE, vec![], &mut mock_ext));
 
 		assert_matches!(
 			&mock_ext.instantiates[..],
@@ -895,18 +789,9 @@ mod tests {
 	#[test]
 	fn contract_terminate() {
 		let mut mock_ext = MockExt::default();
-		execute(
-			CODE_TERMINATE,
-			vec![],
-			&mut mock_ext,
-		).unwrap();
+		execute(CODE_TERMINATE, vec![], &mut mock_ext).unwrap();
 
-		assert_eq!(
-			&mock_ext.terminations,
-			&[TerminationEntry {
-				beneficiary: ALICE,
-			}]
-		);
+		assert_eq!(&mock_ext.terminations, &[TerminationEntry { beneficiary: ALICE }]);
 	}
 
 	const CODE_TRANSFER_LIMITED_GAS: &str = r#"
@@ -957,20 +842,11 @@ mod tests {
 	#[test]
 	fn contract_call_limited_gas() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(
-			&CODE_TRANSFER_LIMITED_GAS,
-			vec![],
-			&mut mock_ext,
-		));
+		assert_ok!(execute(&CODE_TRANSFER_LIMITED_GAS, vec![], &mut mock_ext));
 
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry {
-				to: ALICE,
-				value: 6,
-				data: vec![1, 2, 3, 4],
-				allows_reentry: true,
-			}]
+			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
 		);
 	}
 
@@ -1041,20 +917,14 @@ mod tests {
 	#[test]
 	fn get_storage_puts_data_into_buf() {
 		let mut mock_ext = MockExt::default();
-		mock_ext
-			.storage
-			.insert([0x11; 32], [0x22; 32].to_vec());
+		mock_ext.storage.insert([0x11; 32], [0x22; 32].to_vec());
 
-		let output = execute(
-			CODE_GET_STORAGE,
-			vec![],
-			mock_ext,
-		).unwrap();
+		let output = execute(CODE_GET_STORAGE, vec![], mock_ext).unwrap();
 
-		assert_eq!(output, ExecReturnValue {
-			flags: ReturnFlags::empty(),
-			data: Bytes([0x22; 32].to_vec())
-		});
+		assert_eq!(
+			output,
+			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes([0x22; 32].to_vec()) }
+		);
 	}
 
 	/// calls `seal_caller` and compares the result with the constant 42.
@@ -1102,11 +972,7 @@ mod tests {
 
 	#[test]
 	fn caller() {
-		assert_ok!(execute(
-			CODE_CALLER,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
 	}
 
 	/// calls `seal_address` and compares the result with the constant 69.
@@ -1154,11 +1020,7 @@ mod tests {
 
 	#[test]
 	fn address() {
-		assert_ok!(execute(
-			CODE_ADDRESS,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_ADDRESS, vec![], MockExt::default()));
 	}
 
 	const CODE_BALANCE: &str = r#"
@@ -1204,11 +1066,7 @@ mod tests {
 
 	#[test]
 	fn balance() {
-		assert_ok!(execute(
-			CODE_BALANCE,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_BALANCE, vec![], MockExt::default()));
 	}
 
 	const CODE_GAS_PRICE: &str = r#"
@@ -1254,11 +1112,7 @@ mod tests {
 
 	#[test]
 	fn gas_price() {
-		assert_ok!(execute(
-			CODE_GAS_PRICE,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_GAS_PRICE, vec![], MockExt::default()));
 	}
 
 	const CODE_GAS_LEFT: &str = r#"
@@ -1305,11 +1159,7 @@ mod tests {
 		let mut ext = MockExt::default();
 		let gas_limit = ext.gas_meter.gas_left();
 
-		let output = execute(
-			CODE_GAS_LEFT,
-			vec![],
-			&mut ext,
-		).unwrap();
+		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
 		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
@@ -1360,11 +1210,7 @@ mod tests {
 
 	#[test]
 	fn value_transferred() {
-		assert_ok!(execute(
-			CODE_VALUE_TRANSFERRED,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_VALUE_TRANSFERRED, vec![], MockExt::default()));
 	}
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
@@ -1393,18 +1239,11 @@ mod tests {
 
 	#[test]
 	fn return_from_start_fn() {
-		let output = execute(
-			CODE_RETURN_FROM_START_FN,
-			vec![],
-			MockExt::default(),
-		).unwrap();
+		let output = execute(CODE_RETURN_FROM_START_FN, vec![], MockExt::default()).unwrap();
 
 		assert_eq!(
 			output,
-			ExecReturnValue {
-				flags: ReturnFlags::empty(),
-				data: Bytes(vec![1, 2, 3, 4])
-			}
+			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(vec![1, 2, 3, 4]) }
 		);
 	}
 
@@ -1451,11 +1290,7 @@ mod tests {
 
 	#[test]
 	fn now() {
-		assert_ok!(execute(
-			CODE_TIMESTAMP_NOW,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_TIMESTAMP_NOW, vec![], MockExt::default()));
 	}
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
@@ -1500,16 +1335,12 @@ mod tests {
 
 	#[test]
 	fn minimum_balance() {
-		assert_ok!(execute(
-			CODE_MINIMUM_BALANCE,
-			vec![],
-			MockExt::default(),
-		));
+		assert_ok!(execute(CODE_MINIMUM_BALANCE, vec![], MockExt::default()));
 	}
 
-	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
+	const CODE_CONTRACT_DEPOSIT: &str = r#"
 (module
-	(import "seal0" "seal_tombstone_deposit" (func $seal_tombstone_deposit (param i32 i32)))
+	(import "seal0" "seal_contract_deposit" (func $seal_contract_deposit (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1525,7 +1356,7 @@ mod tests {
 	)
 
 	(func (export "call")
-		(call $seal_tombstone_deposit (i32.const 0) (i32.const 32))
+		(call $seal_contract_deposit (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1548,12 +1379,8 @@ mod tests {
 "#;
 
 	#[test]
-	fn tombstone_deposit() {
-		assert_ok!(execute(
-			CODE_TOMBSTONE_DEPOSIT,
-			vec![],
-			MockExt::default(),
-		));
+	fn contract_deposit() {
+		assert_ok!(execute(CODE_CONTRACT_DEPOSIT, vec![], MockExt::default()));
 	}
 
 	const CODE_RANDOM: &str = r#"
@@ -1612,11 +1439,7 @@ mod tests {
 
 	#[test]
 	fn random() {
-		let output = execute(
-			CODE_RANDOM,
-			vec![],
-			MockExt::default(),
-		).unwrap();
+		let output = execute(CODE_RANDOM, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
@@ -1687,25 +1510,23 @@ mod tests {
 
 	#[test]
 	fn random_v1() {
-		let output = execute(
-			CODE_RANDOM_V1,
-			vec![],
-			MockExt::default(),
-		).unwrap();
+		let output = execute(CODE_RANDOM_V1, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes((
+				data: Bytes(
+					(
 						hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"),
 						42u64,
-					).encode()),
+					)
+						.encode()
+				),
 			},
 		);
 	}
-
 
 	const CODE_DEPOSIT_EVENT: &str = r#"
 (module
@@ -1733,16 +1554,15 @@ mod tests {
 	#[test]
 	fn deposit_event() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(
-			CODE_DEPOSIT_EVENT,
-			vec![],
-			&mut mock_ext,
-		));
+		assert_ok!(execute(CODE_DEPOSIT_EVENT, vec![], &mut mock_ext));
 
-		assert_eq!(mock_ext.events, vec![
-			(vec![H256::repeat_byte(0x33)],
-			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
-		]);
+		assert_eq!(
+			mock_ext.events,
+			vec![(
+				vec![H256::repeat_byte(0x33)],
+				vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00]
+			)]
+		);
 
 		assert!(mock_ext.gas_meter.gas_left() > 0);
 	}
@@ -1778,11 +1598,7 @@ mod tests {
 	#[test]
 	fn deposit_event_max_topics() {
 		assert_eq!(
-			execute(
-				CODE_DEPOSIT_EVENT_MAX_TOPICS,
-				vec![],
-				MockExt::default(),
-			),
+			execute(CODE_DEPOSIT_EVENT_MAX_TOPICS, vec![], MockExt::default(),),
 			Err(ExecError {
 				error: Error::<Test>::TooManyTopics.into(),
 				origin: ErrorOrigin::Caller,
@@ -1820,11 +1636,7 @@ mod tests {
 	#[test]
 	fn deposit_event_duplicates() {
 		assert_eq!(
-			execute(
-				CODE_DEPOSIT_EVENT_DUPLICATES,
-				vec![],
-				MockExt::default(),
-			),
+			execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], MockExt::default(),),
 			Err(ExecError {
 				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
@@ -1877,11 +1689,7 @@ mod tests {
 
 	#[test]
 	fn block_number() {
-		let _ = execute(
-			CODE_BLOCK_NUMBER,
-			vec![],
-			MockExt::default(),
-		).unwrap();
+		let _ = execute(CODE_BLOCK_NUMBER, vec![], MockExt::default()).unwrap();
 	}
 
 	const CODE_RETURN_WITH_DATA: &str = r#"
@@ -1922,27 +1730,32 @@ mod tests {
 			CODE_RETURN_WITH_DATA,
 			hex!("00000000445566778899").to_vec(),
 			MockExt::default(),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(output, ExecReturnValue {
-			flags: ReturnFlags::empty(),
-			data: Bytes(hex!("445566778899").to_vec()),
-		});
+		assert_eq!(
+			output,
+			ExecReturnValue {
+				flags: ReturnFlags::empty(),
+				data: Bytes(hex!("445566778899").to_vec()),
+			}
+		);
 		assert!(output.is_success());
 	}
 
 	#[test]
 	fn return_with_revert_status() {
-		let output = execute(
-			CODE_RETURN_WITH_DATA,
-			hex!("010000005566778899").to_vec(),
-			MockExt::default(),
-		).unwrap();
+		let output =
+			execute(CODE_RETURN_WITH_DATA, hex!("010000005566778899").to_vec(), MockExt::default())
+				.unwrap();
 
-		assert_eq!(output, ExecReturnValue {
-			flags: ReturnFlags::REVERT,
-			data: Bytes(hex!("5566778899").to_vec()),
-		});
+		assert_eq!(
+			output,
+			ExecReturnValue {
+				flags: ReturnFlags::REVERT,
+				data: Bytes(hex!("5566778899").to_vec()),
+			}
+		);
 		assert!(!output.is_success());
 	}
 
@@ -1965,11 +1778,7 @@ mod tests {
 	#[test]
 	fn contract_out_of_bounds_access() {
 		let mut mock_ext = MockExt::default();
-		let result = execute(
-			CODE_OUT_OF_BOUNDS_ACCESS,
-			vec![],
-			&mut mock_ext,
-		);
+		let result = execute(CODE_OUT_OF_BOUNDS_ACCESS, vec![], &mut mock_ext);
 
 		assert_eq!(
 			result,
@@ -1999,107 +1808,17 @@ mod tests {
 	#[test]
 	fn contract_decode_length_ignored() {
 		let mut mock_ext = MockExt::default();
-		let result = execute(
-			CODE_DECODE_FAILURE,
-			vec![],
-			&mut mock_ext,
-		);
+		let result = execute(CODE_DECODE_FAILURE, vec![], &mut mock_ext);
 		// AccountID implements `MaxEncodeLen` and therefore the supplied length is
 		// no longer needed nor used to determine how much is read from contract memory.
 		assert_ok!(result);
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn rent_params_work() {
-		const CODE_RENT_PARAMS: &str = r#"
-(module
-	(import "__unstable__" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
-	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; [0, 4) buffer size = 128 bytes
-	(data (i32.const 0) "\80")
-
-	;; [4; inf) buffer where the result is copied
-
-	(func (export "call")
-		;; Load the rent params into memory
-		(call $seal_rent_params
-			(i32.const 4)		;; Pointer to the output buffer
-			(i32.const 0)		;; Pointer to the size of the buffer
-		)
-
-		;; Return the contents of the buffer
-		(call $seal_return
-			(i32.const 0)				;; return flags
-			(i32.const 4)				;; buffer pointer
-			(i32.load (i32.const 0))	;; buffer size
-		)
-	)
-
-	(func (export "deploy"))
-)
-"#;
-		let output = execute(
-			CODE_RENT_PARAMS,
-			vec![],
-			MockExt::default(),
-		).unwrap();
-		let rent_params = Bytes(<RentParams<Test>>::default().encode());
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
-	}
-
-
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn rent_status_works() {
-		const CODE_RENT_STATUS: &str = r#"
-(module
-	(import "__unstable__" "seal_rent_status" (func $seal_rent_status (param i32 i32 i32)))
-	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; [0, 4) buffer size = 128 bytes
-	(data (i32.const 0) "\80")
-
-	;; [4; inf) buffer where the result is copied
-
-	(func (export "call")
-		;; Load the rent params into memory
-		(call $seal_rent_status
-			(i32.const 1)		;; at_refcount
-			(i32.const 4)		;; Pointer to the output buffer
-			(i32.const 0)		;; Pointer to the size of the buffer
-		)
-
-		;; Return the contents of the buffer
-		(call $seal_return
-			(i32.const 0)				;; return flags
-			(i32.const 4)				;; buffer pointer
-			(i32.load (i32.const 0))	;; buffer size
-		)
-	)
-
-	(func (export "deploy"))
-)
-"#;
-		let output = execute(
-			CODE_RENT_STATUS,
-			vec![],
-			MockExt::default(),
-		).unwrap();
-		let rent_status = Bytes(<RentStatus<Test>>::default().encode());
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_status });
-	}
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn debug_message_works() {
 		const CODE_DEBUG_MESSAGE: &str = r#"
 (module
-	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 0) "Hello World!")
@@ -2116,21 +1835,16 @@ mod tests {
 )
 "#;
 		let mut ext = MockExt::default();
-		execute(
-			CODE_DEBUG_MESSAGE,
-			vec![],
-			&mut ext,
-		).unwrap();
+		execute(CODE_DEBUG_MESSAGE, vec![], &mut ext).unwrap();
 
 		assert_eq!(std::str::from_utf8(&ext.debug_buffer).unwrap(), "Hello World!");
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn debug_message_invalid_utf8_fails() {
 		const CODE_DEBUG_MESSAGE_FAIL: &str = r#"
 (module
-	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 0) "\fc")
@@ -2147,11 +1861,7 @@ mod tests {
 )
 "#;
 		let mut ext = MockExt::default();
-		let result = execute(
-			CODE_DEBUG_MESSAGE_FAIL,
-			vec![],
-			&mut ext,
-		);
+		let result = execute(CODE_DEBUG_MESSAGE_FAIL, vec![], &mut ext);
 		assert_eq!(
 			result,
 			Err(ExecError {
@@ -2159,5 +1869,68 @@ mod tests {
 				origin: ErrorOrigin::Caller,
 			})
 		);
+	}
+
+	#[cfg(feature = "unstable-interface")]
+	const CODE_CALL_RUNTIME: &str = r#"
+(module
+	(import "__unstable__" "seal_call_runtime" (func $seal_call_runtime (param i32 i32) (result i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; 0x1000 = 4k in little endian
+	;; size of input buffer
+	(data (i32.const 0) "\00\10")
+
+	(func (export "call")
+		;; Receive the encoded call
+		(call $seal_input
+			(i32.const 4)	;; Pointer to the input buffer
+			(i32.const 0)	;; Size of the length buffer
+		)
+		;; Just use the call passed as input and store result to memory
+		(i32.store (i32.const 0)
+			(call $seal_call_runtime
+				(i32.const 4)				;; Pointer where the call is stored
+				(i32.load (i32.const 0))	;; Size of the call
+			)
+		)
+		(call $seal_return
+			(i32.const 0)	;; flags
+			(i32.const 0)	;; returned value
+			(i32.const 4)	;; length of returned value
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn call_runtime_works() {
+		use std::convert::TryInto;
+		let call = Call::System(frame_system::Call::remark(b"Hello World".to_vec()));
+		let mut ext = MockExt::default();
+		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
+		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);
+		// 0 = ReturnCode::Success
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn call_runtime_panics_on_invalid_call() {
+		let mut ext = MockExt::default();
+		let result = execute(CODE_CALL_RUNTIME, vec![0x42], &mut ext);
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::DecodingFailed.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
+		assert_eq!(*ext.runtime_calls.borrow(), vec![]);
 	}
 }
