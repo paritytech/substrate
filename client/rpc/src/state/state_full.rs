@@ -371,9 +371,9 @@ where
 		};
 		let client = self.client.clone();
 		try_join_all(keys.into_iter().map(move |key| {
-			let client = client.clone();
+			let res = client.storage(&BlockId::Hash(block), &key).map_err(client_err);
 
-			async move { client.clone().storage(&BlockId::Hash(block), &key).map_err(client_err) }
+			async move { res }
 		}))
 		.boxed()
 	}
