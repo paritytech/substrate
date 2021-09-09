@@ -274,8 +274,8 @@ impl<T: Config> Pallet<T> {
 
 		seq_phragmen::<_, SolutionAccuracyOf<T>>(
 			desired_targets as usize,
-			targets,
-			voters,
+			targets.to_vec(),
+			voters.to_vec(),
 			Some((iters, 0)),
 		)
 		.map_err(Into::into)

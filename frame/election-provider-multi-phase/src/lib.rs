@@ -232,9 +232,9 @@ use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionPro
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
+	pallet_prelude::BoundedVec,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
-	pallet_prelude::BoundedVec,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_arithmetic::{
@@ -458,18 +458,6 @@ pub struct ReadySolution<A> {
 	pub compute: ElectionCompute,
 }
 
-/// A snapshot of all the data that is needed for en entire round. They are provided by
-/// [`ElectionDataProvider`] and are kept around until the round is finished.
-///
-/// These are stored together because they are often accessed together.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct RoundSnapshot<A> {
-	/// All of the voters.
-	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
-	/// All of the targets.
-	pub targets: Vec<A>,
-}
-
 // type RoundSnapshotVoters<T: Config, A> = BoundedVec<(A, VoteWeight, Vec<A>),
 // T::VoterSnapshotPerBlock>; type RoundSnapshotTargets<T: Config, A> = BoundedVec<A,
 // T::TargetSnapshotPerBlock>; A snapshot of all the data that is needed for en entire round. They
@@ -477,15 +465,13 @@ pub struct RoundSnapshot<A> {
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
 /// These are stored together because they are often accessed together.
-// #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-// #[derive(Encode, Decode, Default)]
-// pub struct RoundSnapshot<A> {
-// 	/// All of the voters.
-// 	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
-// 	// pub voters: BoundedVec<(A, VoteWeight, Vec<A>), T::VoterSnapshotPerBlock>,
-// 	/// All of the targets.
-// 	pub targets: Vec<A>,
-// }
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct RoundSnapshot<A, VoterBound: Get<u32>, TargetBound: Get<u32>> {
+	/// All of the voters.
+	pub voters: BoundedVec<(A, VoteWeight, Vec<A>), VoterBound>,
+	/// All of the targets.
+	pub targets: BoundedVec<A, TargetBound>,
+}
 
 /// Encodes the length of a solution or a snapshot.
 ///
@@ -664,6 +650,12 @@ pub mod pallet {
 		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
 		#[pallet::constant]
 		type VoterSnapshotPerBlock: Get<u32>;
+
+		/// The number of snapshot voters to fetch per block.
+		///
+		/// (see docs for [`Config::VoterSnapshotPerBlock`])
+		#[pallet::constant]
+		type TargetSnapshotPerBlock: Get<u32>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1182,7 +1174,10 @@ pub mod pallet {
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId>>;
+	pub type Snapshot<T: Config> = StorageValue<
+		_,
+		RoundSnapshot<T::AccountId, T::VoterSnapshotPerBlock, T::TargetSnapshotPerBlock>,
+	>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1305,8 +1300,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
-		targets: Vec<T::AccountId>,
-		// voters: Vec<crate::unsigned::Voter<T>>,
+		targets: BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>,
 		voters: BoundedVec<crate::unsigned::Voter<T>, T::VoterSnapshotPerBlock>,
 		desired_targets: u32,
 	) {
@@ -1320,7 +1314,7 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot { voters: voters.to_vec(), targets };
+		let snapshot = RoundSnapshot { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1338,7 +1332,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external() -> Result<
-		(Vec<T::AccountId>, BoundedVec<crate::unsigned::Voter<T>, T::VoterSnapshotPerBlock>, u32),
+		(
+			BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>,
+			BoundedVec<crate::unsigned::Voter<T>, T::VoterSnapshotPerBlock>,
+			u32,
+		),
 		ElectionError,
 	> {
 		// we don't impose any limits on the targets for now, the assumption is that
@@ -1347,14 +1345,19 @@ impl<T: Config> Pallet<T> {
 		// for now we have just a single block snapshot.
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
 
-		let targets =
-			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
+		let targets: BoundedVec<_, _> = T::DataProvider::targets(Some(target_limit), 0)
+			.map_err(ElectionError::DataProvider)?
+			.try_into()
+			.map_err(|_| {
+				debug_assert!(false, "Snapshot target limit has not been respected.");
+				ElectionError::DataProvider("Snapshot targets too big for submission.")
+			})?;
 		let voters: BoundedVec<_, _> = T::DataProvider::voters(Some(voter_limit), 0)
 			.map_err(ElectionError::DataProvider)?
 			.try_into()
 			.map_err(|_| {
 				debug_assert!(false, "Snapshot voter limit has not been respected.");
-				ElectionError::DataProvider("Snapshot too big for submission.")
+				ElectionError::DataProvider("Snapshot voters too big for submission.")
 			})?;
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;

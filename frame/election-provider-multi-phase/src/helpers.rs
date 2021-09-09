@@ -35,7 +35,9 @@ macro_rules! log {
 /// Generate a btree-map cache of the voters and their indices.
 ///
 /// This can be used to efficiently build index getter closures.
-pub fn generate_voter_cache<T: Config>(snapshot: &Vec<crate::unsigned::Voter<T>>) -> BTreeMap<T::AccountId, usize> {
+pub fn generate_voter_cache<T: Config>(
+	snapshot: &Vec<crate::unsigned::Voter<T>>,
+) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
 		let _existed = cache.insert(x.clone(), i);
