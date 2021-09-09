@@ -43,7 +43,6 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-#[cfg(not(target_os = "unknown"))]
 use tempfile::TempDir;
 
 /// Service configuration.
@@ -253,7 +252,6 @@ impl Default for RpcMethods {
 #[derive(Debug)]
 pub enum BasePath {
 	/// A temporary directory is used as base path and will be deleted when dropped.
-	#[cfg(not(target_os = "unknown"))]
 	Temporary(TempDir),
 	/// A path on the disk.
 	Permanenent(PathBuf),
@@ -265,7 +263,6 @@ impl BasePath {
 	///
 	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
 	/// instance is dropped.
-	#[cfg(not(target_os = "unknown"))]
 	pub fn new_temp_dir() -> io::Result<BasePath> {
 		Ok(BasePath::Temporary(tempfile::Builder::new().prefix("substrate").tempdir()?))
 	}
@@ -279,7 +276,6 @@ impl BasePath {
 	}
 
 	/// Create a base path from values describing the project.
-	#[cfg(not(target_os = "unknown"))]
 	pub fn from_project(qualifier: &str, organization: &str, application: &str) -> BasePath {
 		BasePath::new(
 			directories::ProjectDirs::from(qualifier, organization, application)
@@ -291,7 +287,6 @@ impl BasePath {
 	/// Retrieve the base path.
 	pub fn path(&self) -> &Path {
 		match self {
-			#[cfg(not(target_os = "unknown"))]
 			BasePath::Temporary(temp_dir) => temp_dir.path(),
 			BasePath::Permanenent(path) => path.as_path(),
 		}
