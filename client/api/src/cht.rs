@@ -32,8 +32,7 @@ use sp_trie;
 use sp_core::{convert_hash, H256};
 use sp_runtime::traits::{AtLeast32Bit, Header as HeaderT, One, Zero};
 use sp_state_machine::{
-	prove_read_on_trie_backend, read_proof_check,
-	read_proof_check_on_proving_backend_generic as read_proof_check_on_proving_backend,
+	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend,
 	Backend as StateBackend, InMemoryBackend, MemoryDB, StorageProof, TrieBackend,
 };
 
@@ -174,7 +173,7 @@ where
 		local_number,
 		remote_hash,
 		|_, local_cht_key| {
-			read_proof_check_on_proving_backend::<Hasher, _>(proving_backend, local_cht_key)
+			read_proof_check_on_proving_backend::<Hasher>(proving_backend, local_cht_key)
 				.map_err(ClientError::from_state)
 		},
 	)

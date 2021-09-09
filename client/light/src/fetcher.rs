@@ -169,7 +169,7 @@ impl<E, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, B, S> {
 		remote_roots_proof: StorageProof,
 	) -> ClientResult<()> {
 		// all the checks are sharing the same storage
-		let storage: sp_state_machine::MemoryDB<HashFor<B>> = remote_roots_proof.into_memory_db();
+		let storage = remote_roots_proof.into_memory_db();
 
 		// remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT

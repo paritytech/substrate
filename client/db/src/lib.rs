@@ -243,24 +243,24 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.storage_root(delta, state_hash)
+		self.state.storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.child_storage_root(child_info, delta, state_hash)
+		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -845,7 +845,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_new_state(
 		&mut self,
 		storage: Storage,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> ClientResult<Block::Hash> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::InvalidState.into())
@@ -867,7 +867,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				(&k[..], Some(&v[..]))
 			}),
 			child_delta,
-			state_hash,
+			state_version,
 		);
 
 		let changes_trie_config = match changes_trie_config {
@@ -922,36 +922,9 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> ClientResult<Block::Hash> {
-		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into())
-		}
-
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
-			(
-				&child_content.child_info,
-				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
-			)
-		});
-
-		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| {
-				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
-					changes_trie_config = Some(
-						Decode::decode(&mut &v[..])
-							.expect("changes trie configuration is encoded properly at genesis"),
-					);
-				}
-				(&k[..], Some(&v[..]))
-			}),
-			child_delta,
-			state_hash,
-		);
-
-		self.db_updates = transaction;
-		self.changes_trie_config_update = Some(changes_trie_config);
+		let root = self.apply_new_state(storage, state_version)?;
 		self.commit_state = true;
 		Ok(root)
 	}
@@ -960,9 +933,9 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		&mut self,
 		storage: Storage,
 		commit: bool,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> ClientResult<Block::Hash> {
-		let root = self.apply_new_state(storage, state_hash)?;
+		let root = self.apply_new_state(storage, state_version)?;
 		self.commit_state = commit;
 		Ok(root)
 	}
