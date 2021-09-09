@@ -296,7 +296,7 @@ fn construct_genesis_should_work_with_wasm() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from((storage, StateVersion::default())); // TODO state version from runtime code??
+	let backend = InMemoryBackend::from((storage, StateVersion::default()));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");

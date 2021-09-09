@@ -115,7 +115,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn from(
-		(inner, state_hashing): (
+		(inner, state_version): (
 			HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>,
 			StateVersion,
 		),
@@ -125,7 +125,7 @@ where
 			inner
 				.into_iter()
 				.map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
-			state_hashing,
+			state_version,
 		);
 		backend
 	}
@@ -135,14 +135,14 @@ impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inners, state_hashing): (Storage, StateVersion)) -> Self {
+	fn from((inners, state_version): (Storage, StateVersion)) -> Self {
 		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = inners
 			.children_default
 			.into_iter()
 			.map(|(_k, c)| (Some(c.child_info), c.data))
 			.collect();
 		inner.insert(None, inners.top);
-		(inner, state_hashing).into()
+		(inner, state_version).into()
 	}
 }
 
@@ -151,10 +151,10 @@ impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)>
 where
 	H::Out: Codec + Ord,
 {
-	fn from((inner, state_hashing): (BTreeMap<StorageKey, StorageValue>, StateVersion)) -> Self {
+	fn from((inner, state_version): (BTreeMap<StorageKey, StorageValue>, StateVersion)) -> Self {
 		let mut expanded = HashMap::new();
 		expanded.insert(None, inner);
-		(expanded, state_hashing).into()
+		(expanded, state_version).into()
 	}
 }
 
@@ -164,7 +164,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn from(
-		(inner, state_hashing): (Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion),
+		(inner, state_version): (Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion),
 	) -> Self {
 		let mut expanded: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
 			HashMap::new();
@@ -176,7 +176,7 @@ where
 				}
 			}
 		}
-		(expanded, state_hashing).into()
+		(expanded, state_version).into()
 	}
 }
 

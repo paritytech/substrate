@@ -547,7 +547,7 @@ impl OverlayedChanges {
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
-		state_threshold: StateVersion,
+		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
@@ -557,7 +557,7 @@ impl OverlayedChanges {
 			changes_trie_state,
 			parent_hash,
 			&mut cache,
-			state_threshold,
+			state_version,
 		)
 	}
 
@@ -568,14 +568,14 @@ impl OverlayedChanges {
 		#[cfg(feature = "std")] changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-		state_threshold: StateVersion,
+		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
-			self.storage_root(backend, &mut cache, state_threshold);
+			self.storage_root(backend, &mut cache, state_version);
 		}
 
 		let (transaction, transaction_storage_root) = cache
@@ -651,7 +651,7 @@ impl OverlayedChanges {
 		&self,
 		backend: &B,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-		threshold: sp_core::StateVersion,
+		state_version: sp_core::StateVersion,
 	) -> H::Out
 	where
 		H::Out: Ord + Encode,
@@ -661,7 +661,7 @@ impl OverlayedChanges {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
 		});
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta, threshold);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);
@@ -933,7 +933,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let state_hash = StateVersion::default();
+		let state_version = StateVersion::default();
 		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
@@ -942,7 +942,7 @@ mod tests {
 		]
 		.into_iter()
 		.collect();
-		let backend = InMemoryBackend::<Blake2Hasher>::from((initial, state_hash));
+		let backend = InMemoryBackend::<Blake2Hasher>::from((initial, state_version));
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_collect_extrinsics(false);
 
@@ -967,7 +967,7 @@ mod tests {
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root(state_hash)[..], &ROOT);
+		assert_eq!(&ext.storage_root(state_version)[..], &ROOT);
 	}
 
 	#[test]

@@ -522,7 +522,7 @@ where
 		StorageAppend::new(current_value).append(value);
 	}
 
-	fn storage_root(&mut self, threshold: StateVersion) -> Vec<u8> {
+	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			trace!(
@@ -537,7 +537,7 @@ where
 
 		let root =
 			self.overlay
-				.storage_root(self.backend, self.storage_transaction_cache, threshold);
+				.storage_root(self.backend, self.storage_transaction_cache, state_version);
 		trace!(
 			target: "state",
 			method = "StorageRoot",
@@ -548,7 +548,7 @@ where
 		root.encode()
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo, threshold: StateVersion) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_info: &ChildInfo, state_version: StateVersion) -> Vec<u8> {
 		let _guard = guard();
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
@@ -569,7 +569,7 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta, threshold))
+				Some(self.backend.child_storage_root(info, delta, state_version))
 			} else {
 				None
 			};
@@ -733,7 +733,7 @@ where
 
 	fn commit(&mut self) {
 		// Bench always use latest state.
-		let state_threshold = StateVersion::default();
+		let state_version = StateVersion::default();
 		for _ in 0..self.overlay.transaction_depth() {
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
@@ -745,7 +745,7 @@ where
 				None,
 				Default::default(),
 				self.storage_transaction_cache,
-				state_threshold,
+				state_version,
 			)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend

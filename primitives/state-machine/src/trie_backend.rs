@@ -339,8 +339,8 @@ pub mod tests {
 		read_from_storage_returns_some_inner(StateVersion::V0);
 		read_from_storage_returns_some_inner(StateVersion::V1);
 	}
-	fn read_from_storage_returns_some_inner(state_hash: StateVersion) {
-		assert_eq!(test_trie(state_hash).storage(b"key").unwrap(), Some(b"value".to_vec()));
+	fn read_from_storage_returns_some_inner(state_version: StateVersion) {
+		assert_eq!(test_trie(state_version).storage(b"key").unwrap(), Some(b"value".to_vec()));
 	}
 
 	#[test]
@@ -348,8 +348,8 @@ pub mod tests {
 		read_from_child_storage_returns_some_inner(StateVersion::V0);
 		read_from_child_storage_returns_some_inner(StateVersion::V1);
 	}
-	fn read_from_child_storage_returns_some_inner(state_hash: StateVersion) {
-		let test_trie = test_trie(state_hash);
+	fn read_from_child_storage_returns_some_inner(state_version: StateVersion) {
+		let test_trie = test_trie(state_version);
 		assert_eq!(
 			test_trie
 				.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3")
@@ -379,8 +379,8 @@ pub mod tests {
 		read_from_storage_returns_none_inner(StateVersion::V0);
 		read_from_storage_returns_none_inner(StateVersion::V1);
 	}
-	fn read_from_storage_returns_none_inner(state_hash: StateVersion) {
-		assert_eq!(test_trie(state_hash).storage(b"non-existing-key").unwrap(), None);
+	fn read_from_storage_returns_none_inner(state_version: StateVersion) {
+		assert_eq!(test_trie(state_version).storage(b"non-existing-key").unwrap(), None);
 	}
 
 	#[test]
@@ -388,8 +388,8 @@ pub mod tests {
 		pairs_are_not_empty_on_non_empty_storage_inner(StateVersion::V0);
 		pairs_are_not_empty_on_non_empty_storage_inner(StateVersion::V1);
 	}
-	fn pairs_are_not_empty_on_non_empty_storage_inner(state_hash: StateVersion) {
-		assert!(!test_trie(state_hash).pairs().is_empty());
+	fn pairs_are_not_empty_on_non_empty_storage_inner(state_version: StateVersion) {
+		assert!(!test_trie(state_version).pairs().is_empty());
 	}
 
 	#[test]
@@ -407,9 +407,9 @@ pub mod tests {
 		storage_root_is_non_default_inner(StateVersion::V0);
 		storage_root_is_non_default_inner(StateVersion::V1);
 	}
-	fn storage_root_is_non_default_inner(state_hash: StateVersion) {
+	fn storage_root_is_non_default_inner(state_version: StateVersion) {
 		assert!(
-			test_trie(state_hash).storage_root(iter::empty(), state_hash).0 != H256::repeat_byte(0)
+			test_trie(state_version).storage_root(iter::empty(), state_version).0 != H256::repeat_byte(0)
 		);
 	}
 
@@ -418,11 +418,11 @@ pub mod tests {
 		storage_root_transaction_is_non_empty_inner(StateVersion::V0);
 		storage_root_transaction_is_non_empty_inner(StateVersion::V1);
 	}
-	fn storage_root_transaction_is_non_empty_inner(state_hash: StateVersion) {
-		let (new_root, mut tx) = test_trie(state_hash)
-			.storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))), state_hash);
+	fn storage_root_transaction_is_non_empty_inner(state_version: StateVersion) {
+		let (new_root, mut tx) = test_trie(state_version)
+			.storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))), state_version);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie(state_hash).storage_root(iter::empty(), state_hash).0);
+		assert!(new_root != test_trie(state_version).storage_root(iter::empty(), state_version).0);
 	}
 
 	#[test]
@@ -430,8 +430,8 @@ pub mod tests {
 		prefix_walking_works_inner(StateVersion::V0);
 		prefix_walking_works_inner(StateVersion::V1);
 	}
-	fn prefix_walking_works_inner(state_hash: StateVersion) {
-		let trie = test_trie(state_hash);
+	fn prefix_walking_works_inner(state_version: StateVersion) {
+		let trie = test_trie(state_version);
 
 		let mut seen = HashSet::new();
 		trie.for_keys_with_prefix(b"value", |key| {

@@ -330,24 +330,24 @@ where
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		self.0.storage_root(delta, threshold)
+		self.0.storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
-		threshold: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		self.0.child_storage_root(child_info, delta, threshold)
+		self.0.child_storage_root(child_info, delta, state_version)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) {}
@@ -428,15 +428,15 @@ mod tests {
 		passes_through_backend_calls_inner(StateVersion::V0);
 		passes_through_backend_calls_inner(StateVersion::V1);
 	}
-	fn passes_through_backend_calls_inner(state_hash: StateVersion) {
-		let trie_backend = test_trie(state_hash);
+	fn passes_through_backend_calls_inner(state_version: StateVersion) {
+		let trie_backend = test_trie(state_version);
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), state_hash);
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), state_version);
 		let (proving_root, mut proving_mdb) =
-			proving_backend.storage_root(std::iter::empty(), state_hash);
+			proving_backend.storage_root(std::iter::empty(), state_version);
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
@@ -446,7 +446,7 @@ mod tests {
 		proof_recorded_and_checked_inner(StateVersion::V0);
 		proof_recorded_and_checked_inner(StateVersion::V1);
 	}
-	fn proof_recorded_and_checked_inner(state_hash: StateVersion) {
+	fn proof_recorded_and_checked_inner(state_version: StateVersion) {
 		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
 		let contents = value_range
@@ -454,14 +454,14 @@ mod tests {
 			.map(|i| (vec![i], Some(vec![i; size_content])))
 			.collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let in_memory = in_memory.update(vec![(None, contents)], state_hash);
-		let in_memory_root = in_memory.storage_root(std::iter::empty(), state_hash).0;
+		let in_memory = in_memory.update(vec![(None, contents)], state_version);
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), state_version).0;
 		value_range.clone().for_each(|i| {
 			assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content])
 		});
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), state_hash).0;
+		let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 		assert_eq!(in_memory_root, trie_root);
 		value_range
 			.clone()
@@ -482,7 +482,7 @@ mod tests {
 		proof_recorded_and_checked_with_child_inner(StateVersion::V0);
 		proof_recorded_and_checked_with_child_inner(StateVersion::V1);
 	}
-	fn proof_recorded_and_checked_with_child_inner(state_hash: StateVersion) {
+	fn proof_recorded_and_checked_with_child_inner(state_version: StateVersion) {
 		let child_info_1 = ChildInfo::new_default(b"sub1");
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;
@@ -492,14 +492,14 @@ mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		in_memory = in_memory.update(contents, state_hash);
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = in_memory.update(contents, state_version);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
 			.full_storage_root(
 				std::iter::empty(),
 				child_storage_keys.iter().map(|k| (k, std::iter::empty())),
-				state_hash,
+				state_version,
 			)
 			.0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -511,7 +511,7 @@ mod tests {
 		});
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), state_hash).0;
+		let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -542,8 +542,8 @@ mod tests {
 		storage_proof_encoded_size_estimation_works_inner(StateVersion::V0);
 		storage_proof_encoded_size_estimation_works_inner(StateVersion::V1);
 	}
-	fn storage_proof_encoded_size_estimation_works_inner(state_hash: StateVersion) {
-		let trie_backend = test_trie(state_hash);
+	fn storage_proof_encoded_size_estimation_works_inner(state_version: StateVersion) {
+		let trie_backend = test_trie(state_version);
 		let backend = test_proving(&trie_backend);
 
 		let check_estimation =

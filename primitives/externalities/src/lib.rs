@@ -157,7 +157,7 @@ pub trait Externalities: ExtensionStore {
 	/// This will also update all child storage keys in the top-level storage map.
 	///
 	/// The returned hash is defined by the `Block` and is SCALE encoded.
-	fn storage_root(&mut self, state_hashing: StateVersion) -> Vec<u8>;
+	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8>;
 
 	/// Get the trie root of a child storage map.
 	///
@@ -168,7 +168,7 @@ pub trait Externalities: ExtensionStore {
 	fn child_storage_root(
 		&mut self,
 		child_info: &ChildInfo,
-		state_hashing: StateVersion,
+		state_version: StateVersion,
 	) -> Vec<u8>;
 
 	/// Append storage item.

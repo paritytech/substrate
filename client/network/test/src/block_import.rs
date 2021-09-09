@@ -69,9 +69,8 @@ fn import_single_good_block_works() {
 	let mut expected_aux = ImportedAux::default();
 	expected_aux.is_new_best = true;
 
-	let mut client = substrate_test_runtime_client::new();
 	match block_on(import_single_block(
-		&mut client,
+		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier::new(true),

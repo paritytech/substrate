@@ -191,7 +191,7 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		Ok(<MemoryDB<H> as hash_db::HashDBRef<H, _>>::get(&self.data.read().mdb, key, prefix))
+		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
 

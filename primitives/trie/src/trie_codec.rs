@@ -204,9 +204,7 @@ where
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
-		// Layout does not change trie reading.
-		// And meta for writing are read from state
-		// (no new node so using trie without threshold is safe here).
+		// Layout does not change trie reading, so can use default here.
 		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
 
 		let mut iter = trie.iter()?;

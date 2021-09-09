@@ -127,14 +127,14 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage_append`: should not be used in async externalities!")
 	}
 
-	fn storage_root(&mut self, _state_hashing: StateVersion) -> Vec<u8> {
+	fn storage_root(&mut self, _state_version: StateVersion) -> Vec<u8> {
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
 
 	fn child_storage_root(
 		&mut self,
 		_child_info: &ChildInfo,
-		_state_hashing: StateVersion,
+		_state_version: StateVersion,
 	) -> Vec<u8> {
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
