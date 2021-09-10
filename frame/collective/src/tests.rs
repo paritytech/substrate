@@ -784,6 +784,8 @@ fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
 		// The voting threshold is 2, but the required votes for `ExternalMajorityOrigin` is 3.
 		// The proposal will be executed regardless of the voting threshold
 		// as long as we have enough yes votes.
+		//
+		// Failed to execute with only 2 yes votes.
 		assert_ok!(Collective::propose(
 			Origin::signed(1),
 			2,
@@ -792,12 +794,37 @@ fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
 		));
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
-		assert_ok!(Collective::vote(Origin::signed(3), hash, 0, true));
 		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 		assert_eq!(
 			System::events(),
 			vec![
 				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash, 2, 0))),
+				record(Event::Collective(RawEvent::Approved(hash))),
+				record(Event::Collective(RawEvent::Executed(hash, Err(DispatchError::BadOrigin)))),
+			]
+		);
+
+		System::reset_events();
+
+		// Execute with 3 yes votes.
+		assert_ok!(Collective::propose(
+			Origin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 1, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 1, true));
+		assert_ok!(Collective::vote(Origin::signed(3), hash, 1, true));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 1, proposal_weight, proposal_len));
+		assert_eq!(
+			System::events(),
+			vec![
+				record(Event::Collective(RawEvent::Proposed(1, 1, hash, 2))),
 				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
 				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
 				record(Event::Collective(RawEvent::Voted(3, hash, true, 3, 0))),
