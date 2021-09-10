@@ -1579,7 +1579,7 @@ mod tests {
 		let mut seed = [0; 16];
 		for i in 0..50u32 {
 			let mut child_infos = Vec::new();
-			&seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
+			seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
 			let mut rand = SmallRng::from_seed(seed);
 
 			let nb_child_trie = rand.next_u32() as usize % 25;
