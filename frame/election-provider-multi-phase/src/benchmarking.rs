@@ -279,7 +279,7 @@ frame_benchmarking::benchmarks! {
 		let raw_solution = solution_with_size::<T>(witness, a, d)?;
 		let ready_solution =
 			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed)
-				.map_err(|e| -> &'static str { e.into() } )?;
+				.map_err(<&str>::from)?;
 		<CurrentPhase<T>>::put(Phase::Signed);
 		// assume a queued solution is stored, regardless of where it comes from.
 		<QueuedSolution<T>>::put(ready_solution);
