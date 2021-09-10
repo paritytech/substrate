@@ -836,7 +836,8 @@ mod tests {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				let (raw, witness) = MultiPhase::mine_solution(2).unwrap();
+				let (raw, witness) =
+					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
 				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
 					witness.voters,
 					witness.targets,
