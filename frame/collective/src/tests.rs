@@ -3,12 +3,70 @@ use crate as collective;
 use frame_support::{assert_noop, assert_ok, parameter_types, Hashable};
 use frame_system::{self as system, EventRecord, Phase};
 use hex_literal::hex;
-use sp_core::H256;
+use sp_core::{u32_trait::{_3, _4}, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
+pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: system::{Pallet, Call, Event<T>},
+		Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+		CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+		DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+		Democracy: mock_democracy::{Pallet, Call, Event<T>},
+	}
+);
+
+mod mock_democracy {
+	pub use pallet::*;
+	#[frame_support::pallet]
+	pub mod pallet {
+		use frame_support::{
+			pallet_prelude::*,
+			traits::EnsureOrigin,
+		};
+		use frame_system::pallet_prelude::*;
+		use sp_runtime::DispatchResult;
+
+		#[pallet::pallet]
+		#[pallet::generate_store(pub(super) trait Store)]
+		pub struct Pallet<T>(_);
+
+		#[pallet::config]
+		pub trait Config: frame_system::Config + Sized {
+			type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+			type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
+		}
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {
+			#[pallet::weight(0)]
+			pub fn external_propose_majority(
+				origin: OriginFor<T>,
+			) -> DispatchResult {
+				T::ExternalMajorityOrigin::ensure_origin(origin)?;
+				Self::deposit_event(Event::<T>::ExternalProposed);
+				Ok(())
+			}
+		}
+
+		#[pallet::event]
+		#[pallet::generate_deposit(pub(super) fn deposit_event)]
+		pub enum Event<T: Config> {
+			ExternalProposed,
+		}
+	}
+}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -63,6 +121,10 @@ impl Config<Instance2> for Test {
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
 }
+impl mock_democracy::Config for Test {
+	type Event = Event;
+	type ExternalMajorityOrigin = EnsureProportionAtLeast<_3, _4, u64, Instance1>;
+}
 impl Config for Test {
 	type Origin = Origin;
 	type Proposal = Call;
@@ -73,22 +135,6 @@ impl Config for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 }
-
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
-
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: system::{Pallet, Call, Event<T>},
-		Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-	}
-);
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = GenesisConfig {
@@ -697,43 +743,17 @@ fn motions_vote_after_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(
-						1,
-						0,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						2,
-					)),
+					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 2)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(
-						1,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						true,
-						1,
-						0,
-					)),
+					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(
-						1,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						false,
-						0,
-						1,
-					)),
+					event: Event::Collective(RawEvent::Voted(1, hash, false, 0, 1)),
 					topics: vec![],
 				}
 			]
@@ -838,6 +858,80 @@ fn motions_reproposing_disapproved_works() {
 			proposal_len
 		));
 		assert_eq!(*Collective::proposals(), vec![hash]);
+	});
+}
+
+#[test]
+fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
+	new_test_ext().execute_with(|| {
+		let proposal = Call::Democracy(mock_democracy::Call::external_propose_majority());
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash: H256 = proposal.blake2_256().into();
+		// The voting threshold is 2, but the required votes for `ExternalMajorityOrigin` is 3.
+		// The proposal will be executed regardless of the voting threshold
+		// as long as we have enough yes votes.
+		assert_ok!(Collective::propose(
+			Origin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 0, true));
+		assert_ok!(Collective::close(
+			Origin::signed(2),
+			hash.clone(),
+			0,
+			proposal_weight,
+			proposal_len
+		));
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 2)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Voted(2, hash, true, 2, 0)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Voted(3, hash, true, 3, 0)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Closed(hash, 3, 0)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Approved(hash)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Executed(hash, Ok(()))),
+					topics: vec![],
+				}
+			]
+		);
 	});
 }
 
