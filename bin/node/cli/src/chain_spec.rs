@@ -361,6 +361,7 @@ pub fn testnet_genesis(
 			max_members: 999,
 		},
 		vesting: Default::default(),
+		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
 	}

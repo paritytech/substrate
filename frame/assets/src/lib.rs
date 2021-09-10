@@ -280,13 +280,22 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		/// Genesis assets: id, owner, is_sufficient, min_balance
 		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
+		/// Genesis metadata: id, name, symbol, decimals
+		pub metadata: Vec<(T::AssetId, Vec<u8>, Vec<u8>, u8)>,
+		/// Genesis accounts: id, account_id, balance
+		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { assets: Default::default() }
+			Self {
+				assets: Default::default(),
+				metadata: Default::default(),
+				accounts: Default::default(),
+			}
 		}
 	}
 
@@ -313,6 +322,36 @@ pub mod pallet {
 						is_frozen: false,
 					},
 				);
+			}
+
+			for (id, name, symbol, decimals) in &self.metadata {
+				assert!(Asset::<T, I>::contains_key(id), "Asset does not exist");
+
+				let bounded_name: BoundedVec<u8, T::StringLimit> =
+					name.clone().try_into().expect("string is too long");
+				let bounded_symbol: BoundedVec<u8, T::StringLimit> =
+					symbol.clone().try_into().expect("string is too long");
+
+				let metadata = AssetMetadata {
+					deposit: Zero::zero(),
+					name: bounded_name,
+					symbol: bounded_symbol,
+					decimals: *decimals,
+					is_frozen: false,
+				};
+				Metadata::<T, I>::insert(id, metadata);
+			}
+
+			for (id, account_id, amount) in &self.accounts {
+				let result = <Pallet<T, I>>::increase_balance(*id, account_id, *amount, |details| -> DispatchResult {
+					debug_assert!(
+						T::Balance::max_value() - details.supply >= *amount,
+						"checked in prep; qed"
+					);
+					details.supply = details.supply.saturating_add(*amount);
+					Ok(())
+				});
+				assert!(result.is_ok());
 			}
 		}
 	}

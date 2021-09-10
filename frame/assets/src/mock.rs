@@ -148,8 +148,16 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
     let config: pallet_assets::GenesisConfig<Test> = pallet_assets::GenesisConfig {
 		assets: vec![
-			// AssetId, AccountId, is_sufficient, min_balance
+			// id, owner, is_sufficient, min_balance
 			(999, 0, true, 1)
+		],
+		metadata: vec![
+			// id, name, symbol, decimals
+			(999, "Token Name".into(), "TOKEN".into(), 10)
+		],
+		accounts: vec![
+			// id, account_id, balance
+			(999, 1, 100)
 		]
     };
 
