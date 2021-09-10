@@ -619,10 +619,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Weight: see `begin_block`
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			Self::begin_block(n).unwrap_or_else(|e| {
-				sp_runtime::print(e);
-				0
-			})
+			Self::begin_block(n)
 		}
 	}
 
@@ -1688,7 +1685,7 @@ impl<T: Config> Pallet<T> {
 		now: T::BlockNumber,
 		index: ReferendumIndex,
 		status: ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>,
-	) -> Result<bool, DispatchError> {
+	) -> bool {
 		let total_issuance = T::Currency::total_issuance();
 		let approved = status.threshold.approved(status.tally, total_issuance);
 
@@ -1725,7 +1722,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::NotPassed(index));
 		}
 
-		Ok(approved)
+		approved
 	}
 
 	/// Current era is ending; we should finish up any proposals.
@@ -1739,7 +1736,7 @@ impl<T: Config> Pallet<T> {
 	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
 	/// # </weight>
-	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
+	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = 0;
 
@@ -1757,12 +1754,21 @@ impl<T: Config> Pallet<T> {
 		weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at_inner(now, next..last).into_iter() {
-			let approved = Self::bake_referendum(now, index, info)?;
+			let approved = Self::bake_referendum(now, index, info);
 			ReferendumInfoOf::<T>::insert(index, ReferendumInfo::Finished { end: now, approved });
 			weight = max_block_weight;
 		}
 
-		Ok(weight)
+		<LowestUnbaked<T>>::mutate(|ref_index| {
+			while *ref_index < last &&
+				Self::referendum_info(*ref_index)
+					.map_or(true, |info| matches!(info, ReferendumInfo::Finished { .. }))
+			{
+				*ref_index += 1
+			}
+		});
+
+		weight
 	}
 
 	/// Reads the length of account in DepositOf without getting the complete value in the runtime.
