@@ -132,7 +132,9 @@ fn asset_transfer_success() {
         let metadata = vec![];
         let amount = 100;
         let token_id = vec![1, 2, 3, 4];
+        let method = "Erc20.transfer".as_bytes().to_vec();
 
+        assert_ok!(Bridge::set_resource(Origin::root(), resource_id, method.clone()));
         assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
 
         assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_id.clone()));
