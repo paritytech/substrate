@@ -121,6 +121,25 @@ impl Memory {
 	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
 		self.inner.set(ptr, value)
 	}
+
+	pub fn setmem_from_key(&self, ptr: u32, db_key: &[u8]) -> Result<(), Error> {
+		let value = sp_io::storage::get(db_key).unwrap();
+		self.inner.set(ptr, &value)
+	}
+
+	pub fn memcpy_to_key(&self, ptr: u32, len: usize, db_key: &[u8]) -> Result<(), Error> {
+		let mut buf = Vec::with_capacity(len as usize);
+		self.get(ptr, &mut buf)?;
+		Ok(sp_io::storage::set(db_key, &buf))
+	}
+
+	pub fn grow(&self, pages: u32) -> Result<u32, Error> {
+		self.inner.grow(pages)
+	}
+
+	pub fn size(&self) -> u32 {
+		self.inner.size()
+	}
 }
 
 /// Struct that can be used for defining an environment for a sandboxed module.
