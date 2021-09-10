@@ -143,7 +143,7 @@ fn solution_with_size<T: Config>(
 
 	let solution =
 		<SolutionOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
-	let score = solution.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
+	let score = solution.clone().score(stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
 	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
