@@ -42,6 +42,9 @@ variables:                         &default-vars
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
+  VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
+  VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
 
 default:
   cache:                           {}
@@ -165,11 +168,70 @@ default:
     | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
 
+#### Vault secrets
+.vault-secrets:                    &vault-secrets
+  secrets:
+    DOCKER_HUB_USER:
+      vault:                       cicd/gitlab/parity/DOCKER_HUB_USER@kv
+      file:                        false
+    DOCKER_HUB_PASS:
+      vault:                       cicd/gitlab/parity/DOCKER_HUB_PASS@kv
+      file:                        false
+    GITHUB_PR_TOKEN:
+      vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
+      file:                        false
+    AWS_ACCESS_KEY_ID:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
+      file:                        false
+    AWS_SECRET_ACCESS_KEY:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_SECRET_ACCESS_KEY@kv
+      file:                        false
+    AWX_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWX_TOKEN@kv
+      file:                        false    
+    CRATES_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
+      file:                        false
+    DOCKER_CHAOS_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_TOKEN@kv
+      file:                        false   
+    DOCKER_CHAOS_USER:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_USER@kv
+      file:                        false
+    GITHUB_EMAIL:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_EMAIL@kv
+      file:                        false
+    GITHUB_RELEASE_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
+      file:                        false
+    GITHUB_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_TOKEN@kv
+      file:                        false
+    GITHUB_USER:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
+      file:                        false
+    MATRIX_ACCESS_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ACCESS_TOKEN@kv
+      file:                        false
+    MATRIX_ROOM_ID:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ROOM_ID@kv
+      file:                        false
+    PIPELINE_TOKEN:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/PIPELINE_TOKEN@kv
+      file:                        false
+    VALIDATOR_KEYS:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/VALIDATOR_KEYS@kv
+      file:                        false
+    VALIDATOR_KEYS_CHAOS:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/VALIDATOR_KEYS_CHAOS@kv
+      file:                        false
+
 #### stage:                       .pre
 
 skip-if-draft:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   stage:                           .pre
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
@@ -185,6 +247,7 @@ check-runtime:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   variables:
@@ -199,6 +262,7 @@ check-signed-tag:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -472,6 +536,7 @@ check-polkadot-companion-status:
   stage:                           build
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
@@ -481,6 +546,7 @@ check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
+  <<:                              *vault-secrets
   needs:
     - job:                         test-linux-stable-int
       artifacts:                   false
@@ -574,6 +640,7 @@ build-rustdoc:
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
@@ -586,7 +653,7 @@ build-rustdoc:
     - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
   script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
+    - test "$DOCKER_HUB_USER" -a "$DOCKER_HUB_PASS" ||
         ( echo "no docker credentials provided"; exit 1 )
     - buildah bud
         --format=docker
@@ -595,8 +662,8 @@ build-rustdoc:
         --tag "$IMAGE_NAME:$VERSION"
         --tag "$IMAGE_NAME:latest"
         --file "$DOCKERFILE" .
-    - echo "$Docker_Hub_Pass_Parity" |
-        buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
+    - echo "$DOCKER_HUB_USER" |
+        buildah login --username "$DOCKER_HUB_PASS" --password-stdin docker.io
     - buildah info
     - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
@@ -638,6 +705,7 @@ publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -659,6 +727,7 @@ publish-s3-release:
 publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   image:                           paritytech/tools:latest
   variables:
     GIT_DEPTH:                     100
@@ -702,6 +771,7 @@ publish-rustdoc:
 
 publish-draft-release:
   stage:                           publish
+  <<:                              *vault-secrets
   image:                           paritytech/tools:latest
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
@@ -713,6 +783,7 @@ publish-draft-release:
 unleash-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
+  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
@@ -754,6 +825,7 @@ simnet-tests:
   stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
+  <<:                              *vault-secrets
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
