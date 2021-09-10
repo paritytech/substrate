@@ -308,7 +308,7 @@ frame_benchmarking::benchmarks! {
 			..Default::default()
 		};
 
-		<MultiPhase<T>>::create_snapshot().map_err(|e| -> &'static str { e.into() } )?;
+		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
 		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
