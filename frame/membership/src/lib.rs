@@ -793,7 +793,6 @@ mod tests {
 	fn migration_v4() {
 		new_test_ext().execute_with(|| {
 			use frame_support::traits::PalletInfo;
-
 			let old_pallet_name =
 				<Test as frame_system::Config>::PalletInfo::name::<Membership>().unwrap();
 			let new_pallet_name = "NewMembership";
