@@ -20,5 +20,5 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 node-cli = { version = "3.0.0-dev", path = "../../node/cli" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
-rand = "0.7.2"
+rand = "0.8.4"
 structopt = "0.3.8"

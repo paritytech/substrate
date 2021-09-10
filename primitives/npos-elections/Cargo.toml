@@ -23,7 +23,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = fa
 
 [dev-dependencies]
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-rand = "0.7.3"
+rand = "0.8.4"
 
 [features]
 default = ["std"]

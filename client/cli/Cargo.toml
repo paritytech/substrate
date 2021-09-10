@@ -21,7 +21,7 @@ fdlimit = "0.2.1"
 libp2p = "0.39.1"
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"
-rand = "0.7.3"
+rand = "0.8.4"
 tiny-bip39 = "0.8.0"
 serde_json = "1.0.41"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }

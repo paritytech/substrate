@@ -32,7 +32,7 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-rand = { version = "0.7.3", default-features = false, optional = true, features = [
+rand = { version = "0.8.4", default-features = false, optional = true, features = [
 	"alloc",
 	"small_rng",
 ] }
@@ -41,7 +41,7 @@ strum_macros = { optional = true, version = "0.21.1" }
 
 [dev-dependencies]
 parking_lot = "0.11.0"
-rand = { version = "0.7.3" }
+rand = { version = "0.8.4" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }

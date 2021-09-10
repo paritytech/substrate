@@ -39,7 +39,7 @@ serde = { version = "1.0.126", features = ["derive"] }
 futures = "0.3.16"
 hex-literal = "0.3.1"
 log = "0.4.8"
-rand = "0.7.2"
+rand = "0.8.4"
 structopt = { version = "0.3.8", optional = true }
 
 # primitives

@@ -26,7 +26,7 @@ serde = { version = "1.0.126", optional = true, features = ["derive"] }
 sp-debug-derive = { version = "3.0.0", default-features = false, path = "../debug-derive" }
 
 [dev-dependencies]
-rand = "0.7.2"
+rand = "0.8.4"
 criterion = "0.3"
 primitive-types = "0.10.0"
 
