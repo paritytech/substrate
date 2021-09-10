@@ -34,6 +34,7 @@
 // --heap-pages=4096
 // --output=./frame/balances/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
+// --extra
 
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
@@ -46,11 +47,14 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_balances.
 pub trait WeightInfo {
 	fn transfer() -> Weight;
+	fn transfer_best_case() -> Weight;
 	fn transfer_keep_alive() -> Weight;
 	fn set_balance_creating() -> Weight;
 	fn set_balance_killing() -> Weight;
 	fn force_transfer() -> Weight;
+	fn transfer_increasing_users(u: u32, ) -> Weight;
 	fn transfer_all() -> Weight;
+	fn beam_asset() -> Weight;
 }
 
 /// Weights for pallet_balances using the Substrate node and recommended hardware.
@@ -58,37 +62,57 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Account (r:1 w:1)
 	fn transfer() -> Weight {
-		(72_901_000 as Weight)
+		(71_549_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
+	fn transfer_best_case() -> Weight {
+		(40_660_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn transfer_keep_alive() -> Weight {
-		(55_650_000 as Weight)
+		(54_799_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn set_balance_creating() -> Weight {
-		(30_502_000 as Weight)
+		(29_962_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn set_balance_killing() -> Weight {
-		(36_748_000 as Weight)
+		(36_474_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:2 w:2)
 	fn force_transfer() -> Weight {
-		(73_476_000 as Weight)
+		(72_721_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
+	fn transfer_increasing_users(u: u32, ) -> Weight {
+		(82_873_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((17_000 as Weight).saturating_mul(u as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
 	fn transfer_all() -> Weight {
-		(68_157_000 as Weight)
+		(67_072_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
+	fn beam_asset() -> Weight {
+		(61_690_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -98,37 +122,57 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: System Account (r:1 w:1)
 	fn transfer() -> Weight {
-		(72_901_000 as Weight)
+		(71_549_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
+	fn transfer_best_case() -> Weight {
+		(40_660_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn transfer_keep_alive() -> Weight {
-		(55_650_000 as Weight)
+		(54_799_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn set_balance_creating() -> Weight {
-		(30_502_000 as Weight)
+		(29_962_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
 	fn set_balance_killing() -> Weight {
-		(36_748_000 as Weight)
+		(36_474_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:2 w:2)
 	fn force_transfer() -> Weight {
-		(73_476_000 as Weight)
+		(72_721_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: System Account (r:1 w:1)
+	fn transfer_increasing_users(u: u32, ) -> Weight {
+		(82_873_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((17_000 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
 	fn transfer_all() -> Weight {
-		(68_157_000 as Weight)
+		(67_072_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
+	fn beam_asset() -> Weight {
+		(61_690_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
