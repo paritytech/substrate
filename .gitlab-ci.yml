@@ -188,13 +188,13 @@ default:
       file:                        false
     AWX_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWX_TOKEN@kv
-      file:                        false    
+      file:                        false
     CRATES_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
       file:                        false
     DOCKER_CHAOS_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_TOKEN@kv
-      file:                        false   
+      file:                        false
     DOCKER_CHAOS_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_USER@kv
       file:                        false
@@ -547,9 +547,6 @@ check-polkadot-companion-build:
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
   <<:                              *vault-secrets
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
   script:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
   after_script:
@@ -819,7 +816,7 @@ deploy-prometheus-alerting-rules:
 # Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
 # A "quick" test is a smoke test where basic check-expect tests run by
 # checking values from metrics exposed by the app.
-# A "long" test is the load testing where we send 50K transactions into the 
+# A "long" test is the load testing where we send 50K transactions into the
 # network and check if all completed successfully
 simnet-tests:
   stage:                           deploy
