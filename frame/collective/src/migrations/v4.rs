@@ -121,20 +121,17 @@ pub fn post_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new
 	log_migration("post-migration", old_pallet_name, new_pallet_name);
 
 	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	#[cfg(test)]
-	{
-		let storage_version_key =
-			[&old_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
-		assert!(storage::next_key(&old_pallet_prefix)
-			.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix) ||
-				next_key == storage_version_key));
-	}
-	#[cfg(not(test))]
-	{
-		// Assert that nothing remains at the old prefix
-		assert!(storage::next_key(&old_pallet_prefix)
-			.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix)));
-	}
+	// Assert that nothing remains at the old prefix
+	let storage_version_key =
+		[&old_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
+	assert!(storage::next_key(&old_pallet_prefix)
+		.map_or(true, |next_key| !next_key.starts_with(&old_pallet_prefix) ||
+			next_key == storage_version_key));
+
+	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
+	// Assert that the storages have been moved to the new prefix
+	assert!(storage::next_key(&new_pallet_prefix)
+		.map_or(true, |next_key| next_key.starts_with(&new_pallet_prefix)));
 
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }
