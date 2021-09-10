@@ -84,6 +84,10 @@ pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_
 	let new_pallet_name = new_pallet_name.as_ref();
 	log_migration("pre-migration", old_pallet_name, new_pallet_name);
 
+	if new_pallet_name == old_pallet_name {
+		return
+	}
+
 	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
 	assert!(storage::next_key(&old_pallet_prefix)
 		.map_or(true, |next_key| next_key.starts_with(&old_pallet_prefix)));
@@ -111,6 +115,10 @@ pub fn post_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new
 	let old_pallet_name = old_pallet_name.as_ref();
 	let new_pallet_name = new_pallet_name.as_ref();
 	log_migration("post-migration", old_pallet_name, new_pallet_name);
+
+	if new_pallet_name == old_pallet_name {
+		return
+	}
 
 	// Assert that nothing remains at the old prefix.
 	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
