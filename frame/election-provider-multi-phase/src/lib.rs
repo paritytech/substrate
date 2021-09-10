@@ -535,8 +535,6 @@ pub enum FeasibilityError {
 	InvalidVote,
 	/// A voter is invalid.
 	InvalidVoter,
-	/// A winner is invalid.
-	InvalidWinner,
 	/// The given score was invalid.
 	InvalidScore,
 	/// The provided round is incorrect.
@@ -1395,17 +1393,8 @@ impl<T: Config> Pallet<T> {
 		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
 		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
 
-		// First, make sure that all the winners are sane.
-		// OPTIMIZATION: we could first build the assignments, and then extract the winners directly
-		// from that, as that would eliminate a little bit of duplicate work. For now, we keep them
-		// separate: First extract winners separately from solution, and then assignments. This is
-		// also better, because we can reject solutions that don't meet `desired_targets` early on.
-		let winners = winners
-			.into_iter()
-			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
-			.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
-
-		// Then convert solution -> assignment. This will fail if any of the indices are gibberish.
+		// Then convert solution -> assignment. This will fail if any of the indices are gibberish,
+		// namely any of the voters or targets.
 		let assignments = solution
 			.into_assignment(voter_at, target_at)
 			.map_err::<FeasibilityError, _>(Into::into)?;
@@ -1441,14 +1430,10 @@ impl<T: Config> Pallet<T> {
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 			.map_err::<FeasibilityError, _>(Into::into)?;
-
-		// This might fail if one of the voter edges is pointing to a non-winner, which is not
-		// really possible anymore because all the winners come from the same `solution`.
-		let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)
-			.map_err::<FeasibilityError, _>(Into::into)?;
+		let supports = sp_npos_elections::to_supports(&staked_assignments);
 
 		// Finally, check that the claimed score was indeed correct.
-		let known_score = (&supports).evaluate();
+		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		Ok(ReadySolution { supports, compute, score })
@@ -1653,7 +1638,7 @@ mod feasibility_check {
 			});
 			assert_noop!(
 				MultiPhase::feasibility_check(raw, COMPUTE),
-				FeasibilityError::InvalidWinner
+				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex)
 			);
 		})
 	}

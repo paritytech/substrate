@@ -30,8 +30,8 @@ use sp_core::{
 	H256,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	ElectionResult, EvaluateSupport, ExtendedBalance, NposSolution,
+	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
+	EvaluateSupport, ExtendedBalance, NposSolution,
 };
 use sp_runtime::{
 	testing::Header,
@@ -157,13 +157,14 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-		desired_targets as usize,
-		targets.clone(),
-		voters.clone(),
-		None,
-	)
-	.unwrap();
+	let ElectionResult { winners: _, assignments } =
+		seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
+			desired_targets as usize,
+			targets.clone(),
+			voters.clone(),
+			None,
+		)
+		.unwrap();
 
 	// closures
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
@@ -171,11 +172,9 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
 	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
 
-	let winners = to_without_backing(winners);
-
 	let score = {
 		let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of).unwrap();
-		to_supports(&winners, &staked).unwrap().evaluate()
+		to_supports(&staked).evaluate()
 	};
 	let solution =
 		<SolutionOf<Runtime>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
