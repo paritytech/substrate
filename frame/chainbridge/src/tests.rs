@@ -186,6 +186,34 @@ fn asset_transfer_success() {
 }
 
 #[test]
+fn asset_transfer_invalid_resource_id() {
+    new_test_ext().execute_with(|| {
+        let dest_id = 2;
+        let to = vec![2];
+        let resource_id = [1; 32];
+        let amount = 100;
+        assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
+
+        assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_id.clone()));
+        
+        assert_noop!(
+            Bridge::transfer_fungible(dest_id.clone(), resource_id.clone(), to.clone(), amount.into()),
+            Error::<Test>::ResourceDoesNotExist
+        );
+
+        assert_noop!(
+            Bridge::transfer_nonfungible(dest_id.clone(), resource_id.clone(), vec![], vec![], vec![]),
+            Error::<Test>::ResourceDoesNotExist
+        );
+
+        assert_noop!(
+            Bridge::transfer_generic(dest_id.clone(), resource_id.clone(), vec![]),
+            Error::<Test>::ResourceDoesNotExist
+        );
+    })
+}
+
+#[test]
 fn asset_transfer_invalid_chain() {
     new_test_ext().execute_with(|| {
         let chain_id = 2;
