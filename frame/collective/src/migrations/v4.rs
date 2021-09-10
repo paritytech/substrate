@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_io::{hashing::twox_128, storage};
+use sp_io::hashing::twox_128;
 
 use frame_support::{
 	traits::{
@@ -86,10 +86,6 @@ pub fn pre_migrate<P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(old_p
 	if new_pallet_name == old_pallet_name {
 		return
 	}
-
-	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	assert!(storage::next_key(&old_pallet_prefix)
-		.map_or(true, |next_key| next_key.starts_with(&old_pallet_prefix)));
 
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 	let storage_version_key = twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX);
