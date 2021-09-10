@@ -996,10 +996,10 @@ pub fn build_random_storage(seed: u32) -> (
 		Default::default();
 	let mut seed_bytes = [0; 16];
 	let mut child_infos = Vec::new();
-	&seed_bytes[0..4].copy_from_slice(&seed.to_be_bytes()[..]);
-	&seed_bytes[4..8].copy_from_slice(&seed.to_be_bytes()[..]);
-	&seed_bytes[8..12].copy_from_slice(&seed.to_be_bytes()[..]);
-	&seed_bytes[12..].copy_from_slice(&seed.to_be_bytes()[..]);
+	(&mut seed_bytes[0..4]).copy_from_slice(&seed.to_be_bytes()[..]);
+	(&mut seed_bytes[4..8]).copy_from_slice(&seed.to_be_bytes()[..]);
+	(&mut seed_bytes[8..12]).copy_from_slice(&seed.to_be_bytes()[..]);
+	(&mut seed_bytes[12..]).copy_from_slice(&seed.to_be_bytes()[..]);
 	let mut rand = SmallRng::from_seed(seed_bytes);
 
 	let nb_child_trie = rand.next_u32() as usize % 25;
@@ -1647,13 +1647,12 @@ mod tests {
 		let mut seed = [0; 16];
 		let nb_iter = 50u32;
 		for i in 0..nb_iter {
-			let (storage, child_infos) = build_random_storage(seed + nb_iter);
-			&seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
+			let (storage, child_infos) = build_random_storage(i + nb_iter);
+			(&mut seed[0..4]).copy_from_slice(&i.to_be_bytes()[..]);
+			let mut rand = SmallRng::from_seed(seed);
+			let trie: InMemoryBackend<BlakeTwo256> = (storage.clone(), StateVersion::default()).into();
 			let trie_root = trie.root().clone();
 			let backend = crate::ProvingBackend::new(&trie);
-
-			let mut rand = SmallRng::from_seed(seed);
-			let trie: InMemoryBackend<BlakeTwo256> = storage.clone().into();
 			let nb_child_trie = child_infos.len();
 			let mut queries = Vec::new();
 			for c in 0..(5 + nb_child_trie / 2) {
