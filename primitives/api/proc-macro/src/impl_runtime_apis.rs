@@ -299,7 +299,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			> where Self: Sized {
 				let at = #crate_::BlockId::Hash(parent_hash.clone());
 				let state_hash = self.call
-					.state_hash_at(&at)
+					.runtime_version_at(&at)
+					.map(|v| v.state_version())
 					.map_err(|e| format!("{:?}", e))?;
 
 				self.changes.replace(Default::default()).into_storage_changes(
