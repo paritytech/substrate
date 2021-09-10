@@ -551,6 +551,10 @@ impl<T: Trait> Module<T> {
             Self::chain_whitelisted(dest_id),
             Error::<T>::ChainNotWhitelisted
         );
+        ensure!(
+            Self::resource_exists(resource_id), 
+            Error::<T>::ResourceDoesNotExist
+        );
         let nonce = Self::bump_nonce(dest_id);
         Self::deposit_event(RawEvent::FungibleTransfer(
             dest_id,
@@ -574,6 +578,10 @@ impl<T: Trait> Module<T> {
             Self::chain_whitelisted(dest_id),
             Error::<T>::ChainNotWhitelisted
         );
+        ensure!(
+            Self::resource_exists(resource_id), 
+            Error::<T>::ResourceDoesNotExist
+        );
         let nonce = Self::bump_nonce(dest_id);
         Self::deposit_event(RawEvent::NonFungibleTransfer(
             dest_id,
@@ -595,6 +603,10 @@ impl<T: Trait> Module<T> {
         ensure!(
             Self::chain_whitelisted(dest_id),
             Error::<T>::ChainNotWhitelisted
+        );
+        ensure!(
+            Self::resource_exists(resource_id), 
+            Error::<T>::ResourceDoesNotExist
         );
         let nonce = Self::bump_nonce(dest_id);
         Self::deposit_event(RawEvent::GenericTransfer(
