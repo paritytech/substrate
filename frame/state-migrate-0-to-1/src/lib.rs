@@ -51,11 +51,20 @@ macro_rules! log {
 	};
 }
 
+
+/// Those key will be migrated in a single block.
+/// We avoid adding them to migration process as they can oversize
+/// the proof easilly (they need to be migrated first or they
+/// will be include in proof anyway).
+const RESERVED_BIG_KEYS: &'static[&'static [u8]] = &[sp_core::storage::well_known_keys::CODE];
+
 /// State of state migration from V0 to V1.
 #[derive(Encode, Decode, RuntimeDebug)]
 pub enum MigrationState {
 	/// Started migration and current progress.
 	Pending {
+		// Big value reserved index.
+		reserved_big: u32,
 		// If None, nothing was processed and current_child is also None.
 		// If Some, its value is already processed.
 		current_top: Option<Vec<u8>>,
@@ -78,6 +87,7 @@ pub enum MigrationState {
 impl Default for MigrationState {
 	fn default() -> Self {
 		MigrationState::Pending {
+			reserved_big: 0,
 			current_top: None,
 			current_child: None,
 		}
@@ -119,9 +129,9 @@ pub mod pallet {
 		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
 			let migration_progress = MigrationProgress::<T>::get();
 	
-			let (current_top, current_child) = match migration_progress {
+			let (current_top, current_child, current_reserved) = match migration_progress {
 				MigrationState::Finished => return T::DbWeight::get().reads(1),
-				MigrationState::Pending { current_top, current_child } => (current_top, current_child),
+				MigrationState::Pending { current_top, current_child, reserved_big } => (current_top, current_child, reserved_big),
 			};
 			let max_weight = T::MigrationWeight::get();
 			let max_size = T::MigrationMaxSize::get();
@@ -129,6 +139,7 @@ pub mod pallet {
 			let mut pending = PendingMigration::<T> {
 				current_top,
 				current_child,
+				current_reserved,
 				current_weight: 0 as Weight,
 				current_size: 0u32,
 				max_weight,
@@ -142,6 +153,7 @@ pub mod pallet {
 				MigrationProgress::<T>::set(MigrationState::Pending {
 					current_top: pending.current_top,
 					current_child: pending.current_child,
+					reserved_big: pending.current_reserved,
 				});
 			} else {
 				MigrationProgress::<T>::set(MigrationState::Finished);
@@ -159,6 +171,7 @@ pub mod pallet {
 struct PendingMigration<T> {
 	current_top: Option<Vec<u8>>,
 	current_child: Option<Vec<u8>>,
+	current_reserved: u32,
 	current_weight: Weight,
 	current_size: u32,
 	threshold: u32,
@@ -277,12 +290,9 @@ impl<T: pallet::Config> PendingMigration<T> {
 			if let Some(current_top) = self.current_top.as_ref() {
 					if let Some(next_key) = sp_io::storage::next_key(current_top) {
 						self.new_next();
-						// TODO if using the host version, then code is written with
-						// previous and this will not work.
-						if next_key == sp_core::storage::well_known_keys::CODE {
+						if RESERVED_BIG_KEYS.iter().find(|key| **key == next_key.as_slice()).is_some() {
 							self.current_top = Some(next_key);
-							// skip as was already created on runtime update
-							// and is likely to oversize block, same could be done with event.
+							// skip as big reserved key where already processed.
 							continue;
 						}
 						if next_key.starts_with(sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX) {
@@ -307,15 +317,25 @@ impl<T: pallet::Config> PendingMigration<T> {
 
 	fn migrate(&mut self) {
 		loop {
+			while (self.current_reserved as usize) < RESERVED_BIG_KEYS.len() {
+				// reserved are run one per one.
+				let key = RESERVED_BIG_KEYS[self.current_reserved as usize];
+				let current_top = self.current_top.take();
+				self.current_top = Some(key.to_vec());
+				let _ = self.process_top_key();
+				self.current_top = current_top;
+				self.current_reserved += 1;
+				break;
+			}
 			if self.current_child.is_some() {
 				if !self.migrate_child() {
-					break
+					break;
 				}
 			} else {
 				let do_child = self.migrate_top();
 				if do_child {
 					if !self.migrate_child() {
-						break
+						break;
 					}
 				} else {
 					break;
@@ -399,7 +419,7 @@ mod mock {
 	pub struct MigrationMaxSizeImpl;
 	impl Get<u32> for MigrationMaxSizeImpl {
 		fn get() -> u32 {
-			500_000
+			300
 		}
 	}
 
