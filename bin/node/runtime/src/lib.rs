@@ -534,7 +534,6 @@ parameter_types! {
 
 	// miner configs
 	pub const MultiPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
-	pub const MinerMaxIterations: u32 = 10;
 	pub MinerMaxWeight: Weight = RuntimeBlockWeights::get()
 		.get(DispatchClass::Normal)
 		.max_extrinsic.expect("Normal extrinsics have a weight limit configured; qed")
@@ -570,6 +569,32 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfi
 	const MAXIMUM_TARGETS: u32 = 2000;
 }
 
+/// Maximum number of iterations for balancing that will be executed in the embedded OCW
+/// miner of election provider multi phase.
+pub const MINER_MAX_ITERATIONS: u32 = 10;
+
+/// A source of random balance for NposSolver, which is meant to be run by the OCW election miner.
+pub struct OffchainRandomBalancing;
+impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::ExtendedBalance)>>
+	for OffchainRandomBalancing
+{
+	fn get() -> Option<(usize, sp_npos_elections::ExtendedBalance)> {
+		use sp_runtime::traits::TrailingZeroInput;
+		let iters = match MINER_MAX_ITERATIONS {
+			0 => 0,
+			max @ _ => {
+				let seed = sp_io::offchain::random_seed();
+				let random = <u32>::decode(&mut TrailingZeroInput::new(&seed))
+					.expect("input is padded with zeroes; qed") %
+					max.saturating_add(1);
+				random as usize
+			},
+		};
+
+		Some((iters, 0))
+	}
+}
+
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -578,7 +603,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type UnsignedPhase = UnsignedPhase;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MultiPhaseUnsignedPriority;
@@ -594,6 +618,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type OnChainAccuracy = Perbill;
 	type Solution = NposSolution16;
 	type Fallback = Fallback;
+	type Solver = frame_election_provider_support::SequentialPhragmen<
+		AccountId,
+		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
+		OffchainRandomBalancing,
+	>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = BenchmarkConfig;
