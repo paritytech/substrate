@@ -97,6 +97,7 @@ discover_our_crates() {
   # workaround for early exits not being detected in command substitution
   # https://unix.stackexchange.com/questions/541969/nested-command-substitution-does-not-stop-a-script-on-a-failure-even-if-e-and-s
   local last_line
+
   while IFS= read -r crate; do
     last_line="$crate"
     # for avoiding duplicate entries
@@ -140,6 +141,7 @@ match_their_crates() {
   # workaround for early exits not being detected in command substitution
   # https://unix.stackexchange.com/questions/541969/nested-command-substitution-does-not-stop-a-script-on-a-failure-even-if-e-and-s
   local last_line
+
   # output will be consumed in the format:
   #   crate
   #   source
@@ -201,7 +203,7 @@ match_their_crates() {
   if [ "${crates_not_found[@]}" ]; then
     echo -e "Errors during crate matching\n"
     printf "Failed to detect our crate \"%s\" referenced in $target_name\n" "${crates_not_found[@]}"
-    echo -e "Note: this error generally happens if you have deleted or renamed a crate and did not update it in $target_name. Consider opening a companion pull request on $target_name and referencing it in this pull request's description like:\n$target_name companion: [your companion PR here]"
+    echo -e "\nNote: this error generally happens if you have deleted or renamed a crate and did not update it in $target_name. Consider opening a companion pull request on $target_name and referencing it in this pull request's description like:\n$target_name companion: [your companion PR here]"
     exit 1
   fi
 }
