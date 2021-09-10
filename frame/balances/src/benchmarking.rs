@@ -195,6 +195,28 @@ benchmarks_instance_pallet! {
 		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
 	}
+
+	// This tests the same behavior from `beam_asset` in xcm.
+	#[extra]
+	beam_asset {
+		let existential_deposit = T::ExistentialDeposit::get();
+		let caller = whitelisted_caller();
+
+		// Give some multiple of the existential deposit
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
+
+		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account,
+		// and reap this user.
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
+	}: {
+		<Balances<T, I> as fungible::Mutate<_>>::burn_from(&caller, transfer_amount)?;
+		<Balances<T, I> as fungible::Mutate<_>>::mint_into(&recipient, transfer_amount)?;
+	} verify {
+		assert_eq!(Balances::<T, I>::free_balance(&caller), Zero::zero());
+		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
+	}
 }
 
 impl_benchmark_test_suite!(
