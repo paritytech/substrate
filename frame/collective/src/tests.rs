@@ -19,7 +19,6 @@ use super::*;
 use crate as collective;
 use frame_support::{assert_noop, assert_ok, parameter_types, Hashable};
 use frame_system::{self as system, EventRecord, Phase};
-use hex_literal::hex;
 use sp_core::{
 	u32_trait::{_3, _4},
 	H256,
