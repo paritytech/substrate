@@ -146,7 +146,7 @@ pub(crate) fn hooks() -> Vec<Hook> {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-    let config: pallet_assets::GenesisConfig<Test> = pallet_assets::GenesisConfig {
+	let config: pallet_assets::GenesisConfig<Test> = pallet_assets::GenesisConfig {
 		assets: vec![
 			// id, owner, is_sufficient, min_balance
 			(999, 0, true, 1)
@@ -159,11 +159,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			// id, account_id, balance
 			(999, 1, 100)
 		]
-    };
+	};
 
-    config.assimilate_storage(&mut storage).unwrap();
+	config.assimilate_storage(&mut storage).unwrap();
 
-    let mut ext: sp_io::TestExternalities = storage.into();
+	let mut ext: sp_io::TestExternalities = storage.into();
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }
