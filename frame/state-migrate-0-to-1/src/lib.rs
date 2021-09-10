@@ -553,8 +553,6 @@ mod test {
 				if do_end {
 					assert!(final_root == final_no_switch);
 					break;
-				} else {
-					assert!(final_root != final_no_switch);
 				}
 			}
 		}
