@@ -42,7 +42,6 @@ const HTTP_THREADS: usize = 4;
 /// The RPC IoHandler containing all requested APIs.
 pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
-pub use self::inner::*;
 pub use middleware::{method_names, RpcMetrics, RpcMiddleware};
 
 /// Construct rpc `IoHandler`
@@ -111,122 +110,106 @@ impl ServerMetrics {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
-mod inner {
-	use super::*;
+/// Type alias for ipc server
+pub type IpcServer = ipc::Server;
+/// Type alias for http server
+pub type HttpServer = http::Server;
+/// Type alias for ws server
+pub type WsServer = ws::Server;
 
-	/// Type alias for ipc server
-	pub type IpcServer = ipc::Server;
-	/// Type alias for http server
-	pub type HttpServer = http::Server;
-	/// Type alias for ws server
-	pub type WsServer = ws::Server;
-
-	impl ws::SessionStats for ServerMetrics {
-		fn open_session(&self, _id: ws::SessionId) {
-			self.session_opened.as_ref().map(|m| m.inc());
-		}
-
-		fn close_session(&self, _id: ws::SessionId) {
-			self.session_closed.as_ref().map(|m| m.inc());
-		}
+impl ws::SessionStats for ServerMetrics {
+	fn open_session(&self, _id: ws::SessionId) {
+		self.session_opened.as_ref().map(|m| m.inc());
 	}
 
-	/// Start HTTP server listening on given address.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_http<M: pubsub::PubSubMetadata + Default + Unpin>(
-		addr: &std::net::SocketAddr,
-		thread_pool_size: Option<usize>,
-		cors: Option<&Vec<String>>,
-		io: RpcHandler<M>,
-		maybe_max_payload_mb: Option<usize>,
-	) -> io::Result<http::Server> {
-		let max_request_body_size = maybe_max_payload_mb
-			.map(|mb| mb.saturating_mul(MEGABYTE))
-			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-
-		http::ServerBuilder::new(io)
-			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
-			.health_api(("/health", "system_health"))
-			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.rest_api(if cors.is_some() { http::RestApi::Secure } else { http::RestApi::Unsecure })
-			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(max_request_body_size)
-			.start_http(addr)
-	}
-
-	/// Start IPC server listening on given path.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
-		addr: &str,
-		io: RpcHandler<M>,
-		server_metrics: ServerMetrics,
-	) -> io::Result<ipc::Server> {
-		let builder = ipc::ServerBuilder::new(io);
-		#[cfg(target_os = "unix")]
-		builder.set_security_attributes({
-			let security_attributes = ipc::SecurityAttributes::empty();
-			security_attributes.set_mode(0o600)?;
-			security_attributes
-		});
-		builder.session_stats(server_metrics).start(addr)
-	}
-
-	/// Start WS server listening on given address.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws<
-		M: pubsub::PubSubMetadata + From<futures::channel::mpsc::UnboundedSender<String>>,
-	>(
-		addr: &std::net::SocketAddr,
-		max_connections: Option<usize>,
-		cors: Option<&Vec<String>>,
-		io: RpcHandler<M>,
-		maybe_max_payload_mb: Option<usize>,
-		server_metrics: ServerMetrics,
-	) -> io::Result<ws::Server> {
-		let rpc_max_payload = maybe_max_payload_mb
-			.map(|mb| mb.saturating_mul(MEGABYTE))
-			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
-			context.sender().into()
-		})
-		.max_payload(rpc_max_payload)
-		.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
-		.allowed_origins(map_cors(cors))
-		.allowed_hosts(hosts_filtering(cors.is_some()))
-		.session_stats(server_metrics)
-		.start(addr)
-		.map_err(|err| match err {
-			ws::Error::Io(io) => io,
-			ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
-			e => {
-				error!("{}", e);
-				io::ErrorKind::Other.into()
-			},
-		})
-	}
-
-	fn map_cors<T: for<'a> From<&'a str>>(
-		cors: Option<&Vec<String>>,
-	) -> http::DomainsValidation<T> {
-		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>())
-			.into()
-	}
-
-	fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
-		if enable {
-			// NOTE The listening address is whitelisted by default.
-			// Setting an empty vector here enables the validation
-			// and allows only the listening address.
-			http::DomainsValidation::AllowOnly(vec![])
-		} else {
-			http::DomainsValidation::Disabled
-		}
+	fn close_session(&self, _id: ws::SessionId) {
+		self.session_closed.as_ref().map(|m| m.inc());
 	}
 }
 
-#[cfg(target_os = "unknown")]
-mod inner {}
+/// Start HTTP server listening on given address.
+pub fn start_http<M: pubsub::PubSubMetadata + Default + Unpin>(
+	addr: &std::net::SocketAddr,
+	thread_pool_size: Option<usize>,
+	cors: Option<&Vec<String>>,
+	io: RpcHandler<M>,
+	maybe_max_payload_mb: Option<usize>,
+) -> io::Result<http::Server> {
+	let max_request_body_size = maybe_max_payload_mb
+		.map(|mb| mb.saturating_mul(MEGABYTE))
+		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+
+	http::ServerBuilder::new(io)
+		.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
+		.health_api(("/health", "system_health"))
+		.allowed_hosts(hosts_filtering(cors.is_some()))
+		.rest_api(if cors.is_some() { http::RestApi::Secure } else { http::RestApi::Unsecure })
+		.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
+		.max_request_body_size(max_request_body_size)
+		.start_http(addr)
+}
+
+/// Start IPC server listening on given path.
+pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
+	addr: &str,
+	io: RpcHandler<M>,
+	server_metrics: ServerMetrics,
+) -> io::Result<ipc::Server> {
+	let builder = ipc::ServerBuilder::new(io);
+	#[cfg(target_os = "unix")]
+	builder.set_security_attributes({
+		let security_attributes = ipc::SecurityAttributes::empty();
+		security_attributes.set_mode(0o600)?;
+		security_attributes
+	});
+	builder.session_stats(server_metrics).start(addr)
+}
+
+/// Start WS server listening on given address.
+pub fn start_ws<
+	M: pubsub::PubSubMetadata + From<futures::channel::mpsc::UnboundedSender<String>>,
+>(
+	addr: &std::net::SocketAddr,
+	max_connections: Option<usize>,
+	cors: Option<&Vec<String>>,
+	io: RpcHandler<M>,
+	maybe_max_payload_mb: Option<usize>,
+	server_metrics: ServerMetrics,
+) -> io::Result<ws::Server> {
+	let rpc_max_payload = maybe_max_payload_mb
+		.map(|mb| mb.saturating_mul(MEGABYTE))
+		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
+		context.sender().into()
+	})
+	.max_payload(rpc_max_payload)
+	.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
+	.allowed_origins(map_cors(cors))
+	.allowed_hosts(hosts_filtering(cors.is_some()))
+	.session_stats(server_metrics)
+	.start(addr)
+	.map_err(|err| match err {
+		ws::Error::Io(io) => io,
+		ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
+		e => {
+			error!("{}", e);
+			io::ErrorKind::Other.into()
+		},
+	})
+}
+
+fn map_cors<T: for<'a> From<&'a str>>(cors: Option<&Vec<String>>) -> http::DomainsValidation<T> {
+	cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>())
+		.into()
+}
+
+fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
+	if enable {
+		// NOTE The listening address is whitelisted by default.
+		// Setting an empty vector here enables the validation
+		// and allows only the listening address.
+		http::DomainsValidation::AllowOnly(vec![])
+	} else {
+		http::DomainsValidation::Disabled
+	}
+}

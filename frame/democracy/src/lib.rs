@@ -263,8 +263,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
-		/// The minimum period of locking and the period between a proposal being approved and
-		/// enacted.
+		/// The period between a proposal being approved and enacted.
 		///
 		/// It should generally be a little more than the unstake period to ensure that
 		/// voting stakers have an opportunity to remove themselves from the system in the case
@@ -279,6 +278,13 @@ pub mod pallet {
 		/// How often (in blocks) to check for new votes.
 		#[pallet::constant]
 		type VotingPeriod: Get<Self::BlockNumber>;
+
+		/// The minimum period of vote locking.
+		///
+		/// It should be no shorter than enactment period to ensure that in the case of an approval,
+		/// those successful voters are locked into the consequences that their votes entail.
+		#[pallet::constant]
+		type VoteLockingPeriod: Get<Self::BlockNumber>;
 
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		#[pallet::constant]
@@ -1429,7 +1435,7 @@ impl<T: Config> Pallet<T> {
 					},
 					Some(ReferendumInfo::Finished { end, approved }) => {
 						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
-							let unlock_at = end + T::EnactmentPeriod::get() * lock_periods.into();
+							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
 							let now = frame_system::Pallet::<T>::block_number();
 							if now < unlock_at {
 								ensure!(
@@ -1553,7 +1559,7 @@ impl<T: Config> Pallet<T> {
 						Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					let now = frame_system::Pallet::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
-					prior.accumulate(now + T::EnactmentPeriod::get() * lock_periods, balance);
+					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
 					voting.set_common(delegations, prior);
 
 					Ok(votes)

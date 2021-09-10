@@ -30,7 +30,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
@@ -43,8 +43,6 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
 serde = "1.0.126"
 thiserror = "1.0.21"
-
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "5.0.0"
 
 [dev-dependencies]
