@@ -43,8 +43,6 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
 serde = "1.0.126"
 thiserror = "1.0.21"
-
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "5.0.0"
 
 [dev-dependencies]

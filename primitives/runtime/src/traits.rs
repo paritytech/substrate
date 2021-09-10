@@ -1585,6 +1585,14 @@ pub trait BlockNumberProvider {
 	/// ```
 	/// .
 	fn current_block_number() -> Self::BlockNumber;
+
+	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+	/// else a noop.
+	///
+	/// It allows for setting the block number that will later be fetched
+	/// This is useful in case the block number provider is different than System
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_block_number(_block: Self::BlockNumber) {}
 }
 
 #[cfg(test)]
