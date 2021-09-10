@@ -128,7 +128,6 @@ pub fn post_migrate<P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(old_
 	);
 	assert_eq!(old_pallet_prefix_iter.count(), 0);
 
-	// Assert that at least one key have been moved to the new prefix.
 	// NOTE: storage_version_key is already in the new prefix.
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 	let new_pallet_prefix_iter = frame_support::storage::KeyPrefixIterator::new(
