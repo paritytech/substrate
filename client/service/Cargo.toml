@@ -79,8 +79,6 @@ parity-util-mem = { version = "0.10.0", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.50"
-
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
 directories = "3.0.2"
 
