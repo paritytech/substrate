@@ -9,7 +9,8 @@
 # polkadot companion: paritytech/polkadot#567
 #
 
-set -euo pipefail
+set -eu -o pipefail
+shopt -s inherit_errexit
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
@@ -93,7 +94,11 @@ discover_our_crates() {
 
   cd "$substrate_dir"
 
+  # workaround for early exits not being detected in command substitution
+  # https://unix.stackexchange.com/questions/541969/nested-command-substitution-does-not-stop-a-script-on-a-failure-even-if-e-and-s
+  local last_line
   while IFS= read -r crate; do
+    last_line="$crate"
     # for avoiding duplicate entries
     for our_crate in "${our_crates[@]}"; do
       if [ "$crate" == "$our_crate" ]; then
@@ -108,13 +113,17 @@ discover_our_crates() {
     fi
   # dependencies with {"source": null} are the ones we own, hence the getpath($p)==null in the jq
   # script below
-  done < <(cargo metadata --quiet --format-version=1 | "$jq" -r '
+  done < <(cargo metadata --quiet --format-version=1 | jq -r '
     . as $in |
     paths |
     select(.[-1]=="source" and . as $p | $in | getpath($p)==null) as $path |
     del($path[-1]) as $path |
     $in | getpath($path + ["name"])
   ')
+  if [ -z "${last_line+_}" ]; then
+    echo "No lines were read for cargo metadata of $PWD (some error probably occurred)"
+    exit 1
+  fi
 }
 discover_our_crates
 
@@ -128,6 +137,9 @@ match_their_crates() {
   local crates_not_found=()
   local found
 
+  # workaround for early exits not being detected in command substitution
+  # https://unix.stackexchange.com/questions/541969/nested-command-substitution-does-not-stop-a-script-on-a-failure-even-if-e-and-s
+  local last_line
   # output will be consumed in the format:
   #   crate
   #   source
@@ -135,6 +147,7 @@ match_their_crates() {
   #   ...
   local next="crate"
   while IFS= read -r line; do
+    last_line="$line"
     case "$next" in
       crate)
         next="source"
@@ -172,7 +185,7 @@ match_their_crates() {
         exit 1
       ;;
     esac
-  done < <(cargo metadata --quiet --format-version=1 | "$jq" -r '
+  done < <(cargo metadata --quiet --format-version=1 | jq -r '
     . as $in |
     paths(select(type=="string")) |
     select(.[-1]=="source") as $source_path |
@@ -180,6 +193,10 @@ match_their_crates() {
     [$in | getpath($path + ["name"]), getpath($path + ["source"])] |
     .[]
   ')
+  if [ -z "${last_line+_}" ]; then
+    echo "No lines were read for cargo metadata of $PWD (some error probably occurred)"
+    exit 1
+  fi
 
   if [ "${crates_not_found[@]}" ]; then
     echo -e "Errors during crate matching\n"
