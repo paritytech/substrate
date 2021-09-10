@@ -157,7 +157,7 @@ where
 
 		let mut pivot = None;
 
-		// `peaks_before` and `peaks_after` have a same prefix.
+		// `peaks_before` and `peaks_after` have a common prefix.
 		for i in 0.. {
 			if let Some(peak_before) = peaks_before.get(i) {
 				if let Some(peak_after) = peaks_after.get(i) {
