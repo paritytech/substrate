@@ -20,7 +20,7 @@ log = "0.4.8"
 parking_lot = "0.11.1"
 serde = { version = "1.0.101", features = ["derive"] }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-utils = { version = "4.0.0-dev", path = "../../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }

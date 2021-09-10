@@ -468,7 +468,7 @@ pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
 	/// An error in the miner (offchain) sub-system.
-	Miner(unsigned::MinerError),
+	Miner(unsigned::MinerError<T>),
 	/// An error happened in the data provider.
 	DataProvider(&'static str),
 	/// An error nested in the fallback.
@@ -500,8 +500,8 @@ impl<T: Config> From<FeasibilityError> for ElectionError<T> {
 	}
 }
 
-impl<T: Config> From<unsigned::MinerError> for ElectionError<T> {
-	fn from(e: unsigned::MinerError) -> Self {
+impl<T: Config> From<unsigned::MinerError<T>> for ElectionError<T> {
+	fn from(e: unsigned::MinerError<T>) -> Self {
 		ElectionError::Miner(e)
 	}
 }
@@ -543,6 +543,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_election_provider_support::NposSolver;
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
@@ -580,10 +581,6 @@ pub mod pallet {
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		#[pallet::constant]
 		type MinerTxPriority: Get<TransactionPriority>;
-		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
-		/// the pallet.
-		#[pallet::constant]
-		type MinerMaxIterations: Get<u32>;
 
 		/// Maximum weight that the miner should consume.
 		///
@@ -656,6 +653,9 @@ pub mod pallet {
 			Self::BlockNumber,
 			DataProvider = Self::DataProvider,
 		>;
+
+		/// OCW election solution miner algorithm implementation.
+		type Solver: NposSolver<AccountId = Self::AccountId>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
@@ -1039,9 +1039,6 @@ pub mod pallet {
 		/// The call is not allowed at this point.
 		CallNotAllowed,
 	}
-
-	#[pallet::origin]
-	pub struct Origin<T>(PhantomData<T>);
 
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
@@ -1977,7 +1974,10 @@ mod tests {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
-			let (solution, _) = MultiPhase::mine_solution(2).unwrap();
+			// set the solution balancing to get the desired score.
+			crate::mock::Balancing::set(Some((2, 0)));
+
+			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
 			// Default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
 

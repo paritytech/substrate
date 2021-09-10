@@ -117,7 +117,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 267,
-	impl_version: 0,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
 };
@@ -533,7 +533,6 @@ parameter_types! {
 
 	// miner configs
 	pub const MultiPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
-	pub const MinerMaxIterations: u32 = 10;
 	pub MinerMaxWeight: Weight = RuntimeBlockWeights::get()
 		.get(DispatchClass::Normal)
 		.max_extrinsic.expect("Normal extrinsics have a weight limit configured; qed")
@@ -569,6 +568,32 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfi
 	const MAXIMUM_TARGETS: u32 = 2000;
 }
 
+/// Maximum number of iterations for balancing that will be executed in the embedded OCW
+/// miner of election provider multi phase.
+pub const MINER_MAX_ITERATIONS: u32 = 10;
+
+/// A source of random balance for NposSolver, which is meant to be run by the OCW election miner.
+pub struct OffchainRandomBalancing;
+impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::ExtendedBalance)>>
+	for OffchainRandomBalancing
+{
+	fn get() -> Option<(usize, sp_npos_elections::ExtendedBalance)> {
+		use sp_runtime::traits::TrailingZeroInput;
+		let iters = match MINER_MAX_ITERATIONS {
+			0 => 0,
+			max @ _ => {
+				let seed = sp_io::offchain::random_seed();
+				let random = <u32>::decode(&mut TrailingZeroInput::new(&seed))
+					.expect("input is padded with zeroes; qed") %
+					max.saturating_add(1);
+				random as usize
+			},
+		};
+
+		Some((iters, 0))
+	}
+}
+
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -577,7 +602,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type UnsignedPhase = UnsignedPhase;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MultiPhaseUnsignedPriority;
@@ -592,6 +616,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
+	type Solver = frame_election_provider_support::SequentialPhragmen<
+		AccountId,
+		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
+		OffchainRandomBalancing,
+	>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = BenchmarkConfig;
@@ -618,6 +647,7 @@ impl pallet_democracy::Config for Runtime {
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
+	type VoteLockingPeriod = EnactmentPeriod; // Same as EnactmentPeriod
 	type MinimumDeposit = MinimumDeposit;
 	/// A straight majority of the council can decide what their next motion is.
 	type ExternalOrigin =
@@ -819,16 +849,10 @@ impl pallet_tips::Config for Runtime {
 }
 
 parameter_types! {
-	pub TombstoneDeposit: Balance = deposit(
+	pub ContractDeposit: Balance = deposit(
 		1,
 		<pallet_contracts::Pallet<Runtime>>::contract_info_size(),
 	);
-	pub DepositPerContract: Balance = TombstoneDeposit::get();
-	pub const DepositPerStorageByte: Balance = deposit(0, 1);
-	pub const DepositPerStorageItem: Balance = deposit(1, 0);
-	pub RentFraction: Perbill = Perbill::from_rational(1u32, 30 * DAYS);
-	pub const SurchargeReward: Balance = 150 * MILLICENTS;
-	pub const SignedClaimHandicap: u32 = 2;
 	pub const MaxValueSize: u32 = 16 * 1024;
 	// The lazy deletion runs inside on_initialize.
 	pub DeletionWeightLimit: Weight = AVERAGE_ON_INITIALIZE_RATIO *
@@ -855,14 +879,7 @@ impl pallet_contracts::Config for Runtime {
 	/// change because that would break already deployed contracts. The `Call` structure itself
 	/// is not allowed to change the indices of existing pallets, too.
 	type CallFilter = Nothing;
-	type RentPayment = ();
-	type SignedClaimHandicap = SignedClaimHandicap;
-	type TombstoneDeposit = TombstoneDeposit;
-	type DepositPerContract = DepositPerContract;
-	type DepositPerStorageByte = DepositPerStorageByte;
-	type DepositPerStorageItem = DepositPerStorageItem;
-	type RentFraction = RentFraction;
-	type SurchargeReward = SurchargeReward;
+	type ContractDeposit = ContractDeposit;
 	type CallStack = [pallet_contracts::Frame<Self>; 31];
 	type WeightPrice = pallet_transaction_payment::Pallet<Self>;
 	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
@@ -1458,9 +1475,9 @@ impl_runtime_apis! {
 			code: pallet_contracts_primitives::Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, BlockNumber>
+		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId>
 		{
-			Contracts::bare_instantiate(origin, endowment, gas_limit, code, data, salt, true, true)
+			Contracts::bare_instantiate(origin, endowment, gas_limit, code, data, salt, true)
 		}
 
 		fn get_storage(
@@ -1468,12 +1485,6 @@ impl_runtime_apis! {
 			key: [u8; 32],
 		) -> pallet_contracts_primitives::GetStorageResult {
 			Contracts::get_storage(address, key)
-		}
-
-		fn rent_projection(
-			address: AccountId,
-		) -> pallet_contracts_primitives::RentProjectionResult<BlockNumber> {
-			Contracts::rent_projection(address)
 		}
 	}
 
