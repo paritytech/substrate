@@ -809,14 +809,13 @@ fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
 
 		System::reset_events();
 
-		// Execute with 3 yes votes.
+		// Executed with 3 yes votes.
 		assert_ok!(Collective::propose(
 			Origin::signed(1),
 			2,
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 1, true));
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 1, true));
 		assert_ok!(Collective::vote(Origin::signed(3), hash, 1, true));
