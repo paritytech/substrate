@@ -42,4 +42,3 @@ EXPOSE 30333 9933 9944
 VOLUME ["/substrate"]
 
 ENTRYPOINT ["/usr/local/bin/substrate"]
-
