@@ -25,7 +25,7 @@ use sp_io::offchain_index;
 use sp_std::prelude::Vec;
 
 use crate::{
-	mmr::{Node, NodeOf},
+	mmr::{utils::NodesUtils, Node, NodeOf},
 	primitives::{self, DataOrHash, NodeIndex},
 	Config, Nodes, NumberOfLeaves, Pallet,
 };
@@ -95,8 +95,8 @@ where
 			log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
 		}
 
-		let leaves = crate::NumberOfLeaves::<T, I>::get();
-		let size = crate::mmr::utils::NodesUtils::new(leaves).size();
+		let leaves = NumberOfLeaves::<T, I>::get();
+		let size = NodesUtils::new(leaves).size();
 
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore)
@@ -148,6 +148,7 @@ where
 			}
 		};
 
+		// A new tree to build, no need to prune.
 		if peaks_before.is_empty() {
 			store(peaks_after, elems);
 
