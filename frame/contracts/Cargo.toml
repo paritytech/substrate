@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 	"max-encoded-len",
 ] }
 log = { version = "0.4", default-features = false }
-pwasm-utils = { version = "0.18", default-features = false }
+pwasm-utils = { version = "0.18.2", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
@@ -64,6 +64,7 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"sp-sandbox/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pwasm-utils/std",
@@ -71,6 +72,7 @@ std = [
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
 	"log/std",
+	"rand/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
