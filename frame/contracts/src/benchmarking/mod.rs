@@ -1213,7 +1213,7 @@ benchmarks! {
 
 		for addr in &addresses {
 			if let Some(_) = ContractInfoOf::<T>::get(&addr) {
-				return Err("Expected that contract does not exist at this point.");
+				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
