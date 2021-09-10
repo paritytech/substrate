@@ -103,6 +103,14 @@ impl Value {
 			_ => None,
 		}
 	}
+
+	/// Return `Self` as `i64`.
+	pub fn as_i64(&self) -> Option<i64> {
+		match self {
+			Self::I64(val) => Some(*val),
+			_ => None,
+		}
+	}
 }
 
 /// Provides `Sealed` trait to prevent implementing trait `PointerType` outside of this crate.
