@@ -485,7 +485,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
@@ -672,6 +672,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	telemetry: Option<TelemetryHandle>,
 }
 
+#[async_trait::async_trait]
 impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
@@ -681,12 +682,12 @@ where
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
-	E: Environment<B, Error = Error>,
+	E: Environment<B, Error = Error> + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Sync,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
@@ -730,7 +731,7 @@ where
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,

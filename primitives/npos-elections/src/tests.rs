@@ -513,7 +513,7 @@ fn phragmen_large_scale_test() {
 	)
 	.unwrap();
 
-	assert_eq_uvec!(to_without_backing(winners.clone()), vec![24, 22]);
+	assert_eq_uvec!(winners.iter().map(|(x, _)| *x).collect::<Vec<_>>(), vec![24, 22]);
 	check_assignments_sum(&assignments);
 }
 
@@ -667,9 +667,8 @@ fn duplicate_target_is_ignored() {
 
 	let ElectionResult { winners, assignments } =
 		seq_phragmen::<_, Perbill>(2, candidates, voters, None).unwrap();
-	let winners = to_without_backing(winners);
 
-	assert_eq!(winners, vec![(2), (3)]);
+	assert_eq!(winners, vec![(2, 140), (3, 110)]);
 	assert_eq!(
 		assignments
 			.into_iter()
@@ -686,9 +685,8 @@ fn duplicate_target_is_ignored_when_winner() {
 
 	let ElectionResult { winners, assignments } =
 		seq_phragmen::<_, Perbill>(2, candidates, voters, None).unwrap();
-	let winners = to_without_backing(winners);
 
-	assert_eq!(winners, vec![1, 2]);
+	assert_eq!(winners, vec![(1, 100), (2, 100)]);
 	assert_eq!(
 		assignments
 			.into_iter()

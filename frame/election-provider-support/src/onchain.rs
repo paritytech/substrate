@@ -73,11 +73,10 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		let targets = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
 		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
-		let mut stake_map: BTreeMap<T::AccountId, VoteWeight> = BTreeMap::new();
-
-		voters.iter().for_each(|(v, s, _)| {
-			stake_map.insert(v.clone(), *s);
-		});
+		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
+			.iter()
+			.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
+			.collect();
 
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };

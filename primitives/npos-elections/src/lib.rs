@@ -146,9 +146,6 @@ pub type ExtendedBalance = u128;
 /// [`EvaluateSupport::evaluate`].
 pub type ElectionScore = [ExtendedBalance; 3];
 
-/// A winner, with their respective approval stake.
-pub type WithApprovalOf<A> = (A, ExtendedBalance);
-
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 
@@ -327,7 +324,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 pub struct ElectionResult<AccountId, P: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
-	pub winners: Vec<WithApprovalOf<AccountId>>,
+	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second is the
 	/// list of candidates that it supports.
 	pub assignments: Vec<Assignment<AccountId, P>>,
