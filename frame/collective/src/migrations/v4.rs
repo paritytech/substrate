@@ -136,7 +136,7 @@ pub fn post_migrate<P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(old_
 		new_pallet_prefix.to_vec(),
 		|_| Ok(()),
 	);
-	assert!(new_pallet_prefix_iter.count() > 1);
+	assert!(new_pallet_prefix_iter.count() >= 1);
 
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }

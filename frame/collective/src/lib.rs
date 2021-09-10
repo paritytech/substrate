@@ -2262,11 +2262,10 @@ mod tests {
 	#[test]
 	fn migration_v4() {
 		new_test_ext().execute_with(|| {
-			use frame_support::traits::PalletInfo;
+			use frame_support::traits::PalletInfoAccess;
 
 			let old_pallet = "OldCollective";
-			let new_pallet =
-				<Test as frame_system::Config>::PalletInfo::name::<Collective>().unwrap();
+			let new_pallet = <Collective as PalletInfoAccess>::name();
 			frame_support::storage::migration::move_pallet(
 				new_pallet.as_bytes(),
 				old_pallet.as_bytes(),
@@ -2278,8 +2277,7 @@ mod tests {
 			crate::migrations::v4::post_migrate::<Collective, _>(old_pallet);
 
 			let old_pallet = "OldCollectiveMajority";
-			let new_pallet =
-				<Test as frame_system::Config>::PalletInfo::name::<CollectiveMajority>().unwrap();
+			let new_pallet = <CollectiveMajority as PalletInfoAccess>::name();
 			frame_support::storage::migration::move_pallet(
 				new_pallet.as_bytes(),
 				old_pallet.as_bytes(),
@@ -2291,8 +2289,7 @@ mod tests {
 			crate::migrations::v4::post_migrate::<CollectiveMajority, _>(old_pallet);
 
 			let old_pallet = "OldDefaultCollective";
-			let new_pallet =
-				<Test as frame_system::Config>::PalletInfo::name::<CollectiveMajority>().unwrap();
+			let new_pallet = <DefaultCollective as PalletInfoAccess>::name();
 			frame_support::storage::migration::move_pallet(
 				new_pallet.as_bytes(),
 				old_pallet.as_bytes(),
