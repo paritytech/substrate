@@ -148,15 +148,14 @@ pub mod pallet {
 				touched: false,
 				_ph: sp_std::marker::PhantomData,
 			};
-			pending.migrate();
-			if pending.current_top.is_some() {
+			if pending.migrate() {
+				MigrationProgress::<T>::set(MigrationState::Finished);
+			} else {
 				MigrationProgress::<T>::set(MigrationState::Pending {
 					current_top: pending.current_top,
 					current_child: pending.current_child,
 					reserved_big: pending.current_reserved,
 				});
-			} else {
-				MigrationProgress::<T>::set(MigrationState::Finished);
 			}
 			T::DbWeight::get().reads(1)
 				+ T::SystemWeightInfo::set_storage(1) // TODO size incorrect for migration pending
@@ -315,7 +314,8 @@ impl<T: pallet::Config> PendingMigration<T> {
 		}
 	}
 
-	fn migrate(&mut self) {
+	// return true when completed.
+	fn migrate(&mut self) -> bool {
 		loop {
 			while (self.current_reserved as usize) < RESERVED_BIG_KEYS.len() {
 				// reserved are run one per one.
@@ -337,11 +337,18 @@ impl<T: pallet::Config> PendingMigration<T> {
 					if !self.migrate_child() {
 						break;
 					}
+					if self.current_top.is_none() {
+						return true;
+					}
 				} else {
+					if self.current_top.is_none() {
+						return true;
+					}
 					break;
 				}
 			}
 		}
+		false
 	}
 }
 
