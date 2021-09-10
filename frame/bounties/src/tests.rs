@@ -955,7 +955,10 @@ fn test_migration_v4() {
 		(pallet_bounties::BountyCount::<Test>::hashed_key().to_vec(), 10.encode().to_vec()),
 		(pallet_bounties::Bounties::<Test>::hashed_key_for(index), bounty.encode().to_vec()),
 		(pallet_bounties::BountyDescriptions::<Test>::hashed_key_for(index), vec![0, 0]),
-		(pallet_bounties::BountyApprovals::<Test>::hashed_key().to_vec(), vec![10 as u32].encode().to_vec())
+		(
+			pallet_bounties::BountyApprovals::<Test>::hashed_key().to_vec(),
+			vec![10 as u32].encode().to_vec(),
+		),
 	];
 
 	s.top = data.into_iter().collect();

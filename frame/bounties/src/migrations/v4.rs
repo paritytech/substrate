@@ -151,11 +151,9 @@ pub fn pre_migration<T: pallet_bounties::Config, P: GetStorageVersion + 'static,
 			// or we ensure that the next key has no common prefix with twox_128(new),
 			// or is the pallet version that is already stored using the pallet name
 			|next_key| {
-				storage::next_key(&next_key).map_or(
-					true,
-					|next_key|
-						!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
-				)
+				storage::next_key(&next_key).map_or(true, |next_key| {
+					!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
+				})
 			},
 		),
 		"unexpected next_key({}) = {:?}",
