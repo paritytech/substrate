@@ -125,16 +125,15 @@
 //! bit less since some of the stake has been lost, and split between members pro rata, based on
 //! their share.
 //!
-//! With regards to slashing, recall that (in the absence of slashing) the pool is always in a state
-//! where the *sum of locks that it has put on members* is equal to its bonded account's stake
-//! (`ledger.total` in staking). This means that a *user's share* (expressed as a ratio) multiplied
-//! by the total stake of the pool's bonded account is exactly equal to the lock amount placed on
-//! that member's account. Whilst this assumption is upheld, then leaving is trivial and
-//! unambiguous. Each account will declare the intention to leave via `unbond_all`, wait for the
-//! bonding duration, trigger `leave`, which makes some funds be unlocked in the pool's bonded
-//! account. This amount will always be equal to the lock that was placed on the member's account.
-//! To finalize leaving, the lock on the member's account is removed and the tokens in the pool's
-//! bonded account are burned.
+//! Recall that (in the absence of slashing) the pool is always in a state where the *sum of locks
+//! that it has put on members* is equal to its bonded account's stake (`ledger.total` in staking).
+//! This means that a *user's share* (expressed as a ratio) multiplied by the total stake of the
+//! pool's bonded account is exactly equal to the lock amount placed on that member's account.
+//! Whilst this assumption is upheld, then leaving is trivial and unambiguous. Each account will
+//! declare the intention to leave via `unbond_all`, wait for the bonding duration, trigger `leave`,
+//! which makes some funds be unlocked in the pool's bonded account. This amount will always be
+//! equal to the lock that was placed on the member's account. To finalize leaving, the lock on the
+//! member's account is removed and the tokens in the pool's bonded account are burned.
 //!
 //! > In essence, the pool's bonded account should NEVER have any unlocked tokens. They can only
 //! become unlocked as the consequence of a member's `leave` transaction (which triggers a
@@ -159,9 +158,9 @@
 //! are burned, and the lock is reduced to 95 to maintain consistency and make further accounting
 //! easier.
 //!
-//! > A hassle of this implementation is that we are treating locked currency as *slashable*,
-//! while clearly they are not meant for it. This is why manual operations like minting and burning
-//! are needed.
+//! > A hassle of this implementation is that we are treating locked currency as *slashable*, while
+//! clearly they are not meant for it. This is why manual operations like minting and burning are
+//! needed, assuming the current `LockableCurrency` APIs.
 //!
 //! ### Dissolving
 //!
