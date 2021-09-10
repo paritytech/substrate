@@ -17,7 +17,7 @@
 
 use super::*;
 use crate as multi_phase;
-use frame_election_provider_support::{data_provider, ElectionDataProvider};
+use frame_election_provider_support::{data_provider, ElectionDataProvider, SequentialPhragmen};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
@@ -31,7 +31,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	ElectionResult, EvaluateSupport, NposSolution,
+	ElectionResult, EvaluateSupport, ExtendedBalance, NposSolution,
 };
 use sp_runtime::{
 	testing::Header,
@@ -262,7 +262,6 @@ parameter_types! {
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
-	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
@@ -352,6 +351,10 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 	}
 }
 
+parameter_types! {
+	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -360,7 +363,6 @@ impl crate::Config for Runtime {
 	type UnsignedPhase = UnsignedPhase;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
@@ -379,6 +381,7 @@ impl crate::Config for Runtime {
 	type Fallback = Fallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
