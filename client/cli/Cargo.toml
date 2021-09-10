@@ -37,7 +37,7 @@ sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
-names = { version = "0.11.0", default-features = false }
+names = { default-features = false, git = "https://github.com/fnichol/names", rev= "8ff6d9a0b5e52fd2454fdeac21c57f372d2da4e3" }
 structopt = "0.3.8"
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
