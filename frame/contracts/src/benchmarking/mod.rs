@@ -1213,7 +1213,7 @@ benchmarks! {
 
 		for addr in &addresses {
 			if let Some(_) = ContractInfoOf::<T>::get(&addr) {
-				return Err("Expected that contract does not exist at this point.");
+				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
@@ -2241,7 +2241,7 @@ benchmarks! {
 			);
 		}
 		#[cfg(not(feature = "std"))]
-		return Err("Run this bench with a native runtime in order to see the schedule.");
+		return Err("Run this bench with a native runtime in order to see the schedule.".into());
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.
