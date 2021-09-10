@@ -124,24 +124,20 @@ impl SpawnTaskHandle {
 				futures::pin_mut!(task);
 				let _ = select(on_exit, task).await;
 			}
-		};
+		}
+		.in_current_span();
 
 		let join_handle = match task_type {
-			TaskType::Async => self.tokio_handle.spawn(future.in_current_span()),
+			TaskType::Async => self.tokio_handle.spawn(future),
 			TaskType::Blocking => {
 				let handle = self.tokio_handle.clone();
 				self.tokio_handle.spawn_blocking(move || {
-					handle.block_on(future.in_current_span());
+					handle.block_on(future);
 				})
 			},
 		};
 
-		let mut task_notifier = self.task_notifier.clone();
-		self.tokio_handle.spawn(async move {
-			if let Err(err) = task_notifier.send(join_handle).await {
-				error!("Could not send spawned task handle to queue: {}", err);
-			}
-		});
+		let _ = self.task_notifier.unbounded_send(join_handle);
 	}
 }
 

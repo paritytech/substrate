@@ -55,6 +55,16 @@ struct TestNet<G, E, F, L, U> {
 	nodes: usize,
 }
 
+impl<G, E, F, L, U> Drop for TestNet<G, E, F, L, U> {
+	fn drop(&mut self) {
+		// Drop the nodes before dropping the runtime, as the runtime otherwise waits for all
+		// futures to be ended and we run into a dead lock.
+		self.full_nodes.drain(..);
+		self.light_nodes.drain(..);
+		self.authority_nodes.drain(..);
+	}
+}
+
 pub trait TestNetNode:
 	Clone + Future<Output = Result<(), sc_service::Error>> + Send + 'static
 {
