@@ -30,6 +30,7 @@ use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::crypto::UncheckedFrom;
+use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
 use sp_runtime::traits::{Convert, Saturating};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
@@ -205,6 +206,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
+
+	/// Recovers ECDSA compressed public key based on signature and message hash.
+	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1032,6 +1036,10 @@ where
 		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
 		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
+	}
+
+	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
+		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
 	}
 }
 

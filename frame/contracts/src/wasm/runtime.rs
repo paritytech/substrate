@@ -73,6 +73,9 @@ pub enum ReturnCode {
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
+	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
+	#[cfg(feature = "unstable-interface")]
+	EcdsaRecoverFailed = 11,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -199,6 +202,9 @@ pub enum RuntimeCosts {
 	HashBlake256(u32),
 	/// Weight of calling `seal_hash_blake2_128` for the given input size.
 	HashBlake128(u32),
+	/// Weight of calling `seal_ecdsa_recover`.
+	#[cfg(feature = "unstable-interface")]
+	EcdsaRecovery,
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
 	/// Weight charged for copying data from the sandbox.
@@ -265,6 +271,8 @@ impl RuntimeCosts {
 			HashBlake128(len) => s
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
+			#[cfg(feature = "unstable-interface")]
+			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => amount,
 			#[cfg(feature = "unstable-interface")]
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
@@ -1710,6 +1718,46 @@ define_env!(Env, <E: Ext>,
 		match result {
 			Ok(_) => Ok(ReturnCode::Success),
 			Err(_) => Ok(ReturnCode::CallRuntimeReturnedError),
+		}
+	},
+
+	// Recovers the ECDSA public key from the given message hash and signature.
+	//
+	// Writes the public key into the given output buffer.
+	// Assumes the secp256k1 curve.
+	//
+	// # Parameters
+	//
+	// - `signature_ptr`: the pointer into the linear memory where the signature
+	//					  is placed. Should be decodable as a 65 bytes. Traps otherwise.
+	// - `message_hash_ptr`: the pointer into the linear memory where the message
+	// 						 hash is placed. Should be decodable as a 32 bytes. Traps otherwise.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The buffer should be 33 bytes. Traps otherwise.
+	// 				   The function will write the result directly into this buffer.
+	//
+	// # Errors
+	//
+	// `ReturnCode::EcdsaRecoverFailed`
+	[__unstable__] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::EcdsaRecovery)?;
+
+		let mut signature: [u8; 65] = [0; 65];
+		ctx.read_sandbox_memory_into_buf(signature_ptr, &mut signature)?;
+		let mut message_hash: [u8; 32] = [0; 32];
+		ctx.read_sandbox_memory_into_buf(message_hash_ptr, &mut message_hash)?;
+
+		let result = ctx.ext.ecdsa_recover(&signature, &message_hash);
+
+		match result {
+			Ok(pub_key) => {
+				// Write the recovered compressed ecdsa public key back into the sandboxed output
+				// buffer.
+				ctx.write_sandbox_memory(output_ptr, pub_key.as_ref())?;
+
+				Ok(ReturnCode::Success)
+			},
+			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
 	},
 );
