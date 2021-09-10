@@ -1,9 +1,29 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use super::*;
 use crate as collective;
 use frame_support::{assert_noop, assert_ok, parameter_types, Hashable};
 use frame_system::{self as system, EventRecord, Phase};
 use hex_literal::hex;
-use sp_core::{u32_trait::{_3, _4}, H256};
+use sp_core::{
+	u32_trait::{_3, _4},
+	H256,
+};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -31,10 +51,7 @@ mod mock_democracy {
 	pub use pallet::*;
 	#[frame_support::pallet]
 	pub mod pallet {
-		use frame_support::{
-			pallet_prelude::*,
-			traits::EnsureOrigin,
-		};
+		use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
 		use frame_system::pallet_prelude::*;
 		use sp_runtime::DispatchResult;
 
@@ -51,9 +68,7 @@ mod mock_democracy {
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
 			#[pallet::weight(0)]
-			pub fn external_propose_majority(
-				origin: OriginFor<T>,
-			) -> DispatchResult {
+			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
 				Self::deposit_event(Event::<T>::ExternalProposed);
 				Ok(())
@@ -181,40 +196,27 @@ fn close_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 
 		System::set_block_number(3);
 		assert_noop!(
-			Collective::close(
-				Origin::signed(4),
-				hash.clone(),
-				0,
-				proposal_weight,
-				proposal_len
-			),
+			Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len),
 			Error::<Test, Instance1>::TooEarly
 		);
 
 		System::set_block_number(4);
-		assert_ok!(Collective::close(
-			Origin::signed(4),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 
-		let record =
-			|event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash.clone(), true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash.clone(), 2, 1))),
-				record(Event::Collective(RawEvent::Disapproved(hash.clone())))
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash, 2, 1))),
+				record(Event::Collective(RawEvent::Disapproved(hash)))
 			]
 		);
 	});
@@ -236,26 +238,14 @@ fn proposal_weight_limit_works_on_approve() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
 		// With 1's prime vote, this should pass
 		System::set_block_number(4);
 		assert_noop!(
-			Collective::close(
-				Origin::signed(4),
-				hash.clone(),
-				0,
-				proposal_weight - 100,
-				proposal_len
-			),
+			Collective::close(Origin::signed(4), hash, 0, proposal_weight - 100, proposal_len),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
-		assert_ok!(Collective::close(
-			Origin::signed(4),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 	})
 }
 
@@ -278,7 +268,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 		System::set_block_number(4);
 		assert_ok!(Collective::close(
 			Origin::signed(4),
-			hash.clone(),
+			hash,
 			0,
 			proposal_weight - 100,
 			proposal_len
@@ -306,28 +296,21 @@ fn close_with_prime_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 
 		System::set_block_number(4);
-		assert_ok!(Collective::close(
-			Origin::signed(4),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 
-		let record =
-			|event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash.clone(), true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash.clone(), 2, 1))),
-				record(Event::Collective(RawEvent::Disapproved(hash.clone())))
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash, 2, 1))),
+				record(Event::Collective(RawEvent::Disapproved(hash)))
 			]
 		);
 	});
@@ -353,32 +336,22 @@ fn close_with_voting_prime_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 
 		System::set_block_number(4);
-		assert_ok!(Collective::close(
-			Origin::signed(4),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 
-		let record =
-			|event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash.clone(), true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash.clone(), 3, 0))),
-				record(Event::Collective(RawEvent::Approved(hash.clone()))),
-				record(Event::Collective(RawEvent::Executed(
-					hash.clone(),
-					Err(DispatchError::BadOrigin)
-				)))
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash, 3, 0))),
+				record(Event::Collective(RawEvent::Approved(hash))),
+				record(Event::Collective(RawEvent::Executed(hash, Err(DispatchError::BadOrigin))))
 			]
 		);
 	});
@@ -404,32 +377,31 @@ fn close_with_no_prime_but_majority_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(CollectiveMajority::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(CollectiveMajority::vote(Origin::signed(2), hash.clone(), 0, true));
-		assert_ok!(CollectiveMajority::vote(Origin::signed(3), hash.clone(), 0, true));
+		assert_ok!(CollectiveMajority::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(CollectiveMajority::vote(Origin::signed(2), hash, 0, true));
+		assert_ok!(CollectiveMajority::vote(Origin::signed(3), hash, 0, true));
 
 		System::set_block_number(4);
 		assert_ok!(CollectiveMajority::close(
 			Origin::signed(4),
-			hash.clone(),
+			hash,
 			0,
 			proposal_weight,
 			proposal_len
 		));
 
-		let record =
-			|event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::CollectiveMajority(RawEvent::Proposed(1, 0, hash.clone(), 5))),
-				record(Event::CollectiveMajority(RawEvent::Voted(1, hash.clone(), true, 1, 0))),
-				record(Event::CollectiveMajority(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::CollectiveMajority(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
-				record(Event::CollectiveMajority(RawEvent::Closed(hash.clone(), 5, 0))),
-				record(Event::CollectiveMajority(RawEvent::Approved(hash.clone()))),
+				record(Event::CollectiveMajority(RawEvent::Proposed(1, 0, hash, 5))),
+				record(Event::CollectiveMajority(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::CollectiveMajority(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::CollectiveMajority(RawEvent::Voted(3, hash, true, 3, 0))),
+				record(Event::CollectiveMajority(RawEvent::Closed(hash, 5, 0))),
+				record(Event::CollectiveMajority(RawEvent::Approved(hash))),
 				record(Event::CollectiveMajority(RawEvent::Executed(
-					hash.clone(),
+					hash,
 					Err(DispatchError::BadOrigin)
 				)))
 			]
@@ -450,8 +422,8 @@ fn removal_of_old_voters_votes_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
@@ -471,8 +443,8 @@ fn removal_of_old_voters_votes_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 1, true));
-		assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 1, true));
+		assert_ok!(Collective::vote(Origin::signed(3), hash, 1, false));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
@@ -498,18 +470,13 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 		);
-		assert_ok!(Collective::set_members(
-			Origin::root(),
-			vec![2, 3, 4],
-			None,
-			MaxMembers::get()
-		));
+		assert_ok!(Collective::set_members(Origin::root(), vec![2, 3, 4], None, MaxMembers::get()));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -524,18 +491,13 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 1, true));
-		assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 1, true));
+		assert_ok!(Collective::vote(Origin::signed(3), hash, 1, false));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 		);
-		assert_ok!(Collective::set_members(
-			Origin::root(),
-			vec![2, 4],
-			None,
-			MaxMembers::get()
-		));
+		assert_ok!(Collective::set_members(Origin::root(), vec![2, 4], None, MaxMembers::get()));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
@@ -567,13 +529,7 @@ fn propose_works() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: Event::Collective(RawEvent::Proposed(
-					1,
-					0,
-					hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"]
-						.into(),
-					3,
-				)),
+				event: Event::Collective(RawEvent::Proposed(1, 0, hash, 3)),
 				topics: vec![],
 			}]
 		);
@@ -608,12 +564,7 @@ fn correct_validate_and_get_proposal() {
 		let proposal =
 			Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
 		let length = proposal.encode().len() as u32;
-		assert_ok!(Collective::propose(
-			Origin::signed(1),
-			3,
-			Box::new(proposal.clone()),
-			length
-		));
+		assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length));
 
 		let hash = BlakeTwo256::hash_of(&proposal);
 		let weight = proposal.get_dispatch_info().weight;
@@ -647,12 +598,7 @@ fn motions_ignoring_non_collective_proposals_works() {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		assert_noop!(
-			Collective::propose(
-				Origin::signed(42),
-				3,
-				Box::new(proposal.clone()),
-				proposal_len
-			),
+			Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone()), proposal_len),
 			Error::<Test, Instance1>::NotMember
 		);
 	});
@@ -671,7 +617,7 @@ fn motions_ignoring_non_collective_votes_works() {
 			proposal_len
 		));
 		assert_noop!(
-			Collective::vote(Origin::signed(42), hash.clone(), 0, true),
+			Collective::vote(Origin::signed(42), hash, 0, true),
 			Error::<Test, Instance1>::NotMember,
 		);
 	});
@@ -691,7 +637,7 @@ fn motions_ignoring_bad_index_collective_vote_works() {
 			proposal_len
 		));
 		assert_noop!(
-			Collective::vote(Origin::signed(2), hash.clone(), 1, true),
+			Collective::vote(Origin::signed(2), hash, 1, true),
 			Error::<Test, Instance1>::WrongIndex,
 		);
 	});
@@ -716,25 +662,25 @@ fn motions_vote_after_works() {
 			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![], end })
 		);
 		// Cast first aye vote.
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
 		);
 		// Try to cast a duplicate aye vote.
 		assert_noop!(
-			Collective::vote(Origin::signed(1), hash.clone(), 0, true),
+			Collective::vote(Origin::signed(1), hash, 0, true),
 			Error::<Test, Instance1>::DuplicateVote,
 		);
 		// Cast a nay vote.
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, false));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1], end })
 		);
 		// Try to cast a duplicate nay vote.
 		assert_noop!(
-			Collective::vote(Origin::signed(1), hash.clone(), 0, false),
+			Collective::vote(Origin::signed(1), hash, 0, false),
 			Error::<Test, Instance1>::DuplicateVote,
 		);
 
@@ -781,50 +727,40 @@ fn motions_all_first_vote_free_works() {
 
 		// For the motion, acc 2's first vote, expecting Ok with Pays::No.
 		let vote_rval: DispatchResultWithPostInfo =
-			Collective::vote(Origin::signed(2), hash.clone(), 0, true);
+			Collective::vote(Origin::signed(2), hash, 0, true);
 		assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
 
 		// Duplicate vote, expecting error with Pays::Yes.
 		let vote_rval: DispatchResultWithPostInfo =
-			Collective::vote(Origin::signed(2), hash.clone(), 0, true);
+			Collective::vote(Origin::signed(2), hash, 0, true);
 		assert_eq!(vote_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 
 		// Modifying vote, expecting ok with Pays::Yes.
 		let vote_rval: DispatchResultWithPostInfo =
-			Collective::vote(Origin::signed(2), hash.clone(), 0, false);
+			Collective::vote(Origin::signed(2), hash, 0, false);
 		assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
 
 		// For the motion, acc 3's first vote, expecting Ok with Pays::No.
 		let vote_rval: DispatchResultWithPostInfo =
-			Collective::vote(Origin::signed(3), hash.clone(), 0, true);
+			Collective::vote(Origin::signed(3), hash, 0, true);
 		assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
 
 		// acc 3 modify the vote, expecting Ok with Pays::Yes.
 		let vote_rval: DispatchResultWithPostInfo =
-			Collective::vote(Origin::signed(3), hash.clone(), 0, false);
+			Collective::vote(Origin::signed(3), hash, 0, false);
 		assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
 
 		// Test close() Extrincis | Check DispatchResultWithPostInfo with Pay Info
 
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		let close_rval: DispatchResultWithPostInfo = Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len,
-		);
+		let close_rval: DispatchResultWithPostInfo =
+			Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len);
 		assert_eq!(close_rval.unwrap().pays_fee, Pays::No);
 
 		// trying to close the proposal, which is already closed.
 		// Expecting error "ProposalMissing" with Pays::Yes
-		let close_rval: DispatchResultWithPostInfo = Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len,
-		);
+		let close_rval: DispatchResultWithPostInfo =
+			Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len);
 		assert_eq!(close_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 	});
 }
@@ -842,14 +778,8 @@ fn motions_reproposing_disapproved_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
-		assert_ok!(Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, false));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 		assert_eq!(*Collective::proposals(), vec![]);
 		assert_ok!(Collective::propose(
 			Origin::signed(1),
@@ -877,16 +807,10 @@ fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 0, true));
-		assert_ok!(Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(3), hash, 0, true));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 		assert_eq!(
 			System::events(),
 			vec![
@@ -922,7 +846,9 @@ fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed),
+					event: Event::Democracy(
+						mock_democracy::pallet::Event::<Test>::ExternalProposed
+					),
 					topics: vec![],
 				},
 				EventRecord {
@@ -948,80 +874,36 @@ fn motions_disapproval_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
-		assert_ok!(Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, false));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 
 		assert_eq!(
 			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(
-						1,
-						0,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						3,
-					)),
+					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 3)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(
-						1,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						true,
-						1,
-						0,
-					)),
+					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(
-						2,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						false,
-						1,
-						1,
-					)),
+					event: Event::Collective(RawEvent::Voted(2, hash, false, 1, 1)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Closed(
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						1,
-						1,
-					)),
+					event: Event::Collective(RawEvent::Closed(hash, 1, 1)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Disapproved(
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-					)),
+					event: Event::Collective(RawEvent::Disapproved(hash)),
 					topics: vec![],
 				}
 			]
@@ -1042,90 +924,43 @@ fn motions_approval_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
-		assert_ok!(Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 
 		assert_eq!(
 			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(
-						1,
-						0,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						2,
-					)),
+					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 2)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(
-						1,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						true,
-						1,
-						0,
-					)),
+					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(
-						2,
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						true,
-						2,
-						0,
-					)),
+					event: Event::Collective(RawEvent::Voted(2, hash, true, 2, 0)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Closed(
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						2,
-						0,
-					)),
+					event: Event::Collective(RawEvent::Closed(hash, 2, 0)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Approved(
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-					)),
+					event: Event::Collective(RawEvent::Approved(hash)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Collective(RawEvent::Executed(
-						hex![
-							"68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"
-						]
-						.into(),
-						Err(DispatchError::BadOrigin),
+						hash,
+						Err(DispatchError::BadOrigin)
 					)),
 					topics: vec![],
 				}
@@ -1137,8 +972,7 @@ fn motions_approval_works() {
 #[test]
 fn motion_with_no_votes_closes_with_disapproval() {
 	new_test_ext().execute_with(|| {
-		let record =
-			|event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -1151,19 +985,13 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		));
 		assert_eq!(
 			System::events()[0],
-			record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3)))
+			record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3)))
 		);
 
 		// Closing the motion too early is not possible because it has neither
 		// an approving or disapproving simple majority due to the lack of votes.
 		assert_noop!(
-			Collective::close(
-				Origin::signed(2),
-				hash.clone(),
-				0,
-				proposal_weight,
-				proposal_len
-			),
+			Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len),
 			Error::<Test, Instance1>::TooEarly
 		);
 
@@ -1171,23 +999,11 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		let closing_block = System::block_number() + MotionDuration::get();
 		System::set_block_number(closing_block);
 		// we can successfully close the motion.
-		assert_ok!(Collective::close(
-			Origin::signed(2),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 
 		// Events show that the close ended in a disapproval.
-		assert_eq!(
-			System::events()[1],
-			record(Event::Collective(RawEvent::Closed(hash.clone(), 0, 3)))
-		);
-		assert_eq!(
-			System::events()[2],
-			record(Event::Collective(RawEvent::Disapproved(hash.clone())))
-		);
+		assert_eq!(System::events()[1], record(Event::Collective(RawEvent::Closed(hash, 0, 3))));
+		assert_eq!(System::events()[2], record(Event::Collective(RawEvent::Disapproved(hash))));
 	})
 }
 
@@ -1207,22 +1023,22 @@ fn close_disapprove_does_not_care_about_weight_or_len() {
 			proposal_len
 		));
 		// First we make the proposal succeed
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		// It will not close with bad weight/len information
 		assert_noop!(
-			Collective::close(Origin::signed(2), hash.clone(), 0, 0, 0),
+			Collective::close(Origin::signed(2), hash, 0, 0, 0),
 			Error::<Test, Instance1>::WrongProposalLength,
 		);
 		assert_noop!(
-			Collective::close(Origin::signed(2), hash.clone(), 0, 0, proposal_len),
+			Collective::close(Origin::signed(2), hash, 0, 0, proposal_len),
 			Error::<Test, Instance1>::WrongProposalWeight,
 		);
 		// Now we make the proposal fail
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, false));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, false));
 		// It can close even if the weight/len information is bad
-		assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, 0, 0));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, 0, 0));
 	})
 }
 
@@ -1239,19 +1055,18 @@ fn disapprove_proposal_works() {
 			proposal_len
 		));
 		// Proposal would normally succeed
-		assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		// But Root can disapprove and remove it anyway
-		assert_ok!(Collective::disapprove_proposal(Origin::root(), hash.clone()));
-		let record =
-			|event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+		assert_ok!(Collective::disapprove_proposal(Origin::root(), hash));
+		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 2))),
-				record(Event::Collective(RawEvent::Voted(1, hash.clone(), true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::Collective(RawEvent::Disapproved(hash.clone()))),
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Disapproved(hash))),
 			]
 		);
 	})
@@ -1260,10 +1075,7 @@ fn disapprove_proposal_works() {
 #[test]
 #[should_panic(expected = "Members cannot contain duplicate accounts.")]
 fn genesis_build_panics_with_duplicate_members() {
-	collective::GenesisConfig::<Test> {
-		members: vec![1, 2, 3, 1],
-		phantom: Default::default(),
-	}
-	.build_storage()
-	.unwrap();
+	collective::GenesisConfig::<Test> { members: vec![1, 2, 3, 1], phantom: Default::default() }
+		.build_storage()
+		.unwrap();
 }
