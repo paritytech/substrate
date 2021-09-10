@@ -57,26 +57,6 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 		on_chain_storage_version,
 	);
 
-	#[cfg(test)]
-	if on_chain_storage_version <= 4 {
-		frame_support::storage::migration::move_pallet(
-			old_pallet_name.as_bytes(),
-			new_pallet_name.as_bytes(),
-		);
-		log_migration("migration", old_pallet_name, new_pallet_name);
-
-		StorageVersion::new(4).put::<P>();
-		<T as frame_system::Config>::BlockWeights::get().max_block
-	} else {
-		log::warn!(
-			target: "runtime::collective",
-			"Attempted to apply migration to v4 but failed because storage version is {:?}",
-			on_chain_storage_version,
-		);
-		0
-	}
-
-	#[cfg(not(test))]
 	if on_chain_storage_version < 4 {
 		frame_support::storage::migration::move_pallet(
 			old_pallet_name.as_bytes(),
@@ -128,9 +108,6 @@ pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_
 		HexDisplay::from(&storage::next_key(&new_pallet_prefix).unwrap()),
 	);
 
-	#[cfg(test)]
-	assert!(<P as GetStorageVersion>::on_chain_storage_version() <= 4);
-	#[cfg(not(test))]
 	assert!(<P as GetStorageVersion>::on_chain_storage_version() < 4);
 }
 

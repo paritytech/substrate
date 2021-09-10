@@ -2264,6 +2264,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			use frame_support::traits::PalletInfo;
 
+			StorageVersion::new(0).put::<Collective>();
+			StorageVersion::new(0).put::<CollectiveMajority>();
+			StorageVersion::new(0).put::<DefaultCollective>();
+
 			let old_pallet =
 				<Test as frame_system::Config>::PalletInfo::name::<Collective>().unwrap();
 			let new_pallet = "NewCollective";
