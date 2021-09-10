@@ -92,13 +92,13 @@ pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 	let storage_version_key =
 		[&new_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
-	// ensure nothing is stored in the new prefix.
+	// ensure nothing is stored in the new prefix, or the first key is storage_version_key.
 	assert!(
 		storage::next_key(&new_pallet_prefix).map_or(
 			// either nothing is there
 			true,
 			// or we ensure that it has no common prefix with twox_128(new),
-			// or isn't the storage version that is already stored using the pallet name
+			// or it's the storage version that is already stored using the pallet name
 			|next_key| {
 				!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
 			},

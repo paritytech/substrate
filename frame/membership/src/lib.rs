@@ -794,8 +794,6 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			use frame_support::traits::PalletInfo;
 
-			StorageVersion::new(0).put::<Membership>();
-
 			let old_pallet_name =
 				<Test as frame_system::Config>::PalletInfo::name::<Membership>().unwrap();
 			let new_pallet_name = "NewMembership";
