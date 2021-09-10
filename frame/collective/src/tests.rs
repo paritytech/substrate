@@ -173,6 +173,10 @@ fn make_proposal(value: u64) -> Call {
 	Call::System(frame_system::Call::remark(value.encode()))
 }
 
+fn record(event: Event) -> EventRecord<Event, H256> {
+	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
+}
+
 #[test]
 fn motions_basic_environment_works() {
 	new_test_ext().execute_with(|| {
@@ -207,7 +211,6 @@ fn close_works() {
 		System::set_block_number(4);
 		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
@@ -301,7 +304,6 @@ fn close_with_prime_works() {
 		System::set_block_number(4);
 		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
@@ -341,7 +343,6 @@ fn close_with_voting_prime_works() {
 		System::set_block_number(4);
 		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
 
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
@@ -389,7 +390,6 @@ fn close_with_no_prime_but_majority_works() {
 			proposal_len
 		));
 
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
@@ -526,11 +526,7 @@ fn propose_works() {
 
 		assert_eq!(
 			System::events(),
-			vec![EventRecord {
-				phase: Phase::Initialization,
-				event: Event::Collective(RawEvent::Proposed(1, 0, hash, 3)),
-				topics: vec![],
-			}]
+			vec![record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3)))]
 		);
 	});
 }
@@ -686,21 +682,9 @@ fn motions_vote_after_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 2)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(1, hash, false, 0, 1)),
-					topics: vec![],
-				}
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(1, hash, false, 0, 1))),
 			]
 		);
 	});
@@ -813,48 +797,14 @@ fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 2)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(2, hash, true, 2, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(3, hash, true, 3, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Closed(hash, 3, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Approved(hash)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Democracy(
-						mock_democracy::pallet::Event::<Test>::ExternalProposed
-					),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Executed(hash, Ok(()))),
-					topics: vec![],
-				}
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Voted(3, hash, true, 3, 0))),
+				record(Event::Collective(RawEvent::Closed(hash, 3, 0))),
+				record(Event::Collective(RawEvent::Approved(hash))),
+				record(Event::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed)),
+				record(Event::Collective(RawEvent::Executed(hash, Ok(())))),
 			]
 		);
 	});
@@ -880,31 +830,11 @@ fn motions_disapproval_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 3)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(2, hash, false, 1, 1)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Closed(hash, 1, 1)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Disapproved(hash)),
-					topics: vec![],
-				}
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, false, 1, 1))),
+				record(Event::Collective(RawEvent::Closed(hash, 1, 1))),
+				record(Event::Collective(RawEvent::Disapproved(hash))),
 			]
 		);
 	});
@@ -930,39 +860,12 @@ fn motions_approval_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Proposed(1, 0, hash, 2)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(1, hash, true, 1, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Voted(2, hash, true, 2, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Closed(hash, 2, 0)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Approved(hash)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Collective(RawEvent::Executed(
-						hash,
-						Err(DispatchError::BadOrigin)
-					)),
-					topics: vec![],
-				}
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash, 2, 0))),
+				record(Event::Collective(RawEvent::Approved(hash))),
+				record(Event::Collective(RawEvent::Executed(hash, Err(DispatchError::BadOrigin)))),
 			]
 		);
 	});
@@ -971,7 +874,6 @@ fn motions_approval_works() {
 #[test]
 fn motion_with_no_votes_closes_with_disapproval() {
 	new_test_ext().execute_with(|| {
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -1058,7 +960,6 @@ fn disapprove_proposal_works() {
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		// But Root can disapprove and remove it anyway
 		assert_ok!(Collective::disapprove_proposal(Origin::root(), hash));
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
 			vec![
