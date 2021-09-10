@@ -1735,6 +1735,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The buffer should be 33 bytes. Traps otherwise.
 	// 				   The function will write the result directly into this buffer.
+	//
 	// # Errors
 	//
 	// `ReturnCode::EcdsaRecoverFailed`

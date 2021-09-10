@@ -1,5 +1,5 @@
 ;; This contract:
-;; 1) Read signature and message hash from the input
+;; 1) Reads signature and message hash from the input
 ;; 2) Calls ecdsa_recover
 ;; 3) Validates that result is Success
 ;; 4) Returns recovered compressed public key

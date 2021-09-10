@@ -207,7 +207,7 @@ pub trait Ext: sealing::Sealed {
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
 
-	/// Recovers ECDSA compressed public key based on signature and message hash
+	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
 }
 

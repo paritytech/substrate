@@ -1416,7 +1416,7 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Only calling the function itself with valid arguments.
-	// It generates different private keys and signatures for the message "Hello world"
+	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		use rand::SeedableRng;
