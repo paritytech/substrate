@@ -1,0 +1,45 @@
+[package]
+name = "pallet-state-migrate-0-to-1"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Unlicense"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME example pallet"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.14", default-features = false }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
+
+[dev-dependencies]
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"log/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+  "sp-state-machine/std",
+	"sp-std/std"
+]
+runtime-benchmarks = ["frame-benchmarking"]
+try-runtime = ["frame-support/try-runtime"]

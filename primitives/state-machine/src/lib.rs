@@ -980,6 +980,60 @@ mod execution {
 	}
 }
 
+#[cfg(feature = "std")]
+use sp_core::storage::ChildInfo;
+#[cfg(feature = "std")]
+use std::collections::{HashMap, BTreeMap};
+
+/// Test helper to get some random storage.
+#[cfg(feature = "std")]
+pub fn build_random_storage(seed: u32) -> (
+	HashMap<Option<ChildInfo>, BTreeMap<Vec<u8>, Vec<u8>>>,
+	Vec<ChildInfo>,
+) {
+	use rand::{rngs::SmallRng, RngCore, SeedableRng};
+	let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
+		Default::default();
+	let mut seed_bytes = [0; 16];
+	let mut child_infos = Vec::new();
+	&seed_bytes[0..4].copy_from_slice(&seed.to_be_bytes()[..]);
+	&seed_bytes[4..8].copy_from_slice(&seed.to_be_bytes()[..]);
+	&seed_bytes[8..12].copy_from_slice(&seed.to_be_bytes()[..]);
+	&seed_bytes[12..].copy_from_slice(&seed.to_be_bytes()[..]);
+	let mut rand = SmallRng::from_seed(seed_bytes);
+
+	let nb_child_trie = rand.next_u32() as usize % 25;
+	for _ in 0..nb_child_trie {
+		let key_len = 1 + (rand.next_u32() % 10);
+		let mut key = vec![0; key_len as usize];
+		rand.fill_bytes(&mut key[..]);
+		let child_info = ChildInfo::new_default(key.as_slice());
+		let nb_item = 1 + rand.next_u32() % 25;
+		let mut items = BTreeMap::new();
+		for item in 0..nb_item {
+			let key_len = 1 + (rand.next_u32() % 10);
+			let mut key = vec![0; key_len as usize];
+			rand.fill_bytes(&mut key[..]);
+			let value = vec![item as u8; item as usize + 28];
+			items.insert(key, value);
+		}
+		child_infos.push(child_info.clone());
+		storage.insert(Some(child_info), items);
+	}
+
+	let nb_item = 1 + rand.next_u32() % 50;
+	let mut items = BTreeMap::new();
+	for item in 0..nb_item {
+		let key_len = 1 + (rand.next_u32() % 10);
+		let mut key = vec![0; key_len as usize];
+		rand.fill_bytes(&mut key[..]);
+		let value = vec![item as u8; item as usize + 28];
+		items.insert(key, value);
+	}
+	storage.insert(None, items);
+	(storage, child_infos)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{changes_trie::Configuration as ChangesTrieConfig, ext::Ext, *};
@@ -1590,37 +1644,17 @@ mod tests {
 	#[test]
 	fn child_read_compact_stress_test() {
 		use rand::{rngs::SmallRng, RngCore, SeedableRng};
-		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
-			Default::default();
 		let mut seed = [0; 16];
-		for i in 0..50u32 {
-			let mut child_infos = Vec::new();
+		let nb_iter = 50u32;
+		for i in 0..nb_iter {
+			let (storage, child_infos) = build_random_storage(seed + nb_iter);
 			&seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
-			let mut rand = SmallRng::from_seed(seed);
-
-			let nb_child_trie = rand.next_u32() as usize % 25;
-			for _ in 0..nb_child_trie {
-				let key_len = 1 + (rand.next_u32() % 10);
-				let mut key = vec![0; key_len as usize];
-				rand.fill_bytes(&mut key[..]);
-				let child_info = ChildInfo::new_default(key.as_slice());
-				let nb_item = 1 + rand.next_u32() % 25;
-				let mut items = BTreeMap::new();
-				for item in 0..nb_item {
-					let key_len = 1 + (rand.next_u32() % 10);
-					let mut key = vec![0; key_len as usize];
-					rand.fill_bytes(&mut key[..]);
-					let value = vec![item as u8; item as usize + 28];
-					items.insert(key, value);
-				}
-				child_infos.push(child_info.clone());
-				storage.insert(Some(child_info), items);
-			}
-
-			let trie: InMemoryBackend<BlakeTwo256> =
-				(storage.clone(), StateVersion::default()).into();
 			let trie_root = trie.root().clone();
 			let backend = crate::ProvingBackend::new(&trie);
+
+			let mut rand = SmallRng::from_seed(seed);
+			let trie: InMemoryBackend<BlakeTwo256> = storage.clone().into();
+			let nb_child_trie = child_infos.len();
 			let mut queries = Vec::new();
 			for c in 0..(5 + nb_child_trie / 2) {
 				// random existing query

@@ -110,6 +110,7 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/state-migrate-0-to-1",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
