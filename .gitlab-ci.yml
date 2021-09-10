@@ -38,7 +38,9 @@ variables:                         &default-vars
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
+  # FIXME: revert me
+  # CI_IMAGE:                        "paritytech/ci-linux:production"
+  CI_IMAGE:                        "paritytech/ci-linux:staging-1.54.0"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
