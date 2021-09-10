@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_io::{hashing::twox_128, storage};
+use sp_io::hashing::twox_128;
 
 use frame_support::{
 	traits::{
