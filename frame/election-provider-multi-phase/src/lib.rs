@@ -535,8 +535,6 @@ pub enum FeasibilityError {
 	InvalidVote,
 	/// A voter is invalid.
 	InvalidVoter,
-	/// A winner is invalid.
-	InvalidWinner,
 	/// The given score was invalid.
 	InvalidScore,
 	/// The provided round is incorrect.
@@ -1640,7 +1638,7 @@ mod feasibility_check {
 			});
 			assert_noop!(
 				MultiPhase::feasibility_check(raw, COMPUTE),
-				FeasibilityError::InvalidWinner
+				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex)
 			);
 		})
 	}
