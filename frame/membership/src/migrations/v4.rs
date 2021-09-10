@@ -88,10 +88,6 @@ pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_
 		return
 	}
 
-	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	assert!(storage::next_key(&old_pallet_prefix)
-		.map_or(true, |next_key| next_key.starts_with(&old_pallet_prefix)));
-
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 	let storage_version_key = twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX);
 
@@ -129,7 +125,6 @@ pub fn post_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new
 	);
 	assert_eq!(old_pallet_prefix_iter.count(), 0);
 
-	// Assert that at least one key have been moved to the new prefix.
 	// NOTE: storage_version_key is already in the new prefix.
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 	let new_pallet_prefix_iter = frame_support::storage::KeyPrefixIterator::new(
@@ -137,7 +132,7 @@ pub fn post_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new
 		new_pallet_prefix.to_vec(),
 		|_| Ok(()),
 	);
-	assert!(new_pallet_prefix_iter.count() > 1);
+	assert!(new_pallet_prefix_iter.count() >= 1);
 
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }
