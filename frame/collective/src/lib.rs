@@ -2264,30 +2264,44 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			use frame_support::traits::PalletInfo;
 
+			let old_pallet = "OldCollective";
+			let new_pallet =
+				<Test as frame_system::Config>::PalletInfo::name::<Collective>().unwrap();
+			frame_support::storage::migration::move_pallet(
+				new_pallet.as_bytes(),
+				old_pallet.as_bytes(),
+			);
 			StorageVersion::new(0).put::<Collective>();
+
+			crate::migrations::v4::pre_migrate::<Collective, _>(old_pallet);
+			crate::migrations::v4::migrate::<Test, Collective, _>(old_pallet);
+			crate::migrations::v4::post_migrate::<Collective, _>(old_pallet);
+
+			let old_pallet = "OldCollectiveMajority";
+			let new_pallet =
+				<Test as frame_system::Config>::PalletInfo::name::<CollectiveMajority>().unwrap();
+			frame_support::storage::migration::move_pallet(
+				new_pallet.as_bytes(),
+				old_pallet.as_bytes(),
+			);
 			StorageVersion::new(0).put::<CollectiveMajority>();
+
+			crate::migrations::v4::pre_migrate::<CollectiveMajority, _>(old_pallet);
+			crate::migrations::v4::migrate::<Test, CollectiveMajority, _>(old_pallet);
+			crate::migrations::v4::post_migrate::<CollectiveMajority, _>(old_pallet);
+
+			let old_pallet = "OldDefaultCollective";
+			let new_pallet =
+				<Test as frame_system::Config>::PalletInfo::name::<CollectiveMajority>().unwrap();
+			frame_support::storage::migration::move_pallet(
+				new_pallet.as_bytes(),
+				old_pallet.as_bytes(),
+			);
 			StorageVersion::new(0).put::<DefaultCollective>();
 
-			let old_pallet =
-				<Test as frame_system::Config>::PalletInfo::name::<Collective>().unwrap();
-			let new_pallet = "NewCollective";
-			crate::migrations::v4::pre_migrate::<Collective, _>(old_pallet, new_pallet);
-			crate::migrations::v4::migrate::<Test, Collective, _>(old_pallet, new_pallet);
-			crate::migrations::v4::post_migrate::<Collective, _>(old_pallet, new_pallet);
-
-			let old_pallet =
-				<Test as frame_system::Config>::PalletInfo::name::<CollectiveMajority>().unwrap();
-			let new_pallet = "NewCollectiveMajority";
-			crate::migrations::v4::pre_migrate::<CollectiveMajority, _>(old_pallet, new_pallet);
-			crate::migrations::v4::migrate::<Test, CollectiveMajority, _>(old_pallet, new_pallet);
-			crate::migrations::v4::post_migrate::<CollectiveMajority, _>(old_pallet, new_pallet);
-
-			let old_pallet =
-				<Test as frame_system::Config>::PalletInfo::name::<DefaultCollective>().unwrap();
-			let new_pallet = "NewDefaultCollective";
-			crate::migrations::v4::pre_migrate::<DefaultCollective, _>(old_pallet, new_pallet);
-			crate::migrations::v4::migrate::<Test, DefaultCollective, _>(old_pallet, new_pallet);
-			crate::migrations::v4::post_migrate::<DefaultCollective, _>(old_pallet, new_pallet);
+			crate::migrations::v4::pre_migrate::<DefaultCollective, _>(old_pallet);
+			crate::migrations::v4::migrate::<Test, DefaultCollective, _>(old_pallet);
+			crate::migrations::v4::post_migrate::<DefaultCollective, _>(old_pallet);
 		});
 	}
 }
