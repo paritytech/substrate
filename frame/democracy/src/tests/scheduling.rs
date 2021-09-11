@@ -154,4 +154,3 @@ fn lowest_unbaked_should_be_sensible() {
 		assert_eq!(Democracy::lowest_unbaked(), Democracy::referendum_count());
 	});
 }
-
