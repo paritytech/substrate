@@ -353,8 +353,6 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 #[cfg(feature = "full_crypto")]
 ss58_registry::ss58_registry!();
 
-
-
 #[cfg(feature = "std")]
 lazy_static::lazy_static! {
 	static ref SS58_REGEX: Regex = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
