@@ -32,8 +32,8 @@ use libp2p::{
 use log::{error, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};
-use smallvec::SmallVec;
 use sc_peerset::DropReason;
+use smallvec::SmallVec;
 use std::{
 	borrow::Cow,
 	cmp,
@@ -243,9 +243,8 @@ impl PeerState {
 	/// that is open for custom protocol traffic.
 	fn get_open(&self) -> Option<&NotificationsSink> {
 		match self {
-			PeerState::Enabled { connections, .. } => connections
-				.iter()
-				.find_map(|(_, s)| match s {
+			PeerState::Enabled { connections, .. } =>
+				connections.iter().find_map(|(_, s)| match s {
 					ConnectionState::Open(s) => Some(s),
 					_ => None,
 				}),
@@ -607,8 +606,7 @@ impl Notifications {
 		set_id: sc_peerset::SetId,
 		message: impl Into<Vec<u8>>,
 	) {
-		let notifs_sink = match self.peers.get(&(*target, set_id)).and_then(|p| p.get_open())
-		{
+		let notifs_sink = match self.peers.get(&(*target, set_id)).and_then(|p| p.get_open()) {
 			None => {
 				trace!(target: "sub-libp2p",
 					"Tried to sent notification to {:?} without an open channel.",
@@ -1152,9 +1150,7 @@ impl NetworkBehaviour for Notifications {
 		_endpoint: &ConnectedPoint,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
-			let mut entry = if let Entry::Occupied(entry) =
-				self.peers.entry((*peer_id, set_id))
-			{
+			let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 				entry
 			} else {
 				error!(target: "sub-libp2p", "inject_connection_closed: State mismatch in the custom protos handler");
@@ -1322,14 +1318,11 @@ impl NetworkBehaviour for Notifications {
 					if let Some(pos) = connections.iter().position(|(c, _)| *c == *conn) {
 						let (_, state) = connections.remove(pos);
 						if let ConnectionState::Open(_) = state {
-							if let Some((replacement_pos, replacement_sink)) = connections
-								.iter()
-								.enumerate()
-								.find_map(|(num, (_, s))| match s {
+							if let Some((replacement_pos, replacement_sink)) =
+								connections.iter().enumerate().find_map(|(num, (_, s))| match s {
 									ConnectionState::Open(s) => Some((num, s.clone())),
 									_ => None,
-								})
-							{
+								}) {
 								if pos <= replacement_pos {
 									trace!(
 										target: "sub-libp2p",
@@ -1492,17 +1485,16 @@ impl NetworkBehaviour for Notifications {
 					"Handler({:?}, {:?}]) => OpenDesiredByRemote({:?})",
 					source, connection, set_id);
 
-				let mut entry =
-					if let Entry::Occupied(entry) = self.peers.entry((source, set_id)) {
-						entry
-					} else {
-						error!(
-							target: "sub-libp2p",
-							"OpenDesiredByRemote: State mismatch in the custom protos handler"
-						);
-						debug_assert!(false);
-						return
-					};
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((source, set_id)) {
+					entry
+				} else {
+					error!(
+						target: "sub-libp2p",
+						"OpenDesiredByRemote: State mismatch in the custom protos handler"
+					);
+					debug_assert!(false);
+					return
+				};
 
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					// Incoming => Incoming
@@ -1679,14 +1671,13 @@ impl NetworkBehaviour for Notifications {
 					"Handler({}, {:?}) => CloseDesired({:?})",
 					source, connection, set_id);
 
-				let mut entry =
-					if let Entry::Occupied(entry) = self.peers.entry((source, set_id)) {
-						entry
-					} else {
-						error!(target: "sub-libp2p", "CloseDesired: State mismatch in the custom protos handler");
-						debug_assert!(false);
-						return
-					};
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((source, set_id)) {
+					entry
+				} else {
+					error!(target: "sub-libp2p", "CloseDesired: State mismatch in the custom protos handler");
+					debug_assert!(false);
+					return
+				};
 
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					// Enabled => Enabled | Disabled
@@ -1722,14 +1713,11 @@ impl NetworkBehaviour for Notifications {
 							event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 						});
 
-						if let Some((replacement_pos, replacement_sink)) = connections
-							.iter()
-							.enumerate()
-							.find_map(|(num, (_, s))| match s {
+						if let Some((replacement_pos, replacement_sink)) =
+							connections.iter().enumerate().find_map(|(num, (_, s))| match s {
 								ConnectionState::Open(s) => Some((num, s.clone())),
 								_ => None,
-							})
-						{
+							}) {
 							if pos <= replacement_pos {
 								trace!(target: "sub-libp2p", "External API <= Sink replaced({:?})", source);
 								let event = NotificationsOut::CustomProtocolReplaced {
@@ -1889,14 +1877,13 @@ impl NetworkBehaviour for Notifications {
 					"Handler({:?}, {:?}) => OpenResultErr({:?})",
 					source, connection, set_id);
 
-				let mut entry =
-					if let Entry::Occupied(entry) = self.peers.entry((source, set_id)) {
-						entry
-					} else {
-						error!(target: "sub-libp2p", "OpenResultErr: State mismatch in the custom protos handler");
-						debug_assert!(false);
-						return
-					};
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((source, set_id)) {
+					entry
+				} else {
+					error!(target: "sub-libp2p", "OpenResultErr: State mismatch in the custom protos handler");
+					debug_assert!(false);
+					return
+				};
 
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					PeerState::Enabled { mut connections } => {

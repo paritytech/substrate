@@ -1142,7 +1142,7 @@ impl<B: BlockT> ChainSync<B> {
 								start: *start,
 								state: next_state,
 							};
-							return Ok(OnBlockData::Request(*who, ancestry_request::<B>(next_num)));
+							return Ok(OnBlockData::Request(*who, ancestry_request::<B>(next_num)))
 						} else {
 							// Ancestry search is complete. Check if peer is on a stale fork unknown
 							// to us and add it to sync targets if necessary.
@@ -1696,7 +1696,7 @@ impl<B: BlockT> ChainSync<B> {
 				}
 				.boxed(),
 			);
-			return;
+			return
 		}
 
 		// Check if there is a slot for this block announce validation.
@@ -1716,7 +1716,7 @@ impl<B: BlockT> ChainSync<B> {
 					}
 					.boxed(),
 				);
-				return;
+				return
 			},
 			HasSlotForBlockAnnounceValidation::MaximumPeerSlotsReached => {
 				self.block_announce_validation.push(async move {
@@ -1729,7 +1729,7 @@ impl<B: BlockT> ChainSync<B> {
 					);
 					PreValidateBlockAnnounce::Skip
 				}.boxed());
-				return;
+				return
 			},
 		}
 
@@ -1835,7 +1835,7 @@ impl<B: BlockT> ChainSync<B> {
 					who,
 					disconnect,
 				);
-				return PollBlockAnnounceValidation::Failure { who, disconnect };
+				return PollBlockAnnounceValidation::Failure { who, disconnect }
 			},
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } =>
 				(announce, is_new_best, who),
@@ -1844,7 +1844,7 @@ impl<B: BlockT> ChainSync<B> {
 					target: "sync",
 					"Ignored announce validation",
 				);
-				return PollBlockAnnounceValidation::Skip;
+				return PollBlockAnnounceValidation::Skip
 			},
 		};
 
@@ -1868,7 +1868,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer
 		} else {
 			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		};
 
 		if is_best {
@@ -1879,7 +1879,7 @@ impl<B: BlockT> ChainSync<B> {
 
 		if let PeerSyncState::AncestorSearch { .. } = peer.state {
 			trace!(target: "sync", "Peer state is ancestor search.");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		// If the announced block is the best they have and is not ahead of us, our common number
@@ -1901,7 +1901,7 @@ impl<B: BlockT> ChainSync<B> {
 			if let Some(target) = self.fork_targets.get_mut(&hash) {
 				target.peers.insert(who.clone());
 			}
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		if ancient_parent {
@@ -1912,7 +1912,7 @@ impl<B: BlockT> ChainSync<B> {
 				hash,
 				announce.header,
 			);
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		let requires_additional_data = self.mode != SyncMode::Light || !known_parent;
@@ -1924,7 +1924,7 @@ impl<B: BlockT> ChainSync<B> {
 				hash,
 				announce.header,
 			);
-			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who };
+			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
 		if self.status().state == SyncState::Idle {
@@ -1991,7 +1991,7 @@ impl<B: BlockT> ChainSync<B> {
 					// We make sure our commmon number is at least something we have.
 					p.common_number = self.best_queued_number;
 					self.peers.insert(id, p);
-					return None;
+					return None
 				},
 				_ => {},
 			}
@@ -2262,11 +2262,11 @@ fn fork_sync_request<B: BlockT>(
 	targets.retain(|hash, r| {
 		if r.number <= finalized {
 			trace!(target: "sync", "Removed expired fork sync request {:?} (#{})", hash, r.number);
-			return false;
+			return false
 		}
 		if check_block(hash) != BlockStatus::Unknown {
 			trace!(target: "sync", "Removed obsolete fork sync request {:?} (#{})", hash, r.number);
-			return false;
+			return false
 		}
 		true
 	});
@@ -2293,7 +2293,7 @@ fn fork_sync_request<B: BlockT>(
 					direction: message::Direction::Descending,
 					max: Some(count),
 				},
-			));
+			))
 		}
 	}
 	None
@@ -2310,7 +2310,7 @@ where
 	T: HeaderMetadata<Block, Error = sp_blockchain::Error> + ?Sized,
 {
 	if base == block {
-		return Ok(false);
+		return Ok(false)
 	}
 
 	let ancestor = sp_blockchain::lowest_common_ancestor(client, *block, *base)?;
@@ -2337,7 +2337,7 @@ fn validate_blocks<Block: BlockT>(
 				blocks.len(),
 			);
 
-			return Err(BadPeer(*who, rep::NOT_REQUESTED));
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		}
 
 		let block_header = if request.direction == message::Direction::Descending {
@@ -2360,7 +2360,7 @@ fn validate_blocks<Block: BlockT>(
 				block_header,
 			);
 
-			return Err(BadPeer(*who, rep::NOT_REQUESTED));
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		}
 
 		if request.fields.contains(message::BlockAttributes::HEADER) &&
@@ -2372,7 +2372,7 @@ fn validate_blocks<Block: BlockT>(
 				who,
 			);
 
-			return Err(BadPeer(*who, rep::BAD_RESPONSE));
+			return Err(BadPeer(*who, rep::BAD_RESPONSE))
 		}
 
 		if request.fields.contains(message::BlockAttributes::BODY) &&
@@ -2384,7 +2384,7 @@ fn validate_blocks<Block: BlockT>(
 				who,
 			);
 
-			return Err(BadPeer(*who, rep::BAD_RESPONSE));
+			return Err(BadPeer(*who, rep::BAD_RESPONSE))
 		}
 	}
 
@@ -2399,7 +2399,7 @@ fn validate_blocks<Block: BlockT>(
 					b.hash,
 					hash,
 				);
-				return Err(BadPeer(*who, rep::BAD_BLOCK));
+				return Err(BadPeer(*who, rep::BAD_BLOCK))
 			}
 		}
 		if let (Some(header), Some(body)) = (&b.header, &b.body) {
@@ -2415,7 +2415,7 @@ fn validate_blocks<Block: BlockT>(
 					expected,
 					got,
 				);
-				return Err(BadPeer(*who, rep::BAD_BLOCK));
+				return Err(BadPeer(*who, rep::BAD_BLOCK))
 			}
 		}
 	}
@@ -2480,10 +2480,7 @@ mod test {
 		// if the peer replies with an empty response (i.e. it doesn't know the block),
 		// the active request should be cleared.
 		assert_eq!(
-			sync.on_block_justification(
-				peer_id,
-				BlockResponse::<Block> { id: 0, blocks: vec![] }
-			),
+			sync.on_block_justification(peer_id, BlockResponse::<Block> { id: 0, blocks: vec![] }),
 			Ok(OnBlockJustification::Nothing),
 		);
 

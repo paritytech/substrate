@@ -131,10 +131,7 @@ impl<B: BlockT> StateSync<B> {
 			ImportResult::Import(
 				self.target_block,
 				self.target_header.clone(),
-				ImportedState {
-					block: self.target_block,
-					state: std::mem::take(&mut self.state),
-				},
+				ImportedState { block: self.target_block, state: std::mem::take(&mut self.state) },
 			)
 		} else {
 			ImportResult::Continue(self.next_request())

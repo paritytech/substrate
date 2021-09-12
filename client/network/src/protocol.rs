@@ -249,11 +249,7 @@ impl ProtocolConfig {
 
 impl Default for ProtocolConfig {
 	fn default() -> ProtocolConfig {
-		Self {
-			roles: Roles::FULL,
-			max_parallel_downloads: 5,
-			sync_mode: config::SyncMode::Full,
-		}
+		Self { roles: Roles::FULL, max_parallel_downloads: 5, sync_mode: config::SyncMode::Full }
 	}
 }
 
@@ -277,12 +273,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 		best_hash: B::Hash,
 		genesis_hash: B::Hash,
 	) -> Self {
-		Self {
-			genesis_hash,
-			roles: protocol_config.roles,
-			best_number,
-			best_hash,
-		}
+		Self { genesis_hash, roles: protocol_config.roles, best_number, best_hash }
 	}
 }
 
@@ -1427,7 +1418,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 												e
 											);
 											self.peerset_handle.report_peer(*id, rep::BAD_MESSAGE);
-											self.behaviour.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
+											self.behaviour
+												.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
 											continue
 										},
 									};
@@ -1446,7 +1438,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 												e
 											);
 											self.peerset_handle.report_peer(*id, rep::BAD_MESSAGE);
-											self.behaviour.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
+											self.behaviour
+												.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
 											continue
 										},
 									};
@@ -1620,10 +1613,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 								&mut &received_handshake[..],
 							) {
 								Ok(handshake) => {
-									if self
-										.on_sync_peer_connected(peer_id, handshake)
-										.is_ok()
-									{
+									if self.on_sync_peer_connected(peer_id, handshake).is_ok() {
 										CustomMessageOutcome::SyncConnected(peer_id)
 									} else {
 										CustomMessageOutcome::None

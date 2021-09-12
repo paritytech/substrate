@@ -29,7 +29,7 @@ use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
-use log::{trace, debug};
+use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};

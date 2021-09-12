@@ -90,10 +90,7 @@ impl<B: BlockT> BlockCollection<B> {
 		self.blocks.insert(
 			start,
 			BlockRangeState::Complete(
-				blocks
-					.into_iter()
-					.map(|b| BlockData { origin: Some(who), block: b })
-					.collect(),
+				blocks.into_iter().map(|b| BlockData { origin: Some(who), block: b }).collect(),
 			),
 		);
 	}
