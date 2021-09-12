@@ -36,12 +36,9 @@ pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
 use std::{
-	future::Future,
 	io,
 	net::SocketAddr,
 	path::{Path, PathBuf},
-	pin::Pin,
-	sync::Arc,
 };
 use tempfile::TempDir;
 
@@ -54,8 +51,8 @@ pub struct Configuration {
 	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
-	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: TaskExecutor,
+	/// Handle to the tokio runtime. Will be used to spawn futures by the task manager.
+	pub tokio_handle: tokio::runtime::Handle,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -94,8 +91,6 @@ pub struct Configuration {
 	pub rpc_ipc: Option<String>,
 	/// Maximum number of connections for WebSockets RPC server. `None` if default.
 	pub rpc_ws_max_connections: Option<usize>,
-	/// Size of the RPC HTTP server thread pool. `None` if default.
-	pub rpc_http_threads: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
@@ -303,64 +298,5 @@ impl BasePath {
 impl std::convert::From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
-	}
-}
-
-// NOTE: here for code readability.
-pub(crate) type SomeFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-
-/// Callable object that execute tasks.
-///
-/// This struct can be created easily using `Into`.
-///
-/// # Examples
-///
-/// ## Using tokio
-///
-/// ```
-/// # use sc_service::TaskExecutor;
-/// use futures::future::FutureExt;
-/// use tokio::runtime::Runtime;
-///
-/// let runtime = Runtime::new().unwrap();
-/// let handle = runtime.handle().clone();
-/// let task_executor: TaskExecutor = (move |future, _task_type| {
-///     handle.spawn(future).map(|_| ())
-/// }).into();
-/// ```
-///
-/// ## Using async-std
-///
-/// ```
-/// # use sc_service::TaskExecutor;
-/// let task_executor: TaskExecutor = (|future, _task_type| {
-///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
-///     async_std::task::spawn(future)
-/// }).into();
-/// ```
-#[derive(Clone)]
-pub struct TaskExecutor(Arc<dyn Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync>);
-
-impl std::fmt::Debug for TaskExecutor {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "TaskExecutor")
-	}
-}
-
-impl<F, FUT> std::convert::From<F> for TaskExecutor
-where
-	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
-	FUT: Future<Output = ()> + Send + 'static,
-{
-	fn from(func: F) -> Self {
-		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
-	}
-}
-
-impl TaskExecutor {
-	/// Spawns a new asynchronous task.
-	pub fn spawn(&self, future: SomeFuture, task_type: TaskType) -> JoinFuture {
-		self.0(future, task_type)
 	}
 }

@@ -36,9 +36,6 @@ pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
-/// Default thread pool size for RPC HTTP servers.
-const HTTP_THREADS: usize = 4;
-
 /// The RPC IoHandler containing all requested APIs.
 pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
@@ -130,17 +127,18 @@ impl ws::SessionStats for ServerMetrics {
 /// Start HTTP server listening on given address.
 pub fn start_http<M: pubsub::PubSubMetadata + Default + Unpin>(
 	addr: &std::net::SocketAddr,
-	thread_pool_size: Option<usize>,
 	cors: Option<&Vec<String>>,
 	io: RpcHandler<M>,
 	maybe_max_payload_mb: Option<usize>,
+	tokio_handle: tokio::runtime::Handle,
 ) -> io::Result<http::Server> {
 	let max_request_body_size = maybe_max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 
 	http::ServerBuilder::new(io)
-		.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
+		.threads(1)
+		.event_loop_executor(tokio_handle)
 		.health_api(("/health", "system_health"))
 		.allowed_hosts(hosts_filtering(cors.is_some()))
 		.rest_api(if cors.is_some() { http::RestApi::Secure } else { http::RestApi::Unsecure })
@@ -175,6 +173,7 @@ pub fn start_ws<
 	io: RpcHandler<M>,
 	maybe_max_payload_mb: Option<usize>,
 	server_metrics: ServerMetrics,
+	tokio_handle: tokio::runtime::Handle,
 ) -> io::Result<ws::Server> {
 	let rpc_max_payload = maybe_max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
@@ -182,6 +181,7 @@ pub fn start_ws<
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
 		context.sender().into()
 	})
+	.event_loop_executor(tokio_handle)
 	.max_payload(rpc_max_payload)
 	.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 	.allowed_origins(map_cors(cors))
