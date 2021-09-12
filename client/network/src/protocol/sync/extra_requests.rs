@@ -594,7 +594,7 @@ mod tests {
 			let mut peers = HashMap::with_capacity(g.size());
 			for _ in 0..g.size() {
 				let ps = ArbitraryPeerSync::arbitrary(g).0;
-				peers.insert(ps.peer_id.clone(), ps);
+				peers.insert(ps.peer_id, ps);
 			}
 			ArbitraryPeers(peers)
 		}

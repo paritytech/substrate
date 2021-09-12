@@ -2457,7 +2457,7 @@ mod test {
 		};
 
 		// add a new peer with the same best block
-		sync.new_peer(peer_id.clone(), a1_hash, a1_number).unwrap();
+		sync.new_peer(peer_id, a1_hash, a1_number).unwrap();
 
 		// and request a justification for the block
 		sync.request_justification(&a1_hash, a1_number);
@@ -2479,7 +2479,7 @@ mod test {
 		// the active request should be cleared.
 		assert_eq!(
 			sync.on_block_justification(
-				peer_id.clone(),
+				peer_id,
 				BlockResponse::<Block> { id: 0, blocks: vec![] }
 			),
 			Ok(OnBlockJustification::Nothing),

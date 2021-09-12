@@ -218,9 +218,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
-			bootnodes.push(bootnode.peer_id.clone());
-			boot_node_ids.insert(bootnode.peer_id.clone());
-			known_addresses.push((bootnode.peer_id.clone(), bootnode.multiaddr.clone()));
+			bootnodes.push(bootnode.peer_id);
+			boot_node_ids.insert(bootnode.peer_id);
+			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
 
 		let boot_node_ids = Arc::new(boot_node_ids);
@@ -230,7 +230,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			if let Some(other) = known_addresses.iter().find(|o| o.1 == *addr && o.0 != *peer_id) {
 				Err(Error::DuplicateBootnode {
 					address: addr.clone(),
-					first_id: peer_id.clone(),
+					first_id: *peer_id,
 					second_id: other.0.clone(),
 				})
 			} else {
@@ -364,7 +364,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			};
 
-			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
+			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id)
 				.connection_limits(
 					ConnectionLimits::default()
 						.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
@@ -1300,7 +1300,7 @@ where
 
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId {
-		self.local_peer_id.clone()
+		self.local_peer_id
 	}
 }
 

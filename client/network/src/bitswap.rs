@@ -305,7 +305,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 	>{
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-				peer_id: peer_id.clone(),
+				peer_id,
 				handler: NotifyHandler::Any,
 				event: message,
 			})

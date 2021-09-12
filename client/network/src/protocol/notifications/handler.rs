@@ -256,7 +256,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 					Protocol { config, in_upgrade, state: State::Closed { pending_opening: false } }
 				})
 				.collect(),
-			peer_id: peer_id.clone(),
+			peer_id: *peer_id,
 			endpoint: connected_point.clone(),
 			when_connection_open: Instant::now(),
 			events_queue: VecDeque::with_capacity(16),
@@ -552,7 +552,7 @@ impl ProtocolsHandler for NotifsHandler {
 				let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 				let notifications_sink = NotificationsSink {
 					inner: Arc::new(NotificationsSinkInner {
-						peer_id: self.peer_id.clone(),
+						peer_id: self.peer_id,
 						async_channel: FuturesMutex::new(async_tx),
 						sync_channel: Mutex::new(sync_tx),
 					}),

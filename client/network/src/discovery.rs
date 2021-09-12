@@ -205,8 +205,8 @@ impl DiscoveryConfig {
 				config.set_kbucket_inserts(KademliaBucketInserts::Manual);
 				config.disjoint_query_paths(kademlia_disjoint_query_paths);
 
-				let store = MemoryStore::new(local_peer_id.clone());
-				let mut kad = Kademlia::with_config(local_peer_id.clone(), store, config);
+				let store = MemoryStore::new(local_peer_id);
+				let mut kad = Kademlia::with_config(local_peer_id, store, config);
 
 				for (peer_id, addr) in &user_defined {
 					kad.add_address(peer_id, addr.clone());
@@ -583,7 +583,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.clone().into()));
+		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
 
 		// NOTE: we might re-discover the same address multiple times
 		// in which case we just want to refrain from logging.
@@ -668,7 +668,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						"Libp2p <= Starting random Kademlia request for {:?}",
 						random_peer_id);
 					for k in self.kademlias.values_mut() {
-						k.get_closest_peers(random_peer_id.clone());
+						k.get_closest_peers(random_peer_id);
 					}
 					true
 				} else {
@@ -1084,7 +1084,7 @@ mod tests {
 		for kademlia in discovery.kademlias.values_mut() {
 			assert!(
 				kademlia
-					.kbucket(remote_peer_id.clone())
+					.kbucket(remote_peer_id)
 					.expect("Remote peer id not to be equal to local peer id.")
 					.is_empty(),
 				"Expect peer with unsupported protocol not to be added."
@@ -1102,7 +1102,7 @@ mod tests {
 			assert_eq!(
 				1,
 				kademlia
-					.kbucket(remote_peer_id.clone())
+					.kbucket(remote_peer_id)
 					.expect("Remote peer id not to be equal to local peer id.")
 					.num_entries(),
 				"Expect peer with supported protocol to be added."
@@ -1143,7 +1143,7 @@ mod tests {
 				.kademlias
 				.get_mut(&protocol_a)
 				.expect("Kademlia instance to exist.")
-				.kbucket(remote_peer_id.clone())
+				.kbucket(remote_peer_id)
 				.expect("Remote peer id not to be equal to local peer id.")
 				.num_entries(),
 			"Expected remote peer to be added to `protocol_a` Kademlia instance.",
@@ -1154,7 +1154,7 @@ mod tests {
 				.kademlias
 				.get_mut(&protocol_b)
 				.expect("Kademlia instance to exist.")
-				.kbucket(remote_peer_id.clone())
+				.kbucket(remote_peer_id)
 				.expect("Remote peer id not to be equal to local peer id.")
 				.is_empty(),
 			"Expected remote peer not to be added to `protocol_b` Kademlia instance.",

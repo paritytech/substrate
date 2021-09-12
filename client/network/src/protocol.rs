@@ -130,7 +130,7 @@ struct Metrics {
 
 impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Metrics {
+		Ok(Self {
 			peers: {
 				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
@@ -249,7 +249,7 @@ impl ProtocolConfig {
 
 impl Default for ProtocolConfig {
 	fn default() -> ProtocolConfig {
-		ProtocolConfig {
+		Self {
 			roles: Roles::FULL,
 			max_parallel_downloads: 5,
 			sync_mode: config::SyncMode::Full,
@@ -277,7 +277,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 		best_hash: B::Hash,
 		genesis_hash: B::Hash,
 	) -> Self {
-		BlockAnnouncesHandshake {
+		Self {
 			genesis_hash,
 			roles: protocol_config.roles,
 			best_number,
@@ -311,7 +311,7 @@ impl<B: BlockT> Protocol<B> {
 		let boot_node_ids = {
 			let mut list = HashSet::new();
 			for node in &network_config.boot_nodes {
-				list.insert(node.peer_id.clone());
+				list.insert(node.peer_id);
 			}
 			list.shrink_to_fit();
 			list
@@ -320,14 +320,14 @@ impl<B: BlockT> Protocol<B> {
 		let important_peers = {
 			let mut imp_p = HashSet::new();
 			for reserved in &network_config.default_peers_set.reserved_nodes {
-				imp_p.insert(reserved.peer_id.clone());
+				imp_p.insert(reserved.peer_id);
 			}
 			for reserved in network_config
 				.extra_sets
 				.iter()
 				.flat_map(|s| s.set_config.reserved_nodes.iter())
 			{
-				imp_p.insert(reserved.peer_id.clone());
+				imp_p.insert(reserved.peer_id);
 			}
 			imp_p.shrink_to_fit();
 			imp_p
@@ -341,14 +341,14 @@ impl<B: BlockT> Protocol<B> {
 
 			let mut default_sets_reserved = HashSet::new();
 			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
-				default_sets_reserved.insert(reserved.peer_id.clone());
-				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+				default_sets_reserved.insert(reserved.peer_id);
+				known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
 			}
 
 			let mut bootnodes = Vec::with_capacity(network_config.boot_nodes.len());
 			for bootnode in network_config.boot_nodes.iter() {
-				bootnodes.push(bootnode.peer_id.clone());
-				known_addresses.push((bootnode.peer_id.clone(), bootnode.multiaddr.clone()));
+				bootnodes.push(bootnode.peer_id);
+				known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 			}
 
 			// Set number 0 is used for block announces.
@@ -364,8 +364,8 @@ impl<B: BlockT> Protocol<B> {
 			for set_cfg in &network_config.extra_sets {
 				let mut reserved_nodes = HashSet::new();
 				for reserved in set_cfg.set_config.reserved_nodes.iter() {
-					reserved_nodes.insert(reserved.peer_id.clone());
-					known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+					reserved_nodes.insert(reserved.peer_id);
+					known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
 				}
 
 				let reserved_only =
@@ -1603,7 +1603,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 								genesis_hash: handshake.genesis_hash,
 							};
 
-							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
+							if self.on_sync_peer_connected(peer_id, handshake).is_ok() {
 								CustomMessageOutcome::SyncConnected(peer_id)
 							} else {
 								CustomMessageOutcome::None
@@ -1625,7 +1625,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							) {
 								Ok(handshake) => {
 									if self
-										.on_sync_peer_connected(peer_id.clone(), handshake)
+										.on_sync_peer_connected(peer_id, handshake)
 										.is_ok()
 									{
 										CustomMessageOutcome::SyncConnected(peer_id)
@@ -1704,7 +1704,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
-					if self.on_sync_peer_disconnected(peer_id.clone()).is_ok() {
+					if self.on_sync_peer_disconnected(peer_id).is_ok() {
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
 						log::trace!(
