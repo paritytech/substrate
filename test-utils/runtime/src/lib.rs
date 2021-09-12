@@ -573,6 +573,8 @@ impl pallet_timestamp::Config for Runtime {
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
 	pub const ExpectedBlockTime: u64 = 10_000;
+	pub const MaxAuthorities: u32 = 10;
+	pub const MaxSegmentLength: u32 = 256;
 }
 
 impl pallet_babe::Config for Runtime {
@@ -595,8 +597,10 @@ impl pallet_babe::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
-
 	type WeightInfo = ();
+
+	type MaxAuthorities = MaxAuthorities;
+	type MaxSegmentLength = MaxSegmentLength;
 }
 
 /// Adds one to the given input and returns the final result.
