@@ -182,10 +182,22 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
+		type Balance: Member
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaybeSerializeDeserialize + MaxEncodedLen;
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -343,14 +355,19 @@ pub mod pallet {
 			}
 
 			for (id, account_id, amount) in &self.accounts {
-				let result = <Pallet<T, I>>::increase_balance(*id, account_id, *amount, |details| -> DispatchResult {
-					debug_assert!(
-						T::Balance::max_value() - details.supply >= *amount,
-						"checked in prep; qed"
-					);
-					details.supply = details.supply.saturating_add(*amount);
-					Ok(())
-				});
+				let result = <Pallet<T, I>>::increase_balance(
+					*id,
+					account_id,
+					*amount,
+					|details| -> DispatchResult {
+						debug_assert!(
+							T::Balance::max_value() - details.supply >= *amount,
+							"checked in prep; qed"
+						);
+						details.supply = details.supply.saturating_add(*amount);
+						Ok(())
+					},
+				);
 				assert!(result.is_ok());
 			}
 		}
