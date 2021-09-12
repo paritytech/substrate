@@ -447,12 +447,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4521f3e3d031370679b3b140beb36dfe4801b09ac77e30c61941f97df3ef28b"
 
 [[package]]
-name = "base58"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5024ee8015f02155eee35c711107ddd9a9bf3cb689cf2a9089c97e79b6e1ae83"
-
-[[package]]
 name = "base64"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8983,8 +8977,9 @@ dependencies = [
 name = "sp-core"
 version = "4.0.0-dev"
 dependencies = [
- "base58",
+ "arrayvec 0.7.0",
  "blake2-rfc",
+ "bs58",
  "byteorder",
  "criterion",
  "dyn-clonable",

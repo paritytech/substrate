@@ -13,6 +13,7 @@ documentation = "https://docs.rs/sp-core"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+arrayvec = { default-features = false, version = "0.7" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = [
 	"derive",
@@ -28,7 +29,7 @@ impl-serde = { version = "0.3.0", optional = true }
 wasmi = { version = "0.9.0", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
-base58 = { version = "0.1.0", optional = true }
+bs58 = { default-features = false, optional = true, version = "0.4" }
 rand = { version = "0.7.3", optional = true, features = ["small_rng"] }
 substrate-bip39 = { version = "0.4.2", optional = true }
 tiny-bip39 = { version = "0.8", optional = true }
@@ -101,10 +102,9 @@ std = [
 	"sp-std/std",
 	"serde",
 	"twox-hash/std",
-	"blake2-rfc/std",
 	"ed25519-dalek/std",
 	"hex/std",
-	"base58",
+	"bs58",
 	"substrate-bip39",
 	"tiny-bip39",
 	"byteorder/std",

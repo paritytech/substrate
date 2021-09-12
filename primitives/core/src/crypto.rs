@@ -22,8 +22,7 @@
 #[cfg(feature = "std")]
 use crate::hexdisplay::HexDisplay;
 use crate::{ed25519, sr25519};
-#[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
+use arrayvec::{ArrayString, ArrayVec};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
@@ -51,6 +50,9 @@ pub const DEV_PHRASE: &str =
 
 /// The address of the associated root phrase for our publicly known keys.
 pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
+
+// Address will never have more than 64 bytes.
+const ADDRESS_UPPER_BOUND: usize = 64;
 
 /// The infallible type.
 #[derive(crate::RuntimeDebug)]
@@ -248,7 +250,10 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		// Must decode to our type.
 		let body_len = res.as_mut().len();
 
-		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		let mut data = ArrayVec::from([0u8; ADDRESS_UPPER_BOUND]);
+		let len = bs58::decode(s).into(&mut data).map_err(|_| PublicError::BadBase58)?;
+		data.truncate(len);
+
 		if data.len() < 2 {
 			return Err(PublicError::BadLength)
 		}
@@ -297,7 +302,10 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
-	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
+	fn to_ss58check_with_version(
+		&self,
+		version: Ss58AddressFormat,
+	) -> ArrayString<ADDRESS_UPPER_BOUND> {
 		// We mask out the upper two bits of the ident - SS58 Prefix currently only supports 14-bits
 		let ident: u16 = u16::from(version) & 0b0011_1111_1111_1111;
 		let mut v = match ident {
@@ -315,12 +323,18 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
-		v.to_base58()
+		// ' ' is valid utf-8
+		let mut rslt = ArrayString::from_byte_string(&[b' '; ADDRESS_UPPER_BOUND]).unwrap();
+		// `rslt` is large enough but be careful when tweaking `ADDRESS_UPPER_BOUND`. Besides, this
+		// `to_ss58check_with_version` method is not fallible
+		let len = bs58::encode(v).into(&mut rslt[..]).unwrap();
+		rslt.truncate(len);
+		rslt
 	}
 
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
-	fn to_ss58check(&self) -> String {
+	fn to_ss58check(&self) -> ArrayString<ADDRESS_UPPER_BOUND> {
 		self.to_ss58check_with_version(*DEFAULT_VERSION.lock())
 	}
 
@@ -829,8 +843,8 @@ impl<'de> serde::Deserialize<'de> for AccountId32 {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		Ss58Codec::from_ss58check(&String::deserialize(deserializer)?)
-			.map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+		let s: &str = <_>::deserialize(deserializer)?;
+		Ss58Codec::from_ss58check(s).map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
 	}
 }
 
