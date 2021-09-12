@@ -531,8 +531,10 @@ impl Notifications {
 				{
 					inc
 				} else {
-					error!(target: "sub-libp2p", "State mismatch in libp2p: no entry in \
-						incoming for incoming peer");
+					error!(
+						target: "sub-libp2p",
+						"State mismatch in libp2p: no entry in incoming for incoming peer"
+					);
 					return
 				};
 
@@ -605,7 +607,7 @@ impl Notifications {
 		set_id: sc_peerset::SetId,
 		message: impl Into<Vec<u8>>,
 	) {
-		let notifs_sink = match self.peers.get(&(target.clone(), set_id)).and_then(|p| p.get_open())
+		let notifs_sink = match self.peers.get(&(*target, set_id)).and_then(|p| p.get_open())
 		{
 			None => {
 				trace!(target: "sub-libp2p",
@@ -638,7 +640,7 @@ impl Notifications {
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: sc_peerset::SetId) {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.
-		let mut occ_entry = match self.peers.entry((peer_id.clone(), set_id)) {
+		let mut occ_entry = match self.peers.entry((peer_id, set_id)) {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
 				// If there's no entry in `self.peers`, start dialing.
@@ -661,8 +663,11 @@ impl Notifications {
 			// Backoff (not expired) => PendingRequest
 			PeerState::Backoff { ref timer, ref timer_deadline } if *timer_deadline > now => {
 				let peer_id = occ_entry.key().0.clone();
-				trace!(target: "sub-libp2p", "PSM => Connect({}, {:?}): Will start to connect at \
-					until {:?}", peer_id, set_id, timer_deadline);
+				trace!(
+					target: "sub-libp2p",
+					"PSM => Connect({}, {:?}): Will start to connect at until {:?}",
+					peer_id, set_id, timer_deadline,
+				);
 				*occ_entry.into_mut() =
 					PeerState::PendingRequest { timer: *timer, timer_deadline: *timer_deadline };
 			},
@@ -685,8 +690,11 @@ impl Notifications {
 				if *backoff > now =>
 			{
 				let peer_id = occ_entry.key().0.clone();
-				trace!(target: "sub-libp2p", "PSM => Connect({}, {:?}): But peer is backed-off until {:?}",
-					peer_id, set_id, backoff);
+				trace!(
+					target: "sub-libp2p",
+					"PSM => Connect({}, {:?}): But peer is backed-off until {:?}",
+					peer_id, set_id, backoff,
+				);
 
 				let delay_id = self.next_delay_id;
 				self.next_delay_id.0 += 1;
@@ -1886,7 +1894,6 @@ impl NetworkBehaviour for Notifications {
 						entry
 					} else {
 						error!(target: "sub-libp2p", "OpenResultErr: State mismatch in the custom protos handler");
-						debug_assert!(false);
 						debug_assert!(false);
 						return
 					};

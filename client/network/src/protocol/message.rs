@@ -368,7 +368,7 @@ pub mod generic {
 				genesis_hash,
 			} = compact;
 
-			Ok(Status {
+			Ok(Self {
 				version,
 				min_supported_version,
 				roles,
@@ -438,7 +438,7 @@ pub mod generic {
 			let header = H::decode(input)?;
 			let state = BlockState::decode(input).ok();
 			let data = Vec::decode(input).ok();
-			Ok(BlockAnnounce { header, state, data })
+			Ok(Self { header, state, data })
 		}
 	}
 

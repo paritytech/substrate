@@ -190,7 +190,7 @@ pub struct Bitswap<B> {
 impl<B: BlockT> Bitswap<B> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<dyn Client<B>>) -> Self {
-		Bitswap { client, ready_blocks: Default::default() }
+		Self { client, ready_blocks: Default::default() }
 	}
 }
 

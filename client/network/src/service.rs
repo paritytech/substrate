@@ -743,7 +743,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
-				log::debug!(
+				debug!(
 					target: "sub-libp2p",
 					"Attempted to send notification on missing or closed substream: {}, {:?}",
 					target, protocol,
@@ -762,9 +762,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		trace!(
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {:?}, {} bytes)",
-			target,
-			protocol,
-			message.len()
+			target, protocol, message.len()
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
 		sink.send_sync_notification(message);
@@ -1260,7 +1258,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
 	fn is_major_syncing(&mut self) -> bool {
-		NetworkService::is_major_syncing(self)
+		Self::is_major_syncing(self)
 	}
 
 	fn is_offline(&mut self) -> bool {
@@ -1280,11 +1278,11 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a Netwo
 
 impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		NetworkService::request_justification(self, hash, number);
+		Self::request_justification(self, hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		NetworkService::clear_justification_requests(self);
+		Self::clear_justification_requests(self);
 	}
 }
 
@@ -1363,9 +1361,7 @@ impl<'a> NotificationSenderReady<'a> {
 		trace!(
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {}, {} bytes)",
-			self.peer_id,
-			self.protocol_name,
-			notification.len()
+			self.peer_id, self.protocol_name, notification.len(),
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);
 
@@ -1477,9 +1473,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				match result {
 					Ok(()) => {},
 					Err(light_client_requests::sender::SendRequestError::TooManyRequests) => {
-						log::warn!(
-							"Couldn't start light client request: too many pending requests"
-						);
+						warn!("Couldn't start light client request: too many pending requests");
 					},
 				}
 
@@ -1771,7 +1765,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, protocol)) {
 						*s = notifications_sink;
 					} else {
-						log::error!(
+						error!(
 							target: "sub-libp2p",
 							"NotificationStreamReplaced for non-existing substream"
 						);
@@ -1931,18 +1925,16 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				},
 				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error, .. }) => {
 					trace!(
-						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
-						peer_id,
-						address,
-						error,
+						target: "sub-libp2p",
+						"Libp2p => Failed to reach {:?} through {:?}: {}",
+						peer_id, address, error,
 					);
 
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
 								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
-								address,
-								peer_id,
+								address, peer_id,
 							);
 						}
 					}
@@ -1980,8 +1972,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					send_back_addr,
 					error,
 				}) => {
-					debug!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
-						local_addr, send_back_addr, error);
+					debug!(
+						target: "sub-libp2p",
+						"Libp2p => IncomingConnectionError({},{}): {}",
+						local_addr, send_back_addr, error,
+					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
@@ -1997,8 +1992,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
-					debug!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
-						peer_id, endpoint);
+					debug!(
+						target: "sub-libp2p",
+						"Libp2p => BannedPeer({}). Connected via {:?}.",
+						peer_id, endpoint,
+					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics
 							.incoming_connections_errors_total

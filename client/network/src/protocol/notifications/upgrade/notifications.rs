@@ -347,7 +347,7 @@ impl NotificationsOut {
 		let mut protocol_names = fallback_names;
 		protocol_names.insert(0, main_protocol_name.into());
 
-		NotificationsOut { protocol_names, initial_message, max_notification_size }
+		Self { protocol_names, initial_message, max_notification_size }
 	}
 }
 
@@ -478,12 +478,11 @@ pub enum NotificationsHandshakeError {
 impl From<unsigned_varint::io::ReadError> for NotificationsHandshakeError {
 	fn from(err: unsigned_varint::io::ReadError) -> Self {
 		match err {
-			unsigned_varint::io::ReadError::Io(err) => NotificationsHandshakeError::Io(err),
-			unsigned_varint::io::ReadError::Decode(err) =>
-				NotificationsHandshakeError::VarintDecode(err),
+			unsigned_varint::io::ReadError::Io(err) => Self::Io(err),
+			unsigned_varint::io::ReadError::Decode(err) => Self::VarintDecode(err),
 			_ => {
 				log::warn!("Unrecognized varint decoding error");
-				NotificationsHandshakeError::Io(From::from(io::ErrorKind::InvalidData))
+				Self::Io(From::from(io::ErrorKind::InvalidData))
 			},
 		}
 	}

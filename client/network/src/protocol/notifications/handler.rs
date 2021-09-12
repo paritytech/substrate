@@ -463,7 +463,7 @@ impl NotifsHandlerProto {
 	/// is always the same whether we open a substream ourselves or respond to handshake from
 	/// the remote.
 	pub fn new(list: impl Into<Vec<ProtocolConfig>>) -> Self {
-		NotifsHandlerProto { protocols: list.into() }
+		Self { protocols: list.into() }
 	}
 }
 
