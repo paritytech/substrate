@@ -94,7 +94,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 			DispatchClass::Mandatory,
 		);
 
-		to_supports(&staked).map_err(Error::from)
+		Ok(to_supports(&staked))
 	}
 }
 
