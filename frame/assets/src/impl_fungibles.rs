@@ -183,7 +183,7 @@ impl<T: Config<I>, I: 'static> fungibles::Erc20Compatible<<T as SystemConfig>::A
 		Self::do_transfer_approved(asset, owner, delegate, dest, amount)
 	}
 
-	// Check the amount approved to be spent by an owner to a spender
+	// Check the amount approved to be spent by an owner to a delegate
 	fn allowance(
 		asset: Self::AssetId,
 		owner: &<T as SystemConfig>::AccountId,
