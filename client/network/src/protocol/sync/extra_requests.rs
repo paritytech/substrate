@@ -337,7 +337,7 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 					self.extras.request_type_name, peer, request,
 				);
 
-				return Some((peer.clone(), request))
+				return Some((*peer, request))
 			}
 
 			self.extras.pending_requests.push_back(request);

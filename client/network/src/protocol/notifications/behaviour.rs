@@ -243,33 +243,22 @@ impl PeerState {
 	/// that is open for custom protocol traffic.
 	fn get_open(&self) -> Option<&NotificationsSink> {
 		match self {
-			PeerState::Enabled { connections, .. } =>
-				connections.iter().find_map(|(_, s)| match s {
-					ConnectionState::Open(s) => Some(s),
-					_ => None,
-				}),
-			PeerState::Poisoned => None,
-			PeerState::Backoff { .. } => None,
-			PeerState::PendingRequest { .. } => None,
-			PeerState::Requested => None,
-			PeerState::Disabled { .. } => None,
-			PeerState::DisabledPendingEnable { .. } => None,
-			PeerState::Incoming { .. } => None,
+			Self::Enabled { connections, .. } => connections.iter().find_map(|(_, s)| match s {
+				ConnectionState::Open(s) => Some(s),
+				_ => None,
+			}),
+			_ => None,
 		}
 	}
 
 	/// True if that node has been requested by the PSM.
 	fn is_requested(&self) -> bool {
-		match self {
-			PeerState::Poisoned => false,
-			PeerState::Backoff { .. } => false,
-			PeerState::PendingRequest { .. } => true,
-			PeerState::Requested => true,
-			PeerState::Disabled { .. } => false,
-			PeerState::DisabledPendingEnable { .. } => true,
-			PeerState::Enabled { .. } => true,
-			PeerState::Incoming { .. } => false,
-		}
+		matches!(
+			self,
+			Self::PendingRequest { .. } |
+				Self::Requested | Self::DisabledPendingEnable { .. } |
+				Self::Enabled { .. }
+		)
 	}
 }
 
@@ -390,7 +379,7 @@ impl Notifications {
 
 		assert!(!notif_protocols.is_empty());
 
-		Notifications {
+		Self {
 			notif_protocols,
 			peerset,
 			peers: FnvHashMap::default(),
@@ -445,7 +434,7 @@ impl Notifications {
 		set_id: sc_peerset::SetId,
 		ban: Option<Duration>,
 	) {
-		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id.clone(), set_id))
+		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id))
 		{
 			entry
 		} else {
@@ -608,9 +597,11 @@ impl Notifications {
 	) {
 		let notifs_sink = match self.peers.get(&(*target, set_id)).and_then(|p| p.get_open()) {
 			None => {
-				trace!(target: "sub-libp2p",
+				trace!(
+					target: "sub-libp2p",
 					"Tried to sent notification to {:?} without an open channel.",
-					target);
+					target,
+				);
 				return
 			},
 			Some(sink) => sink,
@@ -642,8 +633,12 @@ impl Notifications {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
 				// If there's no entry in `self.peers`, start dialing.
-				trace!(target: "sub-libp2p", "PSM => Connect({}, {:?}): Starting to connect",
-					entry.key().0, set_id);
+				trace!(
+					target: "sub-libp2p",
+					"PSM => Connect({}, {:?}): Starting to connect",
+					entry.key().0,
+					set_id,
+				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {}", entry.key().0);
 				// The `DialPeerCondition` ensures that dial attempts are de-duplicated
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
@@ -664,7 +659,9 @@ impl Notifications {
 				trace!(
 					target: "sub-libp2p",
 					"PSM => Connect({}, {:?}): Will start to connect at until {:?}",
-					peer_id, set_id, timer_deadline,
+					peer_id,
+					set_id,
+					timer_deadline,
 				);
 				*occ_entry.into_mut() =
 					PeerState::PendingRequest { timer: *timer, timer_deadline: *timer_deadline };
@@ -672,8 +669,12 @@ impl Notifications {
 
 			// Backoff (expired) => Requested
 			PeerState::Backoff { .. } => {
-				trace!(target: "sub-libp2p", "PSM => Connect({}, {:?}): Starting to connect",
-					occ_entry.key().0, set_id);
+				trace!(
+					target: "sub-libp2p",
+					"PSM => Connect({}, {:?}): Starting to connect",
+					occ_entry.key().0,
+					set_id,
+				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
 				// The `DialPeerCondition` ensures that dial attempts are de-duplicated
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
@@ -691,7 +692,9 @@ impl Notifications {
 				trace!(
 					target: "sub-libp2p",
 					"PSM => Connect({}, {:?}): But peer is backed-off until {:?}",
-					peer_id, set_id, backoff,
+					peer_id,
+					set_id,
+					backoff,
 				);
 
 				let delay_id = self.next_delay_id;
@@ -784,8 +787,10 @@ impl Notifications {
 				{
 					inc.alive = false;
 				} else {
-					error!(target: "sub-libp2p", "State mismatch in libp2p: no entry in \
-						incoming for incoming peer")
+					error!(
+						target: "sub-libp2p",
+						"State mismatch in libp2p: no entry in incoming for incoming peer",
+					)
 				}
 
 				debug_assert!(connections
@@ -1092,7 +1097,7 @@ impl NetworkBehaviour for Notifications {
 		endpoint: &ConnectedPoint,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
-			match self.peers.entry((peer_id.clone(), set_id)).or_insert(PeerState::Poisoned) {
+			match self.peers.entry((*peer_id, set_id)).or_insert(PeerState::Poisoned) {
 				// Requested | PendingRequest => Enabled
 				st @ &mut PeerState::Requested | st @ &mut PeerState::PendingRequest { .. } => {
 					trace!(target: "sub-libp2p",
@@ -1242,9 +1247,9 @@ impl NetworkBehaviour for Notifications {
 					if let Some(pos) = connections.iter().position(|(c, _)| *c == *conn) {
 						connections.remove(pos);
 					} else {
-						debug_assert!(false);
 						error!(target: "sub-libp2p",
 							"inject_connection_closed: State mismatch in the custom protos handler");
+						debug_assert!(false);
 					}
 
 					let no_desired_left = !connections
@@ -1841,9 +1846,9 @@ impl NetworkBehaviour for Notifications {
 							}) {
 							*connec_state = ConnectionState::Closing;
 						} else {
-							debug_assert!(false);
 							error!(target: "sub-libp2p",
 								"OpenResultOk State mismatch in the custom protos handler");
+							debug_assert!(false);
 						}
 					},
 
@@ -1969,8 +1974,12 @@ impl NetworkBehaviour for Notifications {
 						set_id,
 						message.len()
 					);
-					trace!(target: "sub-libp2p", "External API <= Message({}, {:?})",
-						source, set_id);
+					trace!(
+						target: "sub-libp2p",
+						"External API <= Message({}, {:?})",
+						source,
+						set_id,
+					);
 					let event = NotificationsOut::Notification { peer_id: source, set_id, message };
 
 					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));

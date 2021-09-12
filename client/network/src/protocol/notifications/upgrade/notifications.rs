@@ -38,7 +38,7 @@ use asynchronous_codec::Framed;
 use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
-use log::error;
+use log::{error, warn};
 use std::{
 	borrow::Cow,
 	convert::{Infallible, TryFrom as _},
@@ -121,7 +121,7 @@ impl NotificationsIn {
 		let mut protocol_names = fallback_names;
 		protocol_names.insert(0, main_protocol_name.into());
 
-		NotificationsIn { protocol_names, max_notification_size }
+		Self { protocol_names, max_notification_size }
 	}
 }
 
@@ -481,7 +481,7 @@ impl From<unsigned_varint::io::ReadError> for NotificationsHandshakeError {
 			unsigned_varint::io::ReadError::Io(err) => Self::Io(err),
 			unsigned_varint::io::ReadError::Decode(err) => Self::VarintDecode(err),
 			_ => {
-				log::warn!("Unrecognized varint decoding error");
+				warn!("Unrecognized varint decoding error");
 				Self::Io(From::from(io::ErrorKind::InvalidData))
 			},
 		}

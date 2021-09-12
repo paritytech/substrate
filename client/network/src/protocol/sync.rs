@@ -535,7 +535,7 @@ impl<B: BlockT> ChainSync<B> {
 		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
 	) -> Result<Self, ClientError> {
-		let mut sync = ChainSync {
+		let mut sync = Self {
 			client,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
@@ -729,7 +729,7 @@ impl<B: BlockT> ChainSync<B> {
 
 				self.pending_requests.add(&who);
 				self.peers.insert(
-					who.clone(),
+					who,
 					PeerSync {
 						peer_id: who,
 						common_number: Zero::zero(),
@@ -751,9 +751,9 @@ impl<B: BlockT> ChainSync<B> {
 					best_number,
 				);
 				self.peers.insert(
-					who.clone(),
+					who,
 					PeerSync {
-						peer_id: who.clone(),
+						peer_id: who,
 						common_number: std::cmp::min(self.best_queued_number, best_number),
 						best_hash,
 						best_number,
@@ -1065,7 +1065,7 @@ impl<B: BlockT> ChainSync<B> {
 						peer.state = PeerSyncState::Available;
 						if blocks.is_empty() {
 							debug!(target: "sync", "Empty block response from {}", who);
-							return Err(BadPeer(who.clone(), rep::NO_BLOCK))
+							return Err(BadPeer(*who, rep::NO_BLOCK))
 						}
 						validate_blocks::<B>(&blocks, who, Some(request))?;
 						blocks
@@ -1209,7 +1209,7 @@ impl<B: BlockT> ChainSync<B> {
 			}
 		} else {
 			// We don't know of this peer, so we also did not request anything from it.
-			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED))
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		};
 
 		Ok(self.validate_and_queue_blocks(new_blocks))
@@ -1461,7 +1461,7 @@ impl<B: BlockT> ChainSync<B> {
 					if aux.bad_justification {
 						if let Some(ref peer) = who {
 							warn!("💔 Sent block with bad justification to import");
-							output.push(Err(BadPeer(peer.clone(), rep::BAD_JUSTIFICATION)));
+							output.push(Err(BadPeer(*peer, rep::BAD_JUSTIFICATION)));
 						}
 					}
 
