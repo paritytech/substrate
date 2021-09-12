@@ -82,12 +82,11 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners, assignments } =
+		let ElectionResult { winners: _, assignments } =
 			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
 				.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
-		let winners = to_without_backing(winners);
 
 		let weight = T::BlockWeights::get().max_block;
 		frame_system::Pallet::<T>::register_extra_weight_unchecked(
@@ -95,7 +94,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 			DispatchClass::Mandatory,
 		);
 
-		to_supports(&winners, &staked).map_err(Error::from)
+		to_supports(&staked).map_err(Error::from)
 	}
 }
 

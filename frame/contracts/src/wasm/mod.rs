@@ -295,6 +295,7 @@ mod tests {
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
+		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -315,6 +316,7 @@ mod tests {
 				schedule: Default::default(),
 				gas_meter: GasMeter::new(10_000_000_000),
 				debug_buffer: Default::default(),
+				ecdsa_recover: Default::default(),
 			}
 		}
 	}
@@ -417,6 +419,15 @@ mod tests {
 		fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
 			self.runtime_calls.borrow_mut().push(call);
 			Ok(Default::default())
+		}
+
+		fn ecdsa_recover(
+			&self,
+			signature: &[u8; 65],
+			message_hash: &[u8; 32],
+		) -> Result<[u8; 33], ()> {
+			self.ecdsa_recover.borrow_mut().push((signature.clone(), message_hash.clone()));
+			Ok([3; 33])
 		}
 	}
 
@@ -848,6 +859,51 @@ mod tests {
 			&mock_ext.calls,
 			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
 		);
+	}
+
+	#[cfg(feature = "unstable-interface")]
+	const CODE_ECDSA_RECOVER: &str = r#"
+(module
+	;; seal_ecdsa_recover(
+	;;    signature_ptr: u32,
+	;;    message_hash_ptr: u32,
+	;;    output_ptr: u32
+	;; ) -> u32
+	(import "__unstable__" "seal_ecdsa_recover" (func $seal_ecdsa_recover (param i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $seal_ecdsa_recover
+				(i32.const 36) ;; Pointer to signature.
+				(i32.const 4)  ;; Pointer to message hash.
+				(i32.const 36) ;; Pointer for output - public key.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Hash of message.
+	(data (i32.const 4)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+	;; Signature
+	(data (i32.const 36)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01"
+	)
+)
+"#;
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn contract_ecdsa_recover() {
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.ecdsa_recover.into_inner(), [([1; 65], [1; 32])]);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"

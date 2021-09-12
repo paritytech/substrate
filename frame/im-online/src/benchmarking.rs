@@ -83,7 +83,7 @@ benchmarks! {
 		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(|e| -> &'static str { e.into() })?;
+			.map_err(<&str>::from)?;
 	}
 
 	validate_unsigned_and_then_heartbeat {
@@ -93,7 +93,7 @@ benchmarks! {
 		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(|e| -> &'static str { e.into() })?;
+			.map_err(<&str>::from)?;
 		call.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
 }

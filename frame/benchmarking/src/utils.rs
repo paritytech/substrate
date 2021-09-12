@@ -318,7 +318,7 @@ pub trait BenchmarkingSetup<T, I = ()> {
 		&self,
 		components: &[(BenchmarkParameter, u32)],
 		verify: bool,
-	) -> Result<Box<dyn FnOnce() -> Result<(), BenchmarkError>>, &'static str>;
+	) -> Result<Box<dyn FnOnce() -> Result<(), BenchmarkError>>, BenchmarkError>;
 }
 
 /// Grab an account, seeded by a name and index.
