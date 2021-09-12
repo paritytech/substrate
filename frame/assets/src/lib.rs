@@ -1121,35 +1121,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
-
-			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(!d.is_frozen, Error::<T, I>::Frozen);
-			Approvals::<T, I>::try_mutate(
-				(id, &owner, &delegate),
-				|maybe_approved| -> DispatchResult {
-					let mut approved = match maybe_approved.take() {
-						// an approval already exists and is being updated
-						Some(a) => a,
-						// a new approval is created
-						None => {
-							d.approvals.saturating_inc();
-							Default::default()
-						},
-					};
-					let deposit_required = T::ApprovalDeposit::get();
-					if approved.deposit < deposit_required {
-						T::Currency::reserve(&owner, deposit_required - approved.deposit)?;
-						approved.deposit = deposit_required;
-					}
-					approved.amount = approved.amount.saturating_add(amount);
-					*maybe_approved = Some(approved);
-					Ok(())
-				},
-			)?;
-			Asset::<T, I>::insert(id, d);
-			Self::deposit_event(Event::ApprovedTransfer(id, owner, delegate, amount));
-
-			Ok(())
+			Self::do_approve_transfer(id, &owner, &delegate, amount)
 		}
 
 		/// Cancel all of some asset approved for delegated transfer by a third-party account.
@@ -1256,33 +1228,7 @@ pub mod pallet {
 			let delegate = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
-
-			Approvals::<T, I>::try_mutate_exists(
-				(id, &owner, delegate),
-				|maybe_approved| -> DispatchResult {
-					let mut approved = maybe_approved.take().ok_or(Error::<T, I>::Unapproved)?;
-					let remaining =
-						approved.amount.checked_sub(&amount).ok_or(Error::<T, I>::Unapproved)?;
-
-					let f =
-						TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
-					Self::do_transfer(id, &owner, &destination, amount, None, f)?;
-
-					if remaining.is_zero() {
-						T::Currency::unreserve(&owner, approved.deposit);
-						Asset::<T, I>::mutate(id, |maybe_details| {
-							if let Some(details) = maybe_details {
-								details.approvals.saturating_dec();
-							}
-						});
-					} else {
-						approved.amount = remaining;
-						*maybe_approved = Some(approved);
-					}
-					Ok(())
-				},
-			)?;
-			Ok(())
+			Self::do_transfer_approved(id, &owner, &delegate, &destination, amount)
 		}
 	}
 }

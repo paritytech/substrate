@@ -147,3 +147,50 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		}
 	}
 }
+
+impl<T: Config<I>, I: 'static> fungibles::Erc20Compatible<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	fn name(asset: Self::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).name.to_vec()
+	}
+
+	fn symbol(asset: Self::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).symbol.to_vec()
+	}
+
+	fn decimals(asset: Self::AssetId) -> u8 {
+		Metadata::<T, I>::get(asset).decimals
+	}
+
+	fn approve(
+		asset: Self::AssetId,
+		owner: &<T as SystemConfig>::AccountId,
+		delegate: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
+		Self::do_approve_transfer(asset, owner, delegate, amount)
+	}
+
+	// Aprove spending tokens from a given account
+	fn transfer_from(
+		asset: Self::AssetId,
+		owner: &<T as SystemConfig>::AccountId,
+		delegate: &<T as SystemConfig>::AccountId,
+		dest: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
+		Self::do_transfer_approved(asset, owner, delegate, dest, amount)
+	}
+
+	// Check the amount approved to be spent by an owner to a spender
+	fn allowance(
+		asset: Self::AssetId,
+		owner: &<T as SystemConfig>::AccountId,
+		delegate: &<T as SystemConfig>::AccountId,
+	) -> Self::Balance {
+		Approvals::<T, I>::get((asset, &owner, &delegate))
+			.map(|x| x.amount)
+			.unwrap_or_else(Zero::zero)
+	}
+}
