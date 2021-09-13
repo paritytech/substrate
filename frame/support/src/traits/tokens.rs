@@ -17,12 +17,15 @@
 
 //! Traits for working with tokens and their associated datastructures.
 
+pub mod currency;
 pub mod fungible;
 pub mod fungibles;
-pub mod currency;
 pub mod imbalance;
 mod misc;
-pub use misc::{
-	WithdrawConsequence, DepositConsequence, ExistenceRequirement, BalanceStatus, WithdrawReasons,
-};
+pub mod nonfungible;
+pub mod nonfungibles;
 pub use imbalance::Imbalance;
+pub use misc::{
+	BalanceConversion, BalanceStatus, DepositConsequence, ExistenceRequirement,
+	WithdrawConsequence, WithdrawReasons,
+};

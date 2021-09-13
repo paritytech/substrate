@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -17,15 +17,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! subcommand utilities
-use std::{io::Read, path::PathBuf, convert::TryFrom};
-use sp_core::{
-	Pair, hexdisplay::HexDisplay,
-	crypto::{Ss58Codec, Ss58AddressFormat},
+use crate::{
+	error::{self, Error},
+	OutputType,
 };
-use sp_runtime::{MultiSigner, traits::IdentifyAccount};
-use crate::{OutputType, error::{self, Error}};
 use serde_json::json;
-use sp_core::crypto::{SecretString, Zeroize, ExposeSecret};
+use sp_core::{
+	crypto::{ExposeSecret, SecretString, Ss58AddressFormat, Ss58Codec, Zeroize},
+	hexdisplay::HexDisplay,
+	Pair,
+};
+use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+use std::{convert::TryFrom, io::Read, path::PathBuf};
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
@@ -37,9 +40,7 @@ pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 	let uri = if let Some(uri) = uri {
 		let file = PathBuf::from(&uri);
 		if file.is_file() {
-			std::fs::read_to_string(uri)?
-				.trim_end()
-				.to_owned()
+			std::fs::read_to_string(uri)?.trim_end().to_owned()
 		} else {
 			uri.into()
 		}
@@ -54,7 +55,8 @@ pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 ///
 /// 1. Try to construct the `Pair` while using `uri` as input for [`sp_core::Pair::from_phrase`].
 ///
-/// 2. Try to construct the `Pair` while using `uri` as input for [`sp_core::Pair::from_string_with_seed`].
+/// 2. Try to construct the `Pair` while using `uri` as input for
+/// [`sp_core::Pair::from_string_with_seed`].
 ///
 /// 3. Try to construct the `Pair::Public` while using `uri` as input for
 ///    [`sp_core::crypto::Ss58Codec::from_string_with_version`].
@@ -78,22 +80,28 @@ pub fn print_from_uri<Pair>(
 					"secretPhrase": uri,
 					"secretSeed": format_seed::<Pair>(seed),
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
+					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
 					"accountId": format_account_id::<Pair>(public_key),
 					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override),
 				});
-				println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&json).expect("Json pretty print failed")
+				);
 			},
 			OutputType::Text => {
 				println!(
-					"Secret phrase `{}` is account:\n  \
-					Secret seed:      {}\n  \
-					Public key (hex): {}\n  \
-					Account ID:       {}\n  \
-					SS58 Address:     {}",
+					"Secret phrase:       {}\n  \
+					Secret seed:       {}\n  \
+					Public key (hex):  {}\n  \
+					Account ID:        {}\n  \
+					Public key (SS58): {}\n  \
+					SS58 Address:      {}",
 					uri,
 					format_seed::<Pair>(seed),
 					format_public_key::<Pair>(public_key.clone()),
-					format_account_id::<Pair>(public_key),
+					format_account_id::<Pair>(public_key.clone()),
+					public_key.to_ss58check_with_version(network_override),
 					pair.public().into().into_account().to_ss58check_with_version(network_override),
 				);
 			},
@@ -108,22 +116,28 @@ pub fn print_from_uri<Pair>(
 					"secretKeyUri": uri,
 					"secretSeed": if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
+					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
 					"accountId": format_account_id::<Pair>(public_key),
 					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override),
 				});
-				println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&json).expect("Json pretty print failed")
+				);
 			},
 			OutputType::Text => {
 				println!(
 					"Secret Key URI `{}` is account:\n  \
-					Secret seed:      {}\n  \
-					Public key (hex): {}\n  \
-					Account ID:       {}\n  \
-					SS58 Address:     {}",
+					Secret seed:       {}\n  \
+					Public key (hex):  {}\n  \
+					Account ID:        {}\n  \
+					Public key (SS58): {}\n  \
+					SS58 Address:      {}",
 					uri,
 					if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
 					format_public_key::<Pair>(public_key.clone()),
-					format_account_id::<Pair>(public_key),
+					format_account_id::<Pair>(public_key.clone()),
+					public_key.to_ss58check_with_version(network_override),
 					pair.public().into().into_account().to_ss58check_with_version(network_override),
 				);
 			},
@@ -138,10 +152,14 @@ pub fn print_from_uri<Pair>(
 					"networkId": String::from(network_override),
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
 					"accountId": format_account_id::<Pair>(public_key.clone()),
+					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
 					"ss58Address": public_key.to_ss58check_with_version(network_override),
 				});
 
-				println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&json).expect("Json pretty print failed")
+				);
 			},
 			OutputType::Text => {
 				println!(
@@ -149,14 +167,16 @@ pub fn print_from_uri<Pair>(
 					 Network ID/version: {}\n  \
 					 Public key (hex):   {}\n  \
 					 Account ID:         {}\n  \
+					 Public key (SS58):  {}\n  \
 					 SS58 Address:       {}",
 					uri,
 					String::from(network_override),
 					format_public_key::<Pair>(public_key.clone()),
 					format_account_id::<Pair>(public_key.clone()),
 					public_key.to_ss58check_with_version(network_override),
+					public_key.to_ss58check_with_version(network_override),
 				);
-			}
+			},
 		}
 	} else {
 		println!("Invalid phrase/URI given");
@@ -186,6 +206,7 @@ where
 				"networkId": String::from(network_override),
 				"publicKey": format_public_key::<Pair>(public_key.clone()),
 				"accountId": format_account_id::<Pair>(public_key.clone()),
+				"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
 				"ss58Address": public_key.to_ss58check_with_version(network_override),
 			});
 
@@ -196,13 +217,15 @@ where
 				"Network ID/version: {}\n  \
 				 Public key (hex):   {}\n  \
 				 Account ID:         {}\n  \
+				 Public key (SS58):  {}\n  \
 				 SS58 Address:       {}",
 				String::from(network_override),
 				format_public_key::<Pair>(public_key.clone()),
 				format_account_id::<Pair>(public_key.clone()),
 				public_key.to_ss58check_with_version(network_override),
+				public_key.to_ss58check_with_version(network_override),
 			);
-		}
+		},
 	}
 
 	Ok(())
@@ -234,8 +257,8 @@ fn format_public_key<P: sp_core::Pair>(public_key: PublicFor<P>) -> String {
 
 /// formats public key as accountId as hex
 fn format_account_id<P: sp_core::Pair>(public_key: PublicFor<P>) -> String
-	where
-		PublicFor<P>: Into<MultiSigner>,
+where
+	PublicFor<P>: Into<MultiSigner>,
 {
 	format!("0x{}", HexDisplay::from(&public_key.into().into_account().as_ref()))
 }
@@ -261,11 +284,10 @@ pub fn read_message(msg: Option<&String>, should_decode: bool) -> Result<Vec<u8>
 			if should_decode {
 				message = decode_hex(&message)?;
 			}
-		}
+		},
 	}
 	Ok(message)
 }
-
 
 /// Allows for calling $method with appropriate crypto impl.
 #[macro_export]

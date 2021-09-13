@@ -13,4 +13,4 @@ fi
 PATH_TO_ARCHIVE=$1
 cd $PROJECT_ROOT/.maintain/node-template-release
 
-cargo run $PROJECT_ROOT/bin/node-template $PATH_TO_ARCHIVE
+cargo run $PROJECT_ROOT/bin/node-template $PROJECT_ROOT/$PATH_TO_ARCHIVE

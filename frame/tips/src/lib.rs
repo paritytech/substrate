@@ -22,11 +22,11 @@
 //! A subsystem to allow for an agile "tipping" process, whereby a reward may be given without first
 //! having a pre-determined stakeholder group come to consensus on how much should be paid.
 //!
-//! A group of `Tippers` is determined through the config `Config`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countdown period is
-//! entered where any remaining members can declare their tip amounts also. After the close of the
-//! countdown period, the median of all declared tips is paid to the reported beneficiary, along
-//! with any finders fee, in case of a public (and bonded) original report.
+//! A group of `Tippers` is determined through the config `Config`. After half of these have
+//! declared some amount that they believe a particular reported reason deserves, then a countdown
+//! period is entered where any remaining members can declare their tip amounts also. After the
+//! close of the countdown period, the median of all declared tips is paid to the reported
+//! beneficiary, along with any finders fee, in case of a public (and bonded) original report.
 //!
 //!
 //! ### Terminology
@@ -54,23 +54,24 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+mod tests;
 pub mod weights;
 
-use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
-use frame_support::traits::{
-	Currency, Get, ExistenceRequirement::{KeepAlive},
-	ReservableCurrency
+use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, ensure,
+	traits::{Currency, ExistenceRequirement::KeepAlive, Get, ReservableCurrency},
+	Parameter,
 };
+use sp_std::prelude::*;
 
-use sp_runtime::{ Percent, RuntimeDebug, traits::{
-	Zero, AccountIdConversion, Hash, BadOrigin
-}};
-use frame_support::traits::{SortedMembers, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use frame_support::traits::{ContainsLengthBound, EnsureOrigin, OnUnbalanced, SortedMembers};
 use frame_system::{self as system, ensure_signed};
+use sp_runtime::{
+	traits::{AccountIdConversion, BadOrigin, Hash, Zero},
+	Percent, RuntimeDebug,
+};
 pub use weights::WeightInfo;
 
 pub type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
@@ -113,8 +114,8 @@ pub struct OpenTip<
 	BlockNumber: Parameter,
 	Hash: Parameter,
 > {
-	/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
-	/// sensible.
+	/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded
+	/// string. A URL would be sensible.
 	reason: Hash,
 	/// The account to be tipped.
 	who: AccountId,
@@ -484,9 +485,9 @@ impl<T: Config> Module<T> {
 					if m < a {
 						continue
 					} else {
-						break true;
+						break true
 					}
-				}
+				},
 			}
 		});
 	}
@@ -495,13 +496,16 @@ impl<T: Config> Module<T> {
 	///
 	/// Up to three balance operations.
 	/// Plus `O(T)` (`T` is Tippers length).
-	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
+	fn payout_tip(
+		hash: T::Hash,
+		tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+	) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
 
 		let treasury = Self::account_id();
-		let max_payout = pallet_treasury::Module::<T>::pot();
+		let max_payout = pallet_treasury::Pallet::<T>::pot();
 
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if !tip.deposit.is_zero() {
@@ -526,8 +530,8 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn migrate_retract_tip_for_tip_new() {
-		/// An open tipping "motion". Retains all details of a tip including information on the finder
-		/// and the members who have voted.
+		/// An open tipping "motion". Retains all details of a tip including information on the
+		/// finder and the members who have voted.
 		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 		pub struct OldOpenTip<
 			AccountId: Parameter,
@@ -535,36 +539,32 @@ impl<T: Config> Module<T> {
 			BlockNumber: Parameter,
 			Hash: Parameter,
 		> {
-			/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
-			/// sensible.
+			/// The hash of the reason for the tip. The reason should be a human-readable UTF-8
+			/// encoded string. A URL would be sensible.
 			reason: Hash,
 			/// The account to be tipped.
 			who: AccountId,
 			/// The account who began this tip and the amount held on deposit.
 			finder: Option<(AccountId, Balance)>,
-			/// The block number at which this tip will close if `Some`. If `None`, then no closing is
-			/// scheduled.
+			/// The block number at which this tip will close if `Some`. If `None`, then no closing
+			/// is scheduled.
 			closes: Option<BlockNumber>,
 			/// The members who have voted for this tip. Sorted by AccountId.
 			tips: Vec<(AccountId, Balance)>,
 		}
 
-		use frame_support::{Twox64Concat, migration::storage_key_iter};
+		use frame_support::{migration::storage_key_iter, Twox64Concat};
 
 		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>(b"Treasury", b"Tips").drain()
+		>(b"Treasury", b"Tips")
+		.drain()
 		{
-
 			let (finder, deposit, finders_fee) = match old_tip.finder {
-				Some((finder, deposit)) => {
-					(finder, deposit, true)
-				},
-				None => {
-					(T::AccountId::default(), Zero::zero(), false)
-				},
+				Some((finder, deposit)) => (finder, deposit, true),
+				None => (T::AccountId::default(), Zero::zero(), false),
 			};
 			let new_tip = OpenTip {
 				reason: old_tip.reason,
@@ -573,7 +573,7 @@ impl<T: Config> Module<T> {
 				deposit,
 				closes: old_tip.closes,
 				tips: old_tip.tips,
-				finders_fee
+				finders_fee,
 			};
 			Tips::<T>::insert(hash, new_tip)
 		}

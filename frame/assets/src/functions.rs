@@ -38,16 +38,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Get the total supply of an asset `id`.
 	pub fn total_supply(id: T::AssetId) -> T::Balance {
-		Asset::<T, I>::get(id)
-			.map(|x| x.supply)
-			.unwrap_or_else(Zero::zero)
+		Asset::<T, I>::get(id).map(|x| x.supply).unwrap_or_else(Zero::zero)
 	}
 
 	pub(super) fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 	) -> Result<bool, DispatchError> {
-		let accounts = d.accounts.checked_add(1).ok_or(Error::<T, I>::Overflow)?;
+		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 		let is_sufficient = if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
 			d.sufficients += 1;
@@ -134,7 +132,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				match frozen.checked_add(&details.min_balance) {
 					Some(required) if rest < required => return Frozen,
 					None => return Overflow,
-					_ => {}
+					_ => {},
 				}
 			}
 
@@ -162,11 +160,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		keep_alive: bool,
-	) -> Result<T::Balance, Error<T, I>> {
-		let details = match Asset::<T, I>::get(id) {
-			Some(details) => details,
-			None => return Err(Error::<T, I>::Unknown),
-		};
+	) -> Result<T::Balance, DispatchError> {
+		let details = Asset::<T, I>::get(id).ok_or_else(|| Error::<T, I>::Unknown)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
 		let account = Account::<T, I>::get(id, who);
@@ -174,9 +169,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let amount = if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
 			// Frozen balance: account CANNOT be deleted
-			let required = frozen
-				.checked_add(&details.min_balance)
-				.ok_or(Error::<T, I>::Overflow)?;
+			let required =
+				frozen.checked_add(&details.min_balance).ok_or(ArithmeticError::Overflow)?;
 			account.balance.saturating_sub(required)
 		} else {
 			let is_provider = false;
@@ -222,7 +216,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(e) => {
 				debug_assert!(false, "passed from reducible_balance; qed");
 				return Err(e.into())
-			}
+			},
 		};
 
 		Ok(actual)
@@ -271,12 +265,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		Self::increase_balance(id, beneficiary, amount, |details| -> DispatchResult {
 			if let Some(check_issuer) = maybe_check_issuer {
-				ensure!(
-					&check_issuer == &details.issuer,
-					Error::<T, I>::NoPermission
-				);
+				ensure!(&check_issuer == &details.issuer, Error::<T, I>::NoPermission);
 			}
-			debug_assert!(T::Balance::max_value() - details.supply >= amount, "checked in prep; qed");
+			debug_assert!(
+				T::Balance::max_value() - details.supply >= amount,
+				"checked in prep; qed"
+			);
 			details.supply = details.supply.saturating_add(amount);
 			Ok(())
 		})?;
@@ -298,7 +292,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 		) -> DispatchResult,
 	) -> DispatchResult {
-		if amount.is_zero() { return Ok(()) }
+		if amount.is_zero() {
+			return Ok(())
+		}
 
 		Self::can_increase(id, beneficiary, amount).into_result()?;
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
@@ -367,7 +363,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 		) -> DispatchResult,
 	) -> Result<T::Balance, DispatchError> {
-		if amount.is_zero() { return Ok(amount) }
+		if amount.is_zero() {
+			return Ok(amount)
+		}
 
 		let actual = Self::prep_debit(id, target, amount, f)?;
 
@@ -441,7 +439,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Burn any dust if needed.
 			if let Some(burn) = maybe_burn {
-				// Debit dust from supply; this will not saturate since it's already checked in prep.
+				// Debit dust from supply; this will not saturate since it's already checked in
+				// prep.
 				debug_assert!(details.supply >= burn, "checked in prep; qed");
 				details.supply = details.supply.saturating_sub(burn);
 			}

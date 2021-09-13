@@ -16,8 +16,9 @@
 // limitations under the License.
 
 use super::helper;
-use syn::spanned::Spanned;
+use core::convert::TryFrom;
 use quote::ToTokens;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -25,7 +26,6 @@ mod keyword {
 	syn::custom_keyword!(From);
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(I);
-	syn::custom_keyword!(Get);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(Event);
@@ -62,19 +62,44 @@ pub struct ConstMetadataDef {
 	pub doc: Vec<syn::Lit>,
 }
 
-impl syn::parse::Parse for ConstMetadataDef  {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let doc = helper::get_doc_literals(&syn::Attribute::parse_outer(input)?);
-		input.parse::<syn::Token![type]>()?;
-		let ident = input.parse::<syn::Ident>()?;
-		input.parse::<syn::Token![:]>()?;
-		input.parse::<keyword::Get>()?;
-		input.parse::<syn::Token![<]>()?;
-		let mut type_ = input.parse::<syn::Type>()?;
-		type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_.to_token_stream()))
+impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
+	type Error = syn::Error;
+
+	fn try_from(trait_ty: &syn::TraitItemType) -> Result<Self, Self::Error> {
+		let err = |span, msg| {
+			syn::Error::new(span, format!("Invalid usage of `#[pallet::constant]`: {}", msg))
+		};
+		let doc = helper::get_doc_literals(&trait_ty.attrs);
+		let ident = trait_ty.ident.clone();
+		let bound = trait_ty
+			.bounds
+			.iter()
+			.find_map(|b| {
+				if let syn::TypeParamBound::Trait(tb) = b {
+					tb.path
+						.segments
+						.last()
+						.and_then(|s| if s.ident == "Get" { Some(s) } else { None })
+				} else {
+					None
+				}
+			})
+			.ok_or_else(|| err(trait_ty.span(), "`Get<T>` trait bound not found"))?;
+		let type_arg = if let syn::PathArguments::AngleBracketed(ref ab) = bound.arguments {
+			if ab.args.len() == 1 {
+				if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
+					Ok(ty)
+				} else {
+					Err(err(ab.args[0].span(), "Expected a type argument"))
+				}
+			} else {
+				Err(err(bound.span(), "Expected a single type argument"))
+			}
+		} else {
+			Err(err(bound.span(), "Expected trait generic args"))
+		}?;
+		let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
 			.expect("Internal error: replacing `Self` by `T` should result in valid type");
-		input.parse::<syn::Token![>]>()?;
-		input.parse::<syn::Token![;]>()?;
 
 		Ok(Self { ident, type_, doc })
 	}
@@ -192,15 +217,15 @@ impl syn::parse::Parse for FromEventParse {
 fn check_event_type(
 	frame_system: &syn::Ident,
 	trait_item: &syn::TraitItem,
-	trait_has_instance: bool
-)  -> syn::Result<bool> {
+	trait_has_instance: bool,
+) -> syn::Result<bool> {
 	if let syn::TraitItem::Type(type_) = trait_item {
 		if type_.ident == "Event" {
 			// Check event has no generics
 			if !type_.generics.params.is_empty() || type_.generics.where_clause.is_some() {
 				let msg = "Invalid `type Event`, associated type `Event` is reserved and must have\
 					no generics nor where_clause";
-				return Err(syn::Error::new(trait_item.span(), msg));
+				return Err(syn::Error::new(trait_item.span(), msg))
 			}
 			// Check bound contains IsType and From
 
@@ -215,28 +240,28 @@ fn check_event_type(
 					bound: `IsType<<Self as {}::Config>::Event>`",
 					frame_system,
 				);
-				return Err(syn::Error::new(type_.span(), msg));
+				return Err(syn::Error::new(type_.span(), msg))
 			}
 
-			let from_event_bound = type_.bounds.iter().find_map(|s| {
-				syn::parse2::<FromEventParse>(s.to_token_stream()).ok()
-			});
+			let from_event_bound = type_
+				.bounds
+				.iter()
+				.find_map(|s| syn::parse2::<FromEventParse>(s.to_token_stream()).ok());
 
 			let from_event_bound = if let Some(b) = from_event_bound {
 				b
 			} else {
 				let msg = "Invalid `type Event`, associated type `Event` is reserved and must \
 					bound: `From<Event>` or `From<Event<Self>>` or `From<Event<Self, I>>`";
-				return Err(syn::Error::new(type_.span(), msg));
+				return Err(syn::Error::new(type_.span(), msg))
 			};
 
-			if from_event_bound.is_generic
-				&& (from_event_bound.has_instance != trait_has_instance)
+			if from_event_bound.is_generic && (from_event_bound.has_instance != trait_has_instance)
 			{
 				let msg = "Invalid `type Event`, associated type `Event` bounds inconsistent \
 					`From<Event..>`. Config and generic Event must be both with instance or \
 					without instance";
-				return Err(syn::Error::new(type_.span(), msg));
+				return Err(syn::Error::new(type_.span(), msg))
 			}
 
 			Ok(true)
@@ -250,16 +275,14 @@ fn check_event_type(
 
 /// Replace ident `Self` by `T`
 pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-	input.into_iter()
+	input
+		.into_iter()
 		.map(|token_tree| match token_tree {
 			proc_macro2::TokenTree::Group(group) =>
-				proc_macro2::Group::new(
-					group.delimiter(),
-					replace_self_by_t(group.stream())
-				).into(),
+				proc_macro2::Group::new(group.delimiter(), replace_self_by_t(group.stream())).into(),
 			proc_macro2::TokenTree::Ident(ident) if ident == "Self" =>
 				proc_macro2::Ident::new("T", ident.span()).into(),
-			other => other
+			other => other,
 		})
 		.collect()
 }
@@ -275,27 +298,27 @@ impl ConfigDef {
 			item
 		} else {
 			let msg = "Invalid pallet::config, expected trait definition";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::config, trait must be public";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		syn::parse2::<keyword::Config>(item.ident.to_token_stream())?;
 
-
 		let where_clause = {
 			let stream = replace_self_by_t(item.generics.where_clause.to_token_stream());
-			syn::parse2::<Option<syn::WhereClause>>(stream)
-				.expect("Internal error: replacing `Self` by `T` should result in valid where
-					clause")
+			syn::parse2::<Option<syn::WhereClause>>(stream).expect(
+				"Internal error: replacing `Self` by `T` should result in valid where
+					clause",
+			)
 		};
 
 		if item.generics.params.len() > 1 {
 			let msg = "Invalid pallet::config, expected no more than one generic";
-			return Err(syn::Error::new(item.generics.params[2].span(), msg));
+			return Err(syn::Error::new(item.generics.params[2].span(), msg))
 		}
 
 		let has_instance = if item.generics.params.first().is_some() {
@@ -309,43 +332,35 @@ impl ConfigDef {
 		let mut consts_metadata = vec![];
 		for trait_item in &mut item.items {
 			// Parse for event
-			has_event_type = has_event_type
-				|| check_event_type(frame_system, trait_item, has_instance)?;
+			has_event_type =
+				has_event_type || check_event_type(frame_system, trait_item, has_instance)?;
 
 			// Parse for constant
 			let type_attrs_const: Vec<TypeAttrConst> = helper::take_item_pallet_attrs(trait_item)?;
 
 			if type_attrs_const.len() > 1 {
 				let msg = "Invalid attribute in pallet::config, only one attribute is expected";
-				return Err(syn::Error::new(type_attrs_const[1].span(), msg));
+				return Err(syn::Error::new(type_attrs_const[1].span(), msg))
 			}
 
 			if type_attrs_const.len() == 1 {
 				match trait_item {
-					syn::TraitItem::Type(type_) => {
-						let constant = syn::parse2::<ConstMetadataDef>(type_.to_token_stream())
-							.map_err(|e| {
-								let error_msg = "Invalid usage of `#[pallet::constant]`, syntax \
-									must be `type $SomeIdent: Get<$SomeType>;`";
-								let mut err = syn::Error::new(type_.span(), error_msg);
-								err.combine(e);
-								err
-							})?;
-
+					syn::TraitItem::Type(ref type_) => {
+						let constant = ConstMetadataDef::try_from(type_)?;
 						consts_metadata.push(constant);
 					},
 					_ => {
-						let msg = "Invalid pallet::constant in pallet::config, expected type trait \
+						let msg =
+							"Invalid pallet::constant in pallet::config, expected type trait \
 							item";
-						return Err(syn::Error::new(trait_item.span(), msg));
+						return Err(syn::Error::new(trait_item.span(), msg))
 					},
 				}
 			}
 		}
 
-		let attr: Option<DisableFrameSystemSupertraitCheck> = helper::take_first_item_pallet_attr(
-			&mut item.attrs
-		)?;
+		let attr: Option<DisableFrameSystemSupertraitCheck> =
+			helper::take_first_item_pallet_attr(&mut item.attrs)?;
 
 		let disable_system_supertrait_check = attr.is_some();
 
@@ -358,10 +373,9 @@ impl ConfigDef {
 			let found = if item.supertraits.is_empty() {
 				"none".to_string()
 			} else {
-				let mut found = item.supertraits.iter()
-					.fold(String::new(), |acc, s| {
-						format!("{}`{}`, ", acc, quote::quote!(#s).to_string())
-					});
+				let mut found = item.supertraits.iter().fold(String::new(), |acc, s| {
+					format!("{}`{}`, ", acc, quote::quote!(#s).to_string())
+				});
 				found.pop();
 				found.pop();
 				found
@@ -373,19 +387,11 @@ impl ConfigDef {
 				(try `pub trait Config: frame_system::Config {{ ...` or \
 				`pub trait Config<I: 'static>: frame_system::Config {{ ...`). \
 				To disable this check, use `#[pallet::disable_frame_system_supertrait_check]`",
-				frame_system,
-				found,
+				frame_system, found,
 			);
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		Ok(Self {
-			index,
-			has_instance,
-			consts_metadata,
-			has_event_type,
-			where_clause,
-			attr_span,
-		})
+		Ok(Self { index, has_instance, consts_metadata, has_event_type, where_clause, attr_span })
 	}
 }

@@ -26,7 +26,7 @@ use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
@@ -37,18 +37,31 @@ use serde::{Serialize, Deserialize};
 pub struct ContractResult<T> {
 	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
-	/// An optional debug message. This message is only non-empty when explicitly requested
-	/// by the code that calls into the contract.
+	/// How much gas is required as gas limit in order to execute this call.
+	///
+	/// This value should be used to determine the gas limit for on-chain execution.
+	///
+	/// # Note
+	///
+	/// This can only different from [`Self::gas_consumed`] when weight pre charging
+	/// is used. Currently, only `seal_call_runtime` makes use of pre charging.
+	pub gas_required: u64,
+	/// An optional debug message. This message is only filled when explicitly requested
+	/// by the code that calls into the contract. Otherwise it is empty.
 	///
 	/// The contained bytes are valid UTF-8. This is not declared as `String` because
-	/// this type is not allowed within the runtime. A client should decode them in order
-	/// to present the message to its users.
+	/// this type is not allowed within the runtime.
+	///
+	/// Clients should not make any assumptions about the format of the buffer.
+	/// They should just display it as-is. It is **not** only a collection of log lines
+	/// provided by a contract but a formatted buffer with different sections.
 	///
 	/// # Note
 	///
 	/// The debug message is never generated during on-chain execution. It is reserved for
 	/// RPC calls.
-	pub debug_message: Bytes,
+	#[cfg_attr(feature = "std", serde(with = "as_string"))]
+	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: T,
 }
@@ -57,35 +70,17 @@ pub struct ContractResult<T> {
 pub type ContractExecResult = ContractResult<Result<ExecReturnValue, DispatchError>>;
 
 /// Result type of a `bare_instantiate` call.
-pub type ContractInstantiateResult<AccountId, BlockNumber> =
-	ContractResult<Result<InstantiateReturnValue<AccountId, BlockNumber>, DispatchError>>;
+pub type ContractInstantiateResult<AccountId> =
+	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>>;
 
 /// Result type of a `get_storage` call.
 pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
-
-/// Result type of a `rent_projection` call.
-pub type RentProjectionResult<BlockNumber> =
-	Result<RentProjection<BlockNumber>, ContractAccessError>;
 
 /// The possible errors that can happen querying the storage of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub enum ContractAccessError {
 	/// The given address doesn't point to a contract.
 	DoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
-}
-
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub enum RentProjection<BlockNumber> {
-	/// Eviction is projected to happen at the specified block number.
-	EvictionAt(BlockNumber),
-	/// No eviction is scheduled.
-	///
-	/// E.g. Contract accumulated enough funds to offset the rent storage costs.
-	NoEviction,
 }
 
 bitflags! {
@@ -121,19 +116,11 @@ impl ExecReturnValue {
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct InstantiateReturnValue<AccountId, BlockNumber> {
+pub struct InstantiateReturnValue<AccountId> {
 	/// The output of the called constructor.
 	pub result: ExecReturnValue,
 	/// The account id of the new contract.
 	pub account_id: AccountId,
-	/// Information about when and if the new project will be evicted.
-	///
-	/// # Note
-	///
-	/// `None` if `bare_instantiate` was called with
-	/// `compute_projection` set to false. From the perspective of an RPC this means that
-	/// the runtime API did not request this value and this feature is therefore unsupported.
-	pub rent_projection: Option<RentProjection<BlockNumber>>,
 }
 
 /// Reference to an existing code hash or a new wasm module.
@@ -145,4 +132,20 @@ pub enum Code<Hash> {
 	Upload(Bytes),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
+}
+
+#[cfg(feature = "std")]
+mod as_string {
+	use super::*;
+	use serde::{ser::Error, Deserializer, Serializer};
+
+	pub fn serialize<S: Serializer>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
+		std::str::from_utf8(bytes)
+			.map_err(|e| S::Error::custom(format!("Debug buffer contains invalid UTF8: {}", e)))?
+			.serialize(serializer)
+	}
+
+	pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+		Ok(String::deserialize(deserializer)?.into_bytes())
+	}
 }

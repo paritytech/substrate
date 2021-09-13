@@ -15,21 +15,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod constants;
-mod pallet_struct;
 mod call;
 mod config;
+mod constants;
 mod error;
 mod event;
-mod storage;
-mod hooks;
-mod store_trait;
-mod instances;
 mod genesis_build;
 mod genesis_config;
+mod hooks;
+mod inherent;
+mod instances;
+mod origin;
+mod pallet_struct;
+mod storage;
+mod store_trait;
 mod type_value;
+mod validate_unsigned;
 
-use crate::pallet::{Def, parse::helper::get_doc_literals};
+use crate::pallet::{parse::helper::get_doc_literals, Def};
 use quote::ToTokens;
 
 /// Merge where clause together, `where` token span is taken from the first not none one.
@@ -54,12 +57,15 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let error = error::expand_error(&mut def);
 	let event = event::expand_event(&mut def);
 	let storages = storage::expand_storages(&mut def);
+	let inherents = inherent::expand_inherents(&mut def);
 	let instances = instances::expand_instances(&mut def);
 	let store_trait = store_trait::expand_store_trait(&mut def);
 	let hooks = hooks::expand_hooks(&mut def);
 	let genesis_build = genesis_build::expand_genesis_build(&mut def);
 	let genesis_config = genesis_config::expand_genesis_config(&mut def);
 	let type_values = type_value::expand_type_values(&mut def);
+	let origins = origin::expand_origins(&mut def);
+	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
 		def.item.attrs.push(syn::parse_quote!(
@@ -80,15 +86,22 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#error
 		#event
 		#storages
+		#inherents
 		#instances
 		#store_trait
 		#hooks
 		#genesis_build
 		#genesis_config
 		#type_values
+		#origins
+		#validate_unsigned
 	);
 
-	def.item.content.as_mut().expect("This is checked by parsing").1
+	def.item
+		.content
+		.as_mut()
+		.expect("This is checked by parsing")
+		.1
 		.push(syn::Item::Verbatim(new_items));
 
 	def.item.into_token_stream()

@@ -85,11 +85,11 @@
 		{
 			"prefix": 8,
 			"network": "karura",
-			"displayName": "Acala Karura Canary",
+			"displayName": "Karura",
 			"symbols": ["KAR"],
-			"decimals": [18],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://acala.network/"
+			"website": "https://karura.network/"
 		},
 		{
 			"prefix": 9,
@@ -105,7 +105,7 @@
 			"network": "acala",
 			"displayName": "Acala",
 			"symbols": ["ACA"],
-			"decimals": [18],
+			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://acala.network/"
 		},
@@ -129,12 +129,12 @@
 		},
 		{
 			"prefix": 13,
-			"network": "substratee",
-			"displayName": "SubstraTEE",
-			"symbols": null,
-			"decimals": null,
+			"network": "integritee",
+			"displayName": "Integritee",
+			"symbols": ["TEER"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://www.substratee.com"
+			"website": "https://integritee.network"
 		},
 		{
 			"prefix": 14,
@@ -254,15 +254,6 @@
 			"website": "https://jupiter.patract.io"
 		},
 		{
-			"prefix": 27,
-			"network": "patract",
-			"displayName": "Patract",
-			"symbols": ["pDOT", "pKSM"],
-			"decimals": [10, 12],
-			"standardAccount": "*25519",
-			"website": "https://patract.network"
-		},
-		{
 			"prefix": 28,
 			"network": "subsocial",
 			"displayName": "Subsocial",
@@ -338,7 +329,7 @@
 			"prefix": 36,
 			"network": "centrifuge",
 			"displayName": "Centrifuge Chain",
-			"symbols": ["RAD"],
+			"symbols": ["CFG"],
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://centrifuge.io/"
@@ -479,6 +470,15 @@
 			"website": "https://crust.network"
 		},
 		{
+			"prefix": 67,
+			"network": "equilibrium",
+			"displayName": "Equilibrium Network",
+			"symbols": ["Unknown", "USD", "EQ", "ETH", "BTC", "EOS", "DOT", "CRV"],
+			"decimals": [0,9,9,9,9,9,9,9],
+			"standardAccount": "*25519",
+			"website": "https://equilibrium.io"
+		},
+		{
 			"prefix": 69,
 			"network": "sora",
 			"displayName": "SORA Network",
@@ -486,6 +486,96 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://sora.org"
+    },
+    {
+      "prefix": 73,
+			"network": "zeitgeist",
+			"displayName": "Zeitgeist",
+			"symbols": ["ZTG"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://zeitgeist.pm"
+		},
+		{
+			"prefix": 77,
+			"network": "manta",
+			"displayName": "Manta network",
+			"symbols": ["MA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
+			"prefix": 78,
+			"network": "calamari",
+			"displayName": "Calamari: Manta Canary Network",
+			"symbols": ["KMA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
+			"prefix": 98,
+			"network": "polkasmith",
+			"displayName": "PolkaSmith Canary Network",
+			"symbols": ["PKS"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://polkafoundry.com"
+		},
+		{
+			"prefix": 99,
+			"network": "polkafoundry",
+			"displayName": "PolkaFoundry Network",
+			"symbols": ["PKF"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://polkafoundry.com"
+		},
+		{
+			"prefix": 101,
+			"network": "origintrail-parachain",
+			"displayName": "OriginTrail Parachain",
+			"symbols": ["TRAC"],
+			"decimals": [18],
+			"standardAccount": "secp256k1",
+			"website": "https://origintrail.io"
+		},
+    {
+			"prefix": 110,
+			"network": "heiko",
+			"displayName": "Heiko",
+			"symbols": ["HKO"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://parallel.fi/"
+		},  
+		{
+			"prefix": 113,
+			"network": "integritee-incognito",
+			"displayName": "Integritee Incognito",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://integritee.network"
+    },
+		{
+			"prefix": 136,
+			"network": "altair",
+			"displayName": "Altair",
+			"symbols": ["AIR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://centrifuge.io/"
+		},
+		{
+			"prefix": 172,
+			"network": "parallel",
+			"displayName": "Parallel",
+			"symbols": ["PARA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://parallel.fi/"
 		},
 		{
 			"prefix": 252,
@@ -495,6 +585,33 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://social.network"
+		},
+		{
+			"prefix": 1284,
+			"network": "moonbeam",
+			"displayName": "Moonbeam",
+			"symbols": ["GLMR"],
+			"decimals": [18],
+			"standardAccount": "secp256k1",
+			"website": "https://moonbeam.network"
+		},
+		{
+			"prefix": 1285,
+			"network": "moonriver",
+			"displayName": "Moonriver",
+			"symbols": ["MOVR"],
+			"decimals": [18],
+			"standardAccount": "secp256k1",
+			"website": "https://moonbeam.network"
+		},
+		{
+			"prefix": 10041,
+			"network": "basilisk",
+			"displayName": "Basilisk",
+			"symbols": ["BSX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://bsx.fi"
 		}
 	]
 }

@@ -16,12 +16,14 @@
 // limitations under the License.
 
 use frame_support_procedural_tools::syn_ext as ext;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use std::collections::HashSet;
 use syn::{
+	ext::IdentExt,
 	parse::{Parse, ParseStream},
+	punctuated::Punctuated,
 	spanned::Spanned,
-	token, Error, Ident, Result, Token,
+	token, Error, Ident, Path, PathArguments, PathSegment, Result, Token,
 };
 
 mod keyword {
@@ -75,9 +77,9 @@ impl Parse for WhereSection {
 			definitions.push(definition);
 			if !input.peek(Token![,]) {
 				if !input.peek(token::Brace) {
-					return Err(input.error("Expected `,` or `{`"));
+					return Err(input.error("Expected `,` or `{`"))
 				}
-				break;
+				break
 			}
 			input.parse::<Token![,]>()?;
 		}
@@ -85,23 +87,14 @@ impl Parse for WhereSection {
 		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
 		let unchecked_extrinsic =
 			remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
-		if let Some(WhereDefinition {
-			ref kind_span,
-			ref kind,
-			..
-		}) = definitions.first()
-		{
+		if let Some(WhereDefinition { ref kind_span, ref kind, .. }) = definitions.first() {
 			let msg = format!(
 				"`{:?}` was declared above. Please use exactly one declaration for `{:?}`.",
 				kind, kind
 			);
-			return Err(Error::new(*kind_span, msg));
+			return Err(Error::new(*kind_span, msg))
 		}
-		Ok(Self {
-			block,
-			node_block,
-			unchecked_extrinsic,
-		})
+		Ok(Self { block, node_block, unchecked_extrinsic })
 	}
 }
 
@@ -125,17 +118,11 @@ impl Parse for WhereDefinition {
 		let (kind_span, kind) = if lookahead.peek(keyword::Block) {
 			(input.parse::<keyword::Block>()?.span(), WhereKind::Block)
 		} else if lookahead.peek(keyword::NodeBlock) {
-			(
-				input.parse::<keyword::NodeBlock>()?.span(),
-				WhereKind::NodeBlock,
-			)
+			(input.parse::<keyword::NodeBlock>()?.span(), WhereKind::NodeBlock)
 		} else if lookahead.peek(keyword::UncheckedExtrinsic) {
-			(
-				input.parse::<keyword::UncheckedExtrinsic>()?.span(),
-				WhereKind::UncheckedExtrinsic,
-			)
+			(input.parse::<keyword::UncheckedExtrinsic>()?.span(), WhereKind::UncheckedExtrinsic)
 		} else {
-			return Err(lookahead.error());
+			return Err(lookahead.error())
 		};
 
 		Ok(Self {
@@ -154,7 +141,7 @@ pub struct PalletDeclaration {
 	pub name: Ident,
 	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
 	pub index: Option<u8>,
-	pub pallet: Ident,
+	pub path: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Vec<PalletPart>,
 }
@@ -163,18 +150,17 @@ impl Parse for PalletDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
-		let pallet = input.parse()?;
-		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
-			let _: Token![::] = input.parse()?;
+		let path = input.parse()?;
+		let instance = if input.peek(Token![<]) {
 			let _: Token![<] = input.parse()?;
 			let res = Some(input.parse()?);
 			let _: Token![>] = input.parse()?;
+			let _: Token![::] = input.parse()?;
 			res
 		} else {
 			None
 		};
 
-		let _: Token![::] = input.parse()?;
 		let pallet_parts = parse_pallet_parts(input)?;
 
 		let index = if input.peek(Token![=]) {
@@ -186,15 +172,58 @@ impl Parse for PalletDeclaration {
 			None
 		};
 
-		let parsed = Self {
-			name,
-			pallet,
-			instance,
-			pallet_parts,
-			index,
-		};
+		let parsed = Self { name, path, instance, pallet_parts, index };
 
 		Ok(parsed)
+	}
+}
+
+/// A struct representing a path to a pallet. `PalletPath` is almost identical to the standard
+/// Rust path with a few restrictions:
+/// - No leading colons allowed
+/// - Path segments can only consist of identifers; angle-bracketed or parenthesized segments will
+///   result in a parsing error (except when specifying instances)
+#[derive(Debug, Clone)]
+pub struct PalletPath {
+	pub inner: Path,
+}
+
+impl Parse for PalletPath {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let mut lookahead = input.lookahead1();
+		let mut segments = Punctuated::new();
+
+		if lookahead.peek(Token![crate]) ||
+			lookahead.peek(Token![self]) ||
+			lookahead.peek(Token![super]) ||
+			lookahead.peek(Ident)
+		{
+			let ident = input.call(Ident::parse_any)?;
+			segments.push(PathSegment { ident, arguments: PathArguments::None });
+			let _: Token![::] = input.parse()?;
+			lookahead = input.lookahead1();
+		} else {
+			return Err(lookahead.error())
+		}
+
+		while lookahead.peek(Ident) {
+			let ident = input.parse()?;
+			segments.push(PathSegment { ident, arguments: PathArguments::None });
+			let _: Token![::] = input.parse()?;
+			lookahead = input.lookahead1();
+		}
+
+		if !lookahead.peek(token::Brace) && !lookahead.peek(Token![<]) {
+			return Err(lookahead.error())
+		}
+
+		Ok(Self { inner: Path { leading_colon: None, segments } })
+	}
+}
+
+impl quote::ToTokens for PalletPath {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.inner.to_tokens(tokens);
 	}
 }
 
@@ -202,7 +231,7 @@ impl Parse for PalletDeclaration {
 ///
 /// `{ Call, Event }`
 fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
-	let pallet_parts :ext::Braces<ext::Punctuated<PalletPart, Token![,]>> = input.parse()?;
+	let pallet_parts: ext::Braces<ext::Punctuated<PalletPart, Token![,]>> = input.parse()?;
 
 	let mut resolved = HashSet::new();
 	for part in pallet_parts.content.inner.iter() {
@@ -211,7 +240,7 @@ fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
 				"`{}` was already declared before. Please remove the duplicate declaration",
 				part.name(),
 			);
-			return Err(Error::new(part.keyword.span(), msg));
+			return Err(Error::new(part.keyword.span(), msg))
 		}
 	}
 
@@ -271,11 +300,6 @@ impl PalletPartKeyword {
 		}
 	}
 
-	/// Returns the name as `Ident`.
-	fn ident(&self) -> Ident {
-		Ident::new(self.name(), self.span())
-	}
-
 	/// Returns `true` if this pallet part is allowed to have generic arguments.
 	fn allows_generic(&self) -> bool {
 		Self::all_generic_arg().iter().any(|n| *n == self.name())
@@ -321,13 +345,10 @@ impl Parse for PalletPart {
 				keyword.name(),
 				valid_generics,
 			);
-			return Err(syn::Error::new(keyword.span(), msg));
+			return Err(syn::Error::new(keyword.span(), msg))
 		}
 
-		Ok(Self {
-			keyword,
-			generics,
-		})
+		Ok(Self { keyword, generics })
 	}
 }
 
@@ -340,11 +361,6 @@ impl PalletPart {
 	/// The name of this pallet part.
 	pub fn name(&self) -> &'static str {
 		self.keyword.name()
-	}
-
-	/// The name of this pallet part as `Ident`.
-	pub fn ident(&self) -> Ident {
-		self.keyword.ident()
 	}
 }
 

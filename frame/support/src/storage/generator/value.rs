@@ -15,12 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
-	Never,
 	storage::{self, unhashed, StorageAppend},
-	hash::{Twox128, StorageHasher},
+	Never,
 };
+use codec::{Decode, Encode, EncodeLike, FullCodec};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -46,10 +45,7 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Generate the full key used in top storage.
 	fn storage_value_final_key() -> [u8; 32] {
-		let mut final_key = [0u8; 32];
-		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
-		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
-		final_key
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 }
 
@@ -77,10 +73,9 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		let key = Self::storage_value_final_key();
 
 		// attempt to get the length directly.
-		let maybe_old = match unhashed::get_raw(&key) {
-			Some(old_data) => Some(O::decode(&mut &old_data[..]).map_err(|_| ())?),
-			None => None,
-		};
+		let maybe_old = unhashed::get_raw(&key)
+			.map(|old_data| O::decode(&mut &old_data[..]).map_err(|_| ()))
+			.transpose()?;
 		let maybe_new = f(maybe_old);
 		if let Some(new) = maybe_new.as_ref() {
 			new.using_encoded(|d| unhashed::put_raw(&key, d));

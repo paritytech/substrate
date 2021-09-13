@@ -19,9 +19,9 @@
 
 #![cfg(test)]
 
-use sp_runtime::traits::IdentityLookup;
 use frame_election_provider_support::onchain;
 use frame_support::parameter_types;
+use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -74,6 +74,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
@@ -112,7 +114,8 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
 	fn on_disabled(_: usize) {}
 }
@@ -156,9 +159,6 @@ where
 }
 
 impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type BlockWeights = ();
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
 }
@@ -181,6 +181,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 

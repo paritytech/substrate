@@ -16,18 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::Result;
+use crate::{error, error::Result};
 use sc_service::config::KeystoreConfig;
-use std::{fs, path::{PathBuf, Path}};
-use structopt::StructOpt;
-use crate::error;
 use sp_core::crypto::SecretString;
+use std::{
+	fs,
+	path::{Path, PathBuf},
+};
+use structopt::StructOpt;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 
 /// Parameters of the keystore
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct KeystoreParams {
 	/// Specify custom URIs to connect to for keystore-services
 	#[structopt(long = "keystore-uri")]
@@ -44,7 +46,8 @@ pub struct KeystoreParams {
 	)]
 	pub password_interactive: bool,
 
-	/// Password used by the keystore.
+	/// Password used by the keystore. This allows appending an extra user-defined secret to the
+	/// seed.
 	#[structopt(
 		long = "password",
 		parse(try_from_str = secret_string_from_str),
@@ -73,16 +76,9 @@ impl KeystoreParams {
 	/// Returns a vector of remote-urls and the local Keystore configuration
 	pub fn keystore_config(&self, config_dir: &Path) -> Result<(Option<String>, KeystoreConfig)> {
 		let password = if self.password_interactive {
-			#[cfg(not(target_os = "unknown"))]
-			{
-				let password = input_keystore_password()?;
-				Some(SecretString::new(password))
-			}
-			#[cfg(target_os = "unknown")]
-			None
+			Some(SecretString::new(input_keystore_password()?))
 		} else if let Some(ref file) = self.password_filename {
-			let password = fs::read_to_string(file)
-				.map_err(|e| format!("{}", e))?;
+			let password = fs::read_to_string(file).map_err(|e| format!("{}", e))?;
 			Some(SecretString::new(password))
 		} else {
 			self.password.clone()
@@ -111,7 +107,6 @@ impl KeystoreParams {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
 		.map_err(|e| format!("{:?}", e).into())

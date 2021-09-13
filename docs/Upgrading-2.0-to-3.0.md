@@ -4,7 +4,7 @@ An incomplete guide.
 
 ## Refreshing the node-template
 
-Not much has changed on the top and API level for developing Substrate betweeen 2.0 and 3.0. If you've made only small changes to the node-template, we recommend to do the following - it is easiest and quickest path forward:
+Not much has changed on the top and API level for developing Substrate between 2.0 and 3.0. If you've made only small changes to the node-template, we recommend to do the following - it is easiest and quickest path forward:
 1. take a diff between 2.0 and your changes
 2. store that diff
 3. remove everything, copy over the 3.0 node-template
@@ -20,11 +20,11 @@ We'll be taking the diff from 2.0.1 to 3.0.0 on `bin/node` as the baseline of wh
 
 ### Versions upgrade
 
-First and foremost you have to upgrade the version pf the dependencies of course, that's `0.8.x -> 0.9.0` and `2.0.x -> 3.0.0` for all `sc-`, `sp-`, `frame-`, and `pallet-` coming from Parity. Further more this release also upgraded its own dependencies, most notably, we are now using `parity-scale-codec 2.0`, `parking_lot 0.11` and `substrate-wasm-builder 3.0.0` (as build dependency). All other dependency upgrades should resolve automatically or are just internal. However you might see some error that another dependency/type you have as a dependency and one of our upgraded crates don't match up, if so please check the version of said dependency - we've probably ugraded it.
+First and foremost you have to upgrade the version pf the dependencies of course, that's `0.8.x -> 0.9.0` and `2.0.x -> 3.0.0` for all `sc-`, `sp-`, `frame-`, and `pallet-` coming from Parity. Further more this release also upgraded its own dependencies, most notably, we are now using `parity-scale-codec 2.0`, `parking_lot 0.11` and `substrate-wasm-builder 3.0.0` (as build dependency). All other dependency upgrades should resolve automatically or are just internal. However you might see some error that another dependency/type you have as a dependency and one of our upgraded crates don't match up, if so please check the version of said dependency - we've probably upgraded it.
 
 ### WASM-Builder
 
-The new version of wasm-builder has gotten a bit smarter and a lot faster (you should definitly switch). Once you've upgraded the dependency, in most cases you just have to remove the now obsolete `with_wasm_builder_from_crates_or_path`-function and you are good to go:
+The new version of wasm-builder has gotten a bit smarter and a lot faster (you should definitely switch). Once you've upgraded the dependency, in most cases you just have to remove the now obsolete `with_wasm_builder_from_crates_or_path`-function and you are good to go:
 
 ```diff: rust
 --- a/bin/node/runtime/build.rs
@@ -143,7 +143,7 @@ And update the overall definition for weights on frame and a few related types a
 +const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 +
 +impl frame_system::Config for Runtime {
- 	type BaseCallFilter = ();
+ 	type BaseCallFilter = frame_support::traits::AllowAll;
 +	type BlockWeights = RuntimeBlockWeights;
 +	type BlockLength = RuntimeBlockLength;
 +	type DbWeight = RocksDbWeight;
@@ -244,7 +244,7 @@ Finality Tracker has been removed in favor of a different approach to handle the
 
 #### (changes) Elections Phragmen
 
-The pallet has been moved to a new system in which the exact amount of deposit for each voter, candidate, member, or runner-up is now deposited on-chain. Moreover, the concept of a `defunct_voter` is removed, since votes now have adequet deposit associated with them. A number of configuration parameters has changed to reflect this, as shown below:
+The pallet has been moved to a new system in which the exact amount of deposit for each voter, candidate, member, or runner-up is now deposited on-chain. Moreover, the concept of a `defunct_voter` is removed, since votes now have adequate deposit associated with them. A number of configuration parameters has changed to reflect this, as shown below:
 
 ```diff=
  parameter_types! {
@@ -439,69 +439,6 @@ and add the new service:
 
 The telemetry subsystem has seen a few fixes and refactorings to allow for a more flexible handling, in particular in regards to parachains. Most notably `sc_service::spawn_tasks` now returns the `telemetry_connection_notifier` as the second member of the tuple, (`let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(`), which should be passed to `telemetry_on_connect` of `new_full_base` now: `telemetry_on_connect: telemetry_connection_notifier.map(|x| x.on_connect_stream()),` (see the service-section below for a full diff).
 
-On the browser-side, this complicates setup a tiny bit, yet not terribly. Instead of `init_console_log`,  we now use `init_logging_and_telemetry` and need to make sure we spawn the runner for its handleat the end (the other changes are formatting and cosmetics):
-
-```diff
---- a/bin/node/cli/src/browser.rs
-+++ b/bin/node/cli/src/browser.rs
-@@ -21,9 +21,8 @@ use log::info;
- use wasm_bindgen::prelude::*;
- use browser_utils::{
- 	Client,
--	browser_configuration, set_console_error_panic_hook, init_console_log,
-+	browser_configuration, init_logging_and_telemetry, set_console_error_panic_hook,
- };
--use std::str::FromStr;
-
- /// Starts the client.
- #[wasm_bindgen]
-@@ -33,29 +32,38 @@ pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Resu
- 		.map_err(|err| JsValue::from_str(&err.to_string()))
- }
-
--async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Client, Box<dyn std::error::Error>> {
-+async fn start_inner(
-+	chain_spec: Option<String>,
-+	log_directives: String,
-+) -> Result<Client, Box<dyn std::error::Error>> {
- 	set_console_error_panic_hook();
--	init_console_log(log::Level::from_str(&log_level)?)?;
-+	let telemetry_worker = init_logging_and_telemetry(&log_directives)?;
- 	let chain_spec = match chain_spec {
- 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
- 			.map_err(|e| format!("{:?}", e))?,
- 		None => crate::chain_spec::development_config(),
- 	};
-
--	let config = browser_configuration(chain_spec).await?;
-+	let telemetry_handle = telemetry_worker.handle();
-+	let config = browser_configuration(
-+		chain_spec,
-+		Some(telemetry_handle),
-+	).await?;
-
- 	info!("Substrate browser node");
- 	info!("✌️  version {}", config.impl_version);
--	info!("❤️  by Parity Technologies, 2017-2020");
-+	info!("❤️  by Parity Technologies, 2017-2021");
- 	info!("📋 Chain specification: {}", config.chain_spec.name());
--	info!("🏷  Node name: {}", config.network.node_name);
-+	info!("🏷 Node name: {}", config.network.node_name);
- 	info!("👤 Role: {:?}", config.role);
-
- 	// Create the service. This is the most heavy initialization step.
- 	let (task_manager, rpc_handlers) =
- 		crate::service::new_light_base(config)
--			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
-+			.map(|(components, rpc_handlers, _, _, _, _)| (components, rpc_handlers))
- 			.map_err(|e| format!("{:?}", e))?;
-
-+	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
-+
- 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
- }
- ```
-
 ##### Async & Remote Keystore support
 
 In order to allow for remote-keystores, the keystore-subsystem has been reworked to support async operations and generally refactored to not provide the keys itself but only sign on request. This allows for remote-keystore to never hand out keys and thus to operate any substrate-based node in a manner without ever having the private keys in the local system memory.
@@ -558,7 +495,7 @@ First and foremost, grandpa internalised a few aspects, and thus `new_partial` d
 +	));
 ```
 
-As these changes pull through the enitrety of `cli/src/service.rs`, we recommend looking at the final diff below for guidance.
+As these changes pull through the entirety of `cli/src/service.rs`, we recommend looking at the final diff below for guidance.
 
 ##### In a nutshell
 

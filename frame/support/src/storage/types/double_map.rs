@@ -18,17 +18,17 @@
 //! Storage map type. Implements StorageDoubleMap, StorageIterableDoubleMap,
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
-		StorageAppend, StorageDecodeLength,
-		bounded_vec::{BoundedVec, BoundedVecValue},
-		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		types::{OnEmptyGetter, OptionQuery, QueryKindTrait},
+		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
-	traits::{GetDefault, StorageInstance, Get},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
-use sp_std::vec::Vec;
+use sp_arithmetic::traits::SaturatedConversion;
+use sp_std::prelude::*;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
 /// to iterate and remove value associated to first key.
@@ -36,9 +36,9 @@ use sp_std::vec::Vec;
 /// Each value is stored at:
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix())
-///		++ Twox128(Prefix::STORAGE_PREFIX)
-///		++ Hasher1(encode(key1))
-///		++ Hasher2(encode(key2))
+/// 		++ Twox128(Prefix::STORAGE_PREFIX)
+/// 		++ Hasher1(encode(key1))
+/// 		++ Hasher2(encode(key2))
 /// ```
 ///
 /// # Warning
@@ -47,14 +47,32 @@ use sp_std::vec::Vec;
 /// such as `blake2_128_concat` must be used for Hasher1 (resp. Hasher2). Otherwise, other values
 /// in storage can be compromised.
 pub struct StorageDoubleMap<
-	Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind=OptionQuery, OnEmpty=GetDefault
+	Prefix,
+	Hasher1,
+	Key1,
+	Hasher2,
+	Key2,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	MaxValues = GetDefault,
 >(
-	core::marker::PhantomData<(Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty)>
+	core::marker::PhantomData<(
+		Prefix,
+		Hasher1,
+		Key1,
+		Hasher2,
+		Key2,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+	)>,
 );
 
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
-	crate::storage::generator::StorageDoubleMap<Key1, Key2, Value> for
-	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	crate::storage::generator::StorageDoubleMap<Key1, Key2, Value>
+	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
@@ -63,7 +81,8 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	type Query = QueryKind::Query;
 	type Hasher1 = Hasher1;
@@ -82,9 +101,9 @@ where
 	}
 }
 
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
-	crate::storage::StoragePrefixedMap<Value> for
-	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	StoragePrefixedMap<Value>
+	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
@@ -93,7 +112,8 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn module_prefix() -> &'static [u8] {
 		<Self as crate::storage::generator::StorageDoubleMap<Key1, Key2, Value>>::module_prefix()
@@ -103,52 +123,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, QueryKind, OnEmpty, VecValue, VecBound>
-	StorageDoubleMap<
-		Prefix,
-		Hasher1,
-		Key1,
-		Hasher2,
-		Key2,
-		BoundedVec<VecValue, VecBound>,
-		QueryKind,
-		OnEmpty,
-	> where
-	Prefix: StorageInstance,
-	Hasher1: crate::hash::StorageHasher,
-	Hasher2: crate::hash::StorageHasher,
-	Key1: FullCodec,
-	Key2: FullCodec,
-	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
-	VecValue: BoundedVecValue,
-	VecBound: Get<u32>,
-{
-	/// Try and append the given item to the double map in the storage.
-	///
-	/// Is only available if `Value` of the map is [`BoundedVec`].
-	pub fn try_append<EncodeLikeItem, EncodeLikeKey1, EncodeLikeKey2>(
-		key1: EncodeLikeKey1,
-		key2: EncodeLikeKey2,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
-	where
-		EncodeLikeKey1: EncodeLike<Key1> + Clone,
-		EncodeLikeKey2: EncodeLike<Key2> + Clone,
-		EncodeLikeItem: EncodeLike<VecValue>,
-	{
-		<
-			Self
-			as
-			crate::storage::bounded_vec::TryAppendDoubleMap<Key1, Key2, VecValue, VecBound>
-		>::try_append(
-			key1, key2, item,
-		)
-	}
-}
-
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
-	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
@@ -157,7 +133,8 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
@@ -192,7 +169,8 @@ where
 	pub fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<Value, ()>
 	where
 		KArg1: EncodeLike<Key1>,
-		KArg2: EncodeLike<Key2> {
+		KArg2: EncodeLike<Key2>,
+	{
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::try_get(k1, k2)
 	}
 
@@ -206,8 +184,12 @@ where
 	}
 
 	/// Swap the values of two key-pairs.
-	pub fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(x_k1: XKArg1, x_k2: XKArg2, y_k1: YKArg1, y_k2: YKArg2)
-	where
+	pub fn swap<XKArg1, XKArg2, YKArg1, YKArg2>(
+		x_k1: XKArg1,
+		x_k2: XKArg2,
+		y_k1: YKArg1,
+		y_k2: YKArg2,
+	) where
 		XKArg1: EncodeLike<Key1>,
 		XKArg2: EncodeLike<Key2>,
 		YKArg1: EncodeLike<Key1>,
@@ -236,13 +218,17 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<Key1> {
-		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1)
+	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		KArg1: ?Sized + EncodeLike<Key1>,
+	{
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1, limit)
 	}
 
 	/// Iterate over values that share the first key.
 	pub fn iter_prefix_values<KArg1>(k1: KArg1) -> crate::storage::PrefixIterator<Value>
-	where KArg1: ?Sized + EncodeLike<Key1>
+	where
+		KArg1: ?Sized + EncodeLike<Key1>,
 	{
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::iter_prefix_values(k1)
 	}
@@ -296,11 +282,8 @@ where
 	/// If the storage item is not encoded properly, the storage will be overwritten
 	/// and set to `[item]`. Any default value set for the storage item will be ignored
 	/// on overwrite.
-	pub fn append<Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: KArg1,
-		k2: KArg2,
-		item: EncodeLikeItem,
-	) where
+	pub fn append<Item, EncodeLikeItem, KArg1, KArg2>(k1: KArg1, k2: KArg2, item: EncodeLikeItem)
+	where
 		KArg1: EncodeLike<Key1>,
 		KArg2: EncodeLike<Key2>,
 		Item: Encode,
@@ -340,15 +323,21 @@ where
 		OldHasher2: crate::StorageHasher,
 		KeyArg1: EncodeLike<Key1>,
 		KeyArg2: EncodeLike<Key2>,
-	>(key1: KeyArg1, key2: KeyArg2) -> Option<Value> {
-		<
-			Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>
-		>::migrate_keys::<OldHasher1, OldHasher2, _, _>(key1, key2)
+	>(
+		key1: KeyArg1,
+		key2: KeyArg2,
+	) -> Option<Value> {
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::migrate_keys::<
+			OldHasher1,
+			OldHasher2,
+			_,
+			_,
+		>(key1, key2)
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -374,10 +363,30 @@ where
 	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::translate_values(f)
 	}
+
+	/// Try and append the given item to the value in the storage.
+	///
+	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
+	pub fn try_append<KArg1, KArg2, Item, EncodeLikeItem>(
+		key1: KArg1,
+		key2: KArg2,
+		item: EncodeLikeItem,
+	) -> Result<(), ()>
+	where
+		KArg1: EncodeLike<Key1> + Clone,
+		KArg2: EncodeLike<Key2> + Clone,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		Value: StorageTryAppend<Item>,
+	{
+		<Self as crate::storage::TryAppendDoubleMap<Key1, Key2, Value, Item>>::try_append(
+			key1, key2, item,
+		)
+	}
 }
 
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
-	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
@@ -386,7 +395,8 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	/// Enumerate all elements in the map with first key `k1` in no particular order.
 	///
@@ -396,12 +406,53 @@ where
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_prefix(k1)
 	}
 
+	/// Enumerate all elements in the map with first key `k1` after a specified `starting_raw_key`
+	/// in no particular order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_prefix_from(
+		k1: impl EncodeLike<Key1>,
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key2, Value)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_prefix_from(
+			k1,
+			starting_raw_key,
+		)
+	}
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
+	/// order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix(k1: impl EncodeLike<Key1>) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_key_prefix(k1)
+	}
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` after a specified
+	/// `starting_raw_key` in no particular order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix_from(
+		k1: impl EncodeLike<Key1>,
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_key_prefix_from(
+			k1,
+			starting_raw_key,
+		)
+	}
+
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order.
 	///
 	/// If you add elements with first key `k1` to the map while doing this, you'll get undefined
 	/// results.
-	pub fn drain_prefix(k1: impl EncodeLike<Key1>) -> crate::storage::PrefixIterator<(Key2, Value)> {
+	pub fn drain_prefix(
+		k1: impl EncodeLike<Key1>,
+	) -> crate::storage::PrefixIterator<(Key2, Value)> {
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::drain_prefix(k1)
 	}
 
@@ -410,6 +461,37 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key1, Key2, Value)> {
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter()
+	}
+
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in no particular
+	/// order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key1, Key2, Value)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_from(
+			starting_raw_key,
+		)
+	}
+
+	/// Enumerate all keys `k1` and `k2` in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_keys()
+	}
+
+	/// Enumerate all keys `k1` and `k2` in the map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_keys_from(
+			starting_raw_key,
+		)
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -440,8 +522,10 @@ pub trait StorageDoubleMapMetadata {
 	const HASHER2: frame_metadata::StorageHasher;
 }
 
-impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDoubleMapMetadata
-	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> where
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	StorageDoubleMapMetadata
+	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
 	Hasher2: crate::hash::StorageHasher,
@@ -449,7 +533,8 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDou
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
 	const HASHER1: frame_metadata::StorageHasher = Hasher1::METADATA;
@@ -459,17 +544,74 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDou
 		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
 }
 
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::StorageInfoTrait
+	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher1: crate::hash::StorageHasher,
+	Hasher2: crate::hash::StorageHasher,
+	Key1: FullCodec + MaxEncodedLen,
+	Key2: FullCodec + MaxEncodedLen,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: Some(
+				Hasher1::max_len::<Key1>()
+					.saturating_add(Hasher2::max_len::<Key2>())
+					.saturating_add(Value::max_encoded_len())
+					.saturated_into(),
+			),
+		}]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait
+	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher1: crate::hash::StorageHasher,
+	Hasher2: crate::hash::StorageHasher,
+	Key1: FullCodec,
+	Key2: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: None,
+		}]
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_io::{TestExternalities, hashing::twox_128};
-	use crate::hash::*;
-	use crate::storage::types::ValueQuery;
+	use crate::{hash::*, storage::types::ValueQuery};
 	use frame_metadata::StorageEntryModifier;
+	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
-		fn pallet_prefix() -> &'static str { "test" }
+		fn pallet_prefix() -> &'static str {
+			"test"
+		}
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
@@ -482,11 +624,17 @@ mod test {
 
 	#[test]
 	fn test() {
-		type A = StorageDoubleMap<
-			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery
-		>;
+		type A =
+			StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery>;
 		type AValueQueryWithAnOnEmpty = StorageDoubleMap<
-			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, ValueQuery, ADefault
+			Prefix,
+			Blake2_128Concat,
+			u16,
+			Twox64Concat,
+			u8,
+			u32,
+			ValueQuery,
+			ADefault,
 		>;
 		type B = StorageDoubleMap<Prefix, Blake2_256, u16, Twox128, u8, u32, ValueQuery>;
 		type C = StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u8, ValueQuery>;
@@ -528,17 +676,20 @@ mod test {
 
 			A::remove(2, 20);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, 20, |v| {
-				*v = *v * 2; Ok(())
+				*v = *v * 2;
+				Ok(())
 			});
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, 20, |v| {
-				*v = *v * 2; Ok(())
+				*v = *v * 2;
+				Ok(())
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(97 * 4));
 
 			A::remove(2, 20);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, 20, |v| {
-				*v = *v * 2; Err(())
+				*v = *v * 2;
+				Err(())
 			});
 			assert_eq!(A::contains_key(2, 20), false);
 
@@ -577,7 +728,6 @@ mod test {
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(100));
 
-
 			A::insert(2, 20, 10);
 			assert_eq!(A::take(2, 20), Some(10));
 			assert_eq!(A::contains_key(2, 20), false);
@@ -592,7 +742,7 @@ mod test {
 
 			A::insert(3, 30, 10);
 			A::insert(4, 40, 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(4, 40), false);
 
@@ -602,7 +752,7 @@ mod test {
 
 			C::insert(3, 30, 10);
 			C::insert(4, 40, 10);
-			A::translate_values::<u8,_>(|v| Some((v * 2).into()));
+			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40, 20), (3, 30, 20)]);
 
 			A::insert(3, 30, 10);
@@ -613,7 +763,7 @@ mod test {
 
 			C::insert(3, 30, 10);
 			C::insert(4, 40, 10);
-			A::translate::<u8,_>(|k1, k2, v| Some((k1 * k2 as u16 * v as u16).into()));
+			A::translate::<u8, _>(|k1, k2, v| Some((k1 * k2 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40, 1600), (3, 30, 900)]);
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
@@ -632,7 +782,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3, 30), None);
 			WithLen::append(0, 100, 10);
 			assert_eq!(WithLen::decode_len(0, 100), Some(1));
@@ -646,7 +796,7 @@ mod test {
 			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![13, 14]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 
-			A::remove_prefix(3);
+			A::remove_prefix(3, None);
 			assert_eq!(A::iter_prefix(3).collect::<Vec<_>>(), vec![]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 

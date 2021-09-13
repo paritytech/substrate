@@ -16,19 +16,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::{
-	ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
-	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
-	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+use crate::{
+	arg_enums::{
+		ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+		DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
+		DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+	},
+	params::{DatabaseParams, PruningParams},
 };
-use crate::params::DatabaseParams;
-use crate::params::PruningParams;
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use structopt::StructOpt;
 use std::path::PathBuf;
+use structopt::StructOpt;
+
+#[cfg(feature = "wasmtime")]
+const WASM_METHOD_DEFAULT: &str = "Compiled";
+
+#[cfg(not(feature = "wasmtime"))]
+const WASM_METHOD_DEFAULT: &str = "interpreted-i-know-what-i-do";
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct ImportParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -50,9 +57,9 @@ pub struct ImportParams {
 	#[structopt(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::enabled_variants(),
+		possible_values = &WasmExecutionMethod::variants(),
 		case_insensitive = true,
-		default_value = "Interpreted"
+		default_value = WASM_METHOD_DEFAULT
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -67,16 +74,11 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Specify the state cache size.
-	#[structopt(
-		long = "state-cache-size",
-		value_name = "Bytes",
-		default_value = "67108864"
-	)]
+	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 }
 
 impl ImportParams {
-
 	/// Specify the state cache size.
 	pub fn state_cache_size(&self) -> usize {
 		self.state_cache_size
@@ -97,11 +99,7 @@ impl ImportParams {
 	pub fn execution_strategies(&self, is_dev: bool, is_validator: bool) -> ExecutionStrategies {
 		let exec = &self.execution_strategies;
 		let exec_all_or = |strat: Option<ExecutionStrategy>, default: ExecutionStrategy| {
-			let default = if is_dev {
-				ExecutionStrategy::Native
-			} else {
-				default
-			};
+			let default = if is_dev { ExecutionStrategy::Native } else { default };
 
 			exec.execution.unwrap_or_else(|| strat.unwrap_or(default)).into()
 		};
@@ -115,17 +113,21 @@ impl ImportParams {
 		ExecutionStrategies {
 			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
 			importing: exec_all_or(exec.execution_import_block, default_execution_import_block),
-			block_construction:
-				exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
-			offchain_worker:
-				exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
+			block_construction: exec_all_or(
+				exec.execution_block_construction,
+				DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+			),
+			offchain_worker: exec_all_or(
+				exec.execution_offchain_worker,
+				DEFAULT_EXECUTION_OFFCHAIN_WORKER,
+			),
 			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 		}
 	}
 }
 
 /// Execution strategies parameters.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime for importing blocks as
 	/// part of an initial sync.
@@ -165,7 +167,8 @@ pub struct ExecutionStrategiesParams {
 	)]
 	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
-	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
+	/// The means of execution used when calling into the runtime while not syncing, importing or
+	/// constructing blocks.
 	#[structopt(
 		long = "execution-other",
 		value_name = "STRATEGY",

@@ -20,19 +20,15 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use sp_runtime::traits::Bounded;
 use crate::Pallet as Proxy;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Pallet::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
@@ -52,7 +48,7 @@ fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(),
 fn add_announcements<T: Config>(
 	n: u32,
 	maybe_who: Option<T::AccountId>,
-	maybe_real: Option<T::AccountId>
+	maybe_real: Option<T::AccountId>,
 ) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -251,8 +247,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Proxy,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);

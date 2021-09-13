@@ -17,7 +17,7 @@
 
 //! Traits for dealing with the idea of membership.
 
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T> {
@@ -25,10 +25,75 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
-/// A `Contains` implementation which always returns `true`.
-pub struct All<T>(PhantomData<T>);
-impl<T: Ord> Contains<T> for All<T> {
-	fn contains(_: &T) -> bool { true }
+/// A [`Contains`] implementation that contains every value.
+pub enum Everything {}
+impl<T> Contains<T> for Everything {
+	fn contains(_: &T) -> bool {
+		true
+	}
+}
+
+/// A [`Contains`] implementation that contains no value.
+pub enum Nothing {}
+impl<T> Contains<T> for Nothing {
+	fn contains(_: &T) -> bool {
+		false
+	}
+}
+
+#[deprecated = "Use `Everything` instead"]
+pub type AllowAll = Everything;
+#[deprecated = "Use `Nothing` instead"]
+pub type DenyAll = Nothing;
+#[deprecated = "Use `Contains` instead"]
+pub trait Filter<T> {
+	fn filter(t: &T) -> bool;
+}
+#[allow(deprecated)]
+impl<T, C: Contains<T>> Filter<T> for C {
+	fn filter(t: &T) -> bool {
+		Self::contains(t)
+	}
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+impl<T> Contains<T> for Tuple {
+	fn contains(t: &T) -> bool {
+		for_tuples!( #(
+			if Tuple::contains(t) { return true }
+		)* );
+		false
+	}
+}
+
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
+#[macro_export]
+macro_rules! match_type {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+		pub struct $n;
+		impl $crate::traits::Contains<$t> for $n {
+			fn contains(l: &$t) -> bool {
+				matches!(l, $phead $( | $ptail )* )
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	match_type! {
+		pub type OneOrTenToTwenty: impl Contains<u8> = { 1 | 10..=20 };
+	}
+
+	#[test]
+	fn match_type_works() {
+		for i in 0..=255 {
+			assert_eq!(OneOrTenToTwenty::contains(&i), i == 1 || i >= 10 && i <= 20);
+		}
+	}
 }
 
 /// A trait for a set which can enumerate its members in order.
@@ -37,32 +102,46 @@ pub trait SortedMembers<T: Ord> {
 	fn sorted_members() -> Vec<T>;
 
 	/// Return `true` if this "contains" the given value `t`.
-	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
+	fn contains(t: &T) -> bool {
+		Self::sorted_members().binary_search(t).is_ok()
+	}
 
 	/// Get the number of items in the set.
-	fn count() -> usize { Self::sorted_members().len() }
+	fn count() -> usize {
+		Self::sorted_members().len()
+	}
 
 	/// Add an item that would satisfy `contains`. It does not make sure any other
 	/// state is correctly maintained or generated.
 	///
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_t: &T) { unimplemented!() }
+	fn add(_t: &T) {
+		unimplemented!()
+	}
 }
 
 /// Adapter struct for turning an `OrderedMembership` impl into a `Contains` impl.
 pub struct AsContains<OM>(PhantomData<(OM,)>);
 impl<T: Ord + Eq, OM: SortedMembers<T>> Contains<T> for AsContains<OM> {
-	fn contains(t: &T) -> bool { OM::contains(t) }
+	fn contains(t: &T) -> bool {
+		OM::contains(t)
+	}
 }
 
 /// Trivial utility for implementing `Contains`/`OrderedMembership` with a `Vec`.
 pub struct IsInVec<T>(PhantomData<T>);
 impl<X: Eq, T: super::Get<Vec<X>>> Contains<X> for IsInVec<T> {
-	fn contains(t: &X) -> bool { T::get().contains(t) }
+	fn contains(t: &X) -> bool {
+		T::get().contains(t)
+	}
 }
 impl<X: Ord + PartialOrd, T: super::Get<Vec<X>>> SortedMembers<X> for IsInVec<T> {
-	fn sorted_members() -> Vec<X> { let mut r = T::get(); r.sort(); r }
+	fn sorted_members() -> Vec<X> {
+		let mut r = T::get();
+		r.sort();
+		r
+	}
 }
 
 /// A trait for querying bound for the length of an implementation of `Contains`
@@ -106,8 +185,8 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		sorted_new: &[AccountId],
 	);
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it
+	/// to call `change_members_sorted`.
 	///
 	/// This resets any previous value of prime.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
@@ -134,19 +213,19 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 				(Some(old), Some(new)) if old == new => {
 					old_i = old_iter.next();
 					new_i = new_iter.next();
-				}
+				},
 				(Some(old), Some(new)) if old < new => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				}
+				},
 				(Some(old), None) => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				}
+				},
 				(_, Some(new)) => {
 					incoming.push(new.clone());
 					new_i = new_iter.next();
-				}
+				},
 			}
 		}
 		(incoming, outgoing)

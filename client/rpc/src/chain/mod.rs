@@ -24,33 +24,37 @@ mod chain_light;
 #[cfg(test)]
 mod tests;
 
-use std::sync::Arc;
 use futures::{future, StreamExt, TryStreamExt};
 use log::warn;
 use rpc::{
+	futures::{stream, FutureExt, SinkExt, Stream},
 	Result as RpcResult,
-	futures::{stream, Future, Sink, Stream},
 };
+use std::sync::Arc;
 
-use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
-use sp_rpc::{number::NumberOrHex, list::ListOrValue};
+use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
+use sc_client_api::{
+	light::{Fetcher, RemoteBlockchain},
+	BlockchainEvents,
+};
+use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
 };
 
-use self::error::{Result, Error, FutureResult};
+use self::error::{Error, FutureResult, Result};
 
+use sc_client_api::BlockBackend;
 pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
-use sc_client_api::BlockBackend;
 
 /// Blockchain backend API
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
-	where
-		Block: BlockT + 'static,
-		Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+where
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
+	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	/// Get client reference.
 	fn client(&self) -> &Arc<Client>;
@@ -83,8 +87,8 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
-					Error::from(format!(
-						"`{:?}` > u32::max_value(), the max block number is u32.",
+					Error::Other(format!(
+						"`{:?}` > u32::MAX, the max block number is u32.",
 						num_or_hex
 					))
 				})?;
@@ -94,7 +98,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 					.header(BlockId::number(block_num))
 					.map_err(client_err)?
 					.map(|h| h.hash()))
-			}
+			},
 		}
 	}
 
@@ -114,9 +118,11 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			self.subscriptions(),
 			subscriber,
 			|| self.client().info().best_hash,
-			|| self.client().import_notification_stream()
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
+			|| {
+				self.client()
+					.import_notification_stream()
+					.map(|notification| Ok::<_, rpc::Error>(notification.header))
+			},
 		)
 	}
 
@@ -140,10 +146,12 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			self.subscriptions(),
 			subscriber,
 			|| self.client().info().best_hash,
-			|| self.client().import_notification_stream()
-				.filter(|notification| future::ready(notification.is_new_best))
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
+			|| {
+				self.client()
+					.import_notification_stream()
+					.filter(|notification| future::ready(notification.is_new_best))
+					.map(|notification| Ok::<_, rpc::Error>(notification.header))
+			},
 		)
 	}
 
@@ -167,9 +175,11 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			self.subscriptions(),
 			subscriber,
 			|| self.client().info().finalized_hash,
-			|| self.client().finality_notification_stream()
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
+			|| {
+				self.client()
+					.finality_notification_stream()
+					.map(|notification| Ok::<_, rpc::Error>(notification.header))
+			},
 		)
 	}
 
@@ -188,13 +198,12 @@ pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 ) -> Chain<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+where
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
+	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	Chain {
-		backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)),
-	}
+	Chain { backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)) }
 }
 
 /// Create new state API that works on light node.
@@ -204,10 +213,11 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 ) -> Chain<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
-		F: Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
+	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+	F: Send + Sync + 'static,
 {
 	Chain {
 		backend: Box::new(self::chain_light::LightChain::new(
@@ -224,11 +234,12 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for
-	Chain<Block, Client>
-		where
-			Block: BlockT + 'static,
-			Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
+	for Chain<Block, Client>
+where
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
+	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	type Metadata = crate::Metadata;
 
@@ -236,8 +247,7 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 		self.backend.header(hash)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
 		self.backend.block(hash)
 	}
 
@@ -247,12 +257,13 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 	) -> Result<ListOrValue<Option<Block::Hash>>> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value),
-			Some(ListOrValue::Value(number)) => self.backend.block_hash(Some(number)).map(ListOrValue::Value),
-			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(list
-				.into_iter()
-				.map(|number| self.backend.block_hash(Some(number)))
-				.collect::<Result<_>>()?
-			))
+			Some(ListOrValue::Value(number)) =>
+				self.backend.block_hash(Some(number)).map(ListOrValue::Value),
+			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(
+				list.into_iter()
+					.map(|number| self.backend.block_hash(Some(number)))
+					.collect::<Result<_>>()?,
+			)),
 		}
 	}
 
@@ -264,7 +275,11 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 		self.backend.subscribe_all_heads(metadata, subscriber)
 	}
 
-	fn unsubscribe_all_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_all_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		self.backend.unsubscribe_all_heads(metadata, id)
 	}
 
@@ -272,21 +287,33 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 		self.backend.subscribe_new_heads(metadata, subscriber)
 	}
 
-	fn unsubscribe_new_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_new_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		self.backend.unsubscribe_new_heads(metadata, id)
 	}
 
-	fn subscribe_finalized_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
+	fn subscribe_finalized_heads(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<Block::Header>,
+	) {
 		self.backend.subscribe_finalized_heads(metadata, subscriber)
 	}
 
-	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_finalized_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		self.backend.unsubscribe_finalized_heads(metadata, id)
 	}
 }
 
 /// Subscribe to new headers.
-fn subscribe_headers<Block, Client, F, G, S, ERR>(
+fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	subscriptions: &SubscriptionManager,
 	subscriber: Subscriber<Block::Header>,
@@ -294,32 +321,30 @@ fn subscribe_headers<Block, Client, F, G, S, ERR>(
 	stream: F,
 ) where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + 'static,
 	F: FnOnce() -> S,
 	G: FnOnce() -> Block::Hash,
-	ERR: ::std::fmt::Debug,
-	S: Stream<Item=Block::Header, Error=ERR> + Send + 'static,
+	S: Stream<Item = std::result::Result<Block::Header, rpc::Error>> + Send + 'static,
 {
 	subscriptions.add(subscriber, |sink| {
 		// send current head right at the start.
-		let header = client.header(BlockId::Hash(best_block_hash()))
+		let header = client
+			.header(BlockId::Hash(best_block_hash()))
 			.map_err(client_err)
 			.and_then(|header| {
-				header.ok_or_else(|| "Best header missing.".to_owned().into())
+				header.ok_or_else(|| Error::Other("Best header missing.".to_string()))
 			})
 			.map_err(Into::into);
 
 		// send further subscriptions
 		let stream = stream()
-			.map(|res| Ok(res))
-			.map_err(|e| warn!("Block notification stream error: {:?}", e));
+			.inspect_err(|e| warn!("Block notification stream error: {:?}", e))
+			.map(|res| Ok(res));
 
-		sink
-			.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-			.send_all(
-				stream::iter_result(vec![Ok(header)])
-					.chain(stream)
-			)
+		stream::iter(vec![Ok(header)])
+			.chain(stream)
+			.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
 			// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 			.map(|_| ())
 	});

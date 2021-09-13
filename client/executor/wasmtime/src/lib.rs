@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
+/// ! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
 mod host;
 mod imports;
 mod instance_wrapper;
@@ -24,4 +24,10 @@ mod runtime;
 mod state_holder;
 mod util;
 
-pub use runtime::{create_runtime, prepare_runtime_artifact, CodeSupplyMode, Config, Semantics};
+#[cfg(test)]
+mod tests;
+
+pub use runtime::{
+	create_runtime, create_runtime_from_artifact, prepare_runtime_artifact, Config,
+	DeterministicStackLimit, Semantics,
+};

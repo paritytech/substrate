@@ -20,17 +20,14 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{
-	parameter_types,
-	weights::{Weight, constants::WEIGHT_PER_SECOND},
-};
-use frame_system as system;
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::{Header, UintAuthorityId},
-};
 use frame_election_provider_support::onchain;
+use frame_support::{parameter_types, weights::constants::WEIGHT_PER_SECOND};
+use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
+use sp_runtime::{
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+};
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -43,7 +40,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -72,6 +69,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
@@ -110,7 +109,8 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
 	fn on_disabled(_: usize) {}
 }
@@ -151,9 +151,6 @@ parameter_types! {
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
 impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -176,6 +173,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 
@@ -189,18 +187,16 @@ impl pallet_im_online::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
 impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
-impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {
+impl<T> frame_system::offchain::SendTransactionTypes<T> for Test
+where
+	Call: From<T>,
+{
 	type Extrinsic = Extrinsic;
 	type OverarchingCall = Call;
 }
@@ -221,7 +217,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Offences: pallet_offences::{Pallet, Storage, Event},
 		Historical: pallet_session_historical::{Pallet},
 	}
 );

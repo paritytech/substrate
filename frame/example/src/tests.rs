@@ -20,14 +20,16 @@
 use crate::*;
 use frame_support::{
 	assert_ok, parameter_types,
-	weights::{DispatchInfo, GetDispatchInfo}, traits::OnInitialize
+	traits::OnInitialize,
+	weights::{DispatchInfo, GetDispatchInfo},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	testing::Header, BuildStorage,
+	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example;
@@ -54,7 +56,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -83,6 +85,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
@@ -105,15 +109,17 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = GenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
-		frame_system: Default::default(),
-		pallet_balances: Default::default(),
-		pallet_example: pallet_example::GenesisConfig {
+		system: Default::default(),
+		balances: Default::default(),
+		example: pallet_example::GenesisConfig {
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
 		},
-	}.build_storage().unwrap();
+	}
+	.build_storage()
+	.unwrap();
 	t.into()
 }
 
@@ -161,10 +167,11 @@ fn signed_ext_watch_dummy_works() {
 		let info = DispatchInfo::default();
 
 		assert_eq!(
-			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
+			WatchDummy::<Test>(PhantomData)
+				.validate(&1, &call, &info, 150)
 				.unwrap()
 				.priority,
-			u64::max_value(),
+			u64::MAX,
 		);
 		assert_eq!(
 			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),
@@ -180,7 +187,6 @@ fn weights_work() {
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	assert!(info1.weight > 0);
-
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.

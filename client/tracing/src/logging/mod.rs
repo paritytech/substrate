@@ -33,10 +33,9 @@ use std::io;
 use tracing::Subscriber;
 use tracing_subscriber::{
 	filter::LevelFilter,
-	fmt::time::ChronoLocal,
 	fmt::{
-		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
-		SubscriberBuilder,
+		format, time::ChronoLocal, FormatEvent, FormatFields, Formatter, Layer as FmtLayer,
+		MakeWriter, SubscriberBuilder,
 	},
 	layer::{self, SubscriberExt},
 	registry::LookupSpan,
@@ -68,6 +67,20 @@ macro_rules! enable_log_reloading {
 		set_reload_handle(handle);
 		builder
 	}};
+}
+
+/// Convert a `Option<LevelFilter>` to a [`log::LevelFilter`].
+///
+/// `None` is interpreted as `Info`.
+fn to_log_level_filter(level_filter: Option<LevelFilter>) -> log::LevelFilter {
+	match level_filter {
+		Some(LevelFilter::INFO) | None => log::LevelFilter::Info,
+		Some(LevelFilter::TRACE) => log::LevelFilter::Trace,
+		Some(LevelFilter::WARN) => log::LevelFilter::Warn,
+		Some(LevelFilter::ERROR) => log::LevelFilter::Error,
+		Some(LevelFilter::DEBUG) => log::LevelFilter::Debug,
+		Some(LevelFilter::OFF) => log::LevelFilter::Off,
+	}
 }
 
 /// Common implementation to get the subscriber.
@@ -108,6 +121,9 @@ where
 		.add_directive(parse_default_directive("ws=off").expect("provided directive is valid"))
 		.add_directive(parse_default_directive("yamux=off").expect("provided directive is valid"))
 		.add_directive(
+			parse_default_directive("regalloc=off").expect("provided directive is valid"),
+		)
+		.add_directive(
 			parse_default_directive("cranelift_codegen=off").expect("provided directive is valid"),
 		)
 		// Set warn logging by default for some modules.
@@ -134,19 +150,9 @@ where
 	}
 
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
+	let max_level = to_log_level_filter(max_level_hint);
 
-	let max_level = match max_level_hint {
-		Some(LevelFilter::INFO) | None => log::LevelFilter::Info,
-		Some(LevelFilter::TRACE) => log::LevelFilter::Trace,
-		Some(LevelFilter::WARN) => log::LevelFilter::Warn,
-		Some(LevelFilter::ERROR) => log::LevelFilter::Error,
-		Some(LevelFilter::DEBUG) => log::LevelFilter::Debug,
-		Some(LevelFilter::OFF) => log::LevelFilter::Off,
-	};
-
-	tracing_log::LogTracer::builder()
-		.with_max_level(max_level)
-		.init()?;
+	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
 	let simple = match max_level_hint {
@@ -171,22 +177,15 @@ where
 	};
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
 
-	#[cfg(not(target_os = "unknown"))]
+	let builder = builder.with_span_events(format::FmtSpan::NONE);
+
 	let builder = builder.with_writer(std::io::stderr as _);
 
-	#[cfg(target_os = "unknown")]
-	let builder = builder.with_writer(std::io::sink);
-
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
 	let subscriber = builder.finish().with(PrefixLayer);
-
-	#[cfg(target_os = "unknown")]
-	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
 	Ok(subscriber)
 }
@@ -264,23 +263,19 @@ impl LoggerBuilder {
 			}
 		} else {
 			if self.log_reloading {
-				let subscriber = prepare_subscriber(
-					&self.directives,
-					None,
-					self.force_colors,
-					|builder| enable_log_reloading!(builder),
-				)?;
+				let subscriber =
+					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
+						enable_log_reloading!(builder)
+					})?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
 				Ok(())
 			} else {
-				let subscriber = prepare_subscriber(
-					&self.directives,
-					None,
-					self.force_colors,
-					|builder| builder,
-				)?;
+				let subscriber =
+					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
+						builder
+					})?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
@@ -386,7 +381,7 @@ mod tests {
 	#[test]
 	fn prefix_in_log_lines() {
 		let re = regex::Regex::new(&format!(
-			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  \[{}\] {}$",
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} \[{}\] {}$",
 			EXPECTED_NODE_NAME, EXPECTED_LOG_MESSAGE,
 		))
 		.unwrap();
@@ -398,12 +393,7 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(
-			re.is_match(output.trim()),
-			"Expected:\n{}\nGot:\n{}",
-			re,
-			output,
-		);
+		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output);
 	}
 
 	/// This is not an actual test, it is used by the `prefix_in_log_lines` test.
@@ -436,7 +426,7 @@ mod tests {
 	#[test]
 	fn do_not_write_with_colors_on_tty() {
 		let re = regex::Regex::new(&format!(
-			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} {}$",
 			EXPECTED_LOG_MESSAGE,
 		))
 		.unwrap();
@@ -448,12 +438,7 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(
-			re.is_match(output.trim()),
-			"Expected:\n{}\nGot:\n{}",
-			re,
-			output,
-		);
+		assert!(re.is_match(output.trim()), "Expected:\n{}\nGot:\n{}", re, output);
 	}
 
 	#[test]
@@ -491,18 +476,9 @@ mod tests {
 			eprint!("MAX_LOG_LEVEL={:?}", log::max_level());
 		} else {
 			assert_eq!("MAX_LOG_LEVEL=Info", run_test(None, None));
-			assert_eq!(
-				"MAX_LOG_LEVEL=Trace",
-				run_test(Some("test=trace".into()), None)
-			);
-			assert_eq!(
-				"MAX_LOG_LEVEL=Debug",
-				run_test(Some("test=debug".into()), None)
-			);
-			assert_eq!(
-				"MAX_LOG_LEVEL=Trace",
-				run_test(None, Some("test=info".into()))
-			);
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(Some("test=trace".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Debug", run_test(Some("test=debug".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(None, Some("test=info".into())));
 		}
 	}
 }

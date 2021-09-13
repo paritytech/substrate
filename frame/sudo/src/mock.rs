@@ -18,20 +18,25 @@
 //! Test utilities
 
 use super::*;
-use frame_support::{parameter_types, traits::GenesisBuild};
-use sp_core::H256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use sp_io;
 use crate as sudo;
-use frame_support::traits::Filter;
+use frame_support::{
+	parameter_types,
+	traits::{Contains, GenesisBuild},
+};
 use frame_system::limits;
+use sp_core::H256;
+use sp_io;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 // Logger module to track execution.
 #[frame_support::pallet]
 pub mod logger {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -42,16 +47,13 @@ pub mod logger {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(*weight)]
-		pub(crate) fn privileged_i32_log(
+		pub fn privileged_i32_log(
 			origin: OriginFor<T>,
 			i: i32,
-			weight: Weight
+			weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			// Ensure that the `origin` is `Root`.
 			ensure_root(origin)?;
@@ -61,10 +63,10 @@ pub mod logger {
 		}
 
 		#[pallet::weight(*weight)]
-		pub(crate) fn non_privileged_log(
+		pub fn non_privileged_log(
 			origin: OriginFor<T>,
 			i: i32,
-			weight: Weight
+			weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			// Ensure that the `origin` is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -85,21 +87,12 @@ pub mod logger {
 
 	#[pallet::storage]
 	#[pallet::getter(fn account_log)]
-	pub(super) type AccountLog<T: Config> = StorageValue<
-		_,
-		Vec<T::AccountId>,
-		ValueQuery
-	>;
+	pub(super) type AccountLog<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn i32_log)]
-	pub(super) type I32Log<T> = StorageValue<
-		_,
-		Vec<i32>,
-		ValueQuery
-	>;
+	pub(super) type I32Log<T> = StorageValue<_, Vec<i32>, ValueQuery>;
 }
-
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -122,8 +115,8 @@ parameter_types! {
 }
 
 pub struct BlockEverything;
-impl Filter<Call> for BlockEverything {
-	fn filter(_: &Call) -> bool {
+impl Contains<Call> for BlockEverything {
+	fn contains(_: &Call) -> bool {
 		false
 	}
 }
@@ -172,8 +165,8 @@ pub type LoggerCall = logger::Call<Test>;
 // Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	sudo::GenesisConfig::<Test>{
-		key: root_key,
-	}.assimilate_storage(&mut t).unwrap();
+	sudo::GenesisConfig::<Test> { key: root_key }
+		.assimilate_storage(&mut t)
+		.unwrap();
 	t.into()
 }

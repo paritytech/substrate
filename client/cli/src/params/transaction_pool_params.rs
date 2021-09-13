@@ -20,7 +20,7 @@ use sc_service::config::TransactionPoolOptions;
 use structopt::StructOpt;
 
 /// Parameters used to create the pool configuration.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
 	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]

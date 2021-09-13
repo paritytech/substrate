@@ -19,67 +19,53 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
+use crate as offences;
 use crate::Config;
 use codec::Encode;
-use sp_runtime::Perbill;
-use sp_staking::{
-	SessionIndex,
-	offence::{self, Kind, OffenceDetails},
-};
-use sp_runtime::testing::Header;
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
-use sp_core::H256;
 use frame_support::{
-	parameter_types, StorageMap, StorageDoubleMap,
-	weights::{Weight, constants::{WEIGHT_PER_SECOND, RocksDbWeight}},
+	parameter_types,
+	weights::{
+		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
+		Weight,
+	},
 };
-use crate as offences;
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
+use sp_staking::{
+	offence::{self, Kind, OffenceDetails},
+	SessionIndex,
+};
+use std::cell::RefCell;
 
 pub struct OnOffenceHandler;
 
 thread_local! {
 	pub static ON_OFFENCE_PERBILL: RefCell<Vec<Perbill>> = RefCell::new(Default::default());
-	pub static CAN_REPORT: RefCell<bool> = RefCell::new(true);
 	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
-impl<Reporter, Offender>
-	offence::OnOffenceHandler<Reporter, Offender, Weight> for OnOffenceHandler
+impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
+	for OnOffenceHandler
 {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
-	) -> Result<Weight, ()> {
-		if <Self as offence::OnOffenceHandler<Reporter, Offender, Weight>>::can_report() {
-			ON_OFFENCE_PERBILL.with(|f| {
-				*f.borrow_mut() = slash_fraction.to_vec();
-			});
+	) -> Weight {
+		ON_OFFENCE_PERBILL.with(|f| {
+			*f.borrow_mut() = slash_fraction.to_vec();
+		});
 
-			Ok(OFFENCE_WEIGHT.with(|w| *w.borrow()))
-		} else {
-			Err(())
-		}
+		OFFENCE_WEIGHT.with(|w| *w.borrow())
 	}
-
-	fn can_report() -> bool {
-		CAN_REPORT.with(|c| *c.borrow())
-	}
-}
-
-pub fn set_can_report(can_report: bool) {
-	CAN_REPORT.with(|c| *c.borrow_mut() = can_report);
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	ON_OFFENCE_PERBILL.with(|fractions| {
-		f(&mut *fractions.borrow_mut())
-	})
-}
-
-pub fn set_offence_weight(new: Weight) {
-	OFFENCE_WEIGHT.with(|w| *w.borrow_mut() = new);
+	ON_OFFENCE_PERBILL.with(|fractions| f(&mut *fractions.borrow_mut()))
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -92,7 +78,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Offences: offences::{Pallet, Call, Storage, Event},
+		Offences: offences::{Pallet, Storage, Event},
 	}
 );
 
@@ -102,7 +88,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
@@ -127,16 +113,10 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight =
-		Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
 impl Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -186,10 +166,12 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 		1
 	}
 
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		Perbill::from_percent(5 + offenders_count * 100 / validator_set_count)
 	}
+}
+
+/// Create the report id for the given `offender` and `time_slot` combination.
+pub fn report_id(time_slot: u128, offender: u64) -> H256 {
+	Offences::report_id::<Offence<u64>>(&time_slot, &offender)
 }

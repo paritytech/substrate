@@ -121,10 +121,10 @@
 //!
 //! - **`/substrate/<protocol-id>/<version>`** (where `<protocol-id>` must be replaced with the
 //! protocol ID of the targeted chain, and `<version>` is a number between 2 and 6). For each
-//! connection we optionally keep an additional substream for all Substrate-based communications alive.
-//! This protocol is considered legacy, and is progressively being replaced with alternatives.
-//! This is designated as "The legacy Substrate substream" in this documentation. See below for
-//! more details.
+//! connection we optionally keep an additional substream for all Substrate-based communications
+//! alive. This protocol is considered legacy, and is progressively being replaced with
+//! alternatives. This is designated as "The legacy Substrate substream" in this documentation. See
+//! below for more details.
 //! - **`/<protocol-id>/sync/2`** is a request-response protocol (see below) that lets one perform
 //! requests for information about blocks. Each request is the encoding of a `BlockRequest` and
 //! each response is the encoding of a `BlockResponse`, as defined in the `api.v1.proto` file in
@@ -243,13 +243,12 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
 mod chain;
-mod peer_info;
 mod discovery;
 mod on_demand_layer;
+mod peer_info;
 mod protocol;
 mod request_responses;
 mod schema;
@@ -257,21 +256,26 @@ mod service;
 mod transport;
 mod utils;
 
-pub mod block_request_handler;
 pub mod bitswap;
-pub mod light_client_requests;
+pub mod block_request_handler;
 pub mod config;
 pub mod error;
-pub mod gossip;
+pub mod light_client_requests;
 pub mod network_state;
+pub mod state_request_handler;
 pub mod transactions;
+pub mod warp_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use protocol::{
+	event::{DhtEvent, Event, ObservedRole},
+	sync::{StateDownloadProgress, SyncState, WarpSyncPhase, WarpSyncProgress},
+	PeerInfo,
+};
 pub use service::{
-	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady, IfDisconnected,
+	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
+	OutboundFailure, RequestFailure,
 };
 
 pub use sc_peerset::ReputationChange;
@@ -321,4 +325,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
+	/// State sync in progress.
+	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
+	/// Warp sync in progress.
+	pub warp_sync: Option<protocol::sync::WarpSyncProgress>,
 }

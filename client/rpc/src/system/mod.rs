@@ -18,26 +18,27 @@
 
 //! Substrate system API.
 
+use self::error::Result;
+use futures::{channel::oneshot, FutureExt};
+use sc_rpc_api::{DenyUnsafe, Receiver};
+use sc_tracing::logging;
+use sc_utils::mpsc::TracingUnboundedSender;
+use sp_runtime::traits::{self, Header as HeaderT};
+
+pub use self::{
+	gen_client::Client as SystemClient,
+	helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo},
+};
+pub use sc_rpc_api::system::*;
+
 #[cfg(test)]
 mod tests;
 
-use futures::{future::BoxFuture, FutureExt, TryFutureExt};
-use futures::{channel::oneshot, compat::Compat};
-use sc_rpc_api::{DenyUnsafe, Receiver};
-use sc_tracing::logging;
-use sp_utils::mpsc::TracingUnboundedSender;
-use sp_runtime::traits::{self, Header as HeaderT};
-
-use self::error::Result;
-
-pub use sc_rpc_api::system::*;
-pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
-pub use self::gen_client::Client as SystemClient;
-
+/// Early exit for RPCs that require `--rpc-methods=Unsafe` to be enabled
 macro_rules! bail_if_unsafe {
 	($value: expr) => {
 		if let Err(err) = $value.check_if_safe() {
-			return async move { Err(err.into()) }.boxed().compat();
+			return async move { Err(err.into()) }.boxed()
 		}
 	};
 }
@@ -66,6 +67,8 @@ pub enum Request<B: traits::Block> {
 	NetworkAddReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
+	/// Must return the list of reserved peers
+	NetworkReservedPeers(oneshot::Sender<Vec<String>>),
 	/// Must return the node role.
 	NodeRoles(oneshot::Sender<Vec<NodeRole>>),
 	/// Must return the state of the node syncing.
@@ -82,11 +85,7 @@ impl<B: traits::Block> System<B> {
 		send_back: TracingUnboundedSender<Request<B>>,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		System {
-			info,
-			send_back,
-			deny_unsafe,
-		}
+		System { info, send_back, deny_unsafe }
 	}
 }
 
@@ -103,61 +102,53 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Ok(self.info.chain_name.clone())
 	}
 
-	fn system_type(&self) -> Result<sp_chain_spec::ChainType> {
+	fn system_type(&self) -> Result<sc_chain_spec::ChainType> {
 		Ok(self.info.chain_type.clone())
 	}
 
-	fn system_properties(&self) -> Result<sp_chain_spec::Properties> {
+	fn system_properties(&self) -> Result<sc_chain_spec::Properties> {
 		Ok(self.info.properties.clone())
 	}
 
 	fn system_health(&self) -> Receiver<Health> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::Health(tx));
-		Receiver(Compat::new(rx))
+		Receiver(rx)
 	}
 
 	fn system_local_peer_id(&self) -> Receiver<String> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::LocalPeerId(tx));
-		Receiver(Compat::new(rx))
+		Receiver(rx)
 	}
 
 	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::LocalListenAddresses(tx));
-		Receiver(Compat::new(rx))
+		Receiver(rx)
 	}
 
-	fn system_peers(&self)
-		-> Compat<BoxFuture<'static, rpc::Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>>>
-	{
+	fn system_peers(
+		&self,
+	) -> rpc::BoxFuture<rpc::Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>> {
 		bail_if_unsafe!(self.deny_unsafe);
 
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::Peers(tx));
 
-		async move {
-			rx.await.map_err(|_| rpc::Error::internal_error())
-		}.boxed().compat()
+		async move { rx.await.map_err(|_| rpc::Error::internal_error()) }.boxed()
 	}
 
-	fn system_network_state(&self)
-		-> Compat<BoxFuture<'static, rpc::Result<rpc::Value>>>
-	{
+	fn system_network_state(&self) -> rpc::BoxFuture<rpc::Result<rpc::Value>> {
 		bail_if_unsafe!(self.deny_unsafe);
 
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
 
-		async move {
-			rx.await.map_err(|_| rpc::Error::internal_error())
-		}.boxed().compat()
+		async move { rx.await.map_err(|_| rpc::Error::internal_error()) }.boxed()
 	}
 
-	fn system_add_reserved_peer(&self, peer: String)
-		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
-	{
+	fn system_add_reserved_peer(&self, peer: String) -> rpc::BoxFuture<rpc::Result<()>> {
 		bail_if_unsafe!(self.deny_unsafe);
 
 		let (tx, rx) = oneshot::channel();
@@ -168,12 +159,11 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 				Ok(Err(e)) => Err(rpc::Error::from(e)),
 				Err(_) => Err(rpc::Error::internal_error()),
 			}
-		}.boxed().compat()
+		}
+		.boxed()
 	}
 
-	fn system_remove_reserved_peer(&self, peer: String)
-		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
-	{
+	fn system_remove_reserved_peer(&self, peer: String) -> rpc::BoxFuture<rpc::Result<()>> {
 		bail_if_unsafe!(self.deny_unsafe);
 
 		let (tx, rx) = oneshot::channel();
@@ -184,28 +174,35 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 				Ok(Err(e)) => Err(rpc::Error::from(e)),
 				Err(_) => Err(rpc::Error::internal_error()),
 			}
-		}.boxed().compat()
+		}
+		.boxed()
+	}
+
+	fn system_reserved_peers(&self) -> Receiver<Vec<String>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
+		Receiver(rx)
 	}
 
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
-		Receiver(Compat::new(rx))
+		Receiver(rx)
 	}
 
 	fn system_sync_state(&self) -> Receiver<SyncState<<B::Header as HeaderT>::Number>> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
-		Receiver(Compat::new(rx))
+		Receiver(rx)
 	}
 
-	fn system_add_log_filter(&self, directives: String) -> std::result::Result<(), rpc::Error> {
+	fn system_add_log_filter(&self, directives: String) -> rpc::Result<()> {
 		self.deny_unsafe.check_if_safe()?;
 		logging::add_directives(&directives);
 		logging::reload_filter().map_err(|_e| rpc::Error::internal_error())
 	}
 
-	fn system_reset_log_filter(&self)-> std::result::Result<(), rpc::Error> {
+	fn system_reset_log_filter(&self) -> rpc::Result<()> {
 		self.deny_unsafe.check_if_safe()?;
 		logging::reset_log_filter().map_err(|_e| rpc::Error::internal_error())
 	}

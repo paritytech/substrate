@@ -18,19 +18,21 @@
 
 //! Chain Spec extensions helpers.
 
-use std::fmt::Debug;
-use std::any::{TypeId, Any};
+use std::{
+	any::{Any, TypeId},
+	fmt::Debug,
+};
 
 use std::collections::BTreeMap;
 
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// A `ChainSpec` extension.
 ///
 /// This trait is implemented automatically by `ChainSpecGroup` macro.
 pub trait Group: Clone + Sized {
 	/// An associated type containing fork definition.
-	type Fork: Fork<Base=Self>;
+	type Fork: Fork<Base = Self>;
 
 	/// Convert to fork type.
 	fn to_fork(self) -> Self::Fork;
@@ -45,7 +47,7 @@ pub trait Group: Clone + Sized {
 /// a complete set of parameters
 pub trait Fork: Serialize + DeserializeOwned + Clone + Sized {
 	/// A base `Group` type.
-	type Base: Group<Fork=Self>;
+	type Base: Group<Fork = Self>;
 
 	/// Combine with another struct.
 	///
@@ -124,11 +126,14 @@ pub trait Extension: Serialize + DeserializeOwned + Clone {
 
 	/// Get an extension of specific type.
 	fn get<T: 'static>(&self) -> Option<&T>;
-	/// Get an extension of specific type as refernce to `Any`
+	/// Get an extension of specific type as reference to `Any`.
 	fn get_any(&self, t: TypeId) -> &dyn Any;
+	/// Get an extension of specific type as mutable reference to `Any`.
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any;
 
 	/// Get forkable extensions of specific type.
-	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
+	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>>
+	where
 		BlockNumber: Ord + Clone + 'static,
 		T: Group + 'static,
 		<Self::Forks as IsForks>::Extension: Extension,
@@ -142,8 +147,15 @@ pub trait Extension: Serialize + DeserializeOwned + Clone {
 impl Extension for crate::NoExtension {
 	type Forks = Self;
 
-	fn get<T: 'static>(&self) -> Option<&T> { None }
-	fn get_any(&self, _t: TypeId) -> &dyn Any { self }
+	fn get<T: 'static>(&self) -> Option<&T> {
+		None
+	}
+	fn get_any(&self, _t: TypeId) -> &dyn Any {
+		self
+	}
+	fn get_any_mut(&mut self, _: TypeId) -> &mut dyn Any {
+		self
+	}
 }
 
 pub trait IsForks {
@@ -166,14 +178,12 @@ pub struct Forks<BlockNumber: Ord, T: Group> {
 
 impl<B: Ord, T: Group + Default> Default for Forks<B, T> {
 	fn default() -> Self {
-		Self {
-			base: Default::default(),
-			forks: Default::default(),
-		}
+		Self { base: Default::default(), forks: Default::default() }
 	}
 }
 
-impl<B: Ord, T: Group> Forks<B, T> where
+impl<B: Ord, T: Group> Forks<B, T>
+where
 	T::Fork: Debug,
 {
 	/// Create new fork definition given the base and the forks.
@@ -195,7 +205,8 @@ impl<B: Ord, T: Group> Forks<B, T> where
 	}
 }
 
-impl<B, T> IsForks for Forks<B, T> where
+impl<B, T> IsForks for Forks<B, T>
+where
 	B: Ord + 'static,
 	T: Group + 'static,
 {
@@ -203,56 +214,69 @@ impl<B, T> IsForks for Forks<B, T> where
 	type Extension = T;
 }
 
-impl<B: Ord + Clone, T: Group + Extension> Forks<B, T> where
+impl<B: Ord + Clone, T: Group + Extension> Forks<B, T>
+where
 	T::Fork: Extension,
 {
 	/// Get forks definition for a subset of this extension.
 	///
 	/// Returns the `Forks` struct, but limited to a particular type
 	/// within the extension.
-	pub fn for_type<X>(&self) -> Option<Forks<B, X>> where
+	pub fn for_type<X>(&self) -> Option<Forks<B, X>>
+	where
 		X: Group + 'static,
 	{
 		let base = self.base.get::<X>()?.clone();
-		let forks = self.forks.iter().filter_map(|(k, v)| {
-			Some((k.clone(), v.get::<Option<X::Fork>>()?.clone()?))
-		}).collect();
+		let forks = self
+			.forks
+			.iter()
+			.filter_map(|(k, v)| Some((k.clone(), v.get::<Option<X::Fork>>()?.clone()?)))
+			.collect();
 
-		Some(Forks {
-			base,
-			forks,
-		})
+		Some(Forks { base, forks })
 	}
 }
 
-impl<B, E> Extension for Forks<B, E> where
+impl<B, E> Extension for Forks<B, E>
+where
 	B: Serialize + DeserializeOwned + Ord + Clone + 'static,
 	E: Extension + Group + 'static,
 {
 	type Forks = Self;
 
 	fn get<T: 'static>(&self) -> Option<&T> {
-		match TypeId::of::<T>() {
-			x if x == TypeId::of::<E>() => Any::downcast_ref(&self.base),
-			_ => self.base.get(),
+		if TypeId::of::<T>() == TypeId::of::<E>() {
+			<dyn Any>::downcast_ref(&self.base)
+		} else {
+			self.base.get()
 		}
 	}
 
 	fn get_any(&self, t: TypeId) -> &dyn Any {
-		match t {
-			x if x == TypeId::of::<E>() => &self.base,
-			_ => self.base.get_any(t),
+		if t == TypeId::of::<E>() {
+			&self.base
+		} else {
+			self.base.get_any(t)
 		}
 	}
 
-	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any {
+		if t == TypeId::of::<E>() {
+			&mut self.base
+		} else {
+			self.base.get_any_mut(t)
+		}
+	}
+
+	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>>
+	where
 		BlockNumber: Ord + Clone + 'static,
 		T: Group + 'static,
 		<Self::Forks as IsForks>::Extension: Extension,
 		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
 	{
 		if TypeId::of::<BlockNumber>() == TypeId::of::<B>() {
-			Any::downcast_ref(&self.for_type::<T>()?).cloned()
+			<dyn Any>::downcast_ref(&self.for_type::<T>()?).cloned()
 		} else {
 			self.get::<Forks<BlockNumber, <Self::Forks as IsForks>::Extension>>()?
 				.for_type()
@@ -264,24 +288,35 @@ impl<B, E> Extension for Forks<B, E> where
 pub trait GetExtension {
 	/// Get an extension of specific type.
 	fn get_any(&self, t: TypeId) -> &dyn Any;
+
+	/// Get an extension of specific type with mutable access.
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any;
 }
 
-impl <E: Extension> GetExtension for E {
+impl<E: Extension> GetExtension for E {
 	fn get_any(&self, t: TypeId) -> &dyn Any {
 		Extension::get_any(self, t)
 	}
+
+	fn get_any_mut(&mut self, t: TypeId) -> &mut dyn Any {
+		Extension::get_any_mut(self, t)
+	}
 }
 
-/// Helper function that queries an extension by type from `GetExtension`
-/// trait object.
+/// Helper function that queries an extension by type from `GetExtension` trait object.
 pub fn get_extension<T: 'static>(e: &dyn GetExtension) -> Option<&T> {
-	Any::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
+	<dyn Any>::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
+}
+
+/// Helper function that queries an extension by type from `GetExtension` trait object.
+pub fn get_extension_mut<T: 'static>(e: &mut dyn GetExtension) -> Option<&mut T> {
+	<dyn Any>::downcast_mut(GetExtension::get_any_mut(e, TypeId::of::<T>()))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_chain_spec_derive::{ChainSpecGroup, ChainSpecExtension};
+	use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 	// Make the proc macro work for tests and doc tests.
 	use crate as sc_chain_spec;
 
@@ -297,7 +332,9 @@ mod tests {
 		pub test: u8,
 	}
 
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
+	#[derive(
+		Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension,
+	)]
 	#[serde(deny_unknown_fields)]
 	pub struct Extensions {
 		pub ext1: Extension1,
@@ -315,11 +352,12 @@ mod tests {
 
 	#[test]
 	fn forks_should_work_correctly() {
-		use super::Extension as _ ;
+		use super::Extension as _;
 
 		// We first need to deserialize into a `Value` because of the following bug:
 		// https://github.com/serde-rs/json/issues/505
-		let ext_val: serde_json::Value = serde_json::from_str(r#"
+		let ext_val: serde_json::Value = serde_json::from_str(
+			r#"
 {
 	"test": 11,
 	"forkable": {
@@ -342,40 +380,40 @@ mod tests {
 		}
 	}
 }
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
 		let ext: Ext2 = serde_json::from_value(ext_val).unwrap();
 
-		assert_eq!(ext.get::<Extension1>(), Some(&Extension1 {
-			test: 11
-		}));
+		assert_eq!(ext.get::<Extension1>(), Some(&Extension1 { test: 11 }));
 
 		// get forks definition
 		let forks = ext.get::<Forks<u64, Extensions>>().unwrap();
-		assert_eq!(forks.at_block(0), Extensions {
-			ext1: Extension1 { test: 15 },
-			ext2: Extension2 { test: 123 },
-		});
-		assert_eq!(forks.at_block(1), Extensions {
-			ext1: Extension1 { test: 5 },
-			ext2: Extension2 { test: 123 },
-		});
-		assert_eq!(forks.at_block(2), Extensions {
-			ext1: Extension1 { test: 5 },
-			ext2: Extension2 { test: 5 },
-		});
-		assert_eq!(forks.at_block(4), Extensions {
-			ext1: Extension1 { test: 5 },
-			ext2: Extension2 { test: 5 },
-		});
-		assert_eq!(forks.at_block(5), Extensions {
-			ext1: Extension1 { test: 5 },
-			ext2: Extension2 { test: 1 },
-		});
-		assert_eq!(forks.at_block(10), Extensions {
-			ext1: Extension1 { test: 5 },
-			ext2: Extension2 { test: 1 },
-		});
+		assert_eq!(
+			forks.at_block(0),
+			Extensions { ext1: Extension1 { test: 15 }, ext2: Extension2 { test: 123 } }
+		);
+		assert_eq!(
+			forks.at_block(1),
+			Extensions { ext1: Extension1 { test: 5 }, ext2: Extension2 { test: 123 } }
+		);
+		assert_eq!(
+			forks.at_block(2),
+			Extensions { ext1: Extension1 { test: 5 }, ext2: Extension2 { test: 5 } }
+		);
+		assert_eq!(
+			forks.at_block(4),
+			Extensions { ext1: Extension1 { test: 5 }, ext2: Extension2 { test: 5 } }
+		);
+		assert_eq!(
+			forks.at_block(5),
+			Extensions { ext1: Extension1 { test: 5 }, ext2: Extension2 { test: 1 } }
+		);
+		assert_eq!(
+			forks.at_block(10),
+			Extensions { ext1: Extension1 { test: 5 }, ext2: Extension2 { test: 1 } }
+		);
 		assert!(forks.at_block(10).get::<Extension2>().is_some());
 
 		// filter forks for `Extension2`

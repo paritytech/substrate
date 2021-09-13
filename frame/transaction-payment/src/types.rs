@@ -17,12 +17,14 @@
 
 //! Types for transaction-payment RPC.
 
-use sp_std::prelude::*;
-use frame_support::weights::{Weight, DispatchClass};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
+use sp_std::prelude::*;
+
+use frame_support::weights::{DispatchClass, Weight};
 
 /// The base fee and adjusted weight and length fees constitute the _inclusion fee_.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
@@ -34,8 +36,9 @@ pub struct InclusionFee<Balance> {
 	pub base_fee: Balance,
 	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
 	pub len_fee: Balance,
-	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
-	///     the congestion of the network.
+	///
+	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on the
+	///   congestion of the network.
 	/// - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
 	/// accounts for the execution time of a transaction.
 	///
@@ -58,8 +61,8 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 
 /// The `FeeDetails` is composed of:
 ///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
-///   - `tip`: If included in the transaction, the tip will be added on top. Only
-///     signed transactions can have a tip.
+///   - `tip`: If included in the transaction, the tip will be added on top. Only signed
+///     transactions can have a tip.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -78,11 +81,16 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 	/// final_fee = inclusion_fee + tip;
 	/// ```
 	pub fn final_fee(&self) -> Balance {
-		self.inclusion_fee.as_ref().map(|i| i.inclusion_fee()).unwrap_or_else(|| Zero::zero()).saturating_add(self.tip)
+		self.inclusion_fee
+			.as_ref()
+			.map(|i| i.inclusion_fee())
+			.unwrap_or_else(|| Zero::zero())
+			.saturating_add(self.tip)
 	}
 }
 
-/// Information related to a dispatchable's class, weight, and fee that can be queried from the runtime.
+/// Information related to a dispatchable's class, weight, and fee that can be queried from the
+/// runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -103,13 +111,18 @@ pub struct RuntimeDispatchInfo<Balance> {
 
 #[cfg(feature = "std")]
 mod serde_balance {
-	use serde::{Deserialize, Serializer, Deserializer};
+	use serde::{Deserialize, Deserializer, Serializer};
 
-	pub fn serialize<S: Serializer, T: std::fmt::Display>(t: &T, serializer: S) -> Result<S::Ok, S::Error> {
+	pub fn serialize<S: Serializer, T: std::fmt::Display>(
+		t: &T,
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&t.to_string())
 	}
 
-	pub fn deserialize<'de, D: Deserializer<'de>, T: std::str::FromStr>(deserializer: D) -> Result<T, D::Error> {
+	pub fn deserialize<'de, D: Deserializer<'de>, T: std::str::FromStr>(
+		deserializer: D,
+	) -> Result<T, D::Error> {
 		let s = String::deserialize(deserializer)?;
 		s.parse::<T>().map_err(|_| serde::de::Error::custom("Parse from string failed"))
 	}

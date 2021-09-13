@@ -21,8 +21,10 @@
 
 use super::*;
 
+use frame_benchmarking::{
+	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
+};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks_instance_pallet, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Balances;
@@ -30,7 +32,6 @@ use crate::Pallet as Balances;
 const SEED: u32 = 0;
 // existential deposit multiplier
 const ED_MULTIPLIER: u32 = 10;
-
 
 benchmarks_instance_pallet! {
 	// Benchmark `transfer` extrinsic with the worst possible conditions:
@@ -40,7 +41,7 @@ benchmarks_instance_pallet! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
 
-		// Give some multiple of the existential deposit + creation fee + transfer fee
+		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
 
@@ -130,7 +131,7 @@ benchmarks_instance_pallet! {
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
 
-		// Give some multiple of the existential deposit + creation fee + transfer fee
+		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&source, balance);
 
@@ -154,7 +155,7 @@ benchmarks_instance_pallet! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
 
-		// Give some multiple of the existential deposit + creation fee + transfer fee
+		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
 
@@ -175,6 +176,24 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(Balances::<T, I>::free_balance(&caller), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
+	}
+
+	// Benchmark `transfer_all` with the worst possible condition:
+	// * The recipient account is created
+	// * The sender is killed
+	transfer_all {
+		let caller = whitelisted_caller();
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
+
+		// Give some multiple of the existential deposit
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
+	}: _(RawOrigin::Signed(caller.clone()), recipient_lookup, false)
+	verify {
+		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
+		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
 	}
 }
 

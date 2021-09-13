@@ -19,23 +19,26 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use sp_std::prelude::*;
 use super::*;
-use sp_runtime::traits::Bounded;
-use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
-	benchmarks_instance_pallet, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
+	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelist_account,
+	whitelisted_caller,
 };
-use frame_support::traits::Get;
-use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, Get},
+};
+use frame_system::RawOrigin as SystemOrigin;
+use sp_runtime::traits::Bounded;
+use sp_std::prelude::*;
 
 use crate::Pallet as Assets;
 
 const SEED: u32 = 0;
 
-fn create_default_asset<T: Config<I>, I: 'static>(is_sufficient: bool)
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn create_default_asset<T: Config<I>, I: 'static>(
+	is_sufficient: bool,
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let root = SystemOrigin::Root.into();
@@ -45,14 +48,16 @@ fn create_default_asset<T: Config<I>, I: 'static>(is_sufficient: bool)
 		caller_lookup.clone(),
 		is_sufficient,
 		1u32.into(),
-	).is_ok());
+	)
+	.is_ok());
 	(caller, caller_lookup)
 }
 
-fn create_default_minted_asset<T: Config<I>, I: 'static>(is_sufficient: bool, amount: T::Balance)
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
-	let (caller, caller_lookup)  = create_default_asset::<T, I>(is_sufficient);
+fn create_default_minted_asset<T: Config<I>, I: 'static>(
+	is_sufficient: bool,
+	amount: T::Balance,
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+	let (caller, caller_lookup) = create_default_asset::<T, I>(is_sufficient);
 	if !is_sufficient {
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
 	}
@@ -61,14 +66,17 @@ fn create_default_minted_asset<T: Config<I>, I: 'static>(is_sufficient: bool, am
 		Default::default(),
 		caller_lookup.clone(),
 		amount,
-	).is_ok());
+	)
+	.is_ok());
 	(caller, caller_lookup)
 }
 
 fn swap_is_sufficient<T: Config<I>, I: 'static>(s: &mut bool) {
-	Asset::<T, I>::mutate(&T::AssetId::default(), |maybe_a|
-		if let Some(ref mut a) = maybe_a { sp_std::mem::swap(s, &mut a.is_sufficient) }
-	);
+	Asset::<T, I>::mutate(&T::AssetId::default(), |maybe_a| {
+		if let Some(ref mut a) = maybe_a {
+			sp_std::mem::swap(s, &mut a.is_sufficient)
+		}
+	});
 }
 
 fn add_consumers<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
@@ -79,7 +87,13 @@ fn add_consumers<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 		let target = account("consumer", i, SEED);
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+		assert!(Assets::<T, I>::mint(
+			origin.clone().into(),
+			Default::default(),
+			target_lookup,
+			100u32.into()
+		)
+		.is_ok());
 	}
 	swap_is_sufficient::<T, I>(&mut s);
 }
@@ -91,7 +105,13 @@ fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	for i in 0..n {
 		let target = account("sufficient", i, SEED);
 		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+		assert!(Assets::<T, I>::mint(
+			origin.clone().into(),
+			Default::default(),
+			target_lookup,
+			100u32.into()
+		)
+		.is_ok());
 	}
 	swap_is_sufficient::<T, I>(&mut s);
 }
@@ -105,7 +125,8 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 		Default::default(),
 		minter_lookup,
 		(100 * (n + 1)).into(),
-	).unwrap();
+	)
+	.unwrap();
 	for i in 0..n {
 		let target = account("approval", i, SEED);
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
@@ -115,24 +136,17 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 			Default::default(),
 			target_lookup,
 			100u32.into(),
-		).unwrap();
+		)
+		.unwrap();
 	}
 }
 
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
-	let events = frame_system::Pallet::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	let events = frame_system::Pallet::<T>::events();
-	assert!(events.iter().any(|event_record| {
-		matches!(&event_record, frame_system::EventRecord { event, .. } if &system_event == event)
-	}));
+	frame_system::Pallet::<T>::assert_has_event(generic_event.into());
 }
 
 benchmarks_instance_pallet! {

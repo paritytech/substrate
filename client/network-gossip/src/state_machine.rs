@@ -16,19 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Network, MessageIntent, Validator, ValidatorContext, ValidationResult};
+use crate::{MessageIntent, Network, ValidationResult, Validator, ValidatorContext};
 
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use std::iter;
-use std::time;
-use lru::LruCache;
 use libp2p::PeerId;
+use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sc_network::ObservedRole;
-use wasm_timer::Instant;
+use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use std::{
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	iter,
+	sync::Arc,
+	time,
+	time::Instant,
+};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
@@ -41,7 +43,7 @@ use wasm_timer::Instant;
 // this cache should take about 256 KB of memory.
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
 
-const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_millis(750);
 
 pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
@@ -87,17 +89,13 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 	/// Broadcast a message to all peers that have not received it previously.
 	fn broadcast_message(&mut self, topic: B::Hash, message: Vec<u8>, force: bool) {
-		self.gossip.multicast(
-			self.network,
-			topic,
-			message,
-			force,
-		);
+		self.gossip.multicast(self.network, topic, message, force);
 	}
 
 	/// Send addressed message to a peer.
 	fn send_message(&mut self, who: &PeerId, message: Vec<u8>) {
-		self.network.write_notification(who.clone(), self.gossip.protocol.clone(), message);
+		self.network
+			.write_notification(who.clone(), self.gossip.protocol.clone(), message);
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -114,8 +112,9 @@ fn propagate<'a, B: BlockT, I>(
 	peers: &mut HashMap<PeerId, PeerConsensus<B::Hash>>,
 	validator: &Arc<dyn Validator<B>>,
 )
-	// (msg_hash, topic, message)
-	where I: Clone + IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a Vec<u8>)>,
+// (msg_hash, topic, message)
+where
+	I: Clone + IntoIterator<Item = (&'a B::Hash, &'a B::Hash, &'a Vec<u8>)>,
 {
 	let mut message_allowed = validator.message_allowed();
 
@@ -124,23 +123,24 @@ fn propagate<'a, B: BlockT, I>(
 			let intent = match intent {
 				MessageIntent::Broadcast { .. } =>
 					if peer.known_messages.contains(&message_hash) {
-						continue;
+						continue
 					} else {
 						MessageIntent::Broadcast
 					},
-				MessageIntent::PeriodicRebroadcast =>
+				MessageIntent::PeriodicRebroadcast => {
 					if peer.known_messages.contains(&message_hash) {
 						MessageIntent::PeriodicRebroadcast
 					} else {
 						// peer doesn't know message, so the logic should treat it as an
 						// initial broadcast.
 						MessageIntent::Broadcast
-					},
+					}
+				},
 				other => other,
 			};
 
 			if !message_allowed(id, intent, &topic, &message) {
-				continue;
+				continue
 			}
 
 			peer.known_messages.insert(message_hash.clone());
@@ -180,7 +180,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(Err(e)) => {
 				tracing::debug!(target: "gossip", "Failed to register metrics: {:?}", e);
 				None
-			}
+			},
 			None => None,
 		};
 
@@ -197,11 +197,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, role: ObservedRole) {
-		// light nodes are not valid targets for consensus gossip messages
-		if role.is_light() {
-			return;
-		}
-
 		tracing::trace!(
 			target:"gossip",
 			%who,
@@ -209,9 +204,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			?role,
 			"Registering peer",
 		);
-		self.peers.insert(who.clone(), PeerConsensus {
-			known_messages: HashSet::new(),
-		});
+		self.peers.insert(who.clone(), PeerConsensus { known_messages: HashSet::new() });
 
 		let validator = self.validator.clone();
 		let mut context = NetworkContext { gossip: self, network };
@@ -226,12 +219,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		sender: Option<PeerId>,
 	) {
 		if self.known_messages.put(message_hash.clone(), ()).is_none() {
-			self.messages.push(MessageEntry {
-				message_hash,
-				topic,
-				message,
-				sender,
-			});
+			self.messages.push(MessageEntry { message_hash, topic, message, sender });
 
 			if let Some(ref metrics) = self.metrics {
 				metrics.registered_messages.inc();
@@ -244,11 +232,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// the message's topic. No validation is performed on the message, if the
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
-	pub fn register_message(
-		&mut self,
-		topic: B::Hash,
-		message: Vec<u8>,
-	) {
+	pub fn register_message(&mut self, topic: B::Hash, message: Vec<u8>) {
 		let message_hash = HashFor::<B>::hash(&message[..]);
 		self.register_message_hashed(message_hash, topic, message, None);
 	}
@@ -272,7 +256,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Rebroadcast all messages to all peers.
 	fn rebroadcast(&mut self, network: &mut dyn Network<B>) {
-		let messages = self.messages.iter()
+		let messages = self
+			.messages
+			.iter()
 			.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
 		propagate(
 			network,
@@ -280,20 +266,28 @@ impl<B: BlockT> ConsensusGossip<B> {
 			messages,
 			MessageIntent::PeriodicRebroadcast,
 			&mut self.peers,
-			&self.validator
+			&self.validator,
 		);
 	}
 
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, network: &mut dyn Network<B>, topic: B::Hash, force: bool) {
-		let messages = self.messages.iter()
-			.filter_map(|entry|
-				if entry.topic == topic {
-					Some((&entry.message_hash, &entry.topic, &entry.message))
-				} else { None }
-			);
+		let messages = self.messages.iter().filter_map(|entry| {
+			if entry.topic == topic {
+				Some((&entry.message_hash, &entry.topic, &entry.message))
+			} else {
+				None
+			}
+		});
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
-		propagate(network, self.protocol.clone(), messages, intent, &mut self.peers, &self.validator);
+		propagate(
+			network,
+			self.protocol.clone(),
+			messages,
+			intent,
+			&mut self.peers,
+			&self.validator,
+		);
 	}
 
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
@@ -303,8 +297,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let before = self.messages.len();
 
 		let mut message_expired = self.validator.message_expired();
-		self.messages
-			.retain(|entry| !message_expired(entry.topic, &entry.message));
+		self.messages.retain(|entry| !message_expired(entry.topic, &entry.message));
 
 		let expired_messages = before - self.messages.len();
 
@@ -328,10 +321,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Get valid messages received in the past for a topic (might have expired meanwhile).
 	pub fn messages_for(&mut self, topic: B::Hash) -> impl Iterator<Item = TopicNotification> + '_ {
-		self.messages.iter().filter(move |e| e.topic == topic).map(|entry| TopicNotification {
-			message: entry.message.clone(),
-			sender: entry.sender.clone(),
-		})
+		self.messages
+			.iter()
+			.filter(move |e| e.topic == topic)
+			.map(|entry| TopicNotification {
+				message: entry.message.clone(),
+				sender: entry.sender.clone(),
+			})
 	}
 
 	/// Register incoming messages and return the ones that are new and valid (according to a gossip
@@ -365,7 +361,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					"Ignored already known message",
 				);
 				network.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
-				continue;
+				continue
 			}
 
 			// validate the message
@@ -385,7 +381,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 						protocol = %self.protocol,
 						"Discard message from peer",
 					);
-					continue;
+					continue
 				},
 			};
 
@@ -398,24 +394,19 @@ impl<B: BlockT> ConsensusGossip<B> {
 						protocol = %self.protocol,
 						"Got message from unregistered peer",
 					);
-					continue;
-				}
+					continue
+				},
 			};
 
 			network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
 			peer.known_messages.insert(message_hash);
-			to_forward.push((topic, TopicNotification {
-				message: message.clone(),
-				sender: Some(who.clone())
-			}));
+			to_forward.push((
+				topic,
+				TopicNotification { message: message.clone(), sender: Some(who.clone()) },
+			));
 
 			if keep {
-				self.register_message_hashed(
-					message_hash,
-					topic,
-					message,
-					Some(who.clone()),
-				);
+				self.register_message_hashed(message_hash, topic, message, Some(who.clone()));
 			}
 		}
 
@@ -428,24 +419,21 @@ impl<B: BlockT> ConsensusGossip<B> {
 		network: &mut dyn Network<B>,
 		who: &PeerId,
 		topic: B::Hash,
-		force: bool
+		force: bool,
 	) {
 		let mut message_allowed = self.validator.message_allowed();
 
 		if let Some(ref mut peer) = self.peers.get_mut(who) {
 			for entry in self.messages.iter().filter(|m| m.topic == topic) {
-				let intent = if force {
-					MessageIntent::ForcedBroadcast
-				} else {
-					MessageIntent::Broadcast
-				};
+				let intent =
+					if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 
 				if !force && peer.known_messages.contains(&entry.message_hash) {
-					continue;
+					continue
 				}
 
 				if !message_allowed(who, intent, &entry.topic, &entry.message) {
-					continue;
+					continue
 				}
 
 				peer.known_messages.insert(entry.message_hash.clone());
@@ -457,7 +445,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 					?entry.message,
 					"Sending topic message",
 				);
-				network.write_notification(who.clone(), self.protocol.clone(), entry.message.clone());
+				network.write_notification(
+					who.clone(),
+					self.protocol.clone(),
+					entry.message.clone(),
+				);
 			}
 		}
 	}
@@ -479,18 +471,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 			iter::once((&message_hash, &topic, &message)),
 			intent,
 			&mut self.peers,
-			&self.validator
+			&self.validator,
 		);
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(
-		&mut self,
-		network: &mut dyn Network<B>,
-		who: &PeerId,
-		message: Vec<u8>,
-	) {
+	pub fn send_message(&mut self, network: &mut dyn Network<B>, who: &PeerId, message: Vec<u8>) {
 		let peer = match self.peers.get_mut(who) {
 			None => return,
 			Some(peer) => peer,
@@ -539,11 +526,15 @@ impl Metrics {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use futures::prelude::*;
 	use sc_network::{Event, ReputationChange};
-	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use std::{borrow::Cow, pin::Pin, sync::{Arc, Mutex}};
-	use super::*;
+	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256};
+	use std::{
+		borrow::Cow,
+		pin::Pin,
+		sync::{Arc, Mutex},
+	};
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
@@ -557,7 +548,7 @@ mod tests {
 					sender: None,
 				});
 			}
-		}
+		};
 	}
 
 	struct AllowAll;
@@ -573,7 +564,7 @@ mod tests {
 	}
 
 	struct DiscardAll;
-	impl Validator<Block> for DiscardAll{
+	impl Validator<Block> for DiscardAll {
 		fn validate(
 			&self,
 			_context: &mut dyn ValidatorContext<Block>,
@@ -607,11 +598,9 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
-		}
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
-		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
-		}
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
 			unimplemented!();
@@ -682,7 +671,7 @@ mod tests {
 
 		assert_eq!(
 			consensus.messages_for(topic).next(),
-			Some(TopicNotification { message: message, sender: None }),
+			Some(TopicNotification { message, sender: None }),
 		);
 	}
 
@@ -717,15 +706,12 @@ mod tests {
 	#[test]
 	fn on_incoming_ignores_discarded_messages() {
 		let to_forward = ConsensusGossip::<Block>::new(Arc::new(DiscardAll), "/foo".into(), None)
-			.on_incoming(
-				&mut NoOpNetwork::default(),
-				PeerId::random(),
-				vec![vec![1, 2, 3]],
-			);
+			.on_incoming(&mut NoOpNetwork::default(), PeerId::random(), vec![vec![1, 2, 3]]);
 
 		assert!(
 			to_forward.is_empty(),
-			"Expected `on_incoming` to ignore discarded message but got {:?}", to_forward,
+			"Expected `on_incoming` to ignore discarded message but got {:?}",
+			to_forward,
 		);
 	}
 

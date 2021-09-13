@@ -23,7 +23,7 @@ use crate::crypto::KeyTypeId;
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
-/// Key type for generic Sr 25519 key.
+/// Key type for generic ECDSA key.
 pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
@@ -144,6 +144,13 @@ impl TaskExecutor {
 }
 
 #[cfg(feature = "std")]
+impl Default for TaskExecutor {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+#[cfg(feature = "std")]
 impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
@@ -155,7 +162,11 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 
 #[cfg(feature = "std")]
 impl crate::traits::SpawnEssentialNamed for TaskExecutor {
-	fn spawn_essential_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_essential_blocking(
+		&self,
+		_: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
 	fn spawn_essential(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {

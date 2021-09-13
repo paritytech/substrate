@@ -41,9 +41,9 @@
 //! ### Executing Privileged Functions
 //!
 //! The Sudo pallet itself is not intended to be used within other pallets.
-//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other pallets.
-//! You can execute these privileged functions by calling `sudo` with the sudo key account.
-//! Privileged functions cannot be directly executed via an extrinsic.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in
+//! other pallets. You can execute these privileged functions by calling `sudo` with the sudo key
+//! account. Privileged functions cannot be directly executed via an extrinsic.
 //!
 //! Learn more about privileged functions and `Root` origin in the [`Origin`] type documentation.
 //!
@@ -52,7 +52,7 @@
 //! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//!
+//! 
 //! #[frame_support::pallet]
 //! pub mod logger {
 //! 	use frame_support::pallet_prelude::*;
@@ -64,9 +64,6 @@
 //!
 //! 	#[pallet::pallet]
 //! 	pub struct Pallet<T>(PhantomData<T>);
-//!
-//! 	#[pallet::hooks]
-//! 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 //!
 //! 	#[pallet::call]
 //! 	impl<T: Config> Pallet<T> {
@@ -96,13 +93,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_runtime::{traits::StaticLookup, DispatchResult};
 use sp_std::prelude::*;
-use sp_runtime::{DispatchResult, traits::StaticLookup};
 
-use frame_support::{
-	weights::GetDispatchInfo,
-	traits::UnfilteredDispatchable,
-};
+use frame_support::{traits::UnfilteredDispatchable, weights::GetDispatchInfo};
 
 #[cfg(test)]
 mod mock;
@@ -113,9 +107,9 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::{DispatchResult, *};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::{*, DispatchResult};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -123,15 +117,13 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A sudo-able call.
-		type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
+		type Call: Parameter + UnfilteredDispatchable<Origin = Self::Origin> + GetDispatchInfo;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -149,7 +141,7 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
 		})]
-		pub(crate) fn sudo(
+		pub fn sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
@@ -174,7 +166,7 @@ pub mod pallet {
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
-		pub(crate) fn sudo_unchecked_weight(
+		pub fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 			_weight: Weight,
@@ -189,7 +181,8 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
+		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo
+		/// key.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -199,7 +192,7 @@ pub mod pallet {
 		/// - One DB change.
 		/// # </weight>
 		#[pallet::weight(0)]
-		pub(crate) fn set_key(
+		pub fn set_key(
 			origin: OriginFor<T>,
 			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
@@ -235,10 +228,10 @@ pub mod pallet {
 				dispatch_info.class,
 			)
 		})]
-		pub(crate) fn sudo_as(
+		pub fn sudo_as(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
-			call: Box<<T as Config>::Call>
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -287,9 +280,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				key: Default::default(),
-			}
+			Self { key: Default::default() }
 		}
 	}
 
