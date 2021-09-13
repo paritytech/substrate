@@ -132,7 +132,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+	pub fn new(mut params: Params<B, H>) -> Result<Self, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -201,12 +201,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.chain.clone(),
 			params.protocol_id.clone(),
 			&params.network_config,
-			iter::once(Vec::new())
-				.chain(
-					(0..params.network_config.extra_sets.len() - 1)
-						.map(|_| default_notif_handshake_message.clone()),
-				)
-				.collect(),
+			vec![default_notif_handshake_message; params.network_config.extra_sets.len()],
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			warp_sync_provider,

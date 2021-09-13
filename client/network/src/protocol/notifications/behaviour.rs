@@ -434,8 +434,7 @@ impl Notifications {
 		set_id: sc_peerset::SetId,
 		ban: Option<Duration>,
 	) {
-		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id))
-		{
+		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 			entry
 		} else {
 			return
