@@ -29,7 +29,7 @@ use sc_service::{
 	config::{
 		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
-		TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
 };
@@ -348,13 +348,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
-	/// Get the RPC HTTP thread pool size (`None` for a default 4-thread pool config).
-	///
-	/// By default this is `None`.
-	fn rpc_http_threads(&self) -> Result<Option<usize>> {
-		Ok(None)
-	}
-
 	/// Get the RPC cors (`None` if disabled)
 	///
 	/// By default this is `Some(Vec::new())`.
@@ -465,7 +458,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: TaskExecutor,
+		tokio_handle: tokio::runtime::Handle,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -490,7 +483,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
-			task_executor,
+			tokio_handle,
 			transaction_pool: self.transaction_pool()?,
 			network: self.network_config(
 				&chain_spec,
@@ -518,7 +511,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
-			rpc_http_threads: self.rpc_http_threads()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
