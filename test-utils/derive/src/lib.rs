@@ -36,18 +36,9 @@ fn parse_knobs(
 	let attrs = &input.attrs;
 	let vis = input.vis;
 
-	if sig.inputs.len() != 1 {
-		let msg = "the test function accepts only one argument of type sc_service::TaskExecutor";
-		return Err(syn::Error::new_spanned(&sig, msg))
+	if !sig.inputs.is_empty() {
+		return Err(syn::Error::new_spanned(&sig, "No arguments expected for tests."))
 	}
-	let (task_executor_name, task_executor_type) = match sig.inputs.pop().map(|x| x.into_value()) {
-		Some(syn::FnArg::Typed(x)) => (x.pat, x.ty),
-		_ => {
-			let msg =
-				"the test function accepts only one argument of type sc_service::TaskExecutor";
-			return Err(syn::Error::new_spanned(&sig, msg))
-		},
-	};
 
 	let crate_name = match crate_name("substrate-test-utils") {
 		Ok(FoundCrate::Itself) => syn::Ident::new("substrate_test_utils", Span::call_site().into()),
@@ -65,12 +56,6 @@ fn parse_knobs(
 		#header
 		#(#attrs)*
 		#vis #sig {
-			use #crate_name::futures::future::FutureExt;
-
-			let #task_executor_name: #task_executor_type = (|fut, _| {
-				#crate_name::tokio::spawn(fut).map(drop)
-			})
-			.into();
 			if #crate_name::tokio::time::timeout(
 				std::time::Duration::from_secs(
 					std::env::var("SUBSTRATE_TEST_TIMEOUT")
