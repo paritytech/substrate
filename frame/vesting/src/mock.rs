@@ -66,6 +66,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type Origin = Origin;
 	type PalletInfo = PalletInfo;
+	type PovParams = ();
 	type SS58Prefix = ();
 	type SystemWeightInfo = ();
 	type Version = ();

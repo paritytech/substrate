@@ -199,6 +199,7 @@ mod tests {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = BlockLength;
+		type PovParams = ();
 		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;

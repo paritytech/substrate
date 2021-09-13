@@ -507,6 +507,7 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type BlockWeights = ();
 	type BlockLength = ();
+	type PovParams = ();
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;

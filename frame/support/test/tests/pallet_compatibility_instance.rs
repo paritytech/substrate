@@ -205,6 +205,7 @@ frame_support::parameter_types!(
 impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
+	type PovParams = ();
 	type DbWeight = ();
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;

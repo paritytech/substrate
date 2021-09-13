@@ -91,6 +91,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
+	type PovParams = ();
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
 	type Index = u64;

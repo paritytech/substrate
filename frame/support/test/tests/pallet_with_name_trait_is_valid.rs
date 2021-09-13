@@ -144,6 +144,7 @@ mod tests {
 		type DbWeight = ();
 		type BlockWeights = ();
 		type BlockLength = ();
+		type PovParams = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();

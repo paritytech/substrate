@@ -939,6 +939,7 @@ mod tests {
 		type BaseCallFilter = BaseFilter;
 		type BlockWeights = ();
 		type BlockLength = ();
+		type PovParams = ();
 		type DbWeight = RocksDbWeight;
 		type Origin = Origin;
 		type Call = Call;

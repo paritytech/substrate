@@ -57,6 +57,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
+	type PovParams = ();
 	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;

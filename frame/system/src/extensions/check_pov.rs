@@ -26,6 +26,7 @@ use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 };
 
+/// Proof-of-Validity resource limit check.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
 pub struct CheckPov<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 

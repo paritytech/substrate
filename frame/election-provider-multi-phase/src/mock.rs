@@ -210,6 +210,7 @@ impl frame_system::Config for Runtime {
 	type DbWeight = ();
 	type BlockLength = ();
 	type BlockWeights = BlockWeights;
+	type PovParams = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
