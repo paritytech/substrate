@@ -64,8 +64,7 @@ hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.5.0", default-features = false, optional = true }
 libsecp256k1 = { version = "0.6", default-features = false, features = ["hmac", "static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
-ss58-registry = { git = "https://github.com/gilescope/ss58-registry.git", branch = "initial" }
-# ss58-registry = { path = "/home/gilescope/git/ss58-registry-fork" }
+ss58-registry = { git = "https://github.com/paritytech/ss58-registry.git", branch = "main" }
 
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
 

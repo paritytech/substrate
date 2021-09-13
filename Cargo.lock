@@ -9532,7 +9532,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "ss58-registry"
 version = "0.1.0"
-source = "git+https://github.com/gilescope/ss58-registry.git?branch=initial#f69aab473e10eee62abcf5f23b5a6930a880b494"
+source = "git+https://github.com/paritytech/ss58-registry.git?branch=main#eb35165bce10aea8494f26180ad46120d90ec13f"
 dependencies = [
  "proc-macro2",
  "quote",
