@@ -192,8 +192,8 @@ fn asset_transfer_invalid_resource_id() {
         let to = vec![2];
         let resource_id = [1; 32];
         let amount = 100;
-        assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
 
+        assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
         assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_id.clone()));
         
         assert_noop!(
