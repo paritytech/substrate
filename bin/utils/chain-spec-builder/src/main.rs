@@ -102,14 +102,21 @@ fn genesis_constructor(
 	endowed_accounts: &[AccountId],
 	sudo_account: &AccountId,
 ) -> chain_spec::GenesisConfig {
-	let authorities = authority_seeds
+	let aura_authorities = authority_seeds
 		.iter()
 		.map(AsRef::as_ref)
-		.map(chain_spec::authority_keys_from_seed)
+		.map(chain_spec::authority_keys_from_seed_aura)
+		.collect::<Vec<_>>();
+
+	let babe_authorities =  authority_seeds
+		.iter()
+		.map(AsRef::as_ref)
+		.map(chain_spec::authority_keys_from_seed_babe)
 		.collect::<Vec<_>>();
 
 	chain_spec::testnet_genesis(
-		authorities,
+		aura_authorities,
+		babe_authorities,
 		nominator_accounts.to_vec(),
 		sudo_account.clone(),
 		Some(endowed_accounts.to_vec()),
@@ -169,12 +176,16 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
 		);
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
-			chain_spec::authority_keys_from_seed(seed);
+			chain_spec::authority_keys_from_seed_babe(seed);
+
+		let (aura, _) = chain_spec::authority_keys_from_seed_aura(seed);
 
 		let insert_key = |key_type, public| {
 			SyncCryptoStore::insert_unknown(&*keystore, key_type, &format!("//{}", seed), public)
 				.map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
+
+		insert_key(sp_core::crypto::key_types::AURA, aura.as_slice())?;
 
 		insert_key(sp_core::crypto::key_types::BABE, babe.as_slice())?;
 

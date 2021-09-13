@@ -95,6 +95,12 @@ where
 	}
 }
 
+pub type BabeImportSetup = (
+	sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+	grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
+	sc_consensus_babe::BabeLink<Block>,
+);
+
 pub fn new_partial(
 	config: &Configuration,
 	signal_shutdown: Option<exit_future::Signal>,
@@ -110,11 +116,7 @@ pub fn new_partial(
 				node_rpc::DenyUnsafe,
 				sc_rpc::SubscriptionTaskExecutor,
 			) -> Result<node_rpc::IoHandler, sc_service::Error>,
-			(
-				sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
-				grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
-				sc_consensus_babe::BabeLink<Block>,
-			),
+			BabeImportSetup,
 			grandpa::SharedVoterState,
 			Option<Telemetry>,
 		),
@@ -267,6 +269,11 @@ pub fn new_partial(
 	})
 }
 
+pub type AuraImportSetup = (
+	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
+	grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
+);
+
 pub fn new_partial_aura(
 	config: &Configuration,
 	signal_shutdown: Option<exit_future::Signal>,
@@ -282,11 +289,7 @@ pub fn new_partial_aura(
 				node_rpc::DenyUnsafe,
 				sc_rpc::SubscriptionTaskExecutor,
 			) -> Result<node_rpc::IoHandler, sc_service::Error>,
-			(
-				grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
-				grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
-				Option<Telemetry>,
-			),
+			AuraImportSetup,
 			grandpa::SharedVoterState,
 			Option<Telemetry>,
 		),
@@ -419,11 +422,11 @@ pub fn new_full_base(
 		client,
 		backend,
 		mut task_manager,
-		import_queue,
+		// import_queue,
 		keystore_container,
-		select_chain,
+		// select_chain,
 		transaction_pool,
-		block_import,
+		// block_import,
 		grandpa_link,
 		shared_voter_state,
 		mut telemetry,
@@ -491,7 +494,7 @@ pub fn new_full_base(
 			let proposer_factory = sc_basic_authorship::ProposerFactory::new(
 				task_manager.spawn_handle(),
 				client.clone(),
-				transaction_pool,
+				transaction_pool.clone(),
 				prometheus_registry.as_ref(),
 				telemetry.as_ref().map(|x| x.handle()),
 			);
@@ -541,11 +544,11 @@ pub fn new_full_base(
 			client,
 			backend,
 			task_manager,
-			import_queue,
+			// import_queue,
 			keystore_container,
-			select_chain,
+			// select_chain,
 			transaction_pool,
-			block_import,
+			// block_import,
 			grandpa_link,
 			shared_voter_state,
 			telemetry,
@@ -612,8 +615,6 @@ pub fn new_full_base(
 			telemetry: telemetry.as_mut(),
 		})?;
 
-		let (block_import, grandpa_link, babe_link) = import_setup;
-
 		(with_startup_data)(&block_import, &babe_link);
 
 		if role.is_authority() {
@@ -679,11 +680,11 @@ pub fn new_full_base(
 			client,
 			backend,
 			task_manager,
-			import_queue,
+			// import_queue,
 			keystore_container,
-			select_chain,
+			// select_chain,
 			transaction_pool,
-			block_import,
+			// block_import,
 			grandpa_link,
 			shared_voter_state,
 			telemetry,

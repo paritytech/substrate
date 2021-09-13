@@ -184,12 +184,12 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
 
-	testnet_genesis(				
+	testnet_genesis(
 		// Initial Aura authorities
 		vec![authority_keys_from_seed_aura("Alice"), authority_keys_from_seed_aura("Bob")],
-		initial_babe_authorities, 
-		vec![], 
-		root_key, 
+		initial_babe_authorities,
+		vec![],
+		root_key,
 		Some(endowed_accounts)
 	)
 }
@@ -414,6 +414,8 @@ fn local_testnet_genesis() -> GenesisConfig {
 	testnet_genesis(
 		// Initial Aura authorities
 		vec![authority_keys_from_seed_aura("Alice"), authority_keys_from_seed_aura("Bob")],
+		// Initial Babe authorities
+		vec![authority_keys_from_seed_babe("Alice"), authority_keys_from_seed_babe("Bob")],
 		// Initial Babe authorities
 		vec![],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
