@@ -351,21 +351,8 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
 
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("missing snapshot")?.encode();
-		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
-	}: {
-		assert_ok!(
-			<MultiPhase<T>>::submit_unsigned(
-				RawOrigin::None.into(),
-				Box::new(raw_solution),
-				witness,
-			)
-		);
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.expect("decoding should not fail; qed.");
-		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).expect("decoding should not fail; qed.");
-	} verify {
+	}: _(RawOrigin::None, Box::new(raw_solution), witness)
+	verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
 
