@@ -36,7 +36,7 @@ use frame_support::{
 	PalletId, RuntimeDebug,
 };
 use frame_system::{
-	limits::{BlockLength, BlockWeights},
+	limits::{BlockLength, BlockWeights, PovParams},
 	EnsureOneOf, EnsureRoot,
 };
 pub use node_primitives::{AccountId, Signature};
@@ -185,6 +185,7 @@ parameter_types! {
 		})
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 		.build_or_panic();
+	pub DefaultPovParams: PovParams = PovParams::default();
 	pub const SS58Prefix: u16 = 42;
 }
 
@@ -194,6 +195,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
+	type PovParams = DefaultPovParams;
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
 	type Call = Call;

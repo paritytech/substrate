@@ -137,6 +137,7 @@ parameter_types! {
 		::with_sensible_defaults(2 * WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
+	pub PovParams: frame_system::limits::PovParams = frame_system::limits::PovParams::default();
 	pub const SS58Prefix: u8 = 42;
 }
 
@@ -149,6 +150,8 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
 	type BlockLength = BlockLength;
+	/// The PoV parameters of a block. Values should be fetched from the relay chain in production.
+	type PovParams = PovParams;
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
