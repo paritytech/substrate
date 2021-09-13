@@ -188,7 +188,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	CAW: CanAuthorWith<B> + Send,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
@@ -278,7 +278,7 @@ where
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 {
 	AuraWorker {
 		client,
@@ -311,21 +311,22 @@ struct AuraWorker<C, E, I, P, SO, L, BS> {
 	_key_type: PhantomData<P>,
 }
 
+#[async_trait::async_trait]
 impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 	for AuraWorker<C, E, I, P, SO, L, BS>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error = Error>,
+	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
@@ -357,7 +358,7 @@ where
 		Some(epoch_data.len())
 	}
 
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		_header: &B::Header,
 		slot: Slot,
@@ -557,6 +558,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::executor;
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
@@ -777,7 +779,7 @@ mod tests {
 			);
 		}
 
-		futures::executor::block_on(future::select(
+		executor::block_on(future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
@@ -846,14 +848,14 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(worker.claim_slot(&head, 0.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 1.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 2.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 3.into(), &authorities).is_some());
-		assert!(worker.claim_slot(&head, 4.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
+		assert!(executor::block_on(worker.claim_slot(&head, 0.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 1.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 2.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 3.into(), &authorities)).is_some());
+		assert!(executor::block_on(worker.claim_slot(&head, 4.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 5.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 6.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 7.into(), &authorities)).is_some());
 	}
 
 	#[test]
@@ -893,7 +895,7 @@ mod tests {
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
 
-		let res = futures::executor::block_on(worker.on_slot(SlotInfo {
+		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
 			timestamp: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),

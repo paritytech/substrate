@@ -778,16 +778,16 @@ pub enum RequestFailure {
 	/// The remote replied, but the local node is no longer interested in the response.
 	Obsolete,
 	/// Problem on the network.
-	#[display(fmt = "Problem on the network")]
-	Network(#[error(ignore)] OutboundFailure),
+	#[display(fmt = "Problem on the network: {}", _0)]
+	Network(OutboundFailure),
 }
 
 /// Error when processing a request sent by a remote.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
 pub enum ResponseFailure {
 	/// Problem on the network.
-	#[display(fmt = "Problem on the network")]
-	Network(#[error(ignore)] InboundFailure),
+	#[display(fmt = "Problem on the network: {}", _0)]
+	Network(InboundFailure),
 }
 
 /// Implements the libp2p [`RequestResponseCodec`] trait. Defines how streams of bytes are turned

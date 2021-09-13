@@ -25,10 +25,8 @@ use libp2p::{
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	identity, mplex, noise, PeerId, Transport,
+	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
 };
-#[cfg(not(target_os = "unknown"))]
-use libp2p::{dns, tcp, websocket};
 use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
