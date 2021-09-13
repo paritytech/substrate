@@ -804,7 +804,7 @@ mod test {
 		if std::env::var("RUN_CUSTOM_FORMAT_TEST") == Ok("1".into()) {
 			use crate::crypto::Ss58AddressFormat;
 			// temp save default format version
-			let default_format = Ss58AddressFormat::default();
+			let default_format = crate::crypto::ss58_address_format();
 			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
 
 			set_default_ss58_version(Ss58AddressFormat::Custom(200));

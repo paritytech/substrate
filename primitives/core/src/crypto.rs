@@ -230,7 +230,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
-			v if v.is_default() => Ok(r),
+			v if v == ss58_address_format() => Ok(r),
 			_ => Err(PublicError::UnknownVersion),
 		})
 	}
@@ -286,7 +286,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
-			v if v.is_default() => Ok(r),
+			v if v == ss58_address_format() => Ok(r),
 			_ => Err(PublicError::UnknownVersion),
 		})
 	}
@@ -317,7 +317,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String {
-		self.to_ss58check_with_version(Ss58AddressFormat::default())
+		self.to_ss58check_with_version(ss58_address_format())
 	}
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
@@ -351,17 +351,23 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 }
 
 #[cfg(feature = "full_crypto")]
-ss58_registry::ss58_registry!();
+pub use ss58_registry::Ss58AddressFormat;
 
 /// Default prefix number
 #[cfg(feature = "std")]
-static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = core::sync::atomic::AtomicU16::new(42 /*substrate*/);
+static DEFAULT_VERSION: core::sync::atomic::AtomicU16 =
+	core::sync::atomic::AtomicU16::new(Ss58AddressFormat::Substrate.into());
 
+/// Returns default(). (can't impl Default due to orphan rules).
 #[cfg(feature = "std")]
-impl Default for Ss58AddressFormat {
-	fn default() -> Self {
-		DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
-	}
+pub fn ss58_address_format() -> Ss58AddressFormat {
+	DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
+}
+
+/// Returns either the input address format or the default.
+#[cfg(feature = "std")]
+pub fn unwrap_or_ss58_address_format(network: Option<Ss58AddressFormat>) -> Ss58AddressFormat {
+	network.unwrap_or_else(|| DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into())
 }
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
@@ -369,7 +375,7 @@ impl Default for Ss58AddressFormat {
 /// encoding and decoding SS58 addresses.
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
-	let prefix : u16 = new_default.into();
+	let prefix: u16 = new_default.into();
 	DEFAULT_VERSION.store(prefix, core::sync::atomic::Ordering::Relaxed);
 }
 

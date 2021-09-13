@@ -22,7 +22,7 @@ use crate::{
 	error, utils, with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
 use rand::{rngs::OsRng, RngCore};
-use sp_core::crypto::{Ss58AddressFormat, Ss58Codec};
+use sp_core::crypto::{unwrap_or_ss58_address_format, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
 use structopt::StructOpt;
 use utils::print_from_uri;
@@ -53,7 +53,7 @@ impl VanityCmd {
 	pub fn run(&self) -> error::Result<()> {
 		let formated_seed = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			generate_key(&self.pattern, self.network_scheme.network.clone().unwrap_or_default()),
+			generate_key(&self.pattern, unwrap_or_ss58_address_format(self.network_scheme.network)),
 		)?;
 
 		with_crypto_scheme!(
@@ -159,7 +159,10 @@ fn assert_non_empty_string(pattern: &str) -> Result<String, &'static str> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{crypto::Ss58Codec, sr25519, Pair};
+	use sp_core::{
+		crypto::{ss58_address_format, Ss58Codec},
+		sr25519, Pair,
+	};
 	use structopt::StructOpt;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
@@ -172,7 +175,7 @@ mod tests {
 
 	#[test]
 	fn test_generation_with_single_char() {
-		let seed = generate_key::<sr25519::Pair>("ab", Default::default()).unwrap();
+		let seed = generate_key::<sr25519::Pair>("ab", ss58_address_format()).unwrap();
 		assert!(sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
 			.unwrap()
 			.public()
