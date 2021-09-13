@@ -29,10 +29,11 @@ pub(crate) fn codec_impl(
 	count: usize,
 ) -> TokenStream2 {
 	let encode = encode_impl(ident.clone(), count);
-	let decode = decode_impl(ident, voter_type, target_type, weight_type, count);
+	let decode = decode_impl(ident.clone(), voter_type, target_type, weight_type, count);
 
 	quote! {
 		#encode
+		impl _npos::codec::EncodeLike for #ident {}
 		#decode
 	}
 }

@@ -16,33 +16,32 @@
 // limitations under the License.
 
 use super::*;
-use crate::{self as multi_block, unsigned as unsigned_pallet, verifier as verifier_pallet};
-use _npos::StakedAssignment;
-use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ExtendedBalance, Support,
+use crate::{
+	self as multi_block,
+	unsigned::{
+		self as unsigned_pallet,
+		miner::{BaseMiner, MinerError},
+	},
+	verifier as verifier_pallet,
 };
+use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
-	crypto::UncheckedInto,
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	H256,
 };
-use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	ElectionResult, EvaluateSupport, NposSolution,
-};
+use sp_npos_elections::{EvaluateSupport, NposSolution};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16, Perbill,
 };
-use std::{collections::BTreeMap, convert::TryFrom, sync::Arc, vec};
-use substrate_test_utils::assert_eq_uvec;
+use std::{sync::Arc, vec};
 
 // TODO: this mock is basically moving toward the direction of integration tests..maybe someday we
 // need to break it down.
@@ -76,6 +75,7 @@ sp_npos_elections::generate_solution_type!(
 	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
 
+/// get the events of the multi-block pallet.
 pub fn multi_block_events() -> Vec<crate::Event<Runtime>> {
 	System::events()
 		.into_iter()
@@ -84,6 +84,7 @@ pub fn multi_block_events() -> Vec<crate::Event<Runtime>> {
 		.collect::<Vec<_>>()
 }
 
+/// get the events of the verifier pallet.
 pub fn verifier_events() -> Vec<crate::verifier::Event<Runtime>> {
 	System::events()
 		.into_iter()
@@ -92,6 +93,7 @@ pub fn verifier_events() -> Vec<crate::verifier::Event<Runtime>> {
 		.collect::<Vec<_>>()
 }
 
+/// proceed block number to `n`.
 pub fn roll_to(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
@@ -102,6 +104,7 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+/// proceed block number to whenever the snapshot is fully created (`Phase::Snapshot(0)`).
 pub fn roll_to_snapshot_created() {
 	let mut now = System::block_number() + 1;
 	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
@@ -113,6 +116,19 @@ pub fn roll_to_snapshot_created() {
 	}
 }
 
+/// proceed block number to whenever the unsigned phase is open (`Phase::Unsigned(_)`).
+pub fn roll_to_unsigned_open() {
+	let mut now = System::block_number() + 1;
+	while !matches!(MultiBlock::current_phase(), Phase::Unsigned(_)) {
+		System::set_block_number(now);
+		MultiBlock::on_initialize(now);
+		VerifierPallet::on_initialize(now);
+		UnsignedPallet::on_initialize(now);
+		now += 1;
+	}
+}
+
+/// proceed block number to `n`, while running all offchain workers as well.
 pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
@@ -139,11 +155,13 @@ fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
 	flatten
 }
 
-pub(crate) fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
+/// An invalid solution with any scorre.
+pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
 	PagedRawSolution { score, solution_pages: vec![Default::default()], ..Default::default() }
 }
 
-pub(crate) fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
+/// A real solution that's valid, but has a really bad score.
+pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 	PagedRawSolution {
 		solution_pages: vec![TestNposSolution {
 			// 2 targets, both voting for themselves
@@ -682,8 +700,22 @@ pub fn raw_paged_from_supports(
 	PagedRawSolution { solution_pages, score, round }
 }
 
+/// ensure that the snapshot fully exists.
 pub fn ensure_full_snapshot() {
 	Snapshot::<Runtime>::assert_snapshot(true, Pages::get())
+}
+
+/// Simple wrapper for mining a new solution. Just more handy in case the interface of mine solution
+/// changes.
+///
+/// For testing, we never want to do reduce.
+pub fn mine_full_solution() -> Result<PagedRawSolution<Runtime>, MinerError> {
+	BaseMiner::<Runtime>::mine_solution(Pages::get(), false)
+}
+
+/// Same as [`mine_full_solution`] but with custom pages.
+pub fn mine_solution(pages: PageIndex) -> Result<PagedRawSolution<Runtime>, MinerError> {
+	BaseMiner::<Runtime>::mine_solution(pages, false)
 }
 
 #[test]

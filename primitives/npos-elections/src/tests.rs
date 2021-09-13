@@ -930,8 +930,8 @@ mod solution_type {
 		use crate::generate_solution_type;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy = sp_runtime::Percent>(12)
-		);
+			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy =
+	sp_runtime::Percent>(12) 	);
 	}
 
 	#[test]
@@ -1240,4 +1240,120 @@ fn index_assignments_generate_same_solution_as_plain_assignments() {
 	let index_compact = index_assignments.as_slice().try_into().unwrap();
 
 	assert_eq!(solution, index_compact);
+}
+
+#[test]
+fn sort_works() {
+	let mut solution = TestSolution {
+		votes1: vec![(1, 0), (3, 0), (2, 0)],
+		votes2: vec![(1, [(0, p(50))], 1), (2, [(0, p(50))], 1)],
+		votes3: vec![
+			(1, [(0, p(50)), (1, p(50))], 2),
+			(4, [(0, p(50)), (1, p(50))], 2),
+			(2, [(0, p(50)), (1, p(50))], 2),
+			(3, [(0, p(50)), (1, p(50))], 2),
+		],
+		// ensure the last one is also counted.
+		votes16: vec![(1, Default::default(), 0), (2, Default::default(), 0)],
+		..Default::default()
+	};
+
+	let stake_of_voters = |who: &u32| (*who).into();
+	solution.sort(stake_of_voters);
+
+	assert_eq!(
+		solution,
+		TestSolution {
+			votes1: vec![(3, 0), (2, 0), (1, 0)],
+			votes2: vec![(2, [(0, p(50))], 1), (1, [(0, p(50))], 1)],
+			votes3: vec![
+				(4, [(0, p(50)), (1, p(50))], 2),
+				(3, [(0, p(50)), (1, p(50))], 2),
+				(2, [(0, p(50)), (1, p(50))], 2),
+				(1, [(0, p(50)), (1, p(50))], 2),
+			],
+			// ensure the last one is also counted.
+			votes16: vec![(2, Default::default(), 0), (1, Default::default(), 0)],
+			..Default::default()
+		}
+	);
+}
+
+#[test]
+fn remove_weakest_sorted_works() {
+	let mut solution = TestSolution {
+		votes1: vec![(1, 0), (3, 0), (2, 0)],
+		votes2: vec![(3, Default::default(), 0), (4, Default::default(), 0)],
+
+		// ensure the last one is also counted.
+		votes16: vec![(5, Default::default(), 0), (6, Default::default(), 0)],
+		..Default::default()
+	};
+
+	let stake_of_voters = |who: &u32| (*who).into();
+	solution.sort(&stake_of_voters);
+
+	assert_eq!(
+		solution,
+		TestSolution {
+			votes1: vec![(3, 0), (2, 0), (1, 0)],
+			votes2: vec![(4, Default::default(), 0), (3, Default::default(), 0)],
+
+			// ensure the last one is also counted.
+			votes16: vec![(6, Default::default(), 0), (5, Default::default(), 0)],
+			..Default::default()
+		}
+	);
+
+	assert_eq!(solution.remove_weakest_sorted(&stake_of_voters), Some(1));
+	assert_eq!(
+		solution,
+		TestSolution {
+			votes1: vec![(3, 0), (2, 0)],
+			votes2: vec![(4, Default::default(), 0), (3, Default::default(), 0)],
+
+			// ensure the last one is also counted.
+			votes16: vec![(6, Default::default(), 0), (5, Default::default(), 0)],
+			..Default::default()
+		}
+	);
+
+	assert_eq!(solution.remove_weakest_sorted(&stake_of_voters), Some(2));
+	assert_eq!(
+		solution,
+		TestSolution {
+			votes1: vec![(3, 0)],
+			votes2: vec![(4, Default::default(), 0), (3, Default::default(), 0)],
+
+			// ensure the last one is also counted.
+			votes16: vec![(6, Default::default(), 0), (5, Default::default(), 0)],
+			..Default::default()
+		}
+	);
+
+	assert_eq!(solution.remove_weakest_sorted(&stake_of_voters), Some(3));
+	assert_eq!(
+		solution,
+		TestSolution {
+			votes1: vec![],
+			votes2: vec![(4, Default::default(), 0), (3, Default::default(), 0)],
+
+			// ensure the last one is also counted.
+			votes16: vec![(6, Default::default(), 0), (5, Default::default(), 0)],
+			..Default::default()
+		}
+	);
+
+	assert_eq!(solution.remove_weakest_sorted(&stake_of_voters), Some(3));
+	assert_eq!(
+		solution,
+		TestSolution {
+			votes1: vec![],
+			votes2: vec![(4, Default::default(), 0)],
+
+			// ensure the last one is also counted.
+			votes16: vec![(6, Default::default(), 0), (5, Default::default(), 0)],
+			..Default::default()
+		}
+	);
 }

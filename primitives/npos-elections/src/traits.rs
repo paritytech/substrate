@@ -27,6 +27,7 @@ use sp_arithmetic::{
 	PerThing,
 };
 use sp_std::{
+	cmp,
 	convert::{TryFrom, TryInto},
 	fmt::Debug,
 	ops::Mul,
@@ -68,6 +69,7 @@ where
 	type VoterIndex: UniqueSaturatedInto<usize>
 		+ TryInto<usize>
 		+ TryFrom<usize>
+		+ cmp::Ord
 		+ Debug
 		+ Copy
 		+ Clone
@@ -78,6 +80,7 @@ where
 	type TargetIndex: UniqueSaturatedInto<usize>
 		+ TryInto<usize>
 		+ TryFrom<usize>
+		+ cmp::Ord
 		+ Debug
 		+ Copy
 		+ Clone
@@ -152,4 +155,18 @@ where
 		voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
 		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
+
+	/// Sort self by the means of the given function.
+	///
+	/// This might be helpful to allow for easier trimming.
+	fn sort<F>(&mut self, voter_stake: F)
+	where
+		F: FnMut(&Self::VoterIndex) -> VoteWeight;
+
+	/// Remove the least staked voter.
+	///
+	/// This is ONLY sensible to do if [`Self::sort`] has been called on the struct at least once.
+	fn remove_weakest_sorted<F>(&mut self, voter_stake: F) -> Option<Self::VoterIndex>
+	where
+		F: FnMut(&Self::VoterIndex) -> VoteWeight;
 }

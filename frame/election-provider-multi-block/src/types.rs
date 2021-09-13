@@ -19,7 +19,6 @@ use std::fmt::Debug;
 
 use frame_election_provider_support::ElectionProvider;
 pub use frame_election_provider_support::{PageIndex, Supports};
-use frame_support::traits::Get;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
 use sp_runtime::SaturatedConversion;
 
@@ -58,7 +57,14 @@ pub struct PagedRawSolution<T: Config> {
 	pub round: u32,
 }
 
-// TODO: we also need a consuming version of this
+/// A helper trait to deal with the page index of partial solutions.
+///
+/// This should only be called on the `Vec<Solution>`. If the solution is *full*, then it returns a
+/// normal iterator that is just mapping the index (usize) to `PageIndex`.
+///
+/// if the solution is partial, it shifts the indices sufficiently so that the most significant page
+/// of the solution matches with the most significant page of the snapshot onchain.
+// TODO: we need a consuming version of this as well.
 pub trait Pagify<T> {
 	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_>;
 }
@@ -157,11 +163,6 @@ pub enum Phase<Bn> {
 	/// Inner value is `0` if the snapshot is complete and we are ready to move on. Otherwise, it
 	/// indicates hte remaining pages for each of which we need 1 block.
 	Snapshot(PageIndex),
-	/// A solution is being verified. In unsigned phase, this means that no other solution may be
-	/// accepted during this. In signed phase, we only enter this phase shortly before the end of
-	/// the signed phase, and no further signed solutions are acceptable. This can be one or more
-	/// blocks. Inner value is `0` if the verification is true and we are ready to move on.
-	Verification(PageIndex),
 	/// The first call to `ElectionProvider::elect` has happened, and we are expecting more calls.
 	/// No further operation is permitted, freeze all storage items and export `QueuedSolution`.
 	/// This can be one or more blocks.
@@ -213,7 +214,10 @@ mod pagify {
 	#[cfg(test)]
 	fn pagify_works() {
 		// is a noop when you have the same length
-		assert_eq!(vec![10, 11, 12].pagify(3).collect::<Vec<_>>(), vec![(0, &10), (1, &11), (2, &12)]);
+		assert_eq!(
+			vec![10, 11, 12].pagify(3).collect::<Vec<_>>(),
+			vec![(0, &10), (1, &11), (2, &12)]
+		);
 
 		// pads the values otherwise
 		assert_eq!(vec![10, 11].pagify(3).collect::<Vec<_>>(), vec![(1, &10), (2, &11)]);

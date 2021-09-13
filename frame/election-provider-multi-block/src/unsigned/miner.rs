@@ -15,12 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
-
+use super::WeightInfo;
 use crate::{helpers, log, types::*, verifier, Snapshot};
 use codec::{Decode, Encode};
-use frame_election_provider_support::ExtendedBalance;
-use frame_support::{dispatch::Weight, metadata::StorageEntryType, traits::Get};
+use frame_election_provider_support::{ExtendedBalance, Support, VoteWeight};
+use frame_support::{dispatch::Weight, traits::Get};
+use pallet_balances::AccountData;
+use sp_npos_elections::StakedAssignment;
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	traits::{SaturatedConversion, Saturating},
@@ -30,22 +31,33 @@ use sp_runtime::{
 // xxx_page: singular
 // paged_xxx: plural
 
+// TODO: also about naming crates: only 1 super should be ever allowed. Anything else will be
+// crate::xxx
+
+/// The type of the snapshot.
+///
+/// Used to express errors.
 #[derive(Debug, Eq, PartialEq)]
 pub enum SnapshotType {
+	/// Voters at the given page missing.
 	Voters(PageIndex),
-	Targets(PageIndex),
+	/// Targets missing.
+	Targets,
+	/// Metadata missing.
 	Metadata,
+	// Desired targets missing.
 	DesiredTargets,
 }
 
+/// TODO: ideally the errors of the offchain miner would go into its own thing?
+
+/// The errors related to the [`BaseMiner`] and [`OffchainMiner`].
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable(SnapshotType),
-	/// Submitting a transaction to the pool failed.
-	PoolSubmissionFailed,
 	/// The snapshot-independent checks failed for the mined solution.
 	SnapshotIndependentChecksFailed(sp_runtime::DispatchError),
 	/// unsigned-specific checks failed.
@@ -54,16 +66,18 @@ pub enum MinerError {
 	Feasibility(verifier::FeasibilityError),
 	/// Something went wrong fetching the lock.
 	Lock(&'static str),
+	/// Submitting a transaction to the pool failed.
+	PoolSubmissionFailed,
 	/// Cannot restore a solution that was not stored.
 	NoStoredSolution,
 	/// Cached solution is not a `submit_unsigned` call.
 	SolutionCallInvalid,
 	/// Failed to store a solution.
 	FailedToStoreSolution,
-	/// There are no more voters to remove to trim the solution.
-	NoMoreVoters,
 	/// Some page index has been invalid.
 	InvalidPage,
+	/// Too many winners were removed during trimming.
+	TooManyWinnersRemoved,
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -78,10 +92,6 @@ impl From<crate::verifier::FeasibilityError> for MinerError {
 	}
 }
 
-/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
-/// runtime `T`.
-pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
-
 /// A base miner that is only capable of mining a new solution and checking it against the state of
 /// this pallet for feasibility, and trimming its length/weight.
 ///
@@ -94,23 +104,17 @@ impl<T: super::Config> BaseMiner<T> {
 	///
 	/// This miner is only capable of mining a solution that either uses all of the pages of the
 	/// snapshot, or the top `pages` thereof.
-	pub fn mine_solution(mut pages: PageIndex) -> Result<PagedRawSolution<T>, MinerError> {
-		// Implementation note: As an easy way to compute both score, and ensure that the final
-		// supports respect `crate::verifier::Config::MaxBackingCountPerTarget`, the overall code
-		// path is as follows:
-		// election_results -> assignments -> staked assignments -> supports (calculate score and
-		// trim) -> staked assignments -> assignments -> solution
-		//
-		// This is by no means the most performant, but is the safest and cleanest way to do this
-		// with our current abstractions.
-
+	pub fn mine_solution(
+		mut pages: PageIndex,
+		do_reduce: bool,
+	) -> Result<PagedRawSolution<T>, MinerError> {
 		pages = pages.min(T::Pages::get());
 
 		// read the appropriate snapshot pages.
 		let desired_targets = crate::Snapshot::<T>::desired_targets()
 			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::DesiredTargets))?;
-		let targets = crate::Snapshot::<T>::targets()
-			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Targets(0)))?;
+		let all_targets = crate::Snapshot::<T>::targets()
+			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Targets))?;
 
 		// This is the range of voters that we are interested in. Mind the second `.rev`, it is
 		// super critical.
@@ -123,9 +127,12 @@ impl<T: super::Config> BaseMiner<T> {
 			debug,
 			"mining a solution with {} pages, voter snapshot range will be: {:?}",
 			pages,
-			voter_pages_range
+			voter_pages_range.clone().collect::<Vec<_>>()
 		);
 
+		// NOTE: if `pages (2) < T::Pages (3)`, at this point this vector will have length 2, with a
+		// layout of `[snapshot(1), snapshot(2)]`, namely the two most significant pages of the
+		// snapshot.
 		let voter_pages = voter_pages_range
 			.map(|p| {
 				crate::Snapshot::<T>::voters(p)
@@ -135,87 +142,85 @@ impl<T: super::Config> BaseMiner<T> {
 
 		// we also build this closure early, so we can let `targets` be consumed.
 		let voter_page_fn = helpers::generate_voter_page_fn::<T>(&voter_pages);
-		let target_index_fn = helpers::target_index_fn::<T>(&targets);
+		let target_index_fn = helpers::target_index_fn::<T>(&all_targets);
 
 		// now flatten the voters, ready to be used as if pagination did not existed.
-		let voters = voter_pages.iter().flatten().cloned().collect::<Vec<_>>();
+		let all_voters = voter_pages.iter().flatten().cloned().collect::<Vec<_>>();
 
 		let ElectionResult { winners, assignments } =
 			sp_npos_elections::seq_phragmen::<_, SolutionAccuracyOf<T>>(
 				desired_targets as usize,
-				targets.clone(),
-				voters.clone(),
+				all_targets.clone(),
+				all_voters.clone(),
 				None,
 			)
 			.map_err::<MinerError, _>(Into::into)?;
 
-		// compute score from the overall solution before dealing with pages in any way.
-		let (score, trimmed_assignments) = {
-			use crate::helpers;
+		// reduce and trim supports. We don't trim length and weight here, since those are dependent
+		// on the final form of the solution ([`PagedRawSolution`]), thus we do it later.
+		let trimmed_assignments = {
+			// Implementation note: the overall code path is as follows: election_results ->
+			// assignments -> staked assignments -> reduce -> supports -> trim supports -> staked
+			// assignments -> final assignments
+			// This is by no means the most performant, but is the clear and correct.
 			use sp_npos_elections::{
-				assignment_ratio_to_staked_normalized, to_supports, to_without_backing,
+				assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized,
+				reduce, supports_to_staked_assignment, to_supports, to_without_backing,
 				EvaluateSupport,
 			};
 
 			// These closures are of no use in the rest of these code, since they only deal with the
 			// overall list of voters.
-			let cache = helpers::generate_voter_cache::<T>(&voters);
-			let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
-
-			let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
-				.map_err::<MinerError, _>(Into::into)?;
+			let cache = helpers::generate_voter_cache::<T>(&all_voters);
+			let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
 			let winners = to_without_backing(winners);
 
-			// these supports could very well be invalid for score purposes. The reason is that you
-			// might trim out half of an account's stake, but we don't look for this account's other
-			// votes to fix it. Instead, we simply re-convert this back to supports once it has been
-			// converted to the npos solution type, and compute a final score from it. That is
-			// guaranteed to be correct.
-			let mut invalid_supports =
-				to_supports(&winners, &staked).map_err::<MinerError, _>(Into::into)?;
+			// 1. convert to staked and reduce
+			let (reduced_count, staked) = {
+				let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
+					.map_err::<MinerError, _>(Into::into)?;
 
-			let _pre_score = (&invalid_supports).evaluate();
-			let _count = Self::trim_supports(&mut invalid_supports);
+				// first, reduce the solution if requested. This will already remove a lot of
+				// "redundant" and reduce the chance for the need of any further trimming.
+				let count = if do_reduce { reduce(&mut staked) } else { 0 };
+				(count, staked)
+			};
 
-			// now recreated the assignments and push them out.
-			let staked = sp_npos_elections::supports_to_staked_assignment(invalid_supports);
-			let assignments = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)
-				.map_err::<MinerError, _>(Into::into)?;
+			// 2. trim the supports by backing.
+			let (_pre_score, trim_support_count, final_trimmed_assignments) = {
+				// these supports could very well be invalid for SCORE purposes. The reason is that
+				// you might trim out half of an account's stake, but we don't look for this
+				// account's other votes to fix it.
+				let mut supports_invalid_score =
+					to_supports(&winners, &staked).map_err::<MinerError, _>(Into::into)?;
 
-			let score = {
-				// to compensate for missing stakes in the `trim_supports` process, we convert this
-				// back to a single page npos solution type and compute its score there. This is
-				// super expensive to do, but fine for offchain, and better be safe than sorry for
-				// now.
-				let voter_index_fn = helpers::voter_index_fn::<T>(&cache);
-				let solution = <SolutionOf<T>>::from_assignment(
-					&assignments,
-					&voter_index_fn,
-					&target_index_fn,
-				)
-				.map_err::<MinerError, _>(Into::into)?;
-				let voter_at = helpers::voter_at_fn::<T>(&voters);
-				let target_at = helpers::target_at_fn::<T>(&targets);
-				solution
-					.score(&winners, &stake_of, voter_at, target_at)
-					.map_err::<MinerError, _>(Into::into)?
+				let pre_score = (&supports_invalid_score).evaluate();
+				let trimmed = Self::trim_supports(&mut supports_invalid_score);
+
+				// now recreated the staked assignments
+				let staked = supports_to_staked_assignment(supports_invalid_score);
+				let assignments = assignment_staked_to_ratio_normalized(staked)
+					.map_err::<MinerError, _>(Into::into)?;
+				(pre_score, trimmed, assignments)
 			};
 
 			log!(
 				debug,
-				"score of mined solution before any trimming: {:?}, trimmed {} supports, post_score = {:?}",
+				"initial score = {:?}, reduced {} edges, trimmed {} supports",
 				_pre_score,
-				_count,
-				score
+				reduced_count,
+				trim_support_count,
 			);
 
-			(score, assignments)
+			final_trimmed_assignments
 		};
 
 		// split the assignments into different pages.
 		let mut paged_assignments: Vec<Vec<AssignmentOf<T>>> = Vec::with_capacity(pages as usize);
-		paged_assignments.resize(pages as usize, vec![]);
+		paged_assignments.resize(pages as usize, Default::default());
 		for assignment in trimmed_assignments {
+			// NOTE: this `page` index is LOCAL. It does not correspond to the actual page index of
+			// the snapshot map, but rather the index in the `voter_pages`.
 			let page = voter_page_fn(&assignment.who).ok_or(MinerError::InvalidPage)?;
 			let mut assignment_page =
 				paged_assignments.get_mut(page as usize).ok_or(MinerError::InvalidPage)?;
@@ -223,7 +228,7 @@ impl<T: super::Config> BaseMiner<T> {
 		}
 
 		// convert each page to a compact struct
-		let mut solution_pages: Vec<SolutionOf<T>> = paged_assignments
+		let solution_pages: Vec<SolutionOf<T>> = paged_assignments
 			.into_iter()
 			.enumerate()
 			.map(|(page_index, assignment_page)| {
@@ -246,22 +251,35 @@ impl<T: super::Config> BaseMiner<T> {
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
-		// finally, get the round, and pack everything.
+		// finally, wrap everything up.
 		let round = crate::Pallet::<T>::round();
+		let mut paged = PagedRawSolution { round, solution_pages, score: Default::default() };
+
+		let _trim_length_weight =
+			Self::maybe_trim_weight_and_len(&mut paged.solution_pages, &voter_pages)?;
+		log!(debug, "trimmed {} voters due to length/weight restriction.", _trim_length_weight);
+
+		// OPTIMIZATION: we do trimming inside `compute_score`, and once later pre_dispatch. I think
+		// it is fine, but maybe we can improve it.
+		let score = Self::compute_score(&paged).map_err::<MinerError, _>(Into::into)?;
+		paged.score = score.clone();
 
 		log!(
-			debug,
+			info,
 			"mined a solution with score {:?} and size {} bytes",
 			score,
-			solution_pages.using_encoded(|b| b.len())
+			paged.using_encoded(|b| b.len())
 		);
 
-		Ok(PagedRawSolution { round, score, solution_pages })
+		Ok(paged)
 	}
 
 	/// Mine a new solution. Performs the feasibility checks on it as well.
-	pub fn mine_checked_solution(pages: PageIndex) -> Result<PagedRawSolution<T>, MinerError> {
-		let paged_solution = Self::mine_solution(pages)?;
+	pub fn mine_checked_solution(
+		pages: PageIndex,
+		reduce: bool,
+	) -> Result<PagedRawSolution<T>, MinerError> {
+		let paged_solution = Self::mine_solution(pages, reduce)?;
 		let _ = Self::full_checks(&paged_solution, "mined")?;
 		Ok(paged_solution)
 	}
@@ -276,7 +294,7 @@ impl<T: super::Config> BaseMiner<T> {
 	) -> Result<(), MinerError> {
 		crate::Pallet::<T>::snapshot_independent_checks(paged_solution)
 			.map_err(|de| MinerError::SnapshotIndependentChecksFailed(de))
-			.and_then(|_| Self::check_feasibility(&paged_solution, solution_type))
+			.and_then(|_| Self::check_feasibility(&paged_solution, solution_type).map(|_| ()))
 	}
 
 	/// perform the feasibility check on all pages of a solution, returning `Ok(())` if all good and
@@ -284,7 +302,7 @@ impl<T: super::Config> BaseMiner<T> {
 	pub fn check_feasibility(
 		paged_solution: &PagedRawSolution<T>,
 		solution_type: &str,
-	) -> Result<(), MinerError> {
+	) -> Result<Vec<Supports<T::AccountId>>, MinerError> {
 		// check every solution page for feasibility.
 		paged_solution
 			.solution_pages
@@ -294,10 +312,8 @@ impl<T: super::Config> BaseMiner<T> {
 					page_solution.clone(),
 					page_index as PageIndex,
 				)
-				.map(|_ready_page| ())
 			})
 			.collect::<Result<Vec<_>, _>>()
-			.map(|_| ())
 			.map_err(|err| {
 				log!(
 					debug,
@@ -309,40 +325,41 @@ impl<T: super::Config> BaseMiner<T> {
 			})
 	}
 
-	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
+	/// Take the given raw paged solution and compute its score. This will replicate what the chain
+	/// would do as closely as possible, and expects all the corresponding snapshot data to be
+	/// available.
+	fn compute_score(paged_solution: &PagedRawSolution<T>) -> Result<ElectionScore, MinerError> {
+		use crate::Verifier;
+		use sp_npos_elections::EvaluateSupport;
+		use sp_std::collections::btree_map::BTreeMap;
+
+		let mut all_supports = Self::check_feasibility(paged_solution, "mined")?;
+		let mut total_backings: BTreeMap<T::AccountId, ExtendedBalance> = BTreeMap::new();
+		all_supports.into_iter().flatten().for_each(|(who, support)| {
+			let mut backing = total_backings.entry(who).or_default();
+			*backing = backing.saturating_add(support.total);
+		});
+
+		let all_supports = total_backings
+			.into_iter()
+			.map(|(who, total)| (who, Support { total, ..Default::default() }))
+			.collect::<Vec<_>>();
+
+		Ok((&all_supports).evaluate())
+	}
+
+	/// Take the given assignments, and do all the snapshot dependent mumbo-jumbo on it to make it
+	/// submittable in a paginated way.
 	///
-	/// The weight of the solution is foremost a function of the number of voters (i.e.
-	/// `assignments.len()`). Aside from this, the other components of the weight are invariant.
-	/// The number of winners shall not be changed (otherwise the solution is invalid) and the
-	/// `ElectionSize` is merely a representation of the total number of stakers.
-	///
-	/// Thus, we reside to stripping away some voters from the `assignments`.
-	///
-	/// Note that the solution is already computed, and the winners are elected based on the
-	/// merit of the entire stake in the system. Nonetheless, some of the voters will be removed
-	/// further down the line.
-	///
-	/// Indeed, the score must be computed **after** this step. If this step reduces the score
-	/// too much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_assignments_weight(
-		desired_targets: u32,
-		size: SolutionOrSnapshotSize,
-		max_weight: Weight,
-		assignments: &mut Vec<IndexAssignmentOf<T>>,
+	/// This separate function makes it easier to feed in different election results to the miner's
+	/// standard pre-process.
+	pub fn prepare_assignments_for_submission(
+		winners: Vec<T::AccountId>,
+		assignments: Vec<AssignmentOf<T>>,
+		pages: PageIndex,
+		do_reduce: bool,
 	) {
-		let maximum_allowed_voters = Self::maximum_voter_for_weight::<
-			<T as super::Config>::WeightInfo,
-		>(desired_targets, size, max_weight);
-		let removing: usize =
-			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
-		log!(
-			debug,
-			"from {} assignments, truncating to {} for weight, removing {}",
-			assignments.len(),
-			maximum_allowed_voters,
-			removing,
-		);
-		assignments.truncate(maximum_allowed_voters as usize);
+		todo!()
 	}
 
 	/// Trim the given supports so that the count of backings in none of them exceeds
@@ -371,151 +388,140 @@ impl<T: super::Config> BaseMiner<T> {
 		count
 	}
 
-	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
+	/// Maybe tim the weight and length of the given multi-page solution.
 	///
-	/// The length of the solution is largely a function of the number of voters. The number of
-	/// winners cannot be changed. Thus, to reduce the solution size, we need to strip voters.
+	/// Returns the number of voters removed.
 	///
-	/// Note that this solution is already computed, and winners are elected based on the merit
-	/// of the total stake in the system. Nevertheless, some of the voters may be removed here.
+	/// If either of the bounds are not met, the trimming strategy is as follows:
 	///
-	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
-	/// that voter was the only backer of that winner. In such cases, this solution is invalid,
-	/// which will be caught prior to submission.
+	/// Start from the least significant page. Assume only this page is going to be trimmed. call
+	/// `page.sort()` on this page. This will make sure in each field (`votes1`, `votes2`, etc.) of
+	/// that page, the voters are sorted by descending stake. Then, we compare the last item of each
+	/// field. This is the process of removing the single least staked voter. We repeat this until
+	/// satisfied, for both weight and length, until satisfied. If a full page is removed, but the
+	/// bound is not satisfied, we need to make sure that we sort the next least valuable page, and
+	/// repeat the same process.
 	///
-	/// The score must be computed **after** this step. If this step reduces the score too much,
-	/// then the solution must be discarded.
-	pub fn trim_assignments_length(
-		max_allowed_length: u32,
-		assignments: &mut Vec<IndexAssignmentOf<T>>,
-		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
-	) -> Result<(), MinerError> {
-		// Perform a binary search for the max subset of which can fit into the allowed
-		// length. Having discovered that, we can truncate efficiently.
-		let max_allowed_length: usize = max_allowed_length.saturated_into();
-		let mut high = assignments.len();
-		let mut low = 0;
+	/// NOTE: this is a public function to be used by the `OffchainWorkerMiner` or any similar one,
+	/// based on the submission strategy. The length and weight bounds of a call are dependent on
+	/// the number of pages being submitted, the number of blocks over which we submit, and the type
+	/// of the transaction and its weight (e.g. signed or unsigned).
+	pub fn maybe_trim_weight_and_len(
+		solution_pages: &mut Vec<SolutionOf<T>>,
+		voter_pages: &Vec<Vec<Voter<T>>>,
+	) -> Result<u32, MinerError> {
+		debug_assert_eq!(solution_pages.len(), voter_pages.len());
+		let size_limit = T::MinerMaxLength::get();
+		let weight_limit = T::MinerMaxWeight::get();
 
-		// not much we can do if assignments are already empty.
-		if high == low {
-			return Ok(())
+		let all_voters_count = crate::Snapshot::<T>::voters_decode_len(crate::Pallet::<T>::msp())
+			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(
+				crate::Pallet::<T>::msp(),
+			)))? as u32;
+		let all_targets_count = crate::Snapshot::<T>::targets_decode_len()
+			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Targets))?
+			as u32;
+		let desired_targets = crate::Snapshot::<T>::desired_targets()
+			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::DesiredTargets))?;
+
+		let winner_count_of = |solution_pages: &Vec<SolutionOf<T>>| {
+			solution_pages
+				.iter()
+				.map(|page| page.unique_targets())
+				.flatten()
+				.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
+				.len() as u32
+		};
+
+		let voter_count_of = |solution_pages: &Vec<SolutionOf<T>>| {
+			solution_pages
+				.iter()
+				.map(|page| page.voter_count())
+				.fold(0, |acc, x| acc.saturating_add(x)) as u32
+		};
+
+		let needs_any_trim = |solution_pages: &mut Vec<SolutionOf<T>>| {
+			let size = solution_pages.encoded_size() as u32;
+
+			let next_active_targets = winner_count_of(solution_pages);
+			if next_active_targets < desired_targets {
+				log!(warn, "trimming has cause a solution to have less targets than desired, this will fail feasibility");
+			}
+
+			let weight = <T as super::Config>::WeightInfo::submit_unsigned(
+				all_voters_count,
+				all_targets_count,
+				voter_count_of(solution_pages), // TODO: we should NOT recompute this.
+				next_active_targets,
+			);
+			let needs_weight_trim = weight > weight_limit;
+			let needs_len_trim = size > size_limit;
+
+			needs_weight_trim || needs_len_trim
+		};
+
+		// Note the solution might be partial. In either case, this is its least significant page.
+		let mut current_trimming_page = 0;
+		let current_trimming_page_stake_of = |current_trimming_page: usize| {
+			Box::new(move |voter_index: &SolutionVoterIndexOf<T>| -> VoteWeight {
+				voter_pages
+					.get(current_trimming_page)
+					.and_then(|page_voters| {
+						page_voters
+							.get((*voter_index).saturated_into::<usize>())
+							.map(|(_, s, _)| *s)
+					})
+					.unwrap_or_default()
+			})
+		};
+
+		let mut sort_current_trimming_page =
+			|current_trimming_page: usize, solution_pages: &mut Vec<SolutionOf<T>>| {
+				solution_pages.get_mut(current_trimming_page).map(|solution_page| {
+					let stake_of_fn = current_trimming_page_stake_of(current_trimming_page);
+					solution_page.sort(stake_of_fn)
+				});
+			};
+
+		if needs_any_trim(solution_pages) {
+			sort_current_trimming_page(current_trimming_page, solution_pages)
 		}
 
-		while high - low > 1 {
-			let test = (high + low) / 2;
-			if encoded_size_of(&assignments[..test])? <= max_allowed_length {
-				low = test;
+		// Implementation note: we want `solution_pages` and `voter_pages` to remain in sync, so
+		// while one of the pages of `solution_pages` might become "empty" we prefer not removing
+		// it. This has a slight downside that even an empty pages consumes a few dozens of bytes,
+		// which we accept for code simplicity.
+
+		let mut removed = 0;
+		while needs_any_trim(solution_pages) {
+			if solution_pages
+				.get_mut(current_trimming_page)
+				.and_then(|page| {
+					let stake_of_fn = current_trimming_page_stake_of(current_trimming_page);
+					page.remove_weakest_sorted(&stake_of_fn)
+				})
+				.is_some()
+			{
+				// we removed one person, continue.
+				removed.saturating_inc();
 			} else {
-				high = test;
+				// this page cannot support remove anymore. Try and go to the next page.
+				let next_page = current_trimming_page.saturating_add(1);
+				if voter_pages.len() > next_page {
+					current_trimming_page = next_page;
+					sort_current_trimming_page(current_trimming_page, solution_pages);
+				} else {
+					log!(
+						warn,
+						"no more pages to trim from at page {}, already trimmed",
+						current_trimming_page
+					);
+					break
+				}
 			}
 		}
-		let maximum_allowed_voters = if low < assignments.len() &&
-			encoded_size_of(&assignments[..low + 1])? <= max_allowed_length
-		{
-			low + 1
-		} else {
-			low
-		};
 
-		// ensure our post-conditions are correct
-		debug_assert!(
-			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
-		);
-		debug_assert!(if maximum_allowed_voters < assignments.len() {
-			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap() >
-				max_allowed_length
-		} else {
-			true
-		});
-
-		// NOTE: before this point, every access was immutable.
-		// after this point, we never error.
-		// check before edit.
-
-		log!(
-			debug,
-			"from {} assignments, truncating to {} for length, removing {}",
-			assignments.len(),
-			maximum_allowed_voters,
-			assignments.len().saturating_sub(maximum_allowed_voters),
-		);
-		assignments.truncate(maximum_allowed_voters);
-
-		Ok(())
-	}
-
-	/// Find the maximum `len` that a solution can have in order to fit into the block weight.
-	///
-	/// This only returns a value between zero and `size.nominators`.
-	fn maximum_voter_for_weight<W: super::WeightInfo>(
-		desired_winners: u32,
-		size: SolutionOrSnapshotSize,
-		max_weight: Weight,
-	) -> u32 {
-		if size.voters < 1 {
-			return size.voters
-		}
-
-		let max_voters = size.voters.max(1);
-		let mut voters = max_voters;
-
-		// helper closures.
-		let weight_with = |active_voters: u32| -> Weight {
-			W::submit_unsigned(size.voters, size.targets, active_voters, desired_winners)
-		};
-
-		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
-			use sp_std::cmp::Ordering;
-			match current_weight.cmp(&max_weight) {
-				Ordering::Less => {
-					let next_voters = voters.checked_add(step);
-					match next_voters {
-						Some(voters) if voters < max_voters => Ok(voters),
-						_ => Err(()),
-					}
-				},
-				Ordering::Greater => voters.checked_sub(step).ok_or(()),
-				Ordering::Equal => Ok(voters),
-			}
-		};
-
-		// First binary-search the right amount of voters
-		let mut step = voters / 2;
-		let mut current_weight = weight_with(voters);
-
-		while step > 0 {
-			match next_voters(current_weight, voters, step) {
-				// proceed with the binary search
-				Ok(next) if next != voters => {
-					voters = next;
-				},
-				// we are out of bounds, break out of the loop.
-				Err(()) => break,
-				// we found the right value - early exit the function.
-				Ok(next) => return next,
-			}
-			step = step / 2;
-			current_weight = weight_with(voters);
-		}
-
-		// Time to finish. We might have reduced less than expected due to rounding error.
-		// Increase one last time if we have any room left, the reduce until we are sure we are
-		// below limit.
-		while voters + 1 <= max_voters && weight_with(voters + 1) < max_weight {
-			voters += 1;
-		}
-		while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {
-			voters -= 1;
-		}
-
-		let final_decision = voters.min(size.voters);
-		debug_assert!(
-			weight_with(final_decision) <= max_weight,
-			"weight_with({}) <= {}",
-			final_decision,
-			max_weight,
-		);
-		final_decision
+		Ok(removed)
 	}
 }
 
@@ -528,21 +534,21 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	const OFFCHAIN_LAST_BLOCK: &'static [u8] = b"parity/multi-block-unsigned-election";
 	/// Storage key used to cache the solution `call`.
 	const OFFCHAIN_CACHED_CALL: &'static [u8] = b"parity/multi-block-unsigned-election/call";
-	/// Storage key used to store the previous phase. This is used to track going from `unsigned ->
-	/// <any other phase>` and clearing some caches.
-	const OFFCHAIN_PREVIOUS_PHASE: &'static [u8] =
-		b"parity/multi-block-unsigned-election/prev-phase";
+	/// The number of pages that the offchain worker miner will try and mine.
+	const MINING_PAGES: PageIndex = 1;
 
 	/// Get a checked solution from the base miner, ensure unsigned-specific checks also pass, then
 	/// return an submittable call.
 	fn mine_checked_call() -> Result<super::Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
+		// we always do reduce in the offchain worker miner.
+		let reduce = true;
 		let witness = crate::Snapshot::<T>::metadata()
 			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Metadata))?;
 
 		// NOTE: the `BaseMiner` will already run `feasibility` and a `snapshot_independent_checks`
 		// on this, now we just run the `unsigned_specific` ones.
-		let paged_solution = BaseMiner::<T>::mine_checked_solution(1)?;
+		let paged_solution = BaseMiner::<T>::mine_checked_solution(Self::MINING_PAGES, reduce)?;
 		let _ = super::Pallet::<T>::unsigned_specific_checks(&paged_solution)
 			.map_err(|de| MinerError::UnsignedChecksFailed(de))?;
 
@@ -716,20 +722,25 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 		storage.clear();
 	}
 
-	/// Clear the offchain repeat storage.
-	///
-	/// After calling this, the next offchain worker is guaranteed to work, with respect to the
-	/// frequency repeat.
-	fn clear_offchain_repeat_frequency() {
-		let mut last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
-		last_block.clear();
-	}
-
 	#[cfg(test)]
 	fn cached_solution() -> Option<super::Call<T>> {
 		StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL)
-			.get::<crate::unsigned::Call<T>>()
+			.get::<super::Call<T>>()
 			.unwrap()
+	}
+}
+
+#[cfg(test)]
+mod base_miner_maybe_trim_weight_and_len_works {
+	use super::*;
+	use crate::{mock::*, verifier::Verifier};
+	use sp_npos_elections::Support;
+	use sp_runtime::PerU16;
+
+	// This will only focus on testing the internals of `maybe_trim_weight_and_len_works`.
+	#[test]
+	fn maybe_trim_weight_and_len_works_internal() {
+		todo!()
 	}
 }
 
@@ -741,11 +752,6 @@ mod base_miner {
 	use sp_runtime::PerU16;
 
 	#[test]
-	fn can_reduce_solution() {
-		todo!()
-	}
-
-	#[test]
 	fn pagination_does_not_affect_score() {
 		let score_1 = ExtBuilder::default()
 			.pages(1)
@@ -753,7 +759,7 @@ mod base_miner {
 			.build_unchecked()
 			.execute_with(|| {
 				roll_to_snapshot_created();
-				BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap().score
+				mine_full_solution().unwrap().score
 			});
 		let score_2 = ExtBuilder::default()
 			.pages(2)
@@ -761,7 +767,7 @@ mod base_miner {
 			.build_unchecked()
 			.execute_with(|| {
 				roll_to_snapshot_created();
-				BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap().score
+				mine_full_solution().unwrap().score
 			});
 		let score_3 = ExtBuilder::default()
 			.pages(3)
@@ -769,7 +775,7 @@ mod base_miner {
 			.build_unchecked()
 			.execute_with(|| {
 				roll_to_snapshot_created();
-				BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap().score
+				mine_full_solution().unwrap().score
 			});
 
 		assert_eq!(score_1, score_2);
@@ -778,7 +784,52 @@ mod base_miner {
 
 	#[test]
 	fn mine_solution_single_page_works() {
-		todo!()
+		ExtBuilder::default().pages(1).voter_per_page(8).build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			// 1 pages of 8 voters
+			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 1);
+			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 8);
+			// 1 page of 4 targets
+			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
+			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+
+			assert_eq!(
+				Snapshot::<Runtime>::voters(0)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![1, 2, 3, 4, 5, 6, 7, 8]
+			);
+
+			let paged = mine_full_solution().unwrap();
+			assert_eq!(paged.solution_pages.len(), 1);
+
+			// this solution must be feasible and submittable.
+			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			// now do a realistic full verification
+			load_solution_for_verification(paged.clone());
+			let supports = roll_to_full_verification();
+
+			assert_eq!(
+				supports,
+				vec![vec![
+					(10, Support { total: 30, voters: vec![(1, 10), (8, 10), (4, 5), (5, 5)] }),
+					(
+						40,
+						Support {
+							total: 40,
+							voters: vec![(2, 10), (3, 10), (6, 10), (4, 5), (5, 5)]
+						}
+					)
+				]]
+			);
+
+			// NOTE: this is the same as the score of any other test that contains the first 8
+			// voters, we already test for this in `pagination_does_not_affect_score`.
+			assert_eq!(paged.score, [30, 70, 2500]);
+		})
 	}
 
 	#[test]
@@ -812,8 +863,8 @@ mod base_miner {
 			);
 			// targets in pages.
 			assert_eq!(Snapshot::<Runtime>::targets().unwrap(), vec![10, 20, 30, 40]);
+			let paged = mine_full_solution().unwrap();
 
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
 			assert_eq!(
 				paged.solution_pages,
 				vec![
@@ -902,8 +953,7 @@ mod base_miner {
 				vec![10, 20, 30, 40]
 			);
 
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
-			// TODO: put comments on this and do a manual check
+			let paged = mine_full_solution().unwrap();
 			assert_eq!(
 				paged.solution_pages,
 				vec![
@@ -926,17 +976,9 @@ mod base_miner {
 
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
-
-			// convert ot supports
-			let supports = paged
-				.solution_pages
-				.pagify(Pages::get())
-				.map(|(i, p)| {
-					let page_index = i as PageIndex;
-					VerifierPallet::feasibility_check_page(p.clone(), page_index)
-						.expect("feasibility has already been checked; qed.")
-				})
-				.collect::<Vec<_>>();
+			// now do a realistic full verification
+			load_solution_for_verification(paged.clone());
+			let supports = roll_to_full_verification();
 
 			assert_eq!(
 				supports,
@@ -995,7 +1037,7 @@ mod base_miner {
 			);
 
 			// now we ask for just 1 page of solution.
-			let paged = BaseMiner::<Runtime>::mine_solution(1).unwrap();
+			let paged = mine_solution(1).unwrap();
 
 			assert_eq!(
 				paged.solution_pages,
@@ -1012,21 +1054,15 @@ mod base_miner {
 
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
-
-			// convert ot supports
-			let supports = paged
-				.solution_pages
-				.pagify(Pages::get())
-				.map(|(i, p)| {
-					let page_index = i as PageIndex;
-					VerifierPallet::feasibility_check_page(p.clone(), page_index)
-						.expect("feasibility has already been checked; qed.")
-				})
-				.collect::<Vec<_>>();
+			// now do a realistic full verification.
+			load_solution_for_verification(paged.clone());
+			let supports = roll_to_full_verification();
 
 			assert_eq!(
 				supports,
 				vec![
+					// page0: non existent.
+					vec![],
 					// page1 supports from voters 1, 2, 3, 4
 					vec![
 						(10, Support { total: 15, voters: vec![(1, 10), (4, 5)] }),
@@ -1077,7 +1113,7 @@ mod base_miner {
 			);
 
 			// now we ask for just 1 page of solution.
-			let paged = BaseMiner::<Runtime>::mine_solution(2).unwrap();
+			let paged = mine_solution(2).unwrap();
 
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
@@ -1109,20 +1145,17 @@ mod base_miner {
 				]
 			);
 
-			// convert ot supports
-			let supports = paged
-				.solution_pages
-				.pagify(Pages::get())
-				.map(|(i, p)| {
-					let page_index = i as PageIndex;
-					VerifierPallet::feasibility_check_page(p.clone(), page_index)
-						.expect("feasibility has already been checked; qed.")
-				})
-				.collect::<Vec<_>>();
+			// this solution must be feasible and submittable.
+			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			// now do a realistic full verification.
+			load_solution_for_verification(paged.clone());
+			let supports = roll_to_full_verification();
 
 			assert_eq!(
 				supports,
 				vec![
+					// empty page 0.
+					vec![],
 					// supports from voters 5, 6, 7, 8
 					vec![
 						(10, Support { total: 15, voters: vec![(8, 10), (5, 5)] }),
@@ -1137,6 +1170,25 @@ mod base_miner {
 			);
 
 			assert_eq!(paged.score, [30, 70, 2500]);
+		})
+	}
+
+	#[test]
+	fn can_reduce_solution() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_snapshot_created();
+			let full_edges = BaseMiner::<Runtime>::mine_solution(Pages::get(), false)
+				.unwrap()
+				.solution_pages
+				.iter()
+				.fold(0, |acc, x| acc + x.edge_count());
+			let reduced_edges = BaseMiner::<Runtime>::mine_solution(Pages::get(), true)
+				.unwrap()
+				.solution_pages
+				.iter()
+				.fold(0, |acc, x| acc + x.edge_count());
+
+			assert!(reduced_edges < full_edges, "{} < {} not fulfilled", reduced_edges, full_edges);
 		})
 	}
 
@@ -1157,8 +1209,8 @@ mod base_miner {
 				assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 17);
 
 				// now we let the miner mine something for us..
-				let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
-				load_solution_for_verification(paged);
+				let paged = mine_full_solution().unwrap();
+				load_solution_for_verification(paged.clone());
 
 				// this must be correct
 				let supports = roll_to_full_verification();
@@ -1206,10 +1258,7 @@ mod base_miner {
 mod offchain_worker_miner {
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::traits::Hooks;
-	use sp_runtime::{
-		offchain::storage_lock::{BlockAndTime, StorageLock},
-		traits::Zero,
-	};
+	use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
 	use super::*;
 	use crate::mock::*;
@@ -1440,74 +1489,5 @@ mod offchain_worker_miner {
 	#[test]
 	fn infeasible_cache() {
 		todo!();
-	}
-}
-
-#[cfg(test)]
-mod max_weight_binary_search {
-	#![allow(unused_variables)]
-	use frame_support::dispatch::Weight;
-
-	use crate::{mock::Runtime, types::SolutionOrSnapshotSize, unsigned::miner::BaseMiner};
-
-	struct TestWeight;
-	impl crate::unsigned::WeightInfo for TestWeight {
-		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
-			(0 * v + 0 * t + 1000 * a + 0 * d) as Weight
-		}
-	}
-
-	#[test]
-	fn find_max_voter_binary_search_works() {
-		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
-
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2990), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2999), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 3000), 3);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 3);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 5500), 5);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 7777), 7);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 9999), 9);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 10_000), 10);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 10_999), 10);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 11_000), 10);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 22_000), 10);
-
-		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
-
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 1);
-
-		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
-
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
-		assert_eq!(BaseMiner::<Runtime>::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 2);
 	}
 }

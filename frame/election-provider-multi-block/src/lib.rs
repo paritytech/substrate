@@ -193,16 +193,12 @@ use codec::Encode;
 use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider, PageIndex};
 use frame_support::{
 	ensure,
-	traits::{ConstU8, Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::Weight,
+	traits::{ConstU8, Currency, Get, ReservableCurrency},
 };
-use sp_arithmetic::{
-	traits::{CheckedAdd, Saturating, Zero},
-	UpperOf,
-};
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_npos_elections::{NposSolution, VoteWeight};
 use sp_runtime::{traits::Bounded, PerThing, SaturatedConversion};
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 use verifier::Verifier;
 
 #[cfg(test)]
@@ -213,7 +209,6 @@ pub mod helpers;
 const LOG_TARGET: &'static str = "runtime::multiblock-election";
 
 // pub mod signed;
-pub mod fixed_vec;
 pub mod types;
 pub mod unsigned;
 pub mod verifier;
@@ -431,9 +426,9 @@ pub mod pallet {
 				Phase::Snapshot(x) if x > 0 => {
 					// we don't check block numbers here, snapshot creation is mandatory.
 					let remaining_pages = x.saturating_sub(1);
-					log!(info, "continuing snapshot creation [{}]", remaining_pages);
+					log!(info, "continuing voter snapshot creation [{}]", remaining_pages);
 					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
-					Self::create_voters_snapshot_paged(remaining_pages);
+					Self::create_voters_snapshot_paged(remaining_pages).unwrap();
 					0
 				},
 				Phase::Snapshot(0)
@@ -463,17 +458,6 @@ pub mod pallet {
 					Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
 					0
 				}
-
-				//
-				Phase::Verification(last_verified_page) if last_verified_page > 0 => {
-					let current_page = last_verified_page - 1;
-					todo!();
-					0
-				},
-				Phase::Verification(0) => {
-					todo!();
-					0
-				},
 				_ => T::WeightInfo::on_initialize_nothing(),
 			}
 		}
@@ -495,18 +479,6 @@ pub mod pallet {
 			// ----------------------------
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
 			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
-
-			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
-			// let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
-			// 	.map(|_| {
-			// 		<UpperOf<OnChainAccuracyOf<T>>>::from(
-			// 			<OnChainAccuracyOf<T>>::one().deconstruct(),
-			// 		)
-			// 	})
-			// 	.collect();
-			// let _: UpperOf<OnChainAccuracyOf<T>> = maximum_chain_accuracy
-			// 	.iter()
-			// 	.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 
 			// 2. Maximum sum of [SolutionAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
 			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T>>> = (0..max_vote)
@@ -636,8 +608,17 @@ pub mod pallet {
 			PagedVoterSnapshot::<T>::get(page)
 		}
 
+		pub(crate) fn voters_decode_len(page: PageIndex) -> Option<usize> {
+			PagedVoterSnapshot::<T>::decode_len(page)
+		}
+
+		pub(crate) fn targets_decode_len() -> Option<usize> {
+			PagedVoterSnapshot::<T>::decode_len(Pallet::<T>::msp())
+		}
+
 		pub(crate) fn targets() -> Option<RoundTargetSnapshotPage<T>> {
-			PagedTargetSnapshot::<T>::get(0)
+			// NOTE: targets always have one index, which is 0, aka lsp.
+			PagedTargetSnapshot::<T>::get(Pallet::<T>::lsp())
 		}
 
 		pub(crate) fn metadata() -> Option<SolutionOrSnapshotSize> {
@@ -701,7 +682,7 @@ pub mod pallet {
 				(crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp()).collect::<Vec<_>>();
 			key_range
 				.into_iter()
-				.map(|k| PagedVoterSnapshot::<T>::get(k).unwrap())
+				.map(|k| PagedVoterSnapshot::<T>::get(k).unwrap_or_default())
 				.flatten()
 		}
 
@@ -804,7 +785,7 @@ impl<T: Config> Pallet<T> {
 
 		Snapshot::<T>::set_targets(targets);
 		Snapshot::<T>::update_metadata(None, Some(length as u32));
-		log!(trace, "created target snapshot with {} targets.", length);
+		log!(debug, "created target snapshot with {} targets.", length);
 
 		Ok(length as u32)
 	}
@@ -891,7 +872,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				// if either of `Verifier` or `Fallback` was okay, and if this is the last page,
 				// then clear everything.
 				if remaining.is_zero() {
-					log!(trace, "processing last page of election");
+					log!(debug, "processing last page of election");
 					Self::rotate_round()
 				}
 
@@ -1163,8 +1144,7 @@ mod tests {
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
 			// load a solution into the verifier
-
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
 
 			// put each submitted page
@@ -1226,7 +1206,7 @@ mod tests {
 
 			// load a solution into the verifier
 
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
 
 			// put each submitted page
@@ -1284,7 +1264,7 @@ mod tests {
 
 			// load a solution into the verifier
 
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
 
 			// put each submitted page
@@ -1596,7 +1576,7 @@ mod tests {
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
-			let (solution, _) = MultiBlock::mine_solution(2).unwrap();
+			let (solution, _) = MultiBlock::mine_solution(2, falase).unwrap();
 			// Default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
 

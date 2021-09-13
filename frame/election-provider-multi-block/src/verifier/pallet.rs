@@ -153,7 +153,7 @@ mod pallet {
 		/// If [`VerifyingSolutionPage`] does not exists, or its value is 0 (verification is already
 		/// over), `false` is returned.
 		pub(crate) fn proceed_page() -> bool {
-			if let Some(mut current) = VerifyingSolutionPage::<T>::get() {
+			if let Some(current) = VerifyingSolutionPage::<T>::get() {
 				if let Some(x) = current.checked_sub(One::one()) {
 					VerifyingSolutionPage::<T>::put(x);
 					true
@@ -789,7 +789,7 @@ mod feasibility_check {
 		ExtBuilder::default().build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// ..remove the only page of the target snapshot.
 			crate::Snapshot::<Runtime>::remove_voter_page(0);
@@ -803,7 +803,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// ..remove just one of the pages of voter snapshot that is relevant.
 			crate::Snapshot::<Runtime>::remove_voter_page(0);
@@ -817,7 +817,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// ..removing this page is not important.
 			crate::Snapshot::<Runtime>::remove_voter_page(1);
@@ -828,7 +828,7 @@ mod feasibility_check {
 		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// `DesiredTargets` missing is also an error
 			crate::Snapshot::<Runtime>::kill_desired_targets();
@@ -843,7 +843,7 @@ mod feasibility_check {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			roll_to(25);
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// `DesiredTargets` is not checked here.
 			crate::Snapshot::<Runtime>::remove_target_page(0);
@@ -859,7 +859,7 @@ mod feasibility_check {
 	fn winner_indices_single_page_must_be_in_bounds() {
 		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
-			let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let mut paged = mine_full_solution().unwrap();
 			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
@@ -885,7 +885,7 @@ mod feasibility_check {
 			.desired_targets(2)
 			.build_and_execute(|| {
 				roll_to_snapshot_created();
-				let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+				let mut paged = mine_full_solution().unwrap();
 
 				assert_eq!(crate::Snapshot::<Runtime>::voters(0).unwrap().len(), 12);
 				// ------------------------------------------------^^ valid range is [0..11] in page
@@ -916,7 +916,7 @@ mod feasibility_check {
 			.desired_targets(2)
 			.build_and_execute(|| {
 				roll_to_snapshot_created();
-				let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+				let mut paged = mine_full_solution().unwrap();
 
 				// First, check that voter at index 11 (40) actually voted for 3 (40) -- this is
 				// self vote. Then, change the vote to 2 (30).
@@ -1063,9 +1063,17 @@ mod misc {
 			roll_to(25);
 			ensure_full_snapshot();
 
-			let solution = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let solution = mine_full_solution().unwrap();
 			load_solution_for_verification(solution);
-			todo!();
+
+			// now let it verify
+			roll_to(26);
+			// It done after just one block.
+			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::Verified(0), Event::<Runtime>::Queued([15, 40, 850], None)]
+			);
 		});
 	}
 
@@ -1076,8 +1084,8 @@ mod misc {
 			roll_to(25);
 			ensure_full_snapshot();
 
-			let solution = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
-			// ------------------------------------------------ ^^^^^^^^^^^^
+			let solution = mine_full_solution().unwrap();
+			// ------------- ^^^^^^^^^^^^
 
 			load_solution_for_verification(solution);
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
@@ -1118,8 +1126,8 @@ mod misc {
 			roll_to(25);
 			ensure_full_snapshot();
 
-			let solution = BaseMiner::<Runtime>::mine_solution(2).unwrap();
-			// -----------------------------------------------^^^
+			let solution = mine_solution(2).unwrap();
+			// -------------------------^^^
 
 			load_solution_for_verification(solution);
 
@@ -1170,7 +1178,7 @@ mod verifier_trait {
 	fn setting_unverified_and_sealing_it() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 			let score = paged.score.clone();
 
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
@@ -1240,7 +1248,7 @@ mod verifier_trait {
 	fn correct_solution_becomes_queued() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// set each page of the solution
 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
@@ -1287,7 +1295,7 @@ mod verifier_trait {
 		// first solution and invalid, should do nothing and make sure storage is totally cleared.
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let mut paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let mut paged = mine_full_solution().unwrap();
 			let score = paged.score.clone();
 
 			// change a vote in the 2nd page to out an out-of-bounds target index
@@ -1351,7 +1359,7 @@ mod verifier_trait {
 
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let good_paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let good_paged = mine_full_solution().unwrap();
 			let good_score = good_paged.score.clone();
 			let ok_paged = raw_paged_solution_low_score();
 			let ok_score = ok_paged.score.clone();
@@ -1434,7 +1442,7 @@ mod verifier_trait {
 	fn ok_solution_does_not_replace_good_solution() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
-			let good_paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let good_paged = mine_full_solution().unwrap();
 			let good_score = good_paged.score.clone();
 			let ok_paged = raw_paged_solution_low_score();
 			let ok_score = ok_paged.score.clone();
@@ -1492,11 +1500,11 @@ mod verifier_trait {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
 
-			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let paged = mine_full_solution().unwrap();
 			let score = paged.score.clone();
 			assert_eq!(score, [55, 130, 8650,]);
 
-			let mut bad_paged = BaseMiner::<Runtime>::mine_solution(Pages::get()).unwrap();
+			let mut bad_paged = mine_full_solution().unwrap();
 			bad_paged.score = [54, 129, 8640];
 
 			// change a vote in the 2nd page to out an out-of-bounds target index

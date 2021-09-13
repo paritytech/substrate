@@ -18,9 +18,10 @@
 //! The unsigned phase, and its miner.
 
 /// Exports of this pallet
-pub use pallet::{
-	Call, Config, Pallet, WeightInfo, __substrate_call_check, __substrate_validate_unsigned_check,
-};
+pub use pallet::*;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 /// The miner.
 pub mod miner;
@@ -35,9 +36,18 @@ mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	use frame_support::weights::Weight;
 	use sp_npos_elections::EvaluateSupport;
 	use sp_runtime::traits::{One, SaturatedConversion};
+
+	/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
+	/// number.
+	fn dispatch_error_to_invalid(error: sp_runtime::DispatchError) -> InvalidTransaction {
+		let error_number = match error {
+			DispatchError::Module { error, .. } => error,
+			_ => 0,
+		};
+		InvalidTransaction::Custom(error_number)
+	}
 
 	pub trait WeightInfo {
 		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
@@ -49,16 +59,6 @@ mod pallet {
 		}
 	}
 
-	/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
-	/// number.
-	fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
-		let error_number = match error {
-			DispatchError::Module { error, .. } => error,
-			_ => 0,
-		};
-		InvalidTransaction::Custom(error_number)
-	}
-
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config:
@@ -68,29 +68,22 @@ mod pallet {
 		///
 		/// For example, if it is 5, that means that at least 5 blocks will elapse between attempts
 		/// to submit the worker's solution.
-		#[pallet::constant]
 		type OffchainRepeat: Get<Self::BlockNumber>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
-		#[pallet::constant]
 		type MinerTxPriority: Get<TransactionPriority>;
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
 		/// the pallet.
-		#[pallet::constant]
 		type MinerMaxIterations: Get<u32>;
-
 		/// Maximum weight that the miner should consume.
 		///
 		/// The miner will ensure that the total weight of the unsigned solution will not exceed
 		/// this value, based on [`WeightInfo::submit_unsigned`].
-		#[pallet::constant]
 		type MinerMaxWeight: Get<Weight>;
-
 		/// Maximum length (bytes) that the mined solution should consume.
 		///
 		/// The miner will ensure that the total length of the unsigned solution will not exceed
 		/// this value.
-		#[pallet::constant]
 		type MinerMaxLength: Get<u32>;
 
 		type WeightInfo: super::WeightInfo;
@@ -113,12 +106,9 @@ mod pallet {
 
 			// phase, round, claimed score, page-count and hash are checked in pre-dispatch. we
 			// don't check them here anymore.
-			debug_assert!(Self::pre_dispatch_checks(&paged_solution).is_ok());
+			debug_assert!(Self::validate_unsigned_checks(&paged_solution).is_ok());
 
 			// TODO: ensure correct witness
-			// TODO: NOT GOOD, we start everything from high index to low, which means that we first
-			// process our least staked nominators. we MUST change this to such that the index 0 of
-			// the snapshot is the most important one, and is the one that is filled at first.
 
 			let only_page = paged_solution
 				.solution_pages
@@ -132,8 +122,6 @@ mod pallet {
 
 			// we know that the claimed score is better then what we currently have because of the
 			// pre-dispatch checks, now we only check if the claimed score was *valid*.
-
-			// TODO: make `evaluate` not consume self, I really dk why I initially wrote it as such.
 
 			let valid_score = supports.clone().evaluate();
 			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
@@ -150,13 +138,12 @@ mod pallet {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_unsigned(paged_solution, _) = call {
-				// Discard a paged_solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => return InvalidTransaction::Call.into(),
 				}
 
-				let _ = Self::pre_dispatch_checks(paged_solution.as_ref())
+				let _ = Self::validate_unsigned_checks(paged_solution.as_ref())
 					.map_err(|err| {
 						log!(debug, "unsigned transaction validation failed due to {:?}", err);
 						err
@@ -184,7 +171,7 @@ mod pallet {
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			if let Call::submit_unsigned(solution, _) = call {
-				Self::pre_dispatch_checks(solution.as_ref())
+				Self::validate_unsigned_checks(solution.as_ref())
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
@@ -254,15 +241,22 @@ mod pallet {
 			// check, an outdated cache is never a problem. backport this as well.
 		}
 
-		pub(crate) fn pre_dispatch_checks(paged_solution: &PagedRawSolution<T>) -> DispatchResult {
+		/// The checks that should happen in the `ValidateUnsigned`'s `pre_dispatch` and
+		/// `validate_unsigned` functions.
+		///
+		/// These check both for snapshot independent checks, and some checks that are specific to
+		/// the unsigned phase.
+		pub(crate) fn validate_unsigned_checks(
+			paged_solution: &PagedRawSolution<T>,
+		) -> DispatchResult {
 			Self::unsigned_specific_checks(paged_solution)
 				.and(crate::Pallet::<T>::snapshot_independent_checks(paged_solution))
 		}
 
+		/// The checks that are specific to the (this) unsigned pallet.
+		///
+		/// ensure solution has the correct phase, and it has only 1 page.
 		pub fn unsigned_specific_checks(paged_solution: &PagedRawSolution<T>) -> DispatchResult {
-			// ensure solution is timely, and it has only 1 page.
-			// TODO: the fact that we return an error from the top level pallet here is a wee bit
-			// strange.
 			ensure!(
 				crate::Pallet::<T>::current_phase().is_unsigned_open(),
 				crate::Error::<T>::EarlySubmission
@@ -288,11 +282,46 @@ mod validate_unsigned {
 	};
 
 	use super::*;
-	use crate::{mock::*, types::*, PagedRawSolution};
+	use crate::{mock::*, types::*, verifier::Verifier, PagedRawSolution};
 
 	#[test]
 	fn retracts_weak_score() {
-		todo!()
+		ExtBuilder::default()
+			.solution_improvement_threshold(sp_runtime::Perbill::from_percent(10))
+			.build_and_execute(|| {
+				roll_to_snapshot_created();
+
+				let solution = mine_full_solution().unwrap();
+				load_solution_for_verification(solution.clone());
+				roll_to_full_verification();
+
+				// Some good solution is queued now.
+				assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some([55, 130, 8650]));
+
+				roll_to_unsigned_open();
+
+				// this is just worse
+				let attempt = fake_unsigned_solution([20, 0, 0]);
+				let call = super::Call::submit_unsigned(Box::new(attempt), witness());
+				assert_eq!(
+					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
+					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
+				);
+
+				// this is better, but not enough better.
+				let insufficient_improvement = 55 * 105 / 100;
+				let attempt = fake_unsigned_solution([insufficient_improvement, 0, 0]);
+				let call = super::Call::submit_unsigned(Box::new(attempt), witness());
+				assert_eq!(
+					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
+					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
+				);
+
+				let sufficient_improvement = 55 * 115 / 100;
+				let attempt = fake_unsigned_solution([sufficient_improvement, 0, 0]);
+				let call = super::Call::submit_unsigned(Box::new(attempt), witness());
+				assert!(UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).is_ok());
+			})
 	}
 
 	#[test]
@@ -413,13 +442,7 @@ mod validate_unsigned {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		mock::{
-			roll_to, roll_to_with_ocw, BlockNumber, Call as OuterCall, ExtBuilder, Extrinsic,
-			MinerMaxWeight, MultiBlock, Origin, Runtime, System, TestNposSolution, UnsignedPhase,
-		},
-		AssignmentOf, CurrentPhase, Phase,
-	};
+	use crate::{mock::*, AssignmentOf};
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_npos_elections::IndexAssignment;
