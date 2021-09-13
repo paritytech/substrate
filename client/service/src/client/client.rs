@@ -28,7 +28,6 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ShufflingSeed,
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
@@ -38,7 +37,7 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Hash, Block as BlockT, Header as HeaderT, Zero, NumberFor,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor,
 		HashFor, SaturatedConversion, One, DigestFor, UniqueSaturatedInto,
 	},
 };
@@ -857,7 +856,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			(true, Some(_), _) => {}
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
-			(true, ref mut storage_changes @ None, Some(ref body)) => {
+			(true, ref mut storage_changes @ None, Some(ref _body)) => {
 				let runtime_api = self.runtime_api();
 				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
 					ExecutionContext::Syncing
@@ -872,22 +871,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
 						let mut header = import_block.header.clone();
 						header.set_extrinsics_root(*prev_header.extrinsics_root());
-						log::debug!(target: "mat", "SEED :{:?}", header.seed());
-						let block = if previous_block_extrinsics.len() > 1{
-							let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block,Self>(&runtime_api, &at, previous_block_extrinsics, header.seed().seed);
-							// temporarly shuffle extrinsics here as we cannot pass shuffling seed to
-							// runtime easily
-							// temporarly update extrinsics_root that stores hash of ordered extrinsics so it can be
-							// validated properly
-							let trie_root = HashFor::<Block>::ordered_trie_root(shuffled_extrinsics.iter().map(codec::Encode::encode).collect());
-							header.set_extrinsics_root(trie_root);
-							Block::new(header.clone(), shuffled_extrinsics)
-						}else{
-							Block::new(header.clone(), previous_block_extrinsics)
-						};
-
-
-
+						let block = Block::new(header.clone(), previous_block_extrinsics);
 
 						runtime_api.execute_block_with_context(
 							&at,

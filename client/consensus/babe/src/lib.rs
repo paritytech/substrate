@@ -1114,7 +1114,6 @@ where
 
 				let prev_header = self.client.header(BlockId::Hash(parent_hash)).unwrap().unwrap();
 				let seed = header.seed();
-				debug!(target: "babe", "PREV SEED {:?}", pre_header);
 				let key = &viable_epoch.as_ref().authorities[babe_pre_digest.authority_index() as usize];
 				self.validate_seed_signature(prev_header.seed(), seed, key.0.as_ref())?;
 

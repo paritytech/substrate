@@ -80,7 +80,7 @@ fn fisher_yates<T>(data: &mut Vec<T>, seed: [u8; 32]) {
 
 pub fn shuffle_using_seed<E: Encode>(
 	extrinsics: Vec<(Option<AccountId32>, E)>,
-	seed: H256,
+	seed: &H256,
 ) -> Vec<E> {
 	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:2X?}", seed.as_bytes());
 	log::debug!(target: "block_shuffler", "origin order: [");
@@ -105,8 +105,7 @@ pub fn shuffle_using_seed<E: Encode>(
 		});
 
 	// shuffle slots
-	//TODO get rid of clone!
-	fisher_yates(&mut slots, seed.as_fixed_bytes().clone());
+	fisher_yates(&mut slots, seed.to_fixed_bytes());
 
 	// fill slots using extrinsics in order
 	// [ Alice, Bob, ... , Alice, Bob ]
@@ -140,7 +139,7 @@ pub fn shuffle<'a, Block, Api>(
 	api: &ApiRef<'a, Api::Api>,
 	block_id: &BlockId<Block>,
 	extrinsics: Vec<Block::Extrinsic>,
-	seed: H256,
+	seed: &H256,
 ) -> Vec<Block::Extrinsic>
 where
 	Block: BlockT,

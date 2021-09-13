@@ -252,7 +252,7 @@ where
 						&self.api,
 						&self.block_id,
 						previous_block_extrinsics,
-						seed.clone().seed
+						&seed.seed
 					)
 				};
 
@@ -287,7 +287,6 @@ where
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
-		log::debug!(target: "mat", "SEED :{:?}", header.seed());
 
 		let proof = self.api.extract_proof();
 
