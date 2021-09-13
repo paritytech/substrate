@@ -45,17 +45,23 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_bags_list.
 pub trait WeightInfo {
-	fn rebag() -> Weight;
+	fn rebag_non_terminal() -> Weight;
+	fn rebag_terminal() -> Weight;
 }
 
 /// Weights for pallet_bags_list using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
+	fn rebag_non_terminal() -> Weight {
+		(75_718_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(7 as Weight))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+	}
 	// Storage: Staking Bonded (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: BagsList ListNodes (r:4 w:4)
 	// Storage: BagsList ListBags (r:1 w:1)
-	fn rebag() -> Weight {
+	fn rebag_terminal() -> Weight {
 		(75_718_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
@@ -64,11 +70,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
+	fn rebag_non_terminal() -> Weight {
+		(75_718_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
 	// Storage: Staking Bonded (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: BagsList ListNodes (r:4 w:4)
 	// Storage: BagsList ListBags (r:1 w:1)
-	fn rebag() -> Weight {
+	fn rebag_terminal() -> Weight {
 		(75_718_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))

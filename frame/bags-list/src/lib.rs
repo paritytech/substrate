@@ -188,7 +188,7 @@ pub mod pallet {
 		///
 		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
 		/// it is a noop and fees are still collected from `origin`.
-		#[pallet::weight(T::WeightInfo::rebag())]
+		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
