@@ -315,7 +315,7 @@ impl<T: Config> Pallet<T> {
 			SolutionOf::<T>::try_from(assignments).map(|s| s.encoded_size())
 		};
 
-		let ElectionResult { assignments, winners } = election_result;
+		let ElectionResult { assignments, winners: _ } = election_result;
 
 		// Reduce (requires round-trip to staked form)
 		let sorted_assignments = {
@@ -374,8 +374,7 @@ impl<T: Config> Pallet<T> {
 		let solution = SolutionOf::<T>::try_from(&index_assignments)?;
 
 		// re-calc score.
-		let winners = sp_npos_elections::to_without_backing(winners);
-		let score = solution.clone().score(&winners, stake_of, voter_at, target_at)?;
+		let score = solution.clone().score(stake_of, voter_at, target_at)?;
 
 		let round = Self::round();
 		Ok((RawSolution { solution, score, round }, size))

@@ -26,7 +26,6 @@ use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
@@ -113,7 +112,7 @@ pub enum InsertResult<T: Config> {
 /// Mask type which pretends to be a set of `SignedSubmissionOf<T>`, while in fact delegating to the
 /// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
 /// `SignedSubmissionNextIndex<T>`.
-#[cfg_attr(feature = "std", derive(DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 pub struct SignedSubmissions<T: Config> {
 	indices: SubmissionIndicesOf<T>,
 	next_idx: u32,
