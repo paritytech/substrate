@@ -1283,7 +1283,7 @@ mod mmr {
 	pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
 }
 
-/// There are two extnsions returning the priority:
+/// There are two extensions returning the priority:
 /// 1. The `CheckWeight` extension.
 /// 2. The `TransactionPayment` extension.
 ///
