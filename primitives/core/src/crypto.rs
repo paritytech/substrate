@@ -353,6 +353,26 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 #[cfg(feature = "full_crypto")]
 ss58_registry::ss58_registry!();
 
+/// Default prefix number
+#[cfg(feature = "std")]
+static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = core::sync::atomic::AtomicU16::new(42 /*substrate*/);
+
+#[cfg(feature = "std")]
+impl Default for Ss58AddressFormat {
+	fn default() -> Self {
+		DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
+	}
+}
+
+/// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
+/// typically used not just to encode format/version but also network identity) that is used for
+/// encoding and decoding SS58 addresses.
+#[cfg(feature = "std")]
+pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
+	let prefix : u16 = new_default.into();
+	DEFAULT_VERSION.store(prefix, core::sync::atomic::Ordering::Relaxed);
+}
+
 #[cfg(feature = "std")]
 lazy_static::lazy_static! {
 	static ref SS58_REGEX: Regex = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
