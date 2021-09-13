@@ -575,7 +575,7 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo(3, 0);
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes, pov_size: 0 }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(

@@ -1006,6 +1006,7 @@ mod tests {
 					weight: 0,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::No,
+					pov_size: 0,
 				};
 				assert_ok!(ChargeTransactionPayment::<Runtime>::from(0).validate(
 					&1,
@@ -1015,8 +1016,12 @@ mod tests {
 				));
 
 				// like a InsecureFreeNormal
-				let free_transaction =
-					DispatchInfo { weight: 0, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				let free_transaction = DispatchInfo {
+					weight: 0,
+					class: DispatchClass::Normal,
+					pays_fee: Pays::Yes,
+					pov_size: 0,
+				};
 				assert_noop!(
 					ChargeTransactionPayment::<Runtime>::from(0).validate(
 						&1,
@@ -1095,6 +1100,7 @@ mod tests {
 					weight: 0,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::No,
+					pov_size: 0,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 				// No tip, only base fee works
@@ -1102,6 +1108,7 @@ mod tests {
 					weight: 0,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 				// Tip + base fee works
@@ -1113,6 +1120,7 @@ mod tests {
 					weight: 1000,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 0), 1100);
 			});
@@ -1133,6 +1141,7 @@ mod tests {
 					weight: 0,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
@@ -1141,6 +1150,7 @@ mod tests {
 					weight: 123,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				// 123 weight, 456 length, 100 base
 				assert_eq!(
@@ -1166,6 +1176,7 @@ mod tests {
 					weight: 0,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
@@ -1174,6 +1185,7 @@ mod tests {
 					weight: 123,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				// 123 weight, 456 length, 100 base
 				assert_eq!(
@@ -1196,6 +1208,7 @@ mod tests {
 					weight: Weight::max_value(),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
+					pov_size: 0,
 				};
 				assert_eq!(
 					Pallet::<Runtime>::compute_fee(u32::MAX, &dispatch_info, u64::MAX),
@@ -1274,8 +1287,12 @@ mod tests {
 				// So events are emitted
 				System::set_block_number(10);
 				let len = 10;
-				let dispatch_info =
-					DispatchInfo { weight: 100, pays_fee: Pays::No, class: DispatchClass::Normal };
+				let dispatch_info = DispatchInfo {
+					weight: 100,
+					pays_fee: Pays::No,
+					class: DispatchClass::Normal,
+					pov_size: 0,
+				};
 				let user = 69;
 				let pre = ChargeTransactionPayment::<Runtime>::from(0)
 					.pre_dispatch(&user, CALL, &dispatch_info, len)
