@@ -1482,21 +1482,17 @@ mod allocator_impl {
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
-	unsafe {
-		let message = sp_std::alloc::format!("{}", info);
-		logging::log(LogLevel::Error, "runtime", message.as_bytes());
-		core::arch::wasm32::unreachable();
-	}
+	let message = sp_std::alloc::format!("{}", info);
+	logging::log(LogLevel::Error, "runtime", message.as_bytes());
+	core::arch::wasm32::unreachable();
 }
 
 /// A default OOM handler for WASM environment.
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
-	unsafe {
-		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-		core::arch::wasm32::unreachable();
-	}
+	logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
+	core::arch::wasm32::unreachable();
 }
 
 /// Type alias for Externalities implementation used in tests.
