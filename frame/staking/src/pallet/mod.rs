@@ -40,8 +40,8 @@ pub use impls::*;
 use crate::{
 	migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakerStatus, StakingLedger, UnappliedSlash,
-	UnlockChunk, ValidatorPrefs,
+	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -453,7 +453,8 @@ pub mod pallet {
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
-		pub stakers: Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>,
+		pub stakers:
+			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, crate::StakerStatus<T::AccountId>)>,
 		pub min_nominator_bond: BalanceOf<T>,
 		pub min_validator_bond: BalanceOf<T>,
 	}
@@ -502,11 +503,11 @@ pub mod pallet {
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
-					StakerStatus::Validator => <Pallet<T>>::validate(
+					crate::StakerStatus::Validator => <Pallet<T>>::validate(
 						T::Origin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
-					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
+					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
 						T::Origin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),

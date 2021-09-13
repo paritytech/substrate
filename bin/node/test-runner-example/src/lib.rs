@@ -88,18 +88,17 @@ mod tests {
 	use node_cli::chain_spec::development_config;
 	use sp_keyring::sr25519::Keyring::Alice;
 	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-	use test_runner::{build_runtime, client_parts, task_executor, ConfigOrChainSpec, Node};
+	use test_runner::{build_runtime, client_parts, ConfigOrChainSpec, Node};
 
 	#[test]
 	fn test_runner() {
 		let tokio_runtime = build_runtime().unwrap();
-		let task_executor = task_executor(tokio_runtime.handle().clone());
-		let (rpc, task_manager, client, pool, command_sink, backend) = client_parts::<
-			NodeTemplateChainInfo,
-		>(
-			ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor),
-		)
-		.unwrap();
+		let (rpc, task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(ConfigOrChainSpec::ChainSpec(
+				Box::new(development_config()),
+				tokio_runtime.handle().clone(),
+			))
+			.unwrap();
 		let node = Node::<NodeTemplateChainInfo>::new(
 			rpc,
 			task_manager,
