@@ -130,15 +130,18 @@ where
 			log::trace!("peaks_after: {:?}", peaks_after);
 		}
 
-		let store = |mut peaks_to_store: Vec<_>, elems: Vec<(_, DataOrHash<_, _>)>| {
+		let store = |peaks_to_store: &[_], elems: Vec<(_, DataOrHash<_, _>)>| {
 			let mut peak_to_store =
-				peaks_to_store.pop().expect("`peaks_to_store` can not be empty; qed");
+				peaks_to_store.get(0).expect("`peaks_to_store` can not be empty; qed");
+			let mut i = 1;
 
-			for (pos, elem) in elems.into_iter().rev() {
-				if pos == peak_to_store {
+			for (pos, elem) in elems {
+				if &pos == peak_to_store {
+					i += 1;
+
 					<Nodes<T, I>>::insert(peak_to_store, elem.hash());
 
-					if let Some(next_peak_to_store) = peaks_to_store.pop() {
+					if let Some(next_peak_to_store) = peaks_to_store.get(i) {
 						peak_to_store = next_peak_to_store;
 					} else {
 						// No more peaks to store.
@@ -150,7 +153,7 @@ where
 
 		// A new tree to build, no need to prune.
 		if peaks_before.is_empty() {
-			store(peaks_after, elems);
+			store(&peaks_after, elems);
 
 			return Ok(())
 		}
@@ -178,26 +181,29 @@ where
 			log::trace!("pivot: {:?}", pivot);
 		}
 
-		let mut nodes_to_prune = Vec::new();
-		let mut peaks_to_store = Vec::new();
+		// According to the MMR specification
+		// `nodes_to_prune` might be empty
+		// `peaks_to_store` must not be empty
+		let mut nodes_to_prune = &[][..];
+		let mut peaks_to_store = &[][..];
 
 		if let Some(pivot) = pivot {
 			let pivot = pivot + 1;
 
 			if pivot < peaks_before.len() {
-				nodes_to_prune.extend_from_slice(&peaks_before[pivot..]);
+				nodes_to_prune = &peaks_before[pivot..];
 			}
 			if pivot < peaks_after.len() {
-				peaks_to_store.extend_from_slice(&peaks_after[pivot..]);
+				peaks_to_store = &peaks_after[pivot..];
 			}
 		} else {
-			nodes_to_prune = peaks_before;
-			peaks_to_store = peaks_after;
+			nodes_to_prune = &peaks_before;
+			peaks_to_store = &peaks_after;
 		};
 
 		sp_std::if_std! {
-			log::trace!("nodes_to_prune: {:?}", nodes_to_prune);
-			log::trace!("peaks_to_store: {:?}", peaks_to_store);
+			log::trace!("nodes_to_prune: {:?}", nodes_to_prune.to_vec());
+			log::trace!("peaks_to_store: {:?}", peaks_to_store.to_vec());
 		}
 
 		store(peaks_to_store, elems);
