@@ -30,9 +30,7 @@ use jsonrpsee::{
 		JsonRpcResult,
 	},
 };
-use pallet_contracts_primitives::{
-	Code, ContractExecResult, ContractInstantiateResult, RentProjection,
-};
+use pallet_contracts_primitives::{Code, ContractExecResult, ContractInstantiateResult};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 use sp_api::ProvideRuntimeApi;
@@ -49,7 +47,6 @@ pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
 const RUNTIME_ERROR: i32 = 1;
 const CONTRACT_DOESNT_EXIST: i32 = 2;
-const CONTRACT_IS_A_TOMBSTONE: i32 = 3;
 
 pub type Weight = u64;
 
@@ -69,6 +66,7 @@ const GAS_LIMIT: Weight = 5 * GAS_PER_SECOND;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
 struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
+
 impl From<ContractAccessError> for JsonRpseeError {
 	fn from(e: ContractAccessError) -> Self {
 		use pallet_contracts_primitives::ContractAccessError::*;
@@ -76,12 +74,6 @@ impl From<ContractAccessError> for JsonRpseeError {
 			DoesntExist => CallError::Custom {
 				code: CONTRACT_DOESNT_EXIST,
 				message: "The specified contract doesn't exist.".into(),
-				data: None,
-			}
-			.into(),
-			IsTombstone => CallError::Custom {
-				code: CONTRACT_IS_A_TOMBSTONE,
-				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
 			}
 			.into(),
@@ -141,7 +133,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<ContractInstantiateResult<AccountId, BlockNumber>>;
+	) -> JsonRpcResult<ContractInstantiateResult<AccountId>>;
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
@@ -152,42 +144,18 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		key: H256,
 		at: Option<BlockHash>,
 	) -> JsonRpcResult<Option<Bytes>>;
-
-	/// Returns the projected time a given contract will be able to sustain paying its rent.
-	///
-	/// The returned projection is relevant for the given block, i.e. it is as if the contract was
-	/// accessed at the beginning of that block.
-	///
-	/// Returns `None` if the contract is exempted from rent.
-	#[method(name = "rentProjection")]
-	fn rent_projection(
-		&self,
-		address: AccountId,
-		at: Option<BlockHash>,
-	) -> JsonRpcResult<Option<BlockNumber>>;
 }
 
 /// Contracts RPC methods.
-pub struct ContractsRpc<Client, Block, AccountId, Balance, Hash> {
+pub struct ContractsRpc<Client, Block> {
 	client: Arc<Client>,
-	_block: PhantomData<Block>,
-	_account_id: PhantomData<AccountId>,
-	_balance: PhantomData<Balance>,
-	_hash: PhantomData<Hash>,
+	_marker: PhantomData<Block>,
 }
 
-impl<Client, Block, AccountId, Balance, Hash>
-	ContractsRpc<Client, Block, AccountId, Balance, Hash>
-{
+impl<Client, Block> ContractsRpc<Client, Block> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<Client>) -> Self {
-		Self {
-			client,
-			_block: Default::default(),
-			_account_id: Default::default(),
-			_balance: Default::default(),
-			_hash: Default::default(),
-		}
+		Self { client, _marker: Default::default() }
 	}
 }
 
@@ -199,7 +167,7 @@ impl<Client, Block, AccountId, Balance, Hash>
 		AccountId,
 		Balance,
 		Hash,
-	> for ContractsRpc<Client, Block, AccountId, Balance, Hash>
+	> for ContractsRpc<Client, Block>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
@@ -239,9 +207,7 @@ where
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> JsonRpcResult<
-		ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>,
-	> {
+	) -> JsonRpcResult<ContractInstantiateResult<AccountId>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
@@ -273,25 +239,6 @@ where
 			.map(Bytes);
 
 		Ok(result)
-	}
-
-	fn rent_projection(
-		&self,
-		address: AccountId,
-		at: Option<<Block as BlockT>::Hash>,
-	) -> JsonRpcResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
-		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-
-		let result = api
-			.rent_projection(&at, address)
-			.map_err(runtime_error_into_rpc_err)?
-			.map_err(ContractAccessError)?;
-
-		Ok(match result {
-			RentProjection::NoEviction => None,
-			RentProjection::EvictionAt(block_num) => Some(block_num),
-		})
 	}
 }
 
@@ -428,8 +375,7 @@ mod tests {
 	#[test]
 	fn instantiate_result_should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
-			let res: ContractInstantiateResult<String, u64> =
-				serde_json::from_str(expected).unwrap();
+			let res: ContractInstantiateResult<String> = serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, trim(expected).as_str());
 		}
@@ -444,8 +390,7 @@ mod tests {
 					 "flags": 5,
 					 "data": "0x1234"
 				  },
-				  "accountId": "5CiPP",
-				  "rentProjection": null
+				  "accountId": "5CiPP"
 			   }
 			}
 		}"#,

@@ -459,6 +459,14 @@ where
 		key: StorageKey,
 	) -> Result<Option<StorageData>, Error>;
 
+	/// Returns child storage entries at a specific block's state.
+	async fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> Result<Vec<Option<StorageData>>, Error>;
+
 	/// Returns the hash of a child storage entry at a block's state.
 	async fn storage_hash(
 		&self,
@@ -523,6 +531,18 @@ where
 	) -> JsonRpcResult<Option<StorageData>> {
 		self.backend
 			.storage(block, storage_key, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
+
+	async fn storage_entries(
+		&self,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> JsonRpcResult<Vec<Option<StorageData>>> {
+		self.backend
+			.storage_entries(block, storage_key, keys)
 			.await
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}

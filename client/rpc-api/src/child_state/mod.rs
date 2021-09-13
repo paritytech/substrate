@@ -58,6 +58,15 @@ pub trait ChildStateApi<Hash> {
 		hash: Option<Hash>,
 	) -> JsonRpcResult<Option<StorageData>>;
 
+	/// Returns child storage entries for multiple keys at a specific block's state.
+	#[method(name = "getStorageEntries")]
+	async fn storage_entries(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> JsonRpcResult<Vec<Option<StorageData>>>;
+
 	/// Returns the hash of a child storage entry at a block's state.
 	#[method(name = "getStorageHash")]
 	async fn storage_hash(
@@ -77,7 +86,7 @@ pub trait ChildStateApi<Hash> {
 	) -> JsonRpcResult<Option<u64>>;
 
 	/// Returns proof of storage for child key entries at a specific block's state.
-	#[method(name = "state_getChildReadProof")]
+	#[method(name = "getChildReadProof", aliases = "state_getChildReadProof")]
 	async fn read_child_proof(
 		&self,
 		child_storage_key: PrefixedStorageKey,

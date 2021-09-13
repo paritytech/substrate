@@ -22,7 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, MallocSizeOfWasm, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -231,7 +231,7 @@ where
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let chain_spec = &config.chain_spec;
@@ -317,7 +317,7 @@ where
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let db_storage = {
@@ -495,7 +495,7 @@ where
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ MallocSizeOfWasm
+		+ parity_util_mem::MallocSizeOf
 		+ 'static,
 {
 	let SpawnTasksParams {

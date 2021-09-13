@@ -692,6 +692,30 @@ where
 			.map_err(client_err)
 	}
 
+	async fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> std::result::Result<Vec<Option<StorageData>>, Error> {
+		let child_info = match ChildType::from_prefixed_key(&storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) =>
+				Arc::new(ChildInfo::new_default(storage_key)),
+			None => return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey)),
+		};
+		let block = self.block_or_best(block).map_err(client_err)?;
+		let client = self.client.clone();
+		future::try_join_all(keys.into_iter().map(move |key| {
+			let res = client
+				.clone()
+				.child_storage(&BlockId::Hash(block), &child_info, &key)
+				.map_err(client_err);
+
+			async move { res }
+		}))
+		.await
+	}
+
 	async fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,

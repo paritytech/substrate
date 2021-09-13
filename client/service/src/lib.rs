@@ -62,8 +62,8 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -277,7 +277,6 @@ async fn build_network_future<
 }
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 
@@ -301,9 +300,7 @@ mod waiting {
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive. Once this is called, no more methods can be added to the server.
-#[cfg(not(target_os = "unknown"))]
+/// Starts RPC servers.
 async fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
@@ -317,36 +314,24 @@ where
 
 	let http = sc_rpc_server::start_http(
 		http_addr,
-		config.rpc_http_threads,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module.clone(),
+		config.tokio_handle.clone(),
 	)
 	.await?;
 
 	let ws = sc_rpc_server::start_ws(
 		ws_addr,
-		Some(4),
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module,
+		config.tokio_handle.clone(),
 	)
 	.await?;
 
 	Ok(Box::new((http, ws)))
-}
-
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive.
-#[cfg(target_os = "unknown")]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>>(
-	_: &Configuration,
-	_: H,
-	_: Option<sc_rpc_server::RpcMetrics>,
-	_: sc_rpc_server::ServerMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	Ok(Box::new(()))
 }
 
 /// Transaction pool adapter.
