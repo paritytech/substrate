@@ -22,6 +22,7 @@
 use super::*;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::{
+	codec::{Decode, Encode},
 	dispatch::UnfilteredDispatchable,
 	traits::{Currency, EnsureOrigin, Get},
 };
@@ -50,16 +51,16 @@ benchmarks! {
 
 	place_bid_max {
 		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..T::MaxQueueLen::get() {
-			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Gilt::<T>::place_bid(origin.clone().into(), T::MinFreeze::get(), 1)?;
 		}
+		let call = Call::<T>::place_bid( T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
+			.encode();
 	}: {
-		Gilt::<T>::place_bid(
-			RawOrigin::Signed(caller.clone()).into(),
-			T::MinFreeze::get() * BalanceOf::<T>::from(2u32),
-			1,
-		)?
+		<Call<T> as Decode>::decode(&mut &*call).expect("call is encoded above, must be correct")
+			.dispatch_bypass_filter(origin.into())?
 	}
 	verify {
 		assert_eq!(QueueTotals::<T>::get()[0], (

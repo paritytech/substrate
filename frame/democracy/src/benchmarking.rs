@@ -22,6 +22,7 @@ use super::*;
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
+	codec::Decode,
 	traits::{
 		schedule::DispatchTime, Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
 	},
@@ -194,9 +195,9 @@ benchmarks! {
 	emergency_cancel {
 		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = add_referendum::<T>(0)?;
-		let call = Call::<T>::emergency_cancel(referendum_index);
+		let call = Call::<T>::emergency_cancel(referendum_index).encode();
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: { <Call<T> as Decode>::decode(&mut &*call).expect("Encoded above").dispatch_bypass_filter(origin)? }
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
