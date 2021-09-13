@@ -443,6 +443,24 @@
 			"website": "https://neatcoin.org"
 		},
 		{
+			"prefix": 49,
+			"network": "picasso",
+			"displayName": "Picasso",
+			"symbols": ["PICA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://picasso.composable.finance"
+		},
+		{
+			"prefix": 50,
+			"network": "composable",
+			"displayName": "Composable",
+			"symbols": ["LAYR"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://composable.finance"
+		},
+		{
 			"prefix": 63,
 			"network": "hydradx",
 			"displayName": "HydraDX",
