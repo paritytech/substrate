@@ -22,7 +22,6 @@ sp-std = { default-features = false, version = '2.0.0' , path = "../../primitive
 sp-block-builder = { default-features=false, version = "2.0.0" , path = "../../primitives/block-builder"}
 extrinsic-info-runtime-api = { default-features=false, path='../../primitives/extrinsic-info-runtime-api', version='2.0.0' }
 pallet-random-seed = { default-features=false, path='../../frame/random-seed', version='2.0.0' }
-random-seed-runtime-api = {default-features=false, path="../../frame/random-seed/runtime-api", version="2.0.0"}
 derive_more = "0.99.2"
 
 
@@ -35,6 +34,5 @@ std = [
     'sp-runtime/std',
     'sp-block-builder/std',
     'pallet-random-seed/std',
-    'random-seed-runtime-api/std',
     'extrinsic-info-runtime-api/std',
 ]

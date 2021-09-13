@@ -35,14 +35,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
 };
 use sp_blockchain::Error;
-use sp_core::ExecutionContext;
+use sp_core::{ExecutionContext, ShufflingSeed};
 use sp_api::{
 	Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof,
 	TransactionOutcome,
 };
 use sp_consensus::RecordProof;
 
-use pallet_random_seed::SeedType;
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::Backend;
@@ -233,7 +232,7 @@ where
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
 	pub fn build(
 		mut self,
-		seed: SeedType,
+		seed: ShufflingSeed,
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, ApiErrorFor<A, Block>> {
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
@@ -253,7 +252,7 @@ where
 						&self.api,
 						&self.block_id,
 						previous_block_extrinsics,
-						seed,
+						seed.clone().seed
 					)
 				};
 
@@ -287,6 +286,8 @@ where
 			self.extrinsics.iter().map(Encode::encode).collect(),
 		);
 		header.set_extrinsics_root(extrinsics_root);
+		header.set_seed(seed);
+		log::debug!(target: "mat", "SEED :{:?}", header.seed());
 
 		let proof = self.api.extract_proof();
 
@@ -315,10 +316,11 @@ where
 	pub fn create_inherents(
 		&mut self,
 		inherent_data: sp_inherents::InherentData,
-	) -> Result<(SeedType, Vec<Block::Extrinsic>), ApiErrorFor<A, Block>> {
+	) -> Result<(ShufflingSeed, Vec<Block::Extrinsic>), ApiErrorFor<A, Block>> {
 		let block_id = self.block_id.clone();
 		let seed = pallet_random_seed::extract_inherent_data(&inherent_data)
 			.map_err(|_| String::from("cannot read random seed from inherents data"))?;
+
 		self.api
 			.execute_in_transaction(move |api| {
 				// `create_inherents` should not change any state, to ensure this we always rollback
@@ -329,7 +331,7 @@ where
 					inherent_data,
 				))
 			})
-			.map(|inherents| (seed, inherents))
+			.map(|inherents| (ShufflingSeed{seed: seed.seed.into(), proof: seed.proof.into()}, inherents))
 	}
 }
 

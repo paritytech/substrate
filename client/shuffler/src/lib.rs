@@ -9,17 +9,12 @@ use sp_std::convert::TryInto;
 
 use sp_std::collections::vec_deque::VecDeque;
 use sp_std::vec::Vec;
+use sp_core::H256;
 
 #[cfg(feature = "std")]
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 #[cfg(feature = "std")]
-use pallet_random_seed::SeedType;
-#[cfg(feature = "std")]
-use random_seed_runtime_api::RandomSeedApi;
-#[cfg(feature = "std")]
 use sp_api::{ApiExt, ApiRef, ProvideRuntimeApi, TransactionOutcome};
-#[cfg(feature = "std")]
-use sp_block_builder::BlockBuilder as BlockBuilderRuntimeApi;
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
 #[cfg(feature = "std")]
@@ -85,9 +80,9 @@ fn fisher_yates<T>(data: &mut Vec<T>, seed: [u8; 32]) {
 
 pub fn shuffle_using_seed<E: Encode>(
 	extrinsics: Vec<(Option<AccountId32>, E)>,
-	seed: [u8; 32],
+	seed: H256,
 ) -> Vec<E> {
-	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:2X?}", &seed[..]);
+	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:2X?}", seed.as_bytes());
 	log::debug!(target: "block_shuffler", "origin order: [");
 	for (_,tx) in extrinsics.iter() {
 		log::debug!(target: "block_shuffler", "{:?}", BlakeTwo256::hash(&tx.encode()));
@@ -110,7 +105,8 @@ pub fn shuffle_using_seed<E: Encode>(
 		});
 
 	// shuffle slots
-	fisher_yates(&mut slots, seed);
+	//TODO get rid of clone!
+	fisher_yates(&mut slots, seed.as_fixed_bytes().clone());
 
 	// fill slots using extrinsics in order
 	// [ Alice, Bob, ... , Alice, Bob ]
@@ -144,7 +140,7 @@ pub fn shuffle<'a, Block, Api>(
 	api: &ApiRef<'a, Api::Api>,
 	block_id: &BlockId<Block>,
 	extrinsics: Vec<Block::Extrinsic>,
-	seed: SeedType,
+	seed: H256,
 ) -> Vec<Block::Extrinsic>
 where
 	Block: BlockT,
@@ -168,7 +164,7 @@ where
 			(who, tx)
 		}).collect();
 
-	shuffle_using_seed::<Block::Extrinsic>(extrinsics, seed.seed)
+	shuffle_using_seed::<Block::Extrinsic>(extrinsics, seed)
 }
 
 #[derive(derive_more::Display, Debug)]
@@ -177,45 +173,4 @@ pub enum Error {
 	InherentApplyError,
 	#[display(fmt = "Cannot read seed from the runtime api ")]
 	SeedFetchingError,
-}
-
-#[cfg(feature = "std")]
-pub fn fetch_seed<'a, Block, Api>(
-	api: &ApiRef<'a, Api::Api>,
-	block_id: &BlockId<Block>,
-) -> Result<SeedType, Error>
-where
-	Block: BlockT,
-	Api: ProvideRuntimeApi<Block> + 'a,
-	Api::Api: BlockBuilderRuntimeApi<Block> + RandomSeedApi<Block>,
-{
-	api.get_seed(block_id).map_err(|_| Error::SeedFetchingError)
-}
-
-/// shuffles extrinsics assuring that extrinsics signed by single account will be still evaluated
-/// in proper order
-#[cfg(feature = "std")]
-pub fn apply_inherents_and_fetch_seed<'a, Block, Api>(
-	api: &ApiRef<'a, Api::Api>,
-	block_id: &BlockId<Block>,
-	extrinsics: Vec<Block::Extrinsic>,
-) -> Result<SeedType, Error>
-where
-	Block: BlockT,
-	Api: ProvideRuntimeApi<Block> + 'a,
-	Api::Api: BlockBuilderRuntimeApi<Block> + RandomSeedApi<Block>,
-{
-	api.execute_in_transaction(|api| {
-		sp_api::TransactionOutcome::Rollback(
-			extrinsics
-			.into_iter()
-			.take(2)
-			.map(|xt| match api.apply_extrinsic(block_id, xt) {
-				Ok(Ok(Ok(_))) => Ok(()),
-				_ => Err(Error::InherentApplyError),
-			})
-			.collect::<Result<Vec<_>, _>>()
-			.and_then(|_| api.get_seed(block_id).map_err(|_| Error::SeedFetchingError)),
-		)
-	})
 }

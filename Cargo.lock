@@ -1381,7 +1381,6 @@ dependencies = [
  "extrinsic-info-runtime-api",
  "log",
  "pallet-random-seed",
- "random-seed-runtime-api",
  "sp-api",
  "sp-block-builder",
  "sp-core",
@@ -5434,14 +5433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "random-seed-runtime-api"
-version = "2.0.0"
-dependencies = [
- "pallet-random-seed",
- "sp-api",
-]
-
-[[package]]
 name = "raw-cpuid"
 version = "7.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6083,7 +6074,6 @@ dependencies = [
  "pdqselect",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "random-seed-runtime-api",
  "retain_mut",
  "sc-block-builder",
  "sc-client-api",
@@ -6708,12 +6698,12 @@ dependencies = [
  "jsonrpc-pubsub",
  "lazy_static",
  "log",
+ "pallet-random-seed",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.10.2",
  "pin-project",
  "rand 0.7.3",
- "random-seed-runtime-api",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
@@ -8317,7 +8307,6 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "parity-util-mem",
- "random-seed-runtime-api",
  "sc-block-builder",
  "sc-executor",
  "sc-service",

@@ -67,6 +67,7 @@ pub mod hash;
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
+pub mod seed;
 pub mod uint;
 mod changes_trie;
 #[cfg(feature = "std")]
@@ -80,6 +81,8 @@ pub use self::uint::{U256, U512};
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
+
+pub use seed::ShufflingSeed;
 
 pub use hash_db::Hasher;
 #[cfg(feature = "std")]

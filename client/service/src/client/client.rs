@@ -28,6 +28,7 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
+	ShufflingSeed,
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
@@ -65,7 +66,6 @@ use sp_api::{
 };
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_block_builder::BlockBuilder as BlockBuilderRuntimeApi;
-use random_seed_runtime_api::RandomSeedApi;
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 
 use sc_client_api::{
@@ -839,7 +839,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
 			+ ApiExt<Block, StateBackend = B::State>
 			+ ExtrinsicInfoRuntimeApi<Block>
-			+ RandomSeedApi<Block>
 			+ BlockBuilderRuntimeApi<Block>,
 	{
 		let parent_hash = import_block.header.parent_hash();
@@ -873,19 +872,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
 						let mut header = import_block.header.clone();
 						header.set_extrinsics_root(*prev_header.extrinsics_root());
-
+						log::debug!(target: "mat", "SEED :{:?}", header.seed());
 						let block = if previous_block_extrinsics.len() > 1{
-							let seed = extrinsic_shuffler::apply_inherents_and_fetch_seed::<Block, Self>(
-								&runtime_api,
-								&at,
-								body.clone(),
-							)
-								.map_err(|e| {
-									warn!("cannot fetch shuffling seed from the block");
-									sp_blockchain::Error::Backend(format!("{}", e))
-								})?;
-
-							let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block,Self>(&runtime_api, &at, previous_block_extrinsics, seed);
+							let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block,Self>(&runtime_api, &at, previous_block_extrinsics, header.seed().seed);
 							// temporarly shuffle extrinsics here as we cannot pass shuffling seed to
 							// runtime easily
 							// temporarly update extrinsics_root that stores hash of ordered extrinsics so it can be
@@ -1311,7 +1300,6 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = Error>
 			+ ExtrinsicInfoRuntimeApi<Block>
-			+ RandomSeedApi<Block>
 			+ BlockBuilderRuntimeApi<Block>,
 
 {
@@ -1721,7 +1709,6 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
 		+ ApiExt<Block, StateBackend = B::State>
 		+ ExtrinsicInfoRuntimeApi<Block>
-		+ RandomSeedApi<Block>
 		+ BlockBuilderRuntimeApi<Block>,
 {
 	type Error = ConsensusError;
@@ -1824,7 +1811,6 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
 		+ ApiExt<Block, StateBackend = B::State>
 		+ ExtrinsicInfoRuntimeApi<Block>
-		+ RandomSeedApi<Block>
 		+ BlockBuilderRuntimeApi<Block>,
 {
 	type Error = ConsensusError;

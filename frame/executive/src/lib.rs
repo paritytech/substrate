@@ -238,7 +238,7 @@ where
 		parent_hash: &System::Hash,
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
-		seed: &System::Hash,
+		seed: &sp_core::ShufflingSeed,
 	) {
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
