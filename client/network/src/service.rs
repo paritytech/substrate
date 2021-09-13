@@ -201,7 +201,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.chain.clone(),
 			params.protocol_id.clone(),
 			&params.network_config,
-			vec![default_notif_handshake_message; params.network_config.extra_sets.len()],
+			iter::once(Vec::new())
+				.chain(
+					(0..params.network_config.extra_sets.len() - 1)
+						.map(|_| default_notif_handshake_message.clone()),
+				)
+				.collect(),
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			warp_sync_provider,
