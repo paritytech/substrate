@@ -73,6 +73,7 @@ mod batch_verifier;
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
+#[cfg(feature = "std")]
 const LOG_TARGET: &str = "runtime::io";
 
 /// Error verifying ECDSA signature
