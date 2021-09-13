@@ -94,13 +94,13 @@ impl<T: Config> Default for PagedRawSolution<T> {
 
 /// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
 /// voted.
-pub type Voter<T> = (
+pub type VoterOf<T> = (
 	<T as frame_system::Config>::AccountId,
 	sp_npos_elections::VoteWeight,
 	Vec<<T as frame_system::Config>::AccountId>,
 );
 
-pub type RoundVoterSnapshotPage<T> = Vec<Voter<T>>;
+pub type RoundVoterSnapshotPage<T> = Vec<VoterOf<T>>;
 pub type RoundTargetSnapshotPage<T> = Vec<<T as frame_system::Config>::AccountId>;
 
 /// Encodes the length of a solution or a snapshot.

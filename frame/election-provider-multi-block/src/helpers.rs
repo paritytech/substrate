@@ -18,7 +18,7 @@
 //! Some helper functions/macros for this crate.
 
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
-use crate::types::{PageIndex, Voter};
+use crate::types::{PageIndex, VoterOf};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
@@ -34,7 +34,7 @@ macro_rules! log {
 
 /// Generate an `efficient closure of voters and the page in which they live in.
 pub fn generate_voter_page_fn<T: Config>(
-	paged_snapshot: &Vec<Vec<Voter<T>>>,
+	paged_snapshot: &Vec<Vec<VoterOf<T>>>,
 ) -> impl Fn(&T::AccountId) -> Option<PageIndex> {
 	let mut cache: BTreeMap<T::AccountId, PageIndex> = BTreeMap::new();
 	paged_snapshot

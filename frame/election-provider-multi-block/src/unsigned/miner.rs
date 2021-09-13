@@ -20,7 +20,6 @@ use crate::{helpers, log, types::*, verifier, Snapshot};
 use codec::{Decode, Encode};
 use frame_election_provider_support::{ExtendedBalance, Support, VoteWeight};
 use frame_support::{dispatch::Weight, traits::Get};
-use pallet_balances::AccountData;
 use sp_npos_elections::StakedAssignment;
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -147,7 +146,7 @@ impl<T: super::Config> BaseMiner<T> {
 		// now flatten the voters, ready to be used as if pagination did not existed.
 		let all_voters = voter_pages.iter().flatten().cloned().collect::<Vec<_>>();
 
-		let ElectionResult { winners, assignments } =
+		let ElectionResult { winners: _, assignments } =
 			sp_npos_elections::seq_phragmen::<_, SolutionAccuracyOf<T>>(
 				desired_targets as usize,
 				all_targets.clone(),
@@ -165,15 +164,13 @@ impl<T: super::Config> BaseMiner<T> {
 			// This is by no means the most performant, but is the clear and correct.
 			use sp_npos_elections::{
 				assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized,
-				reduce, supports_to_staked_assignment, to_supports, to_without_backing,
-				EvaluateSupport,
+				reduce, supports_to_staked_assignment, to_supports, EvaluateSupport,
 			};
 
 			// These closures are of no use in the rest of these code, since they only deal with the
 			// overall list of voters.
 			let cache = helpers::generate_voter_cache::<T>(&all_voters);
 			let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
-			let winners = to_without_backing(winners);
 
 			// 1. convert to staked and reduce
 			let (reduced_count, staked) = {
@@ -191,8 +188,7 @@ impl<T: super::Config> BaseMiner<T> {
 				// these supports could very well be invalid for SCORE purposes. The reason is that
 				// you might trim out half of an account's stake, but we don't look for this
 				// account's other votes to fix it.
-				let mut supports_invalid_score =
-					to_supports(&winners, &staked).map_err::<MinerError, _>(Into::into)?;
+				let mut supports_invalid_score = to_supports(&staked);
 
 				let pre_score = (&supports_invalid_score).evaluate();
 				let trimmed = Self::trim_supports(&mut supports_invalid_score);
@@ -354,7 +350,6 @@ impl<T: super::Config> BaseMiner<T> {
 	/// This separate function makes it easier to feed in different election results to the miner's
 	/// standard pre-process.
 	pub fn prepare_assignments_for_submission(
-		winners: Vec<T::AccountId>,
 		assignments: Vec<AssignmentOf<T>>,
 		pages: PageIndex,
 		do_reduce: bool,
@@ -408,7 +403,7 @@ impl<T: super::Config> BaseMiner<T> {
 	/// of the transaction and its weight (e.g. signed or unsigned).
 	pub fn maybe_trim_weight_and_len(
 		solution_pages: &mut Vec<SolutionOf<T>>,
-		voter_pages: &Vec<Vec<Voter<T>>>,
+		voter_pages: &Vec<Vec<VoterOf<T>>>,
 	) -> Result<u32, MinerError> {
 		debug_assert_eq!(solution_pages.len(), voter_pages.len());
 		let size_limit = T::MinerMaxLength::get();

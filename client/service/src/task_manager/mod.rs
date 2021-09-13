@@ -18,23 +18,20 @@
 
 //! Substrate service tasks management module.
 
-use crate::{
-	config::{JoinFuture, TaskExecutor, TaskType},
-	Error,
-};
+use crate::{config::TaskType, Error};
 use exit_future::Signal;
 use futures::{
 	future::{join_all, pending, select, try_join_all, BoxFuture, Either},
-	sink::SinkExt,
 	Future, FutureExt, StreamExt,
 };
-use log::{debug, error};
+use log::debug;
 use prometheus_endpoint::{
 	exponential_buckets, register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError,
 	Registry, U64,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{panic, pin::Pin, result::Result};
+use tokio::{runtime::Handle, task::JoinHandle};
 use tracing_futures::Instrument;
 
 mod prometheus_future;
@@ -45,9 +42,9 @@ mod tests;
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
-	executor: TaskExecutor,
+	tokio_handle: Handle,
 	metrics: Option<Metrics>,
-	task_notifier: TracingUnboundedSender<JoinFuture>,
+	task_notifier: TracingUnboundedSender<JoinHandle<()>>,
 }
 
 impl SpawnTaskHandle {
@@ -126,19 +123,20 @@ impl SpawnTaskHandle {
 				futures::pin_mut!(task);
 				let _ = select(on_exit, task).await;
 			}
+		}
+		.in_current_span();
+
+		let join_handle = match task_type {
+			TaskType::Async => self.tokio_handle.spawn(future),
+			TaskType::Blocking => {
+				let handle = self.tokio_handle.clone();
+				self.tokio_handle.spawn_blocking(move || {
+					handle.block_on(future);
+				})
+			},
 		};
 
-		let join_handle = self.executor.spawn(future.in_current_span().boxed(), task_type);
-
-		let mut task_notifier = self.task_notifier.clone();
-		self.executor.spawn(
-			Box::pin(async move {
-				if let Err(err) = task_notifier.send(join_handle).await {
-					error!("Could not send spawned task handle to queue: {}", err);
-				}
-			}),
-			TaskType::Async,
-		);
+		let _ = self.task_notifier.unbounded_send(join_handle);
 	}
 }
 
@@ -222,8 +220,8 @@ pub struct TaskManager {
 	on_exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
-	/// How to spawn background tasks.
-	executor: TaskExecutor,
+	/// Tokio runtime handle that is used to spawn futures.
+	tokio_handle: Handle,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
 	/// Send a signal when a spawned essential task has concluded. The next time
@@ -234,9 +232,9 @@ pub struct TaskManager {
 	/// Things to keep alive until the task manager is dropped.
 	keep_alive: Box<dyn std::any::Any + Send>,
 	/// A sender to a stream of background tasks. This is used for the completion future.
-	task_notifier: TracingUnboundedSender<JoinFuture>,
+	task_notifier: TracingUnboundedSender<JoinHandle<()>>,
 	/// This future will complete when all the tasks are joined and the stream is closed.
-	completion_future: JoinFuture,
+	completion_future: JoinHandle<()>,
 	/// A list of other `TaskManager`'s to terminate and gracefully shutdown when the parent
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
@@ -247,7 +245,7 @@ impl TaskManager {
 	/// If a Prometheus registry is passed, it will be used to report statistics about the
 	/// service tasks.
 	pub fn new(
-		executor: TaskExecutor,
+		tokio_handle: Handle,
 		prometheus_registry: Option<&Registry>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
@@ -261,13 +259,15 @@ impl TaskManager {
 		// NOTE: for_each_concurrent will await on all the JoinHandle futures at the same time. It
 		// is possible to limit this but it's actually better for the memory foot print to await
 		// them all to not accumulate anything on that stream.
-		let completion_future = executor
-			.spawn(Box::pin(background_tasks.for_each_concurrent(None, |x| x)), TaskType::Async);
+		let completion_future =
+			tokio_handle.spawn(background_tasks.for_each_concurrent(None, |x| async move {
+				let _ = x.await;
+			}));
 
 		Ok(Self {
 			on_exit,
 			signal: Some(signal),
-			executor,
+			tokio_handle,
 			metrics,
 			essential_failed_tx,
 			essential_failed_rx,
@@ -282,7 +282,7 @@ impl TaskManager {
 	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
-			executor: self.executor.clone(),
+			tokio_handle: self.tokio_handle.clone(),
 			metrics: self.metrics.clone(),
 			task_notifier: self.task_notifier.clone(),
 		}
@@ -310,8 +310,9 @@ impl TaskManager {
 
 		Box::pin(async move {
 			join_all(children_shutdowns).await;
-			completion_future.await;
-			drop(keep_alive);
+			let _ = completion_future.await;
+
+			let _ = keep_alive;
 		})
 	}
 

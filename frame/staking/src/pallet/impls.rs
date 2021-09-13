@@ -783,10 +783,11 @@ impl<T: Config> Pallet<T> {
 
 	/// Get all of the voters that are eligible for the npos election.
 	///
-	/// `voter_count` imposes a cap on the number of voters returned; care should be taken to ensure
-	/// that it is accurate.
+	/// `maybe_max_len` can imposes a cap on the number of voters returned; First all the validator
+	/// are included in no particular order, then remainder is taken from the nominators, as
+	/// returned by [`Config::SortedListProvider`].
 	///
-	/// This will use on-chain nominators, and all the validators will inject a self vote.
+	/// This will use nominators, and all the validators will inject a self vote.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
@@ -799,19 +800,18 @@ impl<T: Config> Pallet<T> {
 		remaining: PageIndex,
 		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		let nominator_count = CounterForNominators::<T>::get() as usize;
-		let validator_count = CounterForValidators::<T>::get() as usize;
-		let all_voter_count = validator_count.saturating_add(nominator_count);
-		drop(validator_count);
-		drop(nominator_count);
+		let max_allowed_len = {
+			let nominator_count = CounterForNominators::<T>::get() as usize;
+			let validator_count = CounterForValidators::<T>::get() as usize;
 
-		let max_allowed_len = maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count);
-		drop(all_voter_count);
+			// TODO: I don't want to deal with this case for now.
+			assert!(maybe_max_len.map_or(true, |m| validator_count < m));
+
+			let all_voter_count = validator_count.saturating_add(nominator_count);
+			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
+		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
-
-		// TODO: I don't want to deal with this case for now.
-		assert!(maybe_max_len.map_or(true, |m| validator_count < m));
 
 		// first, grab all validators, capped by the maximum allowed length.
 		let mut validators_taken = 0u32;
@@ -893,7 +893,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
-	/// and keep track of the `CounterForNominators`.
+	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
@@ -905,7 +905,7 @@ impl<T: Config> Pallet<T> {
 			// maybe update the counter.
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
 
-			// maybe update sorted list. Defensive-only: this should never fail.
+			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
 				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
 				debug_assert!(false, "attempt to insert duplicate nominator");
@@ -918,7 +918,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// and keep track of the `CounterForNominators`.
+	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///
@@ -1109,6 +1109,9 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Ledger<T>>::remove_all(None);
 		<Validators<T>>::remove_all(None);
 		<Nominators<T>>::remove_all(None);
+		<CounterForNominators<T>>::kill();
+		<CounterForValidators<T>>::kill();
+		T::SortedListProvider::clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1409,7 +1412,9 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	}
 }
 
-/// A simple voter list implementation that does not require any additional pallets.
+/// A simple voter list implementation that does not require any additional pallets. Note, this
+/// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
+/// a look at [`pallet-bags-list].
 pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
@@ -1452,7 +1457,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-
 	fn clear() {
 		Nominators::<T>::remove_all(None);
 		CounterForNominators::<T>::kill();

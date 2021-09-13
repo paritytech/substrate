@@ -144,8 +144,8 @@ pub fn roll_to_with_ocw(n: BlockNumber) {
 }
 
 /// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
-fn nested_voter_snapshot() -> Vec<Vec<Voter<Runtime>>> {
-	let mut flatten: Vec<Vec<Voter<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
+fn nested_voter_snapshot() -> Vec<Vec<VoterOf<Runtime>>> {
+	let mut flatten: Vec<Vec<VoterOf<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
 	flatten.resize(Pages::get() as usize, vec![]);
 	let voter_snapshot = crate::Snapshot::<Runtime>::voters_iter().collect::<Vec<_>>();
 	for (page, voters) in voter_snapshot {
@@ -384,10 +384,7 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-pub struct OnChainConfig;
-impl onchain::Config for OnChainConfig {
-	type AccountId = AccountId;
-	type BlockNumber = u64;
+impl onchain::Config for Runtime {
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = MockStaking;
 	type TargetsPageSize = ();
@@ -402,7 +399,7 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 
 	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
 		if OnChianFallback::get() {
-			onchain::OnChainSequentialPhragmen::<OnChainConfig>::elect(remaining)
+			onchain::OnChainSequentialPhragmen::<Runtime>::elect(remaining)
 				.map_err(|_| "OnChainSequentialPhragmen failed")
 		} else {
 			InitiateEmergencyPhase::<Runtime>::elect(remaining)

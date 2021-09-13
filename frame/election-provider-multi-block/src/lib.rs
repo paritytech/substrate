@@ -189,16 +189,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
 use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider, PageIndex};
 use frame_support::{
 	ensure,
-	traits::{ConstU8, Currency, Get, ReservableCurrency},
+	traits::{ConstU8, Get},
 };
-use sp_arithmetic::traits::{Saturating, Zero};
+use sp_arithmetic::traits::Zero;
 use sp_npos_elections::{NposSolution, VoteWeight};
 use sp_runtime::{traits::Bounded, PerThing, SaturatedConversion};
-use sp_std::prelude::*;
 use verifier::Verifier;
 
 #[cfg(test)]
@@ -677,7 +675,7 @@ pub mod pallet {
 			PagedVoterSnapshot::<T>::iter()
 		}
 
-		pub fn voters_iter_flattened() -> impl Iterator<Item = Voter<T>> {
+		pub fn voters_iter_flattened() -> impl Iterator<Item = VoterOf<T>> {
 			let key_range =
 				(crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp()).collect::<Vec<_>>();
 			key_range

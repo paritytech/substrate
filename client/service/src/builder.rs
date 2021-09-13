@@ -22,8 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, MallocSizeOfWasm, RpcHandlers, SpawnTaskHandle, TaskManager,
-	TransactionPoolAdapter,
+	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpc_pubsub::manager::SubscriptionManager;
@@ -49,6 +48,7 @@ use sc_network::{
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
@@ -61,7 +61,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, HashFor, Zero},
 	BuildStorage,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -287,7 +286,7 @@ where
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let chain_spec = &config.chain_spec;
@@ -373,7 +372,7 @@ where
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let db_storage = {
@@ -552,7 +551,7 @@ where
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ MallocSizeOfWasm
+		+ parity_util_mem::MallocSizeOf
 		+ 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
@@ -639,12 +638,15 @@ where
 		)
 	};
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
-	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone())?;
+	let server_metrics = sc_rpc_server::ServerMetrics::new(config.prometheus_registry())?;
+	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone(), server_metrics)?;
 	// This is used internally, so don't restrict access to unsafe RPC
+	let known_rpc_method_names =
+		sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
 	let rpc_handlers = RpcHandlers(Arc::new(
 		gen_handler(
 			sc_rpc::DenyUnsafe::No,
-			sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser"),
+			sc_rpc_server::RpcMiddleware::new(rpc_metrics, known_rpc_method_names, "inbrowser"),
 		)?
 		.into(),
 	));
@@ -1026,7 +1028,6 @@ where
 	// future using `spawn_blocking`.
 	spawn_handle.spawn_blocking("network-worker", async move {
 		if network_start_rx.await.is_err() {
-			debug_assert!(false);
 			log::warn!(
 				"The NetworkStart returned as part of `build_network` has been silently dropped"
 			);

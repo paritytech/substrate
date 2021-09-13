@@ -18,21 +18,11 @@
 //! Benchmarks for the bags list pallet.
 
 use super::*;
-use crate::list::{Bag, List};
+use crate::list::List;
 use frame_benchmarking::{account, whitelisted_caller};
 use frame_election_provider_support::VoteWeightProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
-
-fn get_bags<T: Config>() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
-	T::BagThresholds::get()
-		.into_iter()
-		.filter_map(|t| {
-			Bag::<T>::get(*t)
-				.map(|bag| (*t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
-		})
-		.collect::<Vec<_>>()
-}
 
 frame_benchmarking::benchmarks! {
 	rebag {
@@ -43,6 +33,10 @@ frame_benchmarking::benchmarks! {
 		//   when it is removed.
 		// - The destination bag is not empty, because then we need to update the `next` pointer
 		//   of the previous node in addition to the work we do otherwise.
+		//
+		// NOTE: another expensive case for rebag-ing is for a terminal node, because in that case
+		// the tail node of each back will need to be updated and both bags will need to be read and
+		// written to storage.
 
 		// clear any pre-existing storage.
 		List::<T>::clear();
@@ -55,7 +49,7 @@ frame_benchmarking::benchmarks! {
 		let origin_head: T::AccountId = account("origin_head", 0, 0);
 		assert_ok!(List::<T>::insert(origin_head.clone(), origin_bag_thresh));
 
-		let origin_middle: T::AccountId  = account("origin_middle", 0, 0);
+		let origin_middle: T::AccountId = account("origin_middle", 0, 0);
 		assert_ok!(List::<T>::insert(origin_middle.clone(), origin_bag_thresh));
 
 		let origin_tail: T::AccountId  = account("origin_tail", 0, 0);
@@ -65,9 +59,9 @@ frame_benchmarking::benchmarks! {
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T>::insert(dest_head.clone(), dest_bag_thresh));
 
-		// and the bags are in the expected state after insertions.
+		// the bags are in the expected state after insertions.
 		assert_eq!(
-			get_bags::<T>(),
+			List::<T>::get_bags(),
 			vec![
 				(origin_bag_thresh, vec![origin_head.clone(), origin_middle.clone(), origin_tail.clone()]),
 				(dest_bag_thresh, vec![dest_head.clone()])
@@ -80,7 +74,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		// check the bags have updated as expected.
 		assert_eq!(
-			get_bags::<T>(),
+			List::<T>::get_bags(),
 			vec![
 				(
 					origin_bag_thresh,
@@ -98,6 +92,6 @@ frame_benchmarking::benchmarks! {
 use frame_benchmarking::impl_benchmark_test_suite;
 impl_benchmark_test_suite!(
 	Pallet,
-	crate::mock::ext_builder::ExtBuilder::default().build(),
+	crate::mock::ExtBuilder::default().build(),
 	crate::mock::Runtime,
 );

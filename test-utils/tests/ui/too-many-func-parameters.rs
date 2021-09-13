@@ -16,11 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[allow(unused_imports)]
-use sc_service::TaskExecutor;
-
 #[substrate_test_utils::test]
-async fn too_many_func_parameters(task_executor_1: TaskExecutor, task_executor_2: TaskExecutor) {
+async fn too_many_func_parameters(_: u32) {
 	assert!(true);
 }
 

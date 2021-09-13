@@ -20,9 +20,8 @@
 //! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
 //! [`CounterForListNodes`] and [`ListBags`] for more information.
 //!
-//!
 //! The outer API of this module is the [`List`] struct. It wraps all acceptable operations on top
-//! of the aggregate linked list. All operations with the linked list should happen through this
+//! of the aggregate linked list. All operations with the bags list should happen through this
 //! interface.
 
 use crate::Config;
@@ -54,23 +53,26 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
 
-/// Data structure providing efficient mostly-accurate selection of the top N id by `VoteWeight`.
-///
-/// It's implemented as a set of linked lists. Each linked list comprises a bag of ids of
-/// arbitrary and unbounded length, all having a vote weight within a particular constant range.
-/// This structure means that ids can be added and removed in `O(1)` time.
-///
-/// Iteration is accomplished by chaining the iteration of each bag, from greatest to least. While
-/// the users within any particular bag are sorted in an entirely arbitrary order, the overall vote
-/// weight decreases as successive bags are reached. This means that it is valid to truncate
-/// iteration at any desired point; only those ids in the lowest bag can be excluded. This
-/// satisfies both the desire for fairness and the requirement for efficiency.
+/// The **ONLY** entry point of this module. All operations to the bags-list should happen through
+/// this interface. It is forbidden to access other module members directly.
+//
+// Data structure providing efficient mostly-accurate selection of the top N id by `VoteWeight`.
+//
+// It's implemented as a set of linked lists. Each linked list comprises a bag of ids of
+// arbitrary and unbounded length, all having a vote weight within a particular constant range.
+// This structure means that ids can be added and removed in `O(1)` time.
+//
+// Iteration is accomplished by chaining the iteration of each bag, from greatest to least. While
+// the users within any particular bag are sorted in an entirely arbitrary order, the overall vote
+// weight decreases as successive bags are reached. This means that it is valid to truncate
+// iteration at any desired point; only those ids in the lowest bag can be excluded. This
+// satisfies both the desire for fairness and the requirement for efficiency.
 pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
@@ -83,7 +85,7 @@ impl<T: Config> List<T> {
 
 	/// Regenerate all of the data from the given ids.
 	///
-	/// This is expensive and should only ever be performed during a migration a migration, or when
+	/// This is expensive and should only ever be performed during a migration, or when
 	/// the data needs to be generated from scratch again.
 	///
 	/// This may or may not need to be called at genesis as well, based on the configuration of the
@@ -119,16 +121,25 @@ impl<T: Config> List<T> {
 	///   threshold set.
 	#[allow(dead_code)]
 	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
+		let new_thresholds = T::BagThresholds::get();
+		if new_thresholds == old_thresholds {
+			return 0
+		}
+
 		// we can't check all preconditions, but we can check one
 		debug_assert!(
 			crate::ListBags::<T>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
 			"not all `bag_upper` currently in storage are members of `old_thresholds`",
 		);
+		debug_assert!(
+			crate::ListNodes::<T>::iter().all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
+			"not all `node.bag_upper` currently in storage are members of `old_thresholds`",
+		);
 
 		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
-		let new_set: BTreeSet<_> = T::BagThresholds::get().iter().copied().collect();
+		let new_set: BTreeSet<_> = new_thresholds.iter().copied().collect();
 
-		// accounts that need to be rebaged
+		// accounts that need to be rebagged
 		let mut affected_accounts = BTreeSet::new();
 		// track affected old bags to make sure we only iterate them once
 		let mut affected_old_bags = BTreeSet::new();
@@ -166,10 +177,12 @@ impl<T: Config> List<T> {
 		}
 
 		// migrate the voters whose bag has changed
-		let weight_of = T::VoteWeightProvider::vote_weight;
-		Self::remove_many(affected_accounts.iter().map(|id| id));
 		let num_affected = affected_accounts.len() as u32;
-		let _ = Self::insert_many(affected_accounts.into_iter(), weight_of);
+		let weight_of = T::VoteWeightProvider::vote_weight;
+		let _removed = Self::remove_many(&affected_accounts);
+		debug_assert_eq!(_removed, num_affected);
+		let _inserted = Self::insert_many(affected_accounts.into_iter(), weight_of);
+		debug_assert_eq!(_inserted, num_affected);
 
 		// we couldn't previously remove the old bags because both insertion and removal assume that
 		// it's always safe to add a bag if it's not present. Now that that's sorted, we can get rid
@@ -185,13 +198,7 @@ impl<T: Config> List<T> {
 			crate::ListBags::<T>::remove(removed_bag);
 		}
 
-		debug_assert!(
-			{
-				let thresholds = T::BagThresholds::get();
-				crate::ListBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
-			},
-			"all `bag_upper` in storage must be members of the new thresholds",
-		);
+		debug_assert_eq!(Self::sanity_check(), Ok(()));
 
 		num_affected
 	}
@@ -253,7 +260,7 @@ impl<T: Config> List<T> {
 	/// Insert several ids into the appropriate bags in the list. Continues with insertions
 	/// if duplicates are detected.
 	///
-	/// Return the final count of number of ids inserted.
+	/// Returns the final count of number of ids inserted.
 	fn insert_many(
 		ids: impl IntoIterator<Item = T::AccountId>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
@@ -301,7 +308,7 @@ impl<T: Config> List<T> {
 		Ok(())
 	}
 
-	/// Remove a id from the list.
+	/// Remove an id from the list.
 	pub(crate) fn remove(id: &T::AccountId) {
 		Self::remove_many(sp_std::iter::once(id));
 	}
@@ -309,7 +316,9 @@ impl<T: Config> List<T> {
 	/// Remove many ids from the list.
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
-	fn remove_many<'a>(ids: impl IntoIterator<Item = &'a T::AccountId>) {
+	///
+	/// Returns the final count of number of ids removed.
+	fn remove_many<'a>(ids: impl IntoIterator<Item = &'a T::AccountId>) -> u32 {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
@@ -333,7 +342,7 @@ impl<T: Config> List<T> {
 			}
 
 			// now get rid of the node itself
-			crate::ListNodes::<T>::remove(id);
+			node.remove_from_storage_unchecked()
 		}
 
 		for (_, bag) in bags {
@@ -343,6 +352,8 @@ impl<T: Config> List<T> {
 		crate::CounterForListNodes::<T>::mutate(|prev_count| {
 			*prev_count = prev_count.saturating_sub(count)
 		});
+
+		count
 	}
 
 	/// Update a node's position in the list.
@@ -397,9 +408,10 @@ impl<T: Config> List<T> {
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
 	/// * there are no duplicate ids,
-	/// * length of this list are in sync with `CounterForListNodes`.
+	/// * length of this list is in sync with `CounterForListNodes`,
 	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
 	///   are checked per *any* update to `List`.
+	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
@@ -408,17 +420,69 @@ impl<T: Config> List<T> {
 			"duplicate identified",
 		);
 
-		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
+		let iter_count = Self::iter().count() as u32;
 		let stored_count = crate::CounterForListNodes::<T>::get();
-		ensure!(iter_count == stored_count, "iter_count != stored_count",);
+		let nodes_count = crate::ListNodes::<T>::iter().count() as u32;
+		ensure!(iter_count == stored_count, "iter_count != stored_count");
+		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
 
-		let _ = T::BagThresholds::get()
-			.into_iter()
-			.map(|t| Bag::<T>::get(*t).unwrap_or_default())
-			.map(|b| b.sanity_check())
-			.collect::<Result<_, _>>()?;
+		crate::log!(debug, "count of nodes: {}", stored_count);
+
+		let active_bags = {
+			let thresholds = T::BagThresholds::get().iter().copied();
+			let thresholds: Vec<u64> = if thresholds.clone().last() == Some(VoteWeight::MAX) {
+				// in the event that they included it, we don't need to make any changes
+				// Box::new(thresholds.collect()
+				thresholds.collect()
+			} else {
+				// otherwise, insert it here.
+				thresholds.chain(iter::once(VoteWeight::MAX)).collect()
+			};
+			thresholds.into_iter().filter_map(|t| Bag::<T>::get(t))
+		};
+
+		let _ = active_bags.clone().map(|b| b.sanity_check()).collect::<Result<_, _>>()?;
+
+		let nodes_in_bags_count =
+			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
+		ensure!(nodes_count == nodes_in_bags_count, "stored_count != nodes_in_bags_count");
+
+		crate::log!(debug, "count of active bags {}", active_bags.count());
+
+		// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
+		// have some "stale" nodes that are not in a bag.
+		for (_id, node) in crate::ListNodes::<T>::iter() {
+			node.sanity_check()?
+		}
 
 		Ok(())
+	}
+
+	#[cfg(not(feature = "std"))]
+	pub(crate) fn sanity_check() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Returns the nodes of all non-empty bags. For testing and benchmarks.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
+	#[allow(dead_code)]
+	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
+		use frame_support::traits::Get as _;
+
+		let thresholds = T::BagThresholds::get();
+		let iter = thresholds.iter().copied();
+		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
+			// in the event that they included it, we can just pass the iterator through unchanged.
+			Box::new(iter)
+		} else {
+			// otherwise, insert it here.
+			Box::new(iter.chain(sp_std::iter::once(VoteWeight::MAX)))
+		};
+
+		iter.filter_map(|t| {
+			Bag::<T>::get(t).map(|bag| (t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
+		})
+		.collect::<Vec<_>>()
 	}
 }
 
@@ -430,7 +494,7 @@ impl<T: Config> List<T> {
 /// iteration so that there's no incentive to churn ids positioning to improve the chances of
 /// appearing within the ids set.
 #[derive(DefaultNoBound, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone))]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Bag<T: Config> {
 	head: Option<T::AccountId>,
@@ -452,17 +516,14 @@ impl<T: Config> Bag<T> {
 
 	/// Get a bag by its upper vote weight.
 	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
-		// debug_assert!( TODO this breaks when we attempt to migrate because thresholds change
-		// 	T::BagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
-		// 	"it is a logic error to attempt to get a bag which is not in the thresholds list"
-		// );
 		crate::ListBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
 			bag.bag_upper = bag_upper;
 			bag
 		})
 	}
 
-	/// Get a bag by its upper vote weight or make it, appropriately initialized.
+	/// Get a bag by its upper vote weight or make it, appropriately initialized. Does not check if
+	/// if `bag_upper` is a valid threshold.
 	fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
@@ -492,8 +553,7 @@ impl<T: Config> Bag<T> {
 	}
 
 	/// Iterate over the nodes in this bag.
-	// TODO: we make this public for the remote-ext test.
-	pub fn iter(&self) -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
@@ -507,7 +567,7 @@ impl<T: Config> Bag<T> {
 	fn insert_unchecked(&mut self, id: T::AccountId) {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
-		// correct [`notional_bag_for`], getting the bag, and then `bag.insert_unchecked`.
+		// correct [`notional_bag_for`].
 		self.insert_node_unchecked(Node::<T> { id, prev: None, next: None, bag_upper: 0 });
 	}
 
@@ -521,7 +581,8 @@ impl<T: Config> Bag<T> {
 	fn insert_node_unchecked(&mut self, mut node: Node<T>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
-				// this should never happen, but this check prevents a worst case infinite loop.
+				// this should never happen, but this check prevents one path to a worst case
+				// infinite loop.
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
 				return
@@ -532,7 +593,6 @@ impl<T: Config> Bag<T> {
 		// to be `self.bag_upper`.
 		node.bag_upper = self.bag_upper;
 
-		// update this node now, making it the new tail.
 		let id = node.id.clone();
 		// update this node now, treating it as the new tail.
 		node.prev = self.tail.clone();
@@ -577,12 +637,13 @@ impl<T: Config> Bag<T> {
 
 	/// Sanity check this bag.
 	///
-	/// Should be called by the call-site, after each mutating operation on a bag. The call site of
+	/// Should be called by the call-site, after any mutating operation on a bag. The call site of
 	/// this struct is always `List`.
 	///
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
+	#[cfg(feature = "std")]
 	fn sanity_check(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
@@ -613,12 +674,29 @@ impl<T: Config> Bag<T> {
 
 		Ok(())
 	}
+
+	#[cfg(not(feature = "std"))]
+	fn sanity_check(&self) -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Iterate over the nodes in this bag (public for tests).
+	#[cfg(feature = "std")]
+	#[allow(dead_code)]
+	pub fn std_iter(&self) -> impl Iterator<Item = Node<T>> {
+		sp_std::iter::successors(self.head(), |prev| prev.next())
+	}
+
+	/// Check if the bag contains a node with `id`.
+	#[cfg(feature = "std")]
+	fn contains(&self, id: &T::AccountId) -> bool {
+		self.iter().find(|n| n.id() == id).is_some()
+	}
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
-#[cfg_attr(test, derive(PartialEq, Clone))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
@@ -639,7 +717,8 @@ impl<T: Config> Node<T> {
 
 	/// Update neighboring nodes to point to reach other.
 	///
-	/// Does _not_ update storage, so the user may need to call `self.put`.
+	/// Only updates storage for adjacent nodes, but not `self`; so the user may need to call
+	/// `self.put`.
 	fn excise(&self) {
 		// Update previous node.
 		if let Some(mut prev) = self.prev() {
@@ -651,6 +730,13 @@ impl<T: Config> Node<T> {
 			next.prev = self.prev.clone();
 			next.put();
 		}
+	}
+
+	/// This is a naive function that removes a node from the `ListNodes` storage item.
+	///
+	/// It is naive because it does not check if the node has first been removed from its bag.
+	fn remove_from_storage_unchecked(&self) {
+		crate::ListNodes::<T>::remove(&self.id)
 	}
 
 	/// Get the previous node in the bag.
@@ -676,5 +762,40 @@ impl<T: Config> Node<T> {
 	/// Get the underlying voter.
 	pub(crate) fn id(&self) -> &T::AccountId {
 		&self.id
+	}
+
+	/// Get the underlying voter (public fo tests).
+	#[cfg(feature = "std")]
+	#[allow(dead_code)]
+	pub fn std_id(&self) -> &T::AccountId {
+		&self.id
+	}
+
+	/// The bag this nodes belongs to (public for benchmarks).
+	#[cfg(feature = "runtime-benchmarks")]
+	#[allow(dead_code)]
+	pub fn bag_upper(&self) -> VoteWeight {
+		self.bag_upper
+	}
+
+	#[cfg(feature = "std")]
+	fn sanity_check(&self) -> Result<(), &'static str> {
+		let expected_bag = Bag::<T>::get(self.bag_upper).ok_or("bag not found for node")?;
+
+		let id = self.id();
+
+		frame_support::ensure!(
+			expected_bag.contains(id),
+			"node does not exist in the expected bag"
+		);
+
+		frame_support::ensure!(
+			!self.is_terminal() ||
+				expected_bag.head.as_ref() == Some(id) ||
+				expected_bag.tail.as_ref() == Some(id),
+			"a terminal node is neither its bag head or tail"
+		);
+
+		Ok(())
 	}
 }

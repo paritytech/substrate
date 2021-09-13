@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Bags-List Pallet
+//!
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
 //! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
@@ -24,7 +26,7 @@
 //! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
-//! the `SortedListProvider` (i.e. `on_insert`) at their genesis.
+//! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
 //!
 //! # Goals
 //!
@@ -43,9 +45,9 @@
 //!   it will worsen its position in list iteration; this reduces incentives for some types of spam
 //!   that involve consistently removing and inserting for better position. Further, ordering
 //!   granularity is thus dictated by range between each bag threshold.
-//! - if an items weight changes to a value no longer within the range of its current bag the item's
-//!   position will need to be updated by an external actor with rebag (update), or removal and
-//!   insertion.
+//! - if an item's weight changes to a value no longer within the range of its current bag the
+//!   item's position will need to be updated by an external actor with rebag (update), or removal
+//!   and insertion.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -56,8 +58,6 @@ use sp_std::prelude::*;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
-#[cfg(feature = "generate-bags")]
-pub mod generate_bags;
 mod list;
 #[cfg(test)]
 mod mock;
@@ -79,7 +79,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("[{:?}] ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+			concat!("[{:?}] 👜", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
 }
@@ -131,8 +131,7 @@ pub mod pallet {
 		/// there exists some constant ratio such that `threshold[k + 1] == (threshold[k] *
 		/// constant_ratio).max(threshold[k] + 1)` for all `k`.
 		///
-		/// The helpers in the `generate-bags` module can simplify this calculation. To use them,
-		/// the `generate-bags` feature must be enabled.
+		/// The helpers in the `/utils/frame/generate-bags` module can simplify this calculation.
 		///
 		/// # Examples
 		///
@@ -154,19 +153,22 @@ pub mod pallet {
 	}
 
 	/// How many ids are registered.
+	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the
+	// `CountedMaop` storage.
 	#[pallet::storage]
 	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Nodes store links forward and back within their respective bags, id.
+	/// A single node, within some bag.
+	///
+	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
 	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
-	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
-	/// mainly exists to store head and tail pointers to the appropriate nodes.
-	// TODO: we make this public for now only for the sake of the remote-ext tests, find another way
-	// around it.
+	/// A bag stored in storage.
+	///
+	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
-	pub type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -185,7 +187,7 @@ pub mod pallet {
 		/// Anyone can call this function about any potentially dislocated account.
 		///
 		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
-		/// it is a noop and only fees are collected from `origin`.
+		/// it is a noop and fees are still collected from `origin`.
 		#[pallet::weight(T::WeightInfo::rebag())]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -223,6 +225,12 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
 		};
 		maybe_movement
+	}
+
+	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
+	#[cfg(feature = "std")]
+	pub fn list_bags_get(weight: VoteWeight) -> Option<list::Bag<T>> {
+		ListBags::get(weight)
 	}
 }
 
@@ -267,11 +275,39 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::regenerate(all, weight_of)
 	}
 
+	#[cfg(feature = "std")]
 	fn sanity_check() -> Result<(), &'static str> {
 		List::<T>::sanity_check()
 	}
 
+	#[cfg(not(feature = "std"))]
+	fn sanity_check() -> Result<(), &'static str> {
+		Ok(())
+	}
+
 	fn clear() {
 		List::<T>::clear()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
+		use frame_support::traits::Get as _;
+		let thresholds = T::BagThresholds::get();
+		let node = list::Node::<T>::get(who).unwrap();
+		let current_bag_idx = thresholds
+			.iter()
+			.chain(sp_std::iter::once(&VoteWeight::MAX))
+			.position(|w| w == &node.bag_upper())
+			.unwrap();
+
+		if is_increase {
+			let next_threshold_idx = current_bag_idx + 1;
+			assert!(thresholds.len() > next_threshold_idx);
+			thresholds[next_threshold_idx]
+		} else {
+			assert!(current_bag_idx != 0);
+			let prev_threshold_idx = current_bag_idx - 1;
+			thresholds[prev_threshold_idx]
+		}
 	}
 }

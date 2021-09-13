@@ -271,7 +271,8 @@ mod pallet {
 			let mock_supports = total_supports
 				.into_iter()
 				.map(|(who, (backing, _))| (who, backing.into()))
-				.map(|(who, total)| (who, Support { total, ..Default::default() }));
+				.map(|(who, total)| (who, Support { total, ..Default::default() }))
+				.collect::<Vec<_>>();
 
 			let winner_count = mock_supports.len() as u32;
 
@@ -705,13 +706,6 @@ impl<T: Config> Pallet<T> {
 		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
 		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
 
-		// First, make sure that all the winners are sane.
-		let winners = partial_solution
-			.unique_targets()
-			.into_iter()
-			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
-			.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
-
 		// Then convert solution -> assignment. This will fail if any of the indices are
 		// gibberish.
 		let assignments = partial_solution
@@ -752,7 +746,7 @@ impl<T: Config> Pallet<T> {
 			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, stake_of)
 				.map_err::<FeasibilityError, _>(Into::into)?;
 
-		let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)?;
+		let supports = sp_npos_elections::to_supports(&staked_assignments);
 
 		// ensure some heuristics
 		let desired_targets =
@@ -872,7 +866,7 @@ mod feasibility_check {
 
 			assert_noop!(
 				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
-				FeasibilityError::InvalidWinner
+				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex)
 			);
 		})
 	}

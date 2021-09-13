@@ -61,6 +61,7 @@ members = [
 	"client/tracing/proc-macro",
 	"client/transaction-pool",
 	"client/transaction-pool/api",
+	"client/utils",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
@@ -131,7 +132,6 @@ members = [
 	"frame/utility",
 	"frame/vesting",
 	"frame/bags-list",
-	"frame/bags-list/generate-bags",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -184,7 +184,6 @@ members = [
 	"primitives/transaction-pool",
 	"primitives/transaction-storage-proof",
 	"primitives/trie",
-	"primitives/utils",
 	"primitives/version",
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
@@ -203,6 +202,8 @@ members = [
 	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
+	"utils/frame/generate-bags",
+	"utils/frame/generate-bags/node-runtime",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -231,7 +232,6 @@ cranelift-codegen = { opt-level = 3 }
 cranelift-wasm = { opt-level = 3 }
 crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
-crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
 ed25519-dalek = { opt-level = 3 }

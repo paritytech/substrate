@@ -40,8 +40,8 @@ pub use impls::*;
 use crate::{
 	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakerStatus, StakingLedger, UnappliedSlash,
-	UnlockChunk, ValidatorPrefs,
+	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -141,7 +141,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
-		/// Something that can provide a sorted list of voters is a somewhat sorted way.
+		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
+		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
+		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -482,7 +484,8 @@ pub mod pallet {
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
-		pub stakers: Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>,
+		pub stakers:
+			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, crate::StakerStatus<T::AccountId>)>,
 		pub min_nominator_bond: BalanceOf<T>,
 		pub min_validator_bond: BalanceOf<T>,
 	}
@@ -538,11 +541,11 @@ pub mod pallet {
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
-					StakerStatus::Validator => <Pallet<T>>::validate(
+					crate::StakerStatus::Validator => <Pallet<T>>::validate(
 						T::Origin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
-					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
+					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
 						T::Origin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
@@ -655,6 +658,8 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == Releases::V6_0_0 {
 				migrations::v7::migrate::<T>()
+			} else if StorageVersion::<T>::get() == Releases::V7_0_0 {
+				migrations::v8::migrate::<T>()
 			} else {
 				T::DbWeight::get().reads(1)
 			}
@@ -664,6 +669,17 @@ pub mod pallet {
 		fn pre_upgrade() -> Result<(), &'static str> {
 			if StorageVersion::<T>::get() == Releases::V6_0_0 {
 				migrations::v7::pre_migrate::<T>()
+			} else if StorageVersion::<T>::get() == Releases::V7_0_0 {
+				migrations::v8::pre_migrate::<T>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if StorageVersion::<T>::get() == Releases::V7_0_0 {
+				migrations::v8::post_migrate::<T>()
 			} else {
 				Ok(())
 			}
@@ -703,6 +719,17 @@ pub mod pallet {
 				"Genesis election provider must have single page. Use `OnChainSequentialPhragmen` \
 				for an easy example.",
 			);
+
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(||
+					assert!(
+						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+						T::SlashDeferDuration::get(),
+						T::BondingDuration::get(),
+					)
+				);
+			}
 		}
 	}
 
@@ -810,13 +837,15 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
+				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
 				if T::SortedListProvider::contains(&stash) {
 					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
+					debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
-				Self::update_ledger(&controller, &ledger);
 			}
 			Ok(())
 		}
@@ -875,6 +904,7 @@ pub mod pallet {
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
 				// update this staker in the sorted list, if they exist in it.
@@ -1377,6 +1407,8 @@ pub mod pallet {
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
+
+			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
 
 			if T::SortedListProvider::contains(&ledger.stash) {

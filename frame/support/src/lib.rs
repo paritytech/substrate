@@ -130,6 +130,18 @@ impl TypeId for PalletId {
 /// 	>
 /// );
 ///
+/// // optionally specify the query type
+/// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
+/// generate_storage_alias!(Prefix, ValueName => Value<u32, OptionQuery>);
+/// generate_storage_alias!(
+/// 	Prefix, SomeStorageName => DoubleMap<
+/// 		(u32, Twox64Concat),
+/// 		(u32, Twox64Concat),
+/// 		Vec<u8>,
+/// 		ValueQuery
+/// 	>
+/// );
+///
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
@@ -140,7 +152,7 @@ impl TypeId for PalletId {
 #[macro_export]
 macro_rules! generate_storage_alias {
 	// without generic for $name.
-	($pallet:ident, $name:ident => Map<($key:ty, $hasher:ty), $value:ty>) => {
+	($pallet:ident, $name:ident => Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageMap<
@@ -148,10 +160,15 @@ macro_rules! generate_storage_alias {
 				$hasher,
 				$key,
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
-	($pallet:ident, $name:ident => DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
+	(
+		$pallet:ident,
+		$name:ident
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageDoubleMap<
@@ -161,10 +178,15 @@ macro_rules! generate_storage_alias {
 				$hasher2,
 				$key2,
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
-	($pallet:ident, $name:ident => NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty>) => {
+	(
+		$pallet:ident,
+		$name:ident
+		=> NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageNMap<
@@ -173,20 +195,26 @@ macro_rules! generate_storage_alias {
 					$( $crate::storage::types::Key<$hasher, $key>, )+
 				),
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
-	($pallet:ident, $name:ident => Value<$value:ty>) => {
+	($pallet:ident, $name:ident => Value<$value:ty $(, $querytype:ty)?>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageValue<
 				[<$name Instance>],
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
 	// with generic for $name.
-	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Map<($key:ty, $hasher:ty), $value:ty>) => {
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt>
+		=> Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
@@ -195,13 +223,15 @@ macro_rules! generate_storage_alias {
 				$key,
 				$hasher,
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
@@ -212,12 +242,14 @@ macro_rules! generate_storage_alias {
 				$key2,
 				$hasher2,
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
 	(
 		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt> => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>
+		$name:ident<$t:ident : $bounds:tt>
+		=> NMap<$(($key:ty, $hasher:ty),)+ $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -228,17 +260,18 @@ macro_rules! generate_storage_alias {
 					$( $crate::storage::types::Key<$hasher, $key>, )+
 				),
 				$value,
+				$( $querytype )?
 			>;
 		}
 	};
-	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Value<$value:ty>) => {
+	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Value<$value:ty $(, $querytype:ty)?>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageValue<
 				[<$name Instance>],
 				$value,
-				$crate::storage::types::ValueQuery,
+				$( $querytype )?
 			>;
 		}
 	};
@@ -1693,7 +1726,19 @@ pub mod pallet_prelude {
 /// E.g. if runtime names the pallet "MyExample" then the storage `type Foo<T> = ...` use the
 /// prefix: `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allow to define a
+/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
+/// specific name to use for the prefix.
+///
+/// E.g:
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::storage_prefix = "OtherName"]
+/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// ```
+/// In this case the final prefix used by the map is
+/// `Twox128(b"MyExample") ++ Twox128(b"OtherName")`.
+///
+/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows to define a
 /// getter function on `Pallet`.
 ///
 /// E.g:
@@ -2023,6 +2068,7 @@ pub mod pallet_prelude {
 /// 	// Another storage declaration
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
+/// 	#[pallet::storage_prefix = "SomeOtherName"]
 /// 	pub(super) type MyStorage<T> =
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
@@ -2165,6 +2211,7 @@ pub mod pallet_prelude {
 ///
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
+/// 	#[pallet::storage_prefix = "SomeOtherName"]
 /// 	pub(super) type MyStorage<T, I = ()> =
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
