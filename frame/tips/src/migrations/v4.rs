@@ -15,8 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_core::hexdisplay::HexDisplay;
-use sp_io::{hashing::twox_128, storage};
+use sp_io::hashing::twox_128;
 use sp_std::str;
 
 use frame_support::{
@@ -41,10 +40,9 @@ use crate as pallet_tips;
 /// migration.
 pub fn migrate<T: pallet_tips::Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
 	old_pallet_name: N,
-	new_pallet_name: N,
 ) -> Weight {
 	let old_pallet_name = old_pallet_name.as_ref();
-	let new_pallet_name = new_pallet_name.as_ref();
+	let new_pallet_name = <P as PalletInfoAccess>::name();
 
 	if new_pallet_name == old_pallet_name {
 		log::info!(
@@ -94,12 +92,15 @@ pub fn migrate<T: pallet_tips::Config, P: GetStorageVersion + PalletInfoAccess, 
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migrate<T: pallet_tips::Config, P: GetStorageVersion + 'static, N: AsRef<str>>(
+pub fn pre_migrate<
+	T: pallet_tips::Config,
+	P: GetStorageVersion + PalletInfoAccess,
+	N: AsRef<str>,
+>(
 	old_pallet_name: N,
-	new_pallet_name: N,
 ) {
 	let old_pallet_name = old_pallet_name.as_ref();
-	let new_pallet_name = new_pallet_name.as_ref();
+	let new_pallet_name = <P as PalletInfoAccess>::name();
 
 	let storage_prefix_tips = pallet_tips::Tips::<T>::storage_prefix();
 	let storage_prefix_reasons = pallet_tips::Reasons::<T>::storage_prefix();
@@ -107,32 +108,22 @@ pub fn pre_migrate<T: pallet_tips::Config, P: GetStorageVersion + 'static, N: As
 	log_migration("pre-migration", storage_prefix_tips, old_pallet_name, new_pallet_name);
 	log_migration("pre-migration", storage_prefix_reasons, old_pallet_name, new_pallet_name);
 
-	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
-	let old_tips_key = [&old_pallet_prefix, &twox_128(storage_prefix_tips)[..]].concat();
-	let old_reasons_key = [&old_pallet_prefix, &twox_128(storage_prefix_reasons)[..]].concat();
-	assert!(storage::next_key(&old_tips_key)
-		.map_or(true, |next_key| next_key.starts_with(&old_tips_key)));
-	assert!(storage::next_key(&old_reasons_key)
-		.map_or(true, |next_key| next_key.starts_with(&old_reasons_key)));
+	if new_pallet_name == old_pallet_name {
+		return
+	}
 
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
-	let storage_version_key =
-		[&new_pallet_prefix, &twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX)[..]].concat();
-	// ensure nothing is stored in the new prefix.
-	assert!(
-		storage::next_key(&new_pallet_prefix).map_or(
-			// either nothing is there
-			true,
-			// or we ensure that it has no common prefix with twox_128(new),
-			// or isn't the pallet version that is already stored using the pallet name
-			|next_key| {
-				!next_key.starts_with(&new_pallet_prefix) || next_key == storage_version_key
-			},
-		),
-		"unexpected next_key({}) = {:?}",
-		new_pallet_name,
-		HexDisplay::from(&storage::next_key(&new_pallet_prefix).unwrap()),
+	let storage_version_key = twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX);
+
+	let mut new_pallet_prefix_iter = frame_support::storage::KeyPrefixIterator::new(
+		new_pallet_prefix.to_vec(),
+		new_pallet_prefix.to_vec(),
+		|key| Ok(key.to_vec()),
 	);
+
+	// Ensure nothing except the storage_version_key is stored in the new prefix.
+	assert!(new_pallet_prefix_iter.all(|key| key == storage_version_key));
+
 	assert!(<P as GetStorageVersion>::on_chain_storage_version() < 4);
 }
 
@@ -140,12 +131,15 @@ pub fn pre_migrate<T: pallet_tips::Config, P: GetStorageVersion + 'static, N: As
 /// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn post_migrate<T: pallet_tips::Config, P: GetStorageVersion, N: AsRef<str>>(
+pub fn post_migrate<
+	T: pallet_tips::Config,
+	P: GetStorageVersion + PalletInfoAccess,
+	N: AsRef<str>,
+>(
 	old_pallet_name: N,
-	new_pallet_name: N,
 ) {
 	let old_pallet_name = old_pallet_name.as_ref();
-	let new_pallet_name = new_pallet_name.as_ref();
+	let new_pallet_name = <P as PalletInfoAccess>::name();
 
 	let storage_prefix_tips = pallet_tips::Tips::<T>::storage_prefix();
 	let storage_prefix_reasons = pallet_tips::Reasons::<T>::storage_prefix();
@@ -153,23 +147,38 @@ pub fn post_migrate<T: pallet_tips::Config, P: GetStorageVersion, N: AsRef<str>>
 	log_migration("post-migration", storage_prefix_tips, old_pallet_name, new_pallet_name);
 	log_migration("post-migration", storage_prefix_reasons, old_pallet_name, new_pallet_name);
 
+	if new_pallet_name == old_pallet_name {
+		return
+	}
+
+	// Assert that no `Tips` and `Reasons` storages remains at the old prefix.
 	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
 	let old_tips_key = [&old_pallet_prefix, &twox_128(storage_prefix_tips)[..]].concat();
-	let old_reasons_key = [&old_pallet_prefix, &twox_128(storage_prefix_reasons)[..]].concat();
-	// Assert that nothing remains at the old prefix
-	assert!(storage::next_key(&old_tips_key)
-		.map_or(true, |next_key| !next_key.starts_with(&old_tips_key)));
-	assert!(storage::next_key(&old_reasons_key)
-		.map_or(true, |next_key| !next_key.starts_with(&old_reasons_key)));
+	let old_tips_key_iter = frame_support::storage::KeyPrefixIterator::new(
+		old_tips_key.to_vec(),
+		old_tips_key.to_vec(),
+		|_| Ok(()),
+	);
+	assert_eq!(old_tips_key_iter.count(), 0);
 
+	let old_reasons_key = [&old_pallet_prefix, &twox_128(storage_prefix_reasons)[..]].concat();
+	let old_reasons_key_iter = frame_support::storage::KeyPrefixIterator::new(
+		old_reasons_key.to_vec(),
+		old_reasons_key.to_vec(),
+		|_| Ok(()),
+	);
+	assert_eq!(old_reasons_key_iter.count(), 0);
+
+	// Assert that the `Tips` and `Reasons` storages (if they exist) have been moved to the new
+	// prefix.
+	// NOTE: storage_version_key is already in the new prefix.
 	let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
-	let new_tips_key = [&new_pallet_prefix, &twox_128(storage_prefix_tips)[..]].concat();
-	let new_reasons_key = [&new_pallet_prefix, &twox_128(storage_prefix_reasons)[..]].concat();
-	// Assert that the `Tips` and `Reasons` storages have been moved to the new prefix
-	assert!(storage::next_key(&new_tips_key)
-		.map_or(true, |next_key| next_key.starts_with(&new_tips_key)));
-	assert!(storage::next_key(&new_reasons_key)
-		.map_or(true, |next_key| next_key.starts_with(&new_reasons_key)));
+	let new_pallet_prefix_iter = frame_support::storage::KeyPrefixIterator::new(
+		new_pallet_prefix.to_vec(),
+		new_pallet_prefix.to_vec(),
+		|_| Ok(()),
+	);
+	assert!(new_pallet_prefix_iter.count() >= 1);
 
 	assert_eq!(<P as GetStorageVersion>::on_chain_storage_version(), 4);
 }

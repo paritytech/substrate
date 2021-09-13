@@ -473,8 +473,6 @@ fn test_last_reward_migration() {
 
 #[test]
 fn test_migration_v4() {
-	let mut s = Storage::default();
-
 	let reason1 = BlakeTwo256::hash(b"reason1");
 	let hash1 = BlakeTwo256::hash_of(&(reason1, 10u64));
 
@@ -493,17 +491,39 @@ fn test_migration_v4() {
 		(pallet_tips::Tips::<Test>::hashed_key_for(hash1), tip.encode().to_vec()),
 	];
 
+	let mut s = Storage::default();
 	s.top = data.into_iter().collect();
 
 	sp_io::TestExternalities::new(s).execute_with(|| {
-		use frame_support::traits::PalletInfo;
-		let old_pallet_name = <Test as frame_system::Config>::PalletInfo::name::<Tips>()
-			.expect("Tips is part of runtime, so it has a name; qed");
-		let new_pallet_name = "NewTips";
+		use frame_support::traits::PalletInfoAccess;
 
-		crate::migrations::v4::pre_migrate::<Test, Tips, _>(old_pallet_name, new_pallet_name);
-		crate::migrations::v4::migrate::<Test, Tips, _>(old_pallet_name, new_pallet_name);
-		crate::migrations::v4::post_migrate::<Test, Tips, _>(old_pallet_name, new_pallet_name);
+		let old_pallet = "Treasury";
+		let new_pallet = <Tips as PalletInfoAccess>::name();
+		frame_support::storage::migration::move_pallet(
+			new_pallet.as_bytes(),
+			old_pallet.as_bytes(),
+		);
+		StorageVersion::new(0).put::<Tips>();
+
+		crate::migrations::v4::pre_migrate::<Test, Tips, _>(old_pallet);
+		crate::migrations::v4::migrate::<Test, Tips, _>(old_pallet);
+		crate::migrations::v4::post_migrate::<Test, Tips, _>(old_pallet);
+	});
+
+	sp_io::TestExternalities::new(Storage::default()).execute_with(|| {
+		use frame_support::traits::PalletInfoAccess;
+
+		let old_pallet = "Treasury";
+		let new_pallet = <Tips as PalletInfoAccess>::name();
+		frame_support::storage::migration::move_pallet(
+			new_pallet.as_bytes(),
+			old_pallet.as_bytes(),
+		);
+		StorageVersion::new(0).put::<Tips>();
+
+		crate::migrations::v4::pre_migrate::<Test, Tips, _>(old_pallet);
+		crate::migrations::v4::migrate::<Test, Tips, _>(old_pallet);
+		crate::migrations::v4::post_migrate::<Test, Tips, _>(old_pallet);
 	});
 }
 
