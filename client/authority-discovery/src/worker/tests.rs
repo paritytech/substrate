@@ -167,7 +167,7 @@ impl NetworkProvider for TestNetwork {
 
 impl NetworkStateInfo for TestNetwork {
 	fn local_peer_id(&self) -> PeerId {
-		self.peer_id.clone()
+		self.peer_id
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
