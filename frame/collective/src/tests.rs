@@ -17,7 +17,9 @@
 
 use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
-use frame_support::{assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable};
+use frame_support::{
+	assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable,
+};
 use frame_system::{EventRecord, Phase};
 use sp_core::{
 	u32_trait::{_3, _4},
@@ -351,7 +353,10 @@ fn close_with_voting_prime_works() {
 				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
 				record(Event::Collective(CollectiveEvent::Closed(hash, 3, 0))),
 				record(Event::Collective(CollectiveEvent::Approved(hash))),
-				record(Event::Collective(CollectiveEvent::Executed(hash, Err(DispatchError::BadOrigin))))
+				record(Event::Collective(CollectiveEvent::Executed(
+					hash,
+					Err(DispatchError::BadOrigin)
+				)))
 			]
 		);
 	});
@@ -803,7 +808,10 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
 				record(Event::Collective(CollectiveEvent::Closed(hash, 2, 0))),
 				record(Event::Collective(CollectiveEvent::Approved(hash))),
-				record(Event::Collective(CollectiveEvent::Executed(hash, Err(DispatchError::BadOrigin)))),
+				record(Event::Collective(CollectiveEvent::Executed(
+					hash,
+					Err(DispatchError::BadOrigin)
+				))),
 			]
 		);
 
@@ -891,7 +899,10 @@ fn motions_approval_works() {
 				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
 				record(Event::Collective(CollectiveEvent::Closed(hash, 2, 0))),
 				record(Event::Collective(CollectiveEvent::Approved(hash))),
-				record(Event::Collective(CollectiveEvent::Executed(hash, Err(DispatchError::BadOrigin)))),
+				record(Event::Collective(CollectiveEvent::Executed(
+					hash,
+					Err(DispatchError::BadOrigin)
+				))),
 			]
 		);
 	});
@@ -929,8 +940,14 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 
 		// Events show that the close ended in a disapproval.
-		assert_eq!(System::events()[1], record(Event::Collective(CollectiveEvent::Closed(hash, 0, 3))));
-		assert_eq!(System::events()[2], record(Event::Collective(CollectiveEvent::Disapproved(hash))));
+		assert_eq!(
+			System::events()[1],
+			record(Event::Collective(CollectiveEvent::Closed(hash, 0, 3)))
+		);
+		assert_eq!(
+			System::events()[2],
+			record(Event::Collective(CollectiveEvent::Disapproved(hash)))
+		);
 	})
 }
 
@@ -1001,9 +1018,12 @@ fn disapprove_proposal_works() {
 #[test]
 #[should_panic(expected = "Members cannot contain duplicate accounts.")]
 fn genesis_build_panics_with_duplicate_members() {
-	pallet_collective::GenesisConfig::<Test> { members: vec![1, 2, 3, 1], phantom: Default::default() }
-		.build_storage()
-		.unwrap();
+	pallet_collective::GenesisConfig::<Test> {
+		members: vec![1, 2, 3, 1],
+		phantom: Default::default(),
+	}
+	.build_storage()
+	.unwrap();
 }
 
 #[test]

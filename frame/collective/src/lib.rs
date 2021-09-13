@@ -742,8 +742,9 @@ pub mod pallet {
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				Ok((
-					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight),
+					Some(
+						T::WeightInfo::close_approved(len as u32, seats, proposal_count)
+							.saturating_add(proposal_weight),
 					),
 					Pays::Yes,
 				)
