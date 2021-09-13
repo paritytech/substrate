@@ -25,14 +25,9 @@ use beefy_primitives::{
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_runtime::traits::MaybeDisplay;
 
+#[derive(Default)]
 struct RoundTracker {
 	votes: Vec<(Public, Signature)>,
-}
-
-impl Default for RoundTracker {
-	fn default() -> Self {
-		RoundTracker { votes: Vec::new() }
-	}
 }
 
 impl RoundTracker {
