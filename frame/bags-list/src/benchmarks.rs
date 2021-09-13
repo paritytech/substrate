@@ -25,12 +25,12 @@ use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 
 frame_benchmarking::benchmarks! {
-	rebag {
+	rebag_non_terminal {
 		// An expensive case for rebag-ing:
 		//
-		// - The node to be rebagged should exist as a non-terminal node in a bag with at least
-		//   2 other nodes so both its prev and next are nodes that will need be updated
-		//   when it is removed.
+		// - The node to be rebagged, _R_, should exist as a non-terminal node in a bag with at
+		//   least 2 other nodes. Thus _R_ will have both its `prev` and `next` nodes updated when
+		//   it is removed.
 		// - The destination bag is not empty, because then we need to update the `next` pointer
 		//   of the previous node in addition to the work we do otherwise.
 		//
