@@ -31,7 +31,7 @@ use sc_rpc::author::{hash::ExtrinsicOrHash, AuthorApiClient};
 async fn main() -> Result<(), Error> {
 	sp_tracing::try_init_simple();
 
-	// TODO(niklasad1):  https://github.com/paritytech/jsonrpsee/issues/448 
+	// TODO(niklasad1):  https://github.com/paritytech/jsonrpsee/issues/448
 	// changed this to the WS client because the jsonrpsee proc macros
 	// requires the trait bound `SubscriptionClient` which is not implemented for the HTTP client.
 	WsClientBuilder::default()

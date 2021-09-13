@@ -195,16 +195,16 @@ where
 		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
-		let _ = self.backend.subscribe_all_heads(sink);
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+		self.backend.subscribe_all_heads(sink).map_err(Into::into)
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
-		let _ = self.backend.subscribe_new_heads(sink);
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+		self.backend.subscribe_new_heads(sink).map_err(Into::into)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
-		let _ = self.backend.subscribe_finalized_heads(sink);
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+		self.backend.subscribe_finalized_heads(sink).map_err(Into::into)
 	}
 }
 

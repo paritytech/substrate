@@ -57,7 +57,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 		aliases = "grandpa_justifications"
 		item = Notification
 	)]
-	fn subscribe_justifications(&self);
+	fn subscribe_justifications(&self) -> JsonRpcResult<()>;
 
 	/// Prove finality for the given block number by returning the Justification for the last block
 	/// in the set and all the intermediary headers to link them together.
@@ -103,7 +103,7 @@ where
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> JsonRpcResult<()> {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
@@ -128,6 +128,7 @@ where
 		}
 		.boxed();
 		self.executor.execute(fut);
+		Ok(())
 	}
 
 	async fn prove_finality(

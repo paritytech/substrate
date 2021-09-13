@@ -168,13 +168,13 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) {
+	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> JsonRpcResult<()> {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
 			Ok(dxt) => dxt,
 			Err(e) => {
 				log::error!("[watch_extrinsic sub] failed to decode extrinsic: {:?}", e);
-				return
+				return Err(JsonRpseeError::to_call_error(e))
 			},
 		};
 
@@ -204,6 +204,7 @@ where
 		};
 
 		executor.execute(Box::pin(fut));
+		Ok(())
 	}
 }
 

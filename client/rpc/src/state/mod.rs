@@ -296,7 +296,7 @@ where
 			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
 				value: count,
 				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			}));
+			}))
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
@@ -386,7 +386,6 @@ where
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	// TODO(niklasad1): use methods (goes probably away by merging to master)
 	async fn trace_block(
 		&self,
 		block: Block::Hash,
@@ -401,16 +400,20 @@ where
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_runtime_version(&self, sink: SubscriptionSink) {
-		if let Err(e) = self.backend.subscribe_runtime_version(sink) {
-			log::error!("[subscribe_runtimeVersion]: error {:?}", e);
-		}
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+		self.backend
+			.subscribe_runtime_version(sink)
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_storage(&self, sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
-		if let Err(e) = self.backend.subscribe_storage(sink, keys) {
-			log::error!("[subscribe_storage]: error {:?}", e);
-		}
+	fn subscribe_storage(
+		&self,
+		sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> JsonRpcResult<()> {
+		self.backend
+			.subscribe_storage(sink, keys)
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }
 
