@@ -788,7 +788,7 @@ fn balance_conversion_should_work() {
 #[test]
 fn querying_name_symbol_and_decimals_should_work() {
 	new_test_ext().execute_with(|| {
-		use frame_support::traits::tokens::fungibles::Erc20Compatible;
+		use frame_support::traits::tokens::fungibles::metadata::Inspect;
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::force_set_metadata(
 			Origin::root(),
@@ -807,7 +807,7 @@ fn querying_name_symbol_and_decimals_should_work() {
 #[test]
 fn querying_allowance_should_work() {
 	new_test_ext().execute_with(|| {
-		use frame_support::traits::tokens::fungibles::Erc20Compatible;
+		use frame_support::traits::tokens::fungibles::approvals::{Inspect, Mutate};
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		Balances::make_free_balance_be(&1, 1);

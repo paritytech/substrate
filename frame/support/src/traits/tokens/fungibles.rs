@@ -24,7 +24,9 @@ use super::{
 use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
 
+pub mod approvals;
 mod balanced;
+pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
@@ -226,37 +228,4 @@ impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<Acc
 		};
 		<Self as fungibles::Balanced<AccountId>>::slash(asset, who, actual)
 	}
-}
-
-/// Trait for making a set of fungible tokens ERC20 compatible.
-/// https://eips.ethereum.org/EIPS/eip-20
-pub trait Erc20Compatible<AccountId>: Transfer<AccountId> {
-	/// Name of the Asset
-	fn name(asset: Self::AssetId) -> Vec<u8>;
-
-	/// Symbol of the Asset
-	fn symbol(asset: Self::AssetId) -> Vec<u8>;
-
-	/// Number of decimals in which the token is represented
-	fn decimals(asset: Self::AssetId) -> u8;
-
-	// Aprove a delegate account to spend an amount of tokens owned by an owner
-	fn approve(
-		asset: Self::AssetId,
-		owner: &AccountId,
-		delegate: &AccountId,
-		amount: Self::Balance,
-	) -> DispatchResult;
-
-	// Transfer from a delegate account an amount approved by the owner of the asset
-	fn transfer_from(
-		asset: Self::AssetId,
-		owner: &AccountId,
-		delegate: &AccountId,
-		dest: &AccountId,
-		amount: Self::Balance,
-	) -> DispatchResult;
-
-	// Check the amount approved by an owner to be spent by a delegate
-	fn allowance(asset: Self::AssetId, owner: &AccountId, delegate: &AccountId) -> Self::Balance;
 }

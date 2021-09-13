@@ -898,43 +898,7 @@ pub mod pallet {
 			decimals: u8,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-
-			let bounded_name: BoundedVec<u8, T::StringLimit> =
-				name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> =
-				symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
-
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(&origin == &d.owner, Error::<T, I>::NoPermission);
-
-			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
-				ensure!(
-					metadata.as_ref().map_or(true, |m| !m.is_frozen),
-					Error::<T, I>::NoPermission
-				);
-
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				let new_deposit = T::MetadataDepositPerByte::get()
-					.saturating_mul(((name.len() + symbol.len()) as u32).into())
-					.saturating_add(T::MetadataDepositBase::get());
-
-				if new_deposit > old_deposit {
-					T::Currency::reserve(&origin, new_deposit - old_deposit)?;
-				} else {
-					T::Currency::unreserve(&origin, old_deposit - new_deposit);
-				}
-
-				*metadata = Some(AssetMetadata {
-					deposit: new_deposit,
-					name: bounded_name,
-					symbol: bounded_symbol,
-					decimals,
-					is_frozen: false,
-				});
-
-				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, false));
-				Ok(())
-			})
+			Self::do_set_metadata(id, &origin, name, symbol, decimals)
 		}
 
 		/// Clear the metadata for an asset.
