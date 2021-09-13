@@ -207,8 +207,7 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// as-is for the second time will fail or produce unwanted results.
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
-#[derive(Debug)]
-#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
@@ -322,7 +321,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 					if !first {
 						promoted.push(current_hash);
 					}
-					// The transactions were removed from the ready pool. We might attempt to re-import them.
+					// The transactions were removed from the ready pool. We might attempt to
+					// re-import them.
 					removed.append(&mut replaced);
 				},
 				// transaction failed to be imported.
@@ -382,9 +382,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 
 	/// Makes sure that the transactions in the queues stay within provided limits.
 	///
-	/// Removes and returns worst transactions from the queues and all transactions that depend on them.
-	/// Technically the worst transaction should be evaluated by computing the entire pending set.
-	/// We use a simplified approach to remove the transaction that occupies the pool for the longest time.
+	/// Removes and returns worst transactions from the queues and all transactions that depend on
+	/// them. Technically the worst transaction should be evaluated by computing the entire pending
+	/// set. We use a simplified approach to remove the transaction that occupies the pool for the
+	/// longest time.
 	pub fn enforce_limits(
 		&mut self,
 		ready: &Limit,

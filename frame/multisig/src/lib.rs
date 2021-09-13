@@ -127,8 +127,8 @@ pub mod pallet {
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		/// The base amount of currency needed to reserve for creating a multisig execution or to store
-		/// a dispatch call for later.
+		/// The base amount of currency needed to reserve for creating a multisig execution or to
+		/// store a dispatch call for later.
 		///
 		/// This is held for an additional storage item whose value size is
 		/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes and whose key size is
@@ -333,9 +333,8 @@ pub mod pallet {
 		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
 		/// - One event.
 		/// - The weight of the `call`.
-		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
-		///   deposit taken for its lifetime of
-		///   `DepositBase + threshold * DepositFactor`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
+		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
 		/// -------------------------------
 		/// - DB Weight:
 		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
@@ -400,9 +399,8 @@ pub mod pallet {
 		/// - Up to one binary search and insert (`O(logS + S)`).
 		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
 		/// - One event.
-		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
-		///   deposit taken for its lifetime of
-		///   `DepositBase + threshold * DepositFactor`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
+		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
 		/// ----------------------------------
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account]

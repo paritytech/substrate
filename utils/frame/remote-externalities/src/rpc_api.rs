@@ -88,3 +88,24 @@ async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
 		.await
 		.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
 }
+
+/// Get the runtime version of a given chain.
+pub async fn get_runtime_version<Block, S>(
+	from: S,
+	at: Option<Block::Hash>,
+) -> Result<sp_version::RuntimeVersion, String>
+where
+	S: AsRef<str>,
+	Block: BlockT + serde::de::DeserializeOwned,
+	Block::Header: HeaderT,
+{
+	let params = if let Some(at) = at { vec![hash_to_json::<Block>(at)?] } else { vec![] };
+	let client = build_client(from).await?;
+	client
+		.request::<sp_version::RuntimeVersion>(
+			"state_getRuntimeVersion",
+			JsonRpcParams::Array(params),
+		)
+		.await
+		.map_err(|e| format!("state_getRuntimeVersion request failed: {:?}", e))
+}

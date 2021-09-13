@@ -238,9 +238,23 @@ impl<N: Zero> Lateness<N> for () {
 }
 
 /// Implementors of this trait provide information about whether or not some validator has
-/// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
+/// been registered with them. The [Session module](../../pallet_session/index.html) is an
+/// implementor.
 pub trait ValidatorRegistration<ValidatorId> {
 	/// Returns true if the provided validator ID has been registered with the implementing runtime
 	/// module
 	fn is_registered(id: &ValidatorId) -> bool;
+}
+
+/// Trait used to check whether a given validator is currently disabled and should not be
+/// participating in consensus (e.g. because they equivocated).
+pub trait DisabledValidators {
+	/// Returns true if the given validator is disabled.
+	fn is_disabled(index: u32) -> bool;
+}
+
+impl DisabledValidators for () {
+	fn is_disabled(_index: u32) -> bool {
+		false
+	}
 }

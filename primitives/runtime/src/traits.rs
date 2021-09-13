@@ -738,8 +738,8 @@ pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 	///
 	/// Extrinsics can be split into:
 	/// 1. Inherents (no signature; created by validators during block production)
-	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of calls)
-	/// 3. Signed Transactions (with signature; a regular transactions with known origin)
+	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of
+	/// calls) 3. Signed Transactions (with signature; a regular transactions with known origin)
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
 		None
 	}
@@ -765,8 +765,8 @@ pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-/// Implement for pieces of information that require some additional context `Context` in order to be
-/// checked.
+/// Implement for pieces of information that require some additional context `Context` in order to
+/// be checked.
 pub trait Checkable<Context>: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
@@ -1585,6 +1585,14 @@ pub trait BlockNumberProvider {
 	/// ```
 	/// .
 	fn current_block_number() -> Self::BlockNumber;
+
+	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+	/// else a noop.
+	///
+	/// It allows for setting the block number that will later be fetched
+	/// This is useful in case the block number provider is different than System
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_block_number(_block: Self::BlockNumber) {}
 }
 
 #[cfg(test)]

@@ -60,9 +60,8 @@ use std::{
 	io, iter,
 	pin::Pin,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
 
@@ -310,7 +309,8 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// If there is no established connection to the target peer, the behavior is determined by the choice of `connect`.
+	/// If there is no established connection to the target peer, the behavior is determined by the
+	/// choice of `connect`.
 	///
 	/// An error is returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(
@@ -566,6 +566,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								address,
 								score,
 							}),
+						NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+							return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+								peer_id,
+								connection,
+							}),
 					};
 
 					match ev {
@@ -700,8 +705,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out))
 						},
 
-						// An inbound request failed, either while reading the request or due to failing
-						// to send a response.
+						// An inbound request failed, either while reading the request or due to
+						// failing to send a response.
 						RequestResponseEvent::InboundFailure {
 							request_id, peer, error, ..
 						} => {
@@ -773,16 +778,16 @@ pub enum RequestFailure {
 	/// The remote replied, but the local node is no longer interested in the response.
 	Obsolete,
 	/// Problem on the network.
-	#[display(fmt = "Problem on the network")]
-	Network(#[error(ignore)] OutboundFailure),
+	#[display(fmt = "Problem on the network: {}", _0)]
+	Network(OutboundFailure),
 }
 
 /// Error when processing a request sent by a remote.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
 pub enum ResponseFailure {
 	/// Problem on the network.
-	#[display(fmt = "Problem on the network")]
-	Network(#[error(ignore)] InboundFailure),
+	#[display(fmt = "Problem on the network: {}", _0)]
+	Network(InboundFailure),
 }
 
 /// Implements the libp2p [`RequestResponseCodec`] trait. Defines how streams of bytes are turned
@@ -1008,7 +1013,7 @@ mod tests {
 				let (mut swarm, _) = swarms.remove(0);
 				async move {
 					loop {
-						match swarm.next_event().await {
+						match swarm.select_next_some().await {
 							SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 								result.unwrap();
 							},
@@ -1027,7 +1032,7 @@ mod tests {
 			let mut response_receiver = None;
 
 			loop {
-				match swarm.next_event().await {
+				match swarm.select_next_some().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
 						swarm.behaviour_mut().send_request(
@@ -1105,7 +1110,7 @@ mod tests {
 				let (mut swarm, _) = swarms.remove(0);
 				async move {
 					loop {
-						match swarm.next_event().await {
+						match swarm.select_next_some().await {
 							SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 								assert!(result.is_ok());
 								break
@@ -1125,7 +1130,7 @@ mod tests {
 			let mut response_receiver = None;
 
 			loop {
-				match swarm.next_event().await {
+				match swarm.select_next_some().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
 						swarm.behaviour_mut().send_request(
@@ -1225,7 +1230,7 @@ mod tests {
 			.spawn_obj(
 				async move {
 					loop {
-						match swarm_2.next_event().await {
+						match swarm_2.select_next_some().await {
 							SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 								result.unwrap();
 							},
@@ -1278,7 +1283,7 @@ mod tests {
 			let mut num_responses = 0;
 
 			loop {
-				match swarm_1.next_event().await {
+				match swarm_1.select_next_some().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender_1, receiver_1) = oneshot::channel();
 						let (sender_2, receiver_2) = oneshot::channel();

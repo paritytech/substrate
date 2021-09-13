@@ -29,6 +29,7 @@ use sc_client_api::{
 	backend::{self, Backend},
 	CallExecutor, ExecutorProvider,
 };
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{OverlayedChanges, StorageTransactionCache};
@@ -51,7 +52,7 @@ pub struct Node<T: ChainInfo> {
 	/// handle to the running node.
 	task_manager: Option<TaskManager>,
 	/// client instance
-	client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+	client: Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>>,
 	/// transaction pool
 	pool: Arc<
 		dyn TransactionPool<
@@ -86,7 +87,9 @@ where
 	pub fn new(
 		rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 		task_manager: TaskManager,
-		client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+		client: Arc<
+			TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
+		>,
 		pool: Arc<
 			dyn TransactionPool<
 				Block = <T as ChainInfo>::Block,
@@ -126,14 +129,33 @@ where
 	}
 
 	/// Return a reference to the Client
-	pub fn client(&self) -> Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>> {
+	pub fn client(
+		&self,
+	) -> Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>> {
 		self.client.clone()
+	}
+
+	/// Return a reference to the pool.
+	pub fn pool(
+		&self,
+	) -> Arc<
+		dyn TransactionPool<
+			Block = <T as ChainInfo>::Block,
+			Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
+			Error = sc_transaction_pool::error::Error,
+			InPoolTransaction = sc_transaction_pool::Transaction<
+				<<T as ChainInfo>::Block as BlockT>::Hash,
+				<<T as ChainInfo>::Block as BlockT>::Extrinsic,
+			>,
+		>,
+	> {
+		self.pool.clone()
 	}
 
 	/// Executes closure in an externalities provided environment.
 	pub fn with_state<R>(&self, closure: impl FnOnce() -> R) -> R
 	where
-		<TFullCallExecutor<T::Block, T::Executor> as CallExecutor<T::Block>>::Error:
+		<TFullCallExecutor<T::Block, NativeElseWasmExecutor<T::ExecutorDispatch>> as CallExecutor<T::Block>>::Error:
 			std::fmt::Debug,
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
@@ -164,11 +186,11 @@ where
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 
-	/// submit some extrinsic to the node, providing the sending account.
+	/// submit some extrinsic to the node. if signer is None, will submit unsigned_extrinsic.
 	pub async fn submit_extrinsic(
 		&self,
 		call: impl Into<<T::Runtime as frame_system::Config>::Call>,
-		from: <T::Runtime as frame_system::Config>::AccountId,
+		signer: Option<<T::Runtime as frame_system::Config>::AccountId>,
 	) -> Result<<T::Block as BlockT>::Hash, sc_transaction_pool::error::Error>
 	where
 		<T::Block as BlockT>::Extrinsic: From<
@@ -183,8 +205,12 @@ where
 			>,
 		>,
 	{
-		let extra = self.with_state(|| T::signed_extras(from.clone()));
-		let signed_data = Some((from.into(), MultiSignature::Sr25519(Default::default()), extra));
+		let signed_data = if let Some(signer) = signer {
+			let extra = self.with_state(|| T::signed_extras(signer.clone()));
+			Some((signer.into(), MultiSignature::Sr25519(Default::default()), extra))
+		} else {
+			None
+		};
 		let ext = UncheckedExtrinsic::<
 			MultiAddress<
 				<T::Runtime as frame_system::Config>::AccountId,
@@ -224,10 +250,12 @@ where
 			future.await.expect(ERROR);
 
 			match future_block.await.expect(ERROR) {
-				Ok(block) =>
-					log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
-				Err(err) =>
-					log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err),
+				Ok(block) => {
+					log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num)
+				},
+				Err(err) => {
+					log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err)
+				},
 			}
 		}
 	}

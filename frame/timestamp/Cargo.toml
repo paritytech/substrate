@@ -24,7 +24,6 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../primitives/timestamp" }
-impl-trait-for-tuples = "0.2.1"
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]

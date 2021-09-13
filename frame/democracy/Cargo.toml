@@ -14,7 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
@@ -26,9 +28,6 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
-sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-hex-literal = "0.3.1"
 
 [features]
 default = ["std"]

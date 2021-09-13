@@ -89,7 +89,8 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
 	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
@@ -176,7 +177,8 @@ pub trait StateApi<Hash> {
 	/// ## Node requirements
 	///
 	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
-	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
+	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime
+	///   versions
 	/// for which tracing is desired.
 	///
 	/// ## Node recommendations
@@ -192,10 +194,12 @@ pub trait StateApi<Hash> {
 	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
 	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
 	/// - Compile the runtime with `cargo build --release --features with-tracing`
-	/// - Tracing-enabled WASM runtime should be found in `./target/release/wbuild/{{chain}}-runtime`
+	/// - Tracing-enabled WASM runtime should be found in
+	///   `./target/release/wbuild/{{chain}}-runtime`
 	/// and be called something like `{{your_chain}}_runtime.compact.wasm`. This can be
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
-	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
+	/// - Run the node with the wasm blob overrides by placing them in a folder with all your
+	///   runtimes,
 	/// and passing the path of this folder to your chain, e.g.:
 	/// - `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
@@ -218,17 +222,55 @@ pub trait StateApi<Hash> {
 	///
 	/// ### `curl` example
 	///
+	/// - Get tracing spans and events
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
 	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
-	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "pallet,frame,state", "", ""]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with all `storage_keys`
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", ""]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with `storage_keys` ('f0c365c3cf59d671eb72da0e7a4113c4')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", ""]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with `storage_keys` ('f0c365c3cf59d671eb72da0e7a4113c4') and method
+	///   ('Put')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", "Put"]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with all `storage_keys` and method ('Put')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", "Put"]}' \
 	/// 	http://localhost:9933/
 	/// ```
 	///
 	/// ### Params
 	///
-	/// - `block_hash` (param index 0): Hash of the block to trace.
+	/// - `block` (param index 0): Hash of the block to trace.
 	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
 	/// targets match with trace targets by prefix (i.e if a target is in the beginning
 	/// of a trace target it is considered a match). If an empty string is specified no
@@ -247,6 +289,10 @@ pub trait StateApi<Hash> {
 	/// which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
 	/// the storage prefix for the map:
 	/// `26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
+	/// - `methods` (param index 3): String of comma separated (no spaces) tracing event method.
+	/// If an empty string is specified no events will be filtered out. If anything other than
+	/// an empty string is specified, events will be filtered by method (so non-method events will
+	/// **not** show up).
 	///
 	/// Additionally you would want to track the extrinsic index, which is under the
 	/// `:extrinsic_index` key. The key for this would be the aforementioned string as bytes
@@ -273,5 +319,6 @@ pub trait StateApi<Hash> {
 		block: Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
