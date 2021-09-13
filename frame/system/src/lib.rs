@@ -115,7 +115,7 @@ pub mod weights;
 
 pub use extensions::{
 	check_genesis::CheckGenesis, check_mortality::CheckMortality, check_nonce::CheckNonce,
-	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
+	check_pov::CheckPov, check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
 	check_weight::CheckWeight,
 };
 // Backward compatible re-export.
@@ -170,6 +170,9 @@ pub mod pallet {
 		/// The maximum length of a block (in bytes).
 		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
+
+		#[pallet::constant]
+		type PovParams: Get<limits::PovParams>;
 
 		/// The `Origin` type used by dispatchable calls.
 		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -579,6 +582,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
+
+	/// The current PoV size for the block.
+	#[pallet::storage]
+	#[pallet::getter(fn pov_size)]
+	pub(super) type PovSize<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// Total length (in bytes) for all extrinsics put together, for the current block.
 	#[pallet::storage]
@@ -1362,6 +1370,7 @@ impl<T: Config> Pallet<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::<T>::kill();
+		PovSize::<T>::kill();
 
 		// Kill inspectable storage entries in state when `InitKind::Full`.
 		if let InitKind::Full = kind {

@@ -477,6 +477,7 @@ mod tests {
 				weight: 100,
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
+				pov_size: 0,
 			};
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
@@ -507,12 +508,17 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_works() {
 		new_test_ext().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+				pov_size: 0,
+			};
 			let op = DispatchInfo {
 				weight: 100,
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
+				pov_size: 0,
 			};
 			let len = 0_usize;
 
@@ -548,8 +554,12 @@ mod tests {
 			reset_check_weight(&normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
-			let op =
-				DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: Pays::Yes };
+			let op = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+				pov_size: 0,
+			};
 			reset_check_weight(&op, normal_limit, false);
 			reset_check_weight(&op, normal_limit + 100, false);
 			reset_check_weight(&op, 1024, false);

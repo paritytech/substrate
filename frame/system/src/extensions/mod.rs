@@ -18,6 +18,7 @@
 pub mod check_genesis;
 pub mod check_mortality;
 pub mod check_nonce;
+pub mod check_pov;
 pub mod check_spec_version;
 pub mod check_tx_version;
 pub mod check_weight;

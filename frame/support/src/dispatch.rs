@@ -2097,6 +2097,7 @@ macro_rules! decl_module {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
 							let __pallet_base_weight = $weight;
+							let __pallet_pov_size = 0;
 							let __pallet_weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
 								&__pallet_base_weight,
 								($( $param_name, )*)
@@ -2113,6 +2114,7 @@ macro_rules! decl_module {
 								weight: __pallet_weight,
 								class: __pallet_class,
 								pays_fee: __pallet_pays_fee,
+								pov_size: __pallet_pov_size,
 							}
 						},
 					)*

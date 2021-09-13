@@ -19,7 +19,7 @@ use crate::{pallet::Def, COUNTER};
 use frame_support_procedural_tools::clean_type_string;
 use syn::spanned::Spanned;
 
-///
+/// 
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
@@ -34,6 +34,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		},
 		None => (def.item.span(), None, Vec::new(), Vec::new()),
 	};
+	let zero_expr: syn::Expr =
+		syn::ExprLit { attrs: Vec::new(), lit: syn::Lit::from(syn::LitInt::new("0", span)) }.into();
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
 	let type_impl_gen = &def.type_impl_generics(span);
@@ -45,6 +47,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
 
 	let fn_weight = methods.iter().map(|method| &method.weight);
+
+	let fn_pov_size = methods.iter().map(|method| method.pov_size.as_ref().unwrap_or(&zero_expr));
 
 	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
@@ -154,6 +158,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 					#(
 						Self::#fn_name ( #( ref #args_name, )* ) => {
 							let __pallet_base_weight = #fn_weight;
+							let __pallet_pov_size = #fn_pov_size;
 
 							let __pallet_weight = <
 								dyn #frame_support::dispatch::WeighData<( #( & #args_type, )* )>
@@ -173,6 +178,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 								weight: __pallet_weight,
 								class: __pallet_class,
 								pays_fee: __pallet_pays_fee,
+								pov_size: __pallet_pov_size,
 							}
 						},
 					)*

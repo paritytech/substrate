@@ -110,8 +110,12 @@ mod tests {
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+				pov_size: 0,
+			};
 			let len = 0_usize;
 			let ext = (
 				crate::CheckWeight::<Test>::new(),

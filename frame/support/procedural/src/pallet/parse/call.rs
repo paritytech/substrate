@@ -27,6 +27,7 @@ mod keyword {
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(pallet);
+	syn::custom_keyword!(pov_size);
 }
 
 /// Definition of dispatchables typically `impl<T: Config> Pallet<T> { ... }`
@@ -54,14 +55,17 @@ pub struct CallVariantDef {
 	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
 	/// Weight formula.
 	pub weight: syn::Expr,
+	/// PoV size formula, if supplied.
+	pub pov_size: Option<syn::Expr>,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
 }
 
 /// Attributes for functions in call impl block.
-/// Parse for `#[pallet::weight(expr)]`
-pub struct FunctionAttr {
-	weight: syn::Expr,
+/// Parse for `#[pallet::weight(expr)]` or `#[pallet::pov_size(expr)]`
+pub enum FunctionAttr {
+	Weight(syn::Expr),
+	PovSize(syn::Expr),
 }
 
 impl syn::parse::Parse for FunctionAttr {
@@ -71,11 +75,21 @@ impl syn::parse::Parse for FunctionAttr {
 		syn::bracketed!(content in input);
 		content.parse::<keyword::pallet>()?;
 		content.parse::<syn::Token![::]>()?;
-		content.parse::<keyword::weight>()?;
 
-		let weight_content;
-		syn::parenthesized!(weight_content in content);
-		Ok(FunctionAttr { weight: weight_content.parse::<syn::Expr>()? })
+		let lookahead = content.lookahead1();
+		if lookahead.peek(keyword::weight) {
+			content.parse::<keyword::weight>()?;
+			let weight_content;
+			syn::parenthesized!(weight_content in content);
+			Ok(FunctionAttr::Weight(weight_content.parse()?))
+		} else if lookahead.peek(keyword::pov_size) {
+			content.parse::<keyword::pov_size>()?;
+			let pov_size_content;
+			syn::parenthesized!(pov_size_content in content);
+			Ok(FunctionAttr::PovSize(pov_size_content.parse()?))
+		} else {
+			Err(lookahead.error())
+		}
 	}
 }
 
@@ -180,18 +194,39 @@ impl CallDef {
 					return Err(syn::Error::new(method.sig.span(), msg))
 				}
 
-				let mut call_var_attrs: Vec<FunctionAttr> =
+				let call_var_attrs: Vec<FunctionAttr> =
 					helper::take_item_pallet_attrs(&mut method.attrs)?;
 
-				if call_var_attrs.len() != 1 {
-					let msg = if call_var_attrs.is_empty() {
+				let (mut weight_attrs, mut pov_size_attrs) = call_var_attrs
+					.into_iter()
+					.partition::<Vec<_>, _>(|attr| matches!(attr, FunctionAttr::Weight(_)));
+				if weight_attrs.len() != 1 {
+					let msg = if weight_attrs.is_empty() {
 						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
 					} else {
 						"Invalid pallet::call, too many weight attributes given"
 					};
 					return Err(syn::Error::new(method.sig.span(), msg))
 				}
-				let weight = call_var_attrs.pop().unwrap().weight;
+				let weight = if let FunctionAttr::Weight(e) = weight_attrs.pop().unwrap() {
+					e
+				} else {
+					unreachable!()
+				};
+
+				let pov_size = if pov_size_attrs.len() == 1 {
+					if let FunctionAttr::PovSize(e) = pov_size_attrs.pop().unwrap() {
+						Some(e)
+					} else {
+						unreachable!()
+					}
+				} else {
+					if pov_size_attrs.len() > 1 {
+						let msg = "Invalid pallet::call, too many pov_size attributes given";
+						return Err(syn::Error::new(method.sig.span(), msg))
+					}
+					None
+				};
 
 				let mut args = vec![];
 				for arg in method.sig.inputs.iter_mut().skip(1) {
@@ -221,7 +256,13 @@ impl CallDef {
 
 				let docs = helper::get_doc_literals(&method.attrs);
 
-				methods.push(CallVariantDef { name: method.sig.ident.clone(), weight, args, docs });
+				methods.push(CallVariantDef {
+					name: method.sig.ident.clone(),
+					weight,
+					pov_size,
+					args,
+					docs,
+				});
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";
 				return Err(syn::Error::new(impl_item.span(), msg))

@@ -74,6 +74,7 @@ parameter_types! {
 		.build_or_panic();
 	pub RuntimeBlockLength: limits::BlockLength =
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
+	pub RuntimePovParams: limits::PovParams = limits::PovParams::default();
 }
 
 thread_local! {
@@ -91,6 +92,7 @@ impl Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
+	type PovParams = RuntimePovParams;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;

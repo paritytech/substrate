@@ -428,6 +428,21 @@ impl BlockWeightsBuilder {
 	}
 }
 
+/// Proof-of-Validity (PoV) configuration parameters.
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
+pub struct PovParams {
+	/// Maximum PoV size in bytes available in each block.
+	pub max_size: u32,
+}
+
+impl Default for PovParams {
+	fn default() -> Self {
+		Self {
+			max_size: 4 * 1024 * 1024, // 4MB
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

@@ -36,7 +36,7 @@ use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
 use frame_support::{parameter_types, traits::KeyOwnerProofSystem, weights::RuntimeDbWeight};
-use frame_system::limits::{BlockLength, BlockWeights};
+use frame_system::limits::{BlockLength, BlockWeights, PovParams};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
 use sp_inherents::{CheckInherentsResult, InherentData};
@@ -534,12 +534,14 @@ parameter_types! {
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+	pub RuntimePovParams: PovParams = PovParams::default();
 }
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
+	type PovParams = RuntimePovParams;
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;

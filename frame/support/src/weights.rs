@@ -319,6 +319,8 @@ pub struct DispatchInfo {
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
 	pub pays_fee: Pays,
+	/// PoV size used by this transaction.
+	pub pov_size: u32,
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
