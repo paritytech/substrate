@@ -644,7 +644,7 @@ macro_rules! benchmark_backend {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, &'static str> {
+			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
 				$(
 					// Prepare instance
 					let $param = components.iter()
@@ -717,7 +717,7 @@ macro_rules! selected_benchmark {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, &'static str> {
+			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
 				match self {
 					$(
 						Self::$bench => <
@@ -1246,7 +1246,7 @@ macro_rules! impl_benchmark_test_suite {
 									}
 								}
 							},
-							Ok(Ok(_)) => (),
+							Ok(Ok(())) => (),
 						}
 					}
 					assert!(!anything_failed);

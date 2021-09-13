@@ -160,8 +160,6 @@ where
 }
 
 impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
 }

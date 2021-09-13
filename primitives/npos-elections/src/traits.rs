@@ -112,7 +112,6 @@ where
 	/// Compute the score of this solution type.
 	fn score<A, FS>(
 		self,
-		winners: &[A],
 		stake_of: FS,
 		voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
 		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
@@ -123,7 +122,7 @@ where
 	{
 		let ratio = self.into_assignment(voter_at, target_at)?;
 		let staked = crate::helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
-		let supports = crate::to_supports(winners, &staked)?;
+		let supports = crate::to_supports(&staked);
 		Ok(supports.evaluate())
 	}
 
