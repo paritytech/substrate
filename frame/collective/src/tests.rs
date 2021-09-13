@@ -775,7 +775,7 @@ fn motions_reproposing_disapproved_works() {
 }
 
 #[test]
-fn motions_approval_with_enought_votes_and_lower_voting_threshold_works() {
+fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 	new_test_ext().execute_with(|| {
 		let proposal = Call::Democracy(mock_democracy::Call::external_propose_majority());
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
