@@ -132,8 +132,9 @@ benchmarks! {
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::<T>::get() - 1;
-		let curator = T::Lookup::lookup(curator_lookup)?;
+		let bounty_id = BountyCount::get() - 1;
+		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
+
 		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
 	}: _(RawOrigin::Signed(curator), bounty_id, beneficiary)
 
@@ -142,8 +143,8 @@ benchmarks! {
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::<T>::get() - 1;
-		let curator = T::Lookup::lookup(curator_lookup)?;
+		let bounty_id = BountyCount::get() - 1;
+		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
 
 		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
@@ -179,8 +180,8 @@ benchmarks! {
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::<T>::get() - 1;
-		let curator = T::Lookup::lookup(curator_lookup)?;
+		let bounty_id = BountyCount::get() - 1;
+		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 	verify {
 		assert_last_event::<T>(Event::BountyExtended(bounty_id).into())
