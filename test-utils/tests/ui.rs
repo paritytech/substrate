@@ -19,6 +19,5 @@
 #[test]
 fn substrate_test_utils_derive_trybuild() {
 	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/ui/missing-func-parameter.rs");
 	t.compile_fail("tests/ui/too-many-func-parameters.rs");
 }
