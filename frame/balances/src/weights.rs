@@ -51,6 +51,7 @@ pub trait WeightInfo {
 	fn set_balance_killing() -> Weight;
 	fn force_transfer() -> Weight;
 	fn transfer_all() -> Weight;
+	fn force_unreserve() -> Weight;
 }
 
 /// Weights for pallet_balances using the Substrate node and recommended hardware.
@@ -92,6 +93,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+	// Storage: System Account (r:1 w:1)
+	fn force_unreserve() -> Weight {
+		(67_749_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -128,6 +135,12 @@ impl WeightInfo for () {
 	}
 	// Storage: System Account (r:1 w:1)
 	fn transfer_all() -> Weight {
+		(67_749_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:1)
+	fn force_unreserve() -> Weight {
 		(67_749_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
