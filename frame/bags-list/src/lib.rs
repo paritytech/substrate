@@ -92,7 +92,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	// #[pallet::generate_storage_info]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -220,7 +220,7 @@ impl<T: Config> Pallet<T> {
 	) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T::AccountId>::get::<T>(&account)
+		let maybe_movement = list::Node::<T>::get(&account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
@@ -279,7 +279,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Ok(())
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
+	// #[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
 		List::<T>::clear(None)
 	}
@@ -288,7 +288,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
 		use frame_support::traits::Get as _;
 		let thresholds = T::BagThresholds::get();
-		let node = list::Node::<T::AccountId>::get::<T>(who).unwrap();
+		let node = list::Node::<T>::get(who).unwrap();
 		let current_bag_idx = thresholds
 			.iter()
 			.chain(sp_std::iter::once(&VoteWeight::MAX))
