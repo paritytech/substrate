@@ -1,0 +1,28 @@
+error: Invalid pallet part specified, the pallet `Pallet` doesn't have the part `Call`. Available parts are: `Storage`, `Pallet`.
+  --> $DIR/use_undefined_part.rs:33:30
+   |
+33 |         Pallet: pallet use_parts { Call },
+   |                                    ^^^^
+
+error[E0412]: cannot find type `Call` in this scope
+  --> $DIR/use_undefined_part.rs:22:64
+   |
+22 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+   |                                                                ^^^^ not found in this scope
+   |
+help: consider importing one of these items
+   |
+1  | use crate::pallet::Call;
+   |
+1  | use frame_support_test::Call;
+   |
+1  | use frame_system::Call;
+   |
+1  | use test_pallet::Call;
+   |
+
+error[E0412]: cannot find type `Runtime` in this scope
+  --> $DIR/use_undefined_part.rs:24:25
+   |
+24 | impl pallet::Config for Runtime {}
+   |                         ^^^^^^^ not found in this scope

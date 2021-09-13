@@ -39,12 +39,12 @@ mod keyword {
 	syn::custom_keyword!(Inherent);
 	syn::custom_keyword!(ValidateUnsigned);
 	syn::custom_keyword!(exclude_parts);
+	syn::custom_keyword!(use_parts);
 }
 
 /// Declaration of a runtime.
 ///
-/// Pallet declare their part either explicitly or implicitly (using `exclude_parts` or no part
-/// declaration)
+/// Pallet declare their part either explicitly or implicitly (using no part declaration)
 /// If all pallet have explicit parts then the runtime declaration is explicit, otherwise it is
 /// implicit.
 #[derive(Debug)]
@@ -181,7 +181,18 @@ pub struct PalletDeclaration {
 	pub path: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Option<Vec<PalletPart>>,
-	pub excluded_parts: Option<Vec<ExcludedPalletPart>>,
+	pub specified_parts: SpecifiedParts,
+}
+
+/// The possible declaration of pallet parts to use.
+#[derive(Debug, Clone)]
+pub enum SpecifiedParts {
+	/// Use all the pallet parts except those specified.
+	Exclude(Vec<PalletPartNoGeneric>),
+	/// Use only the specified pallet parts.
+	Use(Vec<PalletPartNoGeneric>),
+	/// use the all the pallet parts.
+	All,
 }
 
 impl Parse for PalletDeclaration {
@@ -199,12 +210,13 @@ impl Parse for PalletDeclaration {
 			res
 		} else if !(input.peek(Token![::]) && input.peek3(token::Brace)) &&
 			!input.peek(keyword::exclude_parts) &&
+			!input.peek(keyword::use_parts) &&
 			!input.peek(Token![=]) &&
 			!input.peek(Token![,]) &&
 			!input.is_empty()
 		{
 			return Err(input.error(
-				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `=`, `,`",
+				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
 			))
 		} else {
 			None
@@ -215,25 +227,29 @@ impl Parse for PalletDeclaration {
 			let _: Token![::] = input.parse()?;
 			Some(parse_pallet_parts(input)?)
 		} else if !input.peek(keyword::exclude_parts) &&
+			!input.peek(keyword::use_parts) &&
 			!input.peek(Token![=]) &&
 			!input.peek(Token![,]) &&
 			!input.is_empty()
 		{
 			return Err(
-				input.error("Unexpected tokens, expected one of `::{`, `exclude_parts`, `=`, `,`")
+				input.error("Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`")
 			)
 		} else {
 			None
 		};
 
-		// Parse for excluded parts
-		let excluded_parts = if input.peek(keyword::exclude_parts) {
+		// Parse for specified parts
+		let specified_parts = if input.peek(keyword::exclude_parts) {
 			let _: keyword::exclude_parts = input.parse()?;
-			Some(parse_excluded_pallet_parts(input)?)
+			SpecifiedParts::Exclude(parse_pallet_parts_no_generic(input)?)
+		} else if input.peek(keyword::use_parts) {
+			let _: keyword::use_parts = input.parse()?;
+			SpecifiedParts::Use(parse_pallet_parts_no_generic(input)?)
 		} else if !input.peek(Token![=]) && !input.peek(Token![,]) && !input.is_empty() {
 			return Err(input.error("Unexpected tokens, expected one of `exclude_parts`, `=`, `,`"))
 		} else {
-			None
+			SpecifiedParts::All
 		};
 
 		// Parse for pallet index
@@ -248,7 +264,7 @@ impl Parse for PalletDeclaration {
 			None
 		};
 
-		Ok(Self { name, path, instance, pallet_parts, excluded_parts, index })
+		Ok(Self { name, path, instance, pallet_parts, specified_parts, index })
 	}
 }
 
@@ -448,23 +464,23 @@ fn remove_kind(
 	}
 }
 
-/// The declaration of an excluded part
+/// The declaration of a part without its generics
 #[derive(Debug, Clone)]
-pub struct ExcludedPalletPart {
+pub struct PalletPartNoGeneric {
 	keyword: PalletPartKeyword,
 }
 
-impl Parse for ExcludedPalletPart {
+impl Parse for PalletPartNoGeneric {
 	fn parse(input: ParseStream) -> Result<Self> {
 		Ok(Self { keyword: input.parse()? })
 	}
 }
 
-/// Parse [`ExcludedPalletPart`]'s from a braces enclosed list that is split by commas, e.g.
+/// Parse [`PalletPartNoGeneric`]'s from a braces enclosed list that is split by commas, e.g.
 ///
 /// `{ Call, Event }`
-fn parse_excluded_pallet_parts(input: ParseStream) -> Result<Vec<ExcludedPalletPart>> {
-	let pallet_parts: ext::Braces<ext::Punctuated<ExcludedPalletPart, Token![,]>> =
+fn parse_pallet_parts_no_generic(input: ParseStream) -> Result<Vec<PalletPartNoGeneric>> {
+	let pallet_parts: ext::Braces<ext::Punctuated<PalletPartNoGeneric, Token![,]>> =
 		input.parse()?;
 
 	let mut resolved = HashSet::new();
@@ -561,13 +577,53 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 
 			let mut pallet_parts = pallet.pallet_parts.expect("Checked above");
 
-			// Remove exlcuded parts
-			let excluded_parts = pallet.excluded_parts.unwrap_or(vec![]);
-			pallet_parts.retain(|part| {
-				!excluded_parts
-					.iter()
-					.any(|excluded_part| excluded_part.keyword.name() == part.keyword.name())
-			});
+			let available_parts = pallet_parts.iter()
+				.map(|part| part.keyword.name())
+				.collect::<HashSet<_>>();
+
+			// Check parts are correctly specified
+			match &pallet.specified_parts {
+				SpecifiedParts::Exclude(parts) | SpecifiedParts::Use(parts) => {
+					for part in parts {
+						if !available_parts.contains(part.keyword.name()) {
+							let msg = format!(
+								"Invalid pallet part specified, the pallet `{}` doesn't have the \
+								part `{}`. Available parts are: {}.",
+								pallet.name,
+								part.keyword.name(),
+								available_parts.iter()
+									.enumerate()
+									.fold(String::new(), |fold, (index, part)| {
+										if index == 0 {
+											format!("`{}`", part)
+										} else {
+											format!("{}, `{}`", fold, part)
+										}
+									})
+							);
+							return Err(syn::Error::new(part.keyword.span(), msg));
+						}
+					}
+				},
+				SpecifiedParts::All => (),
+			}
+
+			// Set only specified parts.
+			match pallet.specified_parts {
+				SpecifiedParts::Exclude(excluded_parts) =>
+					pallet_parts.retain(|part|
+						!excluded_parts
+							.iter()
+							.any(|excluded_part| excluded_part.keyword.name() == part.keyword.name())
+					),
+				SpecifiedParts::Use(used_parts) =>
+					pallet_parts.retain(|part|
+						used_parts
+							.iter()
+							.any(|use_part| use_part.keyword.name() == part.keyword.name())
+					),
+				SpecifiedParts::All => (),
+			}
 
 			Ok(Pallet {
 				name: pallet.name,
