@@ -17,7 +17,9 @@
 
 use super::*;
 use crate as multi_phase;
-use frame_election_provider_support::{data_provider, ElectionDataProvider, SequentialPhragmen};
+use frame_election_provider_support::{
+	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
@@ -57,7 +59,7 @@ frame_support::construct_runtime!(
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
-pub(crate) type BlockNumber = u32;
+pub(crate) type BlockNumber = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 
@@ -76,7 +78,7 @@ pub(crate) fn multi_phase_events() -> Vec<super::Event<Runtime>> {
 }
 
 /// To from `now` to block `n`.
-pub fn roll_to(n: u64) {
+pub fn roll_to(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
@@ -84,7 +86,7 @@ pub fn roll_to(n: u64) {
 	}
 }
 
-pub fn roll_to_with_ocw(n: u64) {
+pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
@@ -197,7 +199,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
@@ -251,10 +253,9 @@ parameter_types! {
 		(40, 40, vec![40]),
 	];
 
-	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
 	pub static DesiredTargets: u32 = 2;
-	pub static SignedPhase: u64 = 10;
-	pub static UnsignedPhase: u64 = 5;
+	pub static SignedPhase: BlockNumber = 10;
+	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
@@ -269,6 +270,27 @@ parameter_types! {
 	pub static MockWeightInfo: bool = false;
 
 	pub static EpochLength: u64 = 30;
+	pub static OnChianFallback: bool = true;
+}
+
+impl onchain::Config for Runtime {
+	type Accuracy = sp_runtime::Perbill;
+	type DataProvider = StakingMock;
+}
+
+pub struct MockFallback;
+impl ElectionProvider<AccountId, u64> for MockFallback {
+	type Error = &'static str;
+	type DataProvider = StakingMock;
+
+	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+		if OnChianFallback::get() {
+			onchain::OnChainSequentialPhragmen::<Runtime>::elect()
+				.map_err(|_| "OnChainSequentialPhragmen failed")
+		} else {
+			super::NoFallback::<Runtime>::elect()
+		}
+	}
 }
 
 // Hopefully this won't be too much of a hassle to maintain.
@@ -376,8 +398,7 @@ impl crate::Config for Runtime {
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
-	type OnChainAccuracy = Perbill;
-	type Fallback = Fallback;
+	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
@@ -474,13 +495,13 @@ impl ExtBuilder {
 		<SolutionImprovementThreshold>::set(p);
 		self
 	}
-	pub fn phases(self, signed: u64, unsigned: u64) -> Self {
+	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn fallback(self, fallback: FallbackStrategy) -> Self {
-		<Fallback>::set(fallback);
+	pub fn onchain_fallback(self, onchain: bool) -> Self {
+		<OnChianFallback>::set(onchain);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
@@ -555,6 +576,6 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn balances(who: &u64) -> (u64, u64) {
+pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

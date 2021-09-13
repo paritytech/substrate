@@ -1925,6 +1925,8 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "sp-arithmetic",
+ "sp-core",
+ "sp-io",
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",
@@ -4385,6 +4387,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
  "sp-trie",
@@ -5030,7 +5033,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal",
  "log 0.4.14",
  "parity-scale-codec",
  "sp-core",
@@ -8079,6 +8081,7 @@ dependencies = [
  "log 0.4.14",
  "serde_json",
  "substrate-prometheus-endpoint",
+ "tokio",
 ]
 
 [[package]]
