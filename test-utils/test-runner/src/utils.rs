@@ -76,6 +76,7 @@ pub fn default_config(tokio_handle: Handle, mut chain_spec: Box<dyn ChainSpec>) 
 		network: network_config,
 		keystore: KeystoreConfig::Path { path: root_path.join("key"), password: None },
 		database: DatabaseSource::RocksDb { path: root_path.join("db"), cache_size: 128 },
+		trie_cache_size: 16777216,
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		chain_spec,

@@ -34,10 +34,11 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 }
 
 /// Wrap parity-db database into a trait object that implements `sp_database::Database`
-pub fn open<H: Clone + AsRef<[u8]>>(
+pub fn open<H: Clone + AsRef<[u8]> + 'static>(
 	path: &std::path::Path,
 	db_type: DatabaseType,
 	create: bool,
+	trie_cache: Option<usize>,
 ) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
 
@@ -72,8 +73,14 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 	} else {
 		parity_db::Db::open(&config)?
 	};
-
-	Ok(std::sync::Arc::new(DbAdapter(db)))
+	let db = DbAdapter(db);
+	if let (Some(cache), DatabaseType::Full) = (trie_cache, db_type) {
+		let mut db = crate::trie_state_cache::DatabaseCache::new(db);
+		db.configure_cache(columns::STATE, Some(cache));
+		Ok(std::sync::Arc::new(db))
+	} else {
+		Ok(std::sync::Arc::new(db))
+	}
 }
 
 impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {

@@ -234,6 +234,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		})
 	}
 
+	/// Get the trie cache size.
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
+	fn trie_cache_size(&self) -> Result<usize> {
+		Ok(self.import_params().map(|x| x.trie_cache_size()).unwrap_or_default())
+	}
+
 	/// Get the state cache size.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
@@ -498,6 +505,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			keystore_remote,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
+			trie_cache_size: self.trie_cache_size()?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning(unsafe_pruning, &role)?,

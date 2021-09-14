@@ -35,6 +35,7 @@ fn database_role_subdir_migration() {
 	// create a dummy database dir
 	{
 		let _old_db = LightStorage::<Block>::new(DatabaseSettings {
+			trie_cache_size: 0,
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,
@@ -80,6 +81,7 @@ fn database_role_subdir_migration_fail_on_different_role() {
 	// create a database with the old layout
 	{
 		let _old_db = LightStorage::<Block>::new(DatabaseSettings {
+			trie_cache_size: 0,
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,

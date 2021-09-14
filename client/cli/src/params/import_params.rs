@@ -73,12 +73,21 @@ pub struct ImportParams {
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
 
+	/// Specify the trie node cache size.
+	#[structopt(long = "trie-cache-size", value_name = "Bytes", default_value = "0")]
+	pub trie_cache_size: usize,
+
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 }
 
 impl ImportParams {
+	/// Specify the trie cache size.
+	pub fn trie_cache_size(&self) -> usize {
+		self.trie_cache_size
+	}
+
 	/// Specify the state cache size.
 	pub fn state_cache_size(&self) -> usize {
 		self.state_cache_size

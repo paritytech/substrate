@@ -63,6 +63,8 @@ pub struct Configuration {
 	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseSource,
+	/// Size of internal trie node cache in Bytes
+	pub trie_cache_size: usize,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries

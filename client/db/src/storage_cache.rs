@@ -54,7 +54,16 @@ pub struct Cache<B: BlockT> {
 	modifications: VecDeque<BlockChanges<B::Header>>,
 }
 
-struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
+pub(crate) struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
+
+impl<K, V> LRUMap<K, V>
+	where
+		K: std::hash::Hash + Eq,
+{
+	pub(crate) fn new(size_limit: usize) -> Self {
+		LRUMap(LinkedHashMap::new(), 0, size_limit)
+	}
+}
 
 /// Internal trait similar to `heapsize` but using
 /// a simply estimation.
@@ -62,7 +71,7 @@ struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 /// This should not be made public, it is implementation
 /// detail trait. If it need to become public please
 /// consider using `malloc_size_of`.
-trait EstimateSize {
+pub(crate) trait EstimateSize {
 	/// Return a size estimation of additional size needed
 	/// to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
@@ -105,7 +114,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		}
 	}
 
-	fn add(&mut self, k: K, v: V) {
+	pub(crate) fn add(&mut self, k: K, v: V) {
 		let lmap = &mut self.0;
 		let storage_used_size = &mut self.1;
 		let limit = self.2;
@@ -137,7 +146,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		}
 	}
 
-	fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+	pub(crate) fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
 	where
 		K: std::borrow::Borrow<Q>,
 		Q: StdHash + Eq,
@@ -235,12 +244,10 @@ pub fn new_shared_cache<B: BlockT>(
 ) -> SharedCache<B> {
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
 	Arc::new(RwLock::new(Cache {
-		lru_storage: LRUMap(LinkedHashMap::new(), 0, shared_cache_size * top / child_ratio.1),
-		lru_hashes: LRUMap(LinkedHashMap::new(), 0, FIX_LRU_HASH_SIZE),
-		lru_child_storage: LRUMap(
-			LinkedHashMap::new(),
-			0,
-			shared_cache_size * child_ratio.0 / child_ratio.1,
+		lru_storage: LRUMap::new(shared_cache_size * top / child_ratio.1),
+		lru_hashes: LRUMap::new(FIX_LRU_HASH_SIZE),
+		lru_child_storage: LRUMap::new(
+			shared_cache_size * child_ratio.0 / child_ratio.1
 		),
 		modifications: VecDeque::new(),
 	}))

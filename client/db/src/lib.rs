@@ -41,6 +41,7 @@ mod children;
 mod parity_db;
 mod stats;
 mod storage_cache;
+mod trie_state_cache;
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
 mod utils;
@@ -290,6 +291,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 /// Database settings.
 pub struct DatabaseSettings {
+	/// Trie cache size. 
+	pub trie_cache_size: usize,
 	/// State cache size.
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
@@ -1130,6 +1133,7 @@ impl<Block: BlockT> Backend<Block> {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
+			trie_cache_size: 16777216,
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
 			state_pruning: PruningMode::keep_blocks(keep_blocks),
@@ -2538,6 +2542,7 @@ pub(crate) mod tests {
 
 		let backend = Backend::<Block>::new(
 			DatabaseSettings {
+				trie_cache_size: 16777216,
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
 				state_pruning: PruningMode::keep_blocks(1),

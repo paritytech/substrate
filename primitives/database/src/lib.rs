@@ -21,7 +21,7 @@ pub mod error;
 mod kvdb;
 mod mem;
 
-pub use crate::kvdb::as_database;
+pub use crate::kvdb::{as_database, as_database_adapter};
 pub use mem::MemDb;
 
 /// An identifier for a column.
