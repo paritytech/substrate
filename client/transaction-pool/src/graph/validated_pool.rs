@@ -25,7 +25,7 @@ use std::{
 use futures::channel::mpsc::{channel, Sender};
 use parking_lot::{Mutex, RwLock};
 use retain_mut::RetainMut;
-use sc_transaction_pool_api::{PoolStatus, ReadyTransactions, error};
+use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
 use serde::Serialize;
 use sp_runtime::{
 	generic::BlockId,

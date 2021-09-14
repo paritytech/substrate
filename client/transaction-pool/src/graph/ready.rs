@@ -23,7 +23,7 @@ use std::{
 	sync::Arc,
 };
 
-use log::{trace, debug};
+use log::{debug, trace};
 use sc_transaction_pool_api::error;
 use serde::Serialize;
 use sp_runtime::{traits::Member, transaction_validity::TransactionTag as Tag};
@@ -506,7 +506,9 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	}
 }
 
-impl<Hash: hash::Hash + Member, Ex> sc_transaction_pool_api::ReadyTransactions for BestIterator<Hash, Ex> {
+impl<Hash: hash::Hash + Member, Ex> sc_transaction_pool_api::ReadyTransactions
+	for BestIterator<Hash, Ex>
+{
 	fn report_invalid(&mut self) {
 		BestIterator::report_invalid(self)
 	}
@@ -548,7 +550,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 					"[{:?}] Skipping invalid child transaction while iterating.",
 					hash
 				);
-				continue;
+				continue
 			}
 
 			let next = self.all.read().get(hash).cloned();
@@ -577,7 +579,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 			}
 
 			self.last_returned = Some(ready);
-			return Some(best.transaction);
+			return Some(best.transaction)
 		}
 	}
 }

@@ -29,7 +29,10 @@ use std::{borrow::Cow, collections::HashMap, pin::Pin, sync::Arc};
 
 use node_primitives::Block;
 use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
-use sc_transaction_pool_api::{ImportNotificationStream, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionSource, TransactionStatusStreamFor, TxHash};
+use sc_transaction_pool_api::{
+	ImportNotificationStream, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
+	TransactionSource, TransactionStatusStreamFor, TxHash,
+};
 use sp_consensus::{Environment, Proposer};
 use sp_inherents::InherentDataProvider;
 use sp_runtime::{generic::BlockId, traits::NumberFor, OpaqueExtrinsic};
@@ -267,8 +270,9 @@ impl sc_transaction_pool_api::TransactionPool for Transactions {
 		_at: NumberFor<Self::Block>,
 	) -> Pin<
 		Box<
-			dyn Future<Output = Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>>
-				+ Send,
+			dyn Future<
+					Output = Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>,
+				> + Send,
 		>,
 	> {
 		let iter: Box<dyn ReadyTransactions<Item = Arc<PoolTransaction>> + Send> =

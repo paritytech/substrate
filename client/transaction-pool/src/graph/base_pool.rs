@@ -34,7 +34,10 @@ use sp_runtime::{
 	},
 };
 
-use super::{future::{FutureTransactions, WaitingTransaction}, ready::{BestIterator, ReadyTransactions}};
+use super::{
+	future::{FutureTransactions, WaitingTransaction},
+	ready::{BestIterator, ReadyTransactions},
+};
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
