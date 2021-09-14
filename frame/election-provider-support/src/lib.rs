@@ -339,7 +339,10 @@ pub trait SortedListProvider<AccountId> {
 	) -> u32;
 
 	/// Remove the list and all its associated storage items.
-	fn clear();
+	#[cfg(feature = "runtime-benchmarks")]
+	fn clear() {
+		todo!()
+	}
 
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
