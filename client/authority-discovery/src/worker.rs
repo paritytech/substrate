@@ -218,7 +218,9 @@ where
 	/// Start the worker
 	pub async fn run(mut self) {
 		loop {
+			log::trace!(target: LOG_TARGET, "Before start new lookups");
 			self.start_new_lookups();
+			log::trace!(target: LOG_TARGET, "Before select");
 
 			futures::select! {
 				// Process incoming events.
