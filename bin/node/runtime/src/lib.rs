@@ -549,7 +549,7 @@ parameter_types! {
 		.max
 		.get(DispatchClass::Normal);
 
-	pub const VoterSnapshotPerBlock: u32 = u32::max_value();
+	pub const VoterSnapshotPerBlock: u32 = u32::MAX;
 }
 
 sp_npos_elections::generate_solution_type!(
