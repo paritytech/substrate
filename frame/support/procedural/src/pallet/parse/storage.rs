@@ -34,6 +34,7 @@ mod keyword {
 /// Parse for one of the following:
 /// * `#[pallet::getter(fn dummy)]`
 /// * `#[pallet::storage_prefix = "CustomName"]`
+/// * `#[pallet::unbounded]`
 pub enum PalletStorageAttr {
 	Getter(syn::Ident, proc_macro2::Span),
 	StorageName(syn::LitStr, proc_macro2::Span),
