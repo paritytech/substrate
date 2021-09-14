@@ -29,8 +29,11 @@ use sp_std::vec;
 
 /// Nonce check and increment to give replay protection for transactions.
 ///
-/// Note that this does not set any priority by default. Make sure that AT LEAST one of the signed
-/// extension sets some kind of priority upon validating transactions.
+/// # Transaction Validity
+///
+/// This extension affects `requires` and `provides` tags of validity, but DOES NOT
+/// set the `priority` field. Make sure that AT LEAST one of the signed extension sets
+/// some kind of priority upon validating transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckNonce<T: Config>(#[codec(compact)] T::Index);
 

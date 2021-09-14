@@ -26,6 +26,10 @@ use sp_runtime::{
 };
 
 /// Check for transaction mortality.
+///
+/// # Transaction Validity
+///
+/// The extension affects `longevity` of the transaction according to the [`Era`] definition.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 

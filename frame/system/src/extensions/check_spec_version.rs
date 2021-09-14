@@ -20,6 +20,11 @@ use codec::{Decode, Encode};
 use sp_runtime::{traits::SignedExtension, transaction_validity::TransactionValidityError};
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
+///
+/// # Transaction Validity
+///
+/// The transaction with incorrect `spec_version` are considered invalid. The validity
+/// is not affected in any other way.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckSpecVersion<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 

@@ -522,6 +522,12 @@ where
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
+///
+/// # Transaction Validity
+///
+/// This extension sets the `priority` field of `TransactionValidity` depending on the amount
+/// of fee being paid (including the tip) and byte size. Transactions with high per-weight-unit
+/// fee or per-byte fee (depending which is greater) will have higher priority.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
