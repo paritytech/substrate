@@ -674,10 +674,24 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// .. and grab whatever we have left from nominators.
-		let nominators_quota = max_allowed_len.saturating_sub(validators_taken as usize);
+		let nominators_quota = (max_allowed_len as u32).saturating_sub(validators_taken);
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+
+		// track the count of nominators added to `all_voters
 		let mut nominators_taken = 0u32;
-		for nominator in T::SortedListProvider::iter().take(nominators_quota) {
+		// track every nominator iterated over, but not necessarily added to `all_voters`
+		let mut nominators_seen = 0u32;
+
+		let mut nominators_iter = T::SortedListProvider::iter();
+		while nominators_taken < nominators_quota && nominators_seen < nominators_quota * 2 {
+			let nominator = match nominators_iter.next() {
+				Some(nominator) => {
+					nominators_seen.saturating_inc();
+					nominator
+				},
+				None => break,
+			};
+
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
