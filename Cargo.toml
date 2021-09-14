@@ -138,6 +138,7 @@ members = [
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
 	"primitives/authorship",
+	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
 	"primitives/consensus/aura",
