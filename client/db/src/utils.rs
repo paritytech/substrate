@@ -394,6 +394,7 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	_db_type: DatabaseType,
 	_create: bool,
 	_cache_size: usize,
+	_trie_cache_size: Option<usize>,
 ) -> OpenDbResult {
 	Err(OpenDbError::NotEnabled("with-kvdb-rocksdb"))
 }
