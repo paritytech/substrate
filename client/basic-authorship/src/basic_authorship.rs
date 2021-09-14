@@ -344,7 +344,7 @@ where
 		let mut t2 =
 			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
 
-		let pending_iterator = select! {
+		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
 				log::warn!(
@@ -363,7 +363,7 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
-		for pending_tx in pending_iterator {
+		while let Some(pending_tx) = pending_iterator.next() {
 			if (self.now)() > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \
@@ -385,6 +385,7 @@ where
 						 but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
+					pending_iterator.report_invalid();
 					continue
 				} else {
 					debug!("Reached block size limit, proceeding with proposing.");
@@ -400,6 +401,7 @@ where
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
+					pending_iterator.report_invalid();
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
 						debug!(
@@ -412,6 +414,7 @@ where
 					}
 				},
 				Err(e) if skipped > 0 => {
+					pending_iterator.report_invalid();
 					trace!(
 						"[{:?}] Ignoring invalid transaction when skipping: {}",
 						pending_tx_hash,
@@ -419,6 +422,7 @@ where
 					);
 				},
 				Err(e) => {
+					pending_iterator.report_invalid();
 					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
 					unqueue_invalid.push(pending_tx_hash);
 				},

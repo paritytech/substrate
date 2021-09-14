@@ -506,6 +506,12 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	}
 }
 
+impl<Hash: hash::Hash + Member, Ex> sc_transaction_pool_api::ReadyTransactions for BestIterator<Hash, Ex> {
+	fn report_invalid(&mut self) {
+		BestIterator::report_invalid(self)
+	}
+}
+
 impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	/// Report last returned value as invalid.
 	///

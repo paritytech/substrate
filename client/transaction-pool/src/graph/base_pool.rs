@@ -34,10 +34,7 @@ use sp_runtime::{
 	},
 };
 
-use super::{
-	future::{FutureTransactions, WaitingTransaction},
-	ready::ReadyTransactions,
-};
+use super::{future::{FutureTransactions, WaitingTransaction}, ready::{BestIterator, ReadyTransactions}};
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -356,7 +353,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready(&self) -> impl Iterator<Item = Arc<Transaction<Hash, Ex>>> {
+	pub fn ready(&self) -> BestIterator<Hash, Ex> {
 		self.ready.get()
 	}
 
