@@ -32,6 +32,16 @@ use sp_runtime::{
 };
 
 /// Block resource (weight) limit check.
+///
+/// # Transaction Validity
+///
+/// The extension affects `priority` field of `TransationValidity`. The priority depends
+/// on the `DispatchClass` and declared `weight`.
+///
+/// Note that usually it's desireable to include some fee payment mechanism and use that
+/// as a primary source of `priority`. Take a look at
+/// [`frame_support::signed_extensions::AdjustPriority`] utility to adjust priority coming
+/// from multiple extensions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct CheckWeight<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
