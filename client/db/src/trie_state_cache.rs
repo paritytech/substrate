@@ -35,7 +35,7 @@ pub struct DatabaseCache<H: Clone + AsRef<[u8]>, DB: Database<H>> {
 	has_lru: BTreeSet<ColumnId>,
 	// Note that design really only work for trie node (we do not cache
 	// deletion) TODO consider just a single column
-	lru: Option<Arc<RwLock<Vec<Option<LRUMap<Vec<u8>, Vec<u8>>>>>>>,
+	lru: Option<Arc<RwLock<Vec<Option<LRUMap<Vec<u8>, Option<Vec<u8>>>>>>>>,
 	db: DB,
 	_ph: PhantomData<H>,
 }
@@ -80,11 +80,11 @@ impl<H: Clone + AsRef<[u8]>, DB: Database<H>> DatabaseCache<H, DB> {
 		}
 	}
 
-	fn add_val(&self, col: ColumnId, key: &[u8], value: &Vec<u8>) {
+	fn add_val(&self, col: ColumnId, key: &[u8], value: Option<&Vec<u8>>) {
 		if let Some(lru) = self.lru.as_ref()  {
 			let mut lru = lru.write();
 			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				lru.add(key.to_vec(), value.clone());
+				lru.add(key.to_vec(), value.cloned());
 			}
 		}
 	}
@@ -93,8 +93,18 @@ impl<H: Clone + AsRef<[u8]>, DB: Database<H>> DatabaseCache<H, DB> {
 		if let Some(lru) = self.lru.as_ref()  {
 			let mut lru = lru.write();
 			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				lru.add(key.to_vec(), value.to_vec());
+				lru.add(key.to_vec(), Some(value.to_vec()));
 			}
+		}
+	}
+	fn db_get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+		if let Some(val) = self.db.get(col, key) {
+			self.add_val(col, key, Some(&val));
+			Some(val)
+		} else {
+			// cache failed access
+			self.add_val(col, key, None);
+			None
 		}
 	}
 }
@@ -108,6 +118,8 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 				if let Change::Set(col, key, value) = change {
 					self.has_lru.contains(col).then(|| (*col, key.clone(), value.clone()))
 				} else {
+					// Not processing Change::remove as we expect them to already be out
+					// of lru.
 					None
 				}
 			}).collect()
@@ -120,7 +132,7 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 			let mut lru = lru.write();
 			for (col, key, value) in cache_update {
 				if let Some(Some(lru)) = lru.get_mut(col as usize) {
-					lru.add(key, value);
+					lru.add(key, Some(value));
 				}
 			}
 		}
@@ -133,28 +145,25 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 			let mut lru = lru.write();
 			if let Some(Some(lru)) = lru.get_mut(col as usize) {
 				if let Some(node) = lru.get(key) {
-					return Some(node.clone());
+					return node.clone();
 				}
 			}
 		}
 
-		self.db.get(col, key)
-			.map(|value| { self.add_val(col, key, &value); value })
+		self.db_get(col, key)
 	}
 
 	fn contains(&self, col: ColumnId, key: &[u8]) -> bool {
 		if let Some(lru) = self.lru.as_ref()  {
 			let mut lru = lru.write();
 			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				if lru.get(key).is_some() {
-					return true;
+				if let Some(cache) = lru.get(key) {
+					return cache.is_some();
 				}
 			}
 		}
 
-		self.db.get(col, key)
-			.map(|value| { self.add_val(col, key, &value); () })
-			.is_some()
+		self.db_get(col, key).is_some()
 	}
 
 	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
@@ -162,13 +171,12 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 			let mut lru = lru.write();
 			if let Some(Some(lru)) = lru.get_mut(col as usize) {
 				if let Some(node) = lru.get(key) {
-					return Some(node.len());
+					return node.as_ref().map(|value| value.len());
 				}
 			}
 		}
 
-		self.db.get(col, key)
-			.map(|value| { self.add_val(col, key, &value); value.len() })
+		self.db_get(col, key).map(|value| value.len())
 	}
 
 	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
@@ -176,15 +184,24 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 			let mut lru = lru.write();
 			if let Some(Some(lru)) = lru.get_mut(col as usize) {
 				if let Some(node) = lru.get(key) {
-					return f(node);
+					if let Some(node) = node {
+						f(node);
+					}
+					return;
 				}
 			}
 		}
 
+		let mut added = false;
+		let added = &mut added;
 		self.db.with_get(col, key, &mut |value| {
 			self.add_val_slice(col, key, value);
+			*added = true;
 			f(value)
-		})
+		});
+		if !*added {
+			self.add_val(col, key, None);
+		}
 	}
 
 	fn supports_ref_counting(&self) -> bool {
