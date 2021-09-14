@@ -68,7 +68,7 @@ impl<H: Clone + AsRef<[u8]>, DB: Database<H>> DatabaseCache<H, DB> {
 				caches.push(None);
 			}
 			caches[column as usize] = new_cache;
-			self.lru = Some(Arc::new(RwLock::new(Vec::new())));
+			self.lru = Some(Arc::new(RwLock::new(caches)));
 		} else {
 			self.lru.as_ref().map(|lru| {
 				let mut lru = lru.write();
