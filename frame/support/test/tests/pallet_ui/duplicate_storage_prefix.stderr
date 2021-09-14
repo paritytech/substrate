@@ -10,7 +10,7 @@ error[E0412]: cannot find type `_GeneratedPrefixForStorageFoo` in this scope
 13 |     type Foo<T> = StorageValue<_, u8>;
    |          ^^^ not found in this scope
 
-error[E0121]: the type placeholder `_` is not allowed within types on item signatures
+error[E0121]: the type placeholder `_` is not allowed within types on item signatures for type aliases
   --> $DIR/duplicate_storage_prefix.rs:17:35
    |
 17 |     type NotFoo<T> = StorageValue<_, u16>;
