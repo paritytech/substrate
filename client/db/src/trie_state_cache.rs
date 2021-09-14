@@ -82,21 +82,26 @@ impl<H: Clone + AsRef<[u8]>, DB: Database<H>> DatabaseCache<H, DB> {
 
 	fn add_val(&self, col: ColumnId, key: &[u8], value: Option<&Vec<u8>>) {
 		if let Some(lru) = self.lru.as_ref()  {
-			let mut lru = lru.write();
-			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				lru.add(key.to_vec(), value.cloned());
+			if self.has_lru.contains(&col) {
+				let mut lru = lru.write();
+				if let Some(Some(lru)) = lru.get_mut(col as usize) {
+					lru.add(key.to_vec(), value.cloned());
+				}
 			}
 		}
 	}
 
 	fn add_val_slice(&self, col: ColumnId, key: &[u8], value: &[u8]) {
 		if let Some(lru) = self.lru.as_ref()  {
-			let mut lru = lru.write();
-			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				lru.add(key.to_vec(), Some(value.to_vec()));
+			if self.has_lru.contains(&col) {
+				let mut lru = lru.write();
+				if let Some(Some(lru)) = lru.get_mut(col as usize) {
+					lru.add(key.to_vec(), Some(value.to_vec()));
+				}
 			}
 		}
 	}
+
 	fn db_get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
 		if let Some(val) = self.db.get(col, key) {
 			self.add_val(col, key, Some(&val));
@@ -142,10 +147,12 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
 		if let Some(lru) = self.lru.as_ref()  {
-			let mut lru = lru.write();
-			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				if let Some(node) = lru.get(key) {
-					return node.clone();
+			if self.has_lru.contains(&col) {
+				let mut lru = lru.write();
+				if let Some(Some(lru)) = lru.get_mut(col as usize) {
+					if let Some(node) = lru.get(key) {
+						return node.clone();
+					}
 				}
 			}
 		}
@@ -155,10 +162,12 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 
 	fn contains(&self, col: ColumnId, key: &[u8]) -> bool {
 		if let Some(lru) = self.lru.as_ref()  {
-			let mut lru = lru.write();
-			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				if let Some(cache) = lru.get(key) {
-					return cache.is_some();
+			if self.has_lru.contains(&col) {
+				let mut lru = lru.write();
+				if let Some(Some(lru)) = lru.get_mut(col as usize) {
+					if let Some(cache) = lru.get(key) {
+						return cache.is_some();
+					}
 				}
 			}
 		}
@@ -168,10 +177,12 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 
 	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
 		if let Some(lru) = self.lru.as_ref()  {
-			let mut lru = lru.write();
-			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				if let Some(node) = lru.get(key) {
-					return node.as_ref().map(|value| value.len());
+			if self.has_lru.contains(&col) {
+				let mut lru = lru.write();
+				if let Some(Some(lru)) = lru.get_mut(col as usize) {
+					if let Some(node) = lru.get(key) {
+						return node.as_ref().map(|value| value.len());
+					}
 				}
 			}
 		}
@@ -181,13 +192,15 @@ impl<H, DB> Database<H> for DatabaseCache<H, DB>
 
 	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
 		if let Some(lru) = self.lru.as_ref()  {
-			let mut lru = lru.write();
-			if let Some(Some(lru)) = lru.get_mut(col as usize) {
-				if let Some(node) = lru.get(key) {
-					if let Some(node) = node {
-						f(node);
+			if self.has_lru.contains(&col) {
+				let mut lru = lru.write();
+				if let Some(Some(lru)) = lru.get_mut(col as usize) {
+					if let Some(node) = lru.get(key) {
+						if let Some(node) = node {
+							f(node);
+						}
+						return;
 					}
-					return;
 				}
 			}
 		}
