@@ -143,7 +143,7 @@ And update the overall definition for weights on frame and a few related types a
 +const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 +
 +impl frame_system::Config for Runtime {
- 	type BaseCallFilter = ();
+ 	type BaseCallFilter = frame_support::traits::AllowAll;
 +	type BlockWeights = RuntimeBlockWeights;
 +	type BlockLength = RuntimeBlockLength;
 +	type DbWeight = RocksDbWeight;
@@ -438,69 +438,6 @@ and add the new service:
 ##### Telemetry
 
 The telemetry subsystem has seen a few fixes and refactorings to allow for a more flexible handling, in particular in regards to parachains. Most notably `sc_service::spawn_tasks` now returns the `telemetry_connection_notifier` as the second member of the tuple, (`let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(`), which should be passed to `telemetry_on_connect` of `new_full_base` now: `telemetry_on_connect: telemetry_connection_notifier.map(|x| x.on_connect_stream()),` (see the service-section below for a full diff).
-
-On the browser-side, this complicates setup a tiny bit, yet not terribly. Instead of `init_console_log`,  we now use `init_logging_and_telemetry` and need to make sure we spawn the runner for its handle at the end (the other changes are formatting and cosmetics):
-
-```diff
---- a/bin/node/cli/src/browser.rs
-+++ b/bin/node/cli/src/browser.rs
-@@ -21,9 +21,8 @@ use log::info;
- use wasm_bindgen::prelude::*;
- use browser_utils::{
- 	Client,
--	browser_configuration, set_console_error_panic_hook, init_console_log,
-+	browser_configuration, init_logging_and_telemetry, set_console_error_panic_hook,
- };
--use std::str::FromStr;
-
- /// Starts the client.
- #[wasm_bindgen]
-@@ -33,29 +32,38 @@ pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Resu
- 		.map_err(|err| JsValue::from_str(&err.to_string()))
- }
-
--async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Client, Box<dyn std::error::Error>> {
-+async fn start_inner(
-+	chain_spec: Option<String>,
-+	log_directives: String,
-+) -> Result<Client, Box<dyn std::error::Error>> {
- 	set_console_error_panic_hook();
--	init_console_log(log::Level::from_str(&log_level)?)?;
-+	let telemetry_worker = init_logging_and_telemetry(&log_directives)?;
- 	let chain_spec = match chain_spec {
- 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
- 			.map_err(|e| format!("{:?}", e))?,
- 		None => crate::chain_spec::development_config(),
- 	};
-
--	let config = browser_configuration(chain_spec).await?;
-+	let telemetry_handle = telemetry_worker.handle();
-+	let config = browser_configuration(
-+		chain_spec,
-+		Some(telemetry_handle),
-+	).await?;
-
- 	info!("Substrate browser node");
- 	info!("✌️  version {}", config.impl_version);
--	info!("❤️  by Parity Technologies, 2017-2020");
-+	info!("❤️  by Parity Technologies, 2017-2021");
- 	info!("📋 Chain specification: {}", config.chain_spec.name());
--	info!("🏷  Node name: {}", config.network.node_name);
-+	info!("🏷 Node name: {}", config.network.node_name);
- 	info!("👤 Role: {:?}", config.role);
-
- 	// Create the service. This is the most heavy initialization step.
- 	let (task_manager, rpc_handlers) =
- 		crate::service::new_light_base(config)
--			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
-+			.map(|(components, rpc_handlers, _, _, _, _)| (components, rpc_handlers))
- 			.map_err(|e| format!("{:?}", e))?;
-
-+	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
-+
- 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
- }
- ```
 
 ##### Async & Remote Keystore support
 

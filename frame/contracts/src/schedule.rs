@@ -18,16 +18,16 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{Config, weights::WeightInfo};
+use crate::{weights::WeightInfo, Config};
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use codec::{Decode, Encode};
+use frame_support::{weights::Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
-use frame_support::{DefaultNoBound, weights::Weight};
-use sp_std::{marker::PhantomData, vec::Vec};
-use codec::{Encode, Decode};
 use pwasm_utils::{parity_wasm::elements, rules};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::RuntimeDebug;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 /// How many API calls are executed in a single batch. The reason for increasing the amount
 /// of API calls in batches (per benchmark component increase) is so that the linear regression
@@ -36,7 +36,7 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// How many instructions are executed in a single batch. The reasoning is the same
 /// as for `API_BENCHMARK_BATCH_SIZE`.
-pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
+pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
@@ -50,18 +50,18 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 /// fn create_schedule<T: Config>() -> Schedule<T> {
 ///     Schedule {
 ///         limits: Limits {
-///		        globals: 3,
-///		        parameters: 3,
-///		        memory_pages: 16,
-///		        table_size: 3,
-///		        br_table_size: 3,
-///		        .. Default::default()
-///	        },
+/// 		        globals: 3,
+/// 		        parameters: 3,
+/// 		        memory_pages: 16,
+/// 		        table_size: 3,
+/// 		        br_table_size: 3,
+/// 		        .. Default::default()
+/// 	        },
 ///         instruction_weights: InstructionWeights {
-///	            version: 5,
+/// 	            version: 5,
 ///             .. Default::default()
 ///         },
-///	        .. Default::default()
+/// 	        .. Default::default()
 ///     }
 /// }
 /// ```
@@ -267,11 +267,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_minimum_balance`.
 	pub minimum_balance: Weight,
 
-	/// Weight of calling `seal_tombstone_deposit`.
-	pub tombstone_deposit: Weight,
-
-	/// Weight of calling `seal_rent_allowance`.
-	pub rent_allowance: Weight,
+	/// Weight of calling `seal_contract_deposit`.
+	pub contract_deposit: Weight,
 
 	/// Weight of calling `seal_block_number`.
 	pub block_number: Weight,
@@ -300,12 +297,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_terminate`.
 	pub terminate: Weight,
 
-	/// Weight of calling `seal_restore_to`.
-	pub restore_to: Weight,
-
-	/// Weight per delta key supplied to `seal_restore_to`.
-	pub restore_to_per_delta: Weight,
-
 	/// Weight of calling `seal_random`.
 	pub random: Weight,
 
@@ -320,9 +311,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_debug_message`.
 	pub debug_message: Weight,
-
-	/// Weight of calling `seal_set_rent_allowance`.
-	pub set_rent_allowance: Weight,
 
 	/// Weight of calling `seal_set_storage`.
 	pub set_storage: Weight,
@@ -390,13 +378,18 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
+	/// Weight of calling `seal_ecdsa_recover`.
+	pub ecdsa_recover: Weight,
+
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
-	pub _phantom: PhantomData<T>
+	pub _phantom: PhantomData<T>,
 }
 
 macro_rules! replace_token {
-	($_in:tt $replacement:tt) => { $replacement };
+	($_in:tt $replacement:tt) => {
+		$replacement
+	};
 }
 
 macro_rules! call_zero {
@@ -420,20 +413,22 @@ macro_rules! cost_batched_args {
 macro_rules! cost_instr_no_params_with_batch_size {
 	($name:ident, $batch_size:expr) => {
 		(cost_args!($name, 1) / Weight::from($batch_size)) as u32
-	}
+	};
 }
 
 macro_rules! cost_instr_with_batch_size {
 	($name:ident, $num_params:expr, $batch_size:expr) => {
-		cost_instr_no_params_with_batch_size!($name, $batch_size)
-			.saturating_sub((cost_instr_no_params_with_batch_size!(instr_i64const, $batch_size) / 2).saturating_mul($num_params))
-	}
+		cost_instr_no_params_with_batch_size!($name, $batch_size).saturating_sub(
+			(cost_instr_no_params_with_batch_size!(instr_i64const, $batch_size) / 2)
+				.saturating_mul($num_params),
+		)
+	};
 }
 
 macro_rules! cost_instr {
 	($name:ident, $num_params:expr) => {
 		cost_instr_with_batch_size!($name, $num_params, INSTR_BENCHMARK_BATCH_SIZE)
-	}
+	};
 }
 
 macro_rules! cost_byte_args {
@@ -451,25 +446,25 @@ macro_rules! cost_byte_batched_args {
 macro_rules! cost {
 	($name:ident) => {
 		cost_args!($name, 1)
-	}
+	};
 }
 
 macro_rules! cost_batched {
 	($name:ident) => {
 		cost_batched_args!($name, 1)
-	}
+	};
 }
 
 macro_rules! cost_byte {
 	($name:ident) => {
 		cost_byte_args!($name, 1)
-	}
+	};
 }
 
 macro_rules! cost_byte_batched {
 	($name:ident) => {
 		cost_byte_batched_args!($name, 1)
-	}
+	};
 }
 
 impl Default for Limits {
@@ -503,7 +498,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			select: cost_instr!(instr_select, 4),
 			r#if: cost_instr!(instr_if, 3),
 			br: cost_instr!(instr_br, 2),
-			br_if: cost_instr!(instr_br_if, 5),
+			br_if: cost_instr!(instr_br_if, 3),
 			br_table: cost_instr!(instr_br_table, 3),
 			br_table_per_entry: cost_instr!(instr_br_table_per_entry, 0),
 			call: cost_instr!(instr_call, 2),
@@ -562,25 +557,25 @@ impl<T: Config> Default for HostFnWeights<T> {
 			balance: cost_batched!(seal_balance),
 			value_transferred: cost_batched!(seal_value_transferred),
 			minimum_balance: cost_batched!(seal_minimum_balance),
-			tombstone_deposit: cost_batched!(seal_tombstone_deposit),
-			rent_allowance: cost_batched!(seal_rent_allowance),
+			contract_deposit: cost_batched!(seal_tombstone_deposit),
 			block_number: cost_batched!(seal_block_number),
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),
 			gas: cost_batched!(seal_gas),
-			input: cost!(seal_input),
-			input_per_byte: cost_byte!(seal_input_per_kb),
+			input: cost_batched!(seal_input),
+			input_per_byte: cost_byte_batched!(seal_input_per_kb),
 			r#return: cost!(seal_return),
 			return_per_byte: cost_byte!(seal_return_per_kb),
 			terminate: cost!(seal_terminate),
-			restore_to: cost!(seal_restore_to),
-			restore_to_per_delta: cost_batched!(seal_restore_to_per_delta),
 			random: cost_batched!(seal_random),
 			deposit_event: cost_batched!(seal_deposit_event),
 			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
-			deposit_event_per_byte: cost_byte_batched_args!(seal_deposit_event_per_topic_and_kb, 0, 1),
+			deposit_event_per_byte: cost_byte_batched_args!(
+				seal_deposit_event_per_topic_and_kb,
+				0,
+				1
+			),
 			debug_message: cost_batched!(seal_debug_message),
-			set_rent_allowance: cost_batched!(seal_set_rent_allowance),
 			set_storage: cost_batched!(seal_set_storage),
 			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
 			clear_storage: cost_batched!(seal_clear_storage),
@@ -588,13 +583,43 @@ impl<T: Config> Default for HostFnWeights<T> {
 			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
-			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_input_output_kb, 1, 0, 0),
-			call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
-			call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
+			call_transfer_surcharge: cost_batched_args!(
+				seal_call_per_transfer_input_output_kb,
+				1,
+				0,
+				0
+			),
+			call_per_input_byte: cost_byte_batched_args!(
+				seal_call_per_transfer_input_output_kb,
+				0,
+				1,
+				0
+			),
+			call_per_output_byte: cost_byte_batched_args!(
+				seal_call_per_transfer_input_output_kb,
+				0,
+				0,
+				1
+			),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 1, 0, 0),
-			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 1, 0),
-			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 0, 1),
+			instantiate_per_input_byte: cost_byte_batched_args!(
+				seal_instantiate_per_input_output_salt_kb,
+				1,
+				0,
+				0
+			),
+			instantiate_per_output_byte: cost_byte_batched_args!(
+				seal_instantiate_per_input_output_salt_kb,
+				0,
+				1,
+				0
+			),
+			instantiate_per_salt_byte: cost_byte_batched_args!(
+				seal_instantiate_per_input_output_salt_kb,
+				0,
+				0,
+				1
+			),
 			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
 			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
 			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
@@ -603,6 +628,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
+			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			_phantom: PhantomData,
 		}
 	}
@@ -625,7 +651,7 @@ impl<T: Config> Schedule<T> {
 					let elements::Type::Function(func) = func;
 					func.params().len() as u32
 				})
-				.collect()
+				.collect(),
 		}
 	}
 }
@@ -639,12 +665,25 @@ impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 		let weight = match *instruction {
 			End | Unreachable | Return | Else => 0,
 			I32Const(_) | I64Const(_) | Block(_) | Loop(_) | Nop | Drop => w.i64const,
-			I32Load(_, _) | I32Load8S(_, _) | I32Load8U(_, _) | I32Load16S(_, _) |
-			I32Load16U(_, _) | I64Load(_, _) | I64Load8S(_, _) | I64Load8U(_, _) |
-			I64Load16S(_, _) | I64Load16U(_, _) | I64Load32S(_, _) | I64Load32U(_, _)
-				=> w.i64load,
-			I32Store(_, _) | I32Store8(_, _) | I32Store16(_, _) | I64Store(_, _) |
-			I64Store8(_, _) | I64Store16(_, _) | I64Store32(_, _) => w.i64store,
+			I32Load(_, _) |
+			I32Load8S(_, _) |
+			I32Load8U(_, _) |
+			I32Load16S(_, _) |
+			I32Load16U(_, _) |
+			I64Load(_, _) |
+			I64Load8S(_, _) |
+			I64Load8U(_, _) |
+			I64Load16S(_, _) |
+			I64Load16U(_, _) |
+			I64Load32S(_, _) |
+			I64Load32U(_, _) => w.i64load,
+			I32Store(_, _) |
+			I32Store8(_, _) |
+			I32Store16(_, _) |
+			I64Store(_, _) |
+			I64Store8(_, _) |
+			I64Store16(_, _) |
+			I64Store32(_, _) => w.i64store,
 			Select => w.select,
 			If(_) => w.r#if,
 			Br(_) => w.br,
@@ -658,10 +697,9 @@ impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 			CurrentMemory(_) => w.memory_current,
 			GrowMemory(_) => w.memory_grow,
 			CallIndirect(idx, _) => *self.params.get(idx as usize).unwrap_or(&max_params),
-			BrTable(ref data) =>
-				w.br_table.saturating_add(
-					w.br_table_per_entry.saturating_mul(data.table.len() as u32)
-				),
+			BrTable(ref data) => w
+				.br_table
+				.saturating_add(w.br_table_per_entry.saturating_mul(data.table.len() as u32)),
 			I32Clz | I64Clz => w.i64clz,
 			I32Ctz | I64Ctz => w.i64ctz,
 			I32Popcnt | I64Popcnt => w.i64popcnt,
@@ -711,8 +749,8 @@ impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 
 #[cfg(test)]
 mod test {
-	use crate::tests::Test;
 	use super::*;
+	use crate::tests::Test;
 
 	#[test]
 	fn print_test_schedule() {

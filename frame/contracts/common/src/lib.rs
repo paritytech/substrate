@@ -26,7 +26,7 @@ use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
@@ -37,6 +37,15 @@ use serde::{Serialize, Deserialize};
 pub struct ContractResult<T> {
 	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
+	/// How much gas is required as gas limit in order to execute this call.
+	///
+	/// This value should be used to determine the gas limit for on-chain execution.
+	///
+	/// # Note
+	///
+	/// This can only different from [`Self::gas_consumed`] when weight pre charging
+	/// is used. Currently, only `seal_call_runtime` makes use of pre charging.
+	pub gas_required: u64,
 	/// An optional debug message. This message is only filled when explicitly requested
 	/// by the code that calls into the contract. Otherwise it is empty.
 	///
@@ -61,35 +70,17 @@ pub struct ContractResult<T> {
 pub type ContractExecResult = ContractResult<Result<ExecReturnValue, DispatchError>>;
 
 /// Result type of a `bare_instantiate` call.
-pub type ContractInstantiateResult<AccountId, BlockNumber> =
-	ContractResult<Result<InstantiateReturnValue<AccountId, BlockNumber>, DispatchError>>;
+pub type ContractInstantiateResult<AccountId> =
+	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>>;
 
 /// Result type of a `get_storage` call.
 pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
-
-/// Result type of a `rent_projection` call.
-pub type RentProjectionResult<BlockNumber> =
-	Result<RentProjection<BlockNumber>, ContractAccessError>;
 
 /// The possible errors that can happen querying the storage of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub enum ContractAccessError {
 	/// The given address doesn't point to a contract.
 	DoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
-}
-
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub enum RentProjection<BlockNumber> {
-	/// Eviction is projected to happen at the specified block number.
-	EvictionAt(BlockNumber),
-	/// No eviction is scheduled.
-	///
-	/// E.g. Contract accumulated enough funds to offset the rent storage costs.
-	NoEviction,
 }
 
 bitflags! {
@@ -125,19 +116,11 @@ impl ExecReturnValue {
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct InstantiateReturnValue<AccountId, BlockNumber> {
+pub struct InstantiateReturnValue<AccountId> {
 	/// The output of the called constructor.
 	pub result: ExecReturnValue,
 	/// The account id of the new contract.
 	pub account_id: AccountId,
-	/// Information about when and if the new project will be evicted.
-	///
-	/// # Note
-	///
-	/// `None` if `bare_instantiate` was called with
-	/// `compute_projection` set to false. From the perspective of an RPC this means that
-	/// the runtime API did not request this value and this feature is therefore unsupported.
-	pub rent_projection: Option<RentProjection<BlockNumber>>,
 }
 
 /// Reference to an existing code hash or a new wasm module.
@@ -154,7 +137,7 @@ pub enum Code<Hash> {
 #[cfg(feature = "std")]
 mod as_string {
 	use super::*;
-	use serde::{Serializer, Deserializer, ser::Error};
+	use serde::{ser::Error, Deserializer, Serializer};
 
 	pub fn serialize<S: Serializer>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
 		std::str::from_utf8(bytes)

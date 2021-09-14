@@ -17,6 +17,7 @@
 
 use crate::pallet::Def;
 
+///
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
@@ -40,9 +41,11 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
+				"⚠️ {} declares internal migrations (which *might* execute). \
+				 On-chain `{:?}` vs current storage version `{:?}`",
 				pallet_name,
-				new_storage_version,
+				<Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version(),
+				<Self as #frame_support::traits::GetStorageVersion>::current_storage_version(),
 			);
 		}
 	} else {
@@ -50,16 +53,15 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"✅ no migration for {}, setting storage version to {:?}",
+				"✅ no migration for {}",
 				pallet_name,
-				new_storage_version,
 			);
 		}
 	};
 
 	let hooks_impl = if def.hooks.is_none() {
 		let frame_system = &def.frame_system;
-		quote::quote!{
+		quote::quote! {
 			impl<#type_impl_gen>
 				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
 				for Pallet<#type_use_gen> {}
@@ -131,7 +133,6 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				// log info about the upgrade.
-				let new_storage_version = #frame_support::crate_to_pallet_version!();
 				let pallet_name = <
 					<T as #frame_system::Config>::PalletInfo
 					as
@@ -139,19 +140,11 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				>::name::<Self>().unwrap_or("<unknown pallet name>");
 				#log_runtime_upgrade
 
-				let result = <
+				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::on_runtime_upgrade();
-
-				new_storage_version.put_into_storage::<<T as #frame_system::Config>::PalletInfo, Self>();
-
-				let additional_write = <
-					<T as #frame_system::Config>::DbWeight as #frame_support::traits::Get<_>
-				>::get().writes(1);
-
-				result.saturating_add(additional_write)
+				>::on_runtime_upgrade()
 			}
 
 			#[cfg(feature = "try-runtime")]

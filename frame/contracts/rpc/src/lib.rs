@@ -22,7 +22,7 @@ use std::sync::Arc;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use pallet_contracts_primitives::RentProjection;
+use pallet_contracts_primitives::{Code, ContractExecResult, ContractInstantiateResult};
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -33,13 +33,11 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 };
 use std::convert::{TryFrom, TryInto};
-use pallet_contracts_primitives::{Code, ContractExecResult, ContractInstantiateResult};
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
 const RUNTIME_ERROR: i64 = 1;
 const CONTRACT_DOESNT_EXIST: i64 = 2;
-const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 
 pub type Weight = u64;
 
@@ -66,11 +64,6 @@ impl From<ContractAccessError> for Error {
 			DoesntExist => Error {
 				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
 				message: "The specified contract doesn't exist.".into(),
-				data: None,
-			},
-			IsTombstone => Error {
-				code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
-				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
 			},
 		}
@@ -129,7 +122,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<BlockHash>,
-	) -> Result<ContractInstantiateResult<AccountId, BlockNumber>>;
+	) -> Result<ContractInstantiateResult<AccountId>>;
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
@@ -140,19 +133,6 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		key: H256,
 		at: Option<BlockHash>,
 	) -> Result<Option<Bytes>>;
-
-	/// Returns the projected time a given contract will be able to sustain paying its rent.
-	///
-	/// The returned projection is relevant for the given block, i.e. it is as if the contract was
-	/// accessed at the beginning of that block.
-	///
-	/// Returns `None` if the contract is exempted from rent.
-	#[rpc(name = "contracts_rentProjection")]
-	fn rent_projection(
-		&self,
-		address: AccountId,
-		at: Option<BlockHash>,
-	) -> Result<Option<BlockNumber>>;
 }
 
 /// An implementation of contract specific RPC methods.
@@ -164,10 +144,7 @@ pub struct Contracts<C, B> {
 impl<C, B> Contracts<C, B> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		Contracts {
-			client,
-			_marker: Default::default(),
-		}
+		Contracts { client, _marker: Default::default() }
 	}
 }
 impl<C, Block, AccountId, Balance, Hash>
@@ -202,13 +179,7 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let CallRequest {
-			origin,
-			dest,
-			value,
-			gas_limit,
-			input_data,
-		} = call_request;
+		let CallRequest { origin, dest, value, gas_limit, input_data } = call_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
@@ -225,20 +196,14 @@ where
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>> {
+	) -> Result<ContractInstantiateResult<AccountId>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let InstantiateRequest {
-			origin,
-			endowment,
-			gas_limit,
-			code,
-			data,
-			salt,
-		} = instantiate_request;
+		let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
+			instantiate_request;
 
 		let endowment: Balance = decode_hex(endowment, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
@@ -269,27 +234,6 @@ where
 			.map(Bytes);
 
 		Ok(result)
-	}
-
-	fn rent_projection(
-		&self,
-		address: AccountId,
-		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
-		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(||
-			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash));
-
-		let result = api
-			.rent_projection(&at, address)
-			.map_err(runtime_error_into_rpc_err)?
-			.map_err(ContractAccessError)?;
-
-		Ok(match result {
-			RentProjection::NoEviction => None,
-			RentProjection::EvictionAt(block_num) => Some(block_num),
-		})
 	}
 }
 
@@ -337,7 +281,8 @@ mod tests {
 	#[test]
 	fn call_request_should_serialize_deserialize_properly() {
 		type Req = CallRequest<String>;
-		let req: Req = serde_json::from_str(r#"
+		let req: Req = serde_json::from_str(
+			r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"dest": "5DRakbLVnjVrW6niwLfHGW24EeCEvDAFGEXrtaYS5M4ynoom",
@@ -345,7 +290,9 @@ mod tests {
 			"gasLimit": 1000000000000,
 			"inputData": "0x8c97db39"
 		}
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 		assert_eq!(req.gas_limit.into_u256(), U256::from(0xe8d4a51000u64));
 		assert_eq!(req.value.into_u256(), U256::from(1234567890987654321u128));
 	}
@@ -353,7 +300,8 @@ mod tests {
 	#[test]
 	fn instantiate_request_should_serialize_deserialize_properly() {
 		type Req = InstantiateRequest<String, String>;
-		let req: Req = serde_json::from_str(r#"
+		let req: Req = serde_json::from_str(
+			r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"endowment": "0x88",
@@ -362,7 +310,9 @@ mod tests {
 			"data": "0x4299",
 			"salt": "0x9988"
 		}
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
 		assert_eq!(req.origin, "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL");
 		assert_eq!(req.endowment.into_u256(), 0x88.into());
@@ -383,52 +333,63 @@ mod tests {
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, trim(expected).as_str());
 		}
-		test(r#"{
+		test(
+			r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "0x68656c704f6b",
+			"gasRequired": 8000,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Ok": {
 				"flags": 5,
 				"data": "0x1234"
 			  }
 			}
-		}"#);
-		test(r#"{
+		}"#,
+		);
+		test(
+			r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "0x68656c70457272",
+			"gasRequired": 5200,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}
-		}"#);
+		}"#,
+		);
 	}
 
 	#[test]
 	fn instantiate_result_should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
-			let res: ContractInstantiateResult<String, u64> = serde_json::from_str(expected).unwrap();
+			let res: ContractInstantiateResult<String> = serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, trim(expected).as_str());
 		}
-		test(r#"{
+		test(
+			r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "0x68656c704f6b",
+			"gasRequired": 8000,
+			"debugMessage": "HelloWorld",
 			"result": {
 			   "Ok": {
 				  "result": {
 					 "flags": 5,
 					 "data": "0x1234"
 				  },
-				  "accountId": "5CiPP",
-				  "rentProjection": null
+				  "accountId": "5CiPP"
 			   }
 			}
-		}"#);
-		test(r#"{
+		}"#,
+		);
+		test(
+			r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "0x68656c70457272",
+			"gasRequired": 5200,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}
-		}"#);
+		}"#,
+		);
 	}
 }

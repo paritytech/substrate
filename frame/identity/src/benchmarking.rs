@@ -21,11 +21,11 @@
 
 use super::*;
 
-use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use sp_runtime::traits::Bounded;
-use frame_support::{ensure, traits::Get};
 use crate::Pallet as Identity;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::{ensure, traits::Get};
+use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
@@ -39,11 +39,19 @@ fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 		let registrar: T::AccountId = account("registrar", i, SEED);
 		let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar.clone())?;
-		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i.into(), 10u32.into())?;
-		let fields = IdentityFields(
-			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
-			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
-		);
+		Identity::<T>::set_fee(
+			RawOrigin::Signed(registrar.clone()).into(),
+			i.into(),
+			10u32.into(),
+		)?;
+		let fields =
+			IdentityFields(
+				IdentityField::Display |
+					IdentityField::Legal | IdentityField::Web |
+					IdentityField::Riot | IdentityField::Email |
+					IdentityField::PgpFingerprint |
+					IdentityField::Image | IdentityField::Twitter,
+			);
 		Identity::<T>::set_fields(RawOrigin::Signed(registrar.clone()).into(), i.into(), fields)?;
 	}
 
@@ -53,7 +61,10 @@ fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 
 // Create `s` sub-accounts for the identity of `who` and return them.
 // Each will have 32 bytes of raw data added to it.
-fn create_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+fn create_sub_accounts<T: Config>(
+	who: &T::AccountId,
+	s: u32,
+) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
 	let data = Data::Raw(vec![0; 32].try_into().unwrap());
@@ -66,14 +77,17 @@ fn create_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::
 	// Set identity so `set_subs` does not fail.
 	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
 	let info = create_identity_info::<T>(1);
-	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
+	Identity::<T>::set_identity(who_origin.clone().into(), Box::new(info))?;
 
 	Ok(subs)
 }
 
 // Adds `s` sub-accounts to the identity of `who`. Each will have 32 bytes of raw data added to it.
 // This additionally returns the vector of sub-accounts so it can be modified if needed.
-fn add_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+fn add_sub_accounts<T: Config>(
+	who: &T::AccountId,
+	s: u32,
+) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let who_origin = RawOrigin::Signed(who.clone());
 	let subs = create_sub_accounts::<T>(who, s)?;
 
@@ -123,7 +137,7 @@ benchmarks! {
 
 			// Add an initial identity
 			let initial_info = create_identity_info::<T>(1);
-			Identity::<T>::set_identity(caller_origin.clone(), initial_info)?;
+			Identity::<T>::set_identity(caller_origin.clone(), Box::new(initial_info))?;
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
@@ -137,7 +151,7 @@ benchmarks! {
 			}
 			caller
 		};
-	}: _(RawOrigin::Signed(caller.clone()), create_identity_info::<T>(x))
+	}: _(RawOrigin::Signed(caller.clone()), Box::new(create_identity_info::<T>(x)))
 	verify {
 		assert_last_event::<T>(Event::<T>::IdentitySet(caller).into());
 	}
@@ -190,7 +204,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		// User requests judgement from all the registrars, and they approve
@@ -219,7 +233,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
@@ -237,7 +251,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
@@ -307,7 +321,7 @@ benchmarks! {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			let info = create_identity_info::<T>(x);
-			Identity::<T>::set_identity(user_origin.clone(), info)?;
+			Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
@@ -328,7 +342,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
 		let info = create_identity_info::<T>(x);
-		Identity::<T>::set_identity(target_origin.clone(), info)?;
+		Identity::<T>::set_identity(target_origin.clone(), Box::new(info))?;
 		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve
@@ -399,8 +413,4 @@ benchmarks! {
 
 }
 
-impl_benchmark_test_suite!(
-	Identity,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Identity, crate::tests::new_test_ext(), crate::tests::Test);

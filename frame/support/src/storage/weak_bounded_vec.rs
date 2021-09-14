@@ -18,17 +18,16 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
-use sp_std::prelude::*;
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode, MaxEncodedLen};
+use crate::{
+	storage::{StorageDecodeLength, StorageTryAppend},
+	traits::Get,
+};
+use codec::{Decode, Encode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use crate::{
-	traits::Get,
-	storage::{StorageDecodeLength, StorageTryAppend},
-};
+use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -271,8 +270,8 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 }
 
 // NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T, S1>
-// to allow comparison of bounded vectors with different bounds.
+// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T,
+// S1> to allow comparison of bounded vectors with different bounds.
 impl<T, S> PartialEq for WeakBoundedVec<T, S>
 where
 	T: PartialEq,
@@ -317,9 +316,9 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
+	use crate::Twox128;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;
