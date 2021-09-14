@@ -360,7 +360,7 @@ pub mod pallet {
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
-			Self::deposit_log(generic::DigestItem::RuntimeUpdated);
+			Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
 			Ok(().into())
 		}
 
@@ -1083,7 +1083,7 @@ impl<T: Config> Pallet<T> {
 	/// the storage (for instance in case of parachains).
 	pub fn update_code_in_storage(code: &[u8]) -> DispatchResult {
 		storage::unhashed::put_raw(well_known_keys::CODE, code);
-		Self::deposit_log(generic::DigestItem::RuntimeUpdated);
+		Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
 		Self::deposit_event(Event::CodeUpdated);
 		Ok(())
 	}

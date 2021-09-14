@@ -401,7 +401,7 @@ fn assert_runtime_updated_digest(num: usize) {
 		System::digest()
 			.logs
 			.into_iter()
-			.filter(|item| *item == generic::DigestItem::RuntimeUpdated)
+			.filter(|item| *item == generic::DigestItem::RuntimeEnvironmentUpdated)
 			.count(),
 		num,
 		"Incorrect number of Runtime Updated digest items",
