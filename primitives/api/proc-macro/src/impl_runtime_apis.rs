@@ -300,8 +300,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				let at = #crate_::BlockId::Hash(parent_hash.clone());
 				let state_version = self.call
 					.runtime_version_at(&at)
-					.map_err(|e| format!("{:?}", e))?
-					.state_version();
+					.map(|v| v.state_version())
+					.map_err(|e| format!("{:?}", e))?;
 
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
