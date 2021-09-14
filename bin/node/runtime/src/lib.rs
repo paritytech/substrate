@@ -549,7 +549,10 @@ parameter_types! {
 		.max
 		.get(DispatchClass::Normal);
 
-	pub const VoterSnapshotPerBlock: u32 = u32::MAX;
+	// BagsList allows a practically unbounded count of nominators to participate in NPoS elections.
+	// To ensure we respect memory limits when using the BagsList this must be set to a number of
+	// voters we know can fit into a single vec allocation.
+	pub const VoterSnapshotPerBlock: u32 = 10_000;
 }
 
 sp_npos_elections::generate_solution_type!(
