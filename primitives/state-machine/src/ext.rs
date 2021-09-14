@@ -17,16 +17,13 @@
 
 //! Concrete externalities implementation.
 
-use crate::{
-	backend::Backend, IndexOperation, OverlayedChanges,
-	StorageKey, StorageValue,
-};
 #[cfg(feature = "std")]
 use crate::overlayed_changes::OverlayedExtensions;
-#[cfg(feature = "std")]
-use sp_core::hexdisplay::HexDisplay;
+use crate::{backend::Backend, IndexOperation, OverlayedChanges, StorageKey, StorageValue};
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
+#[cfg(feature = "std")]
+use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey};
 use sp_externalities::{Extension, ExtensionStore, Externalities};
 use sp_trie::{empty_child_trie_root, trie_types::Layout};

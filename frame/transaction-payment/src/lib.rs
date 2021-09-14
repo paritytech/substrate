@@ -345,10 +345,10 @@ pub mod pallet {
 
 			#[cfg(any(feature = "std", test))]
 			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// This is the minimum value of the multiplier. Make sure that if we collapse to this
-				// value, we can recover with a reasonable amount of traffic. For this test we assert
-				// that if we collapse to minimum, the trend will be positive with a weight value
-				// which is 1% more than the target.
+				// This is the minimum value of the multiplier. Make sure that if we collapse to
+				// this value, we can recover with a reasonable amount of traffic. For this test we
+				// assert that if we collapse to minimum, the trend will be positive with a weight
+				// value which is 1% more than the target.
 				let min_value = T::FeeMultiplierUpdate::min();
 
 				let target = target + addition;

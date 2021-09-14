@@ -330,7 +330,11 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
 	for BackendRuntimeCode<'a, B, H>
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
-		self.backend.storage(sp_core::storage::well_known_keys::CODE).ok().flatten().map(Into::into)
+		self.backend
+			.storage(sp_core::storage::well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.map(Into::into)
 	}
 }
 
