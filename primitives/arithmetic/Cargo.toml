@@ -28,7 +28,7 @@ sp-debug-derive = { version = "3.0.0", default-features = false, path = "../debu
 [dev-dependencies]
 rand = "0.7.2"
 criterion = "0.3"
-primitive-types = "0.10.0"
+primitive-types = "0.10.1"
 
 [features]
 default = ["std"]

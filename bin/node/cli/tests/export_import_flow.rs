@@ -188,7 +188,7 @@ fn export_import_revert() {
 	let exported_blocks_file = base_path.path().join("exported_blocks");
 	let db_path = base_path.path().join("db");
 
-	common::run_dev_node_for_a_while(base_path.path());
+	common::run_node_for_a_while(base_path.path(), &["--dev"]);
 
 	let mut executor = ExportImportRevertExecutor::new(&base_path, &exported_blocks_file, &db_path);
 
