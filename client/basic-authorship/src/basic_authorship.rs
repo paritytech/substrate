@@ -378,6 +378,7 @@ where
 			let block_size =
 				block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
 			if block_size + pending_tx_data.encoded_size() > block_size_limit {
+				pending_iterator.report_invalid();
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
 					debug!(
@@ -385,7 +386,6 @@ where
 						 but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
-					pending_iterator.report_invalid();
 					continue
 				} else {
 					debug!("Reached block size limit, proceeding with proposing.");
