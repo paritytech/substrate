@@ -228,7 +228,6 @@ where
 					} else {
 						// This point is reached if the network has shut down, at which point there is not
 						// much else to do than to shut down the authority discovery as well.
-						log::debug!(target: LOG_TARGET, "Shutting down worker");
 						return;
 					}
 				},
@@ -259,7 +258,6 @@ where
 				},
 				_ = self.test_connectivity.next().fuse() => {
 					if !self.test_connectivity_future.is_terminated() {
-						log::debug!(target: LOG_TARGET, "Skipping connectivity tests round because previous is still running");
 						continue;
 					}
 
