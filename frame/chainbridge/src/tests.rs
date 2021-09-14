@@ -132,7 +132,9 @@ fn asset_transfer_success() {
         let metadata = vec![];
         let amount = 100;
         let token_id = vec![1, 2, 3, 4];
+        let method = "Erc20.transfer".as_bytes().to_vec();
 
+        assert_ok!(Bridge::set_resource(Origin::root(), resource_id, method.clone()));
         assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
 
         assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_id.clone()));
@@ -180,6 +182,34 @@ fn asset_transfer_success() {
             resource_id,
             metadata,
         ))]);
+    })
+}
+
+#[test]
+fn asset_transfer_invalid_resource_id() {
+    new_test_ext().execute_with(|| {
+        let dest_id = 2;
+        let to = vec![2];
+        let resource_id = [1; 32];
+        let amount = 100;
+
+        assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
+        assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_id.clone()));
+        
+        assert_noop!(
+            Bridge::transfer_fungible(dest_id.clone(), resource_id.clone(), to.clone(), amount.into()),
+            Error::<Test>::ResourceDoesNotExist
+        );
+
+        assert_noop!(
+            Bridge::transfer_nonfungible(dest_id.clone(), resource_id.clone(), vec![], vec![], vec![]),
+            Error::<Test>::ResourceDoesNotExist
+        );
+
+        assert_noop!(
+            Bridge::transfer_generic(dest_id.clone(), resource_id.clone(), vec![]),
+            Error::<Test>::ResourceDoesNotExist
+        );
     })
 }
 

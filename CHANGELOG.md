@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Added dynamic block interval
+- Added validation for resource Id in chainbridge frame.
 
 ## [2.3.2]
 
