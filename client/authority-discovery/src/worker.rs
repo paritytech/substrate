@@ -53,6 +53,9 @@ use sc_network::{
 	NetworkStateInfo,
 	PeerId,
 };
+use sp_api::ProvideRuntimeApi;
+use sp_authority_discovery::{
+	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature};
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
