@@ -98,13 +98,13 @@ impl PalletStorageAttrInfo {
 	fn from_attrs(attrs: Vec<PalletStorageAttr>) -> syn::Result<Self> {
 		let mut getter = None;
 		let mut rename_as = None;
-		let mut unbounded = None;
+		let mut unbounded = false;
 		for attr in attrs {
 			match attr {
 				PalletStorageAttr::Getter(ident, ..) if getter.is_none() => getter = Some(ident),
 				PalletStorageAttr::StorageName(name, ..) if rename_as.is_none() =>
 					rename_as = Some(name),
-				PalletStorageAttr::Unbounded(..) if unbounded.is_none() => unbounded = Some(()),
+				PalletStorageAttr::Unbounded(..) if !unbounded => unbounded = true,
 				attr =>
 					return Err(syn::Error::new(
 						attr.attr_span(),
@@ -113,7 +113,7 @@ impl PalletStorageAttrInfo {
 			}
 		}
 
-		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded: unbounded.is_some() })
+		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded })
 	}
 }
 
