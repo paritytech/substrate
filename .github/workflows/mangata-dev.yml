@@ -26,13 +26,15 @@ jobs:
       - name: Check Cargo version
         run: |
           cargo --version
-      - name: Run cargo check
+      - name: Build UT
         uses: actions-rs/cargo@v1
         with:
           toolchain: nightly-2020-10-01
-          command: check
-      - name: Test cargo check
+          command: build
+          args: --tests
+      - name: Run UT
         uses: actions-rs/cargo@v1
         with:
           toolchain: nightly-2020-10-01
           command: test
+est
