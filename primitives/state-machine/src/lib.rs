@@ -55,10 +55,7 @@ pub use tracing::trace;
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! warn {
-	(target: $target:expr, $message:expr) => {
-		()
-	};
-	(target: $target:expr, $message:expr, $( $arg:ident ),*) => {
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
 		{
 			$(
 				let _ = &$arg;
@@ -79,7 +76,7 @@ macro_rules! warn {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! debug {
-	(target: $target:expr, $message:expr, $( $arg:ident ),*) => {
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
 		{
 			$(
 				let _ = &$arg;
@@ -93,7 +90,7 @@ macro_rules! debug {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! trace {
-	(target: $target:expr, $($arg:tt),*) => {
+	(target: $target:expr, $($arg:tt)+) => {
 		()
 	};
 	($($arg:tt)+) => {
