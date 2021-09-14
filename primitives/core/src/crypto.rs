@@ -222,7 +222,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// A format filterer, can be used to ensure that `from_ss58check` family only decode for
 	/// allowed identifiers. By default just refuses the two reserved identifiers.
 	fn format_is_allowed(f: Ss58AddressFormat) -> bool {
-		!matches!(f, Ss58AddressFormat::Reserved46 | Ss58AddressFormat::Reserved47)
+		!f.is_reserved()
 	}
 
 	/// Some if the string is a properly encoded SS58Check address.
@@ -351,12 +351,12 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 }
 
 #[cfg(feature = "full_crypto")]
-pub use ss58_registry::Ss58AddressFormat;
+pub use ss58_registry::{from_address_format, Ss58AddressFormat};
 
 /// Default prefix number
 #[cfg(feature = "std")]
 static DEFAULT_VERSION: core::sync::atomic::AtomicU16 =
-	core::sync::atomic::AtomicU16::new(Ss58AddressFormat::Substrate.into());
+	core::sync::atomic::AtomicU16::new(from_address_format(Ss58AddressFormat::SubstrateAccount));
 
 /// Returns default(). (can't impl Default due to orphan rules).
 #[cfg(feature = "std")]
