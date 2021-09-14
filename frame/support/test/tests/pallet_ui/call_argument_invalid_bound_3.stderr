@@ -16,6 +16,10 @@ error[E0277]: the trait bound `Bar: Clone` is not satisfied
     |                                               ^^^ the trait `Clone` is not implemented for `Bar`
     |
 note: required by `clone`
+   --> $DIR/clone.rs:121:5
+    |
+121 |     fn clone(&self) -> Self;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0369]: binary operation `==` cannot be applied to type `&Bar`
   --> $DIR/call_argument_invalid_bound_3.rs:22:41
