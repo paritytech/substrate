@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Tipping Module ( pallet-tips )
+//! # Tipping Pallet ( pallet-tips )
 //!
 //! > NOTE: This pallet is tightly coupled with pallet-treasury.
 //!
@@ -56,54 +56,30 @@
 
 mod benchmarking;
 mod tests;
+
+pub mod migrations;
 pub mod weights;
 
-use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, ensure,
-	traits::{Currency, ExistenceRequirement::KeepAlive, Get, ReservableCurrency},
-	Parameter,
-};
-use sp_std::prelude::*;
-
-use codec::{Decode, Encode};
-use frame_support::traits::{ContainsLengthBound, EnsureOrigin, OnUnbalanced, SortedMembers};
-use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
 	traits::{AccountIdConversion, BadOrigin, Hash, Zero},
 	Percent, RuntimeDebug,
 };
+use sp_std::prelude::*;
+
+use codec::{Decode, Encode};
+use frame_support::{
+	traits::{
+		ContainsLengthBound, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
+		OnUnbalanced, ReservableCurrency, SortedMembers, StorageVersion,
+	},
+	Parameter,
+};
+
+pub use pallet::*;
 pub use weights::WeightInfo;
 
 pub type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
-
-pub trait Config: frame_system::Config + pallet_treasury::Config {
-	/// Maximum acceptable reason length.
-	type MaximumReasonLength: Get<u32>;
-
-	/// The amount held on deposit per byte within the tip report reason or bounty description.
-	type DataDepositPerByte: Get<BalanceOf<Self>>;
-
-	/// Origin from which tippers must come.
-	///
-	/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy operation).
-	type Tippers: SortedMembers<Self::AccountId> + ContainsLengthBound;
-
-	/// The period for which a tip remains open after is has achieved threshold tippers.
-	type TipCountdown: Get<Self::BlockNumber>;
-
-	/// The percent of the final tip which goes to the original reporter of the tip.
-	type TipFindersFee: Get<Percent>;
-
-	/// The amount held on deposit for placing a tip report.
-	type TipReportDepositBase: Get<BalanceOf<Self>>;
-
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
-
-	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
-}
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
@@ -132,50 +108,96 @@ pub struct OpenTip<
 	finders_fee: bool,
 }
 
-// Note :: For backward compatability reasons,
-// pallet-tips uses Treasury for storage.
-// This is temporary solution, soon will get replaced with
-// Own storage identifier.
-decl_storage! {
-	trait Store for Module<T: Config> as Treasury {
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-		/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
-		/// This has the insecure enumerable hash function since the key itself is already
-		/// guaranteed to be a secure hash.
-		pub Tips get(fn tips):
-			map hasher(twox_64_concat) T::Hash
-			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
-		/// Simple preimage lookup from the reason's hash to the original data. Again, has an
-		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
-		pub Reasons get(fn reasons): map hasher(identity) T::Hash => Option<Vec<u8>>;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	pub struct Pallet<T>(_);
 
+	#[pallet::config]
+	pub trait Config: frame_system::Config + pallet_treasury::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Maximum acceptable reason length.
+		#[pallet::constant]
+		type MaximumReasonLength: Get<u32>;
+
+		/// The amount held on deposit per byte within the tip report reason or bounty description.
+		#[pallet::constant]
+		type DataDepositPerByte: Get<BalanceOf<Self>>;
+
+		/// The period for which a tip remains open after is has achieved threshold tippers.
+		#[pallet::constant]
+		type TipCountdown: Get<Self::BlockNumber>;
+
+		/// The percent of the final tip which goes to the original reporter of the tip.
+		#[pallet::constant]
+		type TipFindersFee: Get<Percent>;
+
+		/// The amount held on deposit for placing a tip report.
+		#[pallet::constant]
+		type TipReportDepositBase: Get<BalanceOf<Self>>;
+
+		/// Origin from which tippers must come.
+		///
+		/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy
+		/// operation).
+		type Tippers: SortedMembers<Self::AccountId> + ContainsLengthBound;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
-}
 
-decl_event!(
-	pub enum Event<T>
-	where
-		Balance = BalanceOf<T>,
-		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::Hash,
-	{
+	/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
+	/// This has the insecure enumerable hash function since the key itself is already
+	/// guaranteed to be a secure hash.
+	#[pallet::storage]
+	#[pallet::getter(fn tips)]
+	pub type Tips<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::Hash,
+		OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+		OptionQuery,
+	>;
+
+	/// Simple preimage lookup from the reason's hash to the original data. Again, has an
+	/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
+	#[pallet::storage]
+	#[pallet::getter(fn reasons)]
+	pub type Reasons<T: Config> = StorageMap<_, Identity, T::Hash, Vec<u8>, OptionQuery>;
+
+	#[pallet::event]
+	#[pallet::metadata(T::Hash = "Hash", T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
 		/// A new tip suggestion has been opened. \[tip_hash\]
-		NewTip(Hash),
+		NewTip(T::Hash),
 		/// A tip suggestion has reached threshold and is closing. \[tip_hash\]
-		TipClosing(Hash),
+		TipClosing(T::Hash),
 		/// A tip suggestion has been closed. \[tip_hash, who, payout\]
-		TipClosed(Hash, AccountId, Balance),
+		TipClosed(T::Hash, T::AccountId, BalanceOf<T>),
 		/// A tip suggestion has been retracted. \[tip_hash\]
-		TipRetracted(Hash),
+		TipRetracted(T::Hash),
 		/// A tip suggestion has been slashed. \[tip_hash, finder, deposit\]
-		TipSlashed(Hash, AccountId, Balance),
+		TipSlashed(T::Hash, T::AccountId, BalanceOf<T>),
 	}
-);
 
-decl_error! {
-	/// Error for the tips module.
-	pub enum Error for Module<T: Config> {
+	/// Old name generated by `decl_event`.
+	#[deprecated(note = "use `Event` instead")]
+	pub type RawEvent<T> = Event<T>;
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// The reason given is just too big.
 		ReasonTooBig,
 		/// The tip was already found/started.
@@ -189,32 +211,9 @@ decl_error! {
 		/// The tip cannot be claimed/closed because it's still in the countdown period.
 		Premature,
 	}
-}
 
-decl_module! {
-	pub struct Module<T: Config>
-		for enum Call
-		where origin: T::Origin
-	{
-		/// The period for which a tip remains open after is has achieved threshold tippers.
-		const TipCountdown: T::BlockNumber = T::TipCountdown::get();
-
-		/// The amount of the final tip which goes to the original reporter of the tip.
-		const TipFindersFee: Percent = T::TipFindersFee::get();
-
-		/// The amount held on deposit for placing a tip report.
-		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
-
-		/// The amount held on deposit per byte within the tip report reason.
-		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
-
-		/// Maximum acceptable reason length.
-		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
-
-		type Error = Error<T>;
-
-		fn deposit_event() = default;
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -234,19 +233,26 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::report_awesome(reason.len() as u32)]
-		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
+		#[pallet::weight(<T as Config>::WeightInfo::report_awesome(reason.len() as u32))]
+		pub fn report_awesome(
+			origin: OriginFor<T>,
+			reason: Vec<u8>,
+			who: T::AccountId,
+		) -> DispatchResult {
 			let finder = ensure_signed(origin)?;
 
-			ensure!(reason.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
+			ensure!(
+				reason.len() <= T::MaximumReasonLength::get() as usize,
+				Error::<T>::ReasonTooBig
+			);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
-			let deposit = T::TipReportDepositBase::get()
-				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
+			let deposit = T::TipReportDepositBase::get() +
+				T::DataDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T>::insert(&reason_hash, &reason);
@@ -257,10 +263,11 @@ decl_module! {
 				deposit,
 				closes: None,
 				tips: vec![],
-				finders_fee: true
+				finders_fee: true,
 			};
 			Tips::<T>::insert(&hash, tip);
-			Self::deposit_event(RawEvent::NewTip(hash));
+			Self::deposit_event(Event::NewTip(hash));
+			Ok(())
 		}
 
 		/// Retract a prior tip-report from `report_awesome`, and cancel the process of tipping.
@@ -282,8 +289,8 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::retract_tip()]
-		fn retract_tip(origin, hash: T::Hash) {
+		#[pallet::weight(<T as Config>::WeightInfo::retract_tip())]
+		pub fn retract_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
 			ensure!(tip.finder == who, Error::<T>::NotFinder);
@@ -294,7 +301,8 @@ decl_module! {
 				let err_amount = T::Currency::unreserve(&who, tip.deposit);
 				debug_assert!(err_amount.is_zero());
 			}
-			Self::deposit_event(RawEvent::TipRetracted(hash));
+			Self::deposit_event(Event::TipRetracted(hash));
+			Ok(())
 		}
 
 		/// Give a tip for something new; no finder's fee will be taken.
@@ -312,15 +320,20 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Complexity: `O(R + T)` where `R` length of `reason`, `T` is the number of tippers.
-		///   - `O(T)`: decoding `Tipper` vec of length `T`
-		///     `T` is charged as upper bound given by `ContainsLengthBound`.
-		///     The actual cost depends on the implementation of `T::Tippers`.
+		///   - `O(T)`: decoding `Tipper` vec of length `T`. `T` is charged as upper bound given by
+		///     `ContainsLengthBound`. The actual cost depends on the implementation of
+		///     `T::Tippers`.
 		///   - `O(R)`: hashing and encoding of reason of length `R`
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
-		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T>) {
+		#[pallet::weight(<T as Config>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32))]
+		pub fn tip_new(
+			origin: OriginFor<T>,
+			reason: Vec<u8>,
+			who: T::AccountId,
+			#[pallet::compact] tip_value: BalanceOf<T>,
+		) -> DispatchResult {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
@@ -328,7 +341,7 @@ decl_module! {
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
 			Reasons::<T>::insert(&reason_hash, &reason);
-			Self::deposit_event(RawEvent::NewTip(hash.clone()));
+			Self::deposit_event(Event::NewTip(hash.clone()));
 			let tips = vec![(tipper.clone(), tip_value)];
 			let tip = OpenTip {
 				reason: reason_hash,
@@ -340,6 +353,7 @@ decl_module! {
 				finders_fee: false,
 			};
 			Tips::<T>::insert(&hash, tip);
+			Ok(())
 		}
 
 		/// Declare a tip value for an already-open tip.
@@ -357,26 +371,30 @@ decl_module! {
 		/// has started.
 		///
 		/// # <weight>
-		/// - Complexity: `O(T)` where `T` is the number of tippers.
-		///   decoding `Tipper` vec of length `T`, insert tip and check closing,
-		///   `T` is charged as upper bound given by `ContainsLengthBound`.
-		///   The actual cost depends on the implementation of `T::Tippers`.
+		/// - Complexity: `O(T)` where `T` is the number of tippers. decoding `Tipper` vec of length
+		///   `T`, insert tip and check closing, `T` is charged as upper bound given by
+		///   `ContainsLengthBound`. The actual cost depends on the implementation of `T::Tippers`.
 		///
 		///   Actually weight could be lower as it depends on how many tips are in `OpenTip` but it
 		///   is weighted as if almost full i.e of length `T-1`.
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::tip(T::Tippers::max_len() as u32)]
-		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T>) {
+		#[pallet::weight(<T as Config>::WeightInfo::tip(T::Tippers::max_len() as u32))]
+		pub fn tip(
+			origin: OriginFor<T>,
+			hash: T::Hash,
+			#[pallet::compact] tip_value: BalanceOf<T>,
+		) -> DispatchResult {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
 			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
-				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
+				Self::deposit_event(Event::TipClosing(hash.clone()));
 			}
 			Tips::<T>::insert(&hash, tip);
+			Ok(())
 		}
 
 		/// Close and payout a tip.
@@ -389,24 +407,24 @@ decl_module! {
 		///   as the hash of the tuple of the original tip `reason` and the beneficiary account ID.
 		///
 		/// # <weight>
-		/// - Complexity: `O(T)` where `T` is the number of tippers.
-		///   decoding `Tipper` vec of length `T`.
-		///   `T` is charged as upper bound given by `ContainsLengthBound`.
-		///   The actual cost depends on the implementation of `T::Tippers`.
+		/// - Complexity: `O(T)` where `T` is the number of tippers. decoding `Tipper` vec of length
+		///   `T`. `T` is charged as upper bound given by `ContainsLengthBound`. The actual cost
+		///   depends on the implementation of `T::Tippers`.
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
-		fn close_tip(origin, hash: T::Hash) {
+		#[pallet::weight(<T as Config>::WeightInfo::close_tip(T::Tippers::max_len() as u32))]
+		pub fn close_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			ensure_signed(origin)?;
 
 			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			let n = tip.closes.as_ref().ok_or(Error::<T>::StillOpen)?;
-			ensure!(system::Pallet::<T>::block_number() >= *n, Error::<T>::Premature);
+			ensure!(frame_system::Pallet::<T>::block_number() >= *n, Error::<T>::Premature);
 			// closed.
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
+			Ok(())
 		}
 
 		/// Remove and slash an already-open tip.
@@ -421,8 +439,8 @@ decl_module! {
 		///   `T` is charged as upper bound given by `ContainsLengthBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
-		fn slash_tip(origin, hash: T::Hash) {
+		#[pallet::weight(<T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32))]
+		pub fn slash_tip(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::RejectOrigin::ensure_origin(origin)?;
 
 			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
@@ -432,12 +450,13 @@ decl_module! {
 				T::OnSlash::on_unbalanced(imbalance);
 			}
 			Reasons::<T>::remove(&tip.reason);
-			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
+			Self::deposit_event(Event::TipSlashed(hash, tip.finder, tip.deposit));
+			Ok(())
 		}
 	}
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	// Add public immutables and private mutables.
 
 	/// The account ID of the treasury pot.
@@ -464,7 +483,7 @@ impl<T: Config> Module<T> {
 		Self::retain_active_tips(&mut tip.tips);
 		let threshold = (T::Tippers::count() + 1) / 2;
 		if tip.tips.len() >= threshold && tip.closes.is_none() {
-			tip.closes = Some(system::Pallet::<T>::block_number() + T::TipCountdown::get());
+			tip.closes = Some(frame_system::Pallet::<T>::block_number() + T::TipCountdown::get());
 			true
 		} else {
 			false
@@ -526,10 +545,10 @@ impl<T: Config> Module<T> {
 		// same as above: best-effort only.
 		let res = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
 		debug_assert!(res.is_ok());
-		Self::deposit_event(RawEvent::TipClosed(hash, tip.who, payout));
+		Self::deposit_event(Event::TipClosed(hash, tip.who, payout));
 	}
 
-	pub fn migrate_retract_tip_for_tip_new() {
+	pub fn migrate_retract_tip_for_tip_new(module: &[u8], item: &[u8]) {
 		/// An open tipping "motion". Retains all details of a tip including information on the
 		/// finder and the members who have voted.
 		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -559,7 +578,7 @@ impl<T: Config> Module<T> {
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>(b"Treasury", b"Tips")
+		>(module, item)
 		.drain()
 		{
 			let (finder, deposit, finders_fee) = match old_tip.finder {

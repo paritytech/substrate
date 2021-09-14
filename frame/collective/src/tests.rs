@@ -15,10 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate as collective;
-use frame_support::{assert_noop, assert_ok, parameter_types, Hashable};
-use frame_system::{self as system, EventRecord, Phase};
+use super::{Event as CollectiveEvent, *};
+use crate as pallet_collective;
+use frame_support::{
+	assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable,
+};
+use frame_system::{EventRecord, Phase};
 use sp_core::{
 	u32_trait::{_3, _4},
 	H256,
@@ -38,10 +40,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Pallet, Call, Event<T>},
-		Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Collective: pallet_collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+		CollectiveMajority: pallet_collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+		DefaultCollective: pallet_collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
 		Democracy: mock_democracy::{Pallet, Call, Event<T>},
 	}
 );
@@ -152,11 +154,11 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = GenesisConfig {
-		collective: collective::GenesisConfig {
+		collective: pallet_collective::GenesisConfig {
 			members: vec![1, 2, 3],
 			phantom: Default::default(),
 		},
-		collective_majority: collective::GenesisConfig {
+		collective_majority: pallet_collective::GenesisConfig {
 			members: vec![1, 2, 3, 4, 5],
 			phantom: Default::default(),
 		},
@@ -214,11 +216,11 @@ fn close_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash, 2, 1))),
-				record(Event::Collective(RawEvent::Disapproved(hash)))
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 2, 1))),
+				record(Event::Collective(CollectiveEvent::Disapproved(hash)))
 			]
 		);
 	});
@@ -307,11 +309,11 @@ fn close_with_prime_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash, 2, 1))),
-				record(Event::Collective(RawEvent::Disapproved(hash)))
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 2, 1))),
+				record(Event::Collective(CollectiveEvent::Disapproved(hash)))
 			]
 		);
 	});
@@ -346,12 +348,15 @@ fn close_with_voting_prime_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash, 3, 0))),
-				record(Event::Collective(RawEvent::Approved(hash))),
-				record(Event::Collective(RawEvent::Executed(hash, Err(DispatchError::BadOrigin))))
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 3, 0))),
+				record(Event::Collective(CollectiveEvent::Approved(hash))),
+				record(Event::Collective(CollectiveEvent::Executed(
+					hash,
+					Err(DispatchError::BadOrigin)
+				)))
 			]
 		);
 	});
@@ -393,13 +398,13 @@ fn close_with_no_prime_but_majority_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::CollectiveMajority(RawEvent::Proposed(1, 0, hash, 5))),
-				record(Event::CollectiveMajority(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::CollectiveMajority(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::CollectiveMajority(RawEvent::Voted(3, hash, true, 3, 0))),
-				record(Event::CollectiveMajority(RawEvent::Closed(hash, 5, 0))),
-				record(Event::CollectiveMajority(RawEvent::Approved(hash))),
-				record(Event::CollectiveMajority(RawEvent::Executed(
+				record(Event::CollectiveMajority(CollectiveEvent::Proposed(1, 0, hash, 5))),
+				record(Event::CollectiveMajority(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::CollectiveMajority(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::CollectiveMajority(CollectiveEvent::Voted(3, hash, true, 3, 0))),
+				record(Event::CollectiveMajority(CollectiveEvent::Closed(hash, 5, 0))),
+				record(Event::CollectiveMajority(CollectiveEvent::Approved(hash))),
+				record(Event::CollectiveMajority(CollectiveEvent::Executed(
 					hash,
 					Err(DispatchError::BadOrigin)
 				)))
@@ -526,7 +531,7 @@ fn propose_works() {
 
 		assert_eq!(
 			System::events(),
-			vec![record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3)))]
+			vec![record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 3)))]
 		);
 	});
 }
@@ -682,9 +687,9 @@ fn motions_vote_after_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(1, hash, false, 0, 1))),
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, false, 0, 1))),
 			]
 		);
 	});
@@ -798,12 +803,15 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash, 2, 0))),
-				record(Event::Collective(RawEvent::Approved(hash))),
-				record(Event::Collective(RawEvent::Executed(hash, Err(DispatchError::BadOrigin)))),
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Approved(hash))),
+				record(Event::Collective(CollectiveEvent::Executed(
+					hash,
+					Err(DispatchError::BadOrigin)
+				))),
 			]
 		);
 
@@ -823,14 +831,14 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 1, hash, 2))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Voted(3, hash, true, 3, 0))),
-				record(Event::Collective(RawEvent::Closed(hash, 3, 0))),
-				record(Event::Collective(RawEvent::Approved(hash))),
+				record(Event::Collective(CollectiveEvent::Proposed(1, 1, hash, 2))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(3, hash, true, 3, 0))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 3, 0))),
+				record(Event::Collective(CollectiveEvent::Approved(hash))),
 				record(Event::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed)),
-				record(Event::Collective(RawEvent::Executed(hash, Ok(())))),
+				record(Event::Collective(CollectiveEvent::Executed(hash, Ok(())))),
 			]
 		);
 	});
@@ -856,11 +864,11 @@ fn motions_disapproval_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, false, 1, 1))),
-				record(Event::Collective(RawEvent::Closed(hash, 1, 1))),
-				record(Event::Collective(RawEvent::Disapproved(hash))),
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 3))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, false, 1, 1))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 1, 1))),
+				record(Event::Collective(CollectiveEvent::Disapproved(hash))),
 			]
 		);
 	});
@@ -886,12 +894,15 @@ fn motions_approval_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Closed(hash, 2, 0))),
-				record(Event::Collective(RawEvent::Approved(hash))),
-				record(Event::Collective(RawEvent::Executed(hash, Err(DispatchError::BadOrigin)))),
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Closed(hash, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Approved(hash))),
+				record(Event::Collective(CollectiveEvent::Executed(
+					hash,
+					Err(DispatchError::BadOrigin)
+				))),
 			]
 		);
 	});
@@ -912,7 +923,7 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		));
 		assert_eq!(
 			System::events()[0],
-			record(Event::Collective(RawEvent::Proposed(1, 0, hash, 3)))
+			record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 3)))
 		);
 
 		// Closing the motion too early is not possible because it has neither
@@ -929,8 +940,14 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 
 		// Events show that the close ended in a disapproval.
-		assert_eq!(System::events()[1], record(Event::Collective(RawEvent::Closed(hash, 0, 3))));
-		assert_eq!(System::events()[2], record(Event::Collective(RawEvent::Disapproved(hash))));
+		assert_eq!(
+			System::events()[1],
+			record(Event::Collective(CollectiveEvent::Closed(hash, 0, 3)))
+		);
+		assert_eq!(
+			System::events()[2],
+			record(Event::Collective(CollectiveEvent::Disapproved(hash)))
+		);
 	})
 }
 
@@ -989,10 +1006,10 @@ fn disapprove_proposal_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(RawEvent::Proposed(1, 0, hash, 2))),
-				record(Event::Collective(RawEvent::Voted(1, hash, true, 1, 0))),
-				record(Event::Collective(RawEvent::Voted(2, hash, true, 2, 0))),
-				record(Event::Collective(RawEvent::Disapproved(hash))),
+				record(Event::Collective(CollectiveEvent::Proposed(1, 0, hash, 2))),
+				record(Event::Collective(CollectiveEvent::Voted(1, hash, true, 1, 0))),
+				record(Event::Collective(CollectiveEvent::Voted(2, hash, true, 2, 0))),
+				record(Event::Collective(CollectiveEvent::Disapproved(hash))),
 			]
 		);
 	})
@@ -1001,7 +1018,53 @@ fn disapprove_proposal_works() {
 #[test]
 #[should_panic(expected = "Members cannot contain duplicate accounts.")]
 fn genesis_build_panics_with_duplicate_members() {
-	collective::GenesisConfig::<Test> { members: vec![1, 2, 3, 1], phantom: Default::default() }
-		.build_storage()
-		.unwrap();
+	pallet_collective::GenesisConfig::<Test> {
+		members: vec![1, 2, 3, 1],
+		phantom: Default::default(),
+	}
+	.build_storage()
+	.unwrap();
+}
+
+#[test]
+fn migration_v4() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::PalletInfoAccess;
+
+		let old_pallet = "OldCollective";
+		let new_pallet = <Collective as PalletInfoAccess>::name();
+		frame_support::storage::migration::move_pallet(
+			new_pallet.as_bytes(),
+			old_pallet.as_bytes(),
+		);
+		StorageVersion::new(0).put::<Collective>();
+
+		crate::migrations::v4::pre_migrate::<Collective, _>(old_pallet);
+		crate::migrations::v4::migrate::<Test, Collective, _>(old_pallet);
+		crate::migrations::v4::post_migrate::<Collective, _>(old_pallet);
+
+		let old_pallet = "OldCollectiveMajority";
+		let new_pallet = <CollectiveMajority as PalletInfoAccess>::name();
+		frame_support::storage::migration::move_pallet(
+			new_pallet.as_bytes(),
+			old_pallet.as_bytes(),
+		);
+		StorageVersion::new(0).put::<CollectiveMajority>();
+
+		crate::migrations::v4::pre_migrate::<CollectiveMajority, _>(old_pallet);
+		crate::migrations::v4::migrate::<Test, CollectiveMajority, _>(old_pallet);
+		crate::migrations::v4::post_migrate::<CollectiveMajority, _>(old_pallet);
+
+		let old_pallet = "OldDefaultCollective";
+		let new_pallet = <DefaultCollective as PalletInfoAccess>::name();
+		frame_support::storage::migration::move_pallet(
+			new_pallet.as_bytes(),
+			old_pallet.as_bytes(),
+		);
+		StorageVersion::new(0).put::<DefaultCollective>();
+
+		crate::migrations::v4::pre_migrate::<DefaultCollective, _>(old_pallet);
+		crate::migrations::v4::migrate::<Test, DefaultCollective, _>(old_pallet);
+		crate::migrations::v4::post_migrate::<DefaultCollective, _>(old_pallet);
+	});
 }
