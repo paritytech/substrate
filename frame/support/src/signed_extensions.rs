@@ -130,7 +130,7 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		let mut validity = self.ext.validate(who, call, info, len)?;
-		validity.priority = M::combine(validity.priority, V);
+		validity.priority = M::combine_priority(validity.priority, V);
 		Ok(validity)
 	}
 
@@ -150,7 +150,7 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		let mut validity = S::validate_unsigned(call, info, len)?;
-		validity.priority = M::combine(validity.priority, V);
+		validity.priority = M::combine_priority(validity.priority, V);
 		Ok(validity)
 	}
 
@@ -180,7 +180,7 @@ where
 /// Combination mode for the adjuster.
 pub trait Mode {
 	/// Return a combination of two transaction priorities.
-	fn combine(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority;
+	fn combine_priority(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority;
 }
 
 /// Adding mode for the adjuster.
@@ -189,7 +189,7 @@ pub trait Mode {
 #[derive(Default)]
 pub struct Add;
 impl Mode for Add {
-	fn combine(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
+	fn combine_priority(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
 		a.saturating_add(b)
 	}
 }
@@ -200,7 +200,7 @@ impl Mode for Add {
 #[derive(Default)]
 pub struct Multiply;
 impl Mode for Multiply {
-	fn combine(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
+	fn combine_priority(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
 		a.saturating_mul(b)
 	}
 }
@@ -212,7 +212,7 @@ impl Mode for Multiply {
 #[derive(Default)]
 pub struct Divide;
 impl Mode for Divide {
-	fn combine(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
+	fn combine_priority(a: TransactionPriority, b: TransactionPriority) -> TransactionPriority {
 		if b == 0 {
 			0
 		} else {
