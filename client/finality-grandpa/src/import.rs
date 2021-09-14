@@ -27,6 +27,7 @@ use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 };
 use sc_telemetry::TelemetryHandle;
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
@@ -37,7 +38,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
-use sp_utils::mpsc::TracingUnboundedSender;
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},

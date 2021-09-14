@@ -21,7 +21,7 @@ There are a few basic ground-rules for contributors (including the maintainer(s)
 
 *In General*
 
-A PR needs to be reviewed and approved by project maintainers unless:
+A Pull Request (PR) needs to be reviewed and approved by project maintainers unless:
 
 - it does not alter any logic (e.g. comments, dependencies, docs), then it may be tagged https://github.com/paritytech/substrate/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen+label%3AA2-insubstantial[`insubstantial`] and merged by its author once CI is complete.
 - it is an urgent fix with no large change to logic, then it may be merged after a non-author contributor has approved the review once CI is complete.
@@ -76,19 +76,20 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 To create a Polkadot companion PR:
 
 . Pull latest Polkadot master (or clone it, if you haven't yet).
-. Override your local cargo config to point to your local substrate (pointing to your WIP branch): place `paths = ["path/to/substrate"]` in `~/.cargo/config`.
+. Override substrate deps to point to your local path or branch using https://github.com/bkchr/diener. (E.g. from the polkadot clone dir run `diener patch --crates-to-patch ../substrate --substrate` assuming substrate clone is in a sibling dir. If you do use diener, ensure that you _do not_ commit the changes diener makes to the Cargo.tomls.)
 . Make the changes required and build polkadot locally.
-. Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]"
+. Submit all this as a PR against the Polkadot Repo.
+. Link to your Polkadot PR in the _description_ of your _Substrate_ PR as "polkadot companion: [URL]"
 . Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
-. Wait for reviews on both the Substrate and the Polkadot pull request.
-. Once the Substrate pull request runs green, a member of the `parity` github group can comment on the Substrate pull request with `bot merge` which will:
-    - Merge the Substrate pull request.
-    - In case the pull request origins from https://github.com/paritytech/polkadot directly and not from a fork:
-        - The bot will push a commit to the Polkadot pull request updating its Substrate reference.
-        - The bot will merge the Polkadot pull request once all its CI checks are green.
-    - In case the pull request origins from a fork (relevant for pull requests by external contributors):
-        - You need to push a commit to the Polkadot pull request updating the Substrate reference.
-        - You need to merge by commenting `bot merge` on the Polkadot pull request once all CI checks on the pull request are green.
+. Someone will need to approve the Polkadot PR before the Substrate CI will go green. (The Polkadot CI failing can be ignored as long as the polkadot job in the _substrate_ PR is green).
+. Wait for reviews on both the Substrate and the Polkadot PRs.
+. Once the Substrate PR runs green, a member of the `parity` github group can comment on the Substrate PR with `bot merge` which will:
+    - Merge the Substrate PR.
+    - The bot will push a commit to the Polkadot PR updating its Substrate reference.
+    - If the polkadot PR origins from a fork then a project member may need to press `approve run` on the polkadot PR.
+    - The bot will merge the Polkadot PR once all its CI `{"build_allow_failure":false}` checks are green.
+    
+    Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts. 
 
 If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged.
 
