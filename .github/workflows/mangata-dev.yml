@@ -37,4 +37,3 @@ jobs:
         with:
           toolchain: nightly-2020-10-01
           command: test
-est
