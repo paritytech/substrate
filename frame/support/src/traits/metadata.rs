@@ -29,7 +29,7 @@ pub trait PalletInfo {
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
-	/// Convert the given pallet `P` into its Rust module name.
+	/// Convert the given pallet `P` into its Rust module name as used in `construct_runtime!`.
 	fn module_name<P: 'static>() -> Option<&'static str>;
 	/// Convert the given pallet `P` into its containing crate version.
 	fn crate_version<P: 'static>() -> Option<CrateVersion>;
