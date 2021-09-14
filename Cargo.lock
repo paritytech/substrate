@@ -7590,6 +7590,7 @@ dependencies = [
 name = "sc-rpc-server"
 version = "4.0.0-dev"
 dependencies = [
+ "anyhow",
  "futures-channel",
  "jsonrpsee",
  "log",

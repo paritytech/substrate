@@ -301,7 +301,7 @@ mod waiting {
 }
 
 /// Starts RPC servers.
-async fn start_rpc_servers<R>(
+fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
@@ -319,7 +319,7 @@ where
 		module.clone(),
 		config.tokio_handle.clone(),
 	)
-	.await?;
+	.map_err(|e| Error::Application(e.into()))?;
 
 	let ws = sc_rpc_server::start_ws(
 		ws_addr,
@@ -329,7 +329,7 @@ where
 		module,
 		config.tokio_handle.clone(),
 	)
-	.await?;
+	.map_err(|e| Error::Application(e.into()))?;
 
 	Ok(Box::new((http, ws)))
 }

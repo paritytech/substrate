@@ -20,7 +20,6 @@
 
 #![warn(missing_docs)]
 
-use futures_channel::oneshot;
 use jsonrpsee::{
 	http_server::{HttpServerBuilder, HttpStopHandle},
 	ws_server::{WsServerBuilder, WsStopHandle},
@@ -89,101 +88,75 @@ pub type WsServer = WsStopHandle;
 // }
 
 /// Start HTTP server listening on given address.
-pub async fn start_http<M: Send + Sync + 'static>(
+pub fn start_http<M: Send + Sync + 'static>(
 	addr: std::net::SocketAddr,
 	_cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
-	mut module: RpcModule<M>,
+	module: RpcModule<M>,
 	rt: tokio::runtime::Handle,
-) -> Result<HttpStopHandle, String> {
-	let (tx, rx) = oneshot::channel::<Result<HttpStopHandle, String>>();
+) -> Result<HttpStopHandle, anyhow::Error> {
 	let max_request_body_size = maybe_max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 
+	let server = HttpServerBuilder::default()
+		.max_request_body_size(max_request_body_size as u32)
+		.build(addr)?;
+
+	let handle = server.stop_handle();
+	let rpc_api = build_rpc_api(module);
+
 	rt.spawn(async move {
-		let server = match HttpServerBuilder::default()
-			.max_request_body_size(max_request_body_size as u32)
-			.build(addr)
-		{
-			Ok(server) => server,
-			Err(e) => {
-				let _ = tx.send(Err(e.to_string()));
-				return
-			},
-		};
-		// TODO: (dp) DRY this up; it's the same as the WS code
-		let handle = server.stop_handle();
-		let mut methods_api = RpcModule::new(());
-		let mut available_methods = module.method_names().collect::<Vec<_>>();
-		available_methods.sort_unstable();
-
-		// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
-		methods_api
-			.register_method("rpc_methods", move |_, _| {
-				Ok(serde_json::json!({
-					"version": 1,
-					"methods": available_methods,
-				}))
-			})
-			.expect("infallible all other methods have their own address space; qed");
-
-		module.merge(methods_api).expect("infallible already checked; qed");
-		let _ = tx.send(Ok(handle));
-		let _ = server.start(module).await;
+		let _ = server.start(rpc_api).await;
 	});
 
-	rx.await.unwrap_or(Err("Channel closed".to_string()))
+	Ok(handle)
 }
 
 /// Start WS server listening on given address.
-pub async fn start_ws<M: Send + Sync + 'static>(
+pub fn start_ws<M: Send + Sync + 'static>(
 	addr: std::net::SocketAddr,
 	max_connections: Option<usize>,
 	_cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
-	mut module: RpcModule<M>,
+	module: RpcModule<M>,
 	rt: tokio::runtime::Handle,
-) -> Result<WsStopHandle, String> {
-	let (tx, rx) = oneshot::channel::<Result<WsStopHandle, String>>();
+) -> Result<WsStopHandle, anyhow::Error> {
 	let max_request_body_size = maybe_max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
-	rt.spawn(async move {
-		let server = match WsServerBuilder::default()
-			.max_request_body_size(max_request_body_size as u32)
-			.max_connections(max_connections as u64)
-			.build(addr)
-			.await
-		{
-			Ok(server) => server,
-			Err(e) => {
-				let _ = tx.send(Err(e.to_string()));
-				return
-			},
-		};
-		// TODO: (dp) DRY this up; it's the same as the HTTP code
-		let handle = server.stop_handle();
-		let mut methods_api = RpcModule::new(());
-		let mut available_methods = module.method_names().collect::<Vec<_>>();
-		available_methods.sort();
+	let server = tokio::task::block_in_place(|| {
+		rt.block_on(
+			WsServerBuilder::default()
+				.max_request_body_size(max_request_body_size as u32)
+				.max_connections(max_connections as u64)
+				.build(addr),
+		)
+	})?;
 
-		// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
-		methods_api
-			.register_method("rpc_methods", move |_, _| {
-				Ok(serde_json::json!({
-					"version": 1,
-					"methods": available_methods,
-				}))
-			})
-			.expect("infallible all other methods have their own address space; qed");
+	let handle = server.stop_handle();
+	let rpc_api = build_rpc_api(module);
+	rt.spawn(async move { server.start(rpc_api).await });
 
-		module.merge(methods_api).expect("infallible already checked; qed");
-		let _ = tx.send(Ok(handle));
-		server.start(module).await;
-	});
+	Ok(handle)
+}
 
-	rx.await.unwrap_or(Err("Channel closed".to_string()))
+fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
+	let mut available_methods = rpc_api.method_names().collect::<Vec<_>>();
+	// NOTE(niklasad1): substrate master doesn't have this.
+	available_methods.push("rpc_methods");
+	available_methods.sort_unstable();
+
+	rpc_api
+		.register_method("rpc_methods", move |_, _| {
+			Ok(serde_json::json!({
+				"version": 1,
+				"methods": available_methods,
+			}))
+		})
+		.expect("infallible all other methods have their own address space; qed");
+
+	rpc_api
 }
