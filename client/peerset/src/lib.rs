@@ -426,7 +426,7 @@ impl Peerset {
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
-		let mut reputation = self.data.peer_reputation(peer_id.clone());
+		let mut reputation = self.data.peer_reputation(peer_id);
 		reputation.add_reputation(change.value);
 		if reputation.reputation() >= BANNED_THRESHOLD {
 			trace!(target: "peerset", "Report {}: {:+} to {}. Reason: {}",
@@ -486,7 +486,7 @@ impl Peerset {
 					reput.saturating_sub(diff)
 				}
 
-				let mut peer_reputation = self.data.peer_reputation(peer_id.clone());
+				let mut peer_reputation = self.data.peer_reputation(peer_id);
 
 				let before = peer_reputation.reputation();
 				let after = reput_tick(before);
@@ -920,7 +920,7 @@ mod tests {
 			assert_eq!(Stream::poll_next(Pin::new(&mut peerset), cx), Poll::Pending);
 
 			// Check that an incoming connection from that node gets refused.
-			peerset.incoming(SetId::from(0), peer_id.clone(), IncomingIndex(1));
+			peerset.incoming(SetId::from(0), peer_id, IncomingIndex(1));
 			if let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Reject(IncomingIndex(1)));
 			} else {
@@ -931,7 +931,7 @@ mod tests {
 			thread::sleep(Duration::from_millis(1500));
 
 			// Try again. This time the node should be accepted.
-			peerset.incoming(SetId::from(0), peer_id.clone(), IncomingIndex(2));
+			peerset.incoming(SetId::from(0), peer_id, IncomingIndex(2));
 			while let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Accept(IncomingIndex(2)));
 			}
@@ -965,7 +965,7 @@ mod tests {
 			// Check that an incoming connection from that node gets refused.
 			// This is already tested in other tests, but it is done again here because it doesn't
 			// hurt.
-			peerset.incoming(SetId::from(0), peer_id.clone(), IncomingIndex(1));
+			peerset.incoming(SetId::from(0), peer_id, IncomingIndex(1));
 			if let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Reject(IncomingIndex(1)));
 			} else {

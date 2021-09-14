@@ -28,7 +28,7 @@ use std::time::Instant;
 
 use super::base_pool::Transaction;
 
-#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
+#[derive(parity_util_mem::MallocSizeOf)]
 /// Transaction with partially satisfied dependencies.
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
@@ -108,8 +108,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 ///
 /// Contains transactions that are still awaiting for some other transactions that
 /// could provide a tag that they require.
-#[derive(Debug)]
-#[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are not yet provided by any transaction and we await for them
 	wanted_tags: HashMap<Tag, HashSet<Hash>>,

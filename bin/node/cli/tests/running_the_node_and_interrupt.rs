@@ -16,23 +16,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#![cfg(unix)]
+
 use assert_cmd::cargo::cargo_bin;
-use std::{convert::TryInto, process::Command, thread, time::Duration};
+use nix::{
+	sys::signal::{
+		kill,
+		Signal::{self, SIGINT, SIGTERM},
+	},
+	unistd::Pid,
+};
+use sc_service::Deref;
+use std::{
+	convert::TryInto,
+	ops::DerefMut,
+	process::{Child, Command},
+	thread,
+	time::Duration,
+};
 use tempfile::tempdir;
 
 pub mod common;
 
 #[test]
-#[cfg(unix)]
 fn running_the_node_works_and_can_be_interrupted() {
-	use nix::{
-		sys::signal::{
-			kill,
-			Signal::{self, SIGINT, SIGTERM},
-		},
-		unistd::Pid,
-	};
-
 	fn run_command_and_kill(signal: Signal) {
 		let base_path = tempdir().expect("could not create a temp dir");
 		let mut cmd = Command::new(cargo_bin("substrate"))
@@ -54,4 +61,58 @@ fn running_the_node_works_and_can_be_interrupted() {
 
 	run_command_and_kill(SIGINT);
 	run_command_and_kill(SIGTERM);
+}
+
+struct KillChildOnDrop(Child);
+
+impl Drop for KillChildOnDrop {
+	fn drop(&mut self) {
+		let _ = self.0.kill();
+	}
+}
+
+impl Deref for KillChildOnDrop {
+	type Target = Child;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for KillChildOnDrop {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+#[test]
+fn running_two_nodes_with_the_same_ws_port_should_work() {
+	fn start_node() -> Child {
+		Command::new(cargo_bin("substrate"))
+			.args(&["--dev", "--tmp", "--ws-port=45789"])
+			.spawn()
+			.unwrap()
+	}
+
+	let mut first_node = KillChildOnDrop(start_node());
+	let mut second_node = KillChildOnDrop(start_node());
+
+	thread::sleep(Duration::from_secs(30));
+
+	assert!(first_node.try_wait().unwrap().is_none(), "The first node should still be running");
+	assert!(second_node.try_wait().unwrap().is_none(), "The second node should still be running");
+
+	kill(Pid::from_raw(first_node.id().try_into().unwrap()), SIGINT).unwrap();
+	kill(Pid::from_raw(second_node.id().try_into().unwrap()), SIGINT).unwrap();
+
+	assert_eq!(
+		common::wait_for(&mut first_node, 30).map(|x| x.success()),
+		Some(true),
+		"The first node must exit gracefully",
+	);
+	assert_eq!(
+		common::wait_for(&mut second_node, 30).map(|x| x.success()),
+		Some(true),
+		"The second node must exit gracefully",
+	);
 }
