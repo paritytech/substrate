@@ -88,7 +88,7 @@ impl<T: Config> List<T> {
 		}
 	}
 
-	// Regenerate all of the data from the given ids.
+	/// Regenerate all of the data from the given ids.
 	///
 	/// WARNING: this is expensive and should only ever be performed when the list needs to be
 	/// generated from scratch. Care needs to be taken to ensure
