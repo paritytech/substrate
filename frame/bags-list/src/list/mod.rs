@@ -77,13 +77,18 @@ impl<T: Config> List<T> {
 	/// Remove all data associated with the list from storage. Parameter `items` is the number of
 	/// items to clear from the list. WARNING: `None` will clear all items and should generally not
 	/// be used in production as it could lead to an infinite number of storage accesses.
-	pub(crate) fn clear(items: Option<u32>) {
-		crate::CounterForListNodes::<T>::kill();
-		crate::ListBags::<T>::remove_all(items);
-		crate::ListNodes::<T>::remove_all(items);
+	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
+		crate::ListBags::<T>::remove_all(maybe_count);
+		crate::ListNodes::<T>::remove_all(maybe_count);
+		if let Some(count) = maybe_count {
+			crate::CounterForListNodes::<T>::mutate(|items| *items - count);
+			count
+		} else {
+			crate::CounterForListNodes::<T>::take()
+		}
 	}
 
-	/// Regenerate all of the data from the given ids.
+	// Regenerate all of the data from the given ids.
 	///
 	/// WARNING: this is expensive and should only ever be performed when the list needs to be
 	/// generated from scratch. Care needs to be taken to ensure

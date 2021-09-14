@@ -1291,9 +1291,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn clear() {
-		Nominators::<T>::remove_all(None);
-		CounterForNominators::<T>::kill();
+	fn clear(maybe_count: Option<u32>) -> u32 {
+		Nominators::<T>::remove_all(maybe_count);
+		if let Some(count) = maybe_count {
+			CounterForNominators::<T>::mutate(|noms| *noms - count);
+			count
+		} else {
+			CounterForNominators::<T>::take()
+		}
 	}
 }

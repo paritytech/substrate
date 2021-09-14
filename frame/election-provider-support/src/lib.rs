@@ -338,11 +338,10 @@ pub trait SortedListProvider<AccountId> {
 		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
 	) -> u32;
 
-	/// Remove the list and all its associated storage items.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn clear() {
-		todo!()
-	}
+	/// Remove `maybe_count` number of items from the list. Returns the number of items actually
+	/// removed. WARNING: removes all items if `maybe_count` is `None`, which should never be done
+	/// in production settings because it can lead to an unbounded amount of storage accesses.
+	fn clear(maybe_count: Option<u32>) -> u32;
 
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
