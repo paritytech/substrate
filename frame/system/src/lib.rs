@@ -138,14 +138,14 @@ pub type ConsumedWeight = PerDispatchClass<Weight>;
 pub use pallet::*;
 
 /// Do something when we should be setting the code.
-pub trait SetCode {
+pub trait SetCode<T: Config> {
 	/// Set the code to the given blob.
 	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
-impl SetCode for () {
+impl<T: Config> SetCode<T> for () {
 	fn set_code(code: Vec<u8>) -> DispatchResult {
-		storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
 	}
 }
@@ -296,9 +296,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type SS58Prefix: Get<u16>;
 
-		/// What to do if the user wants the code set to something. Just use `()` unless you are in
-		/// cumulus.
-		type OnSetCode: SetCode;
+		/// What to do if the runtime wants to change the code to something new.
+		///
+		/// The default (`()`) implementation is responsible for setting the correct storage
+		/// entry and emitting corresponding event and log item. (see [`update_code_in_storage`]).
+		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
+		/// `Cumulus`, where the actual code change is deferred.
+		type OnSetCode: SetCode<Self>;
 	}
 
 	#[pallet::pallet]
@@ -350,11 +354,13 @@ pub mod pallet {
 		/// - 1 storage write.
 		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
+		/// - 1 digest item
 		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+			Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
 			Ok(().into())
 		}
 
@@ -362,9 +368,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 storage write (codec `O(C)`).
 		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
 		///   expensive).
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime, but generally this is very
 		/// expensive. We will treat this as a full block.
@@ -373,9 +380,7 @@ pub mod pallet {
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
-
 			T::OnSetCode::set_code(code)?;
-			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
 
@@ -384,6 +389,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full
 		/// block. # </weight>
@@ -394,7 +400,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			T::OnSetCode::set_code(code)?;
-			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
 
@@ -1069,6 +1074,18 @@ pub enum DecRefStatus {
 impl<T: Config> Pallet<T> {
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
+	}
+
+	/// Write code to the storage and emit related events and digest items.
+	///
+	/// Note this function almost never should be used directly. It is exposed
+	/// for `OnSetCode` implementations that defer actual code being written to
+	/// the storage (for instance in case of parachains).
+	pub fn update_code_in_storage(code: &[u8]) -> DispatchResult {
+		storage::unhashed::put_raw(well_known_keys::CODE, code);
+		Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
+		Self::deposit_event(Event::CodeUpdated);
+		Ok(())
 	}
 
 	/// Increment the reference counter on an account.
