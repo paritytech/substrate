@@ -3906,6 +3906,77 @@ mod election_data_provider {
 	}
 
 	#[test]
+	fn only_iterates_max_2_times_nominators_quota() {
+		ExtBuilder::default()
+			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
+			.build_and_execute(|| {});
+	}
+
+	// Even if some of the higher staked nominators are slashed, we still get up to max len voters
+	// by adding more lower staked nominators. In other words, we assert that we keep on adding
+	// valid nominators until we reach max len voters; which is opposed to simply stopping after we
+	// have iterated max len voters, but not adding all of them to voters due to some nominators not
+	// having valid targets.
+	#[test]
+	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
+		ExtBuilder::default()
+			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
+			//                                 61 only nominates validator 21 ^^
+			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
+			.build_and_execute(|| {
+				// our nominators ordered by stake
+				assert_eq!(
+					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
+					vec![101, 61, 71]
+				);
+
+				// total voters
+				assert_eq!(
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
+					6
+				);
+
+				// we take 5 voters
+				assert_eq!(
+					Staking::voters(Some(5))
+						.unwrap()
+						.iter()
+						.map(|(stash, _, _)| stash)
+						.copied()
+						.collect::<Vec<_>>(),
+					vec![
+						31, 21, 11, // 3 nominators
+						101, 61 // 2 validators, and 71 is excluded
+					],
+				);
+
+				// roll to session 5
+				run_to_block(25);
+
+				// slash 21, the only validator nominated by 61
+				add_slash(&21);
+
+				// we take 4 voters
+				assert_eq!(
+					Staking::voters(Some(4))
+						.unwrap()
+						.iter()
+						.map(|(stash, _, _)| stash)
+						.copied()
+						.collect::<Vec<_>>(),
+					vec![
+						31, 11, // 2 validators (21 was slashed)
+						101, 71 // 2 nominators, excluding 61
+					],
+				);
+			});
+	}
+
+	#[test]
 	fn estimate_next_election_works() {
 		ExtBuilder::default().session_per_era(5).period(5).build_and_execute(|| {
 			// first session is always length 0.
