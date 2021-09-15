@@ -296,7 +296,7 @@ where
 			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
 				value: count,
 				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			}))
+			}));
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
@@ -342,7 +342,6 @@ where
 	}
 
 	async fn runtime_version(&self, at: Option<Block::Hash>) -> JsonRpcResult<RuntimeVersion> {
-		self.deny_unsafe.check_if_safe()?;
 		self.backend
 			.runtime_version(at)
 			.await
