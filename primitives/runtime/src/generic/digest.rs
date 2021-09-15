@@ -24,12 +24,16 @@ use sp_std::prelude::*;
 
 use crate::{
 	codec::{Decode, Encode, Error, Input},
+	scale_info::{
+		build::{Fields, Variants},
+		meta_type, Path, Type, TypeInfo, TypeParameter,
+	},
 	ConsensusEngineId,
 };
 use sp_core::{ChangesTrieConfiguration, RuntimeDebug};
 
 /// Generic header digest.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
 pub struct Digest<Hash> {
 	/// A list of logs in the digest.
@@ -129,7 +133,7 @@ pub enum DigestItem<Hash> {
 }
 
 /// Available changes trie signals.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, parity_util_mem::MallocSizeOf))]
 pub enum ChangesTrieSignal {
 	/// New changes trie configuration is enacted, starting from **next block**.
@@ -164,6 +168,69 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 		let r = sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
+impl<Hash> TypeInfo for DigestItem<Hash>
+where
+	Hash: TypeInfo + 'static,
+{
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("DigestItem", module_path!()))
+			.type_params(vec![TypeParameter::new("Hash", Some(meta_type::<Hash>()))])
+			.variant(
+				Variants::new()
+					.variant("ChangesTrieRoot", |v| {
+						v.index(DigestItemType::ChangesTrieRoot as u8)
+							.fields(Fields::unnamed().field(|f| f.ty::<Hash>().type_name("Hash")))
+					})
+					.variant("PreRuntime", |v| {
+						v.index(DigestItemType::PreRuntime as u8).fields(
+							Fields::unnamed()
+								.field(|f| {
+									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
+								})
+								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+						)
+					})
+					.variant("Consensus", |v| {
+						v.index(DigestItemType::Consensus as u8).fields(
+							Fields::unnamed()
+								.field(|f| {
+									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
+								})
+								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+						)
+					})
+					.variant("Seal", |v| {
+						v.index(DigestItemType::Seal as u8).fields(
+							Fields::unnamed()
+								.field(|f| {
+									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
+								})
+								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+						)
+					})
+					.variant("ChangesTrieSignal", |v| {
+						v.index(DigestItemType::ChangesTrieSignal as u8).fields(
+							Fields::unnamed().field(|f| {
+								f.ty::<ChangesTrieSignal>().type_name("ChangesTrieSignal")
+							}),
+						)
+					})
+					.variant("Other", |v| {
+						v.index(DigestItemType::Other as u8).fields(
+							Fields::unnamed().field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+						)
+					})
+					.variant("RuntimeEnvironmentUpdated", |v| {
+						v.index(DigestItemType::RuntimeEnvironmentUpdated as u8)
+							.fields(Fields::unit())
+					}),
+			)
 	}
 }
 
@@ -508,5 +575,53 @@ mod tests {
 			serde_json::to_string(&digest).unwrap(),
 			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203"]}"#
 		);
+	}
+
+	#[test]
+	fn digest_item_type_info() {
+		let type_info = DigestItem::<u32>::type_info();
+		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
+			variant.variants()
+		} else {
+			panic!("Should be a TypeDef::TypeDefVariant")
+		};
+
+		// ensure that all variants are covered by manual TypeInfo impl
+		let check = |digest_item_type: DigestItemType| {
+			let (variant_name, digest_item) = match digest_item_type {
+				DigestItemType::Other => ("Other", DigestItem::<u32>::Other(Default::default())),
+				DigestItemType::ChangesTrieRoot =>
+					("ChangesTrieRoot", DigestItem::ChangesTrieRoot(Default::default())),
+				DigestItemType::Consensus =>
+					("Consensus", DigestItem::Consensus(Default::default(), Default::default())),
+				DigestItemType::Seal =>
+					("Seal", DigestItem::Seal(Default::default(), Default::default())),
+				DigestItemType::PreRuntime =>
+					("PreRuntime", DigestItem::PreRuntime(Default::default(), Default::default())),
+				DigestItemType::ChangesTrieSignal => (
+					"ChangesTrieSignal",
+					DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(
+						Default::default(),
+					)),
+				),
+				DigestItemType::RuntimeEnvironmentUpdated =>
+					("RuntimeEnvironmentUpdated", DigestItem::RuntimeEnvironmentUpdated),
+			};
+			let encoded = digest_item.encode();
+			let variant = variants
+				.iter()
+				.find(|v| v.name() == &variant_name)
+				.expect(&format!("Variant {} not found", variant_name));
+
+			assert_eq!(encoded[0], variant.index())
+		};
+
+		check(DigestItemType::Other);
+		check(DigestItemType::ChangesTrieRoot);
+		check(DigestItemType::Consensus);
+		check(DigestItemType::Seal);
+		check(DigestItemType::PreRuntime);
+		check(DigestItemType::ChangesTrieSignal);
+		check(DigestItemType::RuntimeEnvironmentUpdated);
 	}
 }

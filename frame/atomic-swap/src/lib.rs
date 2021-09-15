@@ -49,6 +49,7 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeDebug;
 use sp_std::{
@@ -58,7 +59,8 @@ use sp_std::{
 };
 
 /// Pending atomic swap operation.
-#[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct PendingSwap<T: Config> {
 	/// Source of the swap.
 	pub source: T::AccountId,
@@ -91,7 +93,8 @@ pub trait SwapAction<AccountId, T: Config> {
 }
 
 /// A swap action that only allows transferring balances.
-#[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(C))]
 pub struct BalanceSwapAction<AccountId, C: ReservableCurrency<AccountId>> {
 	value: <C as Currency<AccountId>>::Balance,
 	_marker: PhantomData<C>,
@@ -213,7 +216,6 @@ pub mod pallet {
 
 	/// Event of atomic swap pallet.
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId", PendingSwap<T> = "PendingSwap")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Swap created. \[account, proof, swap\]
