@@ -114,7 +114,7 @@ pub struct SharedParams {
 
 	/// The block hash at which to read state.
 	///
-	/// This is required for `execute-block`, `offchain-worker`, 'offchain-worker', or any command
+	/// This is required for `execute-block`, `offchain-worker`, 'follow-chain', or any command
 	/// that used the `live` subcommand.
 	#[structopt(
 		short,
@@ -126,10 +126,10 @@ pub struct SharedParams {
 				("command", "offchain-worker"),
 				("command", "execute-block"),
 				("command", "follow-chain"),
-				("subcommand", "live")
+				("state", "live")
 			]
 		),
-		requires("block-at")
+		requires("url")
 	)]
 	block_at: Option<String>,
 

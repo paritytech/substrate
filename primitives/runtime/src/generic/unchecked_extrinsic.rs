@@ -138,7 +138,6 @@ where
 /// Note that the payload that we sign to produce unchecked extrinsic signature
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
-#[derive(Debug)]
 pub struct SignedPayload<Call, Extra: SignedExtension>((Call, Extra, Extra::AdditionalSigned));
 
 impl<Call, Extra> SignedPayload<Call, Extra>

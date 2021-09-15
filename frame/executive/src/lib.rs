@@ -324,7 +324,7 @@ where
 		}
 	}
 
-	pub fn initial_checks(block: &Block) {
+	fn initial_checks(block: &Block) {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
@@ -376,7 +376,7 @@ where
 		extrinsics.into_iter().for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
-				panic!("{:?}: {}", e, err)
+				panic!("{}", err)
 			}
 		});
 
