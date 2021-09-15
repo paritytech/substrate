@@ -226,7 +226,7 @@ where
 							Fields::unnamed().field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
 						)
 					})
-					.variant("RuntimeEnvironmentUpdated,", |v| {
+					.variant("RuntimeEnvironmentUpdated", |v| {
 						v.index(DigestItemType::RuntimeEnvironmentUpdated as u8)
 							.fields(Fields::unit())
 					}),
