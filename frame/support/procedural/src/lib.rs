@@ -304,8 +304,14 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         // Pallets declared with `pallet` attribute macro: no need to define the parts
 ///         Test3_Instance1: test3::<Instance1>,
 ///         Test3_DefaultInstance: test3,
+///
+///         // with `exclude_parts` keyword some part can be excluded.
 ///         Test4_Instance1: test4::<Instance1> exclude_parts { Call, Origin },
 ///         Test4_DefaultInstance: test4 exclude_parts { Storage },
+///
+///         // with `use_parts` keyword, a subset of the pallet parts can be specified.
+///         Test4_Instance1: test4::<Instance1> use_parts { Pallet, Call},
+///         Test4_DefaultInstance: test4 use_parts { Pallet },
 ///     }
 /// )
 /// ```
@@ -340,7 +346,20 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// the pallet usable in the runtime.
 ///
 /// * `exclude_parts { Part1, Part2 }` optional: comma separated parts without generics. I.e. one of
-///   `Pallet`, `Call`, `Storage`, `Event`, `Origin`, `Config`, `Inherent`, `ValidateUnsigned`.
+///   `Pallet`, `Call`, `Storage`, `Event`, `Origin`, `Config`, `Inherent`, `ValidateUnsigned`. It
+///   is incompatible with `use_parts`. This specifies the part to exclude. In order to select
+///   subset of the pallet parts.
+///
+///   For example excluding the part `Call` can be useful if the runtime doesn't want to make the
+///   pallet calls available.
+///
+/// * `use_parts { Part1, Part2 }` optional: comma separated parts without generics. I.e. one of
+///   `Pallet`, `Call`, `Storage`, `Event`, `Origin`, `Config`, `Inherent`, `ValidateUnsigned`. It
+///   is incompatible with `exclude_parts`. This specifies the part to use. In order to select a
+///   subset of the pallet parts.
+///
+///   For example not using the part `Call` can be useful if the runtime doesn't want to make the
+///   pallet calls available.
 ///
 /// * `= $n` optional: number to define at which index the pallet variants in `OriginCaller`, `Call`
 ///   and `Event` are encoded, and to define the ModuleToIndex value.
