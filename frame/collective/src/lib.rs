@@ -126,6 +126,7 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 
 /// Origin for the collective module.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(I))]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
