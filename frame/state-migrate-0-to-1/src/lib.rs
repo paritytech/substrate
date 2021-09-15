@@ -180,7 +180,7 @@ struct PendingMigration<T> {
 	_ph: sp_std::marker::PhantomData<T>,
 }
 
-impl<T: pallet::Config> PendingMigration<T> {
+impl<T: frame_system::Config> PendingMigration<T> {
 	fn new_read(&mut self, len: u32) -> bool {
 		// TODO should it take size in account?
 		self.current_weight += T::DbWeight::get().reads(1);
@@ -248,7 +248,6 @@ impl<T: pallet::Config> PendingMigration<T> {
 		}
 		true
 	}
-
 
 	// return true if all content did migrate.
 	fn migrate_child(&mut self) -> bool {
