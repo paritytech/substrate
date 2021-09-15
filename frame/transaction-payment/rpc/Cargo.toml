@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 anyhow = "1"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-http-server-export-acl", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 log = "0.4"
 
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
