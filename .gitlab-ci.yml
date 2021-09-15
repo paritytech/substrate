@@ -748,6 +748,7 @@ publish-rustdoc:
     - if: $CI_COMMIT_REF_NAME == "monthly-2021-09+1"
     - if: $CI_COMMIT_REF_NAME == "v3.0.0"
     - if: $CI_COMMIT_REF_NAME == "jc/test-gen-docs"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/   # PR
 
   # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
   # artifacts from being dowloaded by this job.
@@ -792,17 +793,16 @@ publish-rustdoc:
     mv -f /tmp/docs ${CI_COMMIT_REF_NAME}
 
     # Add the symlink
-    ln -sf ${LATEST_DEST} latest
+    [[ -f $LATEST_DEST ]] && ln -sf ${LATEST_DEST} latest
 
     # Upload files
-    - git add --all --force
+    git add --all --force
     # `git commit` has an exit code of > 0 if there is nothing to commit.
     # This causes GitLab to exit immediately and marks this job failed.
     # We don't want to mark the entire job failed if there's nothing to
     # publish though, hence the `|| true`.
-    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
-        echo "___Nothing to commit___"
-    - git push origin gh-pages --force
+    git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" || echo "___Nothing to commit___"
+    git push origin gh-pages --force
   after_script:
     - rm -rf .git/ ./*
 
