@@ -2310,7 +2310,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "git2",
- "node-runtime",
  "num-format",
  "pallet-staking",
  "sp-io",

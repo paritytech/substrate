@@ -10,8 +10,6 @@ description = "Bag threshold generation script for pallet-bag-list"
 readme = "README.md"
 
 [dependencies]
-node-runtime = { version = "3.0.0-dev", path = "../../../bin/node/runtime" }
-
 # FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../../frame/election-provider-support", features = ["runtime-benchmarks"] }
