@@ -173,7 +173,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// Moved an account from one bag to another. \[who, from, to\].
 		Rebagged(T::AccountId, VoteWeight, VoteWeight),

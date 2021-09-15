@@ -1781,7 +1781,12 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = Call::Contracts(crate::Call::call(addr_callee, 0, GAS_LIMIT / 3, vec![]));
+		let call = Call::Contracts(crate::Call::call {
+			dest: addr_callee,
+			value: 0,
+			gas_limit: GAS_LIMIT / 3,
+			data: vec![],
+		});
 		let result =
 			Contracts::bare_call(ALICE, addr_caller.clone(), 0, GAS_LIMIT, call.encode(), false);
 		assert_ok!(&result.result);
