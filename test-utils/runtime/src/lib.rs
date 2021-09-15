@@ -574,12 +574,6 @@ cfg_if! {
 				}
 			}
 
-			impl random_seed_runtime_api::RandomSeedApi<Block> for Runtime {
-				fn get_seed() -> pallet_random_seed::SeedType{
-					Default::default()
-				}
-			}
-
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
@@ -826,12 +820,6 @@ cfg_if! {
 				fn get_info(
 					_tx: <Block as BlockT>::Extrinsic,
 				) -> Option<extrinsic_info_runtime_api::ExtrinsicInfo> {
-					unimplemented!()
-				}
-			}
-
-			impl random_seed_runtime_api::RandomSeedApi<Block> for Runtime {
-				fn get_seed() -> pallet_random_seed::SeedType{
 					unimplemented!()
 				}
 			}

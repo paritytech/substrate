@@ -26,7 +26,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, Hasher, TypeId, RuntimeDebug, ShufflingSeed};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -539,10 +539,10 @@ pub trait Header:
 	}
 
 	/// Returns seed used for shuffling
-	fn seed(&self) -> &Self::Hash;
+	fn seed(&self) -> &ShufflingSeed;
 
 	/// Returns seed used for shuffling
-	fn set_seed(& mut self,seed: Self::Hash);
+	fn set_seed(& mut self, seed: ShufflingSeed);
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
