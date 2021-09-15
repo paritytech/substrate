@@ -366,7 +366,6 @@ where
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
 	) -> JsonRpcResult<Vec<StorageChangeSet<Block::Hash>>> {
-		self.deny_unsafe.check_if_safe()?;
 		self.backend
 			.query_storage_at(keys, at)
 			.await
@@ -378,7 +377,6 @@ where
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> JsonRpcResult<ReadProof<Block::Hash>> {
-		self.deny_unsafe.check_if_safe()?;
 		self.backend
 			.read_proof(block, keys)
 			.await
