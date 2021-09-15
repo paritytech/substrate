@@ -173,14 +173,22 @@ impl Parse for WhereDefinition {
 	}
 }
 
+/// The declaration of a pallet.
 #[derive(Debug, Clone)]
 pub struct PalletDeclaration {
+	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
-	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
+	/// Optional fixed index, e.g. `MyPallet ...  = 3,`.
 	pub index: Option<u8>,
+	/// The path of the pallet, e.g. `frame_system` in `System: frame_system`.
 	pub path: PalletPath,
+	/// The instance of the pallet, e.g. `Instance1` in `Council: pallet_collective::<Instance1>`.
 	pub instance: Option<Ident>,
+	/// The declared pallet parts,
+	/// e.g. `Some([Pallet, Call])` for `System: system::{Pallet, Call}`
+	/// or `None` for `System: system`.
 	pub pallet_parts: Option<Vec<PalletPart>>,
+	/// The specified parts, either use_parts or exclude_parts.
 	pub specified_parts: SpecifiedParts,
 }
 
@@ -191,7 +199,7 @@ pub enum SpecifiedParts {
 	Exclude(Vec<PalletPartNoGeneric>),
 	/// Use only the specified pallet parts.
 	Use(Vec<PalletPartNoGeneric>),
-	/// use the all the pallet parts.
+	/// Use the all the pallet parts.
 	All,
 }
 
@@ -232,9 +240,9 @@ impl Parse for PalletDeclaration {
 			!input.peek(Token![,]) &&
 			!input.is_empty()
 		{
-			return Err(
-				input.error("Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`")
-			)
+			return Err(input.error(
+				"Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
+			))
 		} else {
 			None
 		};
@@ -497,13 +505,18 @@ fn parse_pallet_parts_no_generic(input: ParseStream) -> Result<Vec<PalletPartNoG
 	Ok(pallet_parts.content.inner.into_iter().collect())
 }
 
-/// The complete definition of a pallet with the resulting fixed index and explicit parts.
+/// The final definition of a pallet with the resulting fixed index and explicit parts.
 #[derive(Debug, Clone)]
 pub struct Pallet {
+	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
+	/// Either automatically infered, or defined (e.g. `MyPallet ...  = 3,`).
 	pub index: u8,
+	/// The path of the pallet, e.g. `frame_system` in `System: frame_system`.
 	pub path: PalletPath,
+	/// The instance of the pallet, e.g. `Instance1` in `Council: pallet_collective::<Instance1>`.
 	pub instance: Option<Ident>,
+	/// The pallet parts to use for the pallet.
 	pub pallet_parts: Vec<PalletPart>,
 }
 
@@ -577,13 +590,12 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 
 			let mut pallet_parts = pallet.pallet_parts.expect("Checked above");
 
-			let available_parts = pallet_parts.iter()
-				.map(|part| part.keyword.name())
-				.collect::<HashSet<_>>();
+			let available_parts =
+				pallet_parts.iter().map(|part| part.keyword.name()).collect::<HashSet<_>>();
 
 			// Check parts are correctly specified
 			match &pallet.specified_parts {
-				SpecifiedParts::Exclude(parts) | SpecifiedParts::Use(parts) => {
+				SpecifiedParts::Exclude(parts) | SpecifiedParts::Use(parts) =>
 					for part in parts {
 						if !available_parts.contains(part.keyword.name()) {
 							let msg = format!(
@@ -591,37 +603,33 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 								part `{}`. Available parts are: {}.",
 								pallet.name,
 								part.keyword.name(),
-								available_parts.iter()
-									.enumerate()
-									.fold(String::new(), |fold, (index, part)| {
+								available_parts.iter().enumerate().fold(
+									String::new(),
+									|fold, (index, part)| {
 										if index == 0 {
 											format!("`{}`", part)
 										} else {
 											format!("{}, `{}`", fold, part)
 										}
-									})
+									}
+								)
 							);
-							return Err(syn::Error::new(part.keyword.span(), msg));
+							return Err(syn::Error::new(part.keyword.span(), msg))
 						}
-					}
-				},
+					},
 				SpecifiedParts::All => (),
 			}
 
 			// Set only specified parts.
 			match pallet.specified_parts {
-				SpecifiedParts::Exclude(excluded_parts) =>
-					pallet_parts.retain(|part|
-						!excluded_parts
-							.iter()
-							.any(|excluded_part| excluded_part.keyword.name() == part.keyword.name())
-					),
-				SpecifiedParts::Use(used_parts) =>
-					pallet_parts.retain(|part|
-						used_parts
-							.iter()
-							.any(|use_part| use_part.keyword.name() == part.keyword.name())
-					),
+				SpecifiedParts::Exclude(excluded_parts) => pallet_parts.retain(|part| {
+					!excluded_parts
+						.iter()
+						.any(|excluded_part| excluded_part.keyword.name() == part.keyword.name())
+				}),
+				SpecifiedParts::Use(used_parts) => pallet_parts.retain(|part| {
+					used_parts.iter().any(|use_part| use_part.keyword.name() == part.keyword.name())
+				}),
 				SpecifiedParts::All => (),
 			}
 
