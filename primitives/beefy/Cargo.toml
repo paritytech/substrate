@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
 codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 sp-api = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
@@ -24,6 +24,7 @@ sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "maste
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-core/std",

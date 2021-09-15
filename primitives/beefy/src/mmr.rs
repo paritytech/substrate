@@ -26,6 +26,7 @@
 //! or are completely standalone, but heavily inspired by Polkadot.
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 /// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -79,8 +80,7 @@ impl MmrLeafVersion {
 }
 
 /// Details of the next BEEFY authority set.
-#[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "scale-info", derive(scale_info::TypeInfo))]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct BeefyNextAuthoritySet<MerkleRoot> {
 	/// Id of the next set.
 	///
