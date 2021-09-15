@@ -268,6 +268,7 @@ use rand_chacha::{
 	rand_core::{RngCore, SeedableRng},
 	ChaChaRng,
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedSub, Hash, IntegerSquareRoot, Saturating, StaticLookup,
@@ -334,7 +335,7 @@ pub trait Config<I = DefaultInstance>: system::Config {
 }
 
 /// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum Vote {
 	/// The member has been chosen to be skeptic and has not yet taken any action.
 	Skeptic,
@@ -345,7 +346,7 @@ pub enum Vote {
 }
 
 /// A judgement by the suspension judgement origin on a suspended candidate.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum Judgement {
 	/// The suspension judgement origin takes no direct judgment
 	/// and places the candidate back into the bid pool.
@@ -357,7 +358,7 @@ pub enum Judgement {
 }
 
 /// Details of a payout given as a per-block linear "trickle".
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default, TypeInfo)]
 pub struct Payout<Balance, BlockNumber> {
 	/// Total value of the payout.
 	value: Balance,
@@ -370,7 +371,7 @@ pub struct Payout<Balance, BlockNumber> {
 }
 
 /// Status of a vouching member.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum VouchingStatus {
 	/// Member is currently vouching for a user.
 	Vouching,
@@ -382,7 +383,7 @@ pub enum VouchingStatus {
 pub type StrikeCount = u32;
 
 /// A bid for entry into society.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Bid<AccountId, Balance> {
 	/// The bidder/candidate trying to enter society
 	who: AccountId,
@@ -393,7 +394,7 @@ pub struct Bid<AccountId, Balance> {
 }
 
 /// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BidKind<AccountId, Balance> {
 	/// The CandidateDeposit was paid for this bid.
 	Deposit(Balance),
@@ -1332,8 +1333,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		// we assume there's at least one member or this logic won't work.
 		if !members.is_empty() {
 			let candidates = <Candidates<T, I>>::take();
-			// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
-			// critical issues or side-effects. This is auto-correcting as members fall out of society.
+			// NOTE: This may cause member length to surpass `MaxMembers`, but results in no
+			// consensus critical issues or side-effects. This is auto-correcting as members fall
+			// out of society.
 			members.reserve(candidates.len());
 
 			let maturity =
@@ -1369,8 +1371,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					let matching_vote = if is_accepted { Vote::Approve } else { Vote::Reject };
 
 					let bad_vote = |m: &T::AccountId| {
-						// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
-						// and increase their strikes. after MaxStrikes then they go into suspension.
+						// Voter voted wrong way (or was just a lazy skeptic) then reduce their
+						// payout and increase their strikes. after MaxStrikes then they go into
+						// suspension.
 						let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
 
 						let strikes = <Strikes<T, I>>::mutate(m, |s| {
@@ -1405,9 +1408,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 						Self::pay_accepted_candidate(&candidate, value, kind, maturity);
 
-						// We track here the total_approvals so that every candidate has a unique range
-						// of numbers from 0 to `total_approvals` with length `approval_count` so each
-						// candidate is proportionally represented when selecting a "primary" below.
+						// We track here the total_approvals so that every candidate has a unique
+						// range of numbers from 0 to `total_approvals` with length `approval_count`
+						// so each candidate is proportionally represented when selecting a
+						// "primary" below.
 						Some((candidate, total_approvals, value))
 					} else {
 						// Suspend Candidate
@@ -1474,8 +1478,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// Then write everything back out, signal the changed membership and leave an event.
 				members.sort();
-				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
-				// critical issues or side-effects. This is auto-correcting as members fall out of society.
+				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no
+				// consensus critical issues or side-effects. This is auto-correcting as members
+				// fall out of society.
 				<Members<T, I>>::put(&members[..]);
 				<Head<T, I>>::put(&primary);
 
@@ -1565,7 +1570,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				value
 			},
 			BidKind::Vouch(voucher, tip) => {
-				// Check that the voucher is still vouching, else some other logic may have removed their status.
+				// Check that the voucher is still vouching, else some other logic may have removed
+				// their status.
 				if <Vouching<T, I>>::take(&voucher) == Some(VouchingStatus::Vouching) {
 					// In the case that a vouched-for bid is accepted we unset the
 					// vouching status and transfer the tip over to the voucher.

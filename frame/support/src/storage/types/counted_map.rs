@@ -20,17 +20,14 @@
 use crate::{
 	storage::{
 		generator::StorageMap as _,
-		types::{
-			OptionQuery, QueryKindTrait, StorageMap, StorageMapMetadata, StorageValue,
-			StorageValueMetadata, ValueQuery,
-		},
+		types::{OptionQuery, QueryKindTrait, StorageMap, StorageValue, ValueQuery, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInfoTrait, StorageInstance},
 	Never,
+	metadata::StorageEntryMetadata,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -400,39 +397,21 @@ where
 	}
 }
 
-/// Part of storage metadata for a counted storage map.
-pub trait CountedStorageMapMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-	const HASHER: frame_metadata::StorageHasher;
-	const COUNTER_NAME: &'static str;
-	const COUNTER_MODIFIER: StorageEntryModifier;
-	const COUNTER_TY: &'static str;
-	const COUNTER_DEFAULT: DefaultByteGetter;
-	const COUNTER_DOC: &'static str;
-}
-
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> CountedStorageMapMetadata
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
 	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec,
-	Value: FullCodec,
+	Key: FullCodec + scale_info::StaticTypeInfo,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = <Self as MapWrapper>::Map::MODIFIER;
-	const HASHER: frame_metadata::StorageHasher = <Self as MapWrapper>::Map::HASHER;
-	const NAME: &'static str = <Self as MapWrapper>::Map::NAME;
-	const DEFAULT: DefaultByteGetter = <Self as MapWrapper>::Map::DEFAULT;
-	const COUNTER_NAME: &'static str = CounterFor::<Prefix>::NAME;
-	const COUNTER_MODIFIER: StorageEntryModifier = CounterFor::<Prefix>::MODIFIER;
-	const COUNTER_TY: &'static str = "u32";
-	const COUNTER_DEFAULT: DefaultByteGetter = CounterFor::<Prefix>::DEFAULT;
-	const COUNTER_DOC: &'static str = &"Counter for the related counted storage map";
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		<Self as MapWrapper>::Map::build_metadata(docs, entries);
+		CounterFor::<Prefix>::build_metadata(vec![&"Counter for the related counted storage map"], entries);
+	}
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
@@ -1021,4 +1000,5 @@ mod test {
 			assert_eq!(A::count(), 0);
 		})
 	}
+	// TODO TODO: add test for metadata similar map
 }

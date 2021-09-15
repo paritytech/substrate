@@ -62,7 +62,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),
 		max_request_size: 1024 * 1024,
 		max_response_size: 16 * 1024 * 1024,
-		request_timeout: Duration::from_secs(40),
+		request_timeout: Duration::from_secs(20),
 		inbound_queue: None,
 	}
 }
@@ -294,12 +294,12 @@ impl<B: BlockT> BlockRequestHandler<B> {
 					};
 					(justifications, Vec::new(), false)
 				} else {
-					// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
-					// the first one. When sending we could have just taken the first one, since we don't
-					// expect there to be any other kind currently, but when receiving we need to add the
-					// engine ID tag.
-					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
-					// removed once we remove the backwards compatibility.
+					// For now we keep compatibility by selecting precisely the GRANDPA one, and not
+					// just the first one. When sending we could have just taken the first one,
+					// since we don't expect there to be any other kind currently, but when
+					// receiving we need to add the engine ID tag.
+					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and
+					// will be removed once we remove the backwards compatibility.
 					// See: https://github.com/paritytech/substrate/issues/8172
 					let justification =
 						justifications.and_then(|just| just.into_justification(*b"FRNK"));
@@ -355,7 +355,8 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				indexed_body,
 			};
 
-			total_size += block_data.body.len();
+			total_size += block_data.body.iter().map(|ex| ex.len()).sum::<usize>();
+			total_size += block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
 			blocks.push(block_data);
 
 			if blocks.len() >= max_blocks as usize || total_size > MAX_BODY_BYTES {

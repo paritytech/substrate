@@ -14,8 +14,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -31,8 +31,8 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
-	"sp-core/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",

@@ -73,7 +73,7 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		None,
 		63,
 		frame_system::RawOrigin::Root.into(),
-		Call::enact_proposal(proposal_hash, referendum_index).into(),
+		Call::enact_proposal { proposal_hash, index: referendum_index }.into(),
 	)
 	.map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
@@ -136,7 +136,7 @@ benchmarks! {
 		}
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 
@@ -146,7 +146,7 @@ benchmarks! {
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
 	}
@@ -164,7 +164,7 @@ benchmarks! {
 		}
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
 
@@ -179,14 +179,14 @@ benchmarks! {
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r + 1) as usize, "Vote was incorrectly added");
 		let referendum_info = Democracy::<T>::referendum_info(referendum_index)
 			.ok_or("referendum doesn't exist")?;
 		let tally =  match referendum_info {
 			ReferendumInfo::Ongoing(r) => r.tally,
-			_ => return Err("referendum not ongoing"),
+			_ => return Err("referendum not ongoing".into()),
 		};
 		assert_eq!(tally.nays, 1000u32.into(), "changed vote was not recorded");
 	}
@@ -194,7 +194,7 @@ benchmarks! {
 	emergency_cancel {
 		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = add_referendum::<T>(0)?;
-		let call = Call::<T>::emergency_cancel(referendum_index);
+		let call = Call::<T>::emergency_cancel { ref_index: referendum_index };
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -224,7 +224,7 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(0)?;
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 
-		let call = Call::<T>::blacklist(hash, Some(referendum_index));
+		let call = Call::<T>::blacklist { proposal_hash: hash, maybe_ref_index: Some(referendum_index) };
 		let origin = T::BlacklistOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -247,7 +247,7 @@ benchmarks! {
 			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
 
-		let call = Call::<T>::external_propose(proposal_hash);
+		let call = Call::<T>::external_propose { proposal_hash };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
@@ -257,7 +257,7 @@ benchmarks! {
 	external_propose_majority {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-		let call = Call::<T>::external_propose_majority(proposal_hash);
+		let call = Call::<T>::external_propose_majority { proposal_hash };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
@@ -267,7 +267,7 @@ benchmarks! {
 	external_propose_default {
 		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-		let call = Call::<T>::external_propose_default(proposal_hash);
+		let call = Call::<T>::external_propose_default { proposal_hash };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
@@ -283,7 +283,11 @@ benchmarks! {
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0u32;
-		let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into());
+		let call = Call::<T>::fast_track {
+			proposal_hash,
+			voting_period: voting_period.into(),
+			delay: delay.into()
+		};
 
 	}: { call.dispatch_bypass_filter(origin_fast_track)? }
 	verify {
@@ -306,7 +310,7 @@ benchmarks! {
 		vetoers.sort();
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
 
-		let call = Call::<T>::veto_external(proposal_hash);
+		let call = Call::<T>::veto_external { proposal_hash };
 		let origin = T::VetoOrigin::successful_origin();
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -356,7 +360,7 @@ benchmarks! {
 
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&r);
-		let call = Call::<T>::external_propose_majority(proposal_hash);
+		let call = Call::<T>::external_propose_majority { proposal_hash };
 		call.dispatch_bypass_filter(origin)?;
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -374,7 +378,7 @@ benchmarks! {
 			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
 				match value {
 					ReferendumInfo::Finished { .. } => (),
-					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished"),
+					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished".into()),
 				}
 			}
 		}
@@ -408,7 +412,7 @@ benchmarks! {
 			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
 				match value {
 					ReferendumInfo::Finished { .. } => (),
-					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished"),
+					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished".into()),
 				}
 			}
 		}
@@ -438,7 +442,7 @@ benchmarks! {
 		for i in 0 .. r {
 			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
 				match value {
-					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished"),
+					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished".into()),
 					ReferendumInfo::Ongoing(_) => (),
 				}
 			}
@@ -462,7 +466,7 @@ benchmarks! {
 		)?;
 		let (target, balance) = match VotingOf::<T>::get(&caller) {
 			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(target, old_delegate, "delegation target didn't work");
 		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
@@ -476,7 +480,7 @@ benchmarks! {
 		}
 		let votes = match VotingOf::<T>::get(&new_delegate) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 		whitelist_account!(caller);
@@ -484,13 +488,13 @@ benchmarks! {
 	verify {
 		let (target, balance) = match VotingOf::<T>::get(&caller) {
 			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(target, new_delegate, "delegation target didn't work");
 		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
 		let delegations = match VotingOf::<T>::get(&new_delegate) {
 			Voting::Direct { delegations, .. } => delegations,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(delegations.capital, delegated_balance, "delegation was not recorded.");
 	}
@@ -512,7 +516,7 @@ benchmarks! {
 		)?;
 		let (target, balance) = match VotingOf::<T>::get(&caller) {
 			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(target, the_delegate, "delegation target didn't work");
 		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
@@ -528,7 +532,7 @@ benchmarks! {
 		}
 		let votes = match VotingOf::<T>::get(&the_delegate) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 		whitelist_account!(caller);
@@ -537,7 +541,7 @@ benchmarks! {
 		// Voting should now be direct
 		match VotingOf::<T>::get(&caller) {
 			Voting::Direct { .. } => (),
-			_ => return Err("undelegation failed"),
+			_ => return Err("undelegation failed".into()),
 		}
 	}
 
@@ -558,7 +562,7 @@ benchmarks! {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		match Preimages::<T>::get(proposal_hash) {
 			Some(PreimageStatus::Available { .. }) => (),
-			_ => return Err("preimage not available")
+			_ => return Err("preimage not available".into())
 		}
 	}
 
@@ -580,7 +584,7 @@ benchmarks! {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		match Preimages::<T>::get(proposal_hash) {
 			Some(PreimageStatus::Available { .. }) => (),
-			_ => return Err("preimage not available")
+			_ => return Err("preimage not available".into())
 		}
 	}
 
@@ -652,7 +656,7 @@ benchmarks! {
 
 		let votes = match VotingOf::<T>::get(&locker) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
 
@@ -667,7 +671,7 @@ benchmarks! {
 	verify {
 		let votes = match VotingOf::<T>::get(&locker) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Vote was not removed");
 
@@ -689,7 +693,7 @@ benchmarks! {
 
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes not created");
 
@@ -699,7 +703,7 @@ benchmarks! {
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
@@ -718,7 +722,7 @@ benchmarks! {
 
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes not created");
 
@@ -728,7 +732,7 @@ benchmarks! {
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
+			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
@@ -739,7 +743,7 @@ benchmarks! {
 		let b in 0 .. MAX_BYTES;
 
 		let proposer = funded_account::<T>("proposer", 0);
-		let raw_call = Call::note_preimage(vec![1; b as usize]);
+		let raw_call = Call::note_preimage { encoded_proposal: vec![1; b as usize] };
 		let generic_call: T::Proposal = raw_call.into();
 		let encoded_proposal = generic_call.encode();
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -747,7 +751,7 @@ benchmarks! {
 
 		match Preimages::<T>::get(proposal_hash) {
 			Some(PreimageStatus::Available { .. }) => (),
-			_ => return Err("preimage not available")
+			_ => return Err("preimage not available".into())
 		}
 	}: enact_proposal(RawOrigin::Root, proposal_hash, 0)
 	verify {
@@ -768,7 +772,7 @@ benchmarks! {
 
 		match Preimages::<T>::get(proposal_hash) {
 			Some(PreimageStatus::Available { .. }) => (),
-			_ => return Err("preimage not available")
+			_ => return Err("preimage not available".into())
 		}
 	}: {
 		assert_eq!(

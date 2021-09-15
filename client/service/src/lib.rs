@@ -37,15 +37,14 @@ mod task_manager;
 use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 
 use codec::{Decode, Encode};
-use futures::{compat::*, stream, Future, FutureExt, Stream, StreamExt};
+use futures::{stream, Future, FutureExt, Stream, StreamExt};
 use log::{debug, error, warn};
-use parity_util_mem::MallocSizeOf;
 use sc_network::PeerId;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
-use sp_utils::mpsc::TracingUnboundedReceiver;
 
 pub use self::{
 	builder::{
@@ -59,8 +58,8 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseConfig, KeepBlocks, PruningMode, Role, RpcMethods,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -80,16 +79,6 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 pub use task_manager::{SpawnTaskHandle, TaskManager};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
-
-/// A type that implements `MallocSizeOf` on native but not wasm.
-#[cfg(not(target_os = "unknown"))]
-pub trait MallocSizeOfWasm: MallocSizeOf {}
-#[cfg(target_os = "unknown")]
-pub trait MallocSizeOfWasm {}
-#[cfg(not(target_os = "unknown"))]
-impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
-#[cfg(target_os = "unknown")]
-impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
@@ -112,11 +101,7 @@ impl RpcHandlers {
 		mem: &RpcSession,
 		request: &str,
 	) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0
-			.handle_request(request, mem.metadata.clone())
-			.compat()
-			.map(|res| res.expect("this should never fail"))
-			.boxed()
+		self.0.handle_request(request, mem.metadata.clone()).boxed()
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
@@ -308,7 +293,6 @@ async fn build_network_future<
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
@@ -342,8 +326,8 @@ mod waiting {
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
-#[cfg(not(target_os = "unknown"))]
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive.
 fn start_rpc_servers<
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
@@ -352,8 +336,9 @@ fn start_rpc_servers<
 >(
 	config: &Configuration,
 	mut gen_handler: H,
-	rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, Error> {
+	rpc_metrics: Option<sc_rpc_server::RpcMetrics>,
+	server_metrics: sc_rpc_server::ServerMetrics,
+) -> Result<Box<dyn std::any::Any + Send>, Error> {
 	fn maybe_start_server<T, F>(
 		address: Option<SocketAddr>,
 		mut start: F,
@@ -386,27 +371,41 @@ fn start_rpc_servers<
 		}
 	}
 
+	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| {
-			sc_rpc_server::start_ipc(
-				&*path,
-				gen_handler(
-					sc_rpc::DenyUnsafe::No,
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
-				)?,
-			)
-			.map_err(Error::from)
-		}),
+		config
+			.rpc_ipc
+			.as_ref()
+			.map(|path| {
+				sc_rpc_server::start_ipc(
+					&*path,
+					gen_handler(
+						sc_rpc::DenyUnsafe::No,
+						sc_rpc_server::RpcMiddleware::new(
+							rpc_metrics.clone(),
+							rpc_method_names.clone(),
+							"ipc",
+						),
+					)?,
+					server_metrics.clone(),
+				)
+				.map_err(Error::from)
+			})
+			.transpose()?,
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,
-				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http"),
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"http",
+					),
 				)?,
 				config.rpc_max_payload,
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
@@ -418,29 +417,20 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws"),
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"ws",
+					),
 				)?,
 				config.rpc_max_payload,
+				server_metrics.clone(),
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
 		.map(|s| waiting::WsServer(Some(s))),
 	)))
-}
-
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
-#[cfg(target_os = "unknown")]
-fn start_rpc_servers<
-	H: FnMut(
-		sc_rpc::DenyUnsafe,
-		sc_rpc_server::RpcMiddleware,
-	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>,
->(
-	_: &Configuration,
-	_: H,
-	_: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	Ok(Box::new(()))
 }
 
 /// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
@@ -457,7 +447,7 @@ impl RpcSession {
 	/// messages.
 	///
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
+	pub fn new(sender: futures::channel::mpsc::UnboundedSender<String>) -> RpcSession {
 		RpcSession { metadata: sender.into() }
 	}
 }
@@ -539,7 +529,8 @@ where
 					},
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
-						// it is not bad at least, just some internal node logic error, so peer is innocent.
+						// it is not bad at least, just some internal node logic error, so peer is
+						// innocent.
 						TransactionImport::KnownGood
 					},
 				},

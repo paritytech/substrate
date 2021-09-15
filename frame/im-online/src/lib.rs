@@ -80,6 +80,7 @@ use frame_support::traits::{
 };
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::offchain::OpaqueNetworkState;
 use sp_runtime::{
@@ -140,7 +141,7 @@ const INCLUDE_THRESHOLD: u32 = 3;
 /// This stores the block number at which heartbeat was requested and when the worker
 /// has actually managed to produce it.
 /// Note we store such status for every `authority_index` separately.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 struct HeartbeatStatus<BlockNumber> {
 	/// An index of the session that we are supposed to send heartbeat for.
 	pub session_index: SessionIndex,
@@ -185,10 +186,12 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match *self {
 			OffchainErr::TooEarly => write!(fmt, "Too early to send heartbeat."),
-			OffchainErr::WaitingForInclusion(ref block) =>
-				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block),
-			OffchainErr::AlreadyOnline(auth_idx) =>
-				write!(fmt, "Authority {} is already online", auth_idx),
+			OffchainErr::WaitingForInclusion(ref block) => {
+				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block)
+			},
+			OffchainErr::AlreadyOnline(auth_idx) => {
+				write!(fmt, "Authority {} is already online", auth_idx)
+			},
 			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
 			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
 			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),
@@ -200,7 +203,7 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Heartbeat<BlockNumber>
 where
 	BlockNumber: PartialEq + Eq + Decode + Encode,
@@ -222,7 +225,8 @@ pub type ValidatorId<T> = <<T as Config>::ValidatorSet as ValidatorSet<
 	<T as frame_system::Config>::AccountId,
 >>::ValidatorId;
 
-/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of
+/// `ValidatorId`.
 pub type IdentificationTuple<T> = (
 	ValidatorId<T>,
 	<<T as Config>::ValidatorSet as ValidatorSetWithIdentification<
@@ -294,7 +298,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AuthorityId = "AuthorityId", Vec<IdentificationTuple<T>> = "Vec<IdentificationTuple>")]
 	pub enum Event<T: Config> {
 		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
 		HeartbeatReceived(T::AuthorityId),
@@ -375,8 +378,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len)
-		///   and E is length of `heartbeat.network_state.external_address`
+		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
+		///   length of `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
 		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
@@ -447,7 +450,8 @@ pub mod pallet {
 		}
 	}
 
-	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
+	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is
+	/// incorrect.
 	pub(crate) const INVALID_VALIDATORS_LEN: u8 = 10;
 
 	#[pallet::validate_unsigned]
@@ -455,7 +459,7 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::heartbeat(heartbeat, signature) = call {
+			if let Call::heartbeat { heartbeat, signature } = call {
 				if <Pallet<T>>::is_online(heartbeat.authority_index) {
 					// we already received a heartbeat for this authority
 					return InvalidTransaction::Stale.into()
@@ -627,7 +631,7 @@ impl<T: Config> Pallet<T> {
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
 			let network_state =
 				sp_io::offchain::network_state().map_err(|_| OffchainErr::NetworkState)?;
-			let heartbeat_data = Heartbeat {
+			let heartbeat = Heartbeat {
 				block_number,
 				network_state,
 				session_index,
@@ -635,9 +639,9 @@ impl<T: Config> Pallet<T> {
 				validators_len,
 			};
 
-			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
+			let signature = key.sign(&heartbeat.encode()).ok_or(OffchainErr::FailedSigning)?;
 
-			Ok(Call::heartbeat(heartbeat_data, signature))
+			Ok(Call::heartbeat { heartbeat, signature })
 		};
 
 		if Self::is_online(authority_index) {
@@ -816,7 +820,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
-#[derive(RuntimeDebug)]
+#[derive(RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.

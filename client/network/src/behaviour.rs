@@ -222,7 +222,7 @@ impl<B: BlockT> Behaviour<B> {
 		request_response_protocols.push(state_request_protocol_config);
 		request_response_protocols.push(light_client_request_protocol_config);
 
-		Ok(Behaviour {
+		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
@@ -302,12 +302,14 @@ impl<B: BlockT> Behaviour<B> {
 		&mut self.substrate
 	}
 
-	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a `ValueNotFound` event.
+	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a
+	/// `ValueNotFound` event.
 	pub fn get_value(&mut self, key: &record::Key) {
 		self.discovery.get_value(key);
 	}
 
-	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
+	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a
+	/// `ValuePutFailed` event.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}

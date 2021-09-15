@@ -19,7 +19,7 @@
 //! A method call executor interface.
 
 use codec::{Decode, Encode};
-use sc_executor::{NativeVersion, RuntimeVersion};
+use sc_executor::RuntimeVersion;
 use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -106,7 +106,4 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
-
-	/// Get runtime version if supported.
-	fn native_runtime_version(&self) -> Option<&NativeVersion>;
 }

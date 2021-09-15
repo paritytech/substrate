@@ -36,7 +36,8 @@ use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 ///
 /// The length of the vec is not strictly bounded. Decoding a vec with more element that the bound
 /// is accepted, and some method allow to bypass the restriction with warnings.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct WeakBoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 impl<T: Decode, S: Get<u32>> Decode for WeakBoundedVec<T, S> {
@@ -270,8 +271,8 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 }
 
 // NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T, S1>
-// to allow comparison of bounded vectors with different bounds.
+// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T,
+// S1> to allow comparison of bounded vectors with different bounds.
 impl<T, S> PartialEq for WeakBoundedVec<T, S>
 where
 	T: PartialEq,

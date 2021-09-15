@@ -19,7 +19,6 @@ use crate::pallet::{
 	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
 	Def,
 };
-use frame_support_procedural_tools::clean_type_string;
 use std::collections::HashMap;
 
 /// Generate the prefix_ident related to the storage.
@@ -87,6 +86,7 @@ fn check_prefix_duplicates(
 	Ok(())
 }
 
+///
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
 /// * if generics are named: reorder the generic, remove their name, and add the missing ones.
 /// * Add `#[allow(type_alias_bounds)]`
@@ -206,6 +206,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 	Ok(())
 }
 
+///
 /// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
 ///   `_GeneratedPrefixForStorage$NameOfStorage` is generated) and implements StorageInstance trait.
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
@@ -232,7 +233,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
 
-	let entries = def.storages.iter().map(|storage| {
+	let entries_builder = def.storages.iter().map(|storage| {
 		let docs = &storage.docs;
 
 		let ident = &storage.ident;
@@ -241,131 +242,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage.cfg_attrs;
 
-		let metadata_trait = match &storage.metadata {
-			Metadata::Value { .. } => quote::quote_spanned!(storage.attr_span =>
-				#frame_support::storage::types::StorageValueMetadata
-			),
-			Metadata::Map { .. } => quote::quote_spanned!(storage.attr_span =>
-				#frame_support::storage::types::StorageMapMetadata
-			),
-			Metadata::CountedMap { .. } => quote::quote_spanned!(storage.attr_span =>
-				#frame_support::storage::types::CountedStorageMapMetadata
-			),
-			Metadata::DoubleMap { .. } => quote::quote_spanned!(storage.attr_span =>
-				#frame_support::storage::types::StorageDoubleMapMetadata
-			),
-			Metadata::NMap { .. } => quote::quote_spanned!(storage.attr_span =>
-				#frame_support::storage::types::StorageNMapMetadata
-			),
-		};
-
-		let ty = match &storage.metadata {
-			Metadata::Value { value } => {
-				let value = clean_type_string(&quote::quote!(#value).to_string());
-				quote::quote_spanned!(storage.attr_span =>
-					#frame_support::metadata::StorageEntryType::Plain(
-						#frame_support::metadata::DecodeDifferent::Encode(#value)
-					)
-				)
-			},
-			Metadata::Map { key, value } => {
-				let value = clean_type_string(&quote::quote!(#value).to_string());
-				let key = clean_type_string(&quote::quote!(#key).to_string());
-				quote::quote_spanned!(storage.attr_span =>
-					#frame_support::metadata::StorageEntryType::Map {
-						hasher: <#full_ident as #metadata_trait>::HASHER,
-						key: #frame_support::metadata::DecodeDifferent::Encode(#key),
-						value: #frame_support::metadata::DecodeDifferent::Encode(#value),
-						unused: false,
-					}
-				)
-			},
-			Metadata::CountedMap { key, value } => {
-				let value = clean_type_string(&quote::quote!(#value).to_string());
-				let key = clean_type_string(&quote::quote!(#key).to_string());
-				quote::quote_spanned!(storage.attr_span =>
-					#frame_support::metadata::StorageEntryType::Map {
-						hasher: <#full_ident as #metadata_trait>::HASHER,
-						key: #frame_support::metadata::DecodeDifferent::Encode(#key),
-						value: #frame_support::metadata::DecodeDifferent::Encode(#value),
-						unused: false,
-					}
-				)
-			},
-			Metadata::DoubleMap { key1, key2, value } => {
-				let value = clean_type_string(&quote::quote!(#value).to_string());
-				let key1 = clean_type_string(&quote::quote!(#key1).to_string());
-				let key2 = clean_type_string(&quote::quote!(#key2).to_string());
-				quote::quote_spanned!(storage.attr_span =>
-					#frame_support::metadata::StorageEntryType::DoubleMap {
-						hasher: <#full_ident as #metadata_trait>::HASHER1,
-						key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
-						key1: #frame_support::metadata::DecodeDifferent::Encode(#key1),
-						key2: #frame_support::metadata::DecodeDifferent::Encode(#key2),
-						value: #frame_support::metadata::DecodeDifferent::Encode(#value),
-					}
-				)
-			},
-			Metadata::NMap { keys, value, .. } => {
-				let keys = keys
-					.iter()
-					.map(|key| clean_type_string(&quote::quote!(#key).to_string()))
-					.collect::<Vec<_>>();
-				let value = clean_type_string(&quote::quote!(#value).to_string());
-				quote::quote_spanned!(storage.attr_span =>
-					#frame_support::metadata::StorageEntryType::NMap {
-						keys: #frame_support::metadata::DecodeDifferent::Encode(&[
-							#( #keys, )*
-						]),
-						hashers: #frame_support::metadata::DecodeDifferent::Encode(
-							<#full_ident as #metadata_trait>::HASHERS,
-						),
-						value: #frame_support::metadata::DecodeDifferent::Encode(#value),
-					}
-				)
-			},
-		};
-
-		let mut metadata = quote::quote_spanned!(storage.attr_span =>
-			#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
-				name: #frame_support::metadata::DecodeDifferent::Encode(
-					<#full_ident as #metadata_trait>::NAME
-				),
-				modifier: <#full_ident as #metadata_trait>::MODIFIER,
-				ty: #ty,
-				default: #frame_support::metadata::DecodeDifferent::Encode(
-					<#full_ident as #metadata_trait>::DEFAULT
-				),
-				documentation: #frame_support::metadata::DecodeDifferent::Encode(&[
-					#( #docs, )*
-				]),
+		quote::quote_spanned!(storage.attr_span =>
+			#(#cfg_attrs)*
+			{
+				<#full_ident as #frame_support::storage::StorageEntryMetadataBuilder>::build_metadata(
+					#frame_support::sp_std::vec![
+						#( #docs, )*
+					],
+					&mut entries,
+				);
 			}
-		);
-
-		// Additional metadata for some storages:
-		if let Metadata::CountedMap { .. } = storage.metadata {
-			metadata.extend(quote::quote_spanned!(storage.attr_span =>
-				, #(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
-					name: #frame_support::metadata::DecodeDifferent::Encode(
-						<#full_ident as #metadata_trait>::COUNTER_NAME
-					),
-					modifier: <#full_ident as #metadata_trait>::COUNTER_MODIFIER,
-					ty: #frame_support::metadata::StorageEntryType::Plain(
-						#frame_support::metadata::DecodeDifferent::Encode(
-							<#full_ident as #metadata_trait>::COUNTER_TY
-						)
-					),
-					default: #frame_support::metadata::DecodeDifferent::Encode(
-						<#full_ident as #metadata_trait>::COUNTER_DEFAULT
-					),
-					documentation: #frame_support::metadata::DecodeDifferent::Encode(&[
-						<#full_ident as #metadata_trait>::COUNTER_DOC
-					]),
-				}
-			));
-		}
-
-		metadata
+		)
 	});
 
 	let getters = def.storages.iter().map(|storage| {
@@ -582,18 +469,19 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata::StorageMetadata {
-				#frame_support::metadata::StorageMetadata {
-					prefix: #frame_support::metadata::DecodeDifferent::Encode(
-						<
-							<T as #frame_system::Config>::PalletInfo as
-							#frame_support::traits::PalletInfo
-						>::name::<#pallet_ident<#type_use_gen>>()
-							.expect("Every active pallet has a name in the runtime; qed")
-					),
-					entries: #frame_support::metadata::DecodeDifferent::Encode(
-						&[ #( #entries, )* ]
-					),
+			pub fn storage_metadata() -> #frame_support::metadata::PalletStorageMetadata {
+				#frame_support::metadata::PalletStorageMetadata {
+					prefix: <
+						<T as #frame_system::Config>::PalletInfo as
+						#frame_support::traits::PalletInfo
+					>::name::<#pallet_ident<#type_use_gen>>()
+						.expect("Every active pallet has a name in the runtime; qed"),
+					entries: {
+						#[allow(unused_mut)]
+						let mut entries = #frame_support::sp_std::vec![];
+						#( #entries_builder )*
+						entries
+					},
 				}
 			}
 		}
