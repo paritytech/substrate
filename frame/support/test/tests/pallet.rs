@@ -1198,6 +1198,26 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
+					StorageEntryMetadata {
+						name: "RenamedCountedMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+							],
+							key: meta_type::<u8>(),
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForRenamedCountedMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec!["Counter for the related counted storage map"],
+					},
 				],
 			}),
 			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
@@ -1249,27 +1269,6 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-				// StorageEntryMetadata {
-				// 	name: DecodeDifferent::Decoded("RenamedCountedMap".to_string()),
-				// 	modifier: StorageEntryModifier::Optional,
-				// 	ty: StorageEntryType::Map {
-				// 		key: DecodeDifferent::Decoded("u8".to_string()),
-				// 		value: DecodeDifferent::Decoded("u32".to_string()),
-				// 		hasher: StorageHasher::Twox64Concat,
-				// 		unused: false,
-				// 	},
-				// 	default: DecodeDifferent::Decoded(vec![0]),
-				// 	documentation: DecodeDifferent::Decoded(vec![]),
-				// },
-				// StorageEntryMetadata {
-				// 	name: DecodeDifferent::Decoded("CounterForRenamedCountedMap".to_string()),
-				// 	modifier: StorageEntryModifier::Default,
-				// 	ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
-				// 	default: DecodeDifferent::Decoded(vec![0, 0, 0, 0]),
-				// 	documentation: DecodeDifferent::Decoded(vec![
-				// 		"Counter for the related counted storage map".to_string(),
-				// 	]),
-				// },
 					StorageEntryMetadata {
 						name: "Value",
 						modifier: StorageEntryModifier::Optional,
@@ -1408,6 +1407,26 @@ fn metadata() {
 						},
 						default: vec![0],
 						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "RenamedCountedMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+							],
+							key: meta_type::<u8>(),
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForRenamedCountedMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 				],
 			}),
