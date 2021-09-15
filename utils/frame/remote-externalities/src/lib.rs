@@ -482,6 +482,17 @@ impl<B: BlockT> Builder<B> {
 		self
 	}
 
+	/// overwrite the `at` value, if `mode` is set to [`Mode::Online`].
+	///
+	/// noop if `mode` is [`Mode::Offline`]
+	pub fn overwrite_online_at(mut self, at: B::Hash) -> Self {
+		if let Mode::Online(mut online) = self.mode.clone() {
+			online.at = Some(at);
+			self.mode = Mode::Online(online);
+		}
+		self
+	}
+
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		let kv = self.pre_build().await?;
