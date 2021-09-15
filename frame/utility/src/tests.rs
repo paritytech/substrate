@@ -23,7 +23,7 @@ use super::*;
 
 use crate as utility;
 use frame_support::{
-	assert_err_ignore_postinfo, assert_noop, assert_ok, decl_module,
+	assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	parameter_types, storage,
 	traits::Contains,
@@ -36,39 +36,48 @@ use sp_runtime::{
 };
 
 // example module to test behaviors.
+#[frame_support::pallet]
 pub mod example {
 	use super::*;
-	use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
-	use frame_system::ensure_signed;
+	use frame_support::{dispatch::WithPostDispatchInfo, pallet_prelude::*};
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
-			#[weight = *_weight]
-			fn noop(_origin, _weight: Weight) { }
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(*_weight)]
+		pub fn noop(_origin: OriginFor<T>, _weight: Weight) -> DispatchResult {
+			Ok(())
+		}
 
-			#[weight = *_start_weight]
-			fn foobar(
-				origin,
-				err: bool,
-				_start_weight: Weight,
-				end_weight: Option<Weight>,
-			) -> DispatchResultWithPostInfo {
-				let _ = ensure_signed(origin)?;
-				if err {
-					let error: DispatchError = "The cake is a lie.".into();
-					if let Some(weight) = end_weight {
-						Err(error.with_weight(weight))
-					} else {
-						Err(error)?
-					}
+		#[pallet::weight(*_start_weight)]
+		pub fn foobar(
+			origin: OriginFor<T>,
+			err: bool,
+			_start_weight: Weight,
+			end_weight: Option<Weight>,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			if err {
+				let error: DispatchError = "The cake is a lie.".into();
+				if let Some(weight) = end_weight {
+					Err(error.with_weight(weight))
 				} else {
-					Ok(end_weight.into())
+					Err(error)?
 				}
+			} else {
+				Ok(end_weight.into())
 			}
+		}
 
-			#[weight = 0]
-			fn big_variant(_origin, _arg: [u8; 400]) {}
+		#[pallet::weight(0)]
+		pub fn big_variant(_origin: OriginFor<T>, _arg: [u8; 400]) -> DispatchResult {
+			Ok(())
 		}
 	}
 }
