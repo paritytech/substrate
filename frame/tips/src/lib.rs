@@ -177,7 +177,6 @@ pub mod pallet {
 	pub type Reasons<T: Config> = StorageMap<_, Identity, T::Hash, Vec<u8>, OptionQuery>;
 
 	#[pallet::event]
-	#[pallet::metadata(T::Hash = "Hash", T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new tip suggestion has been opened. \[tip_hash\]
