@@ -733,9 +733,9 @@ publish-rustdoc:
   variables:
     GIT_DEPTH:                     100
     # For rustdocs deployment
-    RUSTDOCS_DEPLOY_REFS:   "master monthly-2021-08 monthly-2021-09+1 v3.0.0 9785" # branches and tags to generate rustdocs
+    RUSTDOCS_DEPLOY_REFS:   "9785 master monthly-2021-09+1 monthly-2021-08 v3.0.0" # branches and tags to generate rustdocs
     INDEX_TPL:      ".maintain/docs-index-tpl.ejs" # location of the docs index template
-    LATEST:    "monthly-2021-09+1" # One of the $RUSTDOCS_DEPLOY_REFS value
+    LATEST:         "9785" # One of the $RUSTDOCS_DEPLOY_REFS value
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -752,6 +752,7 @@ publish-rustdoc:
     - job:                         build-rustdoc
       artifacts:                   true
   script: |
+    set -x
     rm -rf /tmp/*
 
     # Set git config
@@ -797,7 +798,10 @@ publish-rustdoc:
     # This causes GitLab to exit immediately and marks this job failed.
     # We don't want to mark the entire job failed if there's nothing to
     # publish though, hence the `|| true`.
+
+    ls -l
     echo "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
+
     git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" || echo "___Nothing to commit___"
     git push origin gh-pages --force
   after_script:
