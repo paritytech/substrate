@@ -151,7 +151,10 @@ pub fn start_ws<M: Send + Sync + 'static>(
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		builder = builder.set_allowed_hosts([format!("localhost:{}", addr.port()), format!("127.0.0.1:{}", addr.port())])?;
+		builder = builder.set_allowed_hosts([
+			format!("localhost:{}", addr.port()),
+			format!("127.0.0.1:{}", addr.port()),
+		])?;
 		builder = builder.set_allowed_origins(cors)?;
 	}
 

@@ -592,8 +592,6 @@ where
 		),
 	);
 
-	// NOTE(niklasad1): we spawn jsonrpsee in seperate thread now.
-	// this will not shutdown the server.
 	task_manager.keep_alive((config.base_path, rpc));
 
 	Ok(())
