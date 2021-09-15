@@ -79,8 +79,11 @@ benchmarks! {
 	set_target {
 		let call = Call::<T>::set_target { target: Default::default() }.encode();
 		let origin = T::AdminOrigin::successful_origin();
-	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
-
+	}: {
+		<Call<T> as Decode>::decode(&mut &*call)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(origin)?
+	}
 	thaw {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(3u32));

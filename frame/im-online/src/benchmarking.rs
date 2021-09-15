@@ -94,7 +94,9 @@ benchmarks! {
 		let call_enc = call.encode();
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call).map_err(<&str>::from)?;
-		<Call<T> as Decode>::decode(&mut &*call_enc)?.dispatch_bypass_filter(RawOrigin::None.into())?;
+		<Call<T> as Decode>::decode(&mut &*call_enc)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
 }
 

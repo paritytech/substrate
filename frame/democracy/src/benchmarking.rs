@@ -230,7 +230,11 @@ benchmarks! {
 			maybe_ref_index: Some(referendum_index)
 		}.encode();
 		let origin = T::BlacklistOrigin::successful_origin();
-	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+        <Call<T> as Decode>::decode(&mut &*call)
+            .expect("call is encoded above, encoding must be correct")
+            .dispatch_bypass_filter(origin)?
+    }
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
@@ -252,7 +256,11 @@ benchmarks! {
 		);
 
 		let call = Call::<T>::external_propose { proposal_hash }.encode();
-	}: {  <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+        <Call<T> as Decode>::decode(&mut &*call)
+            .expect("call is encoded above, encoding must be correct")
+            .dispatch_bypass_filter(origin)?
+    }
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -262,7 +270,11 @@ benchmarks! {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
 		let call = Call::<T>::external_propose_majority { proposal_hash }.encode();
-	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+        <Call<T> as Decode>::decode(&mut &*call)
+            .expect("call is encoded above, encoding must be correct")
+            .dispatch_bypass_filter(origin)?
+    }
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -272,7 +284,11 @@ benchmarks! {
 		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
 		let call = Call::<T>::external_propose_default { proposal_hash }.encode();
-	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+        <Call<T> as Decode>::decode(&mut &*call)
+            .expect("call is encoded above, encoding must be correct")
+            .dispatch_bypass_filter(origin)?
+    }
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -293,7 +309,11 @@ benchmarks! {
 			delay: delay.into()
 		}.encode();
 
-	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin_fast_track)?}
+	}: {
+        <Call<T> as Decode>::decode(&mut &*call)
+            .expect("call is encoded above, encoding must be correct")
+            .dispatch_bypass_filter(origin_fast_track)?
+    }
 	verify {
 		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created")
 	}
@@ -317,7 +337,11 @@ benchmarks! {
 		let call = Call::<T>::veto_external { proposal_hash }.encode();
 		let origin = T::VetoOrigin::successful_origin();
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
-	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)?}
+	}: {
+        <Call<T> as Decode>::decode(&mut &*call)
+            .expect("call is encoded above, encoding must be correct")
+            .dispatch_bypass_filter(origin)?
+    }
 	verify {
 		assert!(NextExternal::<T>::get().is_none());
 		let (_, new_vetoers) = <Blacklist<T>>::get(&proposal_hash).ok_or("no blacklist")?;
@@ -782,7 +806,9 @@ benchmarks! {
 		let call = Call::<T>::enact_proposal { proposal_hash, index: 0 }.encode();
 	}: {
 		assert_eq!(
-			<Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin),
+			<Call<T> as Decode>::decode(&mut &*call)
+                .expect("call is encoded above, encoding must be correct")
+                .dispatch_bypass_filter(origin),
 			Err(Error::<T>::PreimageInvalid.into())
 		);
 	}

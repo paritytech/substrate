@@ -556,7 +556,9 @@ benchmarks! {
 		).collect();
 	}: {
 		for call in calls {
-			<Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin.clone().into())?;
+			<Call<T> as Decode>::decode(&mut &*call)
+				.expect("call is encoded above, encoding must be correct")
+				.dispatch_bypass_filter(origin.clone().into())?;
 		}
 	}
 

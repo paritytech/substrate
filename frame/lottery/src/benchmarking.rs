@@ -77,7 +77,11 @@ benchmarks! {
 		let call = Call::<T>::set_calls { calls }.encode();
 		let origin = T::ManagerOrigin::successful_origin();
 		assert!(CallIndices::<T>::get().is_empty());
-	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+		<Call<T> as Decode>::decode(&mut &*call)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(origin)?
+	}
 	verify {
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
@@ -95,7 +99,11 @@ benchmarks! {
 			repeat: true
 		}.encode();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: {  <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+		<Call<T> as Decode>::decode(&mut &*call)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(origin)?
+	}
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
@@ -105,7 +113,11 @@ benchmarks! {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
 		let call = Call::<T>::stop_repeat { }.encode();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
+	}: {
+		<Call<T> as Decode>::decode(&mut &*call)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(origin)?
+	}
 	verify {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}

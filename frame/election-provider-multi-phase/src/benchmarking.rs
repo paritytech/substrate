@@ -365,8 +365,10 @@ frame_benchmarking::benchmarks! {
 				witness,
 			)
 		);
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)?;
-		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call)?;
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.expect("call is encoded above, encoding must be correct");
+		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call)
+			.expect("call is encoded above, encoding must be correct");
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
@@ -393,7 +395,8 @@ frame_benchmarking::benchmarks! {
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot missing")?.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)?;
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.expect("call is encoded above, encoding must be correct");
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in

@@ -158,12 +158,6 @@ impl From<DispatchError> for BenchmarkError {
 	}
 }
 
-impl From<CodecError> for BenchmarkError {
-	fn from(_: CodecError) -> Self {
-		Self::Stop("Codec error")
-	}
-}
-
 /// Configuration used to setup and run runtime benchmarks.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkConfig {

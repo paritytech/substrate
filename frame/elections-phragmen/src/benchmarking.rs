@@ -407,7 +407,8 @@ benchmarks! {
 		let call = Call::<T>::remove_member { who: removing, has_replacement: false }.encode();
 	}: {
 		assert_eq!(
-			<Call<T> as Decode>::decode(&mut &*call)?
+			<Call<T> as Decode>::decode(&mut &*call)
+				.expect("call is encoded above, encoding must be correct")
 				.dispatch_bypass_filter(RawOrigin::Root.into())
 				.unwrap_err()
 				.error,
