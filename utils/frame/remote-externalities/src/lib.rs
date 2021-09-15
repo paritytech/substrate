@@ -487,7 +487,7 @@ impl<B: BlockT> Builder<B> {
 		let kv = self.pre_build().await?;
 		let mut ext = TestExternalities::new_empty();
 
-		debug!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
+		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
 			// Insert the key,value pair into the test trie backend

@@ -399,9 +399,6 @@ impl std::fmt::Display for MultiSigner {
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
-		sp_std::if_std! {
-			println!("{:?}, verifying msg from {:?}", self, signer);
-		}
 		match (self, signer) {
 			(Self::Ed25519(ref sig), who) =>
 				sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),

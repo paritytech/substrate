@@ -32,6 +32,7 @@ use sp_core::{
 	storage::{well_known_keys, StorageData, StorageKey},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
+	H256,
 };
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -47,11 +48,14 @@ mod parse;
 pub enum Command {
 	/// Execute "TryRuntime_on_runtime_upgrade" against the given runtime state.
 	OnRuntimeUpgrade(OnRuntimeUpgradeCmd),
+
 	/// Execute "OffchainWorkerApi_offchain_worker" against the given runtime state.
 	OffchainWorker(OffchainWorkerCmd),
+
 	/// Execute "Core_execute_block" using the given block and the runtime state of the parent
 	/// block.
 	ExecuteBlock(ExecuteBlockCmd),
+
 	/// Follow the given chain's finalized blocks and apply all of its extrinsics.
 	///
 	/// The initial state is the state of the first finalized block received.
@@ -108,32 +112,51 @@ pub struct SharedParams {
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
 
-	/// The block hash at which to read state. This is required for execute-block, offchain-worker,
-	/// or any command that used the live subcommand.
+	/// The block hash at which to read state.
+	///
+	/// This is required for `execute-block`, `offchain-worker`, 'offchain-worker', or any command
+	/// that used the `live` subcommand.
 	#[structopt(
 		short,
 		long,
 		multiple = false,
 		parse(try_from_str = parse::hash),
 		required_ifs(
-			&[("command", "offchain-worker"), ("command", "execute-block"), ("subcommand", "live")]
-		)
+			&[
+				("command", "offchain-worker"),
+				("command", "execute-block"),
+				("command", "follow-chain"),
+				("subcommand", "live")
+			]
+		),
+		requires("block-at")
 	)]
-	block_at: String,
-
-	/// Whether or not to overwrite the code from state with the code from
-	/// the specified chain spec.
-	#[structopt(long)]
-	// TODO: should not be an option in on-runtime-upgrade and follow-chain
-	pub overwrite_code: bool,
+	block_at: Option<String>,
 
 	/// The url to connect to.
-	// TODO having this a shared parm is a temporary hack; the url is used just
-	// to get the header/block. We should try and get that out of state, OR allow
-	// the user to feed in a header/block via file.
-	// https://github.com/paritytech/substrate/issues/9027
-	#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
-	url: String,
+	///
+	/// Needs to be provided if:
+	///
+	/// Only needed when `block-at` needs to be provided.
+	#[structopt(
+		short,
+		long,
+		parse(try_from_str = parse::url),
+	)]
+	url: Option<String>,
+
+	/// Whether or not to overwrite the code from state with the code from the specified chain
+	/// spec.
+	///
+	/// This is only an option in `offchain-worker` and `execute-block`. In the other commands, it
+	/// is always enabled.
+	#[structopt(
+		long,
+		required_ifs(
+			&[("command", "offchain-worker"), ("command", "execute-block")]
+		)
+	)]
+	pub overwrite_wasm_code: Option<bool>,
 }
 
 impl SharedParams {
@@ -145,25 +168,18 @@ impl SharedParams {
 		<<Block as BlockT>::Hash as FromStr>::Err: Debug,
 	{
 		self.block_at
+			.as_ref()
+			.expect("block at should only be needed in commands that mandate it")
 			.parse::<<Block as BlockT>::Hash>()
 			.map_err(|e| format!("Could not parse block hash: {:?}", e).into())
 	}
-}
 
-#[derive(structopt::StructOpt, Debug, Clone)]
-pub enum DummyCommands {
-	OnRuntimeUpgrade,
-	OffchainWorker,
-}
-
-impl std::str::FromStr for DummyCommands {
-	type Err = &'static str;
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.to_lowercase().as_str() {
-			"on-runtime-upgrade" => Ok(DummyCommands::OnRuntimeUpgrade),
-			"offchain-worker" => Ok(DummyCommands::OffchainWorker),
-			_ => Err("Err"),
-		}
+	/// Get the configured value of `url`, assuming that it exists.
+	pub fn url_expect(&self) -> String {
+		self.url
+			.as_ref()
+			.expect("calling this command without --url must be prevented.")
+			.clone()
 	}
 }
 
@@ -204,7 +220,7 @@ async fn follow_chain<Block, ExecDispatch>(
 	config: Configuration,
 ) -> sc_cli::Result<()>
 where
-	Block: BlockT + serde::de::DeserializeOwned,
+	Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	Block::Header: serde::de::DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
@@ -216,9 +232,8 @@ where
 		types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription},
 		WsClientBuilder,
 	};
-	use sp_state_machine::Backend;
 
-	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
+	check_spec_name::<Block>(shared.url_expect(), config.chain_spec.name().to_string()).await;
 
 	let mut maybe_state_ext = None;
 
@@ -228,7 +243,7 @@ where
 	let client = WsClientBuilder::default()
 		.connection_timeout(std::time::Duration::new(20, 0))
 		.max_request_body_size(u32::MAX)
-		.build(&shared.url)
+		.build(&shared.url_expect())
 		.await
 		.unwrap();
 
@@ -241,10 +256,12 @@ where
 	while let Some(header) = subscription.next().await.unwrap() {
 		let hash = header.hash();
 		let number = header.number();
+		let parent = header.parent_hash();
 
-		let block = remote_externalities::rpc_api::get_block::<Block, _>(&shared.url, hash)
-			.await
-			.unwrap();
+		let block =
+			remote_externalities::rpc_api::get_block::<Block, _>(&shared.url_expect(), hash)
+				.await
+				.unwrap();
 
 		log::debug!(
 			target: LOG_TARGET,
@@ -257,7 +274,7 @@ where
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
 			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: shared.url.to_owned().into(),
+				transport: shared.url_expect().into(),
 				at: Some(header.parent_hash().clone()),
 				..Default::default()
 			}));
@@ -290,6 +307,12 @@ where
 
 		let mut extensions = sp_externalities::Extensions::default();
 		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
+		let (offchain, _offchain_state) = TestOffchainExt::new();
+		let (pool, _pool_state) = TestTransactionPoolExt::new();
+		extensions.register(OffchainDbExt::new(offchain.clone()));
+		extensions.register(OffchainWorkerExt::new(offchain));
+		extensions.register(KeystoreExt(Arc::new(KeyStore::new())));
+		extensions.register(TransactionPoolExt::new(pool));
 
 		let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
 			&state_ext.backend,
@@ -303,6 +326,7 @@ where
 				.runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
 		)
+		.set_parent_hash(*parent)
 		.execute(execution.into())
 		.map_err(|e| {
 			format!("failed to execute 'TryRuntime_execute_block_no_state_root_check': {:?}", e)
@@ -310,19 +334,20 @@ where
 
 		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;
-		log::info!(
-			target: LOG_TARGET,
-			"before commit overlay changes empty: {:?}, backend root {:?}",
-			state_ext.overlayed_changes().is_empty(),
-			state_ext.as_backend().root(),
+
+		let storage_changes = changes
+			.drain_storage_changes::<_, _, NumberFor<Block>>(
+				&state_ext.backend,
+				None,
+				Default::default(),
+				&mut Default::default(),
+			)
+			.unwrap();
+		state_ext.backend.apply_transaction(
+			storage_changes.transaction_storage_root,
+			storage_changes.transaction,
 		);
-		state_ext.commit_all().unwrap();
-		log::info!(
-			target: LOG_TARGET,
-			"after commit overlay changes empty: {:?}, backend root {:?}",
-			state_ext.overlayed_changes().is_empty(),
-			state_ext.as_backend().root(),
-		);
+
 		log::info!(
 			target: LOG_TARGET,
 			"executed block {}, consumed weight {}, new storage root {:?}",
@@ -332,6 +357,7 @@ where
 		);
 	}
 
+	log::error!(target: LOG_TARGET, "ws subscription must have terminated.");
 	Ok(())
 }
 
@@ -360,7 +386,9 @@ where
 		max_runtime_instances,
 	);
 
-	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
+	if shared.url.is_some() {
+		check_spec_name::<Block>(shared.url_expect(), config.chain_spec.name().to_string()).await;
+	}
 
 	let ext = {
 		let builder = match command.state {
@@ -370,7 +398,7 @@ where
 				})),
 			State::Live { snapshot_path, modules } =>
 				Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-					transport: shared.url.to_owned().into(),
+					transport: shared.url_expect().into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.to_owned().unwrap_or_default(),
 					at: Some(shared.block_at::<Block>()?),
@@ -439,13 +467,13 @@ where
 		max_runtime_instances,
 	);
 
-	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
+	check_spec_name::<Block>(shared.url_expect(), config.chain_spec.name().to_string()).await;
 
 	let mode = match command.state {
 		State::Live { snapshot_path, modules } => {
 			let at = shared.block_at::<Block>()?;
 			let online_config = OnlineConfig {
-				transport: shared.url.to_owned().into(),
+				transport: shared.url_expect().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
 				at: Some(at),
@@ -464,7 +492,7 @@ where
 	let builder = Builder::<Block>::new()
 		.mode(mode)
 		.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
-	let mut ext = if shared.overwrite_code {
+	let mut ext = if shared.overwrite_wasm_code.unwrap_or(false) {
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject_key_value(&[(code_key, code)]).build().await?
 	} else {
@@ -479,7 +507,7 @@ where
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	let header_hash = shared.block_at::<Block>()?;
-	let header = rpc_api::get_header::<Block, _>(shared.url, header_hash).await?;
+	let header = rpc_api::get_header::<Block, _>(shared.url_expect(), header_hash).await?;
 
 	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
@@ -526,9 +554,9 @@ where
 	);
 
 	let block_hash = shared.block_at::<Block>()?;
-	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
+	let block: Block = rpc_api::get_block::<Block, _>(shared.url_expect(), block_hash).await?;
 
-	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
+	check_spec_name::<Block>(shared.url_expect(), config.chain_spec.name().to_string()).await;
 
 	let mode = match command.state {
 		State::Snap { snapshot_path } => {
@@ -541,7 +569,7 @@ where
 			let parent_hash = block.header().parent_hash();
 
 			let mode = Mode::Online(OnlineConfig {
-				transport: shared.url.to_owned().into(),
+				transport: shared.url_expect().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
 				at: Some(parent_hash.to_owned()),
@@ -556,7 +584,7 @@ where
 		let builder = Builder::<Block>::new()
 			.mode(mode)
 			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
-		let mut ext = if shared.overwrite_code {
+		let mut ext = if shared.overwrite_wasm_code.unwrap_or(false) {
 			let (code_key, code) = extract_code(config.chain_spec)?;
 			builder.inject_key_value(&[(code_key, code)]).build().await?
 		} else {
@@ -604,7 +632,7 @@ where
 impl TryRuntimeCmd {
 	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		Block: BlockT + serde::de::DeserializeOwned,
+		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
 		Block::Header: serde::de::DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,

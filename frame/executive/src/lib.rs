@@ -230,12 +230,7 @@ where
 
 		let (header, extrinsics) = block.deconstruct();
 
-		let signature_batching = sp_runtime::SignatureBatching::start();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-		if !signature_batching.verify() {
-			panic!("Signature verification failed.");
-		}
-
 		// don't call `final_checks`, but do finalize the block.
 		let _header = <frame_system::Pallet<System>>::finalize();
 
@@ -319,9 +314,6 @@ where
 		let last = frame_system::LastRuntimeUpgrade::<System>::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
-		sp_std::if_std! {
-			println!("lat {:?}, current {:?}", last, current);
-		}
 		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
 			frame_system::LastRuntimeUpgrade::<System>::put(
 				frame_system::LastRuntimeUpgradeInfo::from(current),
