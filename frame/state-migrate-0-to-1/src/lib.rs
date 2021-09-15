@@ -416,25 +416,10 @@ mod mock {
 		type OnSetCode = ();
 	}
 
-	pub struct MigrationWeightImpl;
-	impl Get<Weight> for MigrationWeightImpl {
-		fn get() -> Weight {
-			500_000_000_000 as Weight
-		}
-	}
-
-	pub struct MigrationMaxSizeImpl;
-	impl Get<u32> for MigrationMaxSizeImpl {
-		fn get() -> u32 {
-			300
-		}
-	}
-
-	pub struct ThresholdImpl;
-	impl Get<u32> for ThresholdImpl {
-		fn get() -> u32 {
-			33
-		}
+	parameter_types! {
+		pub const MigrationWeight: Weight = 500_000_000_000;
+		pub const MigrationMaxSize: u32 = 300;
+		pub const Threshold: u32 = 33;
 	}
 
 	parameter_types! {
@@ -443,9 +428,9 @@ mod mock {
 	}
 
 	impl pallet_state_migrate_0_to_1::Config for Test {
-		type MigrationWeight = MigrationWeightImpl;
-		type MigrationMaxSize = MigrationMaxSizeImpl;
-		type Threshold = ThresholdImpl;
+		type MigrationWeight = MigrationWeight;
+		type MigrationMaxSize = MigrationMaxSize;
+		type Threshold = Threshold;
 	}
 
 	pub fn new_test_ext(switch_version: bool) -> sp_io::TestExternalities {
