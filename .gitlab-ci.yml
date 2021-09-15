@@ -752,7 +752,6 @@ publish-rustdoc:
     - job:                         build-rustdoc
       artifacts:                   true
   script: |
-    set -x
     rm -rf /tmp/*
 
     # Set git config
@@ -798,10 +797,6 @@ publish-rustdoc:
     # This causes GitLab to exit immediately and marks this job failed.
     # We don't want to mark the entire job failed if there's nothing to
     # publish though, hence the `|| true`.
-
-    ls -l
-    echo "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
-
     git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" || echo "___Nothing to commit___"
     git push origin gh-pages --force
   after_script:
