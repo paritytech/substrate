@@ -225,6 +225,11 @@ where
 						v.index(DigestItemType::Other as u8).fields(
 							Fields::unnamed().field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
 						)
+					})
+					.variant("RuntimeEnvironmentUpdated,", |v| {
+						v.index(DigestItemType::RuntimeEnvironmentUpdated as u8).fields(
+							Fields::unit()
+						)
 					}),
 			)
 	}
@@ -600,6 +605,10 @@ mod tests {
 						Default::default(),
 					)),
 				),
+				DigestItemType::RuntimeEnvironmentUpdated => (
+					"RuntimeEnvironmentUpdated",
+					DigestItem::RuntimeEnvironmentUpdated
+				),
 			};
 			let encoded = digest_item.encode();
 			let variant = variants
@@ -616,5 +625,6 @@ mod tests {
 		check(DigestItemType::Seal);
 		check(DigestItemType::PreRuntime);
 		check(DigestItemType::ChangesTrieSignal);
+		check(DigestItemType::RuntimeEnvironmentUpdated);
 	}
 }
