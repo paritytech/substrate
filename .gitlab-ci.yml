@@ -45,6 +45,14 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
+  # For rustdocs deployment
+  RUSTDOCS_DEPLOY_REFS:   "master monthly-2021-08 monthly-2021-09+1 v3.0.0 jc/test-gen-docs" # branches and tags to generate rustdocs
+  INDEX_TPL:      ".maintain/docs-index-tpl.ejs" # location of the docs index template
+  REPO_NAME:      "substrate"
+  REPO_URL:       "https://${GITHUB_TOKEN}@github.com/paritytech/${REPO_NAME}.git" # github repo URL
+  DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
+  LATEST_DEST:    "monthly-2021-09+1" # One of the $RUSTDOCS_DEPLOY_REFS value
+
 
 default:
   cache:                           {}
@@ -632,7 +640,7 @@ build-rustdoc:
     - mv ./target/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
     - chown -R nonroot:nonroot ./crate-docs
-    - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
+    - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
     - sccache -s
 
 #### stage:                        publish
@@ -728,35 +736,64 @@ publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
   <<:                              *vault-secrets
-  image:                           paritytech/tools:latest
+  image:                           node:16
   variables:
     GIT_DEPTH:                     100
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
-    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    # Need to manually add branches based on $RUSTDOCS_DEPLOY_REFS
     - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "monthly-2021-08"
+    - if: $CI_COMMIT_REF_NAME == "monthly-2021-09+1"
+    - if: $CI_COMMIT_REF_NAME == "v3.0.0"
+    - if: $CI_COMMIT_REF_NAME == "jc/test-gen-docs"
+
   # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
   # artifacts from being dowloaded by this job.
   needs:
     - job:                         build-rustdoc
       artifacts:                   true
-  script:
-    - rm -rf /tmp/*
+  script: |
+    rm -rf /tmp/*
+
     # Set git config
-    - rm -rf .git/config
-    - git config user.email "devops-team@parity.io"
-    - git config user.name "${GITHUB_USER}"
-    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
-    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-    - git fetch origin gh-pages
+    rm -rf .git/config
+    git config user.email "devops-team@parity.io"
+    git config user.name "${GITHUB_USER}"
+    git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    git fetch origin gh-pages
+
+    # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
+    yarn global add ejs
+    ejs ${INDEX_TPL} -i "{\"deploy_refs\": \"${RUSTDOCS_DEPLOY_REFS}\", \"repo_name\": \"${REPO_NAME}\", \"latest\": \"${LATEST_DEST}\"}" > /tmp/index.html
+
     # Save README and docs
-    - cp -r ./crate-docs/ /tmp/doc/
-    - cp README.md /tmp/doc/
-    - git checkout gh-pages
-    # Remove everything and restore generated docs and README
-    - rm -rf ./*
-    - mv /tmp/doc/* .
+    cp -r ./crate-docs/ /tmp/doc/
+    cp README.md /tmp/doc/
+    git checkout gh-pages
+
+    # Remove directories no longer necessary, as specified in $RUSTDOCS_DEPLOY_REFS.
+    # Also ensure $RUSTDOCS_DEPLOY_REFS is non-space
+    if [[ ! -z ${RUSTDOCS_DEPLOY_REFS// } ]]; then
+      for FILE in *; do
+        if [[ ! " $RUSTDOCS_DEPLOY_REFS " =~ " $FILE " ]]; then
+          echo "Removing ${FILE}..."
+          rm -rf $FILE
+        fi
+      done
+    fi
+
+    # Move the index page & built back
+    mv -f /tmp/index.html .
+    # Ensure the destination dir is clear
+    rm -rf ${CI_COMMIT_REF_NAME}
+    mv -f /tmp/docs ${CI_COMMIT_REF_NAME}
+
+    # Add the symlink
+    ln -sf ${LATEST_DEST} latest
+
     # Upload files
     - git add --all --force
     # `git commit` has an exit code of > 0 if there is nothing to commit.
