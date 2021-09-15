@@ -735,7 +735,6 @@ publish-rustdoc:
     # For rustdocs deployment
     RUSTDOCS_DEPLOY_REFS:   "master monthly-2021-08 monthly-2021-09+1 v3.0.0 9785" # branches and tags to generate rustdocs
     INDEX_TPL:      ".maintain/docs-index-tpl.ejs" # location of the docs index template
-    REPO_URL:       "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git" # github repo URL
     LATEST_DEST:    "monthly-2021-09+1" # One of the $RUSTDOCS_DEPLOY_REFS value
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
@@ -759,7 +758,8 @@ publish-rustdoc:
     rm -rf .git/config
     git config user.email "devops-team@parity.io"
     git config user.name "${GITHUB_USER}"
-    git config remote.origin.url "${REPO_URL}"
+    echo "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
+    git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
     git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     git fetch origin gh-pages
 
