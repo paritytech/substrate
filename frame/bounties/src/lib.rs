@@ -94,6 +94,7 @@ use frame_support::{dispatch::DispatchResultWithPostInfo, traits::EnsureOrigin};
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
+use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -106,7 +107,7 @@ type PositiveImbalanceOf<T> = pallet_treasury::PositiveImbalanceOf<T>;
 pub type BountyIndex = u32;
 
 /// A bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -123,7 +124,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 }
 
 /// The status of a bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BountyStatus<AccountId, BlockNumber> {
 	/// The bounty is proposed and waiting for approval.
 	Proposed,
@@ -226,7 +227,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// New bounty proposal. \[index\]
 		BountyProposed(BountyIndex),

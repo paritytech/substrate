@@ -94,7 +94,6 @@ members = [
 	"frame/merkle-mountain-range",
 	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
-	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
 	"frame/node-authorization",
@@ -261,7 +260,6 @@ wasmi = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
-
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
