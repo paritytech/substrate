@@ -56,12 +56,7 @@ benchmarks! {
 		for i in 0..T::MaxQueueLen::get() {
 			Gilt::<T>::place_bid(origin.clone().into(), T::MinFreeze::get(), 1)?;
 		}
-		let call = Call::<T>::place_bid( T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
-			.encode();
-	}: {
-		<Call<T> as Decode>::decode(&mut &*call).expect("call is encoded above, must be correct")
-			.dispatch_bypass_filter(origin.into())?
-	}
+	}: place_bid(origin, T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
 		assert_eq!(QueueTotals::<T>::get()[0], (
 			T::MaxQueueLen::get(),
@@ -82,9 +77,9 @@ benchmarks! {
 	}
 
 	set_target {
-		let call = Call::<T>::set_target(Default::default());
+		let call = Call::<T>::set_target(Default::default()).encode();
 		let origin = T::AdminOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 
 	thaw {
 		let caller: T::AccountId = whitelisted_caller();

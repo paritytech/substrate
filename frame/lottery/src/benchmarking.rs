@@ -74,10 +74,10 @@ benchmarks! {
 		let n in 0 .. T::MaxCalls::get() as u32;
 		let calls = vec![frame_system::Call::<T>::remark(vec![]).into(); n as usize];
 
-		let call = Call::<T>::set_calls(calls);
+		let call = Call::<T>::set_calls(calls).encode();
 		let origin = T::ManagerOrigin::successful_origin();
 		assert!(CallIndices::<T>::get().is_empty());
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
@@ -89,9 +89,9 @@ benchmarks! {
 		let end = 10u32.into();
 		let payout = 5u32.into();
 
-		let call = Call::<T>::start_lottery(price, end, payout, true);
+		let call = Call::<T>::start_lottery(price, end, payout, true).encode();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: {  <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
@@ -99,9 +99,9 @@ benchmarks! {
 	stop_repeat {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
-		let call = Call::<T>::stop_repeat();
+		let call = Call::<T>::stop_repeat().encode();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}

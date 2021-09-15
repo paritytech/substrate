@@ -16,8 +16,7 @@
 // limitations under the License.
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
-
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Error as CodecError};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo},
 	pallet_prelude::*,
@@ -156,6 +155,12 @@ impl From<DispatchErrorWithPostInfo> for BenchmarkError {
 impl From<DispatchError> for BenchmarkError {
 	fn from(e: DispatchError) -> Self {
 		Self::Stop(e.into())
+	}
+}
+
+impl From<CodecError> for BenchmarkError {
+	fn from(_: CodecError) -> Self {
+		Self::Stop("Codec error")
 	}
 }
 

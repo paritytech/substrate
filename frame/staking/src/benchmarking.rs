@@ -22,6 +22,7 @@ use crate::Pallet as Staking;
 use testing_utils::*;
 
 use frame_support::{
+	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
 	traits::{Currency, Get, Imbalance},
 };
@@ -549,9 +550,13 @@ benchmarks! {
 		<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
 		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller);
+		let calls: Vec<_> = payout_calls_arg.iter().map(|arg|
+			Call::<T>::payout_stakers(arg.0.clone(), arg.1).encode()
+		).collect();
 	}: {
-		for arg in payout_calls_arg {
-			<Staking<T>>::payout_stakers(RawOrigin::Signed(caller.clone()).into(), arg.0, arg.1)?;
+		for call in calls {
+			<Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin.clone().into())?;
 		}
 	}
 

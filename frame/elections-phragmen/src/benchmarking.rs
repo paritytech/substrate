@@ -24,7 +24,10 @@ use super::*;
 use frame_benchmarking::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	traits::OnInitialize,
+};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Elections;
@@ -401,9 +404,13 @@ benchmarks! {
 
 		let _ = fill_seats_up_to::<T>(m)?;
 		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
+		let call = Call::<T>::remove_member(removing, false).encode();
 	}: {
 		assert_eq!(
-			<Elections<T>>::remove_member(RawOrigin::Root.into(), removing, false).unwrap_err().error,
+			<Call<T> as Decode>::decode(&mut &*call)?
+				.dispatch_bypass_filter(RawOrigin::Root.into())
+				.unwrap_err()
+				.error,
 			Error::<T>::InvalidReplacement.into(),
 		);
 	}
