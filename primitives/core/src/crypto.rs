@@ -576,6 +576,10 @@ ss58_address_format!(
 		(47, "reserved47", "Reserved for future use (47).")
 	NeatcoinAccount =>
 		(48, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
+	PicassoAccount =>
+		(49, "picasso", "Composable Canary Network, standard account (*25519).")
+	ComposableAccount =>
+		(50, "composable", "Composable mainnet, standard account (*25519).")
 	HydraDXAccount =>
 		(63, "hydradx", "HydraDX standard account (*25519).")
 	AventusAccount =>
@@ -600,6 +604,8 @@ ss58_address_format!(
 		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
 	HeikoAccount =>
 		(110, "heiko", "Heiko, session key (*25519).")
+	CloverAccount =>
+		(128, "clover", "Clover Finance, standard account (*25519).")
 	ParallelAccount =>
 		(172, "parallel", "Parallel, session key (*25519).")
 	SocialAccount =>
