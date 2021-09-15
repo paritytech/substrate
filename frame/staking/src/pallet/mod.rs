@@ -633,8 +633,6 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == Releases::V6_0_0 {
 				migrations::v7::migrate::<T>()
-			} else if StorageVersion::<T>::get() == Releases::V7_0_0 {
-				migrations::v8::migrate::<T>()
 			} else {
 				T::DbWeight::get().reads(1)
 			}
@@ -644,17 +642,6 @@ pub mod pallet {
 		fn pre_upgrade() -> Result<(), &'static str> {
 			if StorageVersion::<T>::get() == Releases::V6_0_0 {
 				migrations::v7::pre_migrate::<T>()
-			} else if StorageVersion::<T>::get() == Releases::V7_0_0 {
-				migrations::v8::pre_migrate::<T>()
-			} else {
-				Ok(())
-			}
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			if StorageVersion::<T>::get() == Releases::V7_0_0 {
-				migrations::v8::post_migrate::<T>()
 			} else {
 				Ok(())
 			}
