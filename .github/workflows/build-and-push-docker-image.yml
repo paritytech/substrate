@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - dev-cere
+      - feature/support-wasm-file-copy
 env:
   ECR_REPOSITORY: pos-network-node
 jobs:
