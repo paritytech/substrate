@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added dynamic block interval
 - Added validation for resource Id in chainbridge frame.
+- Set democracy periods: `LaunchPeriod` to 1 day, `VotingPeriod` to 5 days, `EnactmentPeriod` to 3 days.
+- Updated `FastTrackVotingPeriod` to 3 hours.
 
 ## [2.3.2]
 
