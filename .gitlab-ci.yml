@@ -45,13 +45,6 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-  # For rustdocs deployment
-  RUSTDOCS_DEPLOY_REFS:   "master monthly-2021-08 monthly-2021-09+1 v3.0.0 9785" # branches and tags to generate rustdocs
-  INDEX_TPL:      ".maintain/docs-index-tpl.ejs" # location of the docs index template
-  REPO_URL:       "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git" # github repo URL
-  DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
-  LATEST_DEST:    "monthly-2021-09+1" # One of the $RUSTDOCS_DEPLOY_REFS value
-
 
 default:
   cache:                           {}
@@ -625,6 +618,7 @@ build-rustdoc:
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
+    DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
@@ -738,6 +732,11 @@ publish-rustdoc:
   image:                           node:16
   variables:
     GIT_DEPTH:                     100
+    # For rustdocs deployment
+    RUSTDOCS_DEPLOY_REFS:   "master monthly-2021-08 monthly-2021-09+1 v3.0.0 9785" # branches and tags to generate rustdocs
+    INDEX_TPL:      ".maintain/docs-index-tpl.ejs" # location of the docs index template
+    REPO_URL:       "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git" # github repo URL
+    LATEST_DEST:    "monthly-2021-09+1" # One of the $RUSTDOCS_DEPLOY_REFS value
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -760,7 +759,7 @@ publish-rustdoc:
     rm -rf .git/config
     git config user.email "devops-team@parity.io"
     git config user.name "${GITHUB_USER}"
-    git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    git config remote.origin.url "${REPO_URL}"
     git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     git fetch origin gh-pages
 
