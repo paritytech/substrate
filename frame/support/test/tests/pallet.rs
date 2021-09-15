@@ -24,6 +24,7 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
+use scale_info::{meta_type, TypeInfo};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
@@ -80,14 +81,14 @@ impl From<SomeType7> for u64 {
 }
 
 pub trait SomeAssociation1 {
-	type _1: Parameter + codec::MaxEncodedLen;
+	type _1: Parameter + codec::MaxEncodedLen + TypeInfo;
 }
 impl SomeAssociation1 for u64 {
 	type _1 = u64;
 }
 
 pub trait SomeAssociation2 {
-	type _2: Parameter + codec::MaxEncodedLen;
+	type _2: Parameter + codec::MaxEncodedLen + TypeInfo;
 }
 impl SomeAssociation2 for u64 {
 	type _2 = u64;
@@ -101,6 +102,7 @@ pub mod pallet {
 	};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use scale_info::TypeInfo;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -124,7 +126,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam3: Get<<Self::AccountId as SomeAssociation1>::_1>;
 
-		type Balance: Parameter + Default;
+		type Balance: Parameter + Default + TypeInfo;
 
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
@@ -228,7 +230,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event<T: Config>
 	where
@@ -340,7 +341,9 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode)]
+	#[derive(
+		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, TypeInfo,
+	)]
 	pub struct Origin<T>(PhantomData<T>);
 
 	#[pallet::validate_unsigned]
@@ -352,7 +355,7 @@ pub mod pallet {
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType5); // Test for where clause
-			if matches!(call, Call::foo_transactional(_)) {
+			if matches!(call, Call::foo_transactional { .. }) {
 				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
@@ -372,18 +375,18 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType6); // Test for where clause
-			Some(Call::foo_no_post_info())
+			Some(Call::foo_no_post_info {})
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::foo_no_post_info() | Call::foo(..))
+			matches!(call, Call::foo_no_post_info {} | Call::foo { .. })
 		}
 
 		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 			match call {
-				Call::foo_no_post_info() => Ok(()),
-				Call::foo(0, 0) => Err(InherentError::Fatal),
-				Call::foo(..) => Ok(()),
+				Call::foo_no_post_info {} => Ok(()),
+				Call::foo { foo: 0, bar: 0 } => Err(InherentError::Fatal),
+				Call::foo { .. } => Ok(()),
 				_ => unreachable!("other calls are not inherents"),
 			}
 		}
@@ -550,13 +553,13 @@ fn transactional_works() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		pallet::Call::<Runtime>::foo_transactional(0)
+		pallet::Call::<Runtime>::foo_transactional { foo: 0 }
 			.dispatch_bypass_filter(None.into())
 			.err()
 			.unwrap();
 		assert!(frame_system::Pallet::<Runtime>::events().is_empty());
 
-		pallet::Call::<Runtime>::foo_transactional(1)
+		pallet::Call::<Runtime>::foo_transactional { foo: 1 }
 			.dispatch_bypass_filter(None.into())
 			.unwrap();
 		assert_eq!(
@@ -571,7 +574,7 @@ fn transactional_works() {
 
 #[test]
 fn call_expand() {
-	let call_foo = pallet::Call::<Runtime>::foo(3, 0);
+	let call_foo = pallet::Call::<Runtime>::foo { foo: 3, bar: 0 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
@@ -620,7 +623,7 @@ fn inherent_expand() {
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: Call::Example(pallet::Call::foo_no_post_info()),
+		function: Call::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -635,11 +638,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info()),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo(1, 0)),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -657,11 +660,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info()),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo(0, 0)),
+				function: Call::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -678,7 +681,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_transactional(0)),
+			function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -696,7 +699,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_no_post_info()),
+			function: Call::Example(pallet::Call::foo_no_post_info {}),
 			signature: Some((1, (), ())),
 		}],
 	);
@@ -715,11 +718,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo(1, 1)),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional(0)),
+				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -737,15 +740,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo(1, 1)),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional(0)),
+				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info()),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -763,15 +766,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo(1, 1)),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo(1, 0)),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: Some((1, (), ())),
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info()),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -786,12 +789,12 @@ fn validate_unsigned_expand() {
 		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction,
 		ValidateUnsigned,
 	};
-	let call = pallet::Call::<Runtime>::foo_no_post_info();
+	let call = pallet::Call::<Runtime>::foo_no_post_info {};
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
 	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
 
-	let call = pallet::Call::<Runtime>::foo_transactional(0);
+	let call = pallet::Call::<Runtime>::foo_transactional { foo: 0 };
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
@@ -810,12 +813,19 @@ fn trait_store_expand() {
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
-		pallet::Call::<Runtime>::foo(3, 0).dispatch_bypass_filter(None.into()).unwrap();
+		pallet::Call::<Runtime>::foo { foo: 3, bar: 0 }
+			.dispatch_bypass_filter(None.into())
+			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Example(pallet::Event::Something(3)),
 		);
 	})
+}
+
+#[test]
+fn pallet_new_call_variant() {
+	Call::Example(pallet::Call::new_call_variant_foo(3, 4));
 }
 
 #[test]
@@ -969,288 +979,478 @@ fn migrate_from_pallet_version_to_storage_version() {
 
 #[test]
 fn metadata() {
-	use codec::{Decode, Encode};
-	use frame_metadata::*;
+	use frame_support::metadata::*;
 
-	let expected_pallet_metadata = ModuleMetadata {
-		index: 1,
-		name: DecodeDifferent::Decoded("Example".to_string()),
-		storage: Some(DecodeDifferent::Decoded(StorageMetadata {
-			prefix: DecodeDifferent::Decoded("Example".to_string()),
-			entries: DecodeDifferent::Decoded(vec![
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ValueWhereClause".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Decoded(
-						"<T::AccountId as SomeAssociation2>::_2".to_string(),
-					)),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
+	let pallets = vec![
+		PalletMetadata {
+			index: 0,
+			name: "System",
+			storage: None,
+			calls: Some(meta_type::<frame_system::Call<Runtime>>().into()),
+			event: Some(meta_type::<frame_system::Event<Runtime>>().into()),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "BlockWeights",
+					ty: meta_type::<frame_system::limits::BlockWeights>(),
+					value: vec![],
+					docs: vec![],
 				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Value".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
+				PalletConstantMetadata {
+					name: "BlockLength",
+					ty: meta_type::<frame_system::limits::BlockLength>(),
+					value: vec![],
+					docs: vec![],
 				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Value2".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u64".to_string())),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
+				PalletConstantMetadata {
+					name: "BlockHashCount",
+					ty: meta_type::<u32>(),
+					value: vec![],
+					docs: vec![],
 				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Map".to_string()),
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						key: DecodeDifferent::Decoded("u8".to_string()),
-						value: DecodeDifferent::Decoded("u16".to_string()),
-						hasher: StorageHasher::Blake2_128Concat,
-						unused: false,
+				PalletConstantMetadata {
+					name: "DbWeight",
+					ty: meta_type::<frame_support::weights::RuntimeDbWeight>(),
+					value: vec![],
+					docs: vec![],
+				},
+				PalletConstantMetadata {
+					name: "Version",
+					ty: meta_type::<sp_version::RuntimeVersion>(),
+					value: vec![],
+					docs: vec![],
+				},
+				PalletConstantMetadata {
+					name: "SS58Prefix",
+					ty: meta_type::<u16>(),
+					value: vec![],
+					docs: vec![],
+				},
+			],
+			error: Some(meta_type::<frame_system::Error<Runtime>>().into()),
+		},
+		PalletMetadata {
+			index: 1,
+			name: "Example",
+			storage: Some(PalletStorageMetadata {
+				prefix: "Example",
+				entries: vec![
+					StorageEntryMetadata {
+						name: "ValueWhereClause",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
+						default: vec![0],
+						docs: vec![],
 					},
-					default: DecodeDifferent::Decoded(vec![4, 0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
+					StorageEntryMetadata {
+						name: "Value",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Value2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Map",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u8>(),
+							value: meta_type::<u16>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+						},
+						default: vec![4, 0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Map2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
+							hashers: vec![StorageHasher::Twox64Concat],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "DoubleMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u32>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+							key: meta_type::<(u8, u16)>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "DoubleMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u64>(),
+							key: meta_type::<(u16, u32)>(),
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+								StorageHasher::Blake2_128Concat,
+							],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "NMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u8>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "NMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u16, u32)>(),
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+								StorageHasher::Blake2_128Concat,
+							],
+							value: meta_type::<u64>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalValue",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
+							hashers: vec![StorageHasher::Twox64Concat],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalDoubleMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u32>(),
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalNMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+				],
+			}),
+			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
+			event: Some(meta_type::<pallet::Event<Runtime>>().into()),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "MyGetParam",
+					ty: meta_type::<u32>(),
+					value: vec![10, 0, 0, 0],
+					docs: vec![" Some comment", " Some comment"],
 				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Map2".to_string()),
+				PalletConstantMetadata {
+					name: "MyGetParam2",
+					ty: meta_type::<u32>(),
+					value: vec![11, 0, 0, 0],
+					docs: vec![" Some comment", " Some comment"],
+				},
+				PalletConstantMetadata {
+					name: "MyGetParam3",
+					ty: meta_type::<u64>(),
+					value: vec![12, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
+				},
+				PalletConstantMetadata {
+					name: "some_extra",
+					ty: meta_type::<u64>(),
+					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![" Some doc", " Some doc"],
+				},
+				PalletConstantMetadata {
+					name: "some_extra_extra",
+					ty: meta_type::<u64>(),
+					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![" Some doc"],
+				},
+			],
+			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
+		},
+		PalletMetadata {
+			index: 1,
+			name: "Example",
+			storage: Some(PalletStorageMetadata {
+				prefix: "Example",
+				entries: vec![
+					StorageEntryMetadata {
+						name: "ValueWhereClause",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Value",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Value2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u64>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Map",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u8>(),
+							value: meta_type::<u16>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+						},
+						default: vec![4, 0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Map2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
+							hashers: vec![StorageHasher::Twox64Concat],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "DoubleMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u32>(),
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "DoubleMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u64>(),
+							key: meta_type::<(u16, u32)>(),
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+								StorageHasher::Blake2_128Concat,
+							],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "NMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u8>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "NMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u16, u32)>(),
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+								StorageHasher::Blake2_128Concat,
+							],
+							value: meta_type::<u64>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalValue",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u16>(),
+							value: meta_type::<u32>(),
+							hashers: vec![StorageHasher::Twox64Concat],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalDoubleMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u32>(),
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					#[cfg(feature = "conditional-storage")]
+					StorageEntryMetadata {
+						name: "ConditionalNMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+				],
+			}),
+			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
+			event: Some(meta_type::<pallet::Event<Runtime>>().into()),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "MyGetParam",
+					ty: meta_type::<u32>(),
+					value: vec![10, 0, 0, 0],
+					docs: vec![" Some comment", " Some comment"],
+				},
+				PalletConstantMetadata {
+					name: "MyGetParam2",
+					ty: meta_type::<u32>(),
+					value: vec![11, 0, 0, 0],
+					docs: vec![" Some comment", " Some comment"],
+				},
+				PalletConstantMetadata {
+					name: "MyGetParam3",
+					ty: meta_type::<u64>(),
+					value: vec![12, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
+				},
+				PalletConstantMetadata {
+					name: "some_extra",
+					ty: meta_type::<u64>(),
+					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![" Some doc", " Some doc"],
+				},
+				PalletConstantMetadata {
+					name: "some_extra_extra",
+					ty: meta_type::<u64>(),
+					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![" Some doc"],
+				},
+			],
+			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
+		},
+		PalletMetadata {
+			index: 2,
+			name: "Example2",
+			storage: Some(PalletStorageMetadata {
+				prefix: "Example2",
+				entries: vec![StorageEntryMetadata {
+					name: "SomeValue",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: DecodeDifferent::Decoded("u16".to_string()),
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						hasher: StorageHasher::Twox64Concat,
-						unused: false,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("DoubleMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						key1: DecodeDifferent::Decoded("u8".to_string()),
-						key2: DecodeDifferent::Decoded("u16".to_string()),
-						hasher: StorageHasher::Blake2_128Concat,
-						key2_hasher: StorageHasher::Twox64Concat,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("DoubleMap2".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: DecodeDifferent::Decoded("u64".to_string()),
-						key1: DecodeDifferent::Decoded("u16".to_string()),
-						key2: DecodeDifferent::Decoded("u32".to_string()),
-						hasher: StorageHasher::Twox64Concat,
-						key2_hasher: StorageHasher::Blake2_128Concat,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("NMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::NMap {
-						keys: DecodeDifferent::Decoded(vec!["u8".to_string()]),
-						hashers: DecodeDifferent::Decoded(vec![StorageHasher::Blake2_128Concat]),
-						value: DecodeDifferent::Decoded("u32".to_string()),
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("NMap2".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::NMap {
-						keys: DecodeDifferent::Decoded(vec!["u16".to_string(), "u32".to_string()]),
-						hashers: DecodeDifferent::Decoded(vec![
-							StorageHasher::Twox64Concat,
-							StorageHasher::Blake2_128Concat,
-						]),
-						value: DecodeDifferent::Decoded("u64".to_string()),
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")]
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")]
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: DecodeDifferent::Decoded("u16".to_string()),
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						hasher: StorageHasher::Twox64Concat,
-						unused: false,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")]
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalDoubleMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						key1: DecodeDifferent::Decoded("u8".to_string()),
-						key2: DecodeDifferent::Decoded("u16".to_string()),
-						hasher: StorageHasher::Blake2_128Concat,
-						key2_hasher: StorageHasher::Twox64Concat,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")]
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalNMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::NMap {
-						keys: DecodeDifferent::Decoded(vec!["u8".to_string(), "u16".to_string()]),
-						hashers: DecodeDifferent::Decoded(vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Twox64Concat,
-						]),
-						value: DecodeDifferent::Decoded("u32".to_string()),
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-			]),
-		})),
-		calls: Some(DecodeDifferent::Decoded(vec![
-			FunctionMetadata {
-				name: DecodeDifferent::Decoded("foo".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![
-					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("_foo".to_string()),
-						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
-					},
-					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("_bar".to_string()),
-						ty: DecodeDifferent::Decoded("u32".to_string()),
-					},
-				]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Doc comment put in metadata".to_string()
-				]),
-			},
-			FunctionMetadata {
-				name: DecodeDifferent::Decoded("foo_transactional".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![FunctionArgumentMetadata {
-					name: DecodeDifferent::Decoded("foo".to_string()),
-					ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
-				}]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Doc comment put in metadata".to_string()
-				]),
-			},
-			FunctionMetadata {
-				name: DecodeDifferent::Decoded("foo_no_post_info".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-		])),
-		event: Some(DecodeDifferent::Decoded(vec![
-			EventMetadata {
-				name: DecodeDifferent::Decoded("Proposed".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![
-					"<T as frame_system::Config>::AccountId".to_string()
-				]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" doc comment put in metadata".to_string()
-				]),
-			},
-			EventMetadata {
-				name: DecodeDifferent::Decoded("Spending".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["Balance".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![" doc".to_string()]),
-			},
-			EventMetadata {
-				name: DecodeDifferent::Decoded("Something".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["Other".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-			EventMetadata {
-				name: DecodeDifferent::Decoded("SomethingElse".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![
-					"<T::AccountId as SomeAssociation1>::_1".to_string()
-				]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-		])),
-		constants: DecodeDifferent::Decoded(vec![
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("MyGetParam".to_string()),
-				ty: DecodeDifferent::Decoded("u32".to_string()),
-				value: DecodeDifferent::Decoded(vec![10, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some comment".to_string(),
-					" Some comment".to_string(),
-				]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("MyGetParam2".to_string()),
-				ty: DecodeDifferent::Decoded("u32".to_string()),
-				value: DecodeDifferent::Decoded(vec![11, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some comment".to_string(),
-					" Some comment".to_string(),
-				]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("MyGetParam3".to_string()),
-				ty: DecodeDifferent::Decoded("<T::AccountId as SomeAssociation1>::_1".to_string()),
-				value: DecodeDifferent::Decoded(vec![12, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("some_extra".to_string()),
-				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
-				value: DecodeDifferent::Decoded(vec![100, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some doc".to_string(),
-					" Some doc".to_string(),
-				]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("some_extra_extra".to_string()),
-				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
-				value: DecodeDifferent::Decoded(vec![0, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![" Some doc".to_string()]),
-			},
-		]),
-		errors: DecodeDifferent::Decoded(vec![ErrorMetadata {
-			name: DecodeDifferent::Decoded("InsufficientProposersBalance".to_string()),
-			documentation: DecodeDifferent::Decoded(vec![
-				" doc comment put into metadata".to_string()
-			]),
-		}]),
+					ty: StorageEntryType::Plain(meta_type::<Vec<u32>>()),
+					default: vec![0],
+					docs: vec![],
+				}],
+			}),
+			calls: Some(meta_type::<pallet2::Call<Runtime>>().into()),
+			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
+			constants: vec![],
+			error: None,
+		},
+	];
+
+	let extrinsic = ExtrinsicMetadata {
+		ty: meta_type::<UncheckedExtrinsic>(),
+		version: 4,
+		signed_extensions: vec![SignedExtensionMetadata {
+			identifier: "UnitSignedExtension",
+			ty: meta_type::<()>(),
+			additional_signed: meta_type::<()>(),
+		}],
 	};
 
-	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V13(metadata) => metadata,
-		_ => panic!("metadata has been bump, test needs to be updated"),
+	let expected_metadata: RuntimeMetadataPrefixed =
+		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
+	let expected_metadata = match expected_metadata.1 {
+		RuntimeMetadata::V14(metadata) => metadata,
+		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	let modules_metadata = match metadata.modules {
-		DecodeDifferent::Encode(modules_metadata) => modules_metadata,
-		_ => unreachable!(),
+	let actual_metadata = match Runtime::metadata().1 {
+		RuntimeMetadata::V14(metadata) => metadata,
+		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	let pallet_metadata = ModuleMetadata::decode(&mut &modules_metadata[1].encode()[..]).unwrap();
-
-	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
+	pretty_assertions::assert_eq!(actual_metadata.pallets[1], expected_metadata.pallets[1]);
 }
 
 #[test]

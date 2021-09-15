@@ -66,7 +66,7 @@ impl<B: BlockT> WarpSync<B> {
 			authorities: warp_sync_provider.current_authorities(),
 			last_hash,
 		};
-		WarpSync { client, warp_sync_provider, phase, total_proof_bytes: 0 }
+		Self { client, warp_sync_provider, phase, total_proof_bytes: 0 }
 	}
 
 	///  Validate and import a state reponse.
@@ -132,8 +132,7 @@ impl<B: BlockT> WarpSync<B> {
 	pub fn next_warp_poof_request(&self) -> Option<WarpProofRequest<B>> {
 		match &self.phase {
 			Phase::State(_) => None,
-			Phase::WarpProof { last_hash, .. } =>
-				Some(WarpProofRequest { begin: last_hash.clone() }),
+			Phase::WarpProof { last_hash, .. } => Some(WarpProofRequest { begin: *last_hash }),
 		}
 	}
 

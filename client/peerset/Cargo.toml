@@ -19,7 +19,7 @@ futures = "0.3.9"
 libp2p = { version = "0.39.1", default-features = false }
 sc-utils = { version = "4.0.0-dev", path = "../utils"}
 log = "0.4.8"
-serde_json = "1.0.41"
+serde_json = "1.0.68"
 wasm-timer = "0.2"
 
 [dev-dependencies]

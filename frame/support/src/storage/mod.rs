@@ -17,6 +17,7 @@
 
 //! Stuff to do with the runtime's storage.
 
+pub use self::types::StorageEntryMetadata;
 use crate::{
 	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{

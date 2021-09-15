@@ -353,7 +353,10 @@ frame_benchmarking::benchmarks! {
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("missing snapshot")?.encode();
-		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
+		let encoded_call = Call::<T>::submit_unsigned {
+			raw_solution: Box::new(raw_solution.clone()),
+			witness
+		}.encode();
 	}: {
 		assert_ok!(
 			<MultiPhase<T>>::submit_unsigned(

@@ -74,7 +74,7 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		None,
 		63,
 		frame_system::RawOrigin::Root.into(),
-		Call::enact_proposal(proposal_hash, referendum_index).into(),
+		Call::enact_proposal { proposal_hash, index: referendum_index }.into(),
 	)
 	.map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
@@ -195,7 +195,7 @@ benchmarks! {
 	emergency_cancel {
 		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = add_referendum::<T>(0)?;
-		let call = Call::<T>::emergency_cancel(referendum_index).encode();
+		let call = Call::<T>::emergency_cancel { ref_index: referendum_index }.encode();
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 	}: { <Call<T> as Decode>::decode(&mut &*call).expect("Encoded above").dispatch_bypass_filter(origin)? }
 	verify {
@@ -225,7 +225,10 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(0)?;
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 
-		let call = Call::<T>::blacklist(hash, Some(referendum_index)).encode();
+		let call = Call::<T>::blacklist {
+			proposal_hash: hash,
+			maybe_ref_index: Some(referendum_index)
+		}.encode();
 		let origin = T::BlacklistOrigin::successful_origin();
 	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
@@ -248,7 +251,7 @@ benchmarks! {
 			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
 
-		let call = Call::<T>::external_propose(proposal_hash).encode();
+		let call = Call::<T>::external_propose { proposal_hash }.encode();
 	}: {  <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
@@ -258,7 +261,7 @@ benchmarks! {
 	external_propose_majority {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-		let call = Call::<T>::external_propose_majority(proposal_hash).encode();
+		let call = Call::<T>::external_propose_majority { proposal_hash }.encode();
 	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
@@ -268,7 +271,7 @@ benchmarks! {
 	external_propose_default {
 		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-		let call = Call::<T>::external_propose_default(proposal_hash).encode();
+		let call = Call::<T>::external_propose_default { proposal_hash }.encode();
 	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
@@ -284,7 +287,11 @@ benchmarks! {
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0u32;
-		let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into()).encode();
+		let call = Call::<T>::fast_track {
+			proposal_hash,
+			voting_period: voting_period.into(),
+			delay: delay.into()
+		}.encode();
 
 	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin_fast_track)?}
 	verify {
@@ -307,7 +314,7 @@ benchmarks! {
 		vetoers.sort();
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
 
-		let call = Call::<T>::veto_external(proposal_hash).encode();
+		let call = Call::<T>::veto_external { proposal_hash }.encode();
 		let origin = T::VetoOrigin::successful_origin();
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
 	}: {   <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)?}
@@ -357,7 +364,7 @@ benchmarks! {
 
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&r);
-		let call = Call::<T>::external_propose_majority(proposal_hash);
+		let call = Call::<T>::external_propose_majority { proposal_hash };
 		call.dispatch_bypass_filter(origin)?;
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -740,7 +747,7 @@ benchmarks! {
 		let b in 0 .. MAX_BYTES;
 
 		let proposer = funded_account::<T>("proposer", 0);
-		let raw_call = Call::note_preimage(vec![1; b as usize]);
+		let raw_call = Call::note_preimage { encoded_proposal: vec![1; b as usize] };
 		let generic_call: T::Proposal = raw_call.into();
 		let encoded_proposal = generic_call.encode();
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);

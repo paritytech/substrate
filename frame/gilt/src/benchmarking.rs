@@ -77,7 +77,7 @@ benchmarks! {
 	}
 
 	set_target {
-		let call = Call::<T>::set_target(Default::default()).encode();
+		let call = Call::<T>::set_target { target: Default::default() }.encode();
 		let origin = T::AdminOrigin::successful_origin();
 	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 
@@ -107,7 +107,7 @@ benchmarks! {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		}
 
-		Call::<T>::set_target(Perquintill::from_percent(100))
+		Call::<T>::set_target { target: Perquintill::from_percent(100) }
 			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
 
 	}: { Gilt::<T>::pursue_target(b) }
@@ -123,7 +123,7 @@ benchmarks! {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), i + 1)?;
 		}
 
-		Call::<T>::set_target(Perquintill::from_percent(100))
+		Call::<T>::set_target { target: Perquintill::from_percent(100) }
 			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
 
 	}: { Gilt::<T>::pursue_target(q) }
