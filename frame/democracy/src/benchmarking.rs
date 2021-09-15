@@ -782,8 +782,8 @@ benchmarks! {
 		let call = Call::<T>::enact_proposal(proposal_hash, 0).encode();
 	}: {
 		assert_eq!(
-            <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin),
-		    Err(Error::<T>::PreimageInvalid.into())
+			<Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin),
+			Err(Error::<T>::PreimageInvalid.into())
 		);
 	}
 }
