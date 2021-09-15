@@ -71,7 +71,7 @@ use libp2p::{
 		NetworkBehaviourAction, PollParameters, ProtocolsHandler,
 	},
 };
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
@@ -106,7 +106,7 @@ pub struct DiscoveryConfig {
 impl DiscoveryConfig {
 	/// Create a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
-		DiscoveryConfig {
+		Self {
 			local_peer_id: local_public_key.into_peer_id(),
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
@@ -180,7 +180,7 @@ impl DiscoveryConfig {
 
 	/// Create a `DiscoveryBehaviour` from this config.
 	pub fn finish(self) -> DiscoveryBehaviour {
-		let DiscoveryConfig {
+		let Self {
 			local_peer_id,
 			permanent_addresses,
 			dht_random_walk,
@@ -205,8 +205,8 @@ impl DiscoveryConfig {
 				config.set_kbucket_inserts(KademliaBucketInserts::Manual);
 				config.disjoint_query_paths(kademlia_disjoint_query_paths);
 
-				let store = MemoryStore::new(local_peer_id.clone());
-				let mut kad = Kademlia::with_config(local_peer_id.clone(), store, config);
+				let store = MemoryStore::new(local_peer_id);
+				let mut kad = Kademlia::with_config(local_peer_id, store, config);
 
 				for (peer_id, addr) in &permanent_addresses {
 					kad.add_address(peer_id, addr.clone());
@@ -324,7 +324,7 @@ impl DiscoveryBehaviour {
 		addr: Multiaddr,
 	) {
 		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
-			log::trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
+			trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
 			return
 		}
 
@@ -332,7 +332,7 @@ impl DiscoveryBehaviour {
 		for protocol in supported_protocols {
 			for kademlia in self.kademlias.values_mut() {
 				if protocol.as_ref() == kademlia.protocol_name() {
-					log::trace!(
+					trace!(
 						target: "sub-libp2p",
 						"Adding self-reported address {} from {} to Kademlia DHT {}.",
 						addr, peer_id, String::from_utf8_lossy(kademlia.protocol_name()),
@@ -344,7 +344,7 @@ impl DiscoveryBehaviour {
 		}
 
 		if !added {
-			log::trace!(
+			trace!(
 				target: "sub-libp2p",
 				"Ignoring self-reported address {} from {} as remote node is not part of any \
 				 Kademlia DHTs supported by the local node.", addr, peer_id,
@@ -593,18 +593,21 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		if let Some(kad) = self.kademlias.get_mut(&pid) {
 			return kad.inject_event(peer_id, connection, event)
 		}
-		log::error!(target: "sub-libp2p",
+		error!(
+			target: "sub-libp2p",
 			"inject_node_event: no kademlia instance registered for protocol {:?}",
-			pid)
+			pid,
+		)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.clone().into()));
+		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
 
 		// NOTE: we might re-discover the same address multiple times
 		// in which case we just want to refrain from logging.
 		if self.known_external_addresses.insert(new_addr.clone()) {
-			info!(target: "sub-libp2p",
+			info!(
+				target: "sub-libp2p",
 				"🔍 Discovered new external address for our node: {}",
 				new_addr,
 			);
@@ -680,11 +683,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			while let Poll::Ready(_) = next_kad_random_query.poll_unpin(cx) {
 				let actually_started = if self.num_connections < self.discovery_only_if_under_num {
 					let random_peer_id = PeerId::random();
-					debug!(target: "sub-libp2p",
+					debug!(
+						target: "sub-libp2p",
 						"Libp2p <= Starting random Kademlia request for {:?}",
-						random_peer_id);
+						random_peer_id,
+					);
 					for k in self.kademlias.values_mut() {
-						k.get_closest_peers(random_peer_id.clone());
+						k.get_closest_peers(random_peer_id);
 					}
 					true
 				} else {
@@ -736,17 +741,23 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							..
 						} => match res {
 							Err(GetClosestPeersError::Timeout { key, peers }) => {
-								debug!(target: "sub-libp2p",
-										"Libp2p => Query for {:?} timed out with {} results",
-										HexDisplay::from(&key), peers.len());
+								debug!(
+									target: "sub-libp2p",
+									"Libp2p => Query for {:?} timed out with {} results",
+									HexDisplay::from(&key), peers.len(),
+								);
 							},
 							Ok(ok) => {
-								trace!(target: "sub-libp2p",
-										"Libp2p => Query for {:?} yielded {:?} results",
-										HexDisplay::from(&ok.key), ok.peers.len());
+								trace!(
+									target: "sub-libp2p",
+									"Libp2p => Query for {:?} yielded {:?} results",
+									HexDisplay::from(&ok.key), ok.peers.len(),
+								);
 								if ok.peers.is_empty() && self.num_connections != 0 {
-									debug!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
-											results");
+									debug!(
+										target: "sub-libp2p",
+										"Libp2p => Random Kademlia query has yielded empty results",
+									);
 								}
 							},
 						},
@@ -769,16 +780,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									)
 								},
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
-									trace!(target: "sub-libp2p",
-										"Libp2p => Failed to get record: {:?}", e);
+									trace!(
+										target: "sub-libp2p",
+										"Libp2p => Failed to get record: {:?}",
+										e,
+									);
 									DiscoveryOut::ValueNotFound(
 										e.into_key(),
 										stats.duration().unwrap_or_else(Default::default),
 									)
 								},
 								Err(e) => {
-									debug!(target: "sub-libp2p",
-										"Libp2p => Failed to get record: {:?}", e);
+									debug!(
+										target: "sub-libp2p",
+										"Libp2p => Failed to get record: {:?}",
+										e,
+									);
 									DiscoveryOut::ValueNotFound(
 										e.into_key(),
 										stats.duration().unwrap_or_else(Default::default),
@@ -798,8 +815,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									stats.duration().unwrap_or_else(Default::default),
 								),
 								Err(e) => {
-									debug!(target: "sub-libp2p",
-										"Libp2p => Failed to put record: {:?}", e);
+									debug!(
+										target: "sub-libp2p",
+										"Libp2p => Failed to put record: {:?}",
+										e,
+									);
 									DiscoveryOut::ValuePutFailed(
 										e.into_key(),
 										stats.duration().unwrap_or_else(Default::default),
@@ -812,12 +832,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							result: QueryResult::RepublishRecord(res),
 							..
 						} => match res {
-							Ok(ok) => debug!(target: "sub-libp2p",
-									"Libp2p => Record republished: {:?}",
-									ok.key),
-							Err(e) => debug!(target: "sub-libp2p",
-									"Libp2p => Republishing of record {:?} failed with: {:?}",
-									e.key(), e),
+							Ok(ok) => debug!(
+								target: "sub-libp2p",
+								"Libp2p => Record republished: {:?}",
+								ok.key,
+							),
+							Err(e) => debug!(
+								target: "sub-libp2p",
+								"Libp2p => Republishing of record {:?} failed with: {:?}",
+								e.key(), e,
+							),
 						},
 						// We never start any other type of query.
 						e => {
@@ -907,9 +931,9 @@ enum MdnsWrapper {
 impl MdnsWrapper {
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
 		match self {
-			MdnsWrapper::Instantiating(_) => Vec::new(),
-			MdnsWrapper::Ready(mdns) => mdns.addresses_of_peer(peer_id),
-			MdnsWrapper::Disabled => Vec::new(),
+			Self::Instantiating(_) => Vec::new(),
+			Self::Ready(mdns) => mdns.addresses_of_peer(peer_id),
+			Self::Disabled => Vec::new(),
 		}
 	}
 
@@ -920,16 +944,16 @@ impl MdnsWrapper {
 	) -> Poll<NetworkBehaviourAction<void::Void, MdnsEvent>> {
 		loop {
 			match self {
-				MdnsWrapper::Instantiating(fut) =>
+				Self::Instantiating(fut) =>
 					*self = match futures::ready!(fut.as_mut().poll(cx)) {
-						Ok(mdns) => MdnsWrapper::Ready(mdns),
+						Ok(mdns) => Self::Ready(mdns),
 						Err(err) => {
 							warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-							MdnsWrapper::Disabled
+							Self::Disabled
 						},
 					},
-				MdnsWrapper::Ready(mdns) => return mdns.poll(cx, params),
-				MdnsWrapper::Disabled => return Poll::Pending,
+				Self::Ready(mdns) => return mdns.poll(cx, params),
+				Self::Disabled => return Poll::Pending,
 			}
 		}
 	}
@@ -1100,7 +1124,7 @@ mod tests {
 		for kademlia in discovery.kademlias.values_mut() {
 			assert!(
 				kademlia
-					.kbucket(remote_peer_id.clone())
+					.kbucket(remote_peer_id)
 					.expect("Remote peer id not to be equal to local peer id.")
 					.is_empty(),
 				"Expect peer with unsupported protocol not to be added."
@@ -1118,7 +1142,7 @@ mod tests {
 			assert_eq!(
 				1,
 				kademlia
-					.kbucket(remote_peer_id.clone())
+					.kbucket(remote_peer_id)
 					.expect("Remote peer id not to be equal to local peer id.")
 					.num_entries(),
 				"Expect peer with supported protocol to be added."
@@ -1159,7 +1183,7 @@ mod tests {
 				.kademlias
 				.get_mut(&protocol_a)
 				.expect("Kademlia instance to exist.")
-				.kbucket(remote_peer_id.clone())
+				.kbucket(remote_peer_id)
 				.expect("Remote peer id not to be equal to local peer id.")
 				.num_entries(),
 			"Expected remote peer to be added to `protocol_a` Kademlia instance.",
@@ -1170,7 +1194,7 @@ mod tests {
 				.kademlias
 				.get_mut(&protocol_b)
 				.expect("Kademlia instance to exist.")
-				.kbucket(remote_peer_id.clone())
+				.kbucket(remote_peer_id)
 				.expect("Remote peer id not to be equal to local peer id.")
 				.is_empty(),
 			"Expected remote peer not to be added to `protocol_b` Kademlia instance.",
