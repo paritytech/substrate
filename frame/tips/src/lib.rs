@@ -248,7 +248,8 @@ pub mod pallet {
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
-			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
+			let now = <frame_system::Pallet<T>>::block_number();
+			let hash = T::Hashing::hash_of(&(&reason_hash, &who, &now));
 			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get() +
@@ -338,7 +339,8 @@ pub mod pallet {
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
-			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
+			let now = <frame_system::Pallet<T>>::block_number();
+			let hash = T::Hashing::hash_of(&(&reason_hash, &who, &now));
 
 			Reasons::<T>::insert(&reason_hash, &reason);
 			Self::deposit_event(Event::NewTip(hash.clone()));

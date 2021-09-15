@@ -194,8 +194,8 @@ fn genesis_config_works() {
 	});
 }
 
-fn tip_hash() -> H256 {
-	BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 3u128))
+fn tip_hash(now: u64) -> H256 {
+	BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 3u128, now))
 }
 
 #[test]
@@ -224,7 +224,7 @@ fn report_awesome_and_tip_works() {
 			Error::<Test>::AlreadyKnown
 		);
 
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
@@ -244,7 +244,11 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
-		let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u128));
+		let h = BlakeTwo256::hash_of(&(
+			BlakeTwo256::hash(b"awesome.dot"),
+			0u128,
+			System::block_number(),
+		));
 		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
@@ -265,7 +269,7 @@ fn close_tip_works() {
 
 		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 
 		assert_eq!(last_event(), TipEvent::NewTip(h));
 
@@ -305,7 +309,7 @@ fn slash_tip_works() {
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
 
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 		assert_eq!(last_event(), TipEvent::NewTip(h));
 
 		// can't remove from any origin
@@ -327,7 +331,7 @@ fn retract_tip_works() {
 		// with report awesome
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
@@ -339,7 +343,7 @@ fn retract_tip_works() {
 		// with tip new
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
 		assert_noop!(Tips::retract_tip(Origin::signed(0), h.clone()), Error::<Test>::NotFinder);
@@ -354,7 +358,7 @@ fn tip_median_calculation_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 1000000));
 		System::set_block_number(2);
@@ -368,7 +372,7 @@ fn tip_changing_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
-		let h = tip_hash();
+		let h = tip_hash(System::block_number());
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10000));
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10000));
 		assert_ok!(Tips::tip(Origin::signed(13), h.clone(), 0));

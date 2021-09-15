@@ -105,7 +105,7 @@ benchmarks! {
 			awesome_person.clone()
 		)?;
 		let reason_hash = T::Hashing::hash(&reason[..]);
-		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
+		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person, &frame_system::Pallet::<T>::block_number()));
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
@@ -132,7 +132,7 @@ benchmarks! {
 			value
 		)?;
 		let reason_hash = T::Hashing::hash(&reason[..]);
-		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
+		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary, &frame_system::Pallet::<T>::block_number()));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 		create_tips::<T>(t - 1, hash.clone(), value)?;
 		let caller = account("member", t - 1, SEED);
@@ -159,7 +159,7 @@ benchmarks! {
 
 		// Create a bunch of tips
 		let reason_hash = T::Hashing::hash(&reason[..]);
-		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
+		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary, &frame_system::Pallet::<T>::block_number()));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 
 		create_tips::<T>(t, hash.clone(), value)?;
@@ -187,7 +187,7 @@ benchmarks! {
 		)?;
 
 		let reason_hash = T::Hashing::hash(&reason[..]);
-		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
+		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary, &frame_system::Pallet::<T>::block_number()));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 	}: _(RawOrigin::Root, hash)
 }
