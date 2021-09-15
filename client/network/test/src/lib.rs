@@ -126,7 +126,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 
 pub type PeersFullClient = Client<
 	substrate_test_runtime_client::Backend,
-	substrate_test_runtime_client::Executor,
+	substrate_test_runtime_client::ExecutorDispatch,
 	Block,
 	substrate_test_runtime_client::runtime::RuntimeApi,
 >;

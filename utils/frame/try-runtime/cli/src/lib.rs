@@ -21,7 +21,7 @@ use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{rpc_api, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig};
 use sc_chain_spec::ChainSpec;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
-use sc_executor::NativeExecutor;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
 	hashing::twox_128,
@@ -179,7 +179,7 @@ async fn on_runtime_upgrade<Block, ExecDispatch>(
 	config: Configuration,
 ) -> sc_cli::Result<()>
 where
-	Block: BlockT,
+	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
@@ -192,8 +192,13 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
+
+	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
 
 	let ext = {
 		let builder = match command.state {
@@ -251,7 +256,7 @@ async fn offchain_worker<Block, ExecDispatch>(
 	config: Configuration,
 ) -> sc_cli::Result<()>
 where
-	Block: BlockT,
+	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	Block::Header: serde::de::DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
@@ -265,8 +270,13 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
+
+	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
 
 	let mode = match command.state {
 		State::Live { snapshot_path, modules } => {
@@ -346,11 +356,16 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor =
-		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
+	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
 
 	let block_hash = shared.block_at::<Block>()?;
 	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
+
+	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
 
 	let mode = match command.state {
 		State::Snap { snapshot_path } => {
@@ -474,4 +489,33 @@ fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, Storage
 	let code_key = StorageKey(well_known_keys::CODE.to_vec());
 
 	Ok((code_key, code))
+}
+
+/// Check the spec_name of an `ext`
+///
+/// If the version does not exist, or if it does not match with the given, it emits a warning.
+async fn check_spec_name<Block: BlockT + serde::de::DeserializeOwned>(
+	uri: String,
+	expected_spec_name: String,
+) {
+	let expected_spec_name = expected_spec_name.to_lowercase();
+	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
+		.await
+		.map(|version| String::from(version.spec_name.clone()))
+		.map(|spec_name| spec_name.to_lowercase())
+	{
+		Ok(spec) if spec == expected_spec_name => {
+			log::debug!("found matching spec name: {:?}", spec);
+		},
+		Ok(spec) => {
+			log::warn!(
+				"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
+				spec,
+				expected_spec_name,
+			);
+		},
+		Err(why) => {
+			log::error!("failed to fetch runtime version from {}: {:?}", uri, why);
+		},
+	}
 }

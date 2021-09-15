@@ -40,9 +40,8 @@ use std::{
 	error, io,
 	pin::Pin,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -79,7 +78,7 @@ impl NodeInfo {
 	fn new(endpoint: ConnectedPoint) -> Self {
 		let mut endpoints = SmallVec::new();
 		endpoints.push(endpoint);
-		NodeInfo { info_expire: None, endpoints, client_version: None, latest_ping: None }
+		Self { info_expire: None, endpoints, client_version: None, latest_ping: None }
 	}
 }
 
@@ -92,7 +91,7 @@ impl PeerInfoBehaviour {
 			Identify::new(cfg)
 		};
 
-		PeerInfoBehaviour {
+		Self {
 			ping: Ping::new(PingConfig::new()),
 			identify,
 			nodes_info: FnvHashMap::default(),
@@ -200,7 +199,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 	) {
 		self.ping.inject_connection_established(peer_id, conn, endpoint);
 		self.identify.inject_connection_established(peer_id, conn, endpoint);
-		match self.nodes_info.entry(peer_id.clone()) {
+		match self.nodes_info.entry(*peer_id) {
 			Entry::Vacant(e) => {
 				e.insert(NodeInfo::new(endpoint.clone()));
 			},
@@ -340,6 +339,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						address,
 						score,
 					}),
+				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
+					}),
 			}
 		}
 
@@ -372,6 +376,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 						address,
 						score,
+					}),
+				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+						peer_id,
+						connection,
 					}),
 			}
 		}

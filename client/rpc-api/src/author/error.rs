@@ -29,51 +29,38 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T>>;
 
 /// Author RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt = "Client error: {}", _0)]
-	#[from(ignore)]
+	#[error("Client error: {}", .0)]
 	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
-	#[display(fmt = "Transaction pool error: {}", _0)]
-	Pool(sc_transaction_pool_api::error::Error),
+	#[error("Transaction pool error: {}", .0)]
+	Pool(#[from] sc_transaction_pool_api::error::Error),
 	/// Verification error
-	#[display(fmt = "Extrinsic verification error: {}", _0)]
-	#[from(ignore)]
+	#[error("Extrinsic verification error: {}", .0)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
-	#[display(fmt = "Invalid extrinsic format: {}", _0)]
-	BadFormat(codec::Error),
+	#[error("Invalid extrinsic format: {}", .0)]
+	BadFormat(#[from] codec::Error),
 	/// Incorrect seed phrase.
-	#[display(fmt = "Invalid seed phrase/SURI")]
+	#[error("Invalid seed phrase/SURI")]
 	BadSeedPhrase,
 	/// Key type ID has an unknown format.
-	#[display(fmt = "Invalid key type ID format (should be of length four)")]
+	#[error("Invalid key type ID format (should be of length four)")]
 	BadKeyType,
 	/// Key type ID has some unsupported crypto.
-	#[display(fmt = "The crypto of key type ID is unknown")]
+	#[error("The crypto of key type ID is unknown")]
 	UnsupportedKeyType,
 	/// Some random issue with the key store. Shouldn't happen.
-	#[display(fmt = "The key store is unavailable")]
+	#[error("The key store is unavailable")]
 	KeyStoreUnavailable,
 	/// Invalid session keys encoding.
-	#[display(fmt = "Session keys are not encoded correctly")]
+	#[error("Session keys are not encoded correctly")]
 	InvalidSessionKeys,
 	/// Call to an unsafe RPC was denied.
-	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			Error::Pool(ref err) => Some(err),
-			Error::Verification(ref err) => Some(&**err),
-			Error::UnsafeRpcCalled(ref err) => Some(err),
-			_ => None,
-		}
-	}
+	#[error(transparent)]
+	UnsafeRpcCalled(#[from] crate::policy::UnsafeRpcError),
 }
 
 /// Base code for all authorship errors.

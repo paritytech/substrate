@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionSource, TransactionTag as Tag, ValidTransaction},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::{
 	base_pool::{self as base, PruneStatus},
@@ -111,7 +111,6 @@ pub struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,

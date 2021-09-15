@@ -19,6 +19,7 @@ harness = false
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.6", default-features = false }
@@ -38,6 +39,7 @@ default = ["std"]
 std = [
 	"sp-std/std",
 	"codec/std",
+	"scale-info/std",
 	"hash-db/std",
 	"memory-db/std",
 	"trie-db/std",

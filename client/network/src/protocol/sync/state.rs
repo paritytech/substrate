@@ -25,6 +25,7 @@ use codec::{Decode, Encode};
 use sc_client_api::CompactProof;
 use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
+use log::debug;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{collections::HashMap, sync::Arc};
 
@@ -57,7 +58,7 @@ pub enum ImportResult<B: BlockT> {
 impl<B: BlockT> StateSync<B> {
 	///  Create a new instance.
 	pub fn new(client: Arc<dyn Client<B>>, target: B::Header, skip_proof: bool) -> Self {
-		StateSync {
+		Self {
 			client,
 			target_block: target.hash(),
 			target_root: target.state_root().clone(),
@@ -72,31 +73,21 @@ impl<B: BlockT> StateSync<B> {
 
 	///  Validate and import a state reponse.
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
-		if response.entries.is_empty() && response.proof.is_empty() {
-			log::debug!(
-				target: "sync",
-				"Bad state response",
-			);
+		if response.entries.is_empty() && response.proof.is_empty() && !response.complete {
+			debug!(target: "sync", "Bad state response");
 			return ImportResult::BadResponse
 		}
 		if !self.skip_proof && response.proof.is_empty() {
-			log::debug!(
-				target: "sync",
-				"Missing proof",
-			);
+			debug!(target: "sync", "Missing proof");
 			return ImportResult::BadResponse
 		}
 		let complete = if !self.skip_proof {
-			log::debug!(
-				target: "sync",
-				"Importing state from {} trie nodes",
-				response.proof.len(),
-			);
+			debug!(target: "sync", "Importing state from {} trie nodes", response.proof.len());
 			let proof_size = response.proof.len() as u64;
 			let proof = match CompactProof::decode(&mut response.proof.as_ref()) {
 				Ok(proof) => proof,
 				Err(e) => {
-					log::debug!(target: "sync", "Error decoding proof: {:?}", e);
+					debug!(target: "sync", "Error decoding proof: {:?}", e);
 					return ImportResult::BadResponse
 				},
 			};
@@ -106,7 +97,7 @@ impl<B: BlockT> StateSync<B> {
 				self.last_key.as_slice(),
 			) {
 				Err(e) => {
-					log::debug!(
+					debug!(
 						target: "sync",
 						"StateResponse failed proof verification: {:?}",
 						e,
@@ -115,11 +106,11 @@ impl<B: BlockT> StateSync<B> {
 				},
 				Ok(values) => values,
 			};
-			log::debug!(target: "sync", "Imported with {} keys", values.len());
+			debug!(target: "sync", "Imported with {} keys", values.len());
 
 			let complete = completed == 0;
 			if !complete && !values.update_last_key(completed, &mut self.last_key) {
-				log::debug!(target: "sync", "Error updating key cursor, depth: {}", completed);
+				debug!(target: "sync", "Error updating key cursor, depth: {}", completed);
 			};
 
 			for values in values.0 {
@@ -178,7 +169,7 @@ impl<B: BlockT> StateSync<B> {
 				self.last_key.clear();
 			}
 			for state in response.entries {
-				log::debug!(
+				debug!(
 					target: "sync",
 					"Importing state from {:?} to {:?}",
 					state.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
@@ -216,7 +207,7 @@ impl<B: BlockT> StateSync<B> {
 		if complete {
 			self.complete = true;
 			ImportResult::Import(
-				self.target_block.clone(),
+				self.target_block,
 				self.target_header.clone(),
 				ImportedState {
 					block: self.target_block.clone(),
@@ -244,12 +235,12 @@ impl<B: BlockT> StateSync<B> {
 
 	/// Returns target block number.
 	pub fn target_block_num(&self) -> NumberFor<B> {
-		self.target_header.number().clone()
+		*self.target_header.number()
 	}
 
 	/// Returns target block hash.
 	pub fn target(&self) -> B::Hash {
-		self.target_block.clone()
+		self.target_block
 	}
 
 	/// Returns state sync estimated progress.

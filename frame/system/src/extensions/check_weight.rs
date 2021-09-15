@@ -21,6 +21,7 @@ use frame_support::{
 	traits::Get,
 	weights::{priority::FrameTransactionPriority, DispatchClass, DispatchInfo, PostDispatchInfo},
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
 	transaction_validity::{
@@ -31,7 +32,8 @@ use sp_runtime::{
 };
 
 /// Block resource (weight) limit check.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct CheckWeight<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckWeight<T>
