@@ -552,7 +552,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller);
 		let calls: Vec<_> = payout_calls_arg.iter().map(|arg|
-			Call::<T>::payout_stakers(arg.0.clone(), arg.1).encode()
+			Call::<T>::payout_stakers { validator_stash: arg.0.clone(), era: arg.1 }.encode()
 		).collect();
 	}: {
 		for call in calls {
