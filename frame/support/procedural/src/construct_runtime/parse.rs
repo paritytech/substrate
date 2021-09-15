@@ -302,14 +302,12 @@ impl Parse for PalletPath {
 			return Err(lookahead.error())
 		}
 
-		loop {
-			if !input.peek(Token![::]) || !input.peek3(Ident) {
-				return Ok(res)
-			}
+		while input.peek(Token![::]) && input.peek3(Ident) {
 			input.parse::<Token![::]>()?;
 			let ident = input.parse::<Ident>()?;
 			res.inner.segments.push(ident.into());
 		}
+		Ok(res)
 	}
 }
 
