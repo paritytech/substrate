@@ -101,7 +101,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	let mut acl = AccessControlBuilder::new();
 
-	log::info!("starting JSONRPC HTTP server: addr={}, cors={:?}", addr, cors);
+	log::info!("Starting JSONRPC HTTP server: addr={}, allowed origins={:?}", addr, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
@@ -109,6 +109,8 @@ pub fn start_http<M: Send + Sync + 'static>(
 		acl = acl.allow_host(host);
 		let host = Host::parse(&format!("127.0.0.1:{}", addr.port()));
 		acl = acl.allow_host(host);
+
+		// Set allowed origins.
 		for origin in cors {
 			acl = acl.cors_allow_origin(origin.into());
 		}
@@ -147,7 +149,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64);
 
-	log::info!("starting JSONRPC WS server: addr={}, cors={:?}", addr, cors);
+	log::info!("Starting JSONRPC WS server: addr={}, allowed origins={:?}", addr, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
@@ -155,6 +157,8 @@ pub fn start_ws<M: Send + Sync + 'static>(
 			format!("localhost:{}", addr.port()),
 			format!("127.0.0.1:{}", addr.port()),
 		])?;
+
+		// Set allowed origins.
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
