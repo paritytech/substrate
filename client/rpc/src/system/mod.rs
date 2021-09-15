@@ -164,14 +164,12 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 	}
 
 	async fn system_node_roles(&self) -> JsonRpcResult<Vec<NodeRole>> {
-		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn system_sync_state(&self) -> JsonRpcResult<SyncState<<B::Header as HeaderT>::Number>> {
-		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
