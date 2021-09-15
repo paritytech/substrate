@@ -18,14 +18,17 @@
 //! Storage counted map type.
 
 use crate::{
+	metadata::StorageEntryMetadata,
 	storage::{
 		generator::StorageMap as _,
-		types::{OptionQuery, QueryKindTrait, StorageMap, StorageValue, ValueQuery, StorageEntryMetadataBuilder},
+		types::{
+			OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder, StorageMap, StorageValue,
+			ValueQuery,
+		},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInfoTrait, StorageInstance},
 	Never,
-	metadata::StorageEntryMetadata,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
 use sp_runtime::traits::Saturating;
@@ -410,7 +413,10 @@ where
 {
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
-		CounterFor::<Prefix>::build_metadata(vec![&"Counter for the related counted storage map"], entries);
+		CounterFor::<Prefix>::build_metadata(
+			vec![&"Counter for the related counted storage map"],
+			entries,
+		);
 	}
 }
 

@@ -19,7 +19,7 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata::{StorageEntryType, StorageEntryMetadata},
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
@@ -770,30 +770,37 @@ mod test {
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
 			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
-			assert_eq!(entries,
+			assert_eq!(
+				entries,
 				vec![
-				StorageEntryMetadata {
-					name: "foo",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
-						key: scale_info::meta_type::<(u16, u8)>(),
-						value: scale_info::meta_type::<u32>(),
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
 					},
-					default: Option::<u32>::None.encode(),
-					docs: vec![],
-				},
-				StorageEntryMetadata {
-					name: "foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
-						key: scale_info::meta_type::<(u16, u8)>(),
-						value: scale_info::meta_type::<u32>(),
-					},
-					default: 97u32.encode(),
-					docs: vec![],
-				}
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 97u32.encode(),
+						docs: vec![],
+					}
 				]
 			);
 

@@ -18,7 +18,7 @@
 //! Storage value type. Implements StorageValue trait and its method directly.
 
 use crate::{
-	metadata::{StorageEntryType, StorageEntryMetadata},
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		generator::StorageValue as StorageValueT,
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
@@ -346,22 +346,23 @@ mod test {
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
 			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
-			assert_eq!(entries,
+			assert_eq!(
+				entries,
 				vec![
-				StorageEntryMetadata {
-					name: "foo",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
-					default: Option::<u32>::None.encode(),
-					docs: vec![],
-				},
-				StorageEntryMetadata {
-					name: "foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
-					default: 97u32.encode(),
-					docs: vec![],
-				}
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						default: 97u32.encode(),
+						docs: vec![],
+					}
 				]
 			);
 

@@ -1689,9 +1689,9 @@ pub mod pallet_prelude {
 /// NOTE: Storages use those prefixes so that values are stored after the key
 /// `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// For the `CountedStorageMap` variant, the Prefix also implements `CountedStorageMapInstance`.
-/// It associate a `CounterPrefix`, which is implemented same as above, but the storage prefix is
-/// prepend with `"CounterFor"`.
+/// For the `CountedStorageMap` variant, the Prefix also implements
+/// `CountedStorageMapInstance`. It associate a `CounterPrefix`, which is implemented same as
+/// above, but the storage prefix is prepend with `"CounterFor"`.
 ///
 /// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
 /// specific name to use for the prefix.
@@ -1751,8 +1751,8 @@ pub mod pallet_prelude {
 /// `_GeneratedPrefixForStorage$NameOfStorage`, and implements
 /// [`StorageInstance`](traits::StorageInstance) on it using the pallet and storage name. It
 /// then uses it as the first generic of the aliased type.
-/// For `CountedStorageMap`, `CountedStorageMapInstance` is implemented, and another similar struct
-/// is generated.
+/// For `CountedStorageMap`, `CountedStorageMapInstance` is implemented, and another similar
+/// struct is generated.
 ///
 /// For named generic, the macro will reorder the generics, and remove the names.
 ///

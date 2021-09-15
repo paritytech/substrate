@@ -1202,9 +1202,7 @@ fn metadata() {
 						name: "RenamedCountedMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							hashers: vec![
-								StorageHasher::Twox64Concat,
-							],
+							hashers: vec![StorageHasher::Twox64Concat],
 							key: meta_type::<u8>(),
 							value: meta_type::<u32>(),
 						},
@@ -1412,9 +1410,7 @@ fn metadata() {
 						name: "RenamedCountedMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
-							hashers: vec![
-								StorageHasher::Twox64Concat,
-							],
+							hashers: vec![StorageHasher::Twox64Concat],
 							key: meta_type::<u8>(),
 							value: meta_type::<u32>(),
 						},

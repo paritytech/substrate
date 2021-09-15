@@ -18,7 +18,7 @@
 //! Storage types to build abstraction on storage, they implements storage traits such as
 //! StorageMap and others.
 
-use crate::metadata::{StorageEntryModifier, StorageEntryMetadata};
+use crate::metadata::{StorageEntryMetadata, StorageEntryModifier};
 use codec::FullCodec;
 use sp_std::prelude::*;
 
