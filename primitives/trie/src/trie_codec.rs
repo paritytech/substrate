@@ -160,7 +160,6 @@ where
 		return Err(Error::IncompleteProof)
 	}
 
-	let mut nodes_iter = nodes_iter.peekable();
 	let mut previous_extracted_child_trie = None;
 	let mut nodes_iter = nodes_iter.peekable();
 	for child_root in child_tries.into_iter() {

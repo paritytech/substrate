@@ -857,7 +857,7 @@ mod execution {
 	/// If a key different than `start_at` is a child trie root,
 	/// the child trie content will be included in the proof.
 	pub fn prove_range_read_with_child_with_size<B, H>(
-		mut backend: B,
+		backend: B,
 		size_limit: usize,
 		start_at: &[Vec<u8>],
 	) -> Result<(StorageProof, u32), Box<dyn Error>>
@@ -2111,7 +2111,7 @@ mod tests {
 
 	#[test]
 	fn prove_range_with_child_works() {
-		let mut remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let mut start_at = smallvec::SmallVec::<[Vec<u8>; 2]>::new();
 		let trie_backend = remote_backend.as_trie_backend().unwrap();

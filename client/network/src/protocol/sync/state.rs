@@ -73,7 +73,7 @@ impl<B: BlockT> StateSync<B> {
 
 	///  Validate and import a state reponse.
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
-		if response.entries.is_empty() && response.proof.is_empty() && !response.complete {
+		if response.entries.is_empty() && response.proof.is_empty() {
 			debug!(target: "sync", "Bad state response");
 			return ImportResult::BadResponse
 		}
