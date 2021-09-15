@@ -43,7 +43,7 @@
 //! pallet_balances::construct_runtime_parts!(
 //! 	// First *argument* is the path to frame_support crate.
 //! 	{ frame_support }
-//! 	// Second *argument* is the token idenfiying the pallet on which `construct_runtime_parts`
+//! 	// Second *argument* is the token identifying the pallet on which `construct_runtime_parts`
 //! 	// must add the parts.
 //! 	{ Balances: pallet_balances }
 //! 	// The other tokens are the tokens in which the parts must be added and once the parts are
