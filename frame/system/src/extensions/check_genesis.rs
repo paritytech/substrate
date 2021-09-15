@@ -53,6 +53,9 @@ impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
 	const IDENTIFIER: &'static str = "CheckGenesis";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		sp_std::if_std! {
+			println!("<Pallet<T>>::block_hash(T::BlockNumber::zero()) {:?}", <Pallet<T>>::block_hash(T::BlockNumber::zero()));
+		}
 		Ok(<Pallet<T>>::block_hash(T::BlockNumber::zero()))
 	}
 }

@@ -111,9 +111,18 @@ where
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
+				sp_std::if_std! {
+					println!("checking {:?} from {:?} with extras {:?} => sig {:?}", self.function, signed, extra, signature);
+				}
 				let raw_payload = SignedPayload::new(self.function, extra)?;
+				sp_std::if_std! {
+					println!("rw_payload created");
+				}
 				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
 					return Err(InvalidTransaction::BadProof.into())
+				}
+				sp_std::if_std! {
+					println!("done");
 				}
 
 				let (function, extra, _) = raw_payload.deconstruct();
@@ -138,6 +147,7 @@ where
 /// Note that the payload that we sign to produce unchecked extrinsic signature
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
+#[derive(Debug)]
 pub struct SignedPayload<Call, Extra: SignedExtension>((Call, Extra, Extra::AdditionalSigned));
 
 impl<Call, Extra> SignedPayload<Call, Extra>

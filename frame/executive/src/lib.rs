@@ -220,6 +220,28 @@ where
 		weight
 	}
 
+	/// Execute given block, but don't do any of the [`final_checks`].
+	///
+	/// Should only be used for testing.
+	#[cfg(feature = "try-runtime")]
+	pub fn execute_block_no_state_root_check(block: Block) -> frame_support::weights::Weight {
+		Self::initialize_block(block.header());
+		Self::initial_checks(&block);
+
+		let (header, extrinsics) = block.deconstruct();
+
+		let signature_batching = sp_runtime::SignatureBatching::start();
+		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+		if !signature_batching.verify() {
+			panic!("Signature verification failed.");
+		}
+
+		// don't call `final_checks`, but do finalize the block.
+		let _header = <frame_system::Pallet<System>>::finalize();
+
+		frame_system::Pallet::<System>::block_weight().total()
+	}
+
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
@@ -297,6 +319,9 @@ where
 		let last = frame_system::LastRuntimeUpgrade::<System>::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
+		sp_std::if_std! {
+			println!("lat {:?}, current {:?}", last, current);
+		}
 		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
 			frame_system::LastRuntimeUpgrade::<System>::put(
 				frame_system::LastRuntimeUpgradeInfo::from(current),
@@ -307,7 +332,7 @@ where
 		}
 	}
 
-	fn initial_checks(block: &Block) {
+	pub fn initial_checks(block: &Block) {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
@@ -359,7 +384,7 @@ where
 		extrinsics.into_iter().for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
-				panic!("{}", err)
+				panic!("{:?}: {}", e, err)
 			}
 		});
 

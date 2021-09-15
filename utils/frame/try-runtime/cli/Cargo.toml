@@ -26,5 +26,9 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../../../primitives/stat
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-core = { version = "4.0.0-dev", path = "../../../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../../primitives/keystore" }
+sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/externalities" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = [
+    "tokio1",
+]}

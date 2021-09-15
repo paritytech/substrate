@@ -1549,6 +1549,10 @@ impl_runtime_apis! {
 			let weight = Executive::try_runtime_upgrade()?;
 			Ok((weight, RuntimeBlockWeights::get().max_block))
 		}
+
+		fn execute_block_no_state_root_check(block: Block) -> Weight {
+			Executive::execute_block_no_state_root_check(block)
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

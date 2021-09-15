@@ -30,11 +30,15 @@ use sp_core::{
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	storage::{well_known_keys, StorageData, StorageKey},
+	testing::TaskExecutor,
+	traits::TaskExecutorExt,
 };
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
 use std::{fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
+
+const LOG_TARGET: &'static str = "try-runtime::cli";
 
 mod parse;
 
@@ -48,6 +52,10 @@ pub enum Command {
 	/// Execute "Core_execute_block" using the given block and the runtime state of the parent
 	/// block.
 	ExecuteBlock(ExecuteBlockCmd),
+	/// Follow the given chain's finalized blocks and apply all of its extrinsics.
+	///
+	/// The initial state is the state of the first finalized block received.
+	FollowChain,
 }
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -116,6 +124,7 @@ pub struct SharedParams {
 	/// Whether or not to overwrite the code from state with the code from
 	/// the specified chain spec.
 	#[structopt(long)]
+	// TODO: should not be an option in on-runtime-upgrade and follow-chain
 	pub overwrite_code: bool,
 
 	/// The url to connect to.
@@ -138,6 +147,23 @@ impl SharedParams {
 		self.block_at
 			.parse::<<Block as BlockT>::Hash>()
 			.map_err(|e| format!("Could not parse block hash: {:?}", e).into())
+	}
+}
+
+#[derive(structopt::StructOpt, Debug, Clone)]
+pub enum DummyCommands {
+	OnRuntimeUpgrade,
+	OffchainWorker,
+}
+
+impl std::str::FromStr for DummyCommands {
+	type Err = &'static str;
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_lowercase().as_str() {
+			"on-runtime-upgrade" => Ok(DummyCommands::OnRuntimeUpgrade),
+			"offchain-worker" => Ok(DummyCommands::OffchainWorker),
+			_ => Err("Err"),
+		}
 	}
 }
 
@@ -171,6 +197,142 @@ pub enum State {
 		#[structopt(short, long, require_delimiter = true)]
 		modules: Option<Vec<String>>,
 	},
+}
+
+async fn follow_chain<Block, ExecDispatch>(
+	shared: SharedParams,
+	config: Configuration,
+) -> sc_cli::Result<()>
+where
+	Block: BlockT + serde::de::DeserializeOwned,
+	Block::Hash: FromStr,
+	Block::Header: serde::de::DeserializeOwned,
+	<Block::Hash as FromStr>::Err: Debug,
+	NumberFor<Block>: FromStr,
+	<NumberFor<Block> as FromStr>::Err: Debug,
+	ExecDispatch: NativeExecutionDispatch + 'static,
+{
+	use jsonrpsee_ws_client::{
+		types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription},
+		WsClientBuilder,
+	};
+	use sp_state_machine::Backend;
+
+	check_spec_name::<Block>(shared.url.clone(), config.chain_spec.name().to_string()).await;
+
+	let mut maybe_state_ext = None;
+
+	let sub = "chain_subscribeFinalizedHeads";
+	let unsub = "chain_unsubscribeFinalizedHeads";
+
+	let client = WsClientBuilder::default()
+		.connection_timeout(std::time::Duration::new(20, 0))
+		.max_request_body_size(u32::MAX)
+		.build(&shared.url)
+		.await
+		.unwrap();
+
+	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", sub, unsub);
+	let mut subscription: Subscription<Block::Header> =
+		client.subscribe(&sub, JsonRpcParams::NoParams, &unsub).await.unwrap();
+
+	let (code_key, code) = extract_code(config.chain_spec)?;
+
+	while let Some(header) = subscription.next().await.unwrap() {
+		let hash = header.hash();
+		let number = header.number();
+
+		let block = remote_externalities::rpc_api::get_block::<Block, _>(&shared.url, hash)
+			.await
+			.unwrap();
+
+		log::debug!(
+			target: LOG_TARGET,
+			"new block event: {:?} => {:?}, extrinsics: {}",
+			hash,
+			number,
+			block.extrinsics().len()
+		);
+
+		// create an ext at the state of this block, whatever is the first subscription event.
+		if maybe_state_ext.is_none() {
+			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
+				transport: shared.url.to_owned().into(),
+				at: Some(header.parent_hash().clone()),
+				..Default::default()
+			}));
+
+			let new_ext =
+				builder.inject_key_value(&[(code_key.clone(), code.clone())]).build().await?;
+			log::info!(
+				target: LOG_TARGET,
+				"initialized state externalities at {:?}, storage root {:?}",
+				number,
+				new_ext.as_backend().root()
+			);
+			maybe_state_ext = Some(new_ext);
+		}
+
+		let state_ext =
+			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
+
+		let wasm_method = shared.wasm_method;
+		let execution = shared.execution;
+		let heap_pages = shared.heap_pages.or(config.default_heap_pages);
+
+		let mut changes = Default::default();
+		let max_runtime_instances = config.max_runtime_instances;
+		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+			wasm_method.into(),
+			heap_pages,
+			max_runtime_instances,
+		);
+
+		let mut extensions = sp_externalities::Extensions::default();
+		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
+
+		let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
+			&state_ext.backend,
+			None,
+			&mut changes,
+			&executor,
+			"TryRuntime_execute_block_no_state_root_check",
+			block.encode().as_ref(),
+			extensions,
+			&sp_state_machine::backend::BackendRuntimeCode::new(&state_ext.backend)
+				.runtime_code()?,
+			sp_core::testing::TaskExecutor::new(),
+		)
+		.execute(execution.into())
+		.map_err(|e| {
+			format!("failed to execute 'TryRuntime_execute_block_no_state_root_check': {:?}", e)
+		})?;
+
+		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
+			.map_err(|e| format!("failed to decode output: {:?}", e))?;
+		log::info!(
+			target: LOG_TARGET,
+			"before commit overlay changes empty: {:?}, backend root {:?}",
+			state_ext.overlayed_changes().is_empty(),
+			state_ext.as_backend().root(),
+		);
+		state_ext.commit_all().unwrap();
+		log::info!(
+			target: LOG_TARGET,
+			"after commit overlay changes empty: {:?}, backend root {:?}",
+			state_ext.overlayed_changes().is_empty(),
+			state_ext.as_backend().root(),
+		);
+		log::info!(
+			target: LOG_TARGET,
+			"executed block {}, consumed weight {}, new storage root {:?}",
+			number,
+			consumed_weight,
+			state_ext.as_backend().root(),
+		);
+	}
+
+	Ok(())
 }
 
 async fn on_runtime_upgrade<Block, ExecDispatch>(
@@ -241,6 +403,7 @@ where
 	let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
 		.map_err(|e| format!("failed to decode output: {:?}", e))?;
 	log::info!(
+		target: LOG_TARGET,
 		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = {}, total weight = {} ({})",
 		weight,
 		total_weight,
@@ -332,7 +495,7 @@ where
 	.execute(execution.into())
 	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker':  {:?}", e))?;
 
-	log::info!("OffchainWorkerApi_offchain_worker executed without errors.");
+	log::info!(target: LOG_TARGET, "OffchainWorkerApi_offchain_worker executed without errors.");
 
 	Ok(())
 }
@@ -433,7 +596,7 @@ where
 	.map_err(|e| format!("failed to execute 'Core_execute_block': {:?}", e))?;
 	debug_assert!(_encoded_result == vec![1]);
 
-	log::info!("Core_execute_block executed without errors.");
+	log::info!(target: LOG_TARGET, "Core_execute_block executed without errors.");
 
 	Ok(())
 }
@@ -458,6 +621,8 @@ impl TryRuntimeCmd {
 					.await,
 			Command::ExecuteBlock(cmd) =>
 				execute_block::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await,
+			Command::FollowChain =>
+				follow_chain::<Block, ExecDispatch>(self.shared.clone(), config).await,
 		}
 	}
 }
@@ -505,17 +670,23 @@ async fn check_spec_name<Block: BlockT + serde::de::DeserializeOwned>(
 		.map(|spec_name| spec_name.to_lowercase())
 	{
 		Ok(spec) if spec == expected_spec_name => {
-			log::debug!("found matching spec name: {:?}", spec);
+			log::debug!(target: LOG_TARGET, "found matching spec name: {:?}", spec);
 		},
 		Ok(spec) => {
 			log::warn!(
+				target: LOG_TARGET,
 				"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
 				spec,
 				expected_spec_name,
 			);
 		},
 		Err(why) => {
-			log::error!("failed to fetch runtime version from {}: {:?}", uri, why);
+			log::error!(
+				target: LOG_TARGET,
+				"failed to fetch runtime version from {}: {:?}",
+				uri,
+				why
+			);
 		},
 	}
 }
