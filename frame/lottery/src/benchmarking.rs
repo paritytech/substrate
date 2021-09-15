@@ -88,12 +88,12 @@ benchmarks! {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
-
-<<<<<<< HEAD
-		let call = Call::<T>::start_lottery(price, end, payout, true).encode();
-=======
-		let call = Call::<T>::start_lottery { price, length: end, delay: payout, repeat: true };
->>>>>>> ba153b9ae050eda022f002d74d76f98d1e339a81
+		let call = Call::<T>::start_lottery {
+			price,
+			length: end,
+			delay: payout,
+			repeat: true
+		}.encode();
 		let origin = T::ManagerOrigin::successful_origin();
 	}: {  <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {
@@ -103,11 +103,7 @@ benchmarks! {
 	stop_repeat {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
-<<<<<<< HEAD
-		let call = Call::<T>::stop_repeat().encode();
-=======
-		let call = Call::<T>::stop_repeat {};
->>>>>>> ba153b9ae050eda022f002d74d76f98d1e339a81
+		let call = Call::<T>::stop_repeat { }.encode();
 		let origin = T::ManagerOrigin::successful_origin();
 	}: { <Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin)? }
 	verify {

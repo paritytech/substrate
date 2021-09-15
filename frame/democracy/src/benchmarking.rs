@@ -779,7 +779,7 @@ benchmarks! {
 			_ => return Err("preimage not available".into())
 		}
 		let origin = RawOrigin::Root.into();
-		let call = Call::<T>::enact_proposal(proposal_hash, 0).encode();
+		let call = Call::<T>::enact_proposal { proposal_hash, index: 0 }.encode();
 	}: {
 		assert_eq!(
 			<Call<T> as Decode>::decode(&mut &*call)?.dispatch_bypass_filter(origin),

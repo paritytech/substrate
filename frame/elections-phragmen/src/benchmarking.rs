@@ -404,7 +404,7 @@ benchmarks! {
 
 		let _ = fill_seats_up_to::<T>(m)?;
 		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
-		let call = Call::<T>::remove_member(removing, false).encode();
+		let call = Call::<T>::remove_member { who: removing, has_replacement: false }.encode();
 	}: {
 		assert_eq!(
 			<Call<T> as Decode>::decode(&mut &*call)?
