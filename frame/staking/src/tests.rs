@@ -3909,9 +3909,41 @@ mod election_data_provider {
 	fn only_iterates_max_2_times_nominators_quota() {
 		ExtBuilder::default()
 			.nominate(true) // add nominator 101, who nominates [11, 21]
-			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
-			.build_and_execute(|| {});
+			// the other nominators only nominate 21
+			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.build_and_execute(|| {
+				// given our nominators ordered by stake,
+				assert_eq!(
+					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
+					vec![61, 71, 81, 101]
+				);
+
+				// and total voters
+				assert_eq!(
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
+					7
+				);
+
+				// roll to session 5
+				run_to_block(25);
+
+				// slash 21, the only validator nominated by our first 3 nominators
+				add_slash(&21);
+
+				// we take 4 voters: 2 validators and 2 nominators (so nominators quota = 2)
+				assert_eq!(
+					Staking::voters(Some(3))
+						.unwrap()
+						.iter()
+						.map(|(stash, _, _)| stash)
+						.copied()
+						.collect::<Vec<_>>(),
+					vec![31, 11], // 2 validators, but no nominators because we hit the quota
+				);
+			});
 	}
 
 	// Even if some of the higher staked nominators are slashed, we still get up to max len voters
@@ -3927,13 +3959,13 @@ mod election_data_provider {
 			//                                 61 only nominates validator 21 ^^
 			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
 			.build_and_execute(|| {
-				// our nominators ordered by stake
+				// given our nominators ordered by stake,
 				assert_eq!(
 					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
 					vec![101, 61, 71]
 				);
 
-				// total voters
+				// and total voters
 				assert_eq!(
 					<Test as Config>::SortedListProvider::count() +
 						<Validators<Test>>::iter().count() as u32,
@@ -3948,6 +3980,7 @@ mod election_data_provider {
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
+					// then
 					vec![
 						31, 21, 11, // 3 nominators
 						101, 61 // 2 validators, and 71 is excluded
