@@ -212,7 +212,7 @@ impl<T: Config> Pallet<T> {
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check()?;
 
-		let score = solution.score.clone();
+		let score = raw_solution.score.clone();
 		let call: Call<T> =
 			Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness }.into();
 
