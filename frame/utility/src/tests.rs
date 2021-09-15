@@ -193,7 +193,7 @@ fn call_transfer(dest: u64, value: u64) -> Call {
 	Call::Balances(BalancesCall::transfer { dest, value })
 }
 
-fn call_foobar(err: bool, _start_weight: u64, end_weight: Option<u64>) -> Call {
+fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> Call {
 	Call::Example(ExampleCall::foobar { err, start_weight, end_weight })
 }
 
