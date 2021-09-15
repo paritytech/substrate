@@ -40,7 +40,7 @@ pub struct OffchainWorkerCmd {
 	#[structopt(
 		long,
 		multiple = false,
-		parse(try_from_str = parse::hash)
+		parse(try_from_str = parse::url)
 	)]
 	header_uri: Option<String>,
 
