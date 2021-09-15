@@ -19,6 +19,7 @@
 
 use std::{convert::TryInto, sync::Arc};
 
+use anyhow::anyhow;
 use codec::{Codec, Decode};
 use jsonrpsee::{
 	proc_macros::rpc,
@@ -28,7 +29,6 @@ use jsonrpsee::{
 		JsonRpcResult,
 	},
 };
-pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -38,6 +38,8 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, MaybeDisplay},
 };
+
+pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 
 #[rpc(client, server, namespace = "payment")]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
@@ -109,8 +111,11 @@ where
 			.query_fee_details(&at, uxt, encoded_len)
 			.map_err(|api_err| CallError::from_std_error(api_err))?;
 
-		let try_into_rpc_balance =
-			|value: Balance| value.try_into().map_err(|_try_err| CallError::InvalidParams);
+		let try_into_rpc_balance = |value: Balance| {
+			value
+				.try_into()
+				.map_err(|_| anyhow!("{} doesn't fit in NumberOrHex representation", value))
+		};
 
 		Ok(FeeDetails {
 			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {

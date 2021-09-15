@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 use jsonrpsee::{
-	http_server::{HttpServerBuilder, HttpStopHandle},
+	http_server::{AccessControlBuilder, Host, HttpServerBuilder, HttpStopHandle},
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
@@ -90,7 +90,7 @@ pub type WsServer = WsStopHandle;
 /// Start HTTP server listening on given address.
 pub fn start_http<M: Send + Sync + 'static>(
 	addr: std::net::SocketAddr,
-	_cors: Option<&Vec<String>>,
+	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
 	module: RpcModule<M>,
 	rt: tokio::runtime::Handle,
@@ -99,8 +99,24 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 
+	let mut acl = AccessControlBuilder::new();
+
+	log::info!("starting JSONRPC HTTP server: addr={}, cors={:?}", addr, cors);
+
+	if let Some(cors) = cors {
+		// Whitelist listening address.
+		let host = Host::parse(&format!("localhost:{}", addr.port()));
+		acl = acl.allow_host(host);
+		let host = Host::parse(&format!("127.0.0.1:{}", addr.port()));
+		acl = acl.allow_host(host);
+		for origin in cors {
+			acl = acl.cors_allow_origin(origin.into());
+		}
+	};
+
 	let server = HttpServerBuilder::default()
 		.max_request_body_size(max_request_body_size as u32)
+		.set_access_control(acl.build())
 		.build(addr)?;
 
 	let handle = server.stop_handle();
@@ -117,7 +133,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 pub fn start_ws<M: Send + Sync + 'static>(
 	addr: std::net::SocketAddr,
 	max_connections: Option<usize>,
-	_cors: Option<&Vec<String>>,
+	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
 	module: RpcModule<M>,
 	rt: tokio::runtime::Handle,
@@ -127,14 +143,19 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
-	let server = tokio::task::block_in_place(|| {
-		rt.block_on(
-			WsServerBuilder::default()
-				.max_request_body_size(max_request_body_size as u32)
-				.max_connections(max_connections as u64)
-				.build(addr),
-		)
-	})?;
+	let mut builder = WsServerBuilder::default()
+		.max_request_body_size(max_request_body_size as u32)
+		.max_connections(max_connections as u64);
+
+	log::info!("starting JSONRPC WS server: addr={}, cors={:?}", addr, cors);
+
+	if let Some(cors) = cors {
+		// Whitelist listening address.
+		builder = builder.set_allowed_hosts([format!("localhost:{}", addr.port()), format!("127.0.0.1:{}", addr.port())])?;
+		builder = builder.set_allowed_origins(cors)?;
+	}
+
+	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addr)))?;
 
 	let handle = server.stop_handle();
 	let rpc_api = build_rpc_api(module);

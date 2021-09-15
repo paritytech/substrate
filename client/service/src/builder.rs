@@ -656,7 +656,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 // Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
 // specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
-	_deny_unsafe: DenyUnsafe,
+	deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -689,9 +689,6 @@ where
 	TBl::Header: Unpin,
 {
 	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
-
-	// TODO(niklasad1): fix CORS.
-	let deny_unsafe = DenyUnsafe::No;
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),

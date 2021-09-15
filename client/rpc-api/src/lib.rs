@@ -28,6 +28,7 @@ pub use policy::DenyUnsafe;
 
 pub mod author;
 pub mod chain;
+/// Child state API
 pub mod child_state;
 pub mod offchain;
 pub mod state;
