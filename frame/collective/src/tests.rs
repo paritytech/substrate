@@ -562,7 +562,7 @@ fn limit_active_proposals() {
 fn correct_validate_and_get_proposal() {
 	new_test_ext().execute_with(|| {
 		let proposal =
-			Call::Collective(crate::Call::set_members { new_members: vec![1, 2, 3], prime: None, old_count: MaxMembers::get() })
+			Call::Collective(crate::Call::set_members { new_members: vec![1, 2, 3], prime: None, old_count: MaxMembers::get() });
 		let length = proposal.encode().len() as u32;
 		assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length));
 
