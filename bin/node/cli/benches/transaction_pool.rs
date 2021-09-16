@@ -16,9 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use node_cli::service::{create_extrinsic, FullClient};
-use node_runtime::{constants::currency::*, BalancesCall, SudoCall, UncheckedExtrinsic};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use futures::{future, StreamExt};
+use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
+use node_primitives::AccountId;
+use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
@@ -28,8 +30,10 @@ use sc_service::{
 	BasePath, ChainSpec, Configuration, Error as ServiceError, PartialComponents, Role,
 	RpcHandlers, TFullBackend, TaskManager,
 };
+use sc_transaction_pool_api::{TransactionPool as _, TransactionSource, TransactionStatus};
 use sp_core::{crypto::Pair, sr25519};
 use sp_keyring::Sr25519Keyring;
+use sp_runtime::{generic::BlockId, OpaqueExtrinsic};
 use std::sync::Arc;
 use tokio::runtime::Handle;
 
@@ -111,56 +115,112 @@ fn create_accounts(num: usize) -> Vec<sr25519::Pair> {
 ///
 /// `start_nonce` is the current nonce of Alice.
 fn create_account_extrinsics(
-	client: Arc<FullClient>,
+	client: &FullClient,
 	accounts: &[sr25519::Pair],
-	start_nonce: u32,
-) -> Vec<UncheckedExtrinsic> {
+) -> Vec<OpaqueExtrinsic> {
+	let start_nonce = fetch_nonce(client, Sr25519Keyring::Alice.pair());
+
 	accounts
 		.iter()
 		.enumerate()
 		.map(|(i, a)| {
-			create_extrinsic(
-				client.clone(),
-				Sr25519Keyring::Alice.pair(),
-				SudoCall::sudo(Box::new(BalancesCall::set_balance(
-					a.public().into(),
-					1_000_000 * DOLLARS,
-					0,
-				))),
-				Some(start_nonce + (i as u32)),
-			)
+			vec![
+				// Reset the nonce by removing any funds
+				create_extrinsic(
+					client,
+					Sr25519Keyring::Alice.pair(),
+					SudoCall::sudo(Box::new(
+						BalancesCall::set_balance(AccountId::from(a.public()).into(), 0, 0).into(),
+					)),
+					Some(start_nonce + (i as u32) * 2),
+				),
+				// Give back funds
+				create_extrinsic(
+					client,
+					Sr25519Keyring::Alice.pair(),
+					SudoCall::sudo(Box::new(
+						BalancesCall::set_balance(
+							AccountId::from(a.public()).into(),
+							1_000_000 * DOLLARS,
+							0,
+						)
+						.into(),
+					)),
+					Some(start_nonce + (i as u32) * 2 + 1),
+				),
+			]
 		})
+		.flatten()
+		.map(OpaqueExtrinsic::from)
 		.collect()
 }
 
 fn create_benchmark_extrinsics(
-	client: Arc<FullClient>,
+	client: &FullClient,
 	accounts: &[sr25519::Pair],
 	extrinsics_per_account: usize,
-) -> Vec<UncheckedExtrinsic> {
-	(0..extrinsics_per_account)
-		.map(|nonce| {
-			accounts.iter().map(|a| {
+) -> Vec<OpaqueExtrinsic> {
+	accounts
+		.iter()
+		.map(|account| {
+			(0..extrinsics_per_account).map(move |nonce| {
 				create_extrinsic(
-					client.clone(),
-					a.clone(),
-					BalancesCall::transfer(
-						Sr25519Keyring::Bob.to_account_id(),
-						1 * DOLLARS,
-					),
+					client,
+					account.clone(),
+					BalancesCall::transfer(Sr25519Keyring::Bob.to_account_id().into(), 1 * DOLLARS),
 					Some(nonce as u32),
 				)
 			})
 		})
 		.flatten()
+		.map(OpaqueExtrinsic::from)
 		.collect()
 }
 
+async fn submit_tx_and_wait_for_inclusion(
+	tx_pool: &TransactionPool,
+	tx: OpaqueExtrinsic,
+	client: &FullClient,
+) {
+	let best_hash = client.chain_info().best_hash;
+
+	let mut watch = tx_pool
+		.submit_and_watch(&BlockId::Hash(best_hash), TransactionSource::External, tx.clone())
+		.await
+		.expect("Submits tx to pool")
+		.fuse();
+
+	loop {
+		if let TransactionStatus::InBlock(_) = watch.select_next_some().await {
+			break
+		}
+	}
+}
+
 fn transaction_pool_benchmarks(c: &mut Criterion) {
-	let runtime = tokio::runtime::Runtime::new().expect("Creates tokio runtime");
+	let mut runtime = tokio::runtime::Runtime::new().expect("Creates tokio runtime");
 	let tokio_handle = runtime.handle().clone();
 
-	c.to_async(runtime)
+	let node = new_node(tokio_handle.clone());
+
+	let account_num = 10;
+	let extrinsics_per_account = 2000;
+	let accounts = create_accounts(account_num);
+	let extrinsics = create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account);
+
+	c.bench_function("txpool", move |b| {
+		b.iter_batched(
+			|| {
+				let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
+
+				runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
+					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client)
+				})));
+			},
+			|tx| (),
+			BatchSize::SmallInput,
+		)
+	});
 }
 
 criterion_group!(benches, transaction_pool_benchmarks);

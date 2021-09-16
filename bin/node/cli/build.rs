@@ -18,7 +18,7 @@
 
 fn main() {
 	#[cfg(feature = "cli")]
-	cli::main();
+	// cli::main();
 }
 
 #[cfg(feature = "cli")]

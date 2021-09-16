@@ -79,9 +79,9 @@ pub use frame_system::Call as SystemCall;
 #[cfg(any(feature = "std", test))]
 pub use pallet_balances::Call as BalancesCall;
 #[cfg(any(feature = "std", test))]
-pub use pallet_sudo::Call as SudoCall;
-#[cfg(any(feature = "std", test))]
 pub use pallet_staking::StakerStatus;
+#[cfg(any(feature = "std", test))]
+pub use pallet_sudo::Call as SudoCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 

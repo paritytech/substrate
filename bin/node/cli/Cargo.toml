@@ -126,7 +126,7 @@ regex = "1"
 platforms = "1.1"
 async-std = { version = "1.6.5", features = ["attributes"] }
 soketto = "0.4.2"
-criterion = "0.3.5"
+criterion = { version = "0.3.5", features = [ "async_tokio" ] }
 tokio = "1.10"
 
 [build-dependencies]

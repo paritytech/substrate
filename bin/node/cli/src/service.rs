@@ -45,13 +45,22 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient =
 	sc_service::TLightClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;
+pub type TransactionPool = sc_transaction_pool::FullPool<Block, FullClient>;
+
+pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 {
+	let best_hash = client.chain_info().best_hash;
+	client
+		.runtime_api()
+		.account_nonce(&generic::BlockId::Hash(best_hash), account.public().into())
+		.expect("Fetching account nonce works; qed")
+}
 
 /// Create a transaction using the given `call`.
 ///
 /// The transaction will be signed by `sender`. If `nonce` is `None` it will be fetched from the
 /// state of the best block.
 pub fn create_extrinsic(
-	client: Arc<FullClient>,
+	client: &FullClient,
 	sender: sp_core::sr25519::Pair,
 	function: impl Into<node_runtime::Call>,
 	nonce: Option<u32>,
@@ -60,12 +69,7 @@ pub fn create_extrinsic(
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 	let best_hash = client.chain_info().best_hash;
 	let best_block = client.chain_info().best_number;
-	let nonce = nonce.unwrap_or_else(|| {
-		client
-			.runtime_api()
-			.account_nonce(&generic::BlockId::Hash(best_hash), sender.public().into())
-			.expect("Fetching account nonce works; qed")
-	});
+	let nonce = nonce.unwrap_or_else(|| fetch_nonce(client, sender.clone()));
 
 	let period = node_runtime::BlockHashCount::get()
 		.checked_next_power_of_two()
@@ -281,7 +285,7 @@ pub struct NewFullBase {
 	pub task_manager: TaskManager,
 	pub client: Arc<FullClient>,
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
+	pub transaction_pool: Arc<TransactionPool>,
 }
 
 /// Creates a full service from the configuration.
