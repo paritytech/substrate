@@ -1684,14 +1684,14 @@ pub mod pallet_prelude {
 /// The Prefix generic written by the macro is generated using
 /// `PalletInfo::name::<Pallet<..>>()` and the name of the storage type.
 /// E.g. if runtime names the pallet "MyExample" then the storage `type Foo<T> = ...` use the
-/// pallet prefix: "MyExample" and the storage prefix "Foo".
-///
-/// NOTE: Storages use those prefixes so that values are stored after the key
-/// `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
+/// prefix: `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
 /// For the `CountedStorageMap` variant, the Prefix also implements
 /// `CountedStorageMapInstance`. It associate a `CounterPrefix`, which is implemented same as
 /// above, but the storage prefix is prepend with `"CounterFor"`.
+/// E.g. if runtime names the pallet "MyExample" then the storage
+/// `type Foo<T> = CountedStorageaMap<...>` will store its counter at the prefix:
+/// `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
 ///
 /// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
 /// specific name to use for the prefix.
