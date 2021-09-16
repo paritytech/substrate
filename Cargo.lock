@@ -2781,28 +2781,28 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-proc-macros 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "jsonrpsee-utils",
- "jsonrpsee-ws-client 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-ws-client 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "jsonrpsee-ws-server",
 ]
 
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.16",
  "hyper",
  "hyper-rustls",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "jsonrpsee-utils",
  "log",
  "serde",
@@ -2815,13 +2815,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "futures-channel",
  "futures-util",
  "globset",
  "hyper",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "jsonrpsee-utils",
  "lazy_static",
  "log",
@@ -2850,7 +2850,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "Inflector",
  "bae",
@@ -2882,7 +2882,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2900,13 +2900,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "beef",
  "futures-channel",
  "futures-util",
  "hyper",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "log",
  "parking_lot 0.11.1",
  "rand 0.8.4",
@@ -2943,12 +2943,12 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.16",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "log",
  "pin-project 1.0.5",
  "rustls",
@@ -2966,11 +2966,11 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c13f97ba8bb5a5862dd0372053f5d9aa56531c3b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder#2d813b4ba5011a132b8283dcc1445d0533f92088"
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.3.0 (git+https://github.com/paritytech/jsonrpsee?branch=na-http-server-unify-acl-builder)",
  "jsonrpsee-utils",
  "log",
  "rustc-hash",

@@ -25,7 +25,7 @@ use std::{marker::PhantomData, sync::Arc};
 use codec::{Codec, Encode};
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, error::CallError, JsonRpcResult},
+	types::{async_trait, error::CallError, RpcResult},
 };
 use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
@@ -80,7 +80,7 @@ pub trait MmrApi<BlockHash> {
 		&self,
 		leaf_index: u64,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<LeafProof<BlockHash>>;
+	) -> RpcResult<LeafProof<BlockHash>>;
 }
 
 /// MMR RPC methods.
@@ -109,7 +109,7 @@ where
 		&self,
 		leaf_index: u64,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> JsonRpcResult<LeafProof<Block::Hash>> {
+	) -> RpcResult<LeafProof<Block::Hash>> {
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 

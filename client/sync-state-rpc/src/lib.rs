@@ -43,7 +43,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{error::Error as JsonRpseeError, JsonRpcResult},
+	types::{error::Error as JsonRpseeError, RpcResult},
 };
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
@@ -116,7 +116,7 @@ pub trait SyncStateRpcApi {
 	// NOTE(niklasad1): I changed to `JsonValue` -> `String` as the chainspec
 	// already returns a JSON String.
 	#[method(name = "genSyncSpec")]
-	fn system_gen_sync_spec(&self, raw: bool) -> JsonRpcResult<String>;
+	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String>;
 }
 
 /// An api for sync state RPC calls.
@@ -175,7 +175,7 @@ where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
-	fn system_gen_sync_spec(&self, raw: bool) -> JsonRpcResult<String> {
+	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let current_sync_state =

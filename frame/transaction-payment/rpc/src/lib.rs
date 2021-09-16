@@ -26,7 +26,7 @@ use jsonrpsee::{
 	types::{
 		async_trait,
 		error::{CallError, Error as JsonRpseeError},
-		JsonRpcResult,
+		RpcResult,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
@@ -44,14 +44,14 @@ pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as Tra
 #[rpc(client, server, namespace = "payment")]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[method(name = "queryInfo")]
-	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> JsonRpcResult<ResponseType>;
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
 
 	#[method(name = "queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<FeeDetails<NumberOrHex>>;
+	) -> RpcResult<FeeDetails<NumberOrHex>>;
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
@@ -83,7 +83,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> JsonRpcResult<RuntimeDispatchInfo<Balance>> {
+	) -> RpcResult<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
@@ -99,7 +99,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> JsonRpcResult<FeeDetails<NumberOrHex>> {
+	) -> RpcResult<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 

@@ -17,11 +17,11 @@ jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = 
     "tokio1",
 ] }
 jsonrpsee-proc-macros = "0.3.0"
-# jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
-# # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", default-features = false, features = [
+# jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-http-server-unify-acl-builder" }
+# # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-http-server-unify-acl-builder", default-features = false, features = [
 # #     "tokio02",
 # # ] }
-# jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+# jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-http-server-unify-acl-builder" }
 
 env_logger = "0.9"
 log = "0.4.11"

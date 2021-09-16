@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, error::Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, error::Error as JsonRpseeError, RpcResult},
 	SubscriptionSink,
 };
 
@@ -48,7 +48,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
 	#[method(name = "roundState")]
-	async fn round_state(&self) -> JsonRpcResult<ReportedRoundStates>;
+	async fn round_state(&self) -> RpcResult<ReportedRoundStates>;
 
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
@@ -57,12 +57,12 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 		aliases = "grandpa_justifications"
 		item = Notification
 	)]
-	fn subscribe_justifications(&self) -> JsonRpcResult<()>;
+	fn subscribe_justifications(&self) -> RpcResult<()>;
 
 	/// Prove finality for the given block number by returning the Justification for the last block
 	/// in the set and all the intermediary headers to link them together.
 	#[method(name = "proveFinality")]
-	async fn prove_finality(&self, block: Number) -> JsonRpcResult<Option<EncodedFinalityProof>>;
+	async fn prove_finality(&self, block: Number) -> RpcResult<Option<EncodedFinalityProof>>;
 }
 
 /// Provides RPC methods for interacting with GRANDPA.
@@ -98,12 +98,12 @@ where
 	Block: BlockT,
 	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
-	async fn round_state(&self) -> JsonRpcResult<ReportedRoundStates> {
+	async fn round_state(&self) -> RpcResult<ReportedRoundStates> {
 		ReportedRoundStates::from(&self.authority_set, &self.voter_state)
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> JsonRpcResult<()> {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
@@ -134,7 +134,7 @@ where
 	async fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> JsonRpcResult<Option<EncodedFinalityProof>> {
+	) -> RpcResult<Option<EncodedFinalityProof>> {
 		self.finality_proof_provider
 			.rpc_prove_finality(block)
 			.map_err(|finality_err| error::Error::ProveFinalityFailed(finality_err))

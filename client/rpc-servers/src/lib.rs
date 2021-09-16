@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 use jsonrpsee::{
-	http_server::{AccessControlBuilder, Host, HttpServerBuilder, HttpStopHandle},
+	http_server::{AccessControlBuilder, HttpServerBuilder, HttpStopHandle},
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
@@ -105,15 +105,14 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		let host = Host::parse(&format!("localhost:{}", addr.port()));
-		acl = acl.allow_host(host);
-		let host = Host::parse(&format!("127.0.0.1:{}", addr.port()));
-		acl = acl.allow_host(host);
 
-		// Set allowed origins.
-		for origin in cors {
-			acl = acl.cors_allow_origin(origin.into());
-		}
+		acl = acl.set_allowed_hosts([
+			format!("localhost:{}", addr.port()),
+			format!("127.0.0.1:{}", addr.port()),
+		])?;
+
+		let origins: Vec<String> = cors.iter().map(Into::into).collect();
+		acl = acl.set_allowed_origins(origins)?;
 	};
 
 	let server = HttpServerBuilder::default()
