@@ -100,7 +100,7 @@ where
 		num_traits::cast::AsPrimitive<usize>,
 {
 	use sp_consensus_babe::AuthorityId;
-	let config = match config_or_chain_spec {
+	let mut config = match config_or_chain_spec {
 		ConfigOrChainSpec::Config(config) => config,
 		ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) =>
 			default_config(task_executor, chain_spec),
@@ -183,7 +183,7 @@ where
 
 	let rpc_handlers = {
 		let params = SpawnTasksParams {
-			config,
+			config: &mut config,
 			client: client.clone(),
 			backend: backend.clone(),
 			task_manager: &mut task_manager,

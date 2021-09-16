@@ -404,7 +404,7 @@ pub struct NewFullBase {
 
 /// Creates a full service from the configuration.
 pub fn new_full_base(
-	mut config: Configuration,
+	mut config: &mut Configuration,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
@@ -417,7 +417,6 @@ pub fn new_full_base(
 	let name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
-
 	let (
 		client,
 		backend,
@@ -433,6 +432,7 @@ pub fn new_full_base(
 		network,
 		network_starter,
 	) = if config.block_production == Some("Aura".to_owned()) {
+		log::debug!("inside new_full_base Aura");
 		let sc_service::PartialComponents {
 			client,
 			backend,
@@ -476,7 +476,7 @@ pub fn new_full_base(
 			Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default());
 
 		let _rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
-			config,
+			config: &mut config,
 			backend: backend.clone(),
 			client: client.clone(),
 			keystore: keystore_container.sync_keystore(),
@@ -556,6 +556,7 @@ pub fn new_full_base(
 			network_starter,
 		)
 	} else if config.block_production == Some("Babe".to_owned()) {
+		log::debug!("inside new_full_base Babe");
 		let sc_service::PartialComponents {
 			client,
 			backend,
@@ -601,7 +602,7 @@ pub fn new_full_base(
 			Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default());
 
 		let _rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
-			config,
+			config: &mut config,
 			backend: backend.clone(),
 			client: client.clone(),
 			keystore: keystore_container.sync_keystore(),
@@ -769,7 +770,8 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<(TaskManager, exit_future::Exit), ServiceError> {
+pub fn new_full(config: &mut Configuration) -> Result<(TaskManager, exit_future::Exit), ServiceError> {
+	log::debug!("inside new_full");
 	let (signal, exit) = exit_future::signal();
 	new_full_base(config, |_, _| (), signal)
 		.map(|NewFullBase { task_manager, .. }| (task_manager, exit))
@@ -931,7 +933,7 @@ pub fn new_light_base(
 		client: client.clone(),
 		transaction_pool: transaction_pool.clone(),
 		keystore: keystore_container.sync_keystore(),
-		config,
+		config: &mut config,
 		backend,
 		system_rpc_tx,
 		network: network.clone(),

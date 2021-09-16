@@ -81,21 +81,20 @@ pub fn run() -> Result<()> {
 			use std::cell::RefCell;
 			let clean_shutdown = Arc::new(RefCell::new(false));
 			let clean_copy = clean_shutdown.clone();
-			runner.async_run(|config| {
+			runner.async_run_ref(|config| {
 				let mut config = config;
 				config.block_production = Some("Babe".to_owned());
 				service::new_full(config).map(|v| (
 					v.1.inspect(|()| { clean_copy.replace(true); }).map(Ok),
 					v.0
 				)).map_err(sc_cli::Error::Service)
-			}).and_then(|()| {
+			}).and_then(|runner| {
 				if *clean_shutdown.borrow() {
 					log::debug!("shut down cleanly because of block production change");
-					let runner = cli.create_runner(&cli.run)?;
 					runner.async_run(|config| {
 						let mut config = config;
 						config.block_production = Some("Aura".to_owned());
-						service::new_full(config).map(|v| (v.1.map(Ok), v.0))
+						service::new_full(&mut config).map(|v| (v.1.map(Ok), v.0))
 							.map_err(sc_cli::Error::Service)
 					})
 				} else {

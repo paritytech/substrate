@@ -218,6 +218,39 @@ impl<C: SubstrateCli> Runner<C> {
 		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
 	}
 
+	/// A helper function that runs a future with tokio and stops if the process receives
+	/// the signal `SIGTERM` or `SIGINT`.
+	pub fn async_run_ref<F, E>(
+		mut self,
+		runner: impl FnOnce(&mut Configuration) -> std::result::Result<(F, TaskManager), E>,
+	) -> std::result::Result<Self, E>
+	where
+		F: Future<Output = std::result::Result<(), E>>,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
+	{
+		let (future, task_manager) = runner(&mut self.config)?;
+		self.run_until_exit_ref::<_, E>(future, task_manager)?;
+		Ok(self)
+	}
+
+	fn run_until_exit_ref<F, E>(
+		&mut self,
+		future: F,
+		task_manager: TaskManager,
+	) -> std::result::Result<(), E>
+	where
+		F: Future<Output = std::result::Result<(), E>> + future::Future,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
+	{
+		let f = future.fuse();
+		pin_mut!(f);
+	
+		self.tokio_runtime.block_on(main(f))?;
+		self.tokio_runtime.block_on(task_manager.clean_shutdown());
+	
+		Ok(())
+	}
+
 	/// Get an immutable reference to the node Configuration
 	pub fn config(&self) -> &Configuration {
 		&self.config
