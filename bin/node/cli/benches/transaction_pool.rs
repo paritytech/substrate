@@ -25,11 +25,13 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, MultiaddrWithPeerId, NetworkConfiguration,
-		OffchainWorkerConfig, PruningMode, TransactionStorageMode, WasmExecutionMethod,
+		OffchainWorkerConfig, PruningMode, TransactionPoolOptions, TransactionStorageMode,
+		WasmExecutionMethod,
 	},
 	BasePath, ChainSpec, Configuration, Error as ServiceError, PartialComponents, Role,
 	RpcHandlers, TFullBackend, TaskManager,
 };
+use sc_transaction_pool::PoolLimit;
 use sc_transaction_pool_api::{TransactionPool as _, TransactionSource, TransactionStatus};
 use sp_core::{crypto::Pair, sr25519};
 use sp_keyring::Sr25519Keyring;
@@ -55,7 +57,11 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		impl_version: "1.0".into(),
 		role: Role::Authority,
 		tokio_handle,
-		transaction_pool: Default::default(),
+		transaction_pool: TransactionPoolOptions {
+			ready: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
+			future: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
+			reject_future_transactions: false,
+		},
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
 		keystore_remote: Default::default(),
@@ -181,6 +187,7 @@ async fn submit_tx_and_wait_for_inclusion(
 	tx_pool: &TransactionPool,
 	tx: OpaqueExtrinsic,
 	client: &FullClient,
+	wait_for_finalized: bool,
 ) {
 	let best_hash = client.chain_info().best_hash;
 
@@ -191,13 +198,17 @@ async fn submit_tx_and_wait_for_inclusion(
 		.fuse();
 
 	loop {
-		if let TransactionStatus::InBlock(_) = watch.select_next_some().await {
-			break
+		match watch.select_next_some().await {
+			TransactionStatus::Finalized(_) => break,
+			TransactionStatus::InBlock(_) if !wait_for_finalized => break,
+			_ => {}
 		}
 	}
 }
 
 fn transaction_pool_benchmarks(c: &mut Criterion) {
+	sp_tracing::try_init_simple();
+
 	let mut runtime = tokio::runtime::Runtime::new().expect("Creates tokio runtime");
 	let tokio_handle = runtime.handle().clone();
 
@@ -206,7 +217,6 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 	let account_num = 10;
 	let extrinsics_per_account = 2000;
 	let accounts = create_accounts(account_num);
-	let extrinsics = create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account);
 
 	c.bench_function("txpool", move |b| {
 		b.iter_batched(
@@ -214,10 +224,16 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 				let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
 
 				runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
-					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client)
+					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client, true)
+				})));
+
+				create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account)
+			},
+			|extrinsics| {
+				runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
+					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client, false)
 				})));
 			},
-			|tx| (),
 			BatchSize::SmallInput,
 		)
 	});
