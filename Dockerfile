@@ -19,7 +19,7 @@ LABEL maintainer="team@cere.network"
 LABEL description="This is the optimization to create a small image."
 ARG PROFILE=release
 COPY --from=builder /cerenetwork/target/$PROFILE/cere /usr/local/bin
-COPY --from=builder /cerenetwork/ /home/cere
+COPY --from=builder /cerenetwork/target/release/wbuild/node-runtime /home/cere/wasm-file
 
 RUN mv /usr/share/ca* /tmp && \
 	rm -rf /usr/share/*  && \

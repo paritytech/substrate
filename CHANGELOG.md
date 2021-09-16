@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Set democracy periods: `LaunchPeriod` to 1 day, `VotingPeriod` to 5 days, `EnactmentPeriod` to 3 days.
 - Updated `FastTrackVotingPeriod` to 3 hours.
 - Updated nightly version to 2021-05-21
+- Added script to extract wasm file.
 
 ## [2.3.2]
 
