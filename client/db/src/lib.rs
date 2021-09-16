@@ -355,7 +355,7 @@ pub enum DatabaseSource {
 }
 
 impl DatabaseSource {
-	/// Return dabase path for databases that are on the disk.
+	/// Return path for databases that are stored on disk.
 	pub fn path(&self) -> Option<&Path> {
 		match self {
 			// as per https://github.com/paritytech/substrate/pull/9500#discussion_r684312550
@@ -365,6 +365,22 @@ impl DatabaseSource {
 			DatabaseSource::Auto { paritydb_path, .. } => Some(&paritydb_path),
 			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(&path),
 			DatabaseSource::Custom(..) => None,
+		}
+	}
+
+	/// Set path for databases that are stored on disk.
+	pub fn set_path(&mut self, p: &Path) -> bool {
+		match self {
+			DatabaseSource::Auto { ref mut paritydb_path, .. } => {
+				*paritydb_path = p.into();
+				true
+			},
+			DatabaseSource::RocksDb { ref mut path, .. } |
+			DatabaseSource::ParityDb { ref mut path } => {
+				*path = p.into();
+				true
+			},
+			DatabaseSource::Custom(..) => false,
 		}
 	}
 }

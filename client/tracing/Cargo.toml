@@ -35,7 +35,3 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-tracing-proc-macro = { version = "4.0.0-dev", path = "./proc-macro" }
 sc-rpc-server = { version = "4.0.0-dev", path = "../rpc-servers" }
-
-[target.'cfg(target_os = "unknown")'.dependencies]
-wasm-bindgen = "0.2.67"
-web-sys = { version = "0.3.44", features = ["console"] }

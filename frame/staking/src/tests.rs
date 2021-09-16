@@ -3355,7 +3355,8 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(2);
 
 		// Collect payouts when there are no nominators
-		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 1));
+		let call =
+			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
@@ -3368,7 +3369,8 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(3);
 
 		// Collect payouts for an era where the validator did not receive any points.
-		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 2));
+		let call =
+			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
@@ -3381,7 +3383,8 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(4);
 
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
-		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 3));
+		let call =
+			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
@@ -3404,14 +3407,16 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(6);
 
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
-		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 5));
+		let call =
+			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
-		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 5));
+		let call =
+			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert!(result.is_err());

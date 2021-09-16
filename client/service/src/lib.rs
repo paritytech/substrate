@@ -39,13 +39,12 @@ use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 use codec::{Decode, Encode};
 use futures::{stream, Future, FutureExt, Stream, StreamExt};
 use log::{debug, error, warn};
-use parity_util_mem::MallocSizeOf;
 use sc_network::PeerId;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
-use sp_utils::mpsc::TracingUnboundedReceiver;
 
 pub use self::{
 	builder::{
@@ -59,8 +58,8 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -83,16 +82,6 @@ pub use task_manager::{SpawnTaskHandle, TaskManager};
 type RpcMiddleware<CM> = sc_rpc_server::RpcMiddleware<sc_rpc::Metadata, CM>;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
-
-/// A type that implements `MallocSizeOf` on native but not wasm.
-#[cfg(not(target_os = "unknown"))]
-pub trait MallocSizeOfWasm: MallocSizeOf {}
-#[cfg(target_os = "unknown")]
-pub trait MallocSizeOfWasm {}
-#[cfg(not(target_os = "unknown"))]
-impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
-#[cfg(target_os = "unknown")]
-impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
@@ -306,7 +295,6 @@ async fn build_network_future<
 }
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 	impl Drop for HttpServer {
@@ -341,7 +329,6 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
 /// alive.
-#[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
 	CM: CustomMiddleware<RpcMetadata>,
 	H: FnMut(
@@ -406,13 +393,13 @@ fn start_rpc_servers<
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,
-				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
 					RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "http"),
 				)?,
 				config.rpc_max_payload,
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
@@ -428,29 +415,12 @@ fn start_rpc_servers<
 				)?,
 				config.rpc_max_payload,
 				server_metrics.clone(),
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
 		.map(|s| waiting::WsServer(Some(s))),
 	)))
-}
-
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive.
-#[cfg(target_os = "unknown")]
-fn start_rpc_servers<
-	CM: CustomMiddleware<RpcMetadata>,
-	H: FnMut(
-		sc_rpc::DenyUnsafe,
-		RpcMiddleware<CM>,
-	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata, CM>, Error>,
->(
-	_: &Configuration,
-	_: H,
-	_: Option<sc_rpc_server::RpcMetrics>,
-	_: sc_rpc_server::ServerMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	Ok(Box::new(()))
 }
 
 /// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through

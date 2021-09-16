@@ -56,11 +56,6 @@ where
 		self.essence.backend_storage()
 	}
 
-	/// Get backend storage reference.
-	pub fn backend_storage_mut(&mut self) -> &mut S {
-		self.essence.backend_storage_mut()
-	}
-
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()

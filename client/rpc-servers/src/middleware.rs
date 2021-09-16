@@ -231,7 +231,6 @@ impl<M: Metadata + Sync, CM: CustomMiddleware<M>> RequestMiddleware<M> for RpcMi
 		F: Fn(jsonrpc_core::Call, M) -> X + Send + Sync,
 		X: Future<Output = Option<jsonrpc_core::Output>> + Send + 'static,
 	{
-		#[cfg(not(target_os = "unknown"))]
 		let start = std::time::Instant::now();
 		let name = call_name(&call, &self.known_rpc_method_names).to_owned();
 		let metrics = self.metrics.clone();
@@ -247,11 +246,7 @@ impl<M: Metadata + Sync, CM: CustomMiddleware<M>> RequestMiddleware<M> for RpcMi
 		Either::Left(
 			async move {
 				let r = r.await;
-				#[cfg(not(target_os = "unknown"))]
 				let micros = start.elapsed().as_micros();
-				// seems that std::time is not implemented for browser target
-				#[cfg(target_os = "unknown")]
-				let micros = 1;
 				if let Some(ref metrics) = metrics {
 					metrics
 						.calls_time
