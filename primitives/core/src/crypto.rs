@@ -617,7 +617,8 @@ ss58_address_format!(
 		(1285, "moonriver", "Moonriver, session key (*25519).")
 	BasiliskAccount =>
 		(10041, "basilisk", "Basilisk standard account (*25519).")
-
+	CESS =>
+		(10042, "CESS", "CESS standard account (*25519).")
 	// Note: 16384 and above are reserved.
 );
 
