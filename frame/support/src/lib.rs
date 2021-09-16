@@ -1693,13 +1693,9 @@ pub mod pallet_prelude {
 /// `type Foo<T> = CountedStorageaMap<...>` will store its counter at the prefix:
 /// `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
 ///
-/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
-/// specific name to use for the prefix.
-///
 /// E.g:
 /// ```ignore
 /// #[pallet::storage]
-/// #[pallet::storage_prefix = "OtherName"]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
 /// In this case the final prefix used by the map is
