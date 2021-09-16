@@ -24,6 +24,12 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
  docker build .
 ```
 
+## Extract wasm file
+1. Run the following command to extract wasm from image.
+
+```
+ bash scripts/extract-wasm.sh
+```
 ## Run tests
 
 1. [Install `Docker`](https://docs.docker.com/get-docker/).
