@@ -323,6 +323,12 @@ pub mod pallet {
 	pub type ConditionalNMap<T> =
 		StorageNMap<_, (storage::Key<Blake2_128Concat, u8>, storage::Key<Twox64Concat, u16>), u32>;
 
+	#[pallet::storage]
+	#[pallet::storage_prefix = "RenamedCountedMap"]
+	#[pallet::getter(fn counted_storage_map)]
+	pub type SomeCountedStorageMap<T> =
+		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
+
 	#[pallet::genesis_config]
 	#[derive(Default)]
 	pub struct GenesisConfig {
@@ -416,6 +422,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
+// and that a pallet without the attribute generate_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};
@@ -445,6 +452,10 @@ pub mod pallet2 {
 
 	#[pallet::storage]
 	pub type SomeValue<T: Config> = StorageValue<_, Vec<u32>>;
+
+	#[pallet::storage]
+	pub type SomeCountedStorageMap<T> =
+		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
 	pub enum Event {
@@ -899,6 +910,13 @@ fn storage_expand() {
 			pallet::ConditionalDoubleMap::<Runtime>::insert(1, 2, 3);
 			pallet::ConditionalNMap::<Runtime>::insert((1, 2), 3);
 		}
+
+		pallet::SomeCountedStorageMap::<Runtime>::insert(1, 2);
+		let mut k = [twox_128(b"Example"), twox_128(b"RenamedCountedMap")].concat();
+		k.extend(1u8.using_encoded(twox_64_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
+		let k = [twox_128(b"Example"), twox_128(b"CounterForRenamedCountedMap")].concat();
+		assert_eq!(unhashed::get::<u32>(&k), Some(1u32));
 	})
 }
 
@@ -1180,6 +1198,24 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
+					StorageEntryMetadata {
+						name: "RenamedCountedMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Twox64Concat],
+							key: meta_type::<u8>(),
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForRenamedCountedMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec!["Counter for the related counted storage map"],
+					},
 				],
 			}),
 			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
@@ -1369,6 +1405,24 @@ fn metadata() {
 						},
 						default: vec![0],
 						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "RenamedCountedMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Twox64Concat],
+							key: meta_type::<u8>(),
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForRenamedCountedMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 				],
 			}),
@@ -1577,17 +1631,47 @@ fn test_storage_info() {
 					max_size: Some(7 + 16 + 8),
 				}
 			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"RenamedCountedMap".to_vec(),
+				prefix: prefix(b"Example", b"RenamedCountedMap").to_vec(),
+				max_values: None,
+				max_size: Some(1 + 4 + 8),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CounterForRenamedCountedMap".to_vec(),
+				prefix: prefix(b"Example", b"CounterForRenamedCountedMap").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
 		],
 	);
 
 	assert_eq!(
 		Example2::storage_info(),
-		vec![StorageInfo {
-			pallet_name: b"Example2".to_vec(),
-			storage_name: b"SomeValue".to_vec(),
-			prefix: prefix(b"Example2", b"SomeValue").to_vec(),
-			max_values: Some(1),
-			max_size: None,
-		},],
+		vec![
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"SomeValue".to_vec(),
+				prefix: prefix(b"Example2", b"SomeValue").to_vec(),
+				max_values: Some(1),
+				max_size: None,
+			},
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"SomeCountedStorageMap".to_vec(),
+				prefix: prefix(b"Example2", b"SomeCountedStorageMap").to_vec(),
+				max_values: None,
+				max_size: None,
+			},
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"CounterForSomeCountedStorageMap".to_vec(),
+				prefix: prefix(b"Example2", b"CounterForSomeCountedStorageMap").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
+		],
 	);
 }
