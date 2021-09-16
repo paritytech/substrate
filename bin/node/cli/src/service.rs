@@ -594,12 +594,19 @@ pub fn new_light_base(
 		);
 	}
 
-	// TODO: (dp) implement rpsee builder here for all RPC modules available to the light client.
+	let light_deps = node_rpc::LightDeps {
+		remote_blockchain: backend.remote_blockchain(),
+		fetcher: on_demand.clone(),
+		client: client.clone(),
+		pool: transaction_pool.clone(),
+	};
+
+	let rpc_builder = Box::new(move |_, _| -> RpcModule<()> { node_rpc::create_light(light_deps) });
+
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		on_demand: Some(on_demand),
 		remote_blockchain: Some(backend.remote_blockchain()),
-		// TODO(niklasad1): implement.
-		rpc_builder: Box::new(|_, _| RpcModule::new(())),
+		rpc_builder,
 		client: client.clone(),
 		transaction_pool: transaction_pool.clone(),
 		keystore: keystore_container.sync_keystore(),

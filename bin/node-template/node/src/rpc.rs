@@ -25,7 +25,7 @@ pub struct FullDeps<C, P> {
 }
 
 /// Instantiate all full RPC extensions.
-pub fn create_full<C, P>(deps: FullDeps<C, P>) -> jsonrpc_core::IoHandler<sc_rpc::Metadata>
+pub fn create_full<C, P>(deps: FullDeps<C, P>) -> jsonrpsee::RpcModule<()>
 where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError> + 'static,
@@ -35,20 +35,21 @@ where
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 {
-	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
-	use substrate_frame_rpc_system::{FullSystem, SystemApi};
+	use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
+	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
 
-	let mut io = jsonrpc_core::IoHandler::default();
+	let mut module = jsonrpsee::RpcModule::new(());
 	let FullDeps { client, pool, deny_unsafe } = deps;
 
-	io.extend_with(SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe)));
+	let system_rpc_backend = SystemRpcBackendFull::new(client.clone(), pool.clone(), deny_unsafe);
+	module.merge(SystemRpc::new(Box::new(system_rpc_backend)).into_rpc()).unwrap();
 
-	io.extend_with(TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone())));
+	module.merge(TransactionPaymentRpc::new(client.clone()).into_rpc()).unwrap();
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed
 	// to call into the runtime.
-	// `io.extend_with(YourRpcTrait::to_delegate(YourRpcStruct::new(ReferenceToClient, ...)));`
+	// `module.merge(YourRpcTrait::into_rpc(YourRpcStruct::new(ReferenceToClient, ...))).unwrap();`
 
-	io
+	module
 }

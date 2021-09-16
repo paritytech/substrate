@@ -444,13 +444,23 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		);
 	}
 
+	let rpc_builder = {
+		let client = client.clone();
+		let pool = transaction_pool.clone();
+
+		Box::new(move |deny_unsafe, _| {
+			let deps =
+				crate::rpc::FullDeps { client: client.clone(), pool: pool.clone(), deny_unsafe };
+			crate::rpc::create_full(deps)
+		})
+	};
+
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		remote_blockchain: Some(backend.remote_blockchain()),
 		transaction_pool,
 		task_manager: &mut task_manager,
 		on_demand: Some(on_demand),
-		// TODO: (dp) implement
-		rpc_builder: Box::new(|_, _| RpcModule::new(())),
+		rpc_builder,
 		config,
 		client,
 		keystore: keystore_container.sync_keystore(),

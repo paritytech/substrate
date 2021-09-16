@@ -4251,14 +4251,30 @@ dependencies = [
 name = "node-rpc"
 version = "3.0.0-dev"
 dependencies = [
+ "jsonrpsee",
  "node-primitives",
+ "pallet-contracts-rpc",
+ "pallet-mmr-rpc",
+ "pallet-transaction-payment-rpc",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-consensus-babe",
+ "sc-consensus-babe-rpc",
  "sc-consensus-epochs",
  "sc-finality-grandpa",
+ "sc-finality-grandpa-rpc",
  "sc-rpc",
  "sc-rpc-api",
+ "sc-sync-state-rpc",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-babe",
  "sp-keystore",
+ "sp-runtime",
+ "substrate-frame-rpc-system",
 ]
 
 [[package]]
