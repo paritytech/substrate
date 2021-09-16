@@ -36,6 +36,8 @@ pub use log;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
 pub use sp_core::Void;
@@ -90,17 +92,18 @@ pub use self::{
 pub use sp_runtime::{self, print, traits::Printable, ConsensusEngineId};
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::TypeId;
 
 /// A unified log target for support operations.
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, TypeInfo)]
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, TypeInfo)]
 pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
@@ -811,13 +814,13 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use codec::{Codec, EncodeLike};
-	use frame_metadata::{
-		DecodeDifferent, DefaultByteGetter, StorageEntryMetadata, StorageEntryModifier,
-		StorageEntryType, StorageHasher, StorageMetadata,
+	use crate::metadata::{
+		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
+		StorageHasher,
 	};
+	use codec::{Codec, EncodeLike};
 	use sp_io::TestExternalities;
-	use sp_std::{marker::PhantomData, result};
+	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
 	pub struct PanicPalletInfo;
@@ -832,7 +835,7 @@ pub mod tests {
 	}
 
 	pub trait Config: 'static {
-		type BlockNumber: Codec + EncodeLike + Default;
+		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
 		type Origin;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
@@ -1150,132 +1153,109 @@ pub mod tests {
 		});
 	}
 
-	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: DecodeDifferent::Encode("Test"),
-		entries: DecodeDifferent::Encode(&[
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("Data"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Twox64Concat,
-					key: DecodeDifferent::Encode("u32"),
-					value: DecodeDifferent::Encode("u64"),
-					unused: false,
+	fn expected_metadata() -> PalletStorageMetadata {
+		PalletStorageMetadata {
+			prefix: "Test",
+			entries: vec![
+				StorageEntryMetadata {
+					name: "Data",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Twox64Concat],
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<u64>(),
+					},
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(&__GetByteStructData(
-					PhantomData::<Test>,
-				))),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("OptionLinkedMap"),
-				modifier: StorageEntryModifier::Optional,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Blake2_128Concat,
-					key: DecodeDifferent::Encode("u32"),
-					value: DecodeDifferent::Encode("u32"),
-					unused: false,
+				StorageEntryMetadata {
+					name: "OptionLinkedMap",
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Blake2_128Concat],
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<u32>(),
+					},
+					default: vec![0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(
-					&__GetByteStructOptionLinkedMap(PhantomData::<Test>),
-				)),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("GenericData"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Identity,
-					key: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					unused: false,
+				StorageEntryMetadata {
+					name: "GenericData",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Identity],
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<u32>(),
+					},
+					default: vec![0, 0, 0, 0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(&__GetByteStructGenericData(
-					PhantomData::<Test>,
-				))),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("GenericData2"),
-				modifier: StorageEntryModifier::Optional,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Blake2_128Concat,
-					key: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					unused: false,
+				StorageEntryMetadata {
+					name: "GenericData2",
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Blake2_128Concat],
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<u32>(),
+					},
+					default: vec![0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(&__GetByteStructGenericData2(
-					PhantomData::<Test>,
-				))),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("DataDM"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Twox64Concat,
-					key1: DecodeDifferent::Encode("u32"),
-					key2: DecodeDifferent::Encode("u32"),
-					value: DecodeDifferent::Encode("u64"),
-					key2_hasher: StorageHasher::Blake2_128Concat,
+				StorageEntryMetadata {
+					name: "DataDM",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+						key: scale_info::meta_type::<(u32, u32)>(),
+						value: scale_info::meta_type::<u64>(),
+					},
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(&__GetByteStructDataDM(
-					PhantomData::<Test>,
-				))),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("GenericDataDM"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_128Concat,
-					key1: DecodeDifferent::Encode("T::BlockNumber"),
-					key2: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: StorageHasher::Identity,
+				StorageEntryMetadata {
+					name: "GenericDataDM",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Identity],
+						key: scale_info::meta_type::<(u32, u32)>(),
+						value: scale_info::meta_type::<u32>(),
+					},
+					default: vec![0, 0, 0, 0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(&__GetByteStructGenericDataDM(
-					PhantomData::<Test>,
-				))),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("GenericData2DM"),
-				modifier: StorageEntryModifier::Optional,
-				ty: StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_128Concat,
-					key1: DecodeDifferent::Encode("T::BlockNumber"),
-					key2: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: StorageHasher::Twox64Concat,
+				StorageEntryMetadata {
+					name: "GenericData2DM",
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+						key: scale_info::meta_type::<(u32, u32)>(),
+						value: scale_info::meta_type::<u32>(),
+					},
+					default: vec![0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(
-					&__GetByteStructGenericData2DM(PhantomData::<Test>),
-				)),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("AppendableDM"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_128Concat,
-					key1: DecodeDifferent::Encode("u32"),
-					key2: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("Vec<u32>"),
-					key2_hasher: StorageHasher::Blake2_128Concat,
+				StorageEntryMetadata {
+					name: "AppendableDM",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map {
+						hashers: vec![
+							StorageHasher::Blake2_128Concat,
+							StorageHasher::Blake2_128Concat,
+						],
+						key: scale_info::meta_type::<(u32, u32)>(),
+						value: scale_info::meta_type::<Vec<u32>>(),
+					},
+					default: vec![0],
+					docs: vec![],
 				},
-				default: DecodeDifferent::Encode(DefaultByteGetter(
-					&__GetByteStructGenericData2DM(PhantomData::<Test>),
-				)),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-		]),
-	};
+			],
+		}
+	}
 
 	#[test]
 	fn store_metadata() {
 		let metadata = Module::<Test>::storage_metadata();
-		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+		pretty_assertions::assert_eq!(expected_metadata(), metadata);
 	}
 
 	parameter_types! {
@@ -1470,7 +1450,7 @@ pub mod pallet_prelude {
 /// It implements on pallet:
 /// * [`traits::GetStorageVersion`]
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
-/// * `ModuleErrorMetadata`: using error declared or no metadata.
+/// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
 /// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
@@ -1623,9 +1603,6 @@ pub mod pallet_prelude {
 /// The macro implements `From<Error<T>>` for `&'static str`.
 /// The macro implements `From<Error<T>>` for `DispatchError`.
 ///
-/// The macro implements `ModuleErrorMetadata` on `Pallet` defining the `ErrorMetadata` of the
-/// pallet.
-///
 /// # Event: `#[pallet::event]` optional
 ///
 /// Allow to define pallet events, pallet events are stored in the block when they deposited
@@ -1634,7 +1611,6 @@ pub mod pallet_prelude {
 /// Item is defined as:
 /// ```ignore
 /// #[pallet::event]
-/// #[pallet::metadata($SomeType = "$Metadata", $SomeOtherType = "$Metadata", ..)] // Optional
 /// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
 /// pub enum Event<$some_generic> $optional_where_clause {
 /// 	/// Some doc
@@ -1648,24 +1624,6 @@ pub mod pallet_prelude {
 /// Each field must implement `Clone`, `Eq`, `PartialEq`, `Encode`, `Decode`, and `Debug` (on
 /// std only).
 /// For ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
-///
-/// Variant documentations and field types are put into metadata.
-/// The attribute `#[pallet::metadata(..)]` allows to specify the metadata to put for some
-/// types.
-///
-/// The metadata of a type is defined by:
-/// * if matching a type in `#[pallet::metadata(..)]`, then the corresponding metadata.
-/// * otherwise the type stringified.
-///
-/// E.g.:
-/// ```ignore
-/// #[pallet::event]
-/// #[pallet::metadata(u32 = "SpecialU32")]
-/// pub enum Event<T: Config> {
-/// 	Proposed(u32, T::AccountId),
-/// }
-/// ```
-/// will write in event variant metadata `"SpecialU32"` and `"T::AccountId"`.
 ///
 /// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generate a helper
 /// function on `Pallet` to deposit event.
@@ -2027,8 +1985,6 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// The macro generates event metadata, and derive Clone, Debug, Eq, PartialEq and Codec
 /// 	#[pallet::event]
-/// 	// Additional argument to specify the metadata to use for given type.
-/// 	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 /// 	// Generate a funciton on Pallet to deposit an event.
 /// 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 /// 	pub enum Event<T: Config> {
@@ -2192,7 +2148,6 @@ pub mod pallet_prelude {
 /// 	}
 ///
 /// 	#[pallet::event]
-/// 	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 /// 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 /// 	pub enum Event<T: Config<I>, I: 'static = ()> {
 /// 		/// doc comment put in metadata
@@ -2342,8 +2297,7 @@ pub mod pallet_prelude {
 /// 7. **migrate event**:
 /// 	rewrite as a simple enum under with the attribute `#[pallet::event]`,
 /// 	use `#[pallet::generate_deposit($vis fn deposit_event)]` to generate deposit_event,
-/// 	use `#[pallet::metadata(...)]` to configure the metadata for types in order not to break
-/// them. 8. **migrate error**: rewrite it with attribute `#[pallet::error]`.
+/// 8. **migrate error**: rewrite it with attribute `#[pallet::error]`.
 /// 9. **migrate storage**:
 /// 	decl_storage provide an upgrade template (see 3.). All storages, genesis config, genesis
 /// 	build and default implementation of genesis config can be taken from it directly.
