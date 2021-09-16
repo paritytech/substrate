@@ -86,6 +86,10 @@
 //! ## Commands
 //!
 //! See [`Command`] for more info.
+//! 
+//! ## Examples
+//! 
+//! TODO
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
