@@ -167,6 +167,7 @@ use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
+	pallet_prelude::DispatchResult,
 	traits::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, ExistenceRequirement,
@@ -183,7 +184,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
+	ArithmeticError, DispatchError, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -419,7 +420,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			keep_alive: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			use fungible::Inspect;
 			let transactor = ensure_signed(origin)?;
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
@@ -431,7 +432,22 @@ pub mod pallet {
 				reducible_balance,
 				keep_alive.into(),
 			)?;
-			Ok(().into())
+			Ok(())
+		}
+
+		/// Unreserve some balance from a user by force.
+		///
+		/// Can only be called by ROOT.
+		#[pallet::weight(T::WeightInfo::force_unreserve())]
+		pub fn force_unreserve(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+			amount: T::Balance,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let _leftover = <Self as ReservableCurrency<_>>::unreserve(&who, amount);
+			Ok(())
 		}
 	}
 
