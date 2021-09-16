@@ -19,11 +19,11 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata::{StorageEntryModifier, StorageEntryType},
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
-			StorageEntryMetadata, TupleToEncodedIter,
+			StorageEntryMetadataBuilder, TupleToEncodedIter,
 		},
 		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
 	},
@@ -440,7 +440,7 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadata
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
 	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
@@ -450,19 +450,20 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const NAME: &'static str = Prefix::STORAGE_PREFIX;
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let entry = StorageEntryMetadata {
+			name: Prefix::STORAGE_PREFIX,
+			modifier: QueryKind::METADATA,
+			ty: StorageEntryType::Map {
+				key: scale_info::meta_type::<Key::Key>(),
+				hashers: Key::HASHER_METADATA.iter().cloned().collect(),
+				value: scale_info::meta_type::<Value>(),
+			},
+			default: OnEmpty::get().encode(),
+			docs,
+		};
 
-	fn ty() -> StorageEntryType {
-		StorageEntryType::Map {
-			key: scale_info::meta_type::<Key::Key>(),
-			hashers: Key::HASHER_METADATA.iter().cloned().collect(),
-			value: scale_info::meta_type::<Value>(),
-		}
-	}
-
-	fn default() -> Vec<u8> {
-		OnEmpty::get().encode()
+		entries.push(entry);
 	}
 }
 
@@ -516,8 +517,8 @@ where
 mod test {
 	use super::*;
 	use crate::{
-		hash::*,
-		metadata::StorageEntryModifier,
+		hash::{StorageHasher as _, *},
+		metadata::{StorageEntryModifier, StorageHasher},
 		storage::types::{Key, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
@@ -684,11 +685,36 @@ mod test {
 			A::translate::<u8, _>(|k1, v| Some((k1 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::NAME, "Foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::default(), 98u32.encode());
-			assert_eq!(A::default(), Option::<u32>::None.encode());
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			assert_eq!(
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 98u32.encode(),
+						docs: vec![],
+					}
+				]
+			);
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3,)), None);
@@ -852,11 +878,42 @@ mod test {
 			A::translate::<u8, _>(|(k1, k2), v| Some((k1 * k2 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 1600), ((3, 30), 900)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::NAME, "Foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::default(), 98u32.encode());
-			assert_eq!(A::default(), Option::<u32>::None.encode());
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			assert_eq!(
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 98u32.encode(),
+						docs: vec![],
+					}
+				]
+			);
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30)), None);
@@ -1042,11 +1099,44 @@ mod test {
 			});
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 4), ((3, 30, 300), 3)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::NAME, "Foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::default(), 98u32.encode());
-			assert_eq!(A::default(), Option::<u32>::None.encode());
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			assert_eq!(
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u16, u16)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u16, u16)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 98u32.encode(),
+						docs: vec![],
+					}
+				]
+			);
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30, 300)), None);

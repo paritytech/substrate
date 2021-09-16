@@ -19,27 +19,68 @@ use crate::pallet::{
 	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
 	Def,
 };
-use std::collections::HashSet;
+use std::collections::HashMap;
 
-/// Generate the prefix_ident related the the storage.
+/// Generate the prefix_ident related to the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
 fn prefix_ident(storage: &StorageDef) -> syn::Ident {
 	let storage_ident = &storage.ident;
 	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", storage_ident), storage_ident.span())
 }
 
+/// Generate the counter_prefix_ident related to the storage.
+/// counter_prefix_ident is used for the prefix struct to be given to counted storage map.
+fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
+	syn::Ident::new(
+		&format!("_GeneratedCounterPrefixForStorage{}", storage_ident),
+		storage_ident.span(),
+	)
+}
+
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
+}
+
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an
 /// alternative storage prefix using the #[pallet::storage_prefix] syntax, and we need to ensure
 /// that the prefix specified by the user is not a duplicate of an existing one.
-fn check_prefix_duplicates(storage_def: &StorageDef, set: &mut HashSet<String>) -> syn::Result<()> {
+fn check_prefix_duplicates(
+	storage_def: &StorageDef,
+	// A hashmap of all already used prefix and their associated error if duplication
+	used_prefixes: &mut HashMap<String, syn::Error>,
+) -> syn::Result<()> {
 	let prefix = storage_def.prefix();
+	let dup_err = syn::Error::new(
+		storage_def.prefix_span(),
+		format!("Duplicate storage prefixes found for `{}`", prefix),
+	);
 
-	if !set.insert(prefix.clone()) {
-		let err = syn::Error::new(
-			storage_def.prefix_span(),
-			format!("Duplicate storage prefixes found for `{}`", prefix),
-		);
+	if let Some(other_dup_err) = used_prefixes.insert(prefix.clone(), dup_err.clone()) {
+		let mut err = dup_err;
+		err.combine(other_dup_err);
 		return Err(err)
+	}
+
+	if let Metadata::CountedMap { .. } = storage_def.metadata {
+		let counter_prefix = counter_prefix(&prefix);
+		let counter_dup_err = syn::Error::new(
+			storage_def.prefix_span(),
+			format!(
+				"Duplicate storage prefixes found for `{}`, used for counter associated to \
+				counted storage map",
+				counter_prefix,
+			),
+		);
+
+		if let Some(other_dup_err) =
+			used_prefixes.insert(counter_prefix.clone(), counter_dup_err.clone())
+		{
+			let mut err = counter_dup_err;
+			err.combine(other_dup_err);
+			return Err(err)
+		}
 	}
 
 	Ok(())
@@ -51,11 +92,8 @@ fn check_prefix_duplicates(storage_def: &StorageDef, set: &mut HashSet<String>) 
 /// * Add `#[allow(type_alias_bounds)]`
 pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 	let frame_support = &def.frame_support;
-	let mut prefix_set = HashSet::new();
 
 	for storage_def in def.storages.iter_mut() {
-		check_prefix_duplicates(storage_def, &mut prefix_set)?;
-
 		let item = &mut def.item.content.as_mut().expect("Checked by def").1[storage_def.index];
 
 		let typ_item = match item {
@@ -99,6 +137,24 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 				},
 				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
+					args.args.push(syn::GenericArgument::Type(hasher));
+					args.args.push(syn::GenericArgument::Type(key));
+					args.args.push(syn::GenericArgument::Type(value));
+					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
+					args.args.push(syn::GenericArgument::Type(query_kind));
+					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
+					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
+				},
+				StorageGenerics::CountedMap {
+					hasher,
+					key,
+					value,
+					query_kind,
+					on_empty,
+					max_values,
+				} => {
 					args.args.push(syn::GenericArgument::Type(hasher));
 					args.args.push(syn::GenericArgument::Type(key));
 					args.args.push(syn::GenericArgument::Type(value));
@@ -162,11 +218,22 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		return e.into_compile_error().into()
 	}
 
+	// Check for duplicate prefixes
+	let mut prefix_set = HashMap::new();
+	let mut errors = def
+		.storages
+		.iter()
+		.filter_map(|storage_def| check_prefix_duplicates(storage_def, &mut prefix_set).err());
+	if let Some(mut final_error) = errors.next() {
+		errors.for_each(|error| final_error.combine(error));
+		return final_error.into_compile_error()
+	}
+
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
 
-	let entries = def.storages.iter().map(|storage| {
+	let entries_builder = def.storages.iter().map(|storage| {
 		let docs = &storage.docs;
 
 		let ident = &storage.ident;
@@ -176,14 +243,14 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		let cfg_attrs = &storage.cfg_attrs;
 
 		quote::quote_spanned!(storage.attr_span =>
-			#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
-				name: <#full_ident as #frame_support::storage::StorageEntryMetadata>::NAME,
-				modifier: <#full_ident as #frame_support::storage::StorageEntryMetadata>::MODIFIER,
-				ty: <#full_ident as #frame_support::storage::StorageEntryMetadata>::ty(),
-				default: <#full_ident as #frame_support::storage::StorageEntryMetadata>::default(),
-				docs: #frame_support::sp_std::vec![
-					#( #docs, )*
-				],
+			#(#cfg_attrs)*
+			{
+				<#full_ident as #frame_support::storage::StorageEntryMetadataBuilder>::build_metadata(
+					#frame_support::sp_std::vec![
+						#( #docs, )*
+					],
+					&mut entries,
+				);
 			}
 		)
 	});
@@ -242,6 +309,27 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 								<
 									#full_ident as #frame_support::storage::StorageMap<#key, #value>
 								>::get(k)
+							}
+						}
+					)
+				},
+				Metadata::CountedMap { key, value } => {
+					let query = match storage.query_kind.as_ref().expect("Checked by def") {
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
+						QueryKind::ValueQuery => quote::quote!(#value),
+					};
+					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
+						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
+							#( #docs )*
+							pub fn #getter<KArg>(k: KArg) -> #query where
+								KArg: #frame_support::codec::EncodeLike<#key>,
+							{
+								// NOTE: we can't use any trait here because CountedStorageMap
+								// doesn't implement any.
+								<#full_ident>::get(k)
 							}
 						}
 					)
@@ -311,7 +399,44 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage_def.cfg_attrs;
 
+		let maybe_counter = if let Metadata::CountedMap { .. } = storage_def.metadata {
+			let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
+			let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
+
+			quote::quote_spanned!(storage_def.attr_span =>
+				#(#cfg_attrs)*
+				#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
+					core::marker::PhantomData<(#type_use_gen,)>
+				);
+				#(#cfg_attrs)*
+				impl<#type_impl_gen> #frame_support::traits::StorageInstance
+					for #counter_prefix_struct_ident<#type_use_gen>
+					#config_where_clause
+				{
+					fn pallet_prefix() -> &'static str {
+						<
+							<T as #frame_system::Config>::PalletInfo
+							as #frame_support::traits::PalletInfo
+						>::name::<Pallet<#type_use_gen>>()
+							.expect("Every active pallet has a name in the runtime; qed")
+					}
+					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
+				}
+				#(#cfg_attrs)*
+				impl<#type_impl_gen> #frame_support::storage::types::CountedStorageMapInstance
+					for #prefix_struct_ident<#type_use_gen>
+					#config_where_clause
+				{
+					type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
+				}
+			)
+		} else {
+			proc_macro2::TokenStream::default()
+		};
+
 		quote::quote_spanned!(storage_def.attr_span =>
+			#maybe_counter
+
 			#(#cfg_attrs)*
 			#prefix_struct_vis struct #prefix_struct_ident<#type_use_gen>(
 				core::marker::PhantomData<(#type_use_gen,)>
@@ -351,9 +476,12 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						#frame_support::traits::PalletInfo
 					>::name::<#pallet_ident<#type_use_gen>>()
 						.expect("Every active pallet has a name in the runtime; qed"),
-					entries: #frame_support::sp_std::vec![
-						#( #entries, )*
-					],
+					entries: {
+						#[allow(unused_mut)]
+						let mut entries = #frame_support::sp_std::vec![];
+						#( #entries_builder )*
+						entries
+					},
 				}
 			}
 		}
