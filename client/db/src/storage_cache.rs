@@ -249,7 +249,7 @@ pub fn new_shared_cache<B: BlockT>(
 ) -> SharedCache<B> {
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
 	Arc::new(RwLock::new(Cache {
-		active: shared_cache_size != 0,
+		active: true,
 		lru_storage: LRUMap::new(shared_cache_size * top / child_ratio.1),
 		lru_hashes: LRUMap::new(FIX_LRU_HASH_SIZE),
 		lru_child_storage: LRUMap::new(
