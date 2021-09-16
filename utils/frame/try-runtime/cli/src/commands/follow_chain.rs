@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crate::{
 	build_executor, ensure_matching_spec_name, extract_code, full_extensions, local_spec_name,
 	parse, state_machine_call, SharedParams, LOG_TARGET,
@@ -14,9 +31,10 @@ use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
+/// Configurations of the [`Command::FollowChain`].
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct FollowChainCmd {
-	/// The url to connect to
+	/// The url to connect to.
 	#[structopt(
 			short,
 			long,
@@ -62,7 +80,6 @@ where
 	while let Some(header) = subscription.next().await.unwrap() {
 		let hash = header.hash();
 		let number = header.number();
-		let parent = header.parent_hash();
 
 		let block = rpc_api::get_block::<Block, _>(&command.uri, hash).await.unwrap();
 
@@ -108,7 +125,6 @@ where
 			block.encode().as_ref(),
 			full_extensions(),
 		)?;
-		// .set_parent_hash(*parent)
 
 		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;
