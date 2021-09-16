@@ -9523,21 +9523,14 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "ss58-registry"
 version = "0.0.1"
-source = "git+https://github.com/paritytech/ss58-registry.git?branch=main#42cbe266388405fbf6971148328feaf9c13a1f5e"
+source = "git+https://github.com/paritytech/ss58-registry.git?branch=vNext#a8b5944eaded74b496399d1bbbb3d87d90bd5dad"
 dependencies = [
- "sp-debug-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ss58-registry-derive",
-]
-
-[[package]]
-name = "ss58-registry-derive"
-version = "0.1.0"
-source = "git+https://github.com/paritytech/ss58-registry.git?branch=main#42cbe266388405fbf6971148328feaf9c13a1f5e"
-dependencies = [
+ "Inflector",
  "proc-macro2",
  "quote",
  "serde",
  "serde_json",
+ "sp-debug-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

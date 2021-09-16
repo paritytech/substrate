@@ -771,26 +771,26 @@ mod test {
 
 	#[test]
 	fn ss58check_format_check_works() {
-		use crate::crypto::Ss58AddressFormat;
+		use crate::crypto::KnownSs58AddressFormat;
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let format = Ss58AddressFormat::Reserved46;
+		let format = KnownSs58AddressFormat::Reserved46Account.into();
 		let s = public.to_ss58check_with_version(format);
 		assert_eq!(Public::from_ss58check_with_version(&s), Err(PublicError::FormatNotAllowed));
 	}
 
 	#[test]
 	fn ss58check_full_roundtrip_works() {
-		use crate::crypto::Ss58AddressFormat;
+		use crate::crypto::{KnownSs58AddressFormat, Ss58AddressFormat};
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let format = Ss58AddressFormat::PolkadotAccount;
+		let format = KnownSs58AddressFormat::PolkadotAccount.into();
 		let s = public.to_ss58check_with_version(format);
 		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
 		assert_eq!(k, public);
 		assert_eq!(f, format);
 
-		let format = Ss58AddressFormat::Custom(64);
+		let format = Ss58AddressFormat::custom(64);
 		let s = public.to_ss58check_with_version(format);
 		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
 		assert_eq!(k, public);
@@ -807,7 +807,7 @@ mod test {
 			let default_format = crate::crypto::ss58_address_format();
 			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
 
-			set_default_ss58_version(Ss58AddressFormat::Custom(200));
+			set_default_ss58_version(Ss58AddressFormat::custom(200));
 			// custom addr encoded by version 200
 			let addr = "4pbsSkWcBaYoFHrKJZp5fDVUKbqSYD9dhZZGvpp3vQ5ysVs5ybV";
 			Public::from_ss58check(&addr).unwrap();
