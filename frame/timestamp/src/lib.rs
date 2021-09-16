@@ -189,8 +189,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight((
 			T::WeightInfo::set(),
-			DispatchClass::Mandatory,
-			Pays::No,
+			DispatchClass::Mandatory
 		))]
 		pub fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResult {
 			ensure_none(origin)?;
