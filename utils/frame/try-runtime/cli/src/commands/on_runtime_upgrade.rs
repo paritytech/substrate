@@ -1,13 +1,14 @@
 use std::{fmt::Debug, str::FromStr};
 
 use parity_scale_codec::Decode;
-use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
+use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
-use sp_core::twox_128;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use sp_state_machine::StateMachine;
 
-use crate::{check_spec_name, extract_code, SharedParams, State, LOG_TARGET};
+use crate::{
+	build_executor, ensure_matching_spec_name, extract_code, local_spec_name, state_machine_call,
+	SharedParams, State, LOG_TARGET,
+};
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OnRuntimeUpgradeCmd {
@@ -29,45 +30,28 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
-	let wasm_method = shared.wasm_method;
+	let executor = build_executor(&shared, &config);
 	let execution = shared.execution;
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
-
-	let mut changes = Default::default();
-	let max_runtime_instances = config.max_runtime_instances;
-	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-		wasm_method.into(),
-		heap_pages,
-		max_runtime_instances,
-	);
-
-	if let Some(uri) = command.state.live_uri() {
-		check_spec_name::<Block>(uri, config.chain_spec.name().to_string()).await;
-	}
 
 	let ext = {
 		let builder = command.state.builder::<Block>()?;
-		let (code_key, code) = extract_code(config.chain_spec)?;
-		builder
-			.inject_key_value(&[(code_key, code)])
-			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat())
-			.build()
-			.await?
+		let (code_key, code) = extract_code(&config.chain_spec)?;
+		builder.inject_key_value(&[(code_key, code)]).build().await?
 	};
 
-	let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
-		&ext.backend,
-		None,
-		&mut changes,
+	if let Some(uri) = command.state.live_uri() {
+		let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
+		ensure_matching_spec_name::<Block>(uri, expected_spec_name).await;
+	}
+
+	let (_, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+		&ext,
 		&executor,
+		execution,
 		"TryRuntime_on_runtime_upgrade",
 		&[],
-		ext.extensions,
-		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
-		sp_core::testing::TaskExecutor::new(),
-	)
-	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))?;
+		Default::default(), // we don't really need any extensions here.
+	)?;
 
 	let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
 		.map_err(|e| format!("failed to decode output: {:?}", e))?;

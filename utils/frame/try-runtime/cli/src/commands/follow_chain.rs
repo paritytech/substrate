@@ -1,25 +1,18 @@
-use crate::{check_spec_name, extract_code, parse, SharedParams, LOG_TARGET};
+use crate::{
+	build_executor, ensure_matching_spec_name, extract_code, full_extensions, local_spec_name,
+	parse, state_machine_call, SharedParams, LOG_TARGET,
+};
 use jsonrpsee_ws_client::{
 	types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription},
 	WsClientBuilder,
 };
 use parity_scale_codec::Decode;
 use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
-use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
+use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
-use sp_core::{
-	offchain::{
-		testing::{TestOffchainExt, TestTransactionPoolExt},
-		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
-	},
-	testing::TaskExecutor,
-	traits::TaskExecutorExt,
-	H256,
-};
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use sp_state_machine::StateMachine;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{fmt::Debug, str::FromStr};
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct FollowChainCmd {
@@ -46,8 +39,6 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
-	check_spec_name::<Block>(command.uri.clone(), config.chain_spec.name().to_string()).await;
-
 	let mut maybe_state_ext = None;
 
 	let sub = "chain_subscribeFinalizedHeads";
@@ -64,7 +55,9 @@ where
 	let mut subscription: Subscription<Block::Header> =
 		client.subscribe(&sub, JsonRpcParams::NoParams, &unsub).await.unwrap();
 
-	let (code_key, code) = extract_code(config.chain_spec)?;
+	let (code_key, code) = extract_code(&config.chain_spec)?;
+	let executor = build_executor::<ExecDispatch>(&shared, &config);
+	let execution = shared.execution;
 
 	while let Some(header) = subscription.next().await.unwrap() {
 		let hash = header.hash();
@@ -97,50 +90,25 @@ where
 				number,
 				new_ext.as_backend().root()
 			);
+
+			let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&new_ext, &executor);
+			ensure_matching_spec_name::<Block>(command.uri.clone(), expected_spec_name).await;
+
 			maybe_state_ext = Some(new_ext);
 		}
 
 		let state_ext =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let wasm_method = shared.wasm_method;
-		let execution = shared.execution;
-		let heap_pages = shared.heap_pages.or(config.default_heap_pages);
-
-		let mut changes = Default::default();
-		let max_runtime_instances = config.max_runtime_instances;
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			wasm_method.into(),
-			heap_pages,
-			max_runtime_instances,
-		);
-
-		let mut extensions = sp_externalities::Extensions::default();
-		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
-		let (offchain, _offchain_state) = TestOffchainExt::new();
-		let (pool, _pool_state) = TestTransactionPoolExt::new();
-		extensions.register(OffchainDbExt::new(offchain.clone()));
-		extensions.register(OffchainWorkerExt::new(offchain));
-		extensions.register(KeystoreExt(Arc::new(KeyStore::new())));
-		extensions.register(TransactionPoolExt::new(pool));
-
-		let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
-			&state_ext.backend,
-			None,
-			&mut changes,
+		let (mut changes, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+			&state_ext,
 			&executor,
+			execution,
 			"TryRuntime_execute_block_no_state_root_check",
 			block.encode().as_ref(),
-			extensions,
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state_ext.backend)
-				.runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
-		)
-		.set_parent_hash(*parent)
-		.execute(execution.into())
-		.map_err(|e| {
-			format!("failed to execute 'TryRuntime_execute_block_no_state_root_check': {:?}", e)
-		})?;
+			full_extensions(),
+		)?;
+		// .set_parent_hash(*parent)
 
 		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;

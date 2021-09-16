@@ -237,6 +237,41 @@ where
 		frame_system::Pallet::<System>::block_weight().total()
 	}
 
+	// #[cfg(feature = "try-runtime")]
+	// fn execute_extrinsics_with_book_keeping_no_signature_check(
+	// 	extrinsics: Vec<Block::Extrinsic>,
+	// 	block_number: NumberFor<Block>,
+	// ) {
+	// 	extrinsics.into_iter().for_each(|uxt| {
+	// 		let encoded = uxt.encode();
+	// 		let encoded_len = encoded.len();
+
+	// 		// skip signature verification
+	// 		let xt = Self::blind_check(uxt)?;
+
+	// 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
+	// 		// executed to prevent it from leaking in storage since at this point, it will either
+	// 		// execute or panic (and revert storage changes).
+	// 		<frame_system::Pallet<System>>::note_extrinsic(encoded);
+
+	// 		// AUDIT: Under no circumstances may this function panic from here onwards.
+
+	// 		// Decode parameters and dispatch
+	// 		let dispatch_info = xt.get_dispatch_info();
+	// 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)
+	// 			.map(|_| ())
+	// 			.map_err(|e| e.error)
+	// 			.unwrap();
+
+	// 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
+	// 	});
+
+	// 	// post-extrinsics book-keeping
+	// 	<frame_system::Pallet<System>>::note_finished_extrinsics();
+
+	// 	Self::idle_and_finalize_hook(block_number);
+	// }
+
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.

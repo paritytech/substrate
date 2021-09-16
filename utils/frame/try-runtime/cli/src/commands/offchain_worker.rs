@@ -1,24 +1,18 @@
-use crate::{check_spec_name, extract_code, hash_of, parse, SharedParams, State, LOG_TARGET};
+use crate::{
+	build_executor, ensure_matching_spec_name, extract_code, full_extensions, hash_of,
+	local_spec_name, parse, state_machine_call, SharedParams, State, LOG_TARGET,
+};
 use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
-use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
+use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
-use sp_core::{
-	offchain::{
-		testing::{TestOffchainExt, TestTransactionPoolExt},
-		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
-	},
-	storage::well_known_keys,
-	testing::TaskExecutor,
-	twox_128,
-};
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use sp_state_machine::{backend::BackendRuntimeCode, StateMachine};
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{fmt::Debug, str::FromStr};
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OffchainWorkerCmd {
+	/// Overwrite the wasm code in state or not.
 	#[structopt(long)]
 	overwrite_wasm_code: bool,
 
@@ -61,9 +55,9 @@ impl OffchainWorkerCmd {
 				log::warn!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
 				hash_of::<Block>(&header_at)
 			},
-			(None, State::Live { at, .. }) => hash_of::<Block>(&at),
-			(None, State::Snap { .. }) => {
-				panic!("either `--header-at` must be provided, or state must be `live`");
+			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
+			_ => {
+				panic!("either `--header-at` must be provided, or state must be `live` with a proper `--at`");
 			},
 		}
 	}
@@ -101,17 +95,8 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
-	let wasm_method = shared.wasm_method;
+	let executor = build_executor(&shared, &config);
 	let execution = shared.execution;
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
-
-	let mut changes = Default::default();
-	let max_runtime_instances = config.max_runtime_instances;
-	let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-		wasm_method.into(),
-		heap_pages,
-		max_runtime_instances,
-	);
 
 	let header_at = command.header_at::<Block>()?;
 	let header_uri = command.header_uri::<Block>();
@@ -124,48 +109,30 @@ where
 		header.number()
 	);
 
-	check_spec_name::<Block>(header_uri, config.chain_spec.name().to_string()).await;
-
 	let ext = {
-		let builder = command
-			.state
-			.builder::<Block>()?
-			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
+		let builder = command.state.builder::<Block>()?;
 
 		let builder = if command.overwrite_wasm_code {
-			let (code_key, code) = extract_code(config.chain_spec)?;
+			let (code_key, code) = extract_code(&config.chain_spec)?;
 			builder.inject_key_value(&[(code_key, code)])
 		} else {
 			builder.inject_hashed_key(well_known_keys::CODE)
 		};
 
-		let mut ext = builder.build().await?;
-
-		// register externality extensions in order to provide host interface for OCW to the
-		// runtime.
-		let (offchain, _offchain_state) = TestOffchainExt::new();
-		let (pool, _pool_state) = TestTransactionPoolExt::new();
-		ext.register_extension(OffchainDbExt::new(offchain.clone()));
-		ext.register_extension(OffchainWorkerExt::new(offchain));
-		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
-		ext.register_extension(TransactionPoolExt::new(pool));
-
-		ext
+		builder.build().await?
 	};
 
-	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
-		&ext.backend,
-		None,
-		&mut changes,
+	let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
+	ensure_matching_spec_name::<Block>(header_uri, expected_spec_name).await;
+
+	let _ = state_machine_call::<Block, ExecDispatch>(
+		&ext,
 		&executor,
+		execution,
 		"OffchainWorkerApi_offchain_worker",
 		header.encode().as_ref(),
-		ext.extensions,
-		&BackendRuntimeCode::new(&ext.backend).runtime_code()?,
-		TaskExecutor::new(),
-	)
-	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker':  {:?}", e))?;
+		full_extensions(),
+	)?;
 
 	log::info!(target: LOG_TARGET, "OffchainWorkerApi_offchain_worker executed without errors.");
 
