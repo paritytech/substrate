@@ -742,6 +742,7 @@ publish-rustdoc:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     # Manually add branches based on $RUSTDOCS_DEPLOY_REFS
     # Maybe there is a smarter way?
     - if: $CI_COMMIT_REF_NAME == "master"
