@@ -32,7 +32,7 @@ frame_benchmarking::benchmarks! {
 		//   least 2 other nodes. Thus _R_ will have both its `prev` and `next` nodes updated when
 		//   it is removed. (3 W/R)
 		// - The destination bag is not empty, thus we need to update the `next` pointer of the last
-		//   node in the destination  in addition to the work we do otherwise. (2 W/R)
+		//   node in the destination in addition to the work we do otherwise. (2 W/R)
 
 		// clear any pre-existing storage.
 		List::<T>::clear(None);
