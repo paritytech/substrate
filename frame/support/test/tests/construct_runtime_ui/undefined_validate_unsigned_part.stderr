@@ -39,6 +39,30 @@ help: consider importing this enum
 1  | use frame_system::RawOrigin;
    |
 
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/undefined_validate_unsigned_part.rs:22:1
+   |
+22 | / construct_runtime! {
+23 | |     pub enum Runtime where
+24 | |         Block = Block,
+25 | |         NodeBlock = Block,
+...  |
+30 | |     }
+31 | | }
+   | |_^ not found in `system`
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these items
+   |
+1  | use crate::pallet::Pallet;
+   |
+1  | use frame_support_test::Pallet;
+   |
+1  | use frame_system::Pallet;
+   |
+1  | use test_pallet::Pallet;
+   |
+
 error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
   --> $DIR/undefined_validate_unsigned_part.rs:20:6
    |

@@ -94,6 +94,7 @@ use frame_support::{
 	},
 	Parameter,
 };
+use scale_info::TypeInfo;
 use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
 
 #[cfg(feature = "std")]
@@ -138,14 +139,14 @@ pub type ConsumedWeight = PerDispatchClass<Weight>;
 pub use pallet::*;
 
 /// Do something when we should be setting the code.
-pub trait SetCode {
+pub trait SetCode<T: Config> {
 	/// Set the code to the given blob.
 	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
-impl SetCode for () {
+impl<T: Config> SetCode<T> for () {
 	fn set_code(code: Vec<u8>) -> DispatchResult {
-		storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
 	}
 }
@@ -204,7 +205,8 @@ pub mod pallet {
 			+ sp_std::hash::Hash
 			+ sp_std::str::FromStr
 			+ MaybeMallocSizeOf
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// The output of the `Hashing` function.
 		type Hash: Parameter
@@ -224,7 +226,7 @@ pub mod pallet {
 			+ MaxEncodedLen;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
-		type Hashing: Hash<Output = Self::Hash>;
+		type Hashing: Hash<Output = Self::Hash> + TypeInfo;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter
@@ -276,7 +278,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default;
+		type AccountData: Member + FullCodec + Clone + Default + TypeInfo;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -296,9 +298,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type SS58Prefix: Get<u16>;
 
-		/// What to do if the user wants the code set to something. Just use `()` unless you are in
-		/// cumulus.
-		type OnSetCode: SetCode;
+		/// What to do if the runtime wants to change the code to something new.
+		///
+		/// The default (`()`) implementation is responsible for setting the correct storage
+		/// entry and emitting corresponding event and log item. (see [`update_code_in_storage`]).
+		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
+		/// `Cumulus`, where the actual code change is deferred.
+		type OnSetCode: SetCode<Self>;
 	}
 
 	#[pallet::pallet]
@@ -350,11 +356,13 @@ pub mod pallet {
 		/// - 1 storage write.
 		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
+		/// - 1 digest item
 		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+			Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
 			Ok(().into())
 		}
 
@@ -362,9 +370,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 storage write (codec `O(C)`).
 		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
 		///   expensive).
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime, but generally this is very
 		/// expensive. We will treat this as a full block.
@@ -373,9 +382,7 @@ pub mod pallet {
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
-
 			T::OnSetCode::set_code(code)?;
-			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
 
@@ -384,6 +391,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
+		/// - 1 digest item.
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full
 		/// block. # </weight>
@@ -394,7 +402,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			T::OnSetCode::set_code(code)?;
-			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
 
@@ -517,7 +524,6 @@ pub mod pallet {
 
 	/// Event for the System pallet.
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId", T::Hash = "Hash")]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
@@ -612,9 +618,12 @@ pub mod pallet {
 	pub(super) type Digest<T: Config> = StorageValue<_, DigestOf<T>, ValueQuery>;
 
 	/// Events deposited for the current block.
+	///
+	/// NOTE: This storage item is explicitly unbounded since it is never intended to be read
+	/// from within the runtime.
 	#[pallet::storage]
-	#[pallet::getter(fn events)]
-	pub type Events<T: Config> = StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
+	pub(super) type Events<T: Config> =
+		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
@@ -755,7 +764,7 @@ pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -773,7 +782,7 @@ impl Default for Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
@@ -785,7 +794,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 }
 
 /// Origin for the System pallet.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -825,7 +834,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
@@ -845,7 +854,7 @@ pub struct AccountInfo<Index, AccountData> {
 
 /// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
 /// happened.
-#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
 pub struct LastRuntimeUpgradeInfo {
 	pub spec_version: codec::Compact<u32>,
@@ -1066,6 +1075,18 @@ pub enum DecRefStatus {
 impl<T: Config> Pallet<T> {
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
+	}
+
+	/// Write code to the storage and emit related events and digest items.
+	///
+	/// Note this function almost never should be used directly. It is exposed
+	/// for `OnSetCode` implementations that defer actual code being written to
+	/// the storage (for instance in case of parachains).
+	pub fn update_code_in_storage(code: &[u8]) -> DispatchResult {
+		storage::unhashed::put_raw(well_known_keys::CODE, code);
+		Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
+		Self::deposit_event(Event::CodeUpdated);
+		Ok(())
 	}
 
 	/// Increment the reference counter on an account.
@@ -1446,6 +1467,24 @@ impl<T: Config> Pallet<T> {
 			],
 			children_default: map![],
 		})
+	}
+
+	/// Get the current events deposited by the runtime.
+	///
+	/// NOTE: This should only be used in tests. Reading events from the runtime can have a large
+	/// impact on the PoV size of a block. Users should use alternative and well bounded storage
+	/// items for any behavior like this.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn events() -> Vec<EventRecord<T::Event, T::Hash>> {
+		Self::read_events_no_consensus()
+	}
+
+	/// Get the current events deposited by the runtime.
+	///
+	/// Should only be called if you know what you are doing and outside of the runtime block
+	/// execution else it can have a large impact on the PoV size of a block.
+	pub fn read_events_no_consensus() -> Vec<EventRecord<T::Event, T::Hash>> {
+		Events::<T>::get()
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
