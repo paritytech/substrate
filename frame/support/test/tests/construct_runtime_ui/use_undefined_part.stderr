@@ -1,4 +1,4 @@
-error: Invalid pallet part specified, the pallet `Pallet` doesn't have the part `Call`. Available parts are: `Storage`, `Pallet`.
+error: Invalid pallet part specified, the pallet `Pallet` doesn't have the part `Call`. Available parts are: `Pallet`, `Storage`.
   --> $DIR/use_undefined_part.rs:34:30
    |
 34 |         Pallet: pallet use_parts { Call },
