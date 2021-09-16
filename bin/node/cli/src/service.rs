@@ -80,11 +80,8 @@ where
 		use sp_runtime::traits::Header;
 
 		let block_id = BlockId::hash(*block_import.header.parent_hash());
-		if self
-			.client
-			.runtime_api()
-			.has_api::<dyn BabeApi<Block>>(&block_id)
-			.unwrap_or(false)
+		let version = self.client.runtime_version_at(&block_id).map_err(|e| e.to_string())?;
+		if version.spec_version > 267
 		{
 			log::debug!("shutting down!");
 			self.signal_shutdown.take().map(|s| s.fire());
