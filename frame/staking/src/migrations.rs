@@ -52,6 +52,7 @@ pub mod v8 {
 				"👜 completed staking migration to Releases::V8_0_0 with {} voters migrated",
 				migrated,
 			);
+			
 
 			T::BlockWeights::get().max_block
 		} else {
