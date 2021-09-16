@@ -29,7 +29,7 @@ beefy-primitives = { path = "../beefy-primitives", default-features = false }
 pallet-beefy = { path = "../beefy-pallet", default-features = false }
 
 [dev-dependencies]
-sp-staking = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-staking = { git = "https://github.com/paritytech/substrate", branch = "master" }
 hex = "0.4"
 hex-literal = "0.3"
 

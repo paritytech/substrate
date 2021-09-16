@@ -21,9 +21,9 @@ pallet-session = { git = "https://github.com/paritytech/substrate", default-feat
 beefy-primitives = { path = "../beefy-primitives", default-features = false }
 
 [dev-dependencies]
-sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
-sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
-sp-staking = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-io = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-staking = { git = "https://github.com/paritytech/substrate", branch = "master" }
 
 [features]
 default = ["std"]
