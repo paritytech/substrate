@@ -94,6 +94,9 @@ pub fn run() -> Result<()> {
 					runner.async_run(|config| {
 						let mut config = config;
 						config.block_production = Some("Aura".to_owned());
+
+						// Cannot restart Prometheus.
+						config.prometheus_config = None;
 						service::new_full(&mut config).map(|v| (v.1.map(Ok), v.0))
 							.map_err(sc_cli::Error::Service)
 					})
