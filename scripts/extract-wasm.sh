@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export dir_path_to="${1:-./}"
+export dir_path_to="${1:-./node-runtime-artifacts}"
 export image_tag="${2:-latest}"
 docker pull docker pull cerebellumnetwork/pos-node:"$image_tag"
 id=$(docker create "cerebellumnetwork/pos-node:$image_tag")
