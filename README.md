@@ -28,7 +28,7 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
 1. Run the following command to extract wasm from image.
 
 ```
- bash scripts/extract-wasm.sh
+ bash scripts/extract-wasm.sh node_runtime_artifacts_directory image_tag
 ```
 ## Run tests
 
