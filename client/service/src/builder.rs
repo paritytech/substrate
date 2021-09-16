@@ -150,8 +150,9 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } =>
-				LocalKeystore::open(path.clone(), password.clone())?,
+			KeystoreConfig::Path { path, password } => {
+				LocalKeystore::open(path.clone(), password.clone())?
+			}
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
@@ -424,7 +425,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
-	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	pub rpc_builder:
+		Box<dyn FnOnce(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<()>, Error>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -664,8 +666,10 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
-) -> RpcModule<()>
+	rpc_builder: Box<
+		dyn FnOnce(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<()>, Error>,
+	>,
+) -> Result<RpcModule<()>, Error>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -695,7 +699,7 @@ where
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
-	let task_executor = Arc::new(SubscriptionTaskExecutor::new(spawn_handle));
+	let task_executor = SubscriptionTaskExecutor::new(spawn_handle);
 
 	let mut rpc_api = RpcModule::new(());
 
@@ -756,10 +760,10 @@ where
 	rpc_api.merge(state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	rpc_api.merge(child_state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
-	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone());
+	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone())?;
 	rpc_api.merge(extra_rpcs).expect(UNIQUE_METHOD_NAMES_PROOF);
 
-	rpc_api
+	Ok(rpc_api)
 }
 
 /// Parameters to pass into `build_network`.
@@ -842,8 +846,8 @@ where
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
 			protocol_config
@@ -859,8 +863,8 @@ where
 			let (handler, protocol_config) = StateRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("state_request_handler", handler.run());
 			protocol_config
@@ -974,7 +978,7 @@ where
 			);
 			// This `return` might seem unnecessary, but we don't want to make it look like
 			// everything is working as normal even though the user is clearly misusing the API.
-			return
+			return;
 		}
 
 		future.await

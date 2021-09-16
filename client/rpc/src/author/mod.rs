@@ -58,7 +58,7 @@ pub struct Author<P, Client> {
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<P, Client> Author<P, Client> {
@@ -68,7 +68,7 @@ impl<P, Client> Author<P, Client> {
 		pool: Arc<P>,
 		keystore: SyncCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 	) -> Self {
 		Author { client, pool, keystore, deny_unsafe, executor }
 	}
@@ -156,7 +156,7 @@ where
 				hash::ExtrinsicOrHash::Extrinsic(bytes) => {
 					let xt = Decode::decode(&mut &bytes[..])?;
 					Ok(self.pool.hash_of(&xt))
-				},
+				}
 			})
 			.collect::<Result<Vec<_>>>()?;
 
@@ -174,8 +174,8 @@ where
 			Ok(dxt) => dxt,
 			Err(e) => {
 				log::error!("[watch_extrinsic sub] failed to decode extrinsic: {:?}", e);
-				return Err(JsonRpseeError::to_call_error(e))
-			},
+				return Err(JsonRpseeError::to_call_error(e));
+			}
 		};
 
 		let executor = self.executor.clone();
@@ -191,8 +191,8 @@ where
 						"txpool subscription failed: {:?}; subscription useless",
 						e
 					));
-					return
-				},
+					return;
+				}
 			};
 
 			stream

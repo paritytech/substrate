@@ -171,7 +171,7 @@ where
 /// Create new state API that works on full node.
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	deny_unsafe: DenyUnsafe,
 	rpc_max_payload: Option<usize>,
 ) -> (StateApi<Block, Client>, ChildState<Block, Client>)
@@ -205,7 +205,7 @@ where
 /// Create new state API that works on light node.
 pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 	deny_unsafe: DenyUnsafe,
@@ -296,7 +296,7 @@ where
 			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
 				value: count,
 				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			}))
+			}));
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)

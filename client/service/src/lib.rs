@@ -43,7 +43,6 @@ use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 use sc_network::PeerId;
-use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
 	generic::BlockId,
@@ -109,8 +108,6 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub import_queue: ImportQueue,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
-	/// RPC module builder.
-	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }
@@ -306,9 +303,9 @@ fn start_rpc_servers<R>(
 	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
-	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+	R: FnOnce(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
 {
-	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
+	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes)?;
 	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
 	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
 
@@ -388,8 +385,8 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
-			},
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
+			}
 		};
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
@@ -403,18 +400,19 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					}
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
-					},
+					}
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						// it is not bad at least, just some internal node logic error, so peer is
 						// innocent.
 						TransactionImport::KnownGood
-					},
+					}
 				},
 			}
 		})

@@ -67,7 +67,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 
 /// Provides RPC methods for interacting with GRANDPA.
 pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_stream: GrandpaJustificationStream<Block>,
@@ -78,7 +78,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 {
 	/// Prepare a new [`GrandpaApi`]
 	pub fn new(
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
 		justification_stream: GrandpaJustificationStream<Block>,

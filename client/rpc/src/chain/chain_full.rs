@@ -37,12 +37,12 @@ pub struct FullChain<Block: BlockT, Client> {
 	/// phantom member to pin the block type
 	_phantom: PhantomData<Block>,
 	/// Subscription executor.
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client>, executor: Arc<SubscriptionTaskExecutor>) -> Self {
+	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
 		Self { client, executor, _phantom: PhantomData }
 	}
 }
