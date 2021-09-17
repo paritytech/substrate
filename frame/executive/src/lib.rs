@@ -224,9 +224,7 @@ where
 	///
 	/// Should only be used for testing.
 	#[cfg(feature = "try-runtime")]
-	pub fn execute_block_no_state_root_and_signature_check(
-		block: Block,
-	) -> frame_support::weights::Weight
+	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight
 	where
 		Block::Extrinsic: sp_runtime::traits::CheckableNoCheck<Context>,
 		<Block::Extrinsic as sp_runtime::traits::CheckableNoCheck<Context>>::Checked:
@@ -238,7 +236,9 @@ where
 		let (header, extrinsics) = block.deconstruct();
 
 		Self::execute_extrinsics_with_book_keeping_no_signature_check(extrinsics, *header.number());
-		// don't call `final_checks`, but do finalize the block.
+
+		// don't call `final_checks`, but do finalize the block. This is critical to clear transient
+		// storage items, such as weight.
 		let _header = <frame_system::Pallet<System>>::finalize();
 
 		frame_system::Pallet::<System>::block_weight().total()

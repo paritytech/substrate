@@ -23,7 +23,7 @@ use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use crate::{
-	build_executor, ensure_matching_spec_name, extract_code, local_spec_name, state_machine_call,
+	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call,
 	SharedParams, State, LOG_TARGET,
 };
 
@@ -58,9 +58,15 @@ where
 	};
 
 	if let Some(uri) = command.state.live_uri() {
-		let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
-		ensure_matching_spec_name::<Block>(uri, expected_spec_name, shared.no_spec_name_check)
-			.await;
+		let (expected_spec_name, expected_spec_version) =
+			local_spec::<Block, ExecDispatch>(&ext, &executor);
+		ensure_matching_spec::<Block>(
+			uri,
+			expected_spec_name,
+			expected_spec_version,
+			shared.no_spec_name_check,
+		)
+		.await;
 	}
 
 	let (_, encoded_result) = state_machine_call::<Block, ExecDispatch>(

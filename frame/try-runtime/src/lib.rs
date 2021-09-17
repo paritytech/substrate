@@ -38,6 +38,6 @@ sp_api::decl_runtime_apis! {
 		///
 		/// This is only sensible where the incoming block is from a different network, yet it has
 		/// the same block format as the runtime implementing this API.
-		fn execute_block_no_state_root_and_signature_check(block: Block) -> Weight;
+		fn execute_block_no_check(block: Block) -> Weight;
 	}
 }

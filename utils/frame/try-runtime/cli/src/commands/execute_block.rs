@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec_name, extract_code, full_extensions, hash_of,
-	local_spec_name, state_machine_call, SharedParams, State, LOG_TARGET,
+	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
+	state_machine_call, SharedParams, State, LOG_TARGET,
 };
 use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -33,10 +33,10 @@ pub struct ExecuteBlockCmd {
 	overwrite_wasm_code: bool,
 
 	/// If set, then the state root check is disabled by the virtue of calling into
-	/// `TryRuntime_execute_block_no_state_root_and_signature_check` instead of
+	/// `TryRuntime_execute_block_no_check` instead of
 	/// `Core_execute_block`.
 	#[structopt(long)]
-	no_state_root_check: bool,
+	no_check: bool,
 
 	/// The block hash at which to fetch the block.
 	///
@@ -49,7 +49,7 @@ pub struct ExecuteBlockCmd {
 	)]
 	block_at: Option<String>,
 
-	/// The block uri from which to fetch the block.
+	/// The ws uri from which to fetch the block.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
@@ -58,7 +58,7 @@ pub struct ExecuteBlockCmd {
 		multiple = false,
 		parse(try_from_str = crate::parse::url)
 	)]
-	block_uri: Option<String>,
+	block_ws_uri: Option<String>,
 
 	/// The state type to use.
 	///
@@ -86,16 +86,16 @@ impl ExecuteBlockCmd {
 		}
 	}
 
-	fn block_uri<Block: BlockT>(&self) -> String
+	fn block_ws_uri<Block: BlockT>(&self) -> String
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
-		match (&self.block_uri, &self.state) {
-			(Some(block_uri), State::Snap { .. }) => block_uri.to_owned(),
-			(Some(block_uri), State::Live { .. }) => {
+		match (&self.block_ws_uri, &self.state) {
+			(Some(block_ws_uri), State::Snap { .. }) => block_ws_uri.to_owned(),
+			(Some(block_ws_uri), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--block-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
-				block_uri.to_owned()
+				block_ws_uri.to_owned()
 			},
 			(None, State::Live { uri, .. }) => uri.clone(),
 			(None, State::Snap { .. }) => {
@@ -122,13 +122,13 @@ where
 	let execution = shared.execution;
 
 	let block_at = command.block_at::<Block>()?;
-	let block_uri = command.block_uri::<Block>();
-	let block: Block = rpc_api::get_block::<Block, _>(block_uri.clone(), block_at).await?;
+	let block_ws_uri = command.block_ws_uri::<Block>();
+	let block: Block = rpc_api::get_block::<Block, _>(block_ws_uri.clone(), block_at).await?;
 	let parent_hash = block.header().parent_hash();
 	log::info!(
 		target: LOG_TARGET,
 		"fetched block from {:?}, parent_hash to fetch the state {:?}",
-		block_uri,
+		block_ws_uri,
 		parent_hash
 	);
 
@@ -155,10 +155,12 @@ where
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
 
-	let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
-	ensure_matching_spec_name::<Block>(
-		block_uri.clone(),
+	let (expected_spec_name, expected_spec_version) =
+		local_spec::<Block, ExecDispatch>(&ext, &executor);
+	ensure_matching_spec::<Block>(
+		block_ws_uri.clone(),
 		expected_spec_name,
+		expected_spec_version,
 		shared.no_spec_name_check,
 	)
 	.await;
@@ -167,10 +169,10 @@ where
 		&ext,
 		&executor,
 		execution,
-		if command.no_state_root_check {
+		if command.no_check {
 			"Core_execute_block"
 		} else {
-			"TryRuntime_execute_block_no_state_root_and_signature_check"
+			"TryRuntime_execute_block_no_check"
 		},
 		block.encode().as_ref(),
 		full_extensions(),

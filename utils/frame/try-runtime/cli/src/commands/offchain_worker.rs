@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec_name, extract_code, full_extensions, hash_of,
-	local_spec_name, parse, state_machine_call, SharedParams, State, LOG_TARGET,
+	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
+	parse, state_machine_call, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
@@ -45,7 +45,7 @@ pub struct OffchainWorkerCmd {
 	)]
 	header_at: Option<String>,
 
-	/// The block uri from which to fetch the block.
+	/// The ws uri from which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
@@ -54,7 +54,7 @@ pub struct OffchainWorkerCmd {
 		multiple = false,
 		parse(try_from_str = parse::url)
 	)]
-	header_uri: Option<String>,
+	header_ws_uri: Option<String>,
 
 	/// The state type to use.
 	#[structopt(subcommand)]
@@ -80,16 +80,16 @@ impl OffchainWorkerCmd {
 		}
 	}
 
-	fn header_uri<Block: BlockT>(&self) -> String
+	fn header_ws_uri<Block: BlockT>(&self) -> String
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
-		match (&self.header_uri, &self.state) {
-			(Some(header_uri), State::Snap { .. }) => header_uri.to_owned(),
-			(Some(header_uri), State::Live { .. }) => {
+		match (&self.header_ws_uri, &self.state) {
+			(Some(header_ws_uri), State::Snap { .. }) => header_ws_uri.to_owned(),
+			(Some(header_ws_uri), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--header-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
-				header_uri.to_owned()
+				header_ws_uri.to_owned()
 			},
 			(None, State::Live { uri, .. }) => uri.clone(),
 			(None, State::Snap { .. }) => {
@@ -117,13 +117,13 @@ where
 	let execution = shared.execution;
 
 	let header_at = command.header_at::<Block>()?;
-	let header_uri = command.header_uri::<Block>();
+	let header_ws_uri = command.header_ws_uri::<Block>();
 
-	let header = rpc_api::get_header::<Block, _>(header_uri.clone(), header_at).await?;
+	let header = rpc_api::get_header::<Block, _>(header_ws_uri.clone(), header_at).await?;
 	log::info!(
 		target: LOG_TARGET,
 		"fetched header from {:?}, block number: {:?}",
-		header_uri,
+		header_ws_uri,
 		header.number()
 	);
 
@@ -140,9 +140,15 @@ where
 		builder.build().await?
 	};
 
-	let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
-	ensure_matching_spec_name::<Block>(header_uri, expected_spec_name, shared.no_spec_name_check)
-		.await;
+	let (expected_spec_name, expected_spec_version) =
+		local_spec::<Block, ExecDispatch>(&ext, &executor);
+	ensure_matching_spec::<Block>(
+		header_ws_uri,
+		expected_spec_name,
+		expected_spec_version,
+		shared.no_spec_name_check,
+	)
+	.await;
 
 	let _ = state_machine_call::<Block, ExecDispatch>(
 		&ext,

@@ -99,7 +99,47 @@
 //!
 //! ## Examples
 //!
-//! TODO
+//! Run the migrations of the local runtime on the state of polkadot, from the polkadot repo where
+//! we have `--chain polkadot-dev`, on the latest finalized block's state
+//!
+//! ```
+//! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
+//! 	cargo run try-runtime \
+//! 	--execution Native \
+//! 	--chain polkadot-dev \
+//! 	on-runtime-upgrade \
+//! 	--uri wss://rpc.polkadot.io
+//! 	# note that we don't pass any --at, nothing means latest block.
+//! ```
+//!
+//! Same as previous one, but let's say we want to run this command from the substrate repo, where
+//! we don't have a matching spec name/version.
+//!
+//! ```
+//! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
+//! 	cargo run try-runtime \
+//! 	--execution Native \
+//! 	--chain dev \
+//! 	--no-spec-name-check \ # mind this one!
+//! 	on-runtime-upgrade \
+//! 	--uri wss://rpc.polkadot.io
+//! ```
+//!
+//! Same as the previous one, but run it at specific block number's state. This means that this
+//! block hash's state shall not yet have been pruned in `rpc.polkadot.io`.
+//!
+//! //! ```
+//! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
+//! 	cargo run try-runtime \
+//! 	--execution Native \
+//! 	--chain dev \
+//! 	--no-spec-name-check \ # mind this one!
+//! 	on-runtime-upgrade \
+//! 	--uri wss://rpc.polkadot.io
+//! 	--at <block-hash>
+//! ```
+//!
+//! Moving to `execute-block` and `offchain-workers`. For these commands, you always needs to specify a block hash. For the rest of these examples, we assume we're in the polkadot repo.
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
@@ -151,13 +191,19 @@ pub enum Command {
 	///
 	/// Note that by default, this command does not overwrite the code, so in wasm execution, the
 	/// live chain's code is used. This can be disabled if desired, see
-	/// [`ExecuteBlockCmd::overwrite_wasm_code`]. Note that if you do overwrite the wasm code, or
-	/// generally use the local runtime for this, you might
-	///   - not be able to decode the block, if the block format has changed.
-	///   - almost certainly get a state root mismatch.
+	/// [`ExecuteBlockCmd::overwrite_wasm_code`].
 	///
-	/// To make testing slightly more dynamic, you can disable the state root check by enabling
-	/// [`ExecuteBlockCmd::no_state_root_check`].
+	/// Note that if you do overwrite the wasm code, or generally use the local runtime for this,
+	/// you might
+	///   - not be able to decode the block, if the block format has changed.
+	///   - quite possible get a signature verification failure, since the spec and transaction
+	///     version are part of the signature's payload, and if they differ between your local
+	///     runtime and the remote counterparts, the signatures cannot be verified.
+	///   - almost certainly get a state root mismatch, since, well, you are executing a different
+	///     state transition function.
+	///
+	/// To make testing slightly more dynamic, you can disable the state root and signature  check
+	/// by enabling [`ExecuteBlockCmd::no_check`].
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
 	/// again, you need to scrape the state of block 99. This is already done automatically if you
@@ -165,8 +211,8 @@ pub enum Command {
 	/// [`State::Snap`] is being used, then this needs to manually taken into consideration.
 	///
 	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
-	/// [`ExecuteBlockCmd::no_state_root_check`] is set, it uses a custom, try-runtime-only runtime
-	/// api called `TryRuntime_execute_block_no_state_root_and_signature_check`.
+	/// [`ExecuteBlockCmd::no_check`] is set, it uses a custom, try-runtime-only runtime
+	/// api called `TryRuntime_execute_block_no_check`.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
@@ -191,6 +237,9 @@ pub enum Command {
 	///
 	/// This allows the behavior of a new runtime to be inspected over a long period of time, with
 	/// realistic transactions coming as input.
+	///
+	/// NOTE: this does NOT execute the offchain worker hooks of mirrored blocks. This might be
+	/// added in the future.
 	///
 	/// This does not support snapshot states, and can only work with a remote chain. Upon first
 	/// connections, starts listening for finalized block events. Upon first notification, it
@@ -419,29 +468,43 @@ where
 /// Check the spec_name of an `ext`
 ///
 /// If the version does not exist, or if it does not match with the given, it emits a warning.
-pub(crate) async fn ensure_matching_spec_name<Block: BlockT + serde::de::DeserializeOwned>(
+pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
+	expected_spec_version: u32,
 	relaxed: bool,
 ) {
 	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
 		.await
-		.map(|version| String::from(version.spec_name.clone()))
-		.map(|spec_name| spec_name.to_lowercase())
+		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
+		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))
 	{
-		Ok(spec) if spec == expected_spec_name => {
-			log::debug!(target: LOG_TARGET, "found matching spec name: {:?}", spec);
-		},
-		Ok(spec) => {
-			let msg = format!(
-				"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
-				spec,
-				expected_spec_name
-			);
-			if relaxed {
-				log::warn!(target: LOG_TARGET, "{}", msg);
+		Ok((name, version)) => {
+			// first, deal with spec name
+			if expected_spec_name == name {
+				log::info!(target: LOG_TARGET, "found matching spec name: {:?}", name);
 			} else {
-				panic!("{}", msg);
+				let msg = format!(
+					"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
+					name,
+					expected_spec_name
+				);
+				if relaxed {
+					log::warn!(target: LOG_TARGET, "{}", msg);
+				} else {
+					panic!("{}", msg);
+				}
+			}
+
+			if expected_spec_version == version {
+				log::info!(target: LOG_TARGET, "found matching spec version: {:?}", version);
+			} else {
+				log::warn!(
+					target: LOG_TARGET,
+					"spec version mismatch (local {} != remote {}). This could cause some issues.",
+					expected_spec_version,
+					version
+				);
 			}
 		},
 		Err(why) => {
@@ -510,11 +573,11 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	Ok((changes, encoded_results))
 }
 
-/// Get the spec name from the local runtime.
-pub(crate) fn local_spec_name<Block: BlockT, D: NativeExecutionDispatch + 'static>(
+/// Get the spec `(name, version)` from the local runtime.
+pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	ext: &TestExternalities,
 	executor: &NativeElseWasmExecutor<D>,
-) -> String {
+) -> (String, u32) {
 	let (_, encoded) = state_machine_call::<Block, D>(
 		&ext,
 		&executor,
@@ -526,7 +589,6 @@ pub(crate) fn local_spec_name<Block: BlockT, D: NativeExecutionDispatch + 'stati
 	.expect("all runtimes should have version; qed");
 	<sp_version::RuntimeVersion as Decode>::decode(&mut &*encoded)
 		.map_err(|e| format!("failed to decode output: {:?}", e))
-		.map(|v| v.spec_name)
+		.map(|v| (v.spec_name.into(), v.spec_version))
 		.expect("all runtimes should have version; qed")
-		.into()
 }

@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec_name, extract_code, full_extensions, local_spec_name,
-	parse, state_machine_call, SharedParams, LOG_TARGET,
+	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
+	state_machine_call, SharedParams, LOG_TARGET,
 };
 use jsonrpsee_ws_client::{
 	types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription},
@@ -64,6 +64,7 @@ where
 
 	let client = WsClientBuilder::default()
 		.connection_timeout(std::time::Duration::new(20, 0))
+		.max_notifs_per_subscription(1024)
 		.max_request_body_size(u32::MAX)
 		.build(&command.uri)
 		.await
@@ -120,10 +121,12 @@ where
 				new_ext.as_backend().root()
 			);
 
-			let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&new_ext, &executor);
-			ensure_matching_spec_name::<Block>(
+			let (expected_spec_name, expected_spec_version) =
+				local_spec::<Block, ExecDispatch>(&new_ext, &executor);
+			ensure_matching_spec::<Block>(
 				command.uri.clone(),
 				expected_spec_name,
+				expected_spec_version,
 				shared.no_spec_name_check,
 			)
 			.await;
@@ -138,7 +141,7 @@ where
 			&state_ext,
 			&executor,
 			execution,
-			"TryRuntime_execute_block_no_state_root_and_signature_check",
+			"TryRuntime_execute_block_no_check",
 			block.encode().as_ref(),
 			full_extensions(),
 		)?;

@@ -1587,8 +1587,8 @@ impl_runtime_apis! {
 			(weight, RuntimeBlockWeights::get().max_block)
 		}
 
-		fn execute_block_no_state_root_and_signature_check(block: Block) -> Weight {
-			Executive::execute_block_no_state_root_and_signature_check(block)
+		fn execute_block_no_check(block: Block) -> Weight {
+			Executive::execute_block_no_check(block)
 		}
 	}
 
