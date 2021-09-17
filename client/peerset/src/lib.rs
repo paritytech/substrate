@@ -411,8 +411,7 @@ impl Peerset {
 
 		match self.data.peer(set_id.0, &peer_id) {
 			peersstate::Peer::Connected(peer) => {
-				self.message_queue
-					.push_back(Message::Drop { set_id, peer_id: *peer.peer_id() });
+				self.message_queue.push_back(Message::Drop { set_id, peer_id: *peer.peer_id() });
 				peer.disconnect().forget_peer();
 			},
 			peersstate::Peer::NotConnected(peer) => {

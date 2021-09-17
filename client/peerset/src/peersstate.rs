@@ -135,7 +135,7 @@ impl MembershipState {
 
 	/// Returns `true` for [`MembershipState::NotConnected`].
 	fn is_not_connected(self) -> bool {
-		matches!(self, Self::NotConnected {..})
+		matches!(self, Self::NotConnected { .. })
 	}
 }
 
@@ -318,7 +318,7 @@ impl<'a> Peer<'a> {
 	pub fn into_connected(self) -> Option<ConnectedPeer<'a>> {
 		match self {
 			Self::Connected(peer) => Some(peer),
-			_ => None
+			_ => None,
 		}
 	}
 
@@ -328,7 +328,7 @@ impl<'a> Peer<'a> {
 	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
 		match self {
 			Self::NotConnected(peer) => Some(peer),
-			_ => None
+			_ => None,
 		}
 	}
 
@@ -338,7 +338,7 @@ impl<'a> Peer<'a> {
 	pub fn into_unknown(self) -> Option<UnknownPeer<'a>> {
 		match self {
 			Self::Unknown(peer) => Some(peer),
-			_ => None
+			_ => None,
 		}
 	}
 }

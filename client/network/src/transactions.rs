@@ -92,7 +92,7 @@ struct Metrics {
 
 impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Metrics {
+		Ok(Self {
 			propagated_transactions: register(
 				Counter::new(
 					"sync_propagated_transactions",
@@ -468,11 +468,8 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					propagated_to.entry(hash).or_default().push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				self.service.write_notification(
-					who.clone(),
-					self.protocol_name.clone(),
-					to_send.encode(),
-				);
+				self.service
+					.write_notification(*who, self.protocol_name.clone(), to_send.encode());
 			}
 		}
 
