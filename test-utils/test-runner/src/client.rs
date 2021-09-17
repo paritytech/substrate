@@ -187,7 +187,7 @@ where
 	let (command_sink, commands_stream) = mpsc::channel(10);
 	let rpc_sink = command_sink.clone();
 
-	let rpc_builder = Box::new(move |_, _| -> Result<RpcModule<()>, sc_service::Error> {
+	let rpc_builder = Box::new(move |_, _| {
 		let seal = ManualSeal::new(rpc_sink).into_rpc();
 		let mut module = RpcModule::new(());
 		module.merge(seal).expect("only one module; qed");
