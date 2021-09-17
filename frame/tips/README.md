@@ -1,11 +1,11 @@
-# Tipping Module ( pallet-tips )
+# Tipping Pallet ( pallet-tips )
 
 **Note :: This pallet is tightly coupled to pallet-treasury**
 
 A subsystem to allow for an agile "tipping" process, whereby a reward may be given without first
 having a pre-determined stakeholder group come to consensus on how much should be paid.
 
-A group of `Tippers` is determined through the config `Trait`. After half of these have declared
+A group of `Tippers` is determined through the config `Config`. After half of these have declared
 some amount that they believe a particular reported reason deserves, then a countdown period is
 entered where any remaining members can declare their tip amounts also. After the close of the
 countdown period, the median of all declared tips is paid to the reported beneficiary, along with

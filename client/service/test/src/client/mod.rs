@@ -62,9 +62,9 @@ mod light;
 
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
-pub struct Executor;
+pub struct ExecutorDispatch;
 
-impl sc_executor::NativeExecutionDispatch for Executor {
+impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 	type ExtendHostFunctions = ();
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
@@ -76,14 +76,14 @@ impl sc_executor::NativeExecutionDispatch for Executor {
 	}
 }
 
-fn executor() -> sc_executor::NativeExecutor<Executor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
+	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn prepare_client_with_key_changes() -> (
 	client::Client<
 		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
+		substrate_test_runtime_client::ExecutorDispatch,
 		Block,
 		RuntimeApi,
 	>,
@@ -2106,7 +2106,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		LocalCallExecutor<
 			Block,
 			in_mem::Backend<Block>,
-			sc_executor::NativeExecutor<LocalExecutor>,
+			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 		>,
 		substrate_test_runtime_client::runtime::Block,
 		substrate_test_runtime_client::runtime::RuntimeApi,

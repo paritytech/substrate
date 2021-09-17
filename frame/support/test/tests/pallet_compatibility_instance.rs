@@ -85,7 +85,7 @@ mod pallet_old {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, scale_info};
 	use frame_system::{ensure_root, pallet_prelude::*};
 
 	#[pallet::config]
@@ -95,7 +95,8 @@ pub mod pallet {
 			+ From<u32>
 			+ Into<Weight>
 			+ Default
-			+ MaybeSerializeDeserialize;
+			+ MaybeSerializeDeserialize
+			+ scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
@@ -140,7 +141,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	#[pallet::metadata(T::Balance = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(T::Balance),
@@ -282,23 +282,66 @@ frame_support::construct_runtime!(
 mod test {
 	use super::{pallet, pallet_old, Runtime};
 	use codec::{Decode, Encode};
+	use scale_info::{form::PortableForm, Variant};
 
 	#[test]
 	fn metadata() {
 		let metadata = Runtime::metadata();
-		let modules = match metadata.1 {
-			frame_metadata::RuntimeMetadata::V13(frame_metadata::RuntimeMetadataV13 {
-				modules: frame_metadata::DecodeDifferent::Encode(m),
-				..
-			}) => m,
+		let (pallets, types) = match metadata.1 {
+			frame_support::metadata::RuntimeMetadata::V14(metadata) =>
+				(metadata.pallets, metadata.types),
 			_ => unreachable!(),
 		};
+
+		let get_enum_variants = |ty_id| match types.resolve(ty_id).map(|ty| ty.type_def()) {
+			Some(ty) => match ty {
+				scale_info::TypeDef::Variant(var) => var.variants(),
+				_ => panic!("Expected variant type"),
+			},
+			_ => panic!("No type found"),
+		};
+
+		let assert_enum_variants = |vs1: &[Variant<PortableForm>],
+		                            vs2: &[Variant<PortableForm>]| {
+			assert_eq!(vs1.len(), vs2.len());
+			for i in 0..vs1.len() {
+				let v1 = &vs2[i];
+				let v2 = &vs2[i];
+				assert_eq!(v1.fields().len(), v2.fields().len());
+				for f in 0..v1.fields().len() {
+					let f1 = &v1.fields()[f];
+					let f2 = &v2.fields()[f];
+					pretty_assertions::assert_eq!(f1.name(), f2.name());
+					pretty_assertions::assert_eq!(f1.ty(), f2.ty());
+				}
+			}
+		};
+
 		for i in vec![1, 3, 5].into_iter() {
-			pretty_assertions::assert_eq!(modules[i].storage, modules[i + 1].storage);
-			pretty_assertions::assert_eq!(modules[i].calls, modules[i + 1].calls);
-			pretty_assertions::assert_eq!(modules[i].event, modules[i + 1].event);
-			pretty_assertions::assert_eq!(modules[i].constants, modules[i + 1].constants);
-			pretty_assertions::assert_eq!(modules[i].errors, modules[i + 1].errors);
+			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i + 1].storage);
+
+			let call1_variants = get_enum_variants(pallets[i].calls.as_ref().unwrap().ty.id());
+			let call2_variants = get_enum_variants(pallets[i + 1].calls.as_ref().unwrap().ty.id());
+			assert_enum_variants(call1_variants, call2_variants);
+
+			// event: check variants and fields but ignore the type name which will be different
+			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id());
+			let event2_variants = get_enum_variants(pallets[i + 1].event.as_ref().unwrap().ty.id());
+			assert_enum_variants(event1_variants, event2_variants);
+
+			let err1 = get_enum_variants(pallets[i].error.as_ref().unwrap().ty.id())
+				.iter()
+				.filter(|v| v.name() == "__Ignore")
+				.cloned()
+				.collect::<Vec<_>>();
+			let err2 = get_enum_variants(pallets[i + 1].error.as_ref().unwrap().ty.id())
+				.iter()
+				.filter(|v| v.name() == "__Ignore")
+				.cloned()
+				.collect::<Vec<_>>();
+			assert_enum_variants(&err1, &err2);
+
+			pretty_assertions::assert_eq!(pallets[i].constants, pallets[i + 1].constants);
 		}
 	}
 
@@ -314,10 +357,10 @@ mod test {
 
 		assert_eq!(
 			pallet_old::Call::<Runtime>::decode(
-				&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]
+				&mut &pallet::Call::<Runtime>::set_dummy { new_value: 10 }.encode()[..]
 			)
 			.unwrap(),
-			pallet_old::Call::<Runtime>::set_dummy(10),
+			pallet_old::Call::<Runtime>::set_dummy { new_value: 10 },
 		);
 	}
 }
