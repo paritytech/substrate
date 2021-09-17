@@ -224,55 +224,19 @@ where
 	///
 	/// Should only be used for testing.
 	#[cfg(feature = "try-runtime")]
-	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight
-	where
-		Block::Extrinsic: sp_runtime::traits::CheckableNoCheck<Context>,
-		<Block::Extrinsic as sp_runtime::traits::CheckableNoCheck<Context>>::Checked:
-			Applyable<Call = CallOf<Block::Extrinsic, Context>> + GetDispatchInfo,
-	{
+	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight {
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
 		let (header, extrinsics) = block.deconstruct();
 
-		Self::execute_extrinsics_with_book_keeping_no_signature_check(extrinsics, *header.number());
+		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 		// don't call `final_checks`, but do finalize the block. This is critical to clear transient
 		// storage items, such as weight.
 		let _header = <frame_system::Pallet<System>>::finalize();
 
 		frame_system::Pallet::<System>::block_weight().total()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn execute_extrinsics_with_book_keeping_no_signature_check(
-		extrinsics: Vec<Block::Extrinsic>,
-		block_number: NumberFor<Block>,
-	) where
-		Block::Extrinsic: sp_runtime::traits::CheckableNoCheck<Context>,
-		<Block::Extrinsic as sp_runtime::traits::CheckableNoCheck<Context>>::Checked:
-			Applyable<Call = CallOf<Block::Extrinsic, Context>> + GetDispatchInfo,
-	{
-		use sp_runtime::traits::CheckableNoCheck;
-
-		extrinsics.into_iter().for_each(|uxt| {
-			let encoded = uxt.encode();
-			let encoded_len = encoded.len();
-
-			// skip signature verification
-			let xt = uxt.check_i_know_i_should_not_be_using_this(&Default::default()).unwrap();
-			<frame_system::Pallet<System>>::note_extrinsic(encoded);
-
-			// dispatch
-			let dispatch_info = xt.get_dispatch_info();
-			let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len).unwrap();
-
-			<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
-		});
-
-		// post-extrinsics book-keeping
-		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		Self::idle_and_finalize_hook(block_number);
 	}
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.

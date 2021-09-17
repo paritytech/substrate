@@ -63,6 +63,8 @@ pub struct ExecuteBlockCmd {
 	/// The state type to use.
 	///
 	/// For this command only, if the `live` is used, then state of the parent block is fetched.
+	///
+	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
 	#[structopt(subcommand)]
 	state: State,
 }
@@ -76,7 +78,7 @@ impl ExecuteBlockCmd {
 		match (&self.block_at, &self.state) {
 			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(&block_at),
 			(Some(block_at), State::Live { .. }) => {
-				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live, this will most likely lead to a nonsensical result.");
+				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
 				hash_of::<Block>(&block_at)
 			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
@@ -94,7 +96,7 @@ impl ExecuteBlockCmd {
 		match (&self.block_ws_uri, &self.state) {
 			(Some(block_ws_uri), State::Snap { .. }) => block_ws_uri.to_owned(),
 			(Some(block_ws_uri), State::Live { .. }) => {
-				log::warn!(target: LOG_TARGET, "--block-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
+				log::error!(target: LOG_TARGET, "--block-uri is provided while state type is live, Are you sure you know what you are doing?");
 				block_ws_uri.to_owned()
 			},
 			(None, State::Live { uri, .. }) => uri.clone(),
@@ -169,11 +171,7 @@ where
 		&ext,
 		&executor,
 		execution,
-		if command.no_check {
-			"Core_execute_block"
-		} else {
-			"TryRuntime_execute_block_no_check"
-		},
+		if command.no_check { "TryRuntime_execute_block_no_check" } else { "Core_execute_block" },
 		block.encode().as_ref(),
 		full_extensions(),
 	)?;

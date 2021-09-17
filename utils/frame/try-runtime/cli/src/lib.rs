@@ -44,48 +44,56 @@
 //! All of the variables in the above statement are made *italic*. Let's look at each of them:
 //!
 //! 1. **State** is the key-value pairs of data that consist the important information that any
-//! blockchain is keeping. A state can be full (all key-value pairs), or be partial (only pairs
-//! related to some pallets). Moreover, some keys are special and live outside of pallets, known as
-//! [`well_known_keys`] in substrate. The most important of these is the `:CODE:` key, which
-//! contains the code used for execution, when `--execution Wasm` is used.
-//! 2. *A runtime-api* is a call into the function defined in the runtime, *on top of a given
-//! state*. Each subcommand of `try-runtime` utilizes a specific one of these.
-//! 3. Finally, the **runtime** is the actual code that is used to execute the aforementioned
-//! runtime-api. All substrate based chains always have two runtimes: native and wasm. The decision
-//! of which one is chosen is slightly non-trivial. First, let's look at the options:
+//!    blockchain is keeping. A state can be full (all key-value pairs), or be partial (only pairs
+//!    related to some pallets). Moreover, some keys are special and live outside of pallets, known
+//!    as [`well_known_keys`] in substrate. The most important of these is the `:CODE:` key, which
+//!    contains the code used for execution, when `--execution Wasm` is used.
 //!
-//! 1. Native: this means that the runtime that is **in your codebase**, aka whatever you see in
-//! your editor is being used. This runtime is easier for diagnostics. In the rest of the
-//! documentation, by "local runtime", we mean the na 2. Wasm: this means that whatever is stored in
-//! the `:CODE:` key of the state that your scrape is being used. In plain sight, since the entire
-//! state (including `:CODE:`) is scraped from a remote chain, you could conclude that the wasm
-//! runtime, if used, is always equal to the canonical runtime. That's factually true, but then the
-//! testing would be quite lame. Typically, with try-runtime, you don't want to execute whatever
-//! code is already on the live chain. Instead, you want your local runtime (which typically
-//! includes a non-released feature) to be used. This is why try-runtime overwrites the wasm runtime
-//! (at `:CODE:`) with the local runtime as well. That being said, this behavior can be controlled
-//! in certain subcommands with a special flag.
+//! 2. *A runtime-api* is a call into the function defined in the runtime, *on top of a given
+//!    state*. Each subcommand of `try-runtime` utilizes a specific one of these.
+//!
+//! 3. Finally, the **runtime** is the actual code that is used to execute the aforementioned
+//!    runtime-api. All substrate based chains always have two runtimes: native and wasm. The
+//!    decision of which one is chosen is slightly non-trivial. First, let's look at the options:
+//!
+//!     1. Native: this means that the runtime that is **in your codebase**, aka whatever you see in
+//!        your editor, is being used. This runtime is easier for diagnostics. We refer to this as
+//!        the "local runtime".
+//!
+//!     2. Wasm: this means that whatever is stored in the `:CODE:` key of the state that your
+//!        scrape is being used. In plain sight, since the entire state (including `:CODE:`) is
+//!        scraped from a remote chain, you could conclude that the wasm runtime, if used, is always
+//!        equal to the canonical runtime of the live chain (i.e. NOT the "local runtime"). That's
+//!        factually true, but then the testing would be quite lame. Typically, with try-runtime,
+//!        you don't want to execute whatever code is already on the live chain. Instead, you want
+//!        your local runtime (which typically includes a non-released feature) to be used. This is
+//!        why try-runtime overwrites the wasm runtime (at `:CODE:`) with the local runtime as well.
+//!        That being said, this behavior can be controlled in certain subcommands with a special
+//!        flag (`--overwrite-wasm-code`).
 //!
 //! The decision of which runtime is eventually used is based on two facts:
 //!
 //! 1. `--execution` flag. If you specify `wasm`, then it is *always* wasm. If it is `native`, then
-//! if and ONLY IF the spec versions match, then the native runtime is used. Else, wasm runtime is
-//! used again.
-//! 2. `--chain` flag (if present in your cli), which determines *which native runtime*, if needed,
-//! might be used.
+//!    if and ONLY IF the spec versions match, then the native runtime is used. Else, wasm runtime
+//!    is used again.
+//! 2. `--chain` flag (if present in your cli), which determines *which local runtime*, is selected.
+//!    This will specify:
+//!     1. which native runtime is used, if you select `--execution Native`
+//!	    2. which wasm runtime is used to replace the `:CODE:`, if try-runtime is instructed to do
+//!        so.
 //!
 //! All in all, if the term "local runtime" is used in the rest of this crate's documentation, it
 //! means either the native runtime, or the wasm runtime when overwritten inside `:CODE:`. In other
 //! words, it means your... well, "local runtime", regardless of wasm or native.
 //!
-//! To make sure there are no errors regarding this, always run any try-runtime command with
-//! `executor=trace` logging targets, which will specify which runtime is being used per api call.
+//! //! See [`Command`] for more information about each command's specific customization flags, and
+//! assumptions regarding the runtime being used.
+//!
+//! Finally, To make sure there are no errors regarding this, always run any `try-runtime` command
+//! with `executor=trace` logging targets, which will specify which runtime is being used per api
+//! call.
 //!
 //! Furthermore, other relevant log targets are: `try-runtime::cli`, `remote-ext`, and `runtime`.
-//!
-//! ## Commands
-//!
-//! See [`Command`] for more info.
 //!
 //! ## Spec name check
 //!
@@ -97,6 +105,18 @@
 //! Should you need to disable this on certain occasions, a top level flag of `--no-spec-name-check`
 //! can be used.
 //!
+//! The spec version is also always inspected, but if it is a mismatch, it will only emit a warning.
+//!
+//! ## Note nodes that operate with `try-runtime`
+//!
+//! There are a number of flags that need to be preferably set on a running node in order to work
+//! well with try-runtime's expensive RPC queries:
+//!
+//! - set `--rpc-max-payload 1000` to ensure large RPC queries can work.
+//! - set `--rpc-cors all` to ensure ws connections can come through.
+//!
+//! Note that *none* of the try-runtime operations need unsafe RPCs.
+//!
 //! ## Examples
 //!
 //! Run the migrations of the local runtime on the state of polkadot, from the polkadot repo where
@@ -104,12 +124,13 @@
 //!
 //! ```
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
-//! 	cargo run try-runtime \
-//! 	--execution Native \
-//! 	--chain polkadot-dev \
-//! 	on-runtime-upgrade \
-//! 	--uri wss://rpc.polkadot.io
-//! 	# note that we don't pass any --at, nothing means latest block.
+//!     cargo run try-runtime \
+//!     --execution Native \
+//!     --chain polkadot-dev \
+//!     on-runtime-upgrade \
+//!     live \
+//!     --uri wss://rpc.polkadot.io
+//!     # note that we don't pass any --at, nothing means latest block.
 //! ```
 //!
 //! Same as previous one, but let's say we want to run this command from the substrate repo, where
@@ -117,29 +138,90 @@
 //!
 //! ```
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
-//! 	cargo run try-runtime \
-//! 	--execution Native \
-//! 	--chain dev \
-//! 	--no-spec-name-check \ # mind this one!
-//! 	on-runtime-upgrade \
-//! 	--uri wss://rpc.polkadot.io
+//!     cargo run try-runtime \
+//!     --execution Native \
+//!     --chain dev \
+//!     --no-spec-name-check \ # mind this one!
+//!     on-runtime-upgrade \
+//!     live \
+//!     --uri wss://rpc.polkadot.io
 //! ```
 //!
 //! Same as the previous one, but run it at specific block number's state. This means that this
 //! block hash's state shall not yet have been pruned in `rpc.polkadot.io`.
 //!
-//! //! ```
+//! ```
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
-//! 	cargo run try-runtime \
-//! 	--execution Native \
-//! 	--chain dev \
-//! 	--no-spec-name-check \ # mind this one!
-//! 	on-runtime-upgrade \
-//! 	--uri wss://rpc.polkadot.io
-//! 	--at <block-hash>
+//!     cargo run try-runtime \
+//!     --execution Native \
+//!     --chain dev \
+//!     --no-spec-name-check \ # mind this one! on-runtime-upgrade \
+//!     on-runtime-upgrade \
+//!     live \
+//!     --uri wss://rpc.polkadot.io \
+//!     --at <block-hash>
 //! ```
 //!
-//! Moving to `execute-block` and `offchain-workers`. For these commands, you always needs to specify a block hash. For the rest of these examples, we assume we're in the polkadot repo.
+//! Moving to `execute-block` and `offchain-workers`. For these commands, you always needs to
+//! specify a block hash. For the rest of these examples, we assume we're in the polkadot repo.
+//!
+//! First, let's assume you are in a branch that has the same spec name/version as the live polkadot
+//! network.
+//!
+//! ```
+//! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
+//!     cargo run try-runtime \
+//!     --execution Wasm \
+//!     --chain polkadot-dev \
+//!     --uri wss://rpc.polkadot.io \
+//!     execute-block \
+//!     live \
+//!     --at <block-hash>
+//! ```
+//!
+//! This is wasm, so it will technically execute the code that lives on the live network. Let's say
+//! you want to execute your local runtime. Since you have a matching spec versions, you can simply
+//! change `--execution Wasm` to `--execution Native` to achieve this. Your logs of `executor=trace`
+//! should show something among the lines of:
+//!
+//! ```
+//! Request for native execution succeeded (native: polkadot-9900 (parity-polkadot-0.tx7.au0), chain: polkadot-9900 (parity-polkadot-0.tx7.au0))
+//! ```
+//!
+//! If you don't have matching spec versions, then are doomed to execute wasm. In this case, you can
+//! manually overwrite the wasm code with your local runtime:
+//!
+//! ```
+//! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
+//!     cargo run try-runtime \
+//!     --execution Wasm \
+//!     --chain polkadot-dev \
+//!     execute-block \
+//!     live \
+//!     --uri wss://rpc.polkadot.io \
+//!     --at <block-hash> \
+//!     --overwrite-wasm-code
+//! ```
+//!
+//! For all of these blocks, the block with hash `<block-hash>` is being used, and the initial state
+//! is the state of the parent hash. This is because by omitting [`ExecuteBlockCmd::block_at`], the
+//! `--at` is used for both. This should be good enough for 99% of the cases. The only case where
+//! you need to specify `block-at` and `block-ws-uri` is with snapshots. Let's say you have a file
+//! `snap` and you know it corresponds to the state of the parent block of `X`. Then you'd do:
+//!
+//! ```
+//! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
+//!     cargo run try-runtime \
+//!     --execution Wasm \
+//!     --chain polkadot-dev \
+//!     --uri wss://rpc.polkadot.io \
+//!     execute-block \
+//!     --block-at <x> \
+//!     --block-ws-uri wss://rpc.polkadot.io \
+//!     --overwrite-wasm-code \
+//!     snap \
+//!     -s snap \
+//! ```
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
@@ -176,9 +258,9 @@ pub enum Command {
 	///
 	/// This uses a custom runtime api call, namely "TryRuntime_on_runtime_upgrade".
 	///
-	/// This always overwrites the wasm code with the local runtime, to ensure the new migrations
-	/// are being executed. Re-executing already existing migrations is evidently not very
-	/// exciting.
+	/// This always overwrites the wasm code with the local runtime (specified by `--chain`), to
+	/// ensure the new migrations are being executed. Re-executing already existing migrations is
+	/// evidently not very exciting.
 	OnRuntimeUpgrade(commands::on_runtime_upgrade::OnRuntimeUpgradeCmd),
 
 	/// Executes the given block against some state.
@@ -196,19 +278,20 @@ pub enum Command {
 	/// Note that if you do overwrite the wasm code, or generally use the local runtime for this,
 	/// you might
 	///   - not be able to decode the block, if the block format has changed.
-	///   - quite possible get a signature verification failure, since the spec and transaction
-	///     version are part of the signature's payload, and if they differ between your local
-	///     runtime and the remote counterparts, the signatures cannot be verified.
-	///   - almost certainly get a state root mismatch, since, well, you are executing a different
-	///     state transition function.
+	///   - quite possibly will get a signature verification failure, since the spec and
+	///     transaction version are part of the signature's payload, and if they differ between
+	///     your local runtime and the remote counterparts, the signatures cannot be verified.
+	///   - almost certainly will get a state root mismatch, since, well, you are executing a
+	///     different state transition function.
 	///
-	/// To make testing slightly more dynamic, you can disable the state root and signature  check
-	/// by enabling [`ExecuteBlockCmd::no_check`].
+	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
+	/// [`ExecuteBlockCmd::no_check`]. If you get signature verification errors, you should
+	/// manually tweak your local runtime's spec version to fix this.
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
 	/// again, you need to scrape the state of block 99. This is already done automatically if you
-	/// use [`State::Live`], and the parent has of the target block is used to scrape the state. If
-	/// [`State::Snap`] is being used, then this needs to manually taken into consideration.
+	/// use [`State::Live`], and the parent hash of the target block is used to scrape the state.
+	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
 	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
 	/// [`ExecuteBlockCmd::no_check`] is set, it uses a custom, try-runtime-only runtime
@@ -242,9 +325,9 @@ pub enum Command {
 	/// added in the future.
 	///
 	/// This does not support snapshot states, and can only work with a remote chain. Upon first
-	/// connections, starts listening for finalized block events. Upon first notification, it
-	/// initializes the state from the remote node, and starts applying that block, and all the
-	/// ones that follows, to the same growing state.
+	/// connections, starts listening for finalized block events. Upon first block notification, it
+	/// initializes the state from the remote node, and starts applying that block, plus all the
+	/// blocks that follow, to the same growing state.
 	FollowChain(commands::follow_chain::FollowChainCmd),
 }
 

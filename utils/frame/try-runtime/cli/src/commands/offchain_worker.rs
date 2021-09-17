@@ -34,7 +34,7 @@ pub struct OffchainWorkerCmd {
 	#[structopt(long)]
 	overwrite_wasm_code: bool,
 
-	/// The block hash at which to fetch the block.
+	/// The block hash at which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
@@ -70,7 +70,7 @@ impl OffchainWorkerCmd {
 		match (&self.header_at, &self.state) {
 			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(&header_at),
 			(Some(header_at), State::Live { .. }) => {
-				log::warn!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
+				log::error!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
 				hash_of::<Block>(&header_at)
 			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
@@ -88,7 +88,7 @@ impl OffchainWorkerCmd {
 		match (&self.header_ws_uri, &self.state) {
 			(Some(header_ws_uri), State::Snap { .. }) => header_ws_uri.to_owned(),
 			(Some(header_ws_uri), State::Live { .. }) => {
-				log::warn!(target: LOG_TARGET, "--header-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
+				log::error!(target: LOG_TARGET, "--header-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
 				header_ws_uri.to_owned()
 			},
 			(None, State::Live { uri, .. }) => uri.clone(),
