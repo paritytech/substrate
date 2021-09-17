@@ -54,7 +54,6 @@ pub mod v8 {
 			);
 
 			T::BlockWeights::get().max_block
-			
 		} else {
 			T::DbWeight::get().reads(1)
 		}
