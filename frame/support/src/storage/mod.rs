@@ -17,7 +17,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-pub use self::types::StorageEntryMetadata;
+pub use self::types::StorageEntryMetadataBuilder;
 use crate::{
 	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{
@@ -786,10 +786,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter;
 }
 
-/// Iterate over a prefix and decode raw_key and raw_value into `T`.
+/// Iterate or drain over a prefix and decode raw_key and raw_value into `T`.
 ///
 /// If any decoding fails it skips it and continues to the next key.
-pub struct PrefixIterator<T> {
+///
+/// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
+pub struct PrefixIterator<T, OnRemoval = ()> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -797,9 +799,21 @@ pub struct PrefixIterator<T> {
 	/// Function that take `(raw_key_without_prefix, raw_value)` and decode `T`.
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
-impl<T> PrefixIterator<T> {
+/// Trait for specialising on removal logic of [`PrefixIterator`].
+pub trait PrefixIteratorOnRemoval {
+	/// This function is called whenever a key/value is removed.
+	fn on_removal(key: &[u8], value: &[u8]);
+}
+
+/// No-op implementation.
+impl PrefixIteratorOnRemoval for () {
+	fn on_removal(_key: &[u8], _value: &[u8]) {}
+}
+
+impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
 	/// are not prefixed with `prefix`.
 	///
@@ -813,7 +827,13 @@ impl<T> PrefixIterator<T> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
+		PrefixIterator {
+			prefix,
+			previous_key,
+			drain: false,
+			closure: decode_fn,
+			phantom: Default::default(),
+		}
 	}
 
 	/// Get the last key that has been iterated upon and return it.
@@ -838,7 +858,7 @@ impl<T> PrefixIterator<T> {
 	}
 }
 
-impl<T> Iterator for PrefixIterator<T> {
+impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRemoval> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -859,7 +879,8 @@ impl<T> Iterator for PrefixIterator<T> {
 						},
 					};
 					if self.drain {
-						unhashed::kill(&self.previous_key)
+						unhashed::kill(&self.previous_key);
+						OnRemoval::on_removal(&self.previous_key, &raw_value);
 					}
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
@@ -1119,7 +1140,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
@@ -1127,6 +1148,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 			previous_key: prefix.to_vec(),
 			drain: false,
 			closure: |_raw_key, mut raw_value| Value::decode(&mut raw_value),
+			phantom: Default::default(),
 		}
 	}
 
@@ -1613,7 +1635,7 @@ mod test {
 
 			assert_eq!(final_vec, vec![1, 2, 3, 4, 5]);
 
-			let mut iter = PrefixIterator::new(
+			let mut iter = PrefixIterator::<_>::new(
 				iter.prefix().to_vec(),
 				stored_key,
 				|mut raw_key_without_prefix, mut raw_value| {
