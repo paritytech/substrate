@@ -644,7 +644,7 @@
 			"prefix": 10042,
 			"network": "CESS",
 			"displayName": "CESS",
-			"symbols": ["tCESS"],
+			"symbols": ["TCESS"],
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://cess.cloud"
