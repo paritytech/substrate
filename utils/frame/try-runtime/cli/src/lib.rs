@@ -43,18 +43,17 @@
 //!
 //! All of the variables in the above statement are made *italic*. Let's look at each of them:
 //!
-//! 1. **State** is the key-value pairs of data that consist the important information that any
+//! 1. **State** is the key-value pairs of data that comprise the canonical information that any
 //!    blockchain is keeping. A state can be full (all key-value pairs), or be partial (only pairs
-//!    related to some pallets). Moreover, some keys are special and live outside of pallets, known
-//!    as [`well_known_keys`] in substrate. The most important of these is the `:CODE:` key, which
-//!    contains the code used for execution, when `--execution Wasm` is used.
+//!    related to some pallets). Moreover, some keys are special and are not related to specific
+//!    pallets, known as [`well_known_keys`] in substrate. The most important of these is the
+//!    `:CODE:` key, which contains the code used for execution, when `--execution Wasm` is used.
 //!
 //! 2. *A runtime-api* is a call into the function defined in the runtime, *on top of a given
-//!    state*. Each subcommand of `try-runtime` utilizes a specific one of these.
-//!
-//! 3. Finally, the **runtime** is the actual code that is used to execute the aforementioned
-//!    runtime-api. All substrate based chains always have two runtimes: native and wasm. The
-//!    decision of which one is chosen is slightly non-trivial. First, let's look at the options:
+//!    state*. Each subcommand of `try-runtime` utilizes a specific *runtime-api*. 3. Finally, the
+//!    **runtime** is the actual code that is used to execute the aforementioned    runtime-api. All
+//!    substrate based chains always have two runtimes: native and wasm. The    decision of which
+//!    one is chosen is slightly non-trivial. First, let's look at the options:
 //!
 //!     1. Native: this means that the runtime that is **in your codebase**, aka whatever you see in
 //!        your editor, is being used. This runtime is easier for diagnostics. We refer to this as
