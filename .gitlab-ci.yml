@@ -762,7 +762,7 @@ publish-rustdoc:
     - git fetch origin gh-pages
     # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
     - yarn global add ejs
-    - "ejs ${INDEX_TPL} -i \"{\\\"deploy_refs\\\":\\\"${RUSTDOCS_DEPLOY_REFS}\\\",\\\"repo_name\\\":\\\"${CI_PROJECT_NAME}\\\",\\\"latest\\\":\\\"${LATEST}\\\"}\" > /tmp/index.html"
+    - 'ejs ${INDEX_TPL} -i "{\"deploy_refs\":\"${RUSTDOCS_DEPLOY_REFS}\",\"repo_name\":\"${CI_PROJECT_NAME}\",\"latest\":\"${LATEST}\"}" > /tmp/index.html'
     # Save README and docs
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
@@ -783,7 +783,7 @@ publish-rustdoc:
     - rm -rf ${CI_COMMIT_REF_NAME}
     - mv -f /tmp/doc ${CI_COMMIT_REF_NAME}
     # Add the symlink
-    - "[[ -e \"$LATEST\" ]] && ln -sf \"${LATEST}\" latest"
+    - '[[ -e "$LATEST" ]] && ln -sf "${LATEST}" latest'
     # Upload files
     - git add --all --force
     # `git commit` has an exit code of > 0 if there is nothing to commit.
