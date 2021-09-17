@@ -86,9 +86,19 @@
 //! ## Commands
 //!
 //! See [`Command`] for more info.
-//! 
+//!
+//! ## Spec name check
+//!
+//! A common pitfall is that you might be running some test on top of the state of chain `x`, with
+//! the runtime of chain `y`. To avoid this all commands do a spec-name check before executing
+//! anything by default. This will check the spec name of the remote node your are connected to,
+//! with the spec name of your local runtime and ensure that they match.
+//!
+//! Should you need to disable this on certain occasions, a top level flag of `--no-spec-name-check`
+//! can be used.
+//!
 //! ## Examples
-//! 
+//!
 //! TODO
 
 use parity_scale_codec::Decode;
@@ -156,7 +166,7 @@ pub enum Command {
 	///
 	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
 	/// [`ExecuteBlockCmd::no_state_root_check`] is set, it uses a custom, try-runtime-only runtime
-	/// api called `TryRuntime_execute_block_no_state_root_check`.
+	/// api called `TryRuntime_execute_block_no_state_root_and_signature_check`.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
@@ -221,6 +231,10 @@ pub struct SharedParams {
 	/// [`sc_service::Configuration.default_heap_pages`].
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
+
+	/// When enabled, the spec name check will not panic, and instead only show a warning.
+	#[structopt(long)]
+	pub no_spec_name_check: bool,
 }
 
 /// Our `try-runtime` command.
@@ -408,6 +422,7 @@ where
 pub(crate) async fn ensure_matching_spec_name<Block: BlockT + serde::de::DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
+	relaxed: bool,
 ) {
 	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
 		.await
@@ -418,11 +433,16 @@ pub(crate) async fn ensure_matching_spec_name<Block: BlockT + serde::de::Deseria
 			log::debug!(target: LOG_TARGET, "found matching spec name: {:?}", spec);
 		},
 		Ok(spec) => {
-			panic!(
+			let msg = format!(
 				"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
 				spec,
-				expected_spec_name,
+				expected_spec_name
 			);
+			if relaxed {
+				log::warn!(target: LOG_TARGET, "{}", msg);
+			} else {
+				panic!("{}", msg);
+			}
 		},
 		Err(why) => {
 			log::error!(

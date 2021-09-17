@@ -31,6 +31,9 @@ use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
+const SUB: &'static str = "chain_subscribeFinalizedHeads";
+const UN_SUB: &'static str = "chain_unsubscribeFinalizedHeads";
+
 /// Configurations of the [`Command::FollowChain`].
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct FollowChainCmd {
@@ -59,9 +62,6 @@ where
 {
 	let mut maybe_state_ext = None;
 
-	let sub = "chain_subscribeFinalizedHeads";
-	let unsub = "chain_unsubscribeFinalizedHeads";
-
 	let client = WsClientBuilder::default()
 		.connection_timeout(std::time::Duration::new(20, 0))
 		.max_request_body_size(u32::MAX)
@@ -69,15 +69,27 @@ where
 		.await
 		.unwrap();
 
-	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", sub, unsub);
+	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 	let mut subscription: Subscription<Block::Header> =
-		client.subscribe(&sub, JsonRpcParams::NoParams, &unsub).await.unwrap();
+		client.subscribe(&SUB, JsonRpcParams::NoParams, &UN_SUB).await.unwrap();
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	while let Some(header) = subscription.next().await.unwrap() {
+	loop {
+		let header = match subscription.next().await {
+			Ok(Some(header)) => header,
+			Ok(None) => {
+				log::warn!("subscription returned `None`. Probably decoding has failed.");
+				break
+			},
+			Err(why) => {
+				log::warn!("subscription returned error: {:?}.", why);
+				continue
+			},
+		};
+
 		let hash = header.hash();
 		let number = header.number();
 
@@ -109,7 +121,12 @@ where
 			);
 
 			let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&new_ext, &executor);
-			ensure_matching_spec_name::<Block>(command.uri.clone(), expected_spec_name).await;
+			ensure_matching_spec_name::<Block>(
+				command.uri.clone(),
+				expected_spec_name,
+				shared.no_spec_name_check,
+			)
+			.await;
 
 			maybe_state_ext = Some(new_ext);
 		}
@@ -121,7 +138,7 @@ where
 			&state_ext,
 			&executor,
 			execution,
-			"TryRuntime_execute_block_no_state_root_check",
+			"TryRuntime_execute_block_no_state_root_and_signature_check",
 			block.encode().as_ref(),
 			full_extensions(),
 		)?;

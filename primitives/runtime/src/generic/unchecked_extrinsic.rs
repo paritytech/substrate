@@ -159,6 +159,34 @@ where
 	}
 }
 
+#[cfg(feature = "try-runtime")]
+impl<Address, AccountId, Call, Signature, Extra, Lookup> traits::CheckableNoCheck<Lookup>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Address: Member + MaybeDisplay,
+	Call: Encode + Member,
+	Signature: Member + traits::Verify,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
+	Extra: SignedExtension<AccountId = AccountId>,
+	AccountId: Member + MaybeDisplay,
+	Lookup: traits::Lookup<Source = Address, Target = AccountId>,
+{
+	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
+
+	fn check_i_know_i_should_not_be_using_this(
+		self,
+		lookup: &Lookup,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		Ok(match self.signature {
+			Some((signed, _, extra)) => {
+				let signed = lookup.lookup(signed)?;
+				CheckedExtrinsic { signed: Some((signed, extra)), function: self.function }
+			},
+			None => CheckedExtrinsic { signed: None, function: self.function },
+		})
+	}
+}
+
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where

@@ -59,7 +59,8 @@ where
 
 	if let Some(uri) = command.state.live_uri() {
 		let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
-		ensure_matching_spec_name::<Block>(uri, expected_spec_name).await;
+		ensure_matching_spec_name::<Block>(uri, expected_spec_name, shared.no_spec_name_check)
+			.await;
 	}
 
 	let (_, encoded_result) = state_machine_call::<Block, ExecDispatch>(

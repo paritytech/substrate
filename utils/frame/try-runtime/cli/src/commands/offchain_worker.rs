@@ -141,7 +141,8 @@ where
 	};
 
 	let expected_spec_name = local_spec_name::<Block, ExecDispatch>(&ext, &executor);
-	ensure_matching_spec_name::<Block>(header_uri, expected_spec_name).await;
+	ensure_matching_spec_name::<Block>(header_uri, expected_spec_name, shared.no_spec_name_check)
+		.await;
 
 	let _ = state_machine_call::<Block, ExecDispatch>(
 		&ext,

@@ -779,6 +779,21 @@ pub trait Checkable<Context>: Sized {
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
+/// A variant if `Checkable` that avoids any checks.
+///
+/// Only useful for testing, without breaking the generic assumptions of the runtime.
+#[cfg(feature = "try-runtime")]
+pub trait CheckableNoCheck<Context>: Sized {
+	/// Returned if `check` succeeds.
+	type Checked;
+
+	/// Check self, given an instance of Context.
+	fn check_i_know_i_should_not_be_using_this(
+		self,
+		c: &Context,
+	) -> Result<Self::Checked, TransactionValidityError>;
+}
+
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 /// Implement for pieces of information that don't require additional context in order to be
