@@ -18,6 +18,8 @@
 //! Inspect and Mutate traits for Asset metadata
 
 use crate::dispatch::DispatchResult;
+use sp_std::vec::Vec;
+
 pub trait Inspect<AssetId> {
 	// Get name for an AssetId.
 	fn name(asset: AssetId) -> Vec<u8>;
