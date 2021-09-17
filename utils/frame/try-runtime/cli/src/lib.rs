@@ -43,7 +43,7 @@
 //!
 //! All of the variables in the above statement are made *italic*. Let's look at each of them:
 //!
-//! 1. **State** is the key-value pairs of data that consist the important information that any
+//! 1. **State** is the key-value pairs of data that comprise the canonical information that any
 //! blockchain is keeping. A state can be full (all key-value pairs), or be partial (only pairs
 //! related to some pallets). Moreover, some keys are special and live outside of pallets, known as
 //! [`well_known_keys`] in substrate. The most important of these is the `:CODE:` key, which
