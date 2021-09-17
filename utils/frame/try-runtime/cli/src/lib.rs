@@ -45,7 +45,7 @@
 //!
 //! 1. **State** is the key-value pairs of data that comprise the canonical information that any
 //! blockchain is keeping. A state can be full (all key-value pairs), or be partial (only pairs
-//! related to some pallets). Moreover, some keys are special and live outside of pallets, known as
+//! related to some pallets). Moreover, some keys are special and are not related to specific pallets, known as
 //! [`well_known_keys`] in substrate. The most important of these is the `:CODE:` key, which
 //! contains the code used for execution, when `--execution Wasm` is used.
 //! 2. *A runtime-api* is a call into the function defined in the runtime, *on top of a given
