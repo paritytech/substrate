@@ -745,7 +745,7 @@ publish-rustdoc:
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^monthly-20[0-9]{2}-[0-9]{2}.*$/  # to support: monthly-2021-09+1
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
   # artifacts from being dowloaded by this job.
   needs:
