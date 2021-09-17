@@ -8,7 +8,6 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 [dependencies]
 fnv = "1.0.6"
 futures = "0.3"
-hex = "0.4"
 log = "0.4"
 parking_lot = "0.11"
 thiserror = "1.0"
@@ -21,7 +20,6 @@ sp-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
