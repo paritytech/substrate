@@ -41,6 +41,16 @@ use sp_std::{
 pub enum Error {
 	/// A duplicate id has been detected.
 	Duplicate,
+	/// Attempted to place node in front of a node in another bag.
+	NotInSameBag,
+	/// Id not found in list
+	IdNotFound,
+	/// Does not have a greater vote weight than the node it was placed in front of.
+	NotHeavier,
+	/// Higher weight node is already in a higher position than the the lesser weight node.
+	AlreadyHigherPosition,
+	/// Bag could not be found. This is a system logic error that should never happen.
+	BagNotFound,
 }
 
 #[cfg(test)]
@@ -290,11 +300,6 @@ impl<T: Config> List<T> {
 		Ok(())
 	}
 
-	/// Remove an id from the list.
-	pub(crate) fn remove(id: &T::AccountId) {
-		Self::remove_many(sp_std::iter::once(id));
-	}
-
 	/// Remove many ids from the list.
 	///
 	/// This is more efficient than repeated calls to `Self::remove`.
@@ -382,6 +387,71 @@ impl<T: Config> List<T> {
 
 			(old_bag_upper, new_bag_upper)
 		})
+	}
+
+	/// Mover `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in
+	/// same bag  and the `weight_of` `lighter_id` must be less than that of `heavier_id`
+	pub(crate) fn move_in_front_of(
+		lighter_id: &T::AccountId,
+		heavier_id: &T::AccountId,
+		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) -> Result<(), Error> {
+		use frame_support::ensure;
+
+		let mut lighter_node = Node::<T>::get(&lighter_id).ok_or(Error::IdNotFound)?;
+		let mut heavier_node = Node::<T>::get(&heavier_id).ok_or(Error::IdNotFound)?;
+
+		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, Error::NotInSameBag);
+		ensure!(heavier_node.next.as_ref() != Some(lighter_id), Error::AlreadyHigherPosition);
+
+		// this is the most expensive check, so we do it last
+		ensure!(weight_of(&heavier_id) > weight_of(&lighter_id), Error::NotHeavier);
+
+		// check if the bag needs to be updated in storage
+		if lighter_node.is_terminal() || heavier_node.is_terminal() {
+			let mut bag = Bag::<T>::get(lighter_node.bag_upper).ok_or_else(|| {
+				debug_assert!(false, "bag that should exist cannot be found");
+				crate::log!(warn, "bag that should exist cannot be found");
+				Error::BagNotFound
+			})?;
+			debug_assert!(bag.iter().count() > 1);
+			if bag.head.as_ref() == Some(lighter_id) {
+				debug_assert!(lighter_node.next.is_some(), "lighter node must have next if head");
+				bag.head = Some(heavier_id.clone());
+			}
+			// re-assign bag tail if lighter is the tail
+			if bag.tail.as_ref() == Some(heavier_id) {
+				debug_assert!(heavier_node.prev.is_some(), "heaver node must have prev if tail");
+				bag.tail = heavier_node.prev.clone();
+			}
+			// we need to write the bag to storage if its head and/or tail is updated
+			bag.put()
+		}
+
+		// cut heavier out of the list, updating its neighbors
+		heavier_node.excise();
+
+		// connect heavier to its new prev
+		if let Some(mut prev) = lighter_node.prev() {
+			prev.next = Some(heavier_id.clone());
+			prev.put()
+		}
+		heavier_node.prev = lighter_node.prev;
+
+		// connect heavier and lighter
+		heavier_node.next = Some(lighter_id.clone());
+		lighter_node.prev = Some(heavier_id.clone());
+
+		// write the updated nodes to storage
+		lighter_node.put();
+		heavier_node.put();
+
+		Ok(())
+	}
+
+	/// Remove an id from the list.
+	pub(crate) fn remove(id: &T::AccountId) {
+		Self::remove_many(sp_std::iter::once(id));
 	}
 
 	/// Sanity check the list.
