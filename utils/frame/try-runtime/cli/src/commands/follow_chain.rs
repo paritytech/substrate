@@ -43,7 +43,7 @@ pub struct FollowChainCmd {
 	uri: String,
 }
 
-pub async fn follow_chain<Block, ExecDispatch>(
+pub(crate) async fn follow_chain<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: FollowChainCmd,
 	config: Configuration,
