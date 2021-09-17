@@ -582,7 +582,7 @@ pub fn new_light_base(
 		pool: transaction_pool.clone(),
 	};
 
-	let rpc_builder = Box::new(move |_, _| Ok(node_rpc::create_light(light_deps)));
+	let rpc_builder = Box::new(move |_, _| node_rpc::create_light(light_deps).map_err(Into::into));
 
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		on_demand: Some(on_demand),
