@@ -62,7 +62,7 @@ type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 #[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
 	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
@@ -133,7 +133,7 @@ where
 	/// Create new state API backend for light nodes.
 	pub fn new(
 		client: Arc<Client>,
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
@@ -430,10 +430,10 @@ where
 									});
 									old_storage = Ok(new_value);
 									res
-								},
+								}
 								false => None,
 							}
-						},
+						}
 						_ => None,
 					};
 					ready(res)
@@ -465,7 +465,7 @@ where
 							if entry.get().is_empty() {
 								entry.remove();
 							}
-						},
+						}
 					}
 				}
 			}
@@ -708,7 +708,7 @@ where
 
 	// if that isn't the first request - just listen for existing request' response
 	if !need_issue_request {
-		return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))))
+		return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))));
 	}
 
 	// that is the first request - issue remote request + notify all listeners on

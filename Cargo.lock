@@ -4866,6 +4866,7 @@ dependencies = [
 name = "pallet-contracts-rpc"
 version = "4.0.0-dev"
 dependencies = [
+ "anyhow",
  "jsonrpsee",
  "log",
  "pallet-contracts-primitives",

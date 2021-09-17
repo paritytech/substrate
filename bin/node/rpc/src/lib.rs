@@ -171,7 +171,7 @@ where
 	)?;
 	io.merge(
 		GrandpaRpc::new(
-			Arc::new(subscription_executor),
+			subscription_executor,
 			shared_authority_set.clone(),
 			shared_voter_state,
 			justification_stream,

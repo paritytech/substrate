@@ -7,12 +7,14 @@
 
 use std::sync::Arc;
 
+use jsonrpsee::RpcModule;
 use node_template_runtime::{opaque::Block, AccountId, Balance, Index};
-pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
+
+pub use sc_rpc_api::DenyUnsafe;
 
 /// Full client dependencies.
 pub struct FullDeps<C, P> {
@@ -25,7 +27,9 @@ pub struct FullDeps<C, P> {
 }
 
 /// Instantiate all full RPC extensions.
-pub fn create_full<C, P>(deps: FullDeps<C, P>) -> jsonrpsee::RpcModule<()>
+pub fn create_full<C, P>(
+	deps: FullDeps<C, P>,
+) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError> + 'static,
@@ -38,18 +42,17 @@ where
 	use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
 	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
 
-	let mut module = jsonrpsee::RpcModule::new(());
+	let mut module = RpcModule::new(());
 	let FullDeps { client, pool, deny_unsafe } = deps;
 
 	let system_rpc_backend = SystemRpcBackendFull::new(client.clone(), pool.clone(), deny_unsafe);
-	module.merge(SystemRpc::new(Box::new(system_rpc_backend)).into_rpc()).unwrap();
-
-	module.merge(TransactionPaymentRpc::new(client.clone()).into_rpc()).unwrap();
+	module.merge(SystemRpc::new(Box::new(system_rpc_backend)).into_rpc())?;
+	module.merge(TransactionPaymentRpc::new(client.clone()).into_rpc())?;
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed
 	// to call into the runtime.
-	// `module.merge(YourRpcTrait::into_rpc(YourRpcStruct::new(ReferenceToClient, ...))).unwrap();`
+	// `module.merge(YourRpcTrait::into_rpc(YourRpcStruct::new(ReferenceToClient, ...)))?;`
 
-	module
+	Ok(module)
 }

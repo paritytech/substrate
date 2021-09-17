@@ -102,8 +102,9 @@ where
 	use sp_consensus_babe::AuthorityId;
 	let config = match config_or_chain_spec {
 		ConfigOrChainSpec::Config(config) => config,
-		ConfigOrChainSpec::ChainSpec(chain_spec, tokio_handle) =>
-			default_config(tokio_handle, chain_spec),
+		ConfigOrChainSpec::ChainSpec(chain_spec, tokio_handle) => {
+			default_config(tokio_handle, chain_spec)
+		}
 	};
 
 	let executor = NativeElseWasmExecutor::<T::ExecutorDispatch>::new(
@@ -186,11 +187,11 @@ where
 	let (command_sink, commands_stream) = mpsc::channel(10);
 	let rpc_sink = command_sink.clone();
 
-	let rpc_builder = Box::new(move |_, _| -> RpcModule<()> {
+	let rpc_builder = Box::new(move |_, _| {
 		let seal = ManualSeal::new(rpc_sink).into_rpc();
 		let mut module = RpcModule::new(());
 		module.merge(seal).expect("only one module; qed");
-		module
+		Ok(module)
 	});
 
 	let _rpc_handlers = {
