@@ -22,7 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, RpcHandlers, RpcMiddleware, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, RpcHandlers, RpcMiddleware, SpawnTaskHandle, TaskManager,
+	TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpc_pubsub::manager::SubscriptionManager;
