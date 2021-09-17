@@ -19,9 +19,9 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata::{StorageEntryModifier, StorageEntryType},
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
-		types::{OptionQuery, QueryKindTrait, StorageEntryMetadata},
+		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
@@ -342,7 +342,7 @@ where
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value> {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::iter_values()
 	}
@@ -512,7 +512,7 @@ where
 }
 
 impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
-	StorageEntryMetadata
+	StorageEntryMetadataBuilder
 	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
@@ -525,19 +525,20 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const NAME: &'static str = Prefix::STORAGE_PREFIX;
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let entry = StorageEntryMetadata {
+			name: Prefix::STORAGE_PREFIX,
+			modifier: QueryKind::METADATA,
+			ty: StorageEntryType::Map {
+				hashers: vec![Hasher1::METADATA, Hasher2::METADATA],
+				key: scale_info::meta_type::<(Key1, Key2)>(),
+				value: scale_info::meta_type::<Value>(),
+			},
+			default: OnEmpty::get().encode(),
+			docs,
+		};
 
-	fn ty() -> StorageEntryType {
-		StorageEntryType::Map {
-			hashers: vec![Hasher1::METADATA, Hasher2::METADATA],
-			key: scale_info::meta_type::<(Key1, Key2)>(),
-			value: scale_info::meta_type::<Value>(),
-		}
-	}
-
-	fn default() -> Vec<u8> {
-		OnEmpty::get().encode()
+		entries.push(entry);
 	}
 }
 
@@ -605,7 +606,6 @@ mod test {
 		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
 		storage::types::ValueQuery,
 	};
-	use assert_matches::assert_matches;
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -767,29 +767,42 @@ mod test {
 			A::translate::<u8, _>(|k1, k2, v| Some((k1 * k2 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40, 1600), (3, 30, 900)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-
-			let assert_map_hashers = |ty, expected_hashers| {
-				if let StorageEntryType::Map { hashers, .. } = ty {
-					assert_eq!(hashers, expected_hashers)
-				} else {
-					assert_matches!(ty, StorageEntryType::Map { .. })
-				}
-			};
-
-			assert_map_hashers(
-				A::ty(),
-				vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			assert_eq!(
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 97u32.encode(),
+						docs: vec![],
+					}
+				]
 			);
-			assert_map_hashers(
-				AValueQueryWithAnOnEmpty::ty(),
-				vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
-			);
-
-			assert_eq!(A::NAME, "foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::default(), 97u32.encode());
-			assert_eq!(A::default(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3, 30), None);
