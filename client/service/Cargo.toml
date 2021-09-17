@@ -22,7 +22,7 @@ wasmtime = ["sc-executor/wasmtime"]
 test-helpers = []
 
 [dependencies]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", features = ["server"] }
 
 thiserror = "1.0.21"
 futures01 = { package = "futures", version = "0.1.29" }
