@@ -639,6 +639,15 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://bsx.fi"
+		},
+		{
+			"prefix": 10042,
+			"network": "CESS",
+			"displayName": "CESS",
+			"symbols": ["TCESS"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://cess.cloud"
 		}
 	]
 }
