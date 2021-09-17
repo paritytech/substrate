@@ -94,7 +94,7 @@ where
 				let body = fetcher.remote_body(req_body).await.map_err(client_err)?;
 
 				Ok(Some(SignedBlock { block: Block::new(header, body), justifications: None }))
-			}
+			},
 			None => Ok(None),
 		}
 	}

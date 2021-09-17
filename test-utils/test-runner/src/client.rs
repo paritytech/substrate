@@ -102,9 +102,8 @@ where
 	use sp_consensus_babe::AuthorityId;
 	let config = match config_or_chain_spec {
 		ConfigOrChainSpec::Config(config) => config,
-		ConfigOrChainSpec::ChainSpec(chain_spec, tokio_handle) => {
-			default_config(tokio_handle, chain_spec)
-		}
+		ConfigOrChainSpec::ChainSpec(chain_spec, tokio_handle) =>
+			default_config(tokio_handle, chain_spec),
 	};
 
 	let executor = NativeElseWasmExecutor::<T::ExecutorDispatch>::new(

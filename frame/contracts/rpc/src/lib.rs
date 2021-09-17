@@ -28,7 +28,7 @@ use jsonrpsee::{
 	types::{
 		async_trait,
 		error::{CallError, Error as JsonRpseeError},
-		JsonRpcResult,
+		RpcResult,
 	},
 };
 use pallet_contracts_primitives::{Code, ContractExecResult, ContractInstantiateResult};
@@ -121,7 +121,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		&self,
 		call_request: CallRequest<AccountId>,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<ContractExecResult>;
+	) -> RpcResult<ContractExecResult>;
 
 	/// Instantiate a new contract.
 	///
@@ -134,7 +134,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<ContractInstantiateResult<AccountId>>;
+	) -> RpcResult<ContractInstantiateResult<AccountId>>;
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
@@ -144,7 +144,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
 		address: AccountId,
 		key: H256,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<Option<Bytes>>;
+	) -> RpcResult<Option<Bytes>>;
 }
 
 /// Contracts RPC methods.
@@ -187,7 +187,7 @@ where
 		&self,
 		call_request: CallRequest<AccountId>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> JsonRpcResult<ContractExecResult> {
+	) -> RpcResult<ContractExecResult> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
@@ -208,7 +208,7 @@ where
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> JsonRpcResult<ContractInstantiateResult<AccountId>> {
+	) -> RpcResult<ContractInstantiateResult<AccountId>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
@@ -230,7 +230,7 @@ where
 		address: AccountId,
 		key: H256,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> JsonRpcResult<Option<Bytes>> {
+	) -> RpcResult<Option<Bytes>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let result = api

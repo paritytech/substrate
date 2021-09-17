@@ -30,7 +30,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	types::{async_trait, JsonRpcResult},
+	types::{async_trait, RpcResult},
 	SubscriptionSink,
 };
 use sc_client_api::{
@@ -96,7 +96,7 @@ where
 					.header(BlockId::number(block_num))
 					.map_err(client_err)?
 					.map(|h| h.hash()))
-			}
+			},
 		}
 	}
 
@@ -164,18 +164,18 @@ where
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	async fn header(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<Block::Header>> {
+	async fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
 		self.backend.header(hash).await.map_err(Into::into)
 	}
 
-	async fn block(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<SignedBlock<Block>>> {
+	async fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
 		self.backend.block(hash).await.map_err(Into::into)
 	}
 
 	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
-	) -> JsonRpcResult<ListOrValue<Option<Block::Hash>>> {
+	) -> RpcResult<ListOrValue<Option<Block::Hash>>> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value).map_err(Into::into),
 			Some(ListOrValue::Value(number)) => self
@@ -191,19 +191,19 @@ where
 		}
 	}
 
-	fn finalized_head(&self) -> JsonRpcResult<Block::Hash> {
+	fn finalized_head(&self) -> RpcResult<Block::Hash> {
 		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> RpcResult<()> {
 		self.backend.subscribe_all_heads(sink).map_err(Into::into)
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> RpcResult<()> {
 		self.backend.subscribe_new_heads(sink).map_err(Into::into)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> JsonRpcResult<()> {
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> RpcResult<()> {
 		self.backend.subscribe_finalized_heads(sink).map_err(Into::into)
 	}
 }
