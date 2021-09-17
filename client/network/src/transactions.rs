@@ -133,7 +133,7 @@ pub struct TransactionsHandlerPrototype {
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
 	pub fn new(protocol_id: ProtocolId) -> Self {
-		TransactionsHandlerPrototype {
+		Self {
 			protocol_name: Cow::from({
 				let mut proto = String::new();
 				proto.push_str("/");
@@ -401,7 +401,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				let hash = self.transaction_pool.hash_of(&t);
 				peer.known_transactions.insert(hash.clone());
 
-				self.service.report_peer(who.clone(), rep::ANY_TRANSACTION);
+				self.service.report_peer(who, rep::ANY_TRANSACTION);
 
 				match self.pending_transactions_peers.entry(hash.clone()) {
 					Entry::Vacant(entry) => {
@@ -409,10 +409,10 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 							validation: self.transaction_pool.import(t),
 							tx_hash: hash,
 						});
-						entry.insert(vec![who.clone()]);
+						entry.insert(vec![who]);
 					},
 					Entry::Occupied(mut entry) => {
-						entry.get_mut().push(who.clone());
+						entry.get_mut().push(who);
 					},
 				}
 			}
