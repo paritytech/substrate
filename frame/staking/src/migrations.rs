@@ -53,7 +53,6 @@ pub mod v8 {
 				migrated,
 			);
 
-			
 			T::BlockWeights::get().max_block
 		} else {
 			T::DbWeight::get().reads(1)
