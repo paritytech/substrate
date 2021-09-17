@@ -417,19 +417,16 @@ fn remove_blacklist_works() {
 	});
 }
 
-/*
 mod cid_tests {
 	use cid::{
 		multibase::Base,
 		multihash::{Code, MultihashDigest},
-		CidGeneric, Version,
+		Cid, Version,
 	};
 	use codec::{Decode, Encode};
 	use hex_literal::hex;
 
 	const RAW: u64 = 0x55;
-
-	type Cid = CidGeneric<32>;
 
 	#[test]
 	fn normal_test_for_example() {
@@ -504,4 +501,3 @@ mod cid_tests {
 		assert_cid!(cid, 16);
 	}
 }
-*/

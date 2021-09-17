@@ -769,7 +769,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		proposal_hash: T::Hash,
 		index: ProposalIndex,
 		proposal_weight_bound: Weight,
-		length_bound: u32
+		length_bound: u32,
 	) -> DispatchResultWithPostInfo {
 		let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		ensure!(voting.index == index, Error::<T, I>::WrongIndex);
@@ -808,10 +808,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		// Only allow actual closing of the proposal after the voting period has ended.
-		ensure!(
-			frame_system::Pallet::<T>::block_number() >= voting.end,
-			Error::<T, I>::TooEarly
-		);
+		ensure!(frame_system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
 		let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
 

@@ -4659,7 +4659,7 @@ dependencies = [
 [[package]]
 name = "multihash"
 version = "0.14.0"
-source = "git+https://github.com/patractlabs/rust-multihash?branch=alliance#7dc4858d2f07c9e377be05393cc5acb84368f7bb"
+source = "git+https://github.com/patractlabs/rust-multihash?branch=alliance#3c581326467e65401c70a887a631f33a2db0a1d3"
 dependencies = [
  "blake2b_simd",
  "blake2s_simd",
@@ -4690,7 +4690,7 @@ dependencies = [
 [[package]]
 name = "multihash-derive"
 version = "0.7.2"
-source = "git+https://github.com/patractlabs/rust-multihash?branch=alliance#7dc4858d2f07c9e377be05393cc5acb84368f7bb"
+source = "git+https://github.com/patractlabs/rust-multihash?branch=alliance#3c581326467e65401c70a887a631f33a2db0a1d3"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro-error 1.0.4",
