@@ -168,9 +168,6 @@ pub trait Ext: sealing::Sealed {
 	/// Returns the minimum balance that is required for creating an account.
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the deposit required to instantiate a contract.
-	fn contract_deposit(&self) -> BalanceOf<Self::T>;
-
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>);
 
@@ -760,7 +757,7 @@ where
 	/// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
 	/// results in an error.
 	fn transfer(
-		sender_is_contract: bool,
+		sender_is_origin: bool,
 		allow_death: bool,
 		from: &T::AccountId,
 		to: &T::AccountId,
@@ -770,17 +767,17 @@ where
 			return Ok(())
 		}
 
-		let existence_requirement = match (allow_death, sender_is_contract) {
+		let existence_requirement = match (allow_death, sender_is_origin) {
 			(true, _) => ExistenceRequirement::AllowDeath,
-			(false, true) => {
+			(false, false) => {
 				ensure!(
-					T::Currency::total_balance(from).saturating_sub(value) >=
-						Contracts::<T>::subsistence_threshold(),
-					Error::<T>::BelowSubsistenceThreshold,
+					T::Currency::free_balance(from).saturating_sub(value) >=
+						T::Currency::minimum_balance(),
+					Error::<T>::TransferFailed,
 				);
 				ExistenceRequirement::KeepAlive
 			},
-			(false, false) => ExistenceRequirement::KeepAlive,
+			(false, true) => ExistenceRequirement::KeepAlive,
 		};
 
 		T::Currency::transfer(from, to, value, existence_requirement)
@@ -793,13 +790,11 @@ where
 	fn initial_transfer(&self) -> DispatchResult {
 		let frame = self.top_frame();
 		let value = frame.value_transferred;
-		let subsistence_threshold = <Contracts<T>>::subsistence_threshold();
+		let min_balance = T::Currency::minimum_balance();
 
-		// If the value transferred to a new contract is less than the subsistence threshold
-		// we can error out early. This avoids executing the constructor in cases where
-		// we already know that the contract has too little balance.
-		if frame.entry_point == ExportedFunction::Constructor && value < subsistence_threshold {
-			return Err(<Error<T>>::NewContractNotFunded.into())
+		// New contracts must receive at least the minimum balance as endowment.
+		if frame.entry_point == ExportedFunction::Constructor && value < min_balance {
+			return Err(<Error<T>>::EndowmentTooLow.into())
 		}
 
 		Self::transfer(self.caller_is_origin(), false, self.caller(), &frame.account_id, value)
@@ -807,7 +802,7 @@ where
 
 	/// Wether the caller is the initiator of the call stack.
 	fn caller_is_origin(&self) -> bool {
-		!self.frames.is_empty()
+		self.frames.is_empty()
 	}
 
 	/// Reference to the current (top) frame.
@@ -941,7 +936,7 @@ where
 		let info = frame.terminate();
 		Storage::<T>::queue_trie_for_deletion(&info)?;
 		<Stack<'a, T, E>>::transfer(
-			true,
+			false,
 			true,
 			&frame.account_id,
 			beneficiary,
@@ -957,7 +952,7 @@ where
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
-		Self::transfer(true, false, &self.top_frame().account_id, to, value)
+		Self::transfer(false, false, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
@@ -995,10 +990,6 @@ where
 
 	fn minimum_balance(&self) -> BalanceOf<T> {
 		T::Currency::minimum_balance()
-	}
-
-	fn contract_deposit(&self) -> BalanceOf<T> {
-		T::ContractDeposit::get()
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
@@ -1354,7 +1345,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			set_balance(&origin, 0);
 
-			let result = MockStack::transfer(false, false, &origin, &dest, 100);
+			let result = MockStack::transfer(true, false, &origin, &dest, 100);
 
 			assert_eq!(result, Err(Error::<Test>::TransferFailed.into()));
 			assert_eq!(get_balance(&origin), 0);
@@ -1457,19 +1448,19 @@ mod tests {
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
 
-			set_balance(&ALICE, subsistence * 10);
+			set_balance(&ALICE, min_balance * 10);
 
 			let result = MockStack::run_instantiate(
 				ALICE,
 				executable,
 				&mut gas_meter,
 				&schedule,
-				subsistence * 3,
+				min_balance * 3,
 				vec![1, 2, 3, 4],
 				&[],
 				None,
@@ -1720,7 +1711,7 @@ mod tests {
 					.instantiate(
 						0,
 						dummy_ch,
-						Contracts::<Test>::subsistence_threshold() * 3,
+						<Test as Config>::Currency::minimum_balance() * 3,
 						vec![],
 						&[48, 49, 50],
 					)
@@ -1733,7 +1724,7 @@ mod tests {
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			set_balance(&ALICE, Contracts::<Test>::subsistence_threshold() * 100);
+			set_balance(&ALICE, <Test as Config>::Currency::minimum_balance() * 100);
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
@@ -1776,7 +1767,7 @@ mod tests {
 					ctx.ext.instantiate(
 						0,
 						dummy_ch,
-						Contracts::<Test>::subsistence_threshold(),
+						<Test as Config>::Currency::minimum_balance(),
 						vec![],
 						&[],
 					),
@@ -1906,18 +1897,18 @@ mod tests {
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
 
-			set_balance(&ALICE, subsistence * 10);
+			set_balance(&ALICE, min_balance * 10);
 
 			let result = MockStack::run_instantiate(
 				ALICE,
 				executable,
 				&mut gas_meter,
 				&schedule,
-				subsistence * 3,
+				min_balance * 3,
 				vec![],
 				&[],
 				None,
@@ -1937,10 +1928,10 @@ mod tests {
 		let mut debug_buffer = Vec::new();
 
 		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 10);
+			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			MockStack::run_call(
 				ALICE,
@@ -1968,10 +1959,10 @@ mod tests {
 		let mut debug_buffer = Vec::new();
 
 		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 10);
+			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let result = MockStack::run_call(
 				ALICE,
@@ -2078,10 +2069,10 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 10);
+			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			System::reset_events();
 			MockStack::run_call(ALICE, BOB, &mut gas_meter, &schedule, 0, vec![], None).unwrap();
@@ -2135,10 +2126,10 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 10);
+			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			System::reset_events();
 			MockStack::run_call(ALICE, BOB, &mut gas_meter, &schedule, 0, vec![], None).unwrap();

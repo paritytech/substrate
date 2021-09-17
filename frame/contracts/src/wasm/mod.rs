@@ -389,9 +389,6 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn contract_deposit(&self) -> u64 {
-			16
-		}
 		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
 			(H256::from_slice(subject), 42)
 		}
@@ -1393,51 +1390,6 @@ mod tests {
 	#[test]
 	fn minimum_balance() {
 		assert_ok!(execute(CODE_MINIMUM_BALANCE, vec![], MockExt::default()));
-	}
-
-	const CODE_CONTRACT_DEPOSIT: &str = r#"
-(module
-	(import "seal0" "seal_contract_deposit" (func $seal_contract_deposit (param i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; size of our buffer is 32 bytes
-	(data (i32.const 32) "\20")
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
-
-	(func (export "call")
-		(call $seal_contract_deposit (i32.const 0) (i32.const 32))
-
-		;; assert len == 8
-		(call $assert
-			(i32.eq
-				(i32.load (i32.const 32))
-				(i32.const 8)
-			)
-		)
-
-		;; assert that contents of the buffer is equal to the i64 value of 16.
-		(call $assert
-			(i64.eq
-				(i64.load (i32.const 0))
-				(i64.const 16)
-			)
-		)
-	)
-	(func (export "deploy"))
-)
-"#;
-
-	#[test]
-	fn contract_deposit() {
-		assert_ok!(execute(CODE_CONTRACT_DEPOSIT, vec![], MockExt::default()));
 	}
 
 	const CODE_RANDOM: &str = r#"

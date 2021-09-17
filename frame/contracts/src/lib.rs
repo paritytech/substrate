@@ -122,7 +122,7 @@ use pallet_contracts_primitives::{
 	GetStorageResult, InstantiateReturnValue,
 };
 use sp_core::{crypto::UncheckedFrom, Bytes};
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, StaticLookup};
 use sp_std::prelude::*;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
@@ -165,12 +165,6 @@ pub mod pallet {
 		/// This is applied in **addition** to [`frame_system::Config::BaseCallFilter`].
 		/// It is recommended to treat this as a whitelist.
 		///
-		/// # Subsistence Threshold
-		///
-		/// The runtime **must** make sure that any allowed dispatchable makes sure that the
-		/// `total_balance` of the contract stays above [`Pallet::subsistence_threshold()`].
-		/// Otherwise users could clutter the storage with contracts.
-		///
 		/// # Stability
 		///
 		/// The runtime **must** make sure that all dispatchables that are callable by
@@ -200,13 +194,6 @@ pub mod pallet {
 		/// Cost schedule and limits.
 		#[pallet::constant]
 		type Schedule: Get<Schedule<Self>>;
-
-		/// The deposit that must be placed into the contract's account to instantiate it.
-		/// This is in **addition** to the [`pallet_balances::Pallet::ExistenialDeposit`].
-		/// The minimum balance for a contract's account can be queried using
-		/// [`Pallet::subsistence_threshold`].
-		#[pallet::constant]
-		type ContractDeposit: Get<BalanceOf<Self>>;
 
 		/// The type of the call stack determines the maximum nesting depth of contract calls.
 		///
@@ -417,16 +404,20 @@ pub mod pallet {
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
 		OutputBufferTooSmall,
-		/// Performing the requested transfer would have brought the contract below
-		/// the subsistence threshold. No transfer is allowed to do this. Use `seal_terminate`
-		/// to recover a deposit.
-		BelowSubsistenceThreshold,
-		/// The newly created contract is below the subsistence threshold after executing
-		/// its contructor. No contracts are allowed to exist below that threshold.
-		NewContractNotFunded,
-		/// Performing the requested transfer failed for a reason originating in the
-		/// chosen currency implementation of the runtime. Most probably the balance is
-		/// too low or locks are placed on it.
+		/// When creating a new contract at least the minimum balance must be provided
+		/// as endowment. If that is not the case this error is returned.
+		EndowmentTooLow,
+		/// Performing the requested transfer failed. Most probably the transfer would have
+		/// brought the contract's account below the minimum balance. Other possible reasons
+		/// are balance locks or reservations on the contract's account.
+		///
+		/// # Note
+		///
+		/// Any transfer must leave the minimum balance as **free** balance in the contract.
+		/// This is different from a usual keep alive transfer where the reserved balance
+		/// also counts into the minimum balance. This is enforced because otherwise a refund
+		/// of a storage deposit could remove a contract's account as it was only kept alive
+		/// by this deposit.
 		TransferFailed,
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.
@@ -634,30 +625,6 @@ where
 			.cloned()
 			.collect();
 		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
-	}
-
-	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit)
-	/// by the contract deposit. It is the minimum balance any contract must hold.
-	///
-	/// Any contract initiated balance transfer mechanism cannot make the balance lower
-	/// than the subsistence threshold. The only way to recover the balance is to remove
-	/// contract using `seal_terminate`.
-	pub fn subsistence_threshold() -> BalanceOf<T> {
-		T::Currency::minimum_balance().saturating_add(T::ContractDeposit::get())
-	}
-
-	/// The in-memory size in bytes of the data structure associated with each contract.
-	///
-	/// The data structure is also put into storage for each contract. The in-storage size
-	/// is never larger than the in-memory representation and usually smaller due to compact
-	/// encoding and lack of padding.
-	///
-	/// # Note
-	///
-	/// This returns the in-memory size because the in-storage size (SCALE encoded) cannot
-	/// be efficiently determined. Treat this as an upper bound of the in-storage size.
-	pub fn contract_info_size() -> u32 {
-		sp_std::mem::size_of::<ContractInfo<T>>() as u32
 	}
 
 	/// Store code for benchmarks which does not check nor instrument the code.

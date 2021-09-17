@@ -41,7 +41,7 @@ use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 use sp_runtime::{
-	traits::{Bounded, Hash},
+	traits::{Bounded, Hash, Saturating},
 	Perbill,
 };
 use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
@@ -369,14 +369,6 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
-		), vec![])?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-
-	seal_tombstone_deposit {
-		let r in 0 .. API_BENCHMARK_BATCHES;
-		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_tombstone_deposit", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
@@ -923,7 +915,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
-		let value = Contracts::<T>::subsistence_threshold();
+		let value = T::Currency::minimum_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1111,7 +1103,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// We assume that every instantiate sends at least the subsistence amount.
+	// We assume that every instantiate sends at least the minimum balance.
 	seal_instantiate {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)

@@ -73,7 +73,7 @@ pub mod test_utils {
 	use crate::{
 		exec::{AccountIdOf, StorageKey},
 		storage::Storage,
-		AccountCounter, CodeHash, ContractInfoOf, Pallet as Contracts, TrieId,
+		AccountCounter, CodeHash, Config, ContractInfoOf, TrieId,
 	};
 	use frame_support::traits::Currency;
 
@@ -94,7 +94,7 @@ pub mod test_utils {
 	}
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
 		let trie_id = generate_trie_id(address);
-		set_balance(address, Contracts::<Test>::subsistence_threshold() * 10);
+		set_balance(address, <Test as Config>::Currency::minimum_balance() * 10);
 		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
@@ -248,7 +248,6 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const ContractDeposit: u64 = 16;
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
@@ -289,7 +288,6 @@ impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type CallFilter = TestFilter;
-	type ContractDeposit = ContractDeposit;
 	type CallStack = [Frame<Self>; 31];
 	type WeightPrice = Self;
 	type WeightInfo = ();
@@ -429,12 +427,12 @@ fn instantiate_and_call_and_deposit_event() {
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Check at the end to get hash on error easily
 		let creation = Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			wasm,
 			vec![],
@@ -469,7 +467,7 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Endowed(
 						addr.clone(),
-						subsistence * 100
+						min_balance * 100
 					)),
 					topics: vec![],
 				},
@@ -478,7 +476,7 @@ fn instantiate_and_call_and_deposit_event() {
 					event: Event::Balances(pallet_balances::Event::Transfer(
 						ALICE,
 						addr.clone(),
-						subsistence * 100
+						min_balance * 100
 					)),
 					topics: vec![],
 				},
@@ -556,14 +554,13 @@ fn deposit_event_max_value_limit() {
 #[test]
 fn run_out_of_gas() {
 	let (wasm, code_hash) = compile_module::<Test>("run_out_of_gas").unwrap();
-	let subsistence = Pallet::<Test>::subsistence_threshold();
-
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			100 * subsistence,
+			100 * min_balance,
 			GAS_LIMIT,
 			wasm,
 			vec![],
@@ -921,12 +918,12 @@ fn crypto_hashes() {
 fn transfer_return_code() {
 	let (wasm, code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			wasm,
 			vec![],
@@ -934,18 +931,18 @@ fn transfer_return_code() {
 		),);
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
-		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
-		Balances::make_free_balance_be(&addr, subsistence);
+		// Contract has only the minimal balance so any transfer will fail.
+		Balances::make_free_balance_be(&addr, min_balance);
 		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, vec![], false)
 			.result
 			.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
+		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
-		// Contract has enough total balance in order to not go below the subsistence
+		// Contract has enough total balance in order to not go below the min balance
 		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails but with another return code.
-		Balances::make_free_balance_be(&addr, subsistence + 100);
-		Balances::reserve(&addr, subsistence + 100).unwrap();
+		// the transfer still fails.
+		Balances::make_free_balance_be(&addr, min_balance + 100);
+		Balances::reserve(&addr, min_balance + 100).unwrap();
 		let result = Contracts::bare_call(ALICE, addr, 0, GAS_LIMIT, vec![], false).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
@@ -956,20 +953,20 @@ fn call_return_code() {
 	let (caller_code, caller_hash) = compile_module::<Test>("call_return_code").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			caller_code,
 			vec![0],
 			vec![],
 		),);
 		let addr_bob = Contracts::contract_address(&ALICE, &caller_hash, &[]);
-		Balances::make_free_balance_be(&addr_bob, subsistence);
+		Balances::make_free_balance_be(&addr_bob, min_balance);
 
 		// Contract calls into Django which is no valid contract
 		let result = Contracts::bare_call(
@@ -986,16 +983,16 @@ fn call_return_code() {
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(CHARLIE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			callee_code,
 			vec![0],
 			vec![],
 		),);
 		let addr_django = Contracts::contract_address(&CHARLIE, &callee_hash, &[]);
-		Balances::make_free_balance_be(&addr_django, subsistence);
+		Balances::make_free_balance_be(&addr_django, min_balance);
 
-		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
+		// Contract has only the minimal balance so any transfer will fail.
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1010,13 +1007,13 @@ fn call_return_code() {
 		)
 		.result
 		.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
+		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
-		// Contract has enough total balance in order to not go below the subsistence
+		// Contract has enough total balance in order to not go below the min balance
 		// threshold when transfering 100 balance but this balance is reserved so
-		// the transfer still fails but with another return code.
-		Balances::make_free_balance_be(&addr_bob, subsistence + 100);
-		Balances::reserve(&addr_bob, subsistence + 100).unwrap();
+		// the transfer still fails.
+		Balances::make_free_balance_be(&addr_bob, min_balance + 100);
+		Balances::reserve(&addr_bob, min_balance + 100).unwrap();
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1034,7 +1031,7 @@ fn call_return_code() {
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
-		Balances::make_free_balance_be(&addr_bob, subsistence + 1000);
+		Balances::make_free_balance_be(&addr_bob, min_balance + 1000);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1075,14 +1072,14 @@ fn instantiate_return_code() {
 	let (caller_code, caller_hash) = compile_module::<Test>("instantiate_return_code").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
 		let callee_hash = callee_hash.as_ref().to_vec();
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			callee_code,
 			vec![],
@@ -1091,7 +1088,7 @@ fn instantiate_return_code() {
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			caller_code,
 			vec![],
@@ -1099,19 +1096,19 @@ fn instantiate_return_code() {
 		),);
 		let addr = Contracts::contract_address(&ALICE, &caller_hash, &[]);
 
-		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
-		Balances::make_free_balance_be(&addr, subsistence);
+		// Contract has only the minimal balance so any transfer will fail.
+		Balances::make_free_balance_be(&addr, min_balance);
 		let result =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, callee_hash.clone(), false)
 				.result
 				.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
+		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
-		// Contract has enough total balance in order to not go below the subsistence
+		// Contract has enough total balance in order to not go below the min_balance
 		// threshold when transfering the balance but this balance is reserved so
-		// the transfer still fails but with another return code.
-		Balances::make_free_balance_be(&addr, subsistence + 10_000);
-		Balances::reserve(&addr, subsistence + 10_000).unwrap();
+		// the transfer still fails.
+		Balances::make_free_balance_be(&addr, min_balance + 10_000);
+		Balances::reserve(&addr, min_balance + 10_000).unwrap();
 		let result =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, callee_hash.clone(), false)
 				.result
@@ -1119,7 +1116,7 @@ fn instantiate_return_code() {
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but the passed code hash is invalid
-		Balances::make_free_balance_be(&addr, subsistence + 10_000);
+		Balances::make_free_balance_be(&addr, min_balance + 10_000);
 		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, vec![0; 33], false)
 			.result
 			.unwrap();
@@ -1157,13 +1154,13 @@ fn instantiate_return_code() {
 fn disabled_chain_extension_wont_deploy() {
 	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 		TestExtension::disable();
 		assert_err_ignore_postinfo!(
 			Contracts::instantiate_with_code(
 				Origin::signed(ALICE),
-				3 * subsistence,
+				3 * min_balance,
 				GAS_LIMIT,
 				code,
 				vec![],
@@ -1178,11 +1175,11 @@ fn disabled_chain_extension_wont_deploy() {
 fn disabled_chain_extension_errors_on_call() {
 	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1201,11 +1198,11 @@ fn disabled_chain_extension_errors_on_call() {
 fn chain_extension_works() {
 	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1248,12 +1245,12 @@ fn chain_extension_works() {
 fn lazy_removal_works() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1299,12 +1296,12 @@ fn lazy_removal_partial_remove_works() {
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
 	let trie = ext.execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1369,12 +1366,12 @@ fn lazy_removal_partial_remove_works() {
 fn lazy_removal_does_no_run_on_full_block() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1444,12 +1441,12 @@ fn lazy_removal_does_not_use_all_weight() {
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
 	let (trie, vals, weight_per_key) = ext.execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1509,12 +1506,12 @@ fn lazy_removal_does_not_use_all_weight() {
 fn deletion_queue_full() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code,
 			vec![],
@@ -1542,12 +1539,12 @@ fn refcounter() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Create two contracts with the same code and check that they do in fact share it.
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			wasm.clone(),
 			vec![],
@@ -1555,7 +1552,7 @@ fn refcounter() {
 		));
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			wasm.clone(),
 			vec![],
@@ -1566,7 +1563,7 @@ fn refcounter() {
 		// Sharing should also work with the usual instantiate call
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			code_hash,
 			vec![],
@@ -1605,13 +1602,13 @@ fn reinstrument_does_charge() {
 	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let zero = 0u32.to_le_bytes().encode();
 		let code_len = wasm.len() as u32;
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			wasm,
 			zero.clone(),
@@ -1719,13 +1716,13 @@ fn gas_estimation_nested_call_fixed_limit() {
 	let (caller_code, caller_hash) = compile_module::<Test>("call_with_limit").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			caller_code,
 			vec![],
@@ -1735,7 +1732,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			callee_code,
 			vec![],
@@ -1769,13 +1766,13 @@ fn gas_estimation_call_runtime() {
 	let (caller_code, caller_hash) = compile_module::<Test>("call_runtime").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Pallet::<Test>::subsistence_threshold();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			caller_code,
 			vec![],
@@ -1785,7 +1782,7 @@ fn gas_estimation_call_runtime() {
 
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			subsistence * 100,
+			min_balance * 100,
 			GAS_LIMIT,
 			callee_code,
 			vec![],
