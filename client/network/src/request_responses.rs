@@ -223,10 +223,7 @@ pub enum IfDisconnected {
 impl IfDisconnected {
 	/// Shall we connect to a disconnected peer?
 	pub fn should_connect(self) -> bool {
-		match self {
-			Self::TryConnect => true,
-			Self::ImmediateError => false,
-		}
+		matches!(self, Self::TryConnect)
 	}
 }
 
