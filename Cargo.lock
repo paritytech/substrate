@@ -959,9 +959,21 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff0e3bc0b6446b3f9663c1a6aba6ef06c5aeaa1bc92bd18077be337198ab9768"
 dependencies = [
- "multibase",
+ "multibase 0.8.0",
  "multihash 0.13.2",
  "unsigned-varint 0.5.1",
+]
+
+[[package]]
+name = "cid"
+version = "0.7.0"
+source = "git+https://github.com/patractlabs/rust-cid?branch=alliance#d5aaa1c115b52e75b1cd513a4b866912d944a6bd"
+dependencies = [
+ "multibase 0.9.1",
+ "multihash 0.14.0 (git+https://github.com/patractlabs/rust-multihash?branch=alliance)",
+ "parity-scale-codec",
+ "scale-info",
+ "unsigned-varint 0.7.0",
 ]
 
 [[package]]
@@ -3722,7 +3734,7 @@ dependencies = [
  "libsecp256k1",
  "log 0.4.14",
  "multiaddr",
- "multihash 0.14.0",
+ "multihash 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "multistream-select",
  "parking_lot 0.11.2",
  "pin-project 1.0.10",
@@ -4574,7 +4586,7 @@ dependencies = [
  "bs58",
  "byteorder",
  "data-encoding",
- "multihash 0.14.0",
+ "multihash 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "percent-encoding 2.1.0",
  "serde",
  "static_assertions",
@@ -4594,6 +4606,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "multibase"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b3539ec3c1f04ac9748a260728e855f261b4977f5c3406612c884564f329404"
+dependencies = [
+ "base-x",
+ "data-encoding",
+ "data-encoding-macro",
+]
+
+[[package]]
 name = "multihash"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4604,9 +4627,15 @@ dependencies = [
  "blake3",
  "digest 0.9.0",
  "generic-array 0.14.4",
+<<<<<<< HEAD
  "multihash-derive",
  "sha2 0.9.8",
  "sha3 0.9.1",
+=======
+ "multihash-derive 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2 0.9.3",
+ "sha3",
+>>>>>>> 2369417073 (Add pallet-alliance)
  "unsigned-varint 0.5.1",
 ]
 
@@ -4616,10 +4645,31 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "752a61cd890ff691b4411423d23816d5866dd5621e4d1c5687a53b94b5a979d8"
 dependencies = [
+ "blake2b_simd",
+ "blake2s_simd",
+ "blake3",
  "digest 0.9.0",
  "generic-array 0.14.4",
- "multihash-derive",
- "sha2 0.9.8",
+ "multihash-derive 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2 0.9.3",
+ "sha3",
+ "unsigned-varint 0.7.0",
+]
+
+[[package]]
+name = "multihash"
+version = "0.14.0"
+source = "git+https://github.com/patractlabs/rust-multihash?branch=alliance#7dc4858d2f07c9e377be05393cc5acb84368f7bb"
+dependencies = [
+ "blake2b_simd",
+ "blake2s_simd",
+ "blake3",
+ "digest 0.9.0",
+ "multihash-derive 0.7.2 (git+https://github.com/patractlabs/rust-multihash?branch=alliance)",
+ "parity-scale-codec",
+ "scale-info",
+ "sha2 0.9.3",
+ "sha3",
  "unsigned-varint 0.7.0",
 ]
 
@@ -4631,6 +4681,19 @@ checksum = "424f6e86263cd5294cbd7f1e95746b95aca0e0d66bff31e5a40d6baa87b4aa99"
 dependencies = [
  "proc-macro-crate 1.1.0",
  "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
+name = "multihash-derive"
+version = "0.7.2"
+source = "git+https://github.com/patractlabs/rust-multihash?branch=alliance#7dc4858d2f07c9e377be05393cc5acb84368f7bb"
+dependencies = [
+ "proc-macro-crate 1.0.0",
+ "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
  "syn",
@@ -5408,6 +5471,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "pallet-asset-tx-payment"
 version = "4.0.0-dev"
 dependencies = [
@@ -5422,11 +5486,30 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec 1.8.0",
+=======
+name = "pallet-alliance"
+version = "4.0.0-dev"
+dependencies = [
+ "cid 0.7.0",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "hex-literal",
+ "log 0.4.14",
+ "multihash 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pallet-balances",
+ "pallet-collective",
+ "parity-scale-codec",
+ "scale-info",
+>>>>>>> 2369417073 (Add pallet-alliance)
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
+<<<<<<< HEAD
  "sp-storage",
+=======
+>>>>>>> 2369417073 (Add pallet-alliance)
 ]
 
 [[package]]
@@ -8629,8 +8712,14 @@ dependencies = [
  "async-trait",
  "asynchronous-codec 0.5.0",
  "bitflags",
+<<<<<<< HEAD
  "bytes 1.1.0",
  "cid",
+=======
+ "bytes 1.0.1",
+ "cid 0.6.1",
+ "derive_more",
+>>>>>>> 2369417073 (Add pallet-alliance)
  "either",
  "fnv",
  "fork-tree",
