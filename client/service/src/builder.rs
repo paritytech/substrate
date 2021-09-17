@@ -653,8 +653,6 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	Ok(telemetry.handle())
 }
 
-// Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
-// specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
@@ -690,8 +688,6 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 {
-	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
-
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
 		impl_name: config.impl_name.clone(),
@@ -751,17 +747,17 @@ where
 	if let Some(storage) = offchain_storage {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
 
-		rpc_api.merge(offchain).expect(UNIQUE_METHOD_NAMES_PROOF);
+		rpc_api.merge(offchain).map_err(|e| Error::Application(e.into()))?;
 	}
 
-	rpc_api.merge(chain).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(author).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(system).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(state).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(child_state).expect(UNIQUE_METHOD_NAMES_PROOF);
+	rpc_api.merge(chain).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(author).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(system).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(state).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(child_state).map_err(|e| Error::Application(e.into()))?;
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
 	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone())?;
-	rpc_api.merge(extra_rpcs).expect(UNIQUE_METHOD_NAMES_PROOF);
+	rpc_api.merge(extra_rpcs).map_err(|e| Error::Application(e.into()))?;
 
 	Ok(rpc_api)
 }

@@ -21,6 +21,7 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
+use anyhow::anyhow;
 use codec::Codec;
 use jsonrpsee::{
 	proc_macros::rpc,
@@ -256,26 +257,17 @@ fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(
 	from: H,
 	name: &str,
 ) -> Result<T, JsonRpseeError> {
-	from.try_into().map_err(|_| {
-		CallError::Custom {
-			code: -32602, // TODO: was `ErrorCode::InvalidParams`
-			message: format!("{:?} does not fit into the {} type", from, name),
-			data: None,
-		}
-		.into()
-	})
+	from.try_into()
+		.map_err(|_| anyhow!("{:?} does not fit into the {} type", from, name).into())
 }
 
 fn limit_gas(gas_limit: Weight) -> Result<(), JsonRpseeError> {
 	if gas_limit > GAS_LIMIT {
-		Err(CallError::Custom {
-			code: -32602, // TODO: was `ErrorCode::InvalidParams,`
-			message: format!(
-				"Requested gas limit is greater than maximum allowed: {} > {}",
-				gas_limit, GAS_LIMIT
-			),
-			data: None,
-		}
+		Err(anyhow!(
+			"Requested gas limit is greater than maximum allowed: {} > {}",
+			gas_limit,
+			GAS_LIMIT
+		)
 		.into())
 	} else {
 		Ok(())
