@@ -36,6 +36,28 @@ help: consider importing this enum
 1  | use frame_system::RawOrigin;
    |
 
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/no_std_genesis_config.rs:13:1
+   |
+13 | / construct_runtime! {
+14 | |     pub enum Runtime where
+15 | |         Block = Block,
+16 | |         NodeBlock = Block,
+...  |
+21 | |     }
+22 | | }
+   | |_^ not found in `system`
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these items
+   |
+1  | use frame_support_test::Pallet;
+   |
+1  | use frame_system::Pallet;
+   |
+1  | use test_pallet::Pallet;
+   |
+
 error[E0412]: cannot find type `GenesisConfig` in crate `test_pallet`
   --> $DIR/no_std_genesis_config.rs:13:1
    |

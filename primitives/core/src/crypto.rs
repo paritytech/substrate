@@ -29,6 +29,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
+use scale_info::TypeInfo;
 /// Trait for accessing reference to `SecretString`.
 pub use secrecy::ExposeSecret;
 /// A store for sensitive data.
@@ -465,7 +466,9 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
@@ -925,6 +928,7 @@ pub trait CryptoType {
 	Decode,
 	PassByInner,
 	crate::RuntimeDebug,
+	TypeInfo,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);

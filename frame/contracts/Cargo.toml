@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
 pwasm-utils = { version = "0.18.2", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -60,6 +61,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-io/std",
