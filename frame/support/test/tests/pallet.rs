@@ -150,7 +150,7 @@ pub mod pallet {
                 #[pallet::constant_name(SomeExtraRename)]
                 /// Some doc
                 fn some_extra_rename() -> T::AccountId {
-                        SomeType3.into()
+                        SomeType1.into()
                 }
 	}
 
