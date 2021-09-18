@@ -752,6 +752,11 @@ publish-rustdoc:
     - job:                         build-rustdoc
       artifacts:                   true
   script:
+    # If $CI_COMMIT_REF_NAME doesn't match one of $RUSTDOCS_DEPLOY_REFS space-separated value, we
+    # exit immediately.
+    # Putting spaces at the front and back to ensure we are not matching just any substring, but the
+    # whole space-separated value.
+    - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     - rm -rf /tmp/*
     # Set git config
     - rm -rf .git/config
