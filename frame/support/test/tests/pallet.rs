@@ -146,6 +146,12 @@ pub mod pallet {
 		fn some_extra_extra() -> T::AccountId {
 			SomeType1.into()
 		}
+
+                #[pallet::constant_name(SomeExtraRename)]
+                /// Some doc
+                fn some_extra_rename() -> T::AccountId {
+                        SomeType3.into()
+                }
 	}
 
 	#[pallet::pallet]
@@ -1220,6 +1226,12 @@ fn metadata() {
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![" Some doc"],
 				},
+                                PalletConstantMetadata {
+                                        name: "SomeExtraRename",
+                                        ty: meta_type::<u64>(),
+                                        value: vec![0, 0, 0, 0, 0, 0, 0, 0],
+                                        docs: vec![" Some doc"],
+                                },
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
 		},
