@@ -752,7 +752,7 @@ publish-rustdoc:
     - job:                         build-rustdoc
       artifacts:                   true
   script:
-    # If $CI_COMMIT_REF_NAME doesn't match one of $RUSTDOCS_DEPLOY_REFS space-separated value, we
+    # If $CI_COMMIT_REF_NAME doesn't match one of $RUSTDOCS_DEPLOY_REFS space-separated values, we
     # exit immediately.
     # Putting spaces at the front and back to ensure we are not matching just any substring, but the
     # whole space-separated value.
