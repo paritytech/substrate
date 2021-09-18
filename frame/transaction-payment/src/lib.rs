@@ -48,6 +48,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{
@@ -225,7 +226,7 @@ where
 }
 
 /// Storage releases of the pallet.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 enum Releases {
 	/// Original version of the pallet.
 	V1Ancient,
@@ -522,7 +523,8 @@ where
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Config> ChargeTransactionPayment<T>
@@ -714,7 +716,7 @@ mod tests {
 	);
 
 	const CALL: &<Runtime as frame_system::Config>::Call =
-		&Call::Balances(BalancesCall::transfer(2, 69));
+		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 	thread_local! {
 		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
@@ -1054,7 +1056,7 @@ mod tests {
 
 	#[test]
 	fn query_info_works() {
-		let call = Call::Balances(BalancesCall::transfer(2, 69));
+		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let origin = 111111;
 		let extra = ();
 		let xt = TestXt::new(call, Some((origin, extra)));

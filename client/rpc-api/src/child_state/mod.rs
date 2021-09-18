@@ -66,6 +66,15 @@ pub trait ChildStateApi<Hash> {
 		hash: Option<Hash>,
 	) -> FutureResult<Option<StorageData>>;
 
+	/// Returns child storage entries for multiple keys at a specific block's state.
+	#[rpc(name = "childstate_getStorageEntries")]
+	fn storage_entries(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> FutureResult<Vec<Option<StorageData>>>;
+
 	/// Returns the hash of a child storage entry at a block's state.
 	#[rpc(name = "childstate_getStorageHash")]
 	fn storage_hash(

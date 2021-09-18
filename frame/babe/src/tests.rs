@@ -726,10 +726,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
-		let inner = Call::report_equivocation_unsigned(
-			Box::new(equivocation_proof.clone()),
-			key_owner_proof.clone(),
-		);
+		let inner = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof.clone()),
+			key_owner_proof: key_owner_proof.clone(),
+		};
 
 		// only local/inblock reports are allowed
 		assert_eq!(
@@ -822,10 +822,10 @@ fn valid_equivocation_reports_dont_pay_fees() {
 				.unwrap();
 
 		// check the dispatch info for the call.
-		let info = Call::<Test>::report_equivocation_unsigned(
-			Box::new(equivocation_proof.clone()),
-			key_owner_proof.clone(),
-		)
+		let info = Call::<Test>::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof.clone()),
+			key_owner_proof: key_owner_proof.clone(),
+		}
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
