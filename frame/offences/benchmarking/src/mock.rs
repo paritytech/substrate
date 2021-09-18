@@ -151,8 +151,6 @@ parameter_types! {
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
 impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -176,6 +174,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type WeightInfo = ();
 }
 

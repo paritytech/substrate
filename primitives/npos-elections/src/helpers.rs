@@ -17,9 +17,7 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{
-	Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight, WithApprovalOf,
-};
+use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight};
 use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
@@ -79,11 +77,6 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 		assignment.try_normalize().map_err(|err| Error::ArithmeticError(err))?;
 	}
 	Ok(ratio)
-}
-
-/// consumes a vector of winners with backing stake to just winners.
-pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Vec<A> {
-	winners.into_iter().map(|(who, _)| who).collect::<Vec<A>>()
 }
 
 #[cfg(test)]
