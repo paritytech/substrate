@@ -31,7 +31,6 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 [dev-dependencies]
 cid = { git = "https://github.com/patractlabs/rust-cid", branch = "alliance" }
 hex-literal = "0.3.1"
-multihash = "0.14.0"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 
