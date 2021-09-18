@@ -97,16 +97,16 @@ impl pallet_collective::Config<AllianceCollective> for Test {
 
 pub struct AllianceIdentityVerifier;
 impl IdentityVerifier<u64> for AllianceIdentityVerifier {
+	fn has_identity(_who: &u64, _fields: u64) -> bool {
+		true
+	}
+
+	fn has_good_judgement(_who: &u64) -> bool {
+		true
+	}
+
 	fn super_account_id(_who: &u64) -> Option<u64> {
 		None
-	}
-
-	fn verify_identity(_who: &u64, _field: u64) -> bool {
-		true
-	}
-
-	fn verify_judgement(_who: &u64) -> bool {
-		true
 	}
 }
 

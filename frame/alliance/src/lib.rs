@@ -135,16 +135,12 @@ type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-const IDENTITY_FIELD_DISPLAY: u64 =
-	0b0000000000000000000000000000000000000000000000000000000000000001;
-const IDENTITY_FIELD_WEB: u64 = 0b0000000000000000000000000000000000000000000000000000000000000100;
-
 pub trait IdentityVerifier<AccountId: Clone + Ord> {
+	fn has_identity(who: &AccountId, fields: u64) -> bool;
+
+	fn has_good_judgement(who: &AccountId) -> bool;
+
 	fn super_account_id(who: &AccountId) -> Option<AccountId>;
-
-	fn verify_identity(who: &AccountId, fields: u64) -> bool;
-
-	fn verify_judgement(who: &AccountId) -> bool;
 }
 
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
@@ -276,12 +272,10 @@ pub mod pallet {
 		KickingMember,
 		/// Balance is insufficient to be a candidate.
 		InsufficientCandidateFunds,
-		/// The account's identity has not been judged.
-		WithoutVerifiedIdentity,
-		/// The account's identity has not display field.
-		WithoutIdentityDisplay,
-		/// The account' identity has not website field.
-		WithoutIdentityWebsite,
+		/// The account's identity has not display field and website field.
+		WithoutIdentityDisplayAndWebsite,
+		/// The account's identity has no good judgement.
+		WithoutGoodIdentityJudgement,
 		/// The proposal hash is not found.
 		MissingProposalHash,
 		/// The proposal is not vetoable.
@@ -934,18 +928,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn has_identity(who: &T::AccountId) -> DispatchResult {
-		let judgement = |w: &T::AccountId| -> DispatchResult {
+		const IDENTITY_FIELD_DISPLAY: u64 =
+			0b0000000000000000000000000000000000000000000000000000000000000001;
+		const IDENTITY_FIELD_WEB: u64 =
+			0b0000000000000000000000000000000000000000000000000000000000000100;
+
+		let judgement = |who: &T::AccountId| -> DispatchResult {
 			ensure!(
-				T::IdentityVerifier::verify_identity(w, IDENTITY_FIELD_DISPLAY),
-				Error::<T, I>::WithoutIdentityDisplay
+				T::IdentityVerifier::has_identity(who, IDENTITY_FIELD_DISPLAY | IDENTITY_FIELD_WEB),
+				Error::<T, I>::WithoutIdentityDisplayAndWebsite
 			);
 			ensure!(
-				T::IdentityVerifier::verify_judgement(w),
-				Error::<T, I>::WithoutVerifiedIdentity
-			);
-			ensure!(
-				T::IdentityVerifier::verify_identity(w, IDENTITY_FIELD_WEB),
-				Error::<T, I>::WithoutIdentityWebsite
+				T::IdentityVerifier::has_good_judgement(who),
+				Error::<T, I>::WithoutGoodIdentityJudgement
 			);
 			Ok(())
 		};

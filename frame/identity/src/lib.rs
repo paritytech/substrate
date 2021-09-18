@@ -88,6 +88,7 @@ pub use types::{
 	Data, IdentityField, IdentityFields, IdentityInfo, Judgement, RegistrarIndex, RegistrarInfo,
 	Registration,
 };
+pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -159,7 +160,7 @@ pub mod pallet {
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn identity)]
-	pub(super) type IdentityOf<T: Config> = StorageMap<
+	pub type IdentityOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -171,7 +172,7 @@ pub mod pallet {
 	/// context. If the account is not some other account's sub-identity, then just `None`.
 	#[pallet::storage]
 	#[pallet::getter(fn super_of)]
-	pub(super) type SuperOf<T: Config> =
+	pub type SuperOf<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Data), OptionQuery>;
 
 	/// Alternative "sub" identities of this account.
@@ -181,7 +182,7 @@ pub mod pallet {
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn subs_of)]
-	pub(super) type SubsOf<T: Config> = StorageMap<
+	pub type SubsOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -195,7 +196,7 @@ pub mod pallet {
 	/// The index into this can be cast to `RegistrarIndex` to get a valid value.
 	#[pallet::storage]
 	#[pallet::getter(fn registrars)]
-	pub(super) type Registrars<T: Config> = StorageValue<
+	pub type Registrars<T: Config> = StorageValue<
 		_,
 		BoundedVec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>, T::MaxRegistrars>,
 		ValueQuery,
@@ -977,5 +978,14 @@ impl<T: Config> Pallet<T> {
 			.into_iter()
 			.filter_map(|a| SuperOf::<T>::get(&a).map(|x| (a, x.1)))
 			.collect()
+	}
+
+	/// Check if the account has corresponding identity information by the identity field.
+	pub fn has_identity(who: &T::AccountId, fields: u64) -> bool {
+		if let Some(info) = IdentityOf::<T>::get(who).map(|registration| registration.info) {
+			(info.fields().0.bits() & fields) == 1
+		} else {
+			false
+		}
 	}
 }
