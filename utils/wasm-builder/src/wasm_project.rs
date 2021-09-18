@@ -431,7 +431,6 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 	build_cmd
 		.args(&["rustc", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
-		.env("RUSTFLAGS", rustflags)
 		// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir
 		// exclusive). The runner project is created in `CARGO_TARGET_DIR` and executing it will
 		// create a sub target directory inside of `CARGO_TARGET_DIR`.
@@ -446,6 +445,9 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 	if is_release_build() {
 		build_cmd.arg("--release");
 	};
+
+	build_cmd.arg("--");
+	build_cmd.args(rustflags.trim().split(' '));
 
 	println!("{}", colorize_info_message("Information that should be included in a bug report."));
 	println!("{} {:?}", colorize_info_message("Executing build command:"), build_cmd);
