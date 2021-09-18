@@ -474,7 +474,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T, I> = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The society is founded by the given identity. \[founder\]
 		Founded(T::AccountId),
