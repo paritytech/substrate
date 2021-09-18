@@ -779,11 +779,11 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
-	fn initialize_authorities(authorities: &Vec<(AuthorityId, BabeAuthorityWeight)>) {
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
 			let bounded_authorities =
-				WeakBoundedVec::<_, T::MaxAuthorities>::try_from((*authorities).clone())
+				WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
 					.expect("Initial number of authorities should be lower than T::MaxAuthorities");
 			Authorities::<T>::put(&bounded_authorities);
 			NextAuthorities::<T>::put(&bounded_authorities);
