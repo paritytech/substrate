@@ -76,6 +76,7 @@ use futures::{
 		mpsc::{channel, Receiver, Sender},
 		oneshot,
 	},
+	future::BoxFuture,
 	prelude::*,
 };
 use log::{debug, info, log, trace, warn};
@@ -694,8 +695,6 @@ where
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
-	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
 
@@ -868,7 +867,10 @@ where
 		&mut self.justification_sync_link
 	}
 
-	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+	fn proposer(
+		&mut self,
+		block: &B::Header,
+	) -> BoxFuture<'_, Result<Self::Proposer, sp_consensus::Error>> {
 		Box::pin(
 			self.env
 				.init(block)

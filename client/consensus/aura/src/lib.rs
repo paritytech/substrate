@@ -35,11 +35,10 @@ use std::{
 	fmt::Debug,
 	hash::Hash,
 	marker::PhantomData,
-	pin::Pin,
 	sync::Arc,
 };
 
-use futures::prelude::*;
+use futures::{future::BoxFuture, prelude::*};
 use log::{debug, trace};
 
 use codec::{Codec, Decode, Encode};
@@ -332,8 +331,6 @@ where
 	type BlockImport = I;
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
-	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
@@ -466,7 +463,10 @@ where
 		&mut self.justification_sync_link
 	}
 
-	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+	fn proposer(
+		&mut self,
+		block: &B::Header,
+	) -> BoxFuture<'_, Result<Self::Proposer, sp_consensus::Error>> {
 		Box::pin(
 			self.env
 				.init(block)
@@ -558,7 +558,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::executor;
+	use futures::{executor, future::BoxFuture, FutureExt};
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
@@ -592,11 +592,14 @@ mod tests {
 
 	impl Environment<TestBlock> for DummyFactory {
 		type Proposer = DummyProposer;
-		type CreateProposer = futures::future::Ready<Result<DummyProposer, Error>>;
 		type Error = Error;
 
-		fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header) -> Self::CreateProposer {
+		fn init(
+			&mut self,
+			parent_header: &<TestBlock as BlockT>::Header,
+		) -> BoxFuture<'_, Result<Self::Proposer, Self::Error>> {
 			futures::future::ready(Ok(DummyProposer(parent_header.number + 1, self.0.clone())))
+				.boxed()
 		}
 	}
 

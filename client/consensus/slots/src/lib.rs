@@ -33,7 +33,10 @@ pub use slots::SlotInfo;
 use slots::Slots;
 
 use codec::{Decode, Encode};
-use futures::{future::Either, Future, TryFutureExt};
+use futures::{
+	future::{BoxFuture, Either},
+	TryFutureExt,
+};
 use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
@@ -94,12 +97,6 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `JustificationSyncLink`, allows hooking into the sync module to control the
 	/// justification sync process.
 	type JustificationSyncLink: JustificationSyncLink<B>;
-
-	/// The type of future resolving to the proposer.
-	type CreateProposer: Future<Output = Result<Self::Proposer, sp_consensus::Error>>
-		+ Send
-		+ Unpin
-		+ 'static;
 
 	/// The type of proposer to use to build blocks.
 	type Proposer: Proposer<B> + Send;
@@ -188,7 +185,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink;
 
 	/// Returns a `Proposer` to author on top of the given block.
-	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
+	fn proposer(
+		&mut self,
+		block: &B::Header,
+	) -> BoxFuture<'_, Result<Self::Proposer, sp_consensus::Error>>;
 
 	/// Returns a [`TelemetryHandle`] if any.
 	fn telemetry(&self) -> Option<TelemetryHandle>;

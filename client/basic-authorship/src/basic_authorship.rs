@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use futures::{
 	channel::oneshot,
 	future,
-	future::{Future, FutureExt},
+	future::{BoxFuture, Future, FutureExt},
 	select,
 };
 use log::{debug, error, info, trace, warn};
@@ -207,12 +207,14 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
-	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
 	type Proposer = Proposer<B, Block, C, A, PR>;
 	type Error = sp_blockchain::Error;
 
-	fn init(&mut self, parent_header: &<Block as BlockT>::Header) -> Self::CreateProposer {
-		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now))))
+	fn init(
+		&mut self,
+		parent_header: &<Block as BlockT>::Header,
+	) -> BoxFuture<'_, Result<Self::Proposer, Self::Error>> {
+		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now)))).boxed()
 	}
 }
 

@@ -23,7 +23,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use futures::prelude::*;
+use futures::{future::BoxFuture, prelude::*};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, DigestFor, HashFor, NumberFor},
@@ -91,17 +91,15 @@ impl From<BlockOrigin> for sp_core::ExecutionContext {
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B> + Send + 'static;
-	/// A future that resolves to the proposer.
-	type CreateProposer: Future<Output = Result<Self::Proposer, Self::Error>>
-		+ Send
-		+ Unpin
-		+ 'static;
 	/// Error which can occur upon creation.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&mut self, parent_header: &B::Header) -> Self::CreateProposer;
+	fn init(
+		&mut self,
+		parent_header: &B::Header,
+	) -> BoxFuture<'_, Result<Self::Proposer, Self::Error>>;
 }
 
 /// A proposal that is created by a [`Proposer`].

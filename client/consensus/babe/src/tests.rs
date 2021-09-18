@@ -23,7 +23,7 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-use futures::executor::block_on;
+use futures::{executor::block_on, future::BoxFuture, FutureExt};
 use log::debug;
 use rand::RngCore;
 use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
@@ -87,11 +87,13 @@ struct DummyProposer {
 }
 
 impl Environment<TestBlock> for DummyFactory {
-	type CreateProposer = future::Ready<Result<DummyProposer, Error>>;
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header) -> Self::CreateProposer {
+	fn init(
+		&mut self,
+		parent_header: &<TestBlock as BlockT>::Header,
+	) -> BoxFuture<'_, Result<Self::Proposer, Self::Error>> {
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot();
@@ -102,6 +104,7 @@ impl Environment<TestBlock> for DummyFactory {
 			parent_number: *parent_header.number(),
 			parent_slot,
 		}))
+		.boxed()
 	}
 }
 
