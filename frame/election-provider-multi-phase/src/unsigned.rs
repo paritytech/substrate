@@ -160,9 +160,9 @@ impl<T: Config> Pallet<T> {
 		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned(solution, _) = &call {
+				if let Call::submit_unsigned { raw_solution, .. } = &call {
 					// prevent errors arising from state changes in a forkful chain
-					Self::basic_checks(solution, "restored")?;
+					Self::basic_checks(raw_solution, "restored")?;
 					Ok(call)
 				} else {
 					Err(MinerError::SolutionCallInvalid)
@@ -213,7 +213,8 @@ impl<T: Config> Pallet<T> {
 		let (raw_solution, witness) = Self::mine_and_check()?;
 
 		let score = raw_solution.score.clone();
-		let call: Call<T> = Call::submit_unsigned(Box::new(raw_solution), witness).into();
+		let call: Call<T> =
+			Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness }.into();
 
 		log!(
 			debug,
@@ -763,7 +764,10 @@ mod tests {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -833,7 +837,10 @@ mod tests {
 
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -870,7 +877,8 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let raw = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(raw.clone()), witness());
+			let call =
+				Call::submit_unsigned { raw_solution: Box::new(raw.clone()), witness: witness() };
 			assert_eq!(raw.solution.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -896,7 +904,10 @@ mod tests {
 
 				let solution =
 					RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-				let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+				let call = Call::submit_unsigned {
+					raw_solution: Box::new(solution.clone()),
+					witness: witness(),
+				};
 
 				assert_eq!(
 					<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -923,7 +934,10 @@ mod tests {
 			// This is in itself an invalid BS solution.
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -944,7 +958,10 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned(Box::new(solution.clone()), correct_witness);
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: correct_witness,
+			};
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -1350,7 +1367,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = codec::Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(..))));
+			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned { .. })));
 		})
 	}
 
@@ -1367,7 +1384,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
 			let call = match extrinsic.call {
-				OuterCall::MultiPhase(call @ Call::submit_unsigned(..)) => call,
+				OuterCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
 				_ => panic!("bad call: unexpected submission"),
 			};
 

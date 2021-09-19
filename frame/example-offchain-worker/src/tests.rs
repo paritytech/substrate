@@ -228,7 +228,7 @@ fn should_submit_signed_transaction_on_chain() {
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature.unwrap().0, 0);
-		assert_eq!(tx.call, Call::Example(crate::Call::submit_price(15523)));
+		assert_eq!(tx.call, Call::Example(crate::Call::submit_price { price: 15523 }));
 	});
 }
 
@@ -274,10 +274,10 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::Example(crate::Call::submit_price_unsigned_with_signed_payload(
-			body,
+		if let Call::Example(crate::Call::submit_price_unsigned_with_signed_payload {
+			price_payload: body,
 			signature,
-		)) = tx.call
+		}) = tx.call
 		{
 			assert_eq!(body, price_payload);
 
@@ -334,10 +334,10 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::Example(crate::Call::submit_price_unsigned_with_signed_payload(
-			body,
+		if let Call::Example(crate::Call::submit_price_unsigned_with_signed_payload {
+			price_payload: body,
 			signature,
-		)) = tx.call
+		}) = tx.call
 		{
 			assert_eq!(body, price_payload);
 
@@ -374,7 +374,10 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		assert_eq!(tx.call, Call::Example(crate::Call::submit_price_unsigned(1, 15523)));
+		assert_eq!(
+			tx.call,
+			Call::Example(crate::Call::submit_price_unsigned { block_number: 1, price: 15523 })
+		);
 	});
 }
 
