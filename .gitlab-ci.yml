@@ -274,8 +274,7 @@ cargo-clippy:
   <<:                              *test-refs
   script:
     - rustup +nightly component add clippy
-    - cargo +nightly install cargo-lints
-    - cargo +nightly lints clippy
+    - ./.maintain/clippy.sh
   allow_failure:                   true
 
 cargo-check-benches:
