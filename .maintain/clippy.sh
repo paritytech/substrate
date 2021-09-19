@@ -5,7 +5,7 @@
 set -e
 
 # +nightly
-SKIP_WASM_BUILD=1 cargo clippy -- \
+SKIP_WASM_BUILD=1 cargo +nightly clippy -- \
 -A clippy::zero_prefixed_literal \
 -A clippy::tabs_in_doc_comments \
 -A clippy::type_complexity \
