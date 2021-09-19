@@ -21,13 +21,15 @@ use frame_support::{
 	traits::Get,
 	weights::{DispatchInfo, PostDispatchInfo},
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, SignedExtension},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 };
 
 /// Proof-of-Validity resource limit check.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct CheckPov<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckPov<T>

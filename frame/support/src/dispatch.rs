@@ -2775,21 +2775,21 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-        weight: 5,
-        class: DispatchClass::Operational,
-        pays_fee: Pays::Yes,
-        pov_size: 0,
-      },
+				weight: 5,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+				pov_size: 0,
+			},
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-        weight: 3,
-        class: DispatchClass::Normal,
-        pays_fee: Pays::Yes,
-        pov_size: 0,
-      },
+				weight: 3,
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+				pov_size: 0,
+			},
 		);
 	}
 

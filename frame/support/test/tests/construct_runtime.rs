@@ -526,11 +526,11 @@ fn call_weight_should_attach_to_call_enum() {
 	assert_eq!(
 		module3::Call::<Runtime>::operational {}.get_dispatch_info(),
 		DispatchInfo {
-      weight: 5,
-      class: DispatchClass::Operational,
-      pays_fee: Pays::Yes,
-      pov_size: 0,
-    },
+			weight: 5,
+			class: DispatchClass::Operational,
+			pays_fee: Pays::Yes,
+			pov_size: 0,
+		},
 	);
 	// custom basic
 	assert_eq!(
