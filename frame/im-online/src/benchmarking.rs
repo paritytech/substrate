@@ -47,7 +47,7 @@ pub fn create_heartbeat<T: Config>(
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
 	let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys)
-		.map_err(|| "More than the maximum number of keys provided")?;
+		.map_err(|()| "More than the maximum number of keys provided")?;
 	Keys::<T>::put(bounded_keys);
 
 	let network_state = OpaqueNetworkState {
