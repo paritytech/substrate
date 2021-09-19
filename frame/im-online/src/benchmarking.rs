@@ -46,7 +46,7 @@ pub fn create_heartbeat<T: Config>(
 	for _ in 0..k {
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
-	let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys)
+	let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys.clone())
 		.map_err(|()| "More than the maximum number of keys provided")?;
 	Keys::<T>::put(bounded_keys);
 
