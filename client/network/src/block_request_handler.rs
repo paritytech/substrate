@@ -85,6 +85,7 @@ struct SeenRequestsKey<B: BlockT> {
 	support_multiple_justifications: bool,
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.peer.hash(state);
