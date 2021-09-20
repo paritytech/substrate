@@ -567,7 +567,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		// exclude part `Storage` in order not to check its metadata in tests.
+		// Exclude part `Storage` in order not to check its metadata in tests.
 		System: frame_system exclude_parts { Storage },
 		Example: pallet,
 		Example2: pallet2 exclude_parts { Call },
