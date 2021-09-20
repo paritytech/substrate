@@ -649,11 +649,8 @@ impl<T: Config> Pallet<T> {
 	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
 		let segment_idx = SegmentIndex::<T>::get();
 		let mut segment = UnderConstruction::<T>::get(&segment_idx);
-		if segment.len() < T::MaxSegmentLength::get() as usize {
+		if segment.try_push(*randomness).is_ok() {
 			// push onto current segment: not full.
-			segment
-				.try_push(*randomness)
-				.expect("UnderConstruction size is equal to T::MaxSegmentLength");
 			UnderConstruction::<T>::insert(&segment_idx, &segment);
 		} else {
 			// move onto the next segment and update the index.
