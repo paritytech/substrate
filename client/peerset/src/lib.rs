@@ -197,7 +197,7 @@ pub enum Message {
 pub struct IncomingIndex(pub u64);
 
 impl From<u64> for IncomingIndex {
-	fn from(val: u64) -> IncomingIndex {
+	fn from(val: u64) -> Self {
 		Self(val)
 	}
 }
