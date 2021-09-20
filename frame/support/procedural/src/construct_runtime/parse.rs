@@ -601,16 +601,13 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 								`{}` part. Available parts are: {}.",
 								pallet.name,
 								part.keyword.name(),
-								pallet_parts.iter().fold(
-									String::new(),
-									|fold, part| {
-										if fold.is_empty() {
-											format!("`{}`", part.keyword.name())
-										} else {
-											format!("{}, `{}`", fold, part.keyword.name())
-										}
+								pallet_parts.iter().fold(String::new(), |fold, part| {
+									if fold.is_empty() {
+										format!("`{}`", part.keyword.name())
+									} else {
+										format!("{}, `{}`", fold, part.keyword.name())
 									}
-								)
+								})
 							);
 							return Err(syn::Error::new(part.keyword.span(), msg))
 						}
