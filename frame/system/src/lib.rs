@@ -94,6 +94,7 @@ use frame_support::{
 	},
 	Parameter,
 };
+use scale_info::TypeInfo;
 use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
 
 #[cfg(feature = "std")]
@@ -204,7 +205,8 @@ pub mod pallet {
 			+ sp_std::hash::Hash
 			+ sp_std::str::FromStr
 			+ MaybeMallocSizeOf
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// The output of the `Hashing` function.
 		type Hash: Parameter
@@ -224,7 +226,7 @@ pub mod pallet {
 			+ MaxEncodedLen;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
-		type Hashing: Hash<Output = Self::Hash>;
+		type Hashing: Hash<Output = Self::Hash> + TypeInfo;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter
@@ -276,7 +278,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default;
+		type AccountData: Member + FullCodec + Clone + Default + TypeInfo;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -522,7 +524,6 @@ pub mod pallet {
 
 	/// Event for the System pallet.
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId", T::Hash = "Hash")]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
@@ -763,7 +764,7 @@ pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -781,7 +782,7 @@ impl Default for Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
@@ -793,7 +794,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 }
 
 /// Origin for the System pallet.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -833,7 +834,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
@@ -853,7 +854,7 @@ pub struct AccountInfo<Index, AccountData> {
 
 /// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
 /// happened.
-#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
 pub struct LastRuntimeUpgradeInfo {
 	pub spec_version: codec::Compact<u32>,
