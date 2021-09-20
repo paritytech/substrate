@@ -74,7 +74,7 @@ impl syn::parse::Parse for ExpandAfterDef {
 // `with` must be some (Option is used for internal simplification).
 // `after` musn't be empty and only contains Ident or Punct
 fn expand_in_stream(
-	after: &Vec<TokenTree>,
+	after: &[TokenTree],
 	with: &mut Option<TokenStream>,
 	stream: TokenStream,
 ) -> Result<TokenStream, ()> {
@@ -105,8 +105,8 @@ fn expand_in_stream(
 				use TokenTree::{Ident, Punct};
 
 				let other_match_pattern = match (&other, &after[match_cursor]) {
-					(Ident(i1), Ident(i2)) if i1 == i2 => true,
-					(Punct(p1), Punct(p2)) if p1.as_char() == p2.as_char() => true,
+					(Ident(i1), Ident(i2)) => i1 == i2,
+					(Punct(p1), Punct(p2)) => p1.as_char() == p2.as_char(),
 					_ => false,
 				};
 

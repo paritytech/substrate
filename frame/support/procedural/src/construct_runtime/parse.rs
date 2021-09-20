@@ -598,7 +598,7 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 						if !available_parts.contains(part.keyword.name()) {
 							let msg = format!(
 								"Invalid pallet part specified, the pallet `{}` doesn't have the \
-								part `{}`. Available parts are: {}.",
+								`{}` part. Available parts are: {}.",
 								pallet.name,
 								part.keyword.name(),
 								pallet_parts.iter().enumerate().fold(
