@@ -516,7 +516,7 @@ test-wasmer-sandbox:
   variables:
     <<:                            *default-vars
   script:
-    - time cargo test --release --features runtime-benchmarks,wasmer-sandbox
+    - time cargo test --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests
     - sccache -s
 
 cargo-check-macos:
