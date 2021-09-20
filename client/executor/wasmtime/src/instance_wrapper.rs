@@ -399,6 +399,7 @@ impl InstanceWrapper {
 	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
 	/// returned it must be ensured that only one mutable and no shared references to memory exists
 	/// at the same time.
+	#[allow(clippy::mut_from_ref)]
 	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
 		let ptr = self.memory.data_ptr();
 		let len = self.memory.data_size();
