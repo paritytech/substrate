@@ -97,6 +97,7 @@ use frame_support::weights::Weight;
 
 use codec::{Decode, Encode};
 use frame_system::{self as system, ensure_signed};
+use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
@@ -136,7 +137,7 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 pub type BountyIndex = u32;
 
 /// A bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -153,7 +154,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 }
 
 /// The status of a bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BountyStatus<AccountId, BlockNumber> {
 	/// The bounty is proposed and waiting for approval.
 	Proposed,

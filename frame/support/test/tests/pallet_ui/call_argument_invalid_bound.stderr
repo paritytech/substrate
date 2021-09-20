@@ -1,26 +1,26 @@
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
-  --> $DIR/call_argument_invalid_bound.rs:20:41
+  --> $DIR/call_argument_invalid_bound.rs:20:36
    |
 20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                               ^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
+   |                                          ^^^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
    |
    = help: the trait `std::fmt::Debug` is not implemented for `<T as pallet::Config>::Bar`
    = note: required because of the requirements on the impl of `std::fmt::Debug` for `&<T as pallet::Config>::Bar`
    = note: required for the cast to the object type `dyn std::fmt::Debug`
 
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
-  --> $DIR/call_argument_invalid_bound.rs:20:41
+  --> $DIR/call_argument_invalid_bound.rs:20:36
    |
 20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                               ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
+   |                                          ^^^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
    |
    = note: required by `clone`
 
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
-  --> $DIR/call_argument_invalid_bound.rs:20:41
+  --> $DIR/call_argument_invalid_bound.rs:20:36
    |
 20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                               ^
+   |                                          ^^^
    |
 help: consider further restricting this bound
    |

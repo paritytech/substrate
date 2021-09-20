@@ -217,6 +217,7 @@ use frame_support::{
 	weights::{DispatchClass, Weight},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
+use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Saturating, Zero},
 	UpperOf,
@@ -311,7 +312,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for NoFallback<T>
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
@@ -373,7 +374,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -399,7 +400,7 @@ impl Default for ElectionCompute {
 ///
 /// Such a solution should never become effective in anyway before being checked by the
 /// `Pallet::feasibility_check`.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord, TypeInfo)]
 pub struct RawSolution<S> {
 	/// the solution itself.
 	pub solution: S,
@@ -417,7 +418,7 @@ impl<C: Default> Default for RawSolution<C> {
 }
 
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
 pub struct ReadySolution<A> {
 	/// The final supports of the solution.
 	///
@@ -436,7 +437,7 @@ pub struct ReadySolution<A> {
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
 /// These are stored together because they are often accessed together.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
 pub struct RoundSnapshot<A> {
 	/// All of the voters.
 	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
@@ -449,7 +450,7 @@ pub struct RoundSnapshot<A> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -619,6 +620,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
+		/// The maximum number of voters to put in the snapshot. At the moment, snapshots are only
+		/// over a single block, but once multi-block elections are introduced they will take place
+		/// over multiple blocks.
+		///
+		/// Also, note the data type: If the voters are represented by a `u32` in `type
+		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
+		#[pallet::constant]
+		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -643,7 +653,8 @@ pub mod pallet {
 			+ Clone
 			+ sp_std::fmt::Debug
 			+ Ord
-			+ NposSolution;
+			+ NposSolution
+			+ TypeInfo;
 
 		/// Configuration for the fallback
 		type Fallback: ElectionProvider<
@@ -949,7 +960,8 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call = Call::submit(raw_solution.clone(), num_signed_submissions);
+				let call =
+					Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
@@ -985,10 +997,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		<T as frame_system::Config>::AccountId = "AccountId",
-		BalanceOf<T> = "Balance"
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
@@ -1042,14 +1050,14 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned(solution, _) = call {
+			if let Call::submit_unsigned { raw_solution, .. } = call {
 				// Discard solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => return InvalidTransaction::Call.into(),
 				}
 
-				let _ = Self::unsigned_pre_dispatch_checks(solution)
+				let _ = Self::unsigned_pre_dispatch_checks(raw_solution)
 					.map_err(|err| {
 						log!(debug, "unsigned transaction validation failed due to {:?}", err);
 						err
@@ -1060,11 +1068,11 @@ pub mod pallet {
 					// The higher the score[0], the better a solution is.
 					.priority(
 						T::MinerTxPriority::get()
-							.saturating_add(solution.score[0].saturated_into()),
+							.saturating_add(raw_solution.score[0].saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
-					.and_provides(solution.round)
+					.and_provides(raw_solution.round)
 					// Transaction should stay in the pool for the duration of the unsigned phase.
 					.longevity(T::UnsignedPhase::get().saturated_into::<u64>())
 					// We don't propagate this. This can never be validated at a remote node.
@@ -1076,8 +1084,8 @@ pub mod pallet {
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::submit_unsigned(solution, _) = call {
-				Self::unsigned_pre_dispatch_checks(solution)
+			if let Call::submit_unsigned { raw_solution, .. } = call {
+				Self::unsigned_pre_dispatch_checks(raw_solution)
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
@@ -1275,7 +1283,8 @@ impl<T: Config> Pallet<T> {
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let voter_limit = <SolutionVoterIndexOf<T>>::max_value().saturated_into::<usize>();
+		// for now we have just a single block snapshot.
+		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
 
 		let targets =
 			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
@@ -1934,7 +1943,8 @@ mod tests {
 	}
 
 	#[test]
-	fn snapshot_creation_fails_if_too_big() {
+	fn snapshot_too_big_failure_onchain_fallback() {
+		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
@@ -1950,6 +1960,49 @@ mod tests {
 			roll_to(29);
 			let supports = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+		});
+	}
+
+	#[test]
+	fn snapshot_too_big_failure_no_fallback() {
+		// and if the backup mode is nothing, we go into the emergency mode..
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			crate::mock::Targets::set(
+				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+			);
+
+			// Signed phase failed to open.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// Unsigned phase failed to open.
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(29);
+			let err = MultiPhase::elect().unwrap_err();
+			assert_eq!(err, ElectionError::Fallback("NoFallback."));
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+		});
+	}
+
+	#[test]
+	fn snapshot_too_big_truncate() {
+		// but if there are too many voters, we simply truncate them.
+		ExtBuilder::default().build_and_execute(|| {
+			// we have 8 voters in total.
+			assert_eq!(crate::mock::Voters::get().len(), 8);
+			// but we want to take 2.
+			crate::mock::VoterSnapshotPerBlock::set(2);
+
+			// Signed phase opens just fine.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			assert_eq!(
+				MultiPhase::snapshot_metadata().unwrap(),
+				SolutionOrSnapshotSize { voters: 2, targets: 4 }
+			);
 		})
 	}
 
