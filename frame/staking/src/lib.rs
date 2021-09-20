@@ -157,22 +157,31 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
+//! use frame_support::pallet_prelude::*;
 //! use frame_system::ensure_signed;
 //! use pallet_staking::{self as staking};
 //!
-//! pub trait Config: staking::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//!   use super::*;
 //!
-//! decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//!         /// Reward a validator.
-//!         #[weight = 0]
-//!         pub fn reward_myself(origin) -> dispatch::DispatchResult {
-//!             let reported = ensure_signed(origin)?;
-//!             <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
-//!             Ok(())
-//!         }
+//!   #[pallet::pallet]
+//!   #[pallet::generate_store(pub(crate) trait Store)]
+//!   pub struct Pallet<T>(_);
+//!
+//!   #[pallet::config]
+//!   pub trait Config: staking::Config {}
+//!
+//!   #[pallet::call]
+//!   impl<T: Config> Pallet<T> {
+//!     /// Reward a validator.
+//!     #[weight = 0]
+//!     pub fn reward_myself(origin) -> dispatch::DispatchResult {
+//!       let reported = ensure_signed(origin)?;
+//!       <staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
+//!       Ok(())
 //!     }
+//!   }
 //! }
 //! # fn main() { }
 //! ```
