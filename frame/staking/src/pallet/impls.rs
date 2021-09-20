@@ -203,7 +203,12 @@ impl<T: Config> Pallet<T> {
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(
 		controller: &T::AccountId,
-		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
+		ledger: &StakingLedger<
+			T::AccountId,
+			BalanceOf<T>,
+			T::MaxUnlockingChunks,
+			T::MaxErasForRewards,
+		>,
 	) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);

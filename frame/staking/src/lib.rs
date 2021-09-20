@@ -299,10 +299,11 @@ pub mod weights;
 
 mod pallet;
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	traits::{Currency, Get},
 	weights::Weight,
+	BoundedVec, WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -314,7 +315,11 @@ use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
+use sp_std::{
+	collections::btree_map::BTreeMap,
+	convert::{From, TryFrom},
+	prelude::*,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -436,9 +441,19 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
+/// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`
+/// `RewardsLimit` is the size limit of the `WeakBoundedVec` representing `claimed_rewards`
 #[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct StakingLedger<AccountId, Balance: HasCompact> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(UnlockingLimit: Get<u32>, RewardsLimit: Get<u32>))]
+pub struct StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
+where
+	Balance: HasCompact,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
+	AccountId: MaxEncodedLen,
+	Balance: MaxEncodedLen,
+{
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total amount of the stash's balance that we are currently accounting for.
@@ -451,31 +466,39 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub active: Balance,
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance>>,
+	pub unlocking: BoundedVec<UnlockChunk<Balance>, UnlockingLimit>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
-	pub claimed_rewards: Vec<EraIndex>,
+	pub claimed_rewards: WeakBoundedVec<EraIndex, RewardsLimit>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
-	StakingLedger<AccountId, Balance>
+impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
+	StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
+where
+	Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
+	AccountId: MaxEncodedLen,
+	Balance: MaxEncodedLen,
 {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
-		let unlocking = self
-			.unlocking
-			.into_iter()
-			.filter(|chunk| {
-				if chunk.era > current_era {
-					true
-				} else {
-					total = total.saturating_sub(chunk.value);
-					false
-				}
-			})
-			.collect();
+		let unlocking = BoundedVec::<_, UnlockingLimit>::try_from(
+			self.unlocking
+				.into_iter()
+				.filter(|chunk| {
+					if chunk.era > current_era {
+						true
+					} else {
+						total = total.saturating_sub(chunk.value);
+						false
+					}
+				})
+				.collect::<Vec<UnlockChunk<Balance>>>(),
+		)
+		.expect("unlocking vector only reduced in size here.");
 
 		Self {
 			stash: self.stash,
@@ -512,9 +535,14 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 	}
 }
 
-impl<AccountId, Balance> StakingLedger<AccountId, Balance>
+impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
+	StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
 	Balance: AtLeast32BitUnsigned + Saturating + Copy,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
+	AccountId: MaxEncodedLen,
+	Balance: MaxEncodedLen,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`

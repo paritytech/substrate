@@ -25,6 +25,7 @@ use frame_support::{
 		LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
+	BoundedVec, WeakBoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
@@ -32,7 +33,11 @@ use sp_runtime::{
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::SessionIndex;
-use sp_std::{convert::From, prelude::*, result};
+use sp_std::{
+	convert::{From, TryFrom},
+	prelude::*,
+	result,
+};
 
 mod impls;
 
@@ -45,7 +50,6 @@ use crate::{
 	ValidatorPrefs,
 };
 
-pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
@@ -54,6 +58,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -141,6 +146,23 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
+		/// The maximum number of unapplied slashes to be stored in `UnappliedSlashes`
+		#[pallet::constant]
+		type MaxUnappliedSlashes: Get<u32>;
+
+		/// The maximum number of invulnerables, we expect no more than four invulnerables and
+		/// restricted to testnets.
+		#[pallet::constant]
+		type MaxNbOfInvulnerables: Get<u32>;
+
+		/// Maximum number of unlocking chunks
+		#[pallet::constant]
+		type MaxUnlockingChunks: Get<u32>;
+
+		/// Maximum number of eras for which the stakers behind a validator have claimed rewards.
+		#[pallet::constant]
+		type MaxErasForRewards: Get<u32>;
+
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
@@ -185,12 +207,13 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_validator_count)]
 	pub type MinimumValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
-	/// easy to initialize and the performance hit is minimal (we expect no more than four
-	/// invulnerables) and restricted to testnets.
+	/// Any validators that may never be slashed or forcibly kicked. It's a `BoundedVec`
+	/// since they're easy to initialize and are bounded in size, and the performance hit
+	/// is minimal (we expect no more than four invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub type Invulnerables<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxNbOfInvulnerables>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
@@ -208,8 +231,12 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T::AccountId, BalanceOf<T>>>;
+	pub type Ledger<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks, T::MaxErasForRewards>,
+	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
@@ -381,7 +408,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		EraIndex,
-		Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>,
+		WeakBoundedVec<UnappliedSlash<T::AccountId, BalanceOf<T>>, T::MaxUnappliedSlashes>,
 		ValueQuery,
 	>;
 
@@ -489,13 +516,18 @@ pub mod pallet {
 			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
-			Invulnerables::<T>::put(&self.invulnerables);
 			ForceEra::<T>::put(self.force_era);
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			StorageVersion::<T>::put(Releases::V7_0_0);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
+
+			let invulnerables = BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(
+				self.invulnerables,
+			)
+			.expect("Too many invulnerables passed, a runtime parameters adjustment may be needed");
+			Invulnerables::<T>::put(&invulnerables);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
 				log!(
@@ -625,6 +657,8 @@ pub mod pallet {
 		/// There are too many validators in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyValidators,
+		/// Too many invulnerables are passed, a runtime configuration adjustment may be needed
+		TooManyInvulnerables,
 	}
 
 	#[pallet::hooks]
@@ -736,12 +770,20 @@ pub mod pallet {
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded(stash.clone(), value));
+
+			let claimed_rewards = WeakBoundedVec::<_, T::MaxErasForRewards>::force_from(
+				(last_reward_era..current_era).collect(),
+				Some(
+					"Warning: The size of the claimed rewards is bigger than expected. \
+  					A runtime configuration adjustment may be needed.",
+				),
+			);
 			let item = StakingLedger {
 				stash,
 				total: value,
 				active: value,
-				unlocking: vec![],
-				claimed_rewards: (last_reward_era..current_era).collect(),
+				unlocking: BoundedVec::<_, T::MaxUnlockingChunks>::default(),
+				claimed_rewards,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
@@ -805,7 +847,7 @@ pub mod pallet {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
+		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
@@ -822,7 +864,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS, Error::<T>::NoMoreChunks,);
 
 			let mut value = value.min(ledger.active);
 
@@ -849,7 +890,10 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				ledger.unlocking.push(UnlockChunk { value, era });
+				ledger
+					.unlocking
+					.try_push(UnlockChunk { value, era })
+					.map_err(|_| Error::<T>::NoMoreChunks);
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
@@ -1208,6 +1252,8 @@ pub mod pallet {
 			invulnerables: Vec<T::AccountId>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let invulnerables = BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(invulnerables)
+				.map_err(|_| Error::<T>::TooManyInvulnerables)?;
 			<Invulnerables<T>>::put(invulnerables);
 			Ok(())
 		}
@@ -1335,10 +1381,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
-		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS as u32))]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get()))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
