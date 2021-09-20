@@ -567,7 +567,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system,
+		// exclude part `Storage` in order not to check its metadata in tests.
+		System: frame_system exclude_parts { Storage },
 		Example: pallet,
 		Example2: pallet2 exclude_parts { Call },
 		Example4: pallet4 use_parts { Call },
@@ -1025,7 +1026,7 @@ fn metadata() {
 		PalletMetadata {
 			index: 0,
 			name: "System",
-			storage: None,
+			storage: None, // The storage metadatas have been excluded.
 			calls: Some(meta_type::<frame_system::Call<Runtime>>().into()),
 			event: Some(meta_type::<frame_system::Event<Runtime>>().into()),
 			constants: vec![
