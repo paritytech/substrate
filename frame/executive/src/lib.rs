@@ -229,7 +229,7 @@ where
 			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
 			as
 			OnRuntimeUpgrade
-		>::pre_upgrade()?;
+		>::pre_upgrade().unwrap();
 
 		let weight = Self::execute_on_runtime_upgrade();
 
@@ -237,7 +237,7 @@ where
 			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
 			as
 			OnRuntimeUpgrade
-		>::post_upgrade()?;
+		>::post_upgrade().unwrap();
 
 		Ok(weight)
 	}

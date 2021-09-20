@@ -297,6 +297,75 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	}
 }
 
+/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
+///
+/// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
+/// entity.
+///
+/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each entity. The weights
+/// are ascending, the higher, the better. In the long term, if this trait ends up having use cases
+/// outside of the election context, it is easy enough to make it generic over the `VoteWeight`.
+///
+/// Something that implements this trait will do a best-effort sort over ids, and thus can be
+/// used on the implementing side of [`ElectionDataProvider`].
+pub trait SortedListProvider<AccountId> {
+	/// The list's error type.
+	type Error;
+
+	/// An iterator over the list, which can have `take` called on it.
+	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
+
+	/// The current count of ids in the list.
+	fn count() -> u32;
+
+	/// Return true if the list already contains `id`.
+	fn contains(id: &AccountId) -> bool;
+
+	/// Hook for inserting a new id.
+	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+
+	/// Hook for updating a single id.
+	fn on_update(id: &AccountId, weight: VoteWeight);
+
+	/// Hook for removing am id from the list.
+	fn on_remove(id: &AccountId);
+
+	/// Regenerate this list from scratch. Returns the count of items inserted.
+	///
+	/// This should typically only be used at a runtime upgrade.
+	fn regenerate(
+		all: impl IntoIterator<Item = AccountId>,
+		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+	) -> u32;
+
+	/// Remove `maybe_count` number of items from the list. Returns the number of items actually
+	/// removed. WARNING: removes all items if `maybe_count` is `None`, which should never be done
+	/// in production settings because it can lead to an unbounded amount of storage accesses.
+	fn clear(maybe_count: Option<u32>) -> u32;
+
+	/// Sanity check internal state of list. Only meant for debug compilation.
+	fn sanity_check() -> Result<(), &'static str>;
+
+	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
+	/// in their list position.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
+		VoteWeight::MAX
+	}
+}
+
+/// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
+/// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
+/// `SortedListProvider`.
+pub trait VoteWeightProvider<AccountId> {
+	/// Get the current `VoteWeight` of `who`.
+	fn vote_weight(who: &AccountId) -> VoteWeight;
+
+	/// For tests and benchmarks, set the `VoteWeight`.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
+}
+
 /// Something that can compute the result to an NPoS solution.
 pub trait NposSolver {
 	/// The account identifier type of this solver.

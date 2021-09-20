@@ -39,9 +39,11 @@ rand_chacha = { version = "0.2", default-features = false, optional = true }
 [dev-dependencies]
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
+pallet-bags-list = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
