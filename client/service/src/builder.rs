@@ -22,7 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, MallocSizeOfWasm, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -56,6 +56,7 @@ use sc_rpc::{
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
@@ -68,7 +69,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, HashFor, Zero},
 	BuildStorage,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
@@ -231,7 +231,7 @@ where
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let chain_spec = &config.chain_spec;
@@ -317,7 +317,7 @@ where
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let db_storage = {
@@ -424,7 +424,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
-	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	pub rpc_builder:
+		Box<dyn FnOnce(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<()>, Error>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -495,7 +496,7 @@ where
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ MallocSizeOfWasm
+		+ parity_util_mem::MallocSizeOf
 		+ 'static,
 {
 	let SpawnTasksParams {
@@ -579,10 +580,7 @@ where
 		)
 	};
 
-	// TODO(niklasad1): this will block the current thread until the servers have been started
-	// we could spawn it in the background but then the errors must be handled via a channel or
-	// something
-	let rpc = futures::executor::block_on(start_rpc_servers(&config, gen_rpc_module))?;
+	let rpc = start_rpc_servers(&config, gen_rpc_module)?;
 
 	// Spawn informant task
 	spawn_handle.spawn(
@@ -595,8 +593,6 @@ where
 		),
 	);
 
-	// NOTE(niklasad1): we spawn jsonrpsee in seperate thread now.
-	// this will not shutdown the server.
 	task_manager.keep_alive((config.base_path, rpc));
 
 	Ok(())
@@ -656,10 +652,8 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	Ok(telemetry.handle())
 }
 
-// Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
-// specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
-	_deny_unsafe: DenyUnsafe,
+	deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -669,8 +663,10 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
-) -> RpcModule<()>
+	rpc_builder: Box<
+		dyn FnOnce(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<()>, Error>,
+	>,
+) -> Result<RpcModule<()>, Error>
 where
 	TBl: BlockT,
 	TCl: ProvideRuntimeApi<TBl>
@@ -691,11 +687,6 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 {
-	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
-
-	// TODO(niklasad1): fix CORS.
-	let deny_unsafe = DenyUnsafe::No;
-
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
 		impl_name: config.impl_name.clone(),
@@ -703,7 +694,7 @@ where
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
-	let task_executor = Arc::new(SubscriptionTaskExecutor::new(spawn_handle));
+	let task_executor = SubscriptionTaskExecutor::new(spawn_handle);
 
 	let mut rpc_api = RpcModule::new(());
 
@@ -755,19 +746,19 @@ where
 	if let Some(storage) = offchain_storage {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
 
-		rpc_api.merge(offchain).expect(UNIQUE_METHOD_NAMES_PROOF);
+		rpc_api.merge(offchain).map_err(|e| Error::Application(e.into()))?;
 	}
 
-	rpc_api.merge(chain).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(author).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(system).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(state).expect(UNIQUE_METHOD_NAMES_PROOF);
-	rpc_api.merge(child_state).expect(UNIQUE_METHOD_NAMES_PROOF);
+	rpc_api.merge(chain).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(author).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(system).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(state).map_err(|e| Error::Application(e.into()))?;
+	rpc_api.merge(child_state).map_err(|e| Error::Application(e.into()))?;
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
-	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone());
-	rpc_api.merge(extra_rpcs).expect(UNIQUE_METHOD_NAMES_PROOF);
+	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone())?;
+	rpc_api.merge(extra_rpcs).map_err(|e| Error::Application(e.into()))?;
 
-	rpc_api
+	Ok(rpc_api)
 }
 
 /// Parameters to pass into `build_network`.

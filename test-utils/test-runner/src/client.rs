@@ -29,7 +29,7 @@ use sc_client_api::backend::Backend;
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{
 	build_network, new_full_parts, spawn_tasks, BuildNetworkParams, ChainSpec, Configuration,
-	SpawnTasksParams, TFullBackend, TFullClient, TaskExecutor, TaskManager,
+	SpawnTasksParams, TFullBackend, TFullClient, TaskManager,
 };
 use sc_transaction_pool::BasicPool;
 use sc_transaction_pool_api::TransactionPool;
@@ -73,7 +73,7 @@ pub enum ConfigOrChainSpec {
 	/// Configuration object
 	Config(Configuration),
 	/// Chain spec object
-	ChainSpec(Box<dyn ChainSpec>, TaskExecutor),
+	ChainSpec(Box<dyn ChainSpec>, tokio::runtime::Handle),
 }
 /// Creates all the client parts you need for [`Node`](crate::node::Node)
 pub fn client_parts<T>(
@@ -102,8 +102,8 @@ where
 	use sp_consensus_babe::AuthorityId;
 	let config = match config_or_chain_spec {
 		ConfigOrChainSpec::Config(config) => config,
-		ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) =>
-			default_config(task_executor, chain_spec),
+		ConfigOrChainSpec::ChainSpec(chain_spec, tokio_handle) =>
+			default_config(tokio_handle, chain_spec),
 	};
 
 	let executor = NativeElseWasmExecutor::<T::ExecutorDispatch>::new(
@@ -186,11 +186,11 @@ where
 	let (command_sink, commands_stream) = mpsc::channel(10);
 	let rpc_sink = command_sink.clone();
 
-	let rpc_builder = Box::new(move |_, _| -> RpcModule<()> {
+	let rpc_builder = Box::new(move |_, _| {
 		let seal = ManualSeal::new(rpc_sink).into_rpc();
 		let mut module = RpcModule::new(());
 		module.merge(seal).expect("only one module; qed");
-		module
+		Ok(module)
 	});
 
 	let _rpc_handlers = {

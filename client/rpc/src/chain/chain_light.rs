@@ -43,7 +43,7 @@ pub struct LightChain<Block: BlockT, Client, F> {
 	/// Remote fetcher reference.
 	fetcher: Arc<F>,
 	/// Subscription executor.
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
@@ -52,7 +52,7 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 		client: Arc<Client>,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 	) -> Self {
 		Self { client, executor, remote_blockchain, fetcher }
 	}

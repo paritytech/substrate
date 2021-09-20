@@ -18,7 +18,7 @@
 
 //! Substrate blockchain API.
 
-use jsonrpsee::{proc_macros::rpc, types::JsonRpcResult};
+use jsonrpsee::{proc_macros::rpc, types::RpcResult};
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 
 pub mod error;
@@ -27,11 +27,11 @@ pub mod error;
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get header.
 	#[method(name = "getHeader")]
-	async fn header(&self, hash: Option<Hash>) -> JsonRpcResult<Option<Header>>;
+	async fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
 	#[method(name = "getBlock")]
-	async fn block(&self, hash: Option<Hash>) -> JsonRpcResult<Option<SignedBlock>>;
+	async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
@@ -40,11 +40,11 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	fn block_hash(
 		&self,
 		hash: Option<ListOrValue<NumberOrHex>>,
-	) -> JsonRpcResult<ListOrValue<Option<Hash>>>;
+	) -> RpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
 	#[method(name = "getFinalizedHead", aliases = "chain_getFinalisedHead")]
-	fn finalized_head(&self) -> JsonRpcResult<Hash>;
+	fn finalized_head(&self) -> RpcResult<Hash>;
 
 	/// All head subscription.
 	#[subscription(
@@ -53,7 +53,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		unsubscribe_aliases = "chain_unsubscribeAllHeads",
 		item = Header
 	)]
-	fn subscribe_all_heads(&self);
+	fn subscribe_all_heads(&self) -> RpcResult<()>;
 
 	/// New head subscription.
 	#[subscription(
@@ -62,7 +62,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		unsubscribe_aliases = "chain_unsubscribeNewHead, chain_unsubscribeNewHeads",
 		item = Header
 	)]
-	fn subscribe_new_heads(&self);
+	fn subscribe_new_heads(&self) -> RpcResult<()>;
 
 	/// Finalized head subscription.
 	#[subscription(
@@ -71,5 +71,5 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		unsubscribe_aliases = "chain_unsubscribeFinalizedHeads, chain_unsubscribeFinalisedHeads",
 		item = Header
 	)]
-	fn subscribe_finalized_heads(&self);
+	fn subscribe_finalized_heads(&self) -> RpcResult<()>;
 }

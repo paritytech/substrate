@@ -28,7 +28,7 @@ use crate::SubscriptionTaskExecutor;
 use codec::{Decode, Encode};
 use futures::StreamExt;
 use jsonrpsee::{
-	types::{async_trait, error::Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, error::Error as JsonRpseeError, RpcResult},
 	SubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
@@ -58,7 +58,7 @@ pub struct Author<P, Client> {
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<P, Client> Author<P, Client> {
@@ -68,7 +68,7 @@ impl<P, Client> Author<P, Client> {
 		pool: Arc<P>,
 		keystore: SyncCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 	) -> Self {
 		Author { client, pool, keystore, deny_unsafe, executor }
 	}
@@ -83,7 +83,7 @@ where
 	P::Hash: Unpin,
 	<P::Block as BlockT>::Hash: Unpin,
 {
-	async fn submit_extrinsic(&self, ext: Bytes) -> JsonRpcResult<TxHash<P>> {
+	async fn submit_extrinsic(&self, ext: Bytes) -> RpcResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
 			Err(err) => return Err(JsonRpseeError::to_call_error(err)),
@@ -99,7 +99,7 @@ where
 			})
 	}
 
-	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> JsonRpcResult<()> {
+	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
@@ -108,7 +108,7 @@ where
 		Ok(())
 	}
 
-	fn rotate_keys(&self) -> JsonRpcResult<Bytes> {
+	fn rotate_keys(&self) -> RpcResult<Bytes> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
@@ -119,7 +119,7 @@ where
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 	}
 
-	fn has_session_keys(&self, session_keys: Bytes) -> JsonRpcResult<bool> {
+	fn has_session_keys(&self, session_keys: Bytes) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
@@ -133,21 +133,21 @@ where
 		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
 	}
 
-	fn has_key(&self, public_key: Bytes, key_type: String) -> JsonRpcResult<bool> {
+	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 		Ok(SyncCryptoStore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
 	}
 
-	fn pending_extrinsics(&self) -> JsonRpcResult<Vec<Bytes>> {
+	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>> {
 		Ok(self.pool.ready().map(|tx| tx.data().encode().into()).collect())
 	}
 
 	fn remove_extrinsic(
 		&self,
 		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>,
-	) -> JsonRpcResult<Vec<TxHash<P>>> {
+	) -> RpcResult<Vec<TxHash<P>>> {
 		self.deny_unsafe.check_if_safe()?;
 		let hashes = bytes_or_hash
 			.into_iter()
@@ -168,13 +168,13 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) {
+	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> RpcResult<()> {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
 			Ok(dxt) => dxt,
 			Err(e) => {
 				log::error!("[watch_extrinsic sub] failed to decode extrinsic: {:?}", e);
-				return
+				return Err(JsonRpseeError::to_call_error(e))
 			},
 		};
 
@@ -204,6 +204,7 @@ where
 		};
 
 		executor.execute(Box::pin(fut));
+		Ok(())
 	}
 }
 

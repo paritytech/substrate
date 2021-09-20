@@ -35,8 +35,8 @@ pub use config::*;
 pub use error::*;
 pub use params::*;
 pub use runner::*;
+use sc_service::Configuration;
 pub use sc_service::{ChainSpec, Role};
-use sc_service::{Configuration, TaskExecutor};
 pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
@@ -216,9 +216,9 @@ pub trait SubstrateCli: Sized {
 	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
-		task_executor: TaskExecutor,
+		tokio_handle: tokio::runtime::Handle,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor)
+		command.create_configuration(self, tokio_handle)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and

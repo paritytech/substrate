@@ -62,7 +62,7 @@ type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 #[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
 	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
@@ -133,7 +133,7 @@ where
 	/// Create new state API backend for light nodes.
 	pub fn new(
 		client: Arc<Client>,
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
@@ -294,6 +294,7 @@ where
 		_block: Block::Hash,
 		_targets: Option<String>,
 		_storage_keys: Option<String>,
+		_methods: Option<String>,
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error> {
 		Err(client_err(ClientError::NotAvailableOnLightClient))
 	}
@@ -538,6 +539,50 @@ where
 				.map_err(client_err),
 			Err(err) => Err(err),
 		}
+	}
+
+	async fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> Result<Vec<Option<StorageData>>, Error> {
+		let block = self.block_or_best(block);
+		let fetcher = self.fetcher.clone();
+		let keys = keys.iter().map(|k| k.0.clone()).collect::<Vec<_>>();
+		let child_storage =
+			resolve_header(&*self.remote_blockchain, &*self.fetcher, block).then(move |result| {
+				match result {
+					Ok(header) => Either::Left(
+						fetcher
+							.remote_read_child(RemoteReadChildRequest {
+								block,
+								header,
+								storage_key,
+								keys: keys.clone(),
+								retry_count: Default::default(),
+							})
+							.then(move |result| {
+								ready(
+									result
+										.map(|data| {
+											data.iter()
+												.filter_map(|(k, d)| {
+													keys.contains(k).then(|| {
+														d.as_ref().map(|v| StorageData(v.to_vec()))
+													})
+												})
+												.collect::<Vec<_>>()
+										})
+										.map_err(client_err),
+								)
+							}),
+					),
+					Err(error) => Either::Right(ready(Err(error))),
+				}
+			});
+
+		child_storage.await
 	}
 
 	async fn storage_hash(

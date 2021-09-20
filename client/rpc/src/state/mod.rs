@@ -29,7 +29,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	types::{async_trait, error::Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, error::Error as JsonRpseeError, RpcResult},
 	ws_server::SubscriptionSink,
 };
 
@@ -154,6 +154,7 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
 
 	/// New runtime version subscription
@@ -170,7 +171,7 @@ where
 /// Create new state API that works on full node.
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	deny_unsafe: DenyUnsafe,
 	rpc_max_payload: Option<usize>,
 ) -> (StateApi<Block, Client>, ChildState<Block, Client>)
@@ -204,7 +205,7 @@ where
 /// Create new state API that works on light node.
 pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 	deny_unsafe: DenyUnsafe,
@@ -254,7 +255,7 @@ where
 		method: String,
 		data: Bytes,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Bytes> {
+	) -> RpcResult<Bytes> {
 		self.backend
 			.call(block, method, data)
 			.await
@@ -265,7 +266,7 @@ where
 		&self,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<StorageKey>> {
+	) -> RpcResult<Vec<StorageKey>> {
 		self.backend
 			.storage_keys(block, key_prefix)
 			.await
@@ -276,7 +277,7 @@ where
 		&self,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<(StorageKey, StorageData)>> {
+	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
 		self.deny_unsafe.check_if_safe()?;
 		self.backend
 			.storage_pairs(block, key_prefix)
@@ -290,7 +291,7 @@ where
 		count: u32,
 		start_key: Option<StorageKey>,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<StorageKey>> {
+	) -> RpcResult<Vec<StorageKey>> {
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
 			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
 				value: count,
@@ -307,7 +308,7 @@ where
 		&self,
 		key: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Option<StorageData>> {
+	) -> RpcResult<Option<StorageData>> {
 		self.backend
 			.storage(block, key)
 			.await
@@ -318,7 +319,7 @@ where
 		&self,
 		key: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Option<Block::Hash>> {
+	) -> RpcResult<Option<Block::Hash>> {
 		self.backend
 			.storage_hash(block, key)
 			.await
@@ -329,19 +330,18 @@ where
 		&self,
 		key: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Option<u64>> {
+	) -> RpcResult<Option<u64>> {
 		self.backend
 			.storage_size(block, key)
 			.await
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	async fn metadata(&self, block: Option<Block::Hash>) -> JsonRpcResult<Bytes> {
+	async fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
 		self.backend.metadata(block).await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	async fn runtime_version(&self, at: Option<Block::Hash>) -> JsonRpcResult<RuntimeVersion> {
-		self.deny_unsafe.check_if_safe()?;
+	async fn runtime_version(&self, at: Option<Block::Hash>) -> RpcResult<RuntimeVersion> {
 		self.backend
 			.runtime_version(at)
 			.await
@@ -353,7 +353,7 @@ where
 		keys: Vec<StorageKey>,
 		from: Block::Hash,
 		to: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<StorageChangeSet<Block::Hash>>> {
+	) -> RpcResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.deny_unsafe.check_if_safe()?;
 		self.backend
 			.query_storage(from, to, keys)
@@ -365,8 +365,7 @@ where
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<StorageChangeSet<Block::Hash>>> {
-		self.deny_unsafe.check_if_safe()?;
+	) -> RpcResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.backend
 			.query_storage_at(keys, at)
 			.await
@@ -377,39 +376,41 @@ where
 		&self,
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<ReadProof<Block::Hash>> {
-		self.deny_unsafe.check_if_safe()?;
+	) -> RpcResult<ReadProof<Block::Hash>> {
 		self.backend
 			.read_proof(block, keys)
 			.await
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	// TODO(niklasad1): use methods (goes probably away by merging to master)
 	async fn trace_block(
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
-		_methods: Option<String>,
-	) -> JsonRpcResult<sp_rpc::tracing::TraceBlockResponse> {
+		methods: Option<String>,
+	) -> RpcResult<sp_rpc::tracing::TraceBlockResponse> {
 		self.deny_unsafe.check_if_safe()?;
 		self.backend
-			.trace_block(block, targets, storage_keys)
+			.trace_block(block, targets, storage_keys, methods)
 			.await
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_runtime_version(&self, sink: SubscriptionSink) {
-		if let Err(e) = self.backend.subscribe_runtime_version(sink) {
-			log::error!("[subscribe_runtimeVersion]: error {:?}", e);
-		}
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> RpcResult<()> {
+		self.backend
+			.subscribe_runtime_version(sink)
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_storage(&self, sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
-		if let Err(e) = self.backend.subscribe_storage(sink, keys) {
-			log::error!("[subscribe_storage]: error {:?}", e);
-		}
+	fn subscribe_storage(
+		&self,
+		sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> RpcResult<()> {
+		self.backend
+			.subscribe_storage(sink, keys)
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }
 
@@ -455,6 +456,14 @@ where
 		key: StorageKey,
 	) -> Result<Option<StorageData>, Error>;
 
+	/// Returns child storage entries at a specific block's state.
+	async fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> Result<Vec<Option<StorageData>>, Error>;
+
 	/// Returns the hash of a child storage entry at a block's state.
 	async fn storage_hash(
 		&self,
@@ -490,7 +499,7 @@ where
 		storage_key: PrefixedStorageKey,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<StorageKey>> {
+	) -> RpcResult<Vec<StorageKey>> {
 		self.backend
 			.storage_keys(block, storage_key, key_prefix)
 			.await
@@ -504,7 +513,7 @@ where
 		count: u32,
 		start_key: Option<StorageKey>,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Vec<StorageKey>> {
+	) -> RpcResult<Vec<StorageKey>> {
 		self.backend
 			.storage_keys_paged(block, storage_key, prefix, count, start_key)
 			.await
@@ -516,9 +525,21 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Option<StorageData>> {
+	) -> RpcResult<Option<StorageData>> {
 		self.backend
 			.storage(block, storage_key, key)
+			.await
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
+
+	async fn storage_entries(
+		&self,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> RpcResult<Vec<Option<StorageData>>> {
+		self.backend
+			.storage_entries(block, storage_key, keys)
 			.await
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
@@ -528,7 +549,7 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Option<Block::Hash>> {
+	) -> RpcResult<Option<Block::Hash>> {
 		self.backend
 			.storage_hash(block, storage_key, key)
 			.await
@@ -540,7 +561,7 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<Option<u64>> {
+	) -> RpcResult<Option<u64>> {
 		self.backend
 			.storage_size(block, storage_key, key)
 			.await
@@ -552,7 +573,7 @@ where
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
-	) -> JsonRpcResult<ReadProof<Block::Hash>> {
+	) -> RpcResult<ReadProof<Block::Hash>> {
 		self.backend
 			.read_child_proof(block, child_storage_key, keys)
 			.await

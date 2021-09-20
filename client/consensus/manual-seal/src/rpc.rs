@@ -25,7 +25,7 @@ use futures::{
 };
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, Error as JsonRpseeError, RpcResult},
 };
 use sc_consensus::ImportedAux;
 use serde::{Deserialize, Serialize};
@@ -74,7 +74,7 @@ pub trait ManualSealApi<Hash> {
 		create_empty: bool,
 		finalize: bool,
 		parent_hash: Option<Hash>,
-	) -> JsonRpcResult<CreatedBlock<Hash>>;
+	) -> RpcResult<CreatedBlock<Hash>>;
 
 	/// Instructs the manual-seal authorship task to finalize a block
 	#[method(name = "finalizeBlock")]
@@ -82,7 +82,7 @@ pub trait ManualSealApi<Hash> {
 		&self,
 		hash: Hash,
 		justification: Option<EncodedJustification>,
-	) -> JsonRpcResult<bool>;
+	) -> RpcResult<bool>;
 }
 
 /// A struct that implements the [`ManualSealApi`].
@@ -113,7 +113,7 @@ impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 		create_empty: bool,
 		finalize: bool,
 		parent_hash: Option<Hash>,
-	) -> JsonRpcResult<CreatedBlock<Hash>> {
+	) -> RpcResult<CreatedBlock<Hash>> {
 		let mut sink = self.import_block_channel.clone();
 		let (sender, receiver) = oneshot::channel();
 		// NOTE: this sends a Result over the channel.
@@ -137,7 +137,7 @@ impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 		&self,
 		hash: Hash,
 		justification: Option<EncodedJustification>,
-	) -> JsonRpcResult<bool> {
+	) -> RpcResult<bool> {
 		let mut sink = self.import_block_channel.clone();
 		let (sender, receiver) = oneshot::channel();
 		let command = EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification };

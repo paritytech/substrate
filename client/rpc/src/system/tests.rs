@@ -19,14 +19,14 @@
 use super::{helpers::SyncState, *};
 use futures::prelude::*;
 use jsonrpsee::{
-	types::v2::{error::JsonRpcError, response::JsonRpcResponse},
+	types::v2::{error::RpcError, Response},
 	RpcModule,
 };
 use sc_network::{self, config::Role, PeerId};
 use sc_rpc_api::system::helpers::PeerInfo;
 use serde_json::value::to_raw_value;
 use sp_core::H256;
-use sp_utils::mpsc::tracing_unbounded;
+use sc_utils::mpsc::tracing_unbounded;
 use std::{
 	env,
 	io::{BufRead, BufReader, Write},
@@ -236,14 +236,14 @@ async fn system_local_listen_addresses_works() {
 
 #[tokio::test]
 async fn system_peers() {
-	use jsonrpsee::types::v2::response::JsonRpcResponse;
+	use jsonrpsee::types::v2::Response;
 	let peer_id = PeerId::random();
 	let call_result =
 		api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
 			.call("system_peers", None)
 			.await
 			.unwrap();
-	let peer_info: JsonRpcResponse<Vec<PeerInfo<H256, _>>> =
+	let peer_info: Response<Vec<PeerInfo<H256, _>>> =
 		serde_json::from_str(&call_result).unwrap();
 	assert_eq!(
 		peer_info.result,
@@ -260,7 +260,7 @@ async fn system_peers() {
 async fn system_network_state() {
 	use sc_network::network_state::NetworkState;
 	let network_state = api(None).call("system_unstable_networkState", None).await.unwrap();
-	let network_state: JsonRpcResponse<NetworkState> =
+	let network_state: Response<NetworkState> =
 		serde_json::from_str(&network_state).unwrap();
 	assert_eq!(
 		network_state.result,
@@ -278,13 +278,13 @@ async fn system_network_state() {
 #[tokio::test]
 async fn system_node_roles() {
 	let node_roles = api(None).call("system_nodeRoles", None).await.unwrap();
-	let node_roles: JsonRpcResponse<Vec<NodeRole>> = serde_json::from_str(&node_roles).unwrap();
+	let node_roles: Response<Vec<NodeRole>> = serde_json::from_str(&node_roles).unwrap();
 	assert_eq!(node_roles.result, vec![NodeRole::Authority]);
 }
 #[tokio::test]
 async fn system_sync_state() {
 	let sync_state = api(None).call("system_syncState", None).await.unwrap();
-	let sync_state: JsonRpcResponse<SyncState<i32>> = serde_json::from_str(&sync_state).unwrap();
+	let sync_state: Response<SyncState<i32>> = serde_json::from_str(&sync_state).unwrap();
 	assert_eq!(
 		sync_state.result,
 		SyncState { starting_block: 1, current_block: 2, highest_block: Some(3) }
@@ -299,12 +299,12 @@ async fn system_network_add_reserved() {
 	.unwrap();
 	let good = api(None).call("system_addReservedPeer", Some(good_peer_id)).await.unwrap();
 
-	let good: JsonRpcResponse<()> = serde_json::from_str(&good).unwrap();
+	let good: Response<()> = serde_json::from_str(&good).unwrap();
 	assert_eq!(good.result, ());
 
 	let bad_peer_id = to_raw_value(&["/ip4/198.51.100.19/tcp/30333"]).unwrap();
 	let bad = api(None).call("system_addReservedPeer", Some(bad_peer_id)).await.unwrap();
-	let bad: JsonRpcError = serde_json::from_str(&bad).unwrap();
+	let bad: RpcError = serde_json::from_str(&bad).unwrap();
 	assert_eq!(bad.error.message, "Peer id is missing from the address");
 }
 
@@ -315,8 +315,8 @@ async fn system_network_remove_reserved() {
 		.call("system_removeReservedPeer", Some(good_peer_id))
 		.await
 		.expect("call with good peer id works");
-	let good: JsonRpcResponse<()> =
-		serde_json::from_str(&good).expect("call with good peer id returns `JsonRpcResponse`");
+	let good: Response<()> =
+		serde_json::from_str(&good).expect("call with good peer id returns `Response`");
 	assert_eq!(good.result, ());
 
 	let bad_peer_id = to_raw_value(&[
@@ -324,7 +324,7 @@ async fn system_network_remove_reserved() {
 	])
 	.unwrap();
 	let bad = api(None).call("system_removeReservedPeer", Some(bad_peer_id)).await.unwrap();
-	let bad: JsonRpcError = serde_json::from_str(&bad).unwrap();
+	let bad: RpcError = serde_json::from_str(&bad).unwrap();
 	assert_eq!(
 		bad.error.message,
 		"base-58 decode error: provided string contained invalid character '/' at byte 0"
@@ -333,7 +333,7 @@ async fn system_network_remove_reserved() {
 #[tokio::test]
 async fn system_network_reserved_peers() {
 	let reserved_peers = api(None).call("system_reservedPeers", None).await.unwrap();
-	let reserved_peers: JsonRpcResponse<Vec<String>> =
+	let reserved_peers: Response<Vec<String>> =
 		serde_json::from_str(&reserved_peers).unwrap();
 	assert_eq!(
 		reserved_peers.result,

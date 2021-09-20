@@ -18,7 +18,7 @@
 
 //! Substrate state API.
 
-use jsonrpsee::{proc_macros::rpc, types::JsonRpcResult};
+use jsonrpsee::{proc_macros::rpc, types::RpcResult};
 use sp_core::{
 	storage::{StorageChangeSet, StorageData, StorageKey},
 	Bytes,
@@ -35,7 +35,7 @@ pub use self::helpers::ReadProof;
 pub trait StateApi<Hash> {
 	/// Call a contract at a block's state.
 	#[method(name = "call", aliases = "state_callAt")]
-	async fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> JsonRpcResult<Bytes>;
+	async fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// DEPRECATED: Please use `getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix, leave empty to get all the keys.
@@ -44,7 +44,7 @@ pub trait StateApi<Hash> {
 		&self,
 		prefix: StorageKey,
 		hash: Option<Hash>,
-	) -> JsonRpcResult<Vec<StorageKey>>;
+	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[method(name = "getPairs")]
@@ -52,7 +52,7 @@ pub trait StateApi<Hash> {
 		&self,
 		prefix: StorageKey,
 		hash: Option<Hash>,
-	) -> JsonRpcResult<Vec<(StorageKey, StorageData)>>;
+	) -> RpcResult<Vec<(StorageKey, StorageData)>>;
 
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
@@ -64,36 +64,27 @@ pub trait StateApi<Hash> {
 		count: u32,
 		start_key: Option<StorageKey>,
 		hash: Option<Hash>,
-	) -> JsonRpcResult<Vec<StorageKey>>;
+	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[method(name = "getStorage", aliases = "state_getStorageAt")]
-	async fn storage(
-		&self,
-		key: StorageKey,
-		hash: Option<Hash>,
-	) -> JsonRpcResult<Option<StorageData>>;
+	async fn storage(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
 	#[method(name = "getStorageHash", aliases = "state_getStorageHashAt")]
-	async fn storage_hash(
-		&self,
-		key: StorageKey,
-		hash: Option<Hash>,
-	) -> JsonRpcResult<Option<Hash>>;
+	async fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
 	#[method(name = "getStorageSize", aliases = "state_getStorageSizeAt")]
-	async fn storage_size(&self, key: StorageKey, hash: Option<Hash>)
-		-> JsonRpcResult<Option<u64>>;
+	async fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[method(name = "getMetadata")]
-	async fn metadata(&self, hash: Option<Hash>) -> JsonRpcResult<Bytes>;
+	async fn metadata(&self, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Get the runtime version.
 	#[method(name = "getRuntimeVersion", aliases = "chain_getRuntimeVersion")]
-	async fn runtime_version(&self, hash: Option<Hash>) -> JsonRpcResult<RuntimeVersion>;
+	async fn runtime_version(&self, hash: Option<Hash>) -> RpcResult<RuntimeVersion>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second
 	/// parameter.
@@ -106,7 +97,7 @@ pub trait StateApi<Hash> {
 		keys: Vec<StorageKey>,
 		block: Hash,
 		hash: Option<Hash>,
-	) -> JsonRpcResult<Vec<StorageChangeSet<Hash>>>;
+	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
 	#[method(name = "queryStorageAt")]
@@ -114,7 +105,7 @@ pub trait StateApi<Hash> {
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
-	) -> JsonRpcResult<Vec<StorageChangeSet<Hash>>>;
+	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Returns proof of storage entries at a specific block's state.
 	#[method(name = "getReadProof")]
@@ -122,7 +113,7 @@ pub trait StateApi<Hash> {
 		&self,
 		keys: Vec<StorageKey>,
 		hash: Option<Hash>,
-	) -> JsonRpcResult<ReadProof<Hash>>;
+	) -> RpcResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[subscription(
@@ -131,7 +122,7 @@ pub trait StateApi<Hash> {
 		unsubscribe_aliases = "state_unsubscribeRuntimeVersion, chain_unsubscribeRuntimeVersion",
         item = RuntimeVersion,
 	)]
-	fn subscribe_runtime_version(&self);
+	fn subscribe_runtime_version(&self) -> RpcResult<()>;
 
 	/// New storage subscription
 	#[subscription(
@@ -140,7 +131,7 @@ pub trait StateApi<Hash> {
         unsubscribe_aliases = "state_unsubscribeStorage",
         item = StorageChangeSet<Hash>,
     )]
-	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
+	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> RpcResult<()>;
 
 	/// The `traceBlock` RPC provides a way to trace the re-execution of a single
 	/// block, collecting Spans and Events from both the client and the relevant WASM runtime.
@@ -207,7 +198,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "pallet,frame,state", "", ""]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -216,7 +207,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", ""]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -225,7 +216,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", ""]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -235,7 +226,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", "Put"]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -244,7 +235,7 @@ pub trait StateApi<Hash> {
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
-	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "traceBlock", \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
 	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", "Put"]}' \
 	/// 	http://localhost:9933/
 	/// ```
@@ -301,5 +292,5 @@ pub trait StateApi<Hash> {
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
-	) -> JsonRpcResult<sp_rpc::tracing::TraceBlockResponse>;
+	) -> RpcResult<sp_rpc::tracing::TraceBlockResponse>;
 }

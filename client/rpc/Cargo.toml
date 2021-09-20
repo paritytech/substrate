@@ -28,7 +28,7 @@ serde_json = "1.0.41"
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
@@ -38,7 +38,7 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.11.1"
 lazy_static = { version = "1.4.0", optional = true }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "dp-debug-substrate-tests", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", features = ["server"] }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 
 [dev-dependencies]

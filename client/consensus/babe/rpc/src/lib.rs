@@ -21,7 +21,7 @@
 use futures::TryFutureExt;
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, Error as JsonRpseeError, RpcResult},
 };
 
 use sc_consensus_babe::{authorship, Config, Epoch};
@@ -44,7 +44,7 @@ pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
 	/// with the keys in the keystore.
 	#[method(name = "epochAuthorship")]
-	async fn epoch_authorship(&self) -> JsonRpcResult<HashMap<AuthorityId, EpochAuthorship>>;
+	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>>;
 }
 
 /// Provides RPC methods for interacting with Babe.
@@ -88,7 +88,7 @@ where
 	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
-	async fn epoch_authorship(&self) -> JsonRpcResult<HashMap<AuthorityId, EpochAuthorship>> {
+	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>> {
 		self.deny_unsafe.check_if_safe()?;
 		let header = self.select_chain.best_chain().map_err(Error::Consensus).await?;
 		let epoch_start = self

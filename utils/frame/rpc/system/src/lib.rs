@@ -22,7 +22,7 @@ use std::{fmt::Display, marker::PhantomData, sync::Arc};
 use codec::{self, Codec, Decode, Encode};
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, error::CallError, Error as JsonRpseeError, JsonRpcResult},
+	types::{async_trait, error::CallError, Error as JsonRpseeError, RpcResult},
 };
 use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;
@@ -42,12 +42,12 @@ pub trait SystemApi<BlockHash, AccountId, Index> {
 	/// This method takes into consideration all pending transactions
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
-	#[method(name = "system_accountNextIndex", aliases = "system_nextIndex")]
-	async fn nonce(&self, account: AccountId) -> JsonRpcResult<Index>;
+	#[method(name = "accountNextIndex", aliases = "system_nextIndex")]
+	async fn nonce(&self, account: AccountId) -> RpcResult<Index>;
 
 	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
-	#[method(name = "system_dryRun", aliases = "system_dryRunAt")]
-	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> JsonRpcResult<Bytes>;
+	#[method(name = "dryRun", aliases = "system_dryRunAt")]
+	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> RpcResult<Bytes>;
 }
 
 /// System RPC methods.
@@ -76,11 +76,11 @@ where
 		+ traits::MaybeSerialize
 		+ 'static,
 {
-	async fn nonce(&self, account: AccountId) -> JsonRpcResult<Index> {
+	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
 		self.backend.nonce(account).await
 	}
 
-	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> JsonRpcResult<Bytes> {
+	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> RpcResult<Bytes> {
 		self.backend.dry_run(extrinsic, at).await
 	}
 }

@@ -73,7 +73,7 @@ struct QueryStorageRange<Block: BlockT> {
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	_phantom: PhantomData<(BE, Block)>,
 	rpc_max_payload: Option<usize>,
 }
@@ -90,7 +90,7 @@ where
 	/// Create new state API backend for full nodes.
 	pub fn new(
 		client: Arc<Client>,
-		executor: Arc<SubscriptionTaskExecutor>,
+		executor: SubscriptionTaskExecutor,
 		rpc_max_payload: Option<usize>,
 	) -> Self {
 		Self { client, executor, _phantom: PhantomData, rpc_max_payload }
@@ -571,12 +571,14 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> std::result::Result<sp_rpc::tracing::TraceBlockResponse, Error> {
 		sc_tracing::block::BlockExecutor::new(
 			self.client.clone(),
 			block,
 			targets,
 			storage_keys,
+			methods,
 			self.rpc_max_payload,
 		)
 		.trace_block()
@@ -688,6 +690,30 @@ where
 				self.client.child_storage(&BlockId::Hash(block), &child_info, &key)
 			})
 			.map_err(client_err)
+	}
+
+	async fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> std::result::Result<Vec<Option<StorageData>>, Error> {
+		let child_info = match ChildType::from_prefixed_key(&storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) =>
+				Arc::new(ChildInfo::new_default(storage_key)),
+			None => return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey)),
+		};
+		let block = self.block_or_best(block).map_err(client_err)?;
+		let client = self.client.clone();
+		future::try_join_all(keys.into_iter().map(move |key| {
+			let res = client
+				.clone()
+				.child_storage(&BlockId::Hash(block), &child_info, &key)
+				.map_err(client_err);
+
+			async move { res }
+		}))
+		.await
 	}
 
 	async fn storage_hash(

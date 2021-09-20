@@ -30,7 +30,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	types::{async_trait, JsonRpcResult},
+	types::{async_trait, RpcResult},
 	SubscriptionSink,
 };
 use sc_client_api::{
@@ -85,7 +85,7 @@ where
 
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
-					Error::from(format!(
+					Error::Other(format!(
 						"`{:?}` > u32::MAX, the max block number is u32.",
 						num_or_hex
 					))
@@ -118,7 +118,7 @@ where
 /// Create new state API that works on full node.
 pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 ) -> Chain<Block, Client>
 where
 	Block: BlockT + 'static,
@@ -131,7 +131,7 @@ where
 /// Create new state API that works on light node.
 pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
-	executor: Arc<SubscriptionTaskExecutor>,
+	executor: SubscriptionTaskExecutor,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 ) -> Chain<Block, Client>
@@ -156,7 +156,6 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-// TODO(niklasad1): check if those DeserializeOwned bounds are really required.
 #[async_trait]
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
@@ -165,18 +164,18 @@ where
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	async fn header(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<Block::Header>> {
+	async fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
 		self.backend.header(hash).await.map_err(Into::into)
 	}
 
-	async fn block(&self, hash: Option<Block::Hash>) -> JsonRpcResult<Option<SignedBlock<Block>>> {
+	async fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
 		self.backend.block(hash).await.map_err(Into::into)
 	}
 
 	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
-	) -> JsonRpcResult<ListOrValue<Option<Block::Hash>>> {
+	) -> RpcResult<ListOrValue<Option<Block::Hash>>> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value).map_err(Into::into),
 			Some(ListOrValue::Value(number)) => self
@@ -192,20 +191,20 @@ where
 		}
 	}
 
-	fn finalized_head(&self) -> JsonRpcResult<Block::Hash> {
+	fn finalized_head(&self) -> RpcResult<Block::Hash> {
 		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
-		let _ = self.backend.subscribe_all_heads(sink);
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> RpcResult<()> {
+		self.backend.subscribe_all_heads(sink).map_err(Into::into)
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
-		let _ = self.backend.subscribe_new_heads(sink);
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> RpcResult<()> {
+		self.backend.subscribe_new_heads(sink).map_err(Into::into)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
-		let _ = self.backend.subscribe_finalized_heads(sink);
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> RpcResult<()> {
+		self.backend.subscribe_finalized_heads(sink).map_err(Into::into)
 	}
 }
 

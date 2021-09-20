@@ -43,12 +43,11 @@ use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 use sc_network::PeerId;
-use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
-use sp_utils::mpsc::TracingUnboundedReceiver;
 
 pub use self::{
 	builder::{
@@ -62,8 +61,8 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -109,8 +108,6 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub import_queue: ImportQueue,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
-	/// RPC module builder.
-	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }
@@ -277,8 +274,6 @@ async fn build_network_future<
 }
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-// TODO(niklasad1): WsSocket server is not fully "closeable" at the moment.
-#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 
@@ -296,58 +291,44 @@ mod waiting {
 	impl Drop for WsServer {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
-				let _ = futures::executor::block_on(server.stop().unwrap());
+				let _ = server.stop().map(|stop| futures::executor::block_on(stop));
 			}
 		}
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive. Once this is called, no more methods can be added to the server.
-#[cfg(not(target_os = "unknown"))]
-async fn start_rpc_servers<R>(
+/// Starts RPC servers.
+fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
-	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+	R: FnOnce(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
 {
-	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
+	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes)?;
 	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
 	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
 
 	let http = sc_rpc_server::start_http(
 		http_addr,
-		config.rpc_http_threads,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module.clone(),
+		config.tokio_handle.clone(),
 	)
-	.await?;
+	.map_err(|e| Error::Application(e.into()))?;
 
 	let ws = sc_rpc_server::start_ws(
 		ws_addr,
-		Some(4),
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module,
+		config.tokio_handle.clone(),
 	)
-	.await?;
+	.map_err(|e| Error::Application(e.into()))?;
 
 	Ok(Box::new((http, ws)))
-}
-
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive.
-#[cfg(target_os = "unknown")]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>>(
-	_: &Configuration,
-	_: H,
-	_: Option<sc_rpc_server::RpcMetrics>,
-	_: sc_rpc_server::ServerMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	Ok(Box::new(()))
 }
 
 // TODO: (dp) Not sure this makes sense to us, I put it back mostly to make the code compile.

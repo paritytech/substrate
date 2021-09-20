@@ -21,7 +21,7 @@ use super::*;
 use assert_matches::assert_matches;
 use codec::Encode;
 use futures::executor;
-use jsonrpsee::types::v2::{error::JsonRpcError, response::JsonRpcResponse};
+use jsonrpsee::types::v2::{RpcError, Response};
 use sc_transaction_pool::{BasicPool, FullChainApi};
 use serde_json::value::to_raw_value;
 use sp_core::{
@@ -75,13 +75,13 @@ impl TestSetup {
 			pool: self.pool.clone(),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
-			executor: Arc::new(SubscriptionTaskExecutor::default()),
+			executor: SubscriptionTaskExecutor::default(),
 		}
 	}
 }
 
 #[tokio::test]
-async fn submit_transaction_should_not_cause_error() {
+async fn author_submit_transaction_should_not_cause_error() {
 	env_logger::init();
 	let author = TestSetup::default().author();
 	let api = author.into_rpc();
@@ -89,14 +89,14 @@ async fn submit_transaction_should_not_cause_error() {
 	let extrinsic_hash: H256 = blake2_256(&xt).into();
 	let params = to_raw_value(&[xt.clone()]).unwrap();
 	let json = api.call("author_submitExtrinsic", Some(params)).await.unwrap();
-	let response: JsonRpcResponse<H256> = serde_json::from_str(&json).unwrap();
+	let response: Response<H256> = serde_json::from_str(&json).unwrap();
 
 	assert_eq!(response.result, extrinsic_hash,);
 
 	// Can't submit the same extrinsic twice
 	let params_again = to_raw_value(&[xt]).unwrap();
 	let json = api.call("author_submitExtrinsic", Some(params_again)).await.unwrap();
-	let response: JsonRpcError = serde_json::from_str(&json).unwrap();
+	let response: RpcError = serde_json::from_str(&json).unwrap();
 
 	assert!(response.error.message.contains("Already imported"));
 }

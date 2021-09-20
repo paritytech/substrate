@@ -19,16 +19,16 @@
 
 use std::{convert::TryInto, sync::Arc};
 
+use anyhow::anyhow;
 use codec::{Codec, Decode};
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{
 		async_trait,
 		error::{CallError, Error as JsonRpseeError},
-		JsonRpcResult,
+		RpcResult,
 	},
 };
-pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -39,17 +39,19 @@ use sp_runtime::{
 	traits::{Block as BlockT, MaybeDisplay},
 };
 
+pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+
 #[rpc(client, server, namespace = "payment")]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[method(name = "queryInfo")]
-	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> JsonRpcResult<ResponseType>;
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
 
 	#[method(name = "queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>,
-	) -> JsonRpcResult<FeeDetails<NumberOrHex>>;
+	) -> RpcResult<FeeDetails<NumberOrHex>>;
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
@@ -81,7 +83,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> JsonRpcResult<RuntimeDispatchInfo<Balance>> {
+	) -> RpcResult<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
@@ -97,7 +99,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> JsonRpcResult<FeeDetails<NumberOrHex>> {
+	) -> RpcResult<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
@@ -109,8 +111,11 @@ where
 			.query_fee_details(&at, uxt, encoded_len)
 			.map_err(|api_err| CallError::from_std_error(api_err))?;
 
-		let try_into_rpc_balance =
-			|value: Balance| value.try_into().map_err(|_try_err| CallError::InvalidParams);
+		let try_into_rpc_balance = |value: Balance| {
+			value
+				.try_into()
+				.map_err(|_| anyhow!("{} doesn't fit in NumberOrHex representation", value))
+		};
 
 		Ok(FeeDetails {
 			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
