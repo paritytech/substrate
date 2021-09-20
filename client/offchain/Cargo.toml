@@ -31,8 +31,6 @@ sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
-
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.14.11"
 hyper-rustls = "0.22.1"
 

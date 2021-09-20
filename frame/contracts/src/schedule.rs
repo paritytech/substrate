@@ -24,6 +24,7 @@ use codec::{Decode, Encode};
 use frame_support::{weights::Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use pwasm_utils::{parity_wasm::elements, rules};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::RuntimeDebug;
@@ -36,7 +37,7 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// How many instructions are executed in a single batch. The reasoning is the same
 /// as for `API_BENCHMARK_BATCH_SIZE`.
-pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
+pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
@@ -72,7 +73,8 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 /// changes are made to its values.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct Schedule<T: Config> {
 	/// Describes the upper limits on various metrics.
 	pub limits: Limits,
@@ -92,7 +94,7 @@ pub struct Schedule<T: Config> {
 /// values will break existing contracts which are above the new limits when a
 /// re-instrumentation is triggered.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Limits {
 	/// The maximum number of topics supported by an event.
 	pub event_topics: u32,
@@ -174,7 +176,8 @@ impl Limits {
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct InstructionWeights<T: Config> {
 	/// Version of the instruction weights.
 	///
@@ -247,7 +250,8 @@ pub struct InstructionWeights<T: Config> {
 
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
@@ -378,6 +382,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
+	/// Weight of calling `seal_ecdsa_recover`.
+	pub ecdsa_recover: Weight,
+
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
@@ -495,7 +502,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			select: cost_instr!(instr_select, 4),
 			r#if: cost_instr!(instr_if, 3),
 			br: cost_instr!(instr_br, 2),
-			br_if: cost_instr!(instr_br_if, 5),
+			br_if: cost_instr!(instr_br_if, 3),
 			br_table: cost_instr!(instr_br_table, 3),
 			br_table_per_entry: cost_instr!(instr_br_table_per_entry, 0),
 			call: cost_instr!(instr_call, 2),
@@ -559,8 +566,8 @@ impl<T: Config> Default for HostFnWeights<T> {
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),
 			gas: cost_batched!(seal_gas),
-			input: cost!(seal_input),
-			input_per_byte: cost_byte!(seal_input_per_kb),
+			input: cost_batched!(seal_input),
+			input_per_byte: cost_byte_batched!(seal_input_per_kb),
 			r#return: cost!(seal_return),
 			return_per_byte: cost_byte!(seal_return_per_kb),
 			terminate: cost!(seal_terminate),
@@ -625,6 +632,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
+			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			_phantom: PhantomData,
 		}
 	}

@@ -37,6 +37,7 @@ use frame_support::{
 use frame_system::{
 	pallet_prelude::*, WeightInfo,
 };
+use scale_info::TypeInfo;
 
 pub use pallet::*;
 
@@ -59,7 +60,7 @@ macro_rules! log {
 const RESERVED_BIG_KEYS: &'static[&'static [u8]] = &[sp_core::storage::well_known_keys::CODE];
 
 /// State of state migration from V0 to V1.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum MigrationState {
 	/// Started migration and current progress.
 	Pending {
