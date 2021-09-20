@@ -23,7 +23,7 @@
 //! control over what is being executed in which environment. It is recommended that user's first
 //! familiarize themselves with substrate in depth, particularly the execution model. It is critical
 //! to deeply understand how the wasm/native interactions, and the runtime apis work in the
-//! substrate runtime.
+//! substrate runtime, before commencing to working with `try-runtime`.
 //!
 //! #### Resources
 //!
@@ -47,13 +47,14 @@
 //!    blockchain is keeping. A state can be full (all key-value pairs), or be partial (only pairs
 //!    related to some pallets). Moreover, some keys are special and are not related to specific
 //!    pallets, known as [`well_known_keys`] in substrate. The most important of these is the
-//!    `:CODE:` key, which contains the code used for execution, when `--execution Wasm` is used.
+//!    `:CODE:` key, which contains the code used for execution, when wasm execution is chosen.
 //!
-//! 2. *A runtime-api* is a call into the function defined in the runtime, *on top of a given
-//!    state*. Each subcommand of `try-runtime` utilizes a specific *runtime-api*. 3. Finally, the
-//!    **runtime** is the actual code that is used to execute the aforementioned    runtime-api. All
-//!    substrate based chains always have two runtimes: native and wasm. The    decision of which
-//!    one is chosen is slightly non-trivial. First, let's look at the options:
+//! 2. *A runtime-api* call is a call into a function defined in the runtime, *on top of a given
+//!    state*. Each subcommand of `try-runtime` utilizes a specific *runtime-api*.
+//!
+//! 3. Finally, the **runtime** is the actual code that is used to execute the aforementioned
+//!    runtime-api. All substrate based chains always have two runtimes: native and wasm. The
+//!    decision of which one is chosen is non-trivial. First, let's look at the options:
 //!
 //!     1. Native: this means that the runtime that is **in your codebase**, aka whatever you see in
 //!        your editor, is being used. This runtime is easier for diagnostics. We refer to this as
@@ -121,7 +122,7 @@
 //! Run the migrations of the local runtime on the state of polkadot, from the polkadot repo where
 //! we have `--chain polkadot-dev`, on the latest finalized block's state
 //!
-//! ```
+//! ```ignore
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -135,7 +136,7 @@
 //! Same as previous one, but let's say we want to run this command from the substrate repo, where
 //! we don't have a matching spec name/version.
 //!
-//! ```
+//! ```ignore
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -149,7 +150,7 @@
 //! Same as the previous one, but run it at specific block number's state. This means that this
 //! block hash's state shall not yet have been pruned in `rpc.polkadot.io`.
 //!
-//! ```
+//! ```ignore
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -167,7 +168,7 @@
 //! First, let's assume you are in a branch that has the same spec name/version as the live polkadot
 //! network.
 //!
-//! ```
+//! ```ignore
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -183,14 +184,14 @@
 //! change `--execution Wasm` to `--execution Native` to achieve this. Your logs of `executor=trace`
 //! should show something among the lines of:
 //!
-//! ```
+//! ```ignore
 //! Request for native execution succeeded (native: polkadot-9900 (parity-polkadot-0.tx7.au0), chain: polkadot-9900 (parity-polkadot-0.tx7.au0))
 //! ```
 //!
 //! If you don't have matching spec versions, then are doomed to execute wasm. In this case, you can
 //! manually overwrite the wasm code with your local runtime:
 //!
-//! ```
+//! ```ignore
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -208,7 +209,7 @@
 //! you need to specify `block-at` and `block-ws-uri` is with snapshots. Let's say you have a file
 //! `snap` and you know it corresponds to the state of the parent block of `X`. Then you'd do:
 //!
-//! ```
+//! ```ignore
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -549,7 +550,8 @@ where
 
 /// Check the spec_name of an `ext`
 ///
-/// If the version does not exist, or if it does not match with the given, it emits a warning.
+/// If the spec names don't match, if `relaxed`, then it emits a warning, else it panics.
+/// If the spec versions don't match, it only ever emits a warning.
 pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,

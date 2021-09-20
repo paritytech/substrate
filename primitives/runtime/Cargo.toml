@@ -58,4 +58,3 @@ std = [
 	"hash256-std-hasher/std",
 	"either/use_std",
 ]
-try-runtime = []
