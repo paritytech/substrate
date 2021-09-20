@@ -99,19 +99,9 @@ pub trait Inspect<AccountId> {
 
 	/// Returns the `instances`, `instance_metadatas`,  and `attributes` corresponding to `class`.
 	///
-	/// By default returns `None`; class does not exist
-	fn destroy_witness(class: &Self::ClassId) -> Option<(u32, u32, u32)> {
-		let maybe_class_details = Class::<T, I>::get(class);
-
-		if let Some(class_details) = maybe_class_details {
-			Some((
-				class_details.instances,
-				class_details.instance_metadatas,
-				class_details.attributes,
-			))
-		} else {
-			None
-		}
+	/// By default this is `None`; class does not exist
+	fn destroy_witness(_class: &Self::ClassId) -> Option<(u32, u32, u32)> {
+		None
 	}
 }
 
