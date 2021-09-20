@@ -82,6 +82,7 @@ pub mod pallet {
 		traits::{Currency, OnUnbalanced, ReservableCurrency},
 	};
 	use frame_system::pallet_prelude::*;
+	use scale_info::TypeInfo;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::traits::{Saturating, Zero};
 	use sp_std::prelude::*;
@@ -111,7 +112,8 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ Default
-			+ From<u64>;
+			+ From<u64>
+			+ TypeInfo;
 
 		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
@@ -181,7 +183,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	/// A single bid on a gilt, an item of a *queue* in `Queues`.
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct GiltBid<Balance, AccountId> {
 		/// The amount bid.
 		pub amount: Balance,
@@ -190,7 +192,7 @@ pub mod pallet {
 	}
 
 	/// Information representing an active gilt.
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct ActiveGilt<Balance, AccountId, BlockNumber> {
 		/// The proportion of the effective total issuance (i.e. accounting for any eventual gilt
 		/// expansion or contraction that may eventually be claimed).
@@ -214,7 +216,7 @@ pub mod pallet {
 	/// `issuance - frozen + proportion * issuance`
 	///
 	/// where `issuance = total_issuance - IgnoredIssuance`
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct ActiveGiltsTotal<Balance> {
 		/// The total amount of funds held in reserve for all active gilts.
 		pub frozen: Balance,
@@ -269,7 +271,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A bid was successfully placed.
