@@ -25,7 +25,7 @@
 
 use codec::Codec;
 use pallet_contracts_primitives::{
-	Code, ContractExecResult, ContractInstantiateResult, GetStorageResult,
+	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult, GetStorageResult,
 };
 use sp_std::vec::Vec;
 
@@ -45,8 +45,9 @@ sp_api::decl_runtime_apis! {
 			dest: AccountId,
 			value: Balance,
 			gas_limit: u64,
+			storage_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult;
+		) -> ContractExecResult<Balance>;
 
 		/// Instantiate a new contract.
 		///
@@ -55,10 +56,21 @@ sp_api::decl_runtime_apis! {
 			origin: AccountId,
 			endowment: Balance,
 			gas_limit: u64,
+			storage_limit: Option<Balance>,
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId>;
+		) -> ContractInstantiateResult<AccountId, Balance>;
+
+
+		/// Upload new code without instantiating a contract from it.
+		///
+		/// See `pallet_contracts::Pallet::upload_code`.
+		fn upload_code(
+			origin: AccountId,
+			code: Vec<u8>,
+			storage_limit: Option<Balance>,
+		) -> CodeUploadResult<Hash, Balance>;
 
 		/// Query a given storage key in a given contract.
 		///

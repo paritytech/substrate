@@ -54,10 +54,9 @@ mod v4 {
 /// V5: State rent is removed which obsoletes some fields in `ContractInfo`.
 mod v5 {
 	use super::*;
-	use crate::{
-		BalanceOf, CodeHash, ContractInfo, ContractInfoOf, DeletedContract, DeletionQueue, TrieId,
-	};
-	use codec::Decode;
+	use crate::{BalanceOf, CodeHash, TrieId};
+	use codec::{Decode, Encode};
+	use frame_support::{codec, generate_storage_alias, Twox64Concat};
 	use sp_std::marker::PhantomData;
 
 	type AliveContractInfo<T> =
@@ -95,6 +94,30 @@ mod v5 {
 		trie_id: TrieId,
 	}
 
+	type ContractInfo<T> = RawContractInfo<CodeHash<T>>;
+
+	#[derive(Encode, Decode)]
+	struct RawContractInfo<CodeHash> {
+		trie_id: TrieId,
+		code_hash: CodeHash,
+		_reserved: Option<()>,
+	}
+
+	#[derive(Encode, Decode)]
+	struct DeletedContract {
+		trie_id: TrieId,
+	}
+
+	generate_storage_alias!(
+		Contracts,
+		ContractInfoOf<T: Config> => Map<(Twox64Concat, T::AccountId), ContractInfo<T>>
+	);
+
+	generate_storage_alias!(
+		Contracts,
+		DeletionQueue => Value<Vec<DeletedContract>>
+	);
+
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
 
@@ -110,7 +133,7 @@ mod v5 {
 			}
 		});
 
-		<DeletionQueue<T>>::translate(|old: Option<Vec<OldDeletedContract>>| {
+		DeletionQueue::translate(|old: Option<Vec<OldDeletedContract>>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
 		})

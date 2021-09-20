@@ -119,7 +119,7 @@ pub fn executor_call<
 		hash: sp_core::blake2_256(&code).to_vec(),
 		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
 	};
-
+	sp_tracing::try_init_simple();
 	executor().call::<R, NC>(&mut t, &runtime_code, method, data, use_native, native_call)
 }
 

@@ -1065,7 +1065,7 @@ define_env!(Env, <E: Ext>,
 		ctx.terminate(beneficiary_ptr)
 	},
 
-	// Remove the calling account and transfer remaining balance.
+	// Remove the calling account and transfer remaining **free** balance.
 	//
 	// This function never returns. Either the termination was successful and the
 	// execution of the destroyed contract is halted. Or it failed during the termination
