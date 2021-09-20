@@ -618,6 +618,7 @@ build-rustdoc:
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
+    DOC_INDEX_PAGE:                "sc_service/index.html" # default redirected page
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
@@ -632,7 +633,7 @@ build-rustdoc:
     - mv ./target/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
     - chown -R nonroot:nonroot ./crate-docs
-    - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
+    - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
     - sccache -s
 
 #### stage:                        publish
@@ -728,42 +729,73 @@ publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
   <<:                              *vault-secrets
-  image:                           paritytech/tools:latest
+  image:                           node:16
   variables:
     GIT_DEPTH:                     100
+    # --- Following variables are for rustdocs deployment ---
+    # Space separated values of branches and tags to generate rustdocs
+    RUSTDOCS_DEPLOY_REFS:          "master monthly-2021-09+1 monthly-2021-08 v3.0.0"
+    # Location of the docs index template
+    INDEX_TPL:                     ".maintain/docs-index-tpl.ejs"
+    # Where the `/latest` symbolic link links to. One of the $RUSTDOCS_DEPLOY_REFS value.
+    LATEST:                        "monthly-2021-09+1"
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^monthly-20[0-9]{2}-[0-9]{2}.*$/  # to support: monthly-2021-09+1
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
   # artifacts from being dowloaded by this job.
   needs:
     - job:                         build-rustdoc
       artifacts:                   true
   script:
+    # If $CI_COMMIT_REF_NAME doesn't match one of $RUSTDOCS_DEPLOY_REFS space-separated values, we
+    # exit immediately.
+    # Putting spaces at the front and back to ensure we are not matching just any substring, but the
+    # whole space-separated value.
+    - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     - rm -rf /tmp/*
     # Set git config
     - rm -rf .git/config
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
-    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/substrate.git"
+    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
     - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     - git fetch origin gh-pages
+    # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
+    - yarn global add ejs
+    - 'ejs ${INDEX_TPL} -i "{\"deploy_refs\":\"${RUSTDOCS_DEPLOY_REFS}\",\"repo_name\":\"${CI_PROJECT_NAME}\",\"latest\":\"${LATEST}\"}" > /tmp/index.html'
     # Save README and docs
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
     - git checkout gh-pages
-    # Remove everything and restore generated docs and README
-    - rm -rf ./*
-    - mv /tmp/doc/* .
+    # Remove directories no longer necessary, as specified in $RUSTDOCS_DEPLOY_REFS.
+    # Also ensure $RUSTDOCS_DEPLOY_REFS is non-space
+    - if [[ ! -z ${RUSTDOCS_DEPLOY_REFS// } ]]; then
+        for FILE in *; do
+          if [[ ! " $RUSTDOCS_DEPLOY_REFS " =~ " $FILE " ]]; then
+            echo "Removing ${FILE}..."
+            rm -rf $FILE
+          fi
+        done
+      fi
+    # Move the index page & built back
+    - mv -f /tmp/index.html .
+    # Ensure the destination dir doesn't exist.
+    - rm -rf ${CI_COMMIT_REF_NAME}
+    - mv -f /tmp/doc ${CI_COMMIT_REF_NAME}
+    # Add the symlink
+    - '[[ -e "$LATEST" ]] && ln -sf "${LATEST}" latest'
     # Upload files
     - git add --all --force
     # `git commit` has an exit code of > 0 if there is nothing to commit.
     # This causes GitLab to exit immediately and marks this job failed.
     # We don't want to mark the entire job failed if there's nothing to
     # publish though, hence the `|| true`.
-    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
+    - git commit -m "___Updated docs for ${CI_COMMIT_REF_NAME}___" ||
         echo "___Nothing to commit___"
     - git push origin gh-pages --force
   after_script:
