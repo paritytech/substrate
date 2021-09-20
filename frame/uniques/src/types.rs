@@ -58,13 +58,13 @@ pub struct ClassDetails<AccountId, DepositBalance> {
 pub struct DestroyWitness {
 	/// The total number of outstanding instances of this asset class.
 	#[codec(compact)]
-	pub(super) instances: u32,
+	pub instances: u32,
 	/// The total number of outstanding instance metadata of this asset class.
 	#[codec(compact)]
-	pub(super) instance_metadatas: u32,
+	pub instance_metadatas: u32,
 	#[codec(compact)]
 	/// The total number of attributes for this asset class.
-	pub(super) attributes: u32,
+	pub attributes: u32,
 }
 
 impl<AccountId, DepositBalance> ClassDetails<AccountId, DepositBalance> {

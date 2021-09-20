@@ -96,6 +96,23 @@ pub trait Inspect<AccountId> {
 	fn can_transfer(_class: &Self::ClassId, _instance: &Self::InstanceId) -> bool {
 		true
 	}
+
+	/// Returns the `instances`, `instance_metadatas`,  and `attributes` corresponding to `class`.
+	///
+	/// By default returns `None`; class does not exist
+	fn destroy_witness(class: &Self::ClassId) -> Option<(u32, u32, u32)> {
+		let maybe_class_details = Class::<T, I>::get(class);
+
+		if let Some(class_details) = maybe_class_details {
+			Some((
+				class_details.instances,
+				class_details.instance_metadatas,
+				class_details.attributes,
+			))
+		} else {
+			None
+		}
+	}
 }
 
 /// Interface for enumerating assets in existence or owned by a given account over many collections

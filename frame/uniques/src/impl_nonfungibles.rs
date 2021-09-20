@@ -86,6 +86,13 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			_ => false,
 		}
 	}
+
+	/// Returns the `instances`, `instance_metadatas`,  and `attributes` corresponding to `class`.
+	///
+	/// By default this is `None`; class does not exist
+	fn destroy_witness(_class: &Self::ClassId) -> Option<(u32, u32, u32)> {
+		None
+	}
 }
 
 impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
