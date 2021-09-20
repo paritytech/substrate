@@ -269,16 +269,6 @@ check-signed-tag:
   script:
     - ./.maintain/gitlab/check_signed.sh
 
-check-line-width:
-  stage:                           check
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_line_width.sh
-  allow_failure:                   true
-
 test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
