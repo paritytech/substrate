@@ -174,6 +174,28 @@ async fn author_should_return_watch_validation_error() {
 	assert!(response.params.result.contains("subscription useless"));
 }
 
+#[tokio::test]
+async fn author_should_return_pending_extrinsics() {
+	const rpc_method: &'static str = "author_pendingExtrinsics";
+
+	let api = TestSetup::into_rpc();
+
+	let (xt, xt_bytes) = {
+		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
+		let xt_hex = to_hex(&xt_bytes, true);
+		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes.into())
+	};
+	api.call("author_submitExtrinsic", Some(xt)).await.unwrap();
+
+	let pending = api.call(rpc_method, None).await.unwrap();
+	log::debug!(target: "test", "pending: {:?}", pending);
+	let pending = {
+		let r: Response<Vec<Bytes>> = serde_json::from_str(&pending).unwrap();
+		r.result
+	};
+	assert_eq!(pending, &[xt_bytes]);
+}
+
 // #[test]
 // fn should_return_pending_extrinsics() {
 // 	let p = TestSetup::default().author();
