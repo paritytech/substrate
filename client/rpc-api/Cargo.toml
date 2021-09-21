@@ -23,11 +23,10 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-runtime = { path = "../../primitives/runtime", version = "4.0.0-dev" }
 sc-chain-spec = { path = "../chain-spec", version = "4.0.0-dev" }
-serde = { version = "1.0.126", features = ["derive"] }
-serde_json = "1.0.41"
-
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", features = ["full"] }
-
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+
+serde = { version = "1.0.126", features = ["derive"] }
+serde_json = "1.0.68"
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", features = ["full"] }

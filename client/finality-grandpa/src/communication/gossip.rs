@@ -593,7 +593,7 @@ impl<N: Ord> Peers<N> {
 			let mut peers = self
 				.inner
 				.iter()
-				.map(|(peer_id, info)| (peer_id.clone(), info.clone()))
+				.map(|(peer_id, info)| (*peer_id, info.clone()))
 				.collect::<Vec<_>>();
 
 			peers.shuffle(&mut rand::thread_rng());
@@ -618,9 +618,9 @@ impl<N: Ord> Peers<N> {
 		let mut n_authorities_added = 0;
 		for peer_id in shuffled_authorities {
 			if n_authorities_added < half_lucky {
-				first_stage_peers.insert(peer_id.clone());
+				first_stage_peers.insert(*peer_id);
 			} else if n_authorities_added < one_and_a_half_lucky {
-				second_stage_peers.insert(peer_id.clone());
+				second_stage_peers.insert(*peer_id);
 			} else {
 				break
 			}
@@ -637,11 +637,11 @@ impl<N: Ord> Peers<N> {
 			}
 
 			if first_stage_peers.len() < LUCKY_PEERS {
-				first_stage_peers.insert(peer_id.clone());
+				first_stage_peers.insert(*peer_id);
 				second_stage_peers.remove(peer_id);
 			} else if second_stage_peers.len() < n_second_stage_peers {
 				if !first_stage_peers.contains(peer_id) {
-					second_stage_peers.insert(peer_id.clone());
+					second_stage_peers.insert(*peer_id);
 				}
 			} else {
 				break

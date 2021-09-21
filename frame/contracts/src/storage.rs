@@ -29,6 +29,7 @@ use frame_support::{
 	traits::Get,
 	weights::Weight,
 };
+use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{traits::Hash, RuntimeDebug};
@@ -38,7 +39,7 @@ pub type ContractInfo<T> = RawContractInfo<CodeHash<T>>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct RawContractInfo<CodeHash> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -61,7 +62,7 @@ fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 	ChildInfo::new_default(trie_id)
 }
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, TypeInfo)]
 pub struct DeletedContract {
 	pub(crate) trie_id: TrieId,
 }

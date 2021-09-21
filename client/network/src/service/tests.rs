@@ -356,15 +356,13 @@ fn lots_of_incoming_peers_works() {
 		..config::NetworkConfiguration::new_local()
 	});
 
-	let main_node_peer_id = main_node.local_peer_id().clone();
+	let main_node_peer_id = *main_node.local_peer_id();
 
 	// We spawn background tasks and push them in this `Vec`. They will all be waited upon before
 	// this test ends.
 	let mut background_tasks_to_wait = Vec::new();
 
 	for _ in 0..32 {
-		let main_node_peer_id = main_node_peer_id.clone();
-
 		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
 			listen_addresses: vec![],
 			extra_sets: vec![config::NonDefaultSetConfig {
@@ -374,7 +372,7 @@ fn lots_of_incoming_peers_works() {
 				set_config: config::SetConfig {
 					reserved_nodes: vec![config::MultiaddrWithPeerId {
 						multiaddr: listen_addr.clone(),
-						peer_id: main_node_peer_id.clone(),
+						peer_id: main_node_peer_id,
 					}],
 					..Default::default()
 				},

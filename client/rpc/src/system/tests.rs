@@ -238,13 +238,9 @@ async fn system_local_listen_addresses_works() {
 async fn system_peers() {
 	use jsonrpsee::types::v2::Response;
 	let peer_id = PeerId::random();
-	let call_result =
-		api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
-			.call("system_peers", None)
-			.await
-			.unwrap();
-	let peer_info: Response<Vec<PeerInfo<H256, _>>> =
-		serde_json::from_str(&call_result).unwrap();
+	let req = api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true }).system_peers();
+	let res = executor::block_on(req).unwrap();
+
 	assert_eq!(
 		peer_info.result,
 		vec![PeerInfo {

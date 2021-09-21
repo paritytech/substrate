@@ -195,7 +195,7 @@ where
 }
 
 /// Instantiate all Light RPC extensions.
-pub fn create_light<C, P, F>(deps: LightDeps<C, F, P>) -> RpcModule<()>
+pub fn create_light<C, P, F>(deps: LightDeps<C, F, P>) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: sp_blockchain::HeaderBackend<Block> + Send + Sync + 'static,
 	F: sc_client_api::light::Fetcher<Block> + 'static,
@@ -206,8 +206,7 @@ where
 	let LightDeps { client, pool, remote_blockchain, fetcher } = deps;
 	let mut io = RpcModule::new(());
 	let backend = SystemRpcBackendLight::new(client, pool, fetcher, remote_blockchain);
-	io.merge(SystemRpc::<Hash, AccountId, Index>::new(Box::new(backend)).into_rpc())
-		.unwrap();
+	io.merge(SystemRpc::<Hash, AccountId, Index>::new(Box::new(backend)).into_rpc())?;
 
-	io
+	Ok(io)
 }
