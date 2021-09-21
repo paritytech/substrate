@@ -10,8 +10,5 @@ description = "Handling of blobs, usually Wasm code, which may be compresed"
 documentation = "https://docs.rs/sp-maybe-compressed-blob"
 readme = "README.md"
 
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
+[dependencies]
 zstd = { version = "0.6.0", default-features = false }
-
-[target.'cfg(target_os = "unknown")'.dependencies]
-ruzstd = { version = "0.2.2" }
