@@ -5,8 +5,8 @@ error[E0277]: the trait bound `Bar: TypeInfo` is not satisfied
    |               ^^^^^^^ the trait `TypeInfo` is not implemented for `Bar`
    |
    = note: required because of the requirements on the impl of `StaticTypeInfo` for `Bar`
-   = note: required because of the requirements on the impl of `frame_support::storage::StorageEntryMetadata` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
-   = note: required by `NAME`
+   = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+   = note: required by `build_metadata`
 
 error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
@@ -16,8 +16,8 @@ error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
    |
    = note: required because of the requirements on the impl of `Decode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
-   = note: required because of the requirements on the impl of `frame_support::storage::StorageEntryMetadata` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
-   = note: required by `NAME`
+   = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+   = note: required by `build_metadata`
 
 error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
@@ -27,8 +27,8 @@ error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
    |
    = note: required because of the requirements on the impl of `FullEncode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
-   = note: required because of the requirements on the impl of `frame_support::storage::StorageEntryMetadata` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
-   = note: required by `NAME`
+   = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+   = note: required by `build_metadata`
 
 error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
@@ -39,8 +39,8 @@ error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
    = note: required because of the requirements on the impl of `Encode` for `Bar`
    = note: required because of the requirements on the impl of `FullEncode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
-   = note: required because of the requirements on the impl of `frame_support::storage::StorageEntryMetadata` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
-   = note: required by `NAME`
+   = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+   = note: required by `build_metadata`
 
 error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
  --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:9:12
