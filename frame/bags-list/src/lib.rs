@@ -213,6 +213,8 @@ pub mod pallet {
 
 		/// Move `heavier` directly in front of `lighter`.
 		///
+		/// The dispatch origin for this call must be _Signed_ and can be called by anyone.
+		///
 		/// Only works if
 		/// - both nodes are within the same bag,
 		/// - and `heavier` has a greater `VoteWeight` than `lighter`.
