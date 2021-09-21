@@ -158,7 +158,7 @@ async fn author_should_watch_extrinsic() {
 
 #[tokio::test]
 async fn author_should_return_watch_validation_error() {
-	const rpc_method: &'static str = "author_submitAndWatchExtrinsic";
+	const METH: &'static str = "author_submitAndWatchExtrinsic";
 
 	let api = TestSetup::into_rpc();
 	// Nonsensical nonce
@@ -166,7 +166,7 @@ async fn author_should_return_watch_validation_error() {
 		let xt_bytes = uxt(AccountKeyring::Alice, 179).encode();
 		to_raw_value(&[to_hex(&xt_bytes, true)]).unwrap()
 	};
-	let (_, mut data_stream) = api.test_subscription(rpc_method, Some(invalid_xt)).await;
+	let (_, mut data_stream) = api.test_subscription(METH, Some(invalid_xt)).await;
 
 	let subscription_data = data_stream.next().await.unwrap();
 	let response: SubscriptionResponse<String> =
@@ -176,7 +176,7 @@ async fn author_should_return_watch_validation_error() {
 
 #[tokio::test]
 async fn author_should_return_pending_extrinsics() {
-	const rpc_method: &'static str = "author_pendingExtrinsics";
+	const METH: &'static str = "author_pendingExtrinsics";
 
 	let api = TestSetup::into_rpc();
 
@@ -187,7 +187,7 @@ async fn author_should_return_pending_extrinsics() {
 	};
 	api.call("author_submitExtrinsic", Some(xt)).await.unwrap();
 
-	let pending = api.call(rpc_method, None).await.unwrap();
+	let pending = api.call(METH, None).await.unwrap();
 	log::debug!(target: "test", "pending: {:?}", pending);
 	let pending = {
 		let r: Response<Vec<Bytes>> = serde_json::from_str(&pending).unwrap();
@@ -196,17 +196,47 @@ async fn author_should_return_pending_extrinsics() {
 	assert_eq!(pending, &[xt_bytes]);
 }
 
-// #[test]
-// fn should_return_pending_extrinsics() {
-// 	let p = TestSetup::default().author();
+#[tokio::test]
+async fn author_should_remove_extrinsics() {
+	env_logger::init();
+	const METH: &'static str = "author_removeExtrinsic";
+	let setup = TestSetup::default();
+	let api = setup.author().into_rpc();
 
-// 	let ex = uxt(AccountKeyring::Alice, 0);
-// 	executor::block_on(AuthorApi::submit_extrinsic(&p, ex.encode().into())).unwrap();
-// 	assert_matches!(
-// 		p.pending_extrinsics(),
-// 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
-// 	);
-// }
+	let (xt1, xt1_bytes) = {
+		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
+		let xt_hex = to_hex(&xt_bytes, true);
+		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
+	};
+	api.call("author_submitExtrinsic", Some(xt1)).await.unwrap();
+
+	let (xt2, xt2_bytes) = {
+		let xt_bytes = uxt(AccountKeyring::Alice, 1).encode();
+		let xt_hex = to_hex(&xt_bytes, true);
+		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
+	};
+	api.call("author_submitExtrinsic", Some(xt2)).await.unwrap();
+
+	let (xt3, xt3_bytes) = {
+		let xt_bytes = uxt(AccountKeyring::Bob, 0).encode();
+		let xt_hex = to_hex(&xt_bytes, true);
+		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
+	};
+	let ex3_out = api.call("author_submitExtrinsic", Some(xt3)).await.unwrap();
+	let ex3_hash: Response<Bytes> = serde_json::from_str(&ex3_out).unwrap();
+	let ex3_hash = ex3_hash.result;
+	assert_eq!(setup.pool.status().ready, 3);
+	log::debug!(target: "test", "ex3 hash: {:?}, hash: {:?}", &ex3_out, ex3_hash);
+
+	// Now remove all three
+	let removed = api.call_with(METH, vec![
+		hash::ExtrinsicOrHash::Hash(ex3_hash),
+		// Removing this one will also remove xt2
+		hash::ExtrinsicOrHash::Extrinsic(xt1_bytes.into())
+	]).await.unwrap();
+	log::debug!(target: "test", "removed={:?}", removed);
+	// TODO: the params are not parsed properly; run with `RUST_LOG=trace` for details.
+}
 
 // #[test]
 // fn should_remove_extrinsics() {
