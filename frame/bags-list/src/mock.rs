@@ -27,7 +27,8 @@ pub type AccountId = u32;
 pub type Balance = u32;
 
 thread_local! {
-	static NEXT_VOTE_WEIGHT_MAP: RefCell<HashMap<AccountId, VoteWeight>> = RefCell::new(Default::default());
+	static NEXT_VOTE_WEIGHT_MAP: RefCell<HashMap<AccountId, VoteWeight>>
+		= RefCell::new(Default::default());
 }
 
 parameter_types! {

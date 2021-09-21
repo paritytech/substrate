@@ -435,7 +435,7 @@ impl<T: Config> List<T> {
 
 		// re-fetch `lighter_node` from storage since it may have been updated when heavier node was
 		// excised
-		let mut lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?; // TODO this should never fail, but if does could be bad news
+		let mut lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
 
 		// connect `heavier_node` to its new `prev`
 		if let Some(mut prev) = lighter_node.prev() {
