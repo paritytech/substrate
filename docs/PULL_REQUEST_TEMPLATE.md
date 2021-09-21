@@ -1,26 +1,32 @@
-Thank you for your Pull Request!
 
-Before you submitting, please check that:
 
-- [ ] You added a brief description of the PR, e.g.:
+✄ -----------------------------------------------------------------------------
+
+Thank you for your Pull Request! 🙏
+
+Before you submit, please check that:
+
+- [ ] **Description:** You added a brief description of the PR, e.g.:
   - What does it do?
-  - What important points reviewers should know?
+  - What important points should reviewers know?
   - Is there something left for follow-up PRs?
-- [ ] You labeled the PR appropriately if you have permissions to do so:
+- [ ] **Labels:** You labeled the PR appropriately if you have permissions to do so:
   - [ ] `A*` for PR status (**one required**)
   - [ ] `B*` for changelog (**one required**)
   - [ ] `C*` for release notes (**exactly one required**)
   - [ ] `D*` for various implications/requirements
-  - [ ] Github's project assignment
-- [ ] You mentioned a related issue if this PR related to it, e.g. `Fixes #228` or `Related #1337`.
-- [ ] You asked any particular reviewers to review. If you aren't sure, start with GH suggestions.
-- [ ] Your PR adheres to [the style guide](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md)
+  - [ ] Github project assignment
+- [ ] **Related Issues:** You mentioned a related issue if this PR is related to it, e.g. `Fixes #228` or `Related #1337`.
+- [ ] **2 Reviewers:** You asked at least two reviewers to review. If you aren't sure, start with GH suggestions.
+- [ ] **Style Guide:** Your PR adheres to [the style guide](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md)
   - In particular, mind the maximal line length of 100 (120 in exceptional circumstances).
   - There is no commented code checked in unless necessary.
-  - Any panickers have a proof or removed.
-- [ ] You bumped the runtime version if there are breaking changes in the **runtime**.
-- [ ] You updated any rustdocs which may have changed
-- [ ] Has the PR altered the external API or interfaces used by Polkadot? Do you have the corresponding Polkadot PR ready?
+  - Any panickers in the runtime have a proof or were removed.
+- [ ] **Runtime Version:** You bumped the runtime version if there are breaking changes in the **runtime**.
+- [ ] **Docs:** You updated any rustdocs which may need to change.
+- [ ] **Polkadot Companion:** Has the PR altered the external API or interfaces used by Polkadot?
+  - [ ] If so, do you have the corresponding Polkadot PR ready?
+  - [ ] Optionally: Do you have a corresponding Cumulus PR?
 
 Refer to [the contributing guide](https://github.com/paritytech/substrate/blob/master/docs/CONTRIBUTING.adoc) for details.
 
