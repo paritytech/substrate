@@ -5121,6 +5121,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log 0.4.14",
  "pallet-balances",
  "pallet-treasury",
  "parity-scale-codec",
