@@ -74,6 +74,13 @@ impl<P, Client> Author<P, Client> {
 	}
 }
 
+/// Currently we treat all RPC transactions as externals.
+///
+/// Possibly in the future we could allow opt-in for special treatment
+/// of such transactions, so that the block authors can inject
+/// some unique transactions via RPC and have them included in the pool.
+const TX_SOURCE: TransactionSource = TransactionSource::External;
+
 #[async_trait]
 impl<P, Client> AuthorApiServer<TxHash<P>, BlockHash<P>> for Author<P, Client>
 where
@@ -207,10 +214,3 @@ where
 		Ok(())
 	}
 }
-
-/// Currently we treat all RPC transactions as externals.
-///
-/// Possibly in the future we could allow opt-in for special treatment
-/// of such transactions, so that the block authors can inject
-/// some unique transactions via RPC and have them included in the pool.
-const TX_SOURCE: TransactionSource = TransactionSource::External;

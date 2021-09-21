@@ -335,24 +335,24 @@ impl std::fmt::Display for RpcTransactionError {
 }
 
 // TODO: (dp) Needed?
-// pub(crate) fn parse_rpc_result(
-// 	result: Option<String>,
-// 	session: RpcSession,
-// 	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
-// ) -> Result<RpcTransactionOutput, RpcTransactionError> {
-// 	if let Some(ref result) = result {
-// 		let json: serde_json::Value =
-// 			serde_json::from_str(result).expect("the result can only be a JSONRPC string; qed");
-// 		let error = json.as_object().expect("JSON result is always an object; qed").get("error");
+pub(crate) fn parse_rpc_result(
+	result: Option<String>,
+	session: RpcSession,
+	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
+) -> Result<RpcTransactionOutput, RpcTransactionError> {
+	if let Some(ref result) = result {
+		let json: serde_json::Value =
+			serde_json::from_str(result).expect("the result can only be a JSONRPC string; qed");
+		let error = json.as_object().expect("JSON result is always an object; qed").get("error");
 
-// 		if let Some(error) = error {
-// 			return Err(serde_json::from_value(error.clone())
-// 				.expect("the JSONRPC result's error is always valid; qed"))
-// 		}
-// 	}
+		if let Some(error) = error {
+			return Err(serde_json::from_value(error.clone())
+				.expect("the JSONRPC result's error is always valid; qed"))
+		}
+	}
 
-// 	Ok(RpcTransactionOutput { result, session, receiver })
-// }
+	Ok(RpcTransactionOutput { result, session, receiver })
+}
 
 /// An extension trait for `BlockchainEvents`.
 pub trait BlockchainEventsExt<C, B>
