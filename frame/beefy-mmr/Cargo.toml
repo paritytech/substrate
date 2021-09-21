@@ -3,12 +3,12 @@ name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+license = "Apache-2.0"
 description = "BEEFY + MMR runtime utilities"
 
 [dependencies]
 hex = { version = "0.4", optional = true }
-codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
+codec = { version = "2.3.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 libsecp256k1 = { version = "0.7.0", default-features = false }
 log = { version = "0.4.13", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
@@ -25,7 +25,7 @@ sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features 
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
 sp-std = { version = "4.0.0-dev", path = "../../primitives/std", default-features = false }
 
-beefy-merkle-tree = { path = "./primitives", default-features = false }
+beefy-merkle-tree = { version = "4.0.0-dev", path = "./primitives", default-features = false }
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", default-features = false }
 pallet-beefy = { version = "4.0.0-dev", path = "../beefy", default-features = false }
 

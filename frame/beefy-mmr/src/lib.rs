@@ -1,18 +1,19 @@
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+// This file is part of Substrate.
 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -59,9 +60,9 @@ where
 	fn on_new_root(root: &<T as pallet_mmr::Config>::Hash) {
 		let digest = sp_runtime::generic::DigestItem::Consensus(
 			beefy_primitives::BEEFY_ENGINE_ID,
-			codec::Encode::encode(
-				&beefy_primitives::ConsensusLog::<<T as pallet_beefy::Config>::BeefyId>::MmrRoot(*root),
-			),
+			codec::Encode::encode(&beefy_primitives::ConsensusLog::<
+				<T as pallet_beefy::Config>::BeefyId,
+			>::MmrRoot(*root)),
 		);
 		<frame_system::Pallet<T>>::deposit_log(digest);
 	}
@@ -74,15 +75,18 @@ impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEth
 		use sp_core::crypto::Public;
 		let compressed_key = a.as_slice();
 
-		libsecp256k1::PublicKey::parse_slice(compressed_key, Some(libsecp256k1::PublicKeyFormat::Compressed))
-			// uncompress the key
-			.map(|pub_key| pub_key.serialize().to_vec())
-			// now convert to ETH address
-			.map(|uncompressed| sp_io::hashing::keccak_256(&uncompressed[1..])[12..].to_vec())
-			.map_err(|_| {
-				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
-			})
-			.unwrap_or_default()
+		libsecp256k1::PublicKey::parse_slice(
+			compressed_key,
+			Some(libsecp256k1::PublicKeyFormat::Compressed),
+		)
+		// uncompress the key
+		.map(|pub_key| pub_key.serialize().to_vec())
+		// now convert to ETH address
+		.map(|uncompressed| sp_io::hashing::keccak_256(&uncompressed[1..])[12..].to_vec())
+		.map_err(|_| {
+			log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
+		})
+		.unwrap_or_default()
 	}
 }
 
@@ -148,15 +152,19 @@ pub mod pallet {
 	/// This storage entry is used as cache for calls to [`update_beefy_next_authority_set`].
 	#[pallet::storage]
 	#[pallet::getter(fn beefy_next_authorities)]
-	pub type BeefyNextAuthorities<T: Config> = StorageValue<_, BeefyNextAuthoritySet<MerkleRootOf<T>>, ValueQuery>;
+	pub type BeefyNextAuthorities<T: Config> =
+		StorageValue<_, BeefyNextAuthoritySet<MerkleRootOf<T>>, ValueQuery>;
 }
 
 impl<T: Config> LeafDataProvider for Pallet<T>
 where
 	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
 {
-	type LeafData =
-		MmrLeaf<<T as frame_system::Config>::BlockNumber, <T as frame_system::Config>::Hash, MerkleRootOf<T>>;
+	type LeafData = MmrLeaf<
+		<T as frame_system::Config>::BlockNumber,
+		<T as frame_system::Config>::Hash,
+		MerkleRootOf<T>,
+	>;
 
 	fn leaf_data() -> Self::LeafData {
 		MmrLeaf {

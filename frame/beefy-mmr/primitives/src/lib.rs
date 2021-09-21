@@ -1,18 +1,19 @@
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+// This file is part of Substrate.
 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -197,10 +198,7 @@ where
 
 	impl ProofCollection {
 		fn new(position: usize) -> Self {
-			ProofCollection {
-				proof: Default::default(),
-				position,
-			}
+			ProofCollection { proof: Default::default(), position }
 		}
 	}
 
@@ -237,13 +235,7 @@ where
 		collect_proof.proof.iter().map(hex::encode).collect::<Vec<_>>()
 	);
 
-	MerkleProof {
-		root,
-		proof: collect_proof.proof,
-		number_of_leaves,
-		leaf_index,
-		leaf,
-	}
+	MerkleProof { root, proof: collect_proof.proof, number_of_leaves, leaf_index, leaf }
 }
 
 /// Leaf node for proof verification.
@@ -277,7 +269,13 @@ impl<'a> From<Hash> for Leaf<'a> {
 /// concatenating and hashing end up with given root hash.
 ///
 /// The proof must not contain the root hash.
-pub fn verify_proof<'a, H, P, L>(root: &'a Hash, proof: P, number_of_leaves: usize, leaf_index: usize, leaf: L) -> bool
+pub fn verify_proof<'a, H, P, L>(
+	root: &'a Hash,
+	proof: P,
+	number_of_leaves: usize,
+	leaf_index: usize,
+	leaf: L,
+) -> bool
 where
 	H: Hasher,
 	P: IntoIterator<Item = Hash>,
@@ -325,7 +323,11 @@ where
 ///
 /// In case only one element is provided it is returned via `Ok` result, in any other case (also an
 /// empty iterator) an `Err` with the inner nodes of upper layer is returned.
-fn merkelize_row<H, V, I>(mut iter: I, mut next: Vec<Hash>, visitor: &mut V) -> Result<Hash, Vec<Hash>>
+fn merkelize_row<H, V, I>(
+	mut iter: I,
+	mut next: Vec<Hash>,
+	visitor: &mut V,
+) -> Result<Hash, Vec<Hash>>
 where
 	H: Hasher,
 	V: Visitor,
@@ -343,11 +345,7 @@ where
 		visitor.visit(index, &a, &b);
 
 		#[cfg(feature = "debug")]
-		log::debug!(
-			"  {:?}\n  {:?}",
-			a.as_ref().map(hex::encode),
-			b.as_ref().map(hex::encode)
-		);
+		log::debug!("  {:?}\n  {:?}", a.as_ref().map(hex::encode), b.as_ref().map(hex::encode));
 
 		index += 2;
 		match (a, b) {
