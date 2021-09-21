@@ -18,7 +18,7 @@
 
 //! Service integration test utils.
 
-use futures::{task::Poll, Future, FutureExt, TryFutureExt as _};
+use futures::{task::Poll, Future, TryFutureExt as _};
 use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
@@ -30,7 +30,7 @@ use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
 	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
-	SpawnTaskHandle, TaskExecutor, TaskManager, TransactionStorageMode,
+	SpawnTaskHandle, TaskManager, TransactionStorageMode,
 };
 use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderBackend;
@@ -53,6 +53,16 @@ struct TestNet<G, E, F, L, U> {
 	chain_spec: GenericChainSpec<G, E>,
 	base_port: u16,
 	nodes: usize,
+}
+
+impl<G, E, F, L, U> Drop for TestNet<G, E, F, L, U> {
+	fn drop(&mut self) {
+		// Drop the nodes before dropping the runtime, as the runtime otherwise waits for all
+		// futures to be ended and we run into a dead lock.
+		self.full_nodes.drain(..);
+		self.light_nodes.drain(..);
+		self.authority_nodes.drain(..);
+	}
 }
 
 pub trait TestNetNode:
@@ -200,7 +210,7 @@ fn node_config<
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Role,
-	task_executor: TaskExecutor,
+	tokio_handle: tokio::runtime::Handle,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -229,7 +239,7 @@ fn node_config<
 		impl_name: String::from("network-test-impl"),
 		impl_version: String::from("0.1"),
 		role,
-		task_executor,
+		tokio_handle,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore_remote: Default::default(),
@@ -248,7 +258,6 @@ fn node_config<
 		rpc_ipc: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
-		rpc_http_threads: None,
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
@@ -308,21 +317,13 @@ where
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>,
 	) {
 		let handle = self.runtime.handle().clone();
-		let task_executor: TaskExecutor = {
-			let executor = handle.clone();
-			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
-				executor.spawn(fut.unit_error());
-				async {}
-			})
-			.into()
-		};
 
 		for (key, authority) in authorities {
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Role::Authority,
-				task_executor.clone(),
+				handle.clone(),
 				Some(key),
 				self.base_port,
 				&temp,
@@ -343,7 +344,7 @@ where
 				self.nodes,
 				&self.chain_spec,
 				Role::Full,
-				task_executor.clone(),
+				handle.clone(),
 				None,
 				self.base_port,
 				&temp,
@@ -363,7 +364,7 @@ where
 				self.nodes,
 				&self.chain_spec,
 				Role::Light,
-				task_executor.clone(),
+				handle.clone(),
 				None,
 				self.base_port,
 				&temp,

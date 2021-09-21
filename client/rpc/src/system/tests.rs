@@ -223,8 +223,7 @@ fn system_local_listen_addresses_works() {
 #[test]
 fn system_peers() {
 	let peer_id = PeerId::random();
-	let req = api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
-		.system_peers();
+	let req = api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true }).system_peers();
 	let res = executor::block_on(req).unwrap();
 
 	assert_eq!(
