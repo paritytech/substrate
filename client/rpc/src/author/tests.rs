@@ -21,7 +21,10 @@ use super::*;
 use assert_matches::assert_matches;
 use codec::Encode;
 use futures::executor;
-use jsonrpsee::types::v2::{Response, RpcError};
+use jsonrpsee::{
+	types::v2::{Response, RpcError, SubscriptionResponse},
+	RpcModule,
+};
 use sc_transaction_pool::{BasicPool, FullChainApi};
 use serde_json::value::to_raw_value;
 use sp_core::{
@@ -79,6 +82,10 @@ impl TestSetup {
 			executor: SubscriptionTaskExecutor::default(),
 		}
 	}
+
+	fn into_rpc() -> RpcModule<Author<FullTransactionPool, Client<Backend>>> {
+		Self::default().author().into_rpc()
+	}
 }
 
 #[tokio::test]
@@ -104,13 +111,12 @@ async fn author_submit_transaction_should_not_cause_error() {
 
 #[tokio::test]
 async fn author_should_watch_extrinsic() {
-	let api = TestSetup::default().author().into_rpc();
+	let api = TestSetup::into_rpc();
 
 	let xt = {
 		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
-		to_raw_value(&[to_hex(&xt_bytes, true)])
-	}
-	.unwrap();
+		to_raw_value(&[to_hex(&xt_bytes, true)]).unwrap()
+	};
 
 	let (subscription_id, mut rx) =
 		api.test_subscription("author_submitAndWatchExtrinsic", Some(xt)).await;
@@ -137,7 +143,7 @@ async fn author_should_watch_extrinsic() {
 		(to_raw_value(&[to_hex(&tx, true)]).unwrap(), hash)
 	};
 
-	let json = api.call("author_submitExtrinsic", Some(xt_replacement)).await.unwrap();
+	let _ = api.call("author_submitExtrinsic", Some(xt_replacement)).await.unwrap();
 
 	let expected = Some(format!(
 		// TODO: (dp) The `jsonrpc` version of this wraps the subscription ID in `"` – is this a
@@ -150,25 +156,23 @@ async fn author_should_watch_extrinsic() {
 	assert_eq!(subscription_data, expected);
 }
 
-// #[test]
-// fn should_return_watch_validation_error() {
-// 	// given
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
+#[tokio::test]
+async fn author_should_return_watch_validation_error() {
+	const rpc_method: &'static str = "author_submitAndWatchExtrinsic";
 
-// 	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
+	let api = TestSetup::into_rpc();
+	// Nonsensical nonce
+	let invalid_xt = {
+		let xt_bytes = uxt(AccountKeyring::Alice, 179).encode();
+		to_raw_value(&[to_hex(&xt_bytes, true)]).unwrap()
+	};
+	let (_, mut data_stream) = api.test_subscription(rpc_method, Some(invalid_xt)).await;
 
-// 	// when
-// 	p.watch_extrinsic(
-// 		Default::default(),
-// 		subscriber,
-// 		uxt(AccountKeyring::Alice, 179).encode().into(),
-// 	);
-
-// 	// then
-// 	let res = executor::block_on(id_rx).unwrap();
-// 	assert!(res.is_err(), "Expected the transaction to be rejected as invalid.");
-// }
+	let subscription_data = data_stream.next().await.unwrap();
+	let response: SubscriptionResponse<String> =
+		serde_json::from_str(&subscription_data).expect("subscriptions respond");
+	assert!(response.params.result.contains("subscription useless"));
+}
 
 // #[test]
 // fn should_return_pending_extrinsics() {
