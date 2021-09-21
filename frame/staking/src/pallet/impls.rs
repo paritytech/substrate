@@ -392,7 +392,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(
+			T::AccountId,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		)>,
 	) -> Vec<T::AccountId> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
@@ -468,7 +471,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(
+			T::AccountId,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		)>,
 		new_planned_era: EraIndex,
 	) -> Vec<T::AccountId> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
@@ -513,7 +519,10 @@ impl<T: Config> Pallet<T> {
 	/// [`Exposure`].
 	fn collect_exposures(
 		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+	) -> Vec<(
+		T::AccountId,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+	)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -1038,12 +1047,20 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>
-	for Pallet<T>
+impl<T: Config>
+	historical::SessionManager<
+		T::AccountId,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+	> for Pallet<T>
 {
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+	) -> Option<
+		Vec<(
+			T::AccountId,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		)>,
+	> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
@@ -1060,7 +1077,12 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 	}
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+	) -> Option<
+		Vec<(
+			T::AccountId,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		)>,
+	> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
 				let current_era = Self::current_era()
@@ -1108,7 +1130,11 @@ impl<T: Config>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		FullIdentification = Exposure<
+			<T as frame_system::Config>::AccountId,
+			BalanceOf<T>,
+			T::MaxNominatorRewardedPerValidator,
+		>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,

@@ -318,7 +318,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
 		ValueQuery,
 	>;
 
@@ -341,7 +341,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
 		ValueQuery,
 	>;
 

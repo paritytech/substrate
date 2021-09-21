@@ -196,14 +196,14 @@ impl<Balance> SpanRecord<Balance> {
 }
 
 /// Parameters for performing a slash.
-#[derive(Clone)]
 pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The stash account being slashed.
 	pub(crate) stash: &'a T::AccountId,
 	/// The proportion of the slash.
 	pub(crate) slash: Perbill,
 	/// The exposure of the stash and all nominators.
-	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>>,
+	pub(crate) exposure:
+		&'a Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
 	/// The era where the offence occurred.
 	pub(crate) slash_era: EraIndex,
 	/// The first era in the current bonding period.
@@ -213,6 +213,20 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The maximum percentage of a slash that ever gets paid out.
 	/// This is f_inf in the paper.
 	pub(crate) reward_proportion: Perbill,
+}
+
+impl<'a, T: 'a + Config> Clone for SlashParams<'a, T> {
+	fn clone(&self) -> Self {
+		Self {
+			stash: &self.stash.clone(),
+			slash: self.slash.clone(),
+			exposure: self.exposure.clone(),
+			slash_era: self.slash_era.clone(),
+			window_start: self.window_start.clone(),
+			now: self.now.clone(),
+			reward_proportion: self.reward_proportion.clone(),
+		}
+	}
 }
 
 /// Computes a slash of a validator and nominators. It returns an unapplied

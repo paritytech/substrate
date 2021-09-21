@@ -355,7 +355,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 /// Information regarding the active era (era in used in session).
-#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
@@ -390,7 +390,7 @@ pub enum StakerStatus<AccountId> {
 }
 
 /// A destination account for payment.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RewardDestination<AccountId> {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
 	Staked,
@@ -411,7 +411,7 @@ impl<AccountId> Default for RewardDestination<AccountId> {
 }
 
 /// Preference of what happens regarding validation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
@@ -593,7 +593,7 @@ where
 }
 
 /// A record of the nominations made by a specific account.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Nominations<AccountId> {
 	/// The targets of nomination.
 	pub targets: Vec<AccountId>,
@@ -619,10 +619,21 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
+/// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`
 #[derive(
-	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, RuntimeDebug, TypeInfo,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Clone,
+	Encode,
+	Decode,
+	Default,
+	RuntimeDebug,
+	TypeInfo,
+	MaxEncodedLen,
 )]
-pub struct Exposure<AccountId, Balance: HasCompact> {
+pub struct Exposure<AccountId, Balance: HasCompact, Limit: Get<u32>> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
 	pub total: Balance,
@@ -630,7 +641,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	#[codec(compact)]
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	pub others: WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>,
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
@@ -669,7 +680,11 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		FullIdentification = Exposure<
+			<T as frame_system::Config>::AccountId,
+			BalanceOf<T>,
+			T::MaxNominatorRewardedPerValidator,
+		>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
@@ -798,10 +813,15 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 /// `active_era`. It can differ from the latest planned exposure in `current_era`.
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
-	for ExposureOf<T>
+impl<T: Config>
+	Convert<
+		T::AccountId,
+		Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>>,
+	> for ExposureOf<T>
 {
-	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+	fn convert(
+		validator: T::AccountId,
+	) -> Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>> {
 		<Pallet<T>>::active_era()
 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
 	}
