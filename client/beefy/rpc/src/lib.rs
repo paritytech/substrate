@@ -1,4 +1,6 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,7 +43,11 @@ pub trait BeefyApi<Notification, Hash> {
 		subscribe,
 		name = "beefy_subscribeJustifications"
 	)]
-	fn subscribe_justifications(&self, metadata: Self::Metadata, subscriber: Subscriber<Notification>);
+	fn subscribe_justifications(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<Notification>,
+	);
 
 	/// Unsubscribe from receiving notifications about recently finalized blocks.
 	#[pubsub(
@@ -69,10 +75,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
 		let manager = SubscriptionManager::new(Arc::new(executor));
-		Self {
-			signed_commitment_stream,
-			manager,
-		}
+		Self { signed_commitment_stream, manager }
 	}
 }
 

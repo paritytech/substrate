@@ -1,6 +1,6 @@
 [package]
 name = "beefy-gadget-rpc"
-version = "0.1.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -17,10 +17,10 @@ jsonrpc-pubsub = "18.0.0"
 
 codec = { version = "2.0.0", package = "parity-scale-codec", features = ["derive"] }
 
-sc-rpc = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime = { versin = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 beefy-gadget = { path = "../." }
 beefy-primitives = { path = "../../../primitives/beefy" }

@@ -1,6 +1,6 @@
 [package]
 name = "beefy-gadget"
-version = "0.1.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -16,23 +16,23 @@ wasm-timer = "0.2.5"
 codec = { version = "2.0.0", package = "parity-scale-codec", features = ["derive"] }
 prometheus = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/substrate", branch = "master" }
 
-sp-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-utils = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 
-sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-network = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-network-gossip = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
+sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 
-beefy-primitives = { path = "../../primitives/beefy" }
+beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
 
 [dev-dependencies]
-sc-network-test = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-network-test = { version = "0.8.0", path = "../network/test" }
 
 strum = { version = "0.21", features = ["derive"] }

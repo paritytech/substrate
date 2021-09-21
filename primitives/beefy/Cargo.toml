@@ -1,6 +1,6 @@
 [package]
 name = "beefy-primitives"
-version = "0.1.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -9,16 +9,16 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
-sp-api = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
-sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
-sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
-sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
+sp-api = { version = "4.0.0-dev", path = "../api", default-features = false }
+sp-application-crypto = { version = "4.0.0-dev", path = "../application-crypto", default-features = false }
+sp-core = { version = "4.0.0-dev", path = "../core", default-features = false }
+sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = false }
+sp-std = { version = "4.0.0-dev", path = "../std", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3"
 
-sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-keystore = { version = "0.10.0-dev", path = "../keystore" }
 
 [features]
 default = ["std"]
