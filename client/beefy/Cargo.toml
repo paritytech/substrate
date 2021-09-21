@@ -1,0 +1,38 @@
+[package]
+name = "beefy-gadget"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+
+[dependencies]
+fnv = "1.0.6"
+futures = "0.3"
+log = "0.4"
+parking_lot = "0.11"
+thiserror = "1.0"
+wasm-timer = "0.2.5"
+
+codec = { version = "2.0.0", package = "parity-scale-codec", features = ["derive"] }
+prometheus = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/substrate", branch = "master" }
+
+sp-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-utils = { git = "https://github.com/paritytech/substrate", branch = "master" }
+
+sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-network = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-network-gossip = { git = "https://github.com/paritytech/substrate", branch = "master" }
+
+beefy-primitives = { path = "../beefy-primitives" }
+
+[dev-dependencies]
+sc-network-test = { git = "https://github.com/paritytech/substrate", branch = "master" }
+
+beefy-test = { path = "../beefy-test" }
