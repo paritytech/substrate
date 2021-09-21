@@ -48,3 +48,5 @@ try-runtime = ["frame-support/try-runtime"]
 # WARNING: CI only execute pallet test with this feature,
 # if the feature intended to be used outside, CI and this message need to be updated.
 conditional-storage = []
+# Disable ui tests
+disable-ui-tests = []

@@ -74,9 +74,14 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Decode, Encode};
-use frame_support::traits::{
-	EstimateNextSessionRotation, OneSessionHandler, ValidatorSet, ValidatorSetWithIdentification,
+use codec::{Decode, Encode, MaxEncodedLen};
+use core::convert::TryFrom;
+use frame_support::{
+	traits::{
+		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
+		ValidatorSetWithIdentification, WrapperOpaque,
+	},
+	BoundedSlice, WeakBoundedVec,
 };
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 pub use pallet::*;
@@ -220,6 +225,65 @@ where
 	pub validators_len: u32,
 }
 
+/// A type that is the same as [`OpaqueNetworkState`] but with [`Vec`] replaced with
+/// [`WeakBoundedVec<Limit>`] where Limit is the respective size limit
+/// `PeerIdEncodingLimit` represents the size limit of the encoding of `PeerId`
+/// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
+/// `AddressesLimit` represents the size limit of the vector of peers connected
+#[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[codec(mel_bound(PeerIdEncodingLimit: Get<u32>,
+  	MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>))]
+#[scale_info(skip_type_params(PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit))]
+pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
+where
+	PeerIdEncodingLimit: Get<u32>,
+	MultiAddrEncodingLimit: Get<u32>,
+	AddressesLimit: Get<u32>,
+{
+	/// PeerId of the local node in SCALE encoded.
+	pub peer_id: WeakBoundedVec<u8, PeerIdEncodingLimit>,
+	/// List of addresses the node knows it can be reached as.
+	pub external_addresses:
+		WeakBoundedVec<WeakBoundedVec<u8, MultiAddrEncodingLimit>, AddressesLimit>,
+}
+
+impl<PeerIdEncodingLimit: Get<u32>, MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>>
+	BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
+{
+	fn force_from(ons: &OpaqueNetworkState) -> Self {
+		let peer_id = WeakBoundedVec::<_, PeerIdEncodingLimit>::force_from(
+			ons.peer_id.0.clone(),
+			Some(
+				"Warning: The size of the encoding of PeerId \
+  				is bigger than expected. A runtime configuration \
+  				adjustment may be needed.",
+			),
+		);
+
+		let external_addresses = WeakBoundedVec::<_, AddressesLimit>::force_from(
+			ons.external_addresses
+				.iter()
+				.map(|x| {
+					WeakBoundedVec::<_, MultiAddrEncodingLimit>::force_from(
+						x.0.clone(),
+						Some(
+							"Warning: The size of the encoding of MultiAddr \
+  							is bigger than expected. A runtime configuration \
+  							adjustment may be needed.",
+						),
+					)
+				})
+				.collect(),
+			Some(
+				"Warning: The network has more peers than expected \
+  				A runtime configuration adjustment may be needed.",
+			),
+		);
+
+		Self { peer_id, external_addresses }
+	}
+}
+
 /// A type for representing the validator id in a session.
 pub type ValidatorId<T> = <<T as Config>::ValidatorSet as ValidatorSet<
 	<T as frame_system::Config>::AccountId,
@@ -251,6 +315,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -261,7 +326,18 @@ pub mod pallet {
 			+ RuntimeAppPublic
 			+ Default
 			+ Ord
-			+ MaybeSerializeDeserialize;
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
+
+		/// The maximum number of keys that can be added.
+		type MaxKeys: Get<u32>;
+
+		/// The maximum number of peers to be stored in `ReceivedHeartbeats`
+		type MaxPeerInHeartbeats: Get<u32>;
+
+		/// The maximum size of the encoding of `PeerId` and `MultiAddr` that are coming
+		/// from the hearbeat
+		type MaxPeerDataEncodingSize: Get<u32>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -333,14 +409,27 @@ pub mod pallet {
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
-	pub(crate) type Keys<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(crate) type Keys<T: Config> =
+		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
-	/// For each session index, we keep a mapping of `AuthIndex` to
-	/// `offchain::OpaqueNetworkState`.
+	/// For each session index, we keep a mapping of 'SessionIndex` and `AuthIndex` to
+	/// `WrapperOpaque<BoundedOpaqueNetworkState>`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
-	pub(crate) type ReceivedHeartbeats<T> =
-		StorageDoubleMap<_, Twox64Concat, SessionIndex, Twox64Concat, AuthIndex, Vec<u8>>;
+	pub(crate) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		SessionIndex,
+		Twox64Concat,
+		AuthIndex,
+		WrapperOpaque<
+			BoundedOpaqueNetworkState<
+				T::MaxPeerDataEncodingSize,
+				T::MaxPeerDataEncodingSize,
+				T::MaxPeerInHeartbeats,
+			>,
+		>,
+	>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 	/// number of blocks authored by the given authority.
@@ -409,11 +498,15 @@ pub mod pallet {
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
 
-				let network_state = heartbeat.network_state.encode();
+				let network_state_bounded = BoundedOpaqueNetworkState::<
+					T::MaxPeerDataEncodingSize,
+					T::MaxPeerDataEncodingSize,
+					T::MaxPeerInHeartbeats,
+				>::force_from(&heartbeat.network_state);
 				ReceivedHeartbeats::<T>::insert(
 					&current_session,
 					&heartbeat.authority_index,
-					&network_state,
+					WrapperOpaque::from(network_state_bounded),
 				);
 
 				Ok(())
@@ -739,13 +832,17 @@ impl<T: Config> Pallet<T> {
 	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put(keys);
+			let bounded_keys = <BoundedSlice<'_, _, T::MaxKeys>>::try_from(keys)
+				.expect("More than the maximum number of keys provided");
+			Keys::<T>::put(bounded_keys);
 		}
 	}
 
 	#[cfg(test)]
 	fn set_keys(keys: Vec<T::AuthorityId>) {
-		Keys::<T>::put(&keys)
+		let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys)
+			.expect("More than the maximum number of keys provided");
+		Keys::<T>::put(bounded_keys);
 	}
 }
 
@@ -776,7 +873,15 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
-		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
+		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+		let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::force_from(
+			keys,
+			Some(
+				"Warning: The session has more keys than expected. \
+  				A runtime configuration adjustment may be needed.",
+			),
+		);
+		Keys::<T>::put(bounded_keys);
 	}
 
 	fn on_before_session_ending() {
