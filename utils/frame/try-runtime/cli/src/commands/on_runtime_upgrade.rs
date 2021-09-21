@@ -85,7 +85,7 @@ where
 		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = {}, total weight = {} ({})",
 		weight,
 		total_weight,
-		weight as f64 / total_weight as f64
+		weight as f64 / total_weight.max(1) as f64
 	);
 
 	Ok(())

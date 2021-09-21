@@ -232,9 +232,21 @@ where
 
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
-		// don't call `final_checks`, but do finalize the block. This is critical to clear transient
-		// storage items, such as weight.
-		let _header = <frame_system::Pallet<System>>::finalize();
+		// do some of the checks that would normally happen in `final_checks`, but definitely skip
+		// the state root check.
+		{
+			let new_header = <frame_system::Pallet<System>>::finalize();
+			let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+			for (header_item, computed_item) in items_zip {
+				header_item.check_equal(&computed_item);
+				assert!(header_item == computed_item, "Digest item must match that calculated.");
+			}
+
+			assert!(
+				header.extrinsics_root() == new_header.extrinsics_root(),
+				"Transaction trie root must be valid.",
+			);
+		}
 
 		frame_system::Pallet::<System>::block_weight().total()
 	}
