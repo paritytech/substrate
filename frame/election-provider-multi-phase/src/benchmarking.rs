@@ -373,13 +373,8 @@ frame_benchmarking::benchmarks! {
 
 		assert_eq!(raw_solution.solution.voter_count() as u32, a);
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
-
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot missing")?.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.expect("decoding should not fail; qed.");
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
