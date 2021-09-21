@@ -24,9 +24,9 @@ sp-io = { git = "https://github.com/paritytech/substrate", default-features = fa
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
 
-beefy-merkle-tree = { path = "../beefy-merkle-tree", default-features = false }
-beefy-primitives = { path = "../beefy-primitives", default-features = false }
-pallet-beefy = { path = "../beefy-pallet", default-features = false }
+beefy-merkle-tree = { path = "./primitives", default-features = false }
+beefy-primitives = { path = "../../primitives/beefy", default-features = false }
+pallet-beefy = { path = "../beefy", default-features = false }
 
 [dev-dependencies]
 sp-staking = { git = "https://github.com/paritytech/substrate", branch = "master" }

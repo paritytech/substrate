@@ -23,4 +23,4 @@ sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
 
 beefy-gadget = { path = "../." }
-beefy-primitives = { path = "../../beefy-primitives" }
+beefy-primitives = { path = "../../../primitives/beefy" }

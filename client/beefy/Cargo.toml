@@ -30,9 +30,9 @@ sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "maste
 sc-network = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sc-network-gossip = { git = "https://github.com/paritytech/substrate", branch = "master" }
 
-beefy-primitives = { path = "../beefy-primitives" }
+beefy-primitives = { path = "../../primitives/beefy" }
 
 [dev-dependencies]
 sc-network-test = { git = "https://github.com/paritytech/substrate", branch = "master" }
 
-beefy-test = { path = "../beefy-test" }
+strum = { version = "0.21", features = ["derive"] }

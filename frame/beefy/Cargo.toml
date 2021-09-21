@@ -18,7 +18,7 @@ sp-std = { git = "https://github.com/paritytech/substrate", default-features = f
 
 pallet-session = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
 
-beefy-primitives = { path = "../beefy-primitives", default-features = false }
+beefy-primitives = { path = "../../primitives/beefy", default-features = false }
 
 [dev-dependencies]
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
