@@ -128,6 +128,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/bags-list",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -198,6 +199,8 @@ members = [
 	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
+	"utils/frame/generate-bags",
+	"utils/frame/generate-bags/node-runtime",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
