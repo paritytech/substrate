@@ -120,6 +120,22 @@ impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
 		Self::unchecked_from(t)
 	}
 
+	/// Exactly the same semantics as [`Vec::push`], this function unlike `try_push`
+	/// does no check, but only logs warnings if the bound is not being respected.
+	/// The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	pub fn force_push(&mut self, element: T, scope: Option<&'static str>) {
+		if self.len() > Self::bound() {
+			log::warn!(
+				target: crate::LOG_TARGET,
+				"length of a bounded vector in scope {} is not respected.",
+				scope.unwrap_or("UNKNOWN"),
+			);
+		}
+
+		self.0.push(element);
+	}
+
 	/// Consumes self and mutates self via the given `mutate` function.
 	///
 	/// If the outcome of mutation is within bounds, `Some(Self)` is returned. Else, `None` is
