@@ -26,6 +26,7 @@ use sc_transaction_pool::{BasicPool, FullChainApi};
 use serde_json::value::to_raw_value;
 use sp_core::{
 	blake2_256,
+	bytes::to_hex,
 	crypto::{CryptoTypePublicPair, Pair, Public},
 	ed25519,
 	hexdisplay::HexDisplay,
@@ -101,71 +102,53 @@ async fn author_submit_transaction_should_not_cause_error() {
 	assert!(response.error.message.contains("Already imported"));
 }
 
-// #[test]
-// fn submit_rich_transaction_should_not_cause_error() {
-// 	let p = TestSetup::default().author();
-// 	let xt = uxt(AccountKeyring::Alice, 0).encode();
-// 	let h: H256 = blake2_256(&xt).into();
+#[tokio::test]
+async fn author_should_watch_extrinsic() {
+	let api = TestSetup::default().author().into_rpc();
 
-// 	assert_matches!(
-// 		executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
-// 		Ok(h2) if h == h2
-// 	);
-// 	assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
-// }
+	let xt = {
+		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
+		to_raw_value(&[to_hex(&xt_bytes, true)])
+	}
+	.unwrap();
 
-// #[test]
-// fn should_watch_extrinsic() {
-// 	// given
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
+	let (subscription_id, mut rx) =
+		api.test_subscription("author_submitAndWatchExtrinsic", Some(xt)).await;
+	let subscription_data = rx.next().await;
 
-// 	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
+	let expected = Some(format!(
+		// TODO: (dp) The `jsonrpc` version of this wraps the subscription ID in `"` – is this a problem? I think not.
+		r#"{{"jsonrpc":"2.0","method":"author_submitAndWatchExtrinsic","params":{{"subscription":{},"result":"ready"}}}}"#,
+		subscription_id,
+	));
+	assert_eq!(subscription_data, expected);
 
-// 	// when
-// 	p.watch_extrinsic(
-// 		Default::default(),
-// 		subscriber,
-// 		uxt(AccountKeyring::Alice, 0).encode().into(),
-// 	);
+	// Replace the extrinsic and observe the subscription is notified.
+	let (xt_replacement, xt_hash) = {
+		let tx = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		};
+		let tx = tx.into_signed_tx().encode();
+		let hash = blake2_256(&tx);
 
-// 	let id = executor::block_on(id_rx).unwrap().unwrap();
-// 	assert_matches!(id, SubscriptionId::String(_));
+		(to_raw_value(&[to_hex(&tx, true)]).unwrap(), hash)
+	};
 
-// 	let id = match id {
-// 		SubscriptionId::String(id) => id,
-// 		_ => unreachable!(),
-// 	};
+	let json = api.call("author_submitExtrinsic", Some(xt_replacement)).await.unwrap();
 
-// 	// check notifications
-// 	let replacement = {
-// 		let tx = Transfer {
-// 			amount: 5,
-// 			nonce: 0,
-// 			from: AccountKeyring::Alice.into(),
-// 			to: Default::default(),
-// 		};
-// 		tx.into_signed_tx()
-// 	};
-// 	executor::block_on(AuthorApi::submit_extrinsic(&p, replacement.encode().into())).unwrap();
-// 	let (res, data) = executor::block_on(data.into_future());
-
-// 	let expected = Some(format!(
-// 		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":"ready","subscription":"{}"}}}}"#,
-// 		id,
-// 	));
-// 	assert_eq!(res, expected);
-
-// 	let h = blake2_256(&replacement.encode());
-// 	let expected = Some(format!(
-// 		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":"{}"
-// }}}}"#, 		HexDisplay::from(&h),
-// 		id,
-// 	));
-
-// 	let res = executor::block_on(data.into_future()).0;
-// 	assert_eq!(res, expected);
-// }
+	let expected = Some(format!(
+		// TODO: (dp) The `jsonrpc` version of this wraps the subscription ID in `"` – is this a
+		// problem? I think not.
+		r#"{{"jsonrpc":"2.0","method":"author_submitAndWatchExtrinsic","params":{{"subscription":{},"result":{{"usurped":"0x{}"}}}}}}"#,
+		subscription_id,
+		HexDisplay::from(&xt_hash),
+	));
+	let subscription_data = rx.next().await;
+	assert_eq!(subscription_data, expected);
+}
 
 // #[test]
 // fn should_return_watch_validation_error() {
