@@ -385,7 +385,7 @@ impl<T: Config> List<T> {
 	}
 
 	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in
-	/// same bag  and the `weight_of` `lighter_id` must be less than that of `heavier_id`
+	/// same bag  and the `weight_of` `lighter_id` must be less than that of `heavier_id`.
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
@@ -399,10 +399,10 @@ impl<T: Config> List<T> {
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
 
-		// this is the most expensive check, so we do it last
+		// this is the most expensive check, so we do it last.
 		ensure!(weight_of(&heavier_id) > weight_of(&lighter_id), pallet::Error::NotHeavier);
 
-		// we need to write the bag to storage if its head and/or tail is updated
+		// we need to write the bag to storage if its head and/or tail is updated.
 		if lighter_node.is_terminal() || heavier_node.is_terminal() {
 			let mut bag = Bag::<T>::get(lighter_node.bag_upper).ok_or_else(|| {
 				debug_assert!(false, "bag that should exist cannot be found");
@@ -422,29 +422,29 @@ impl<T: Config> List<T> {
 				bag.tail = heavier_node.prev.clone();
 			}
 
-			// within this block we know the bag must have been updated, so we update storage
+			// within this block we know the bag must have been updated, so we update storage.
 			bag.put()
 		}
 
-		// cut heavier out of the list, updating its neighbors
+		// cut heavier out of the list, updating its neighbors.
 		heavier_node.excise();
 
-		// re-fetch `lighter_node` from storage since it may have been updated when heavier node was
-		// excised
+		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node` was
+		// excised.
 		let mut lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
 
-		// connect `heavier_node` to its new `prev`
+		// connect `heavier_node` to its new `prev`.
 		if let Some(mut prev) = lighter_node.prev() {
 			prev.next = Some(heavier_id.clone());
 			prev.put()
 		}
 		heavier_node.prev = lighter_node.prev;
 
-		// connect `heavier_node` and `lighter`
+		// connect `heavier_node` and `lighter`.
 		heavier_node.next = Some(lighter_id.clone());
 		lighter_node.prev = Some(heavier_id.clone());
 
-		// write the updated nodes to storage
+		// write the updated nodes to storage.
 		lighter_node.put();
 		heavier_node.put();
 
