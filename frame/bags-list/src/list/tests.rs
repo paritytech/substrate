@@ -374,6 +374,35 @@ mod list {
 			assert!(non_existent_ids.iter().all(|id| !List::<Runtime>::contains(id)));
 		})
 	}
+
+	#[test]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic = "bag that should exist cannot be found"
+	)]
+	fn put_in_front_of_exits_early_if_bag_not_found() {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			let node_710_no_bag =
+				Node::<Runtime> { id: 710, prev: None, next: None, bag_upper: 15 };
+			let node_711_no_bag =
+				Node::<Runtime> { id: 711, prev: None, next: None, bag_upper: 15 };
+
+			// given
+			ListNodes::<Runtime>::insert(710, node_710_no_bag);
+			ListNodes::<Runtime>::insert(711, node_711_no_bag);
+			assert!(!ListBags::<Runtime>::contains_key(15));
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+			//      710 & 711 our not in reachable via iteration ^^^^^
+
+			let weight_fn = Box::new(<Runtime as Config>::VoteWeightProvider::vote_weight);
+
+			// then
+			assert_storage_noop!(assert_eq!(
+				List::<Runtime>::put_in_front_of(&710, &711, weight_fn).unwrap_err(),
+				crate::pallet::Error::<Runtime>::BagNotFound
+			));
+		});
+	}
 }
 
 mod bags {
