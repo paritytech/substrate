@@ -131,9 +131,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(
-		PhantomData<(T::AccountId, <T as Config<I>>::Event)> = "sp_std::marker::PhantomData<(AccountId, Event)>",
-	)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The given member was added; see the transaction for who.
 		MemberAdded,

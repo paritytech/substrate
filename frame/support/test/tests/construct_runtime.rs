@@ -22,6 +22,7 @@
 #![recursion_limit = "128"]
 
 use frame_support::traits::PalletInfo as _;
+use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic,
@@ -54,7 +55,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData<(T, I)>);
 
 	frame_support::decl_event! {
@@ -96,7 +97,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 	pub struct Origin;
 
 	frame_support::decl_event! {
@@ -139,7 +140,7 @@ mod nested {
 			}
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 		pub struct Origin;
 
 		frame_support::decl_event! {
@@ -195,7 +196,7 @@ pub mod module3 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {
@@ -309,8 +310,8 @@ mod origin_test {
 
 	#[test]
 	fn origin_default_filter() {
-		let accepted_call = nested::module3::Call::fail().into();
-		let rejected_call = module3::Call::fail().into();
+		let accepted_call = nested::module3::Call::fail {}.into();
+		let rejected_call = module3::Call::fail {}.into();
 
 		assert_eq!(Origin::root().filter_call(&accepted_call), true);
 		assert_eq!(Origin::root().filter_call(&rejected_call), true);
@@ -472,28 +473,28 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop()).encode()[0], 30);
-	assert_eq!(Call::Module1_1(module1::Call::fail()).encode()[0], 31);
-	assert_eq!(Call::Module2(module2::Call::fail()).encode()[0], 32);
-	assert_eq!(Call::Module1_2(module1::Call::fail()).encode()[0], 33);
-	assert_eq!(Call::NestedModule3(nested::module3::Call::fail()).encode()[0], 34);
-	assert_eq!(Call::Module3(module3::Call::fail()).encode()[0], 35);
-	assert_eq!(Call::Module1_4(module1::Call::fail()).encode()[0], 3);
-	assert_eq!(Call::Module1_6(module1::Call::fail()).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail()).encode()[0], 2);
-	assert_eq!(Call::Module1_8(module1::Call::fail()).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail()).encode()[0], 13);
+	assert_eq!(Call::System(system::Call::noop {}).encode()[0], 30);
+	assert_eq!(Call::Module1_1(module1::Call::fail {}).encode()[0], 31);
+	assert_eq!(Call::Module2(module2::Call::fail {}).encode()[0], 32);
+	assert_eq!(Call::Module1_2(module1::Call::fail {}).encode()[0], 33);
+	assert_eq!(Call::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
+	assert_eq!(Call::Module3(module3::Call::fail {}).encode()[0], 35);
+	assert_eq!(Call::Module1_4(module1::Call::fail {}).encode()[0], 3);
+	assert_eq!(Call::Module1_6(module1::Call::fail {}).encode()[0], 1);
+	assert_eq!(Call::Module1_7(module1::Call::fail {}).encode()[0], 2);
+	assert_eq!(Call::Module1_8(module1::Call::fail {}).encode()[0], 12);
+	assert_eq!(Call::Module1_9(module1::Call::fail {}).encode()[0], 13);
 }
 
 #[test]
 fn call_compact_attr() {
 	use codec::Encode;
-	let call: module3::Call<Runtime> = module3::Call::aux_1(1);
+	let call: module3::Call<Runtime> = module3::Call::aux_1 { _data: 1 };
 	let encoded = call.encode();
 	assert_eq!(2, encoded.len());
 	assert_eq!(vec![1, 4], encoded);
 
-	let call: module3::Call<Runtime> = module3::Call::aux_2(1, 2);
+	let call: module3::Call<Runtime> = module3::Call::aux_2 { _data: 1, _data2: 2 };
 	let encoded = call.encode();
 	assert_eq!(6, encoded.len());
 	assert_eq!(vec![2, 1, 0, 0, 0, 8], encoded);
@@ -502,13 +503,13 @@ fn call_compact_attr() {
 #[test]
 fn call_encode_is_correct_and_decode_works() {
 	use codec::{Decode, Encode};
-	let call: module3::Call<Runtime> = module3::Call::fail();
+	let call: module3::Call<Runtime> = module3::Call::fail {};
 	let encoded = call.encode();
 	assert_eq!(vec![0], encoded);
 	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(decoded, call);
 
-	let call: module3::Call<Runtime> = module3::Call::aux_3(32, "hello".into());
+	let call: module3::Call<Runtime> = module3::Call::aux_3 { _data: 32, _data2: "hello".into() };
 	let encoded = call.encode();
 	assert_eq!(vec![3, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
 	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
@@ -523,12 +524,12 @@ fn call_weight_should_attach_to_call_enum() {
 	};
 	// operational.
 	assert_eq!(
-		module3::Call::<Runtime>::operational().get_dispatch_info(),
+		module3::Call::<Runtime>::operational {}.get_dispatch_info(),
 		DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
 	);
 	// custom basic
 	assert_eq!(
-		module3::Call::<Runtime>::aux_4().get_dispatch_info(),
+		module3::Call::<Runtime>::aux_4 {}.get_dispatch_info(),
 		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
 	);
 }
@@ -536,14 +537,14 @@ fn call_weight_should_attach_to_call_enum() {
 #[test]
 fn call_name() {
 	use frame_support::dispatch::GetCallName;
-	let name = module3::Call::<Runtime>::aux_4().get_call_name();
+	let name = module3::Call::<Runtime>::aux_4 {}.get_call_name();
 	assert_eq!("aux_4", name);
 }
 
 #[test]
 fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4());
+	let call = Call::Module3(module3::Call::<Runtime>::aux_4 {});
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
 	assert_eq!(metadata, expected);
@@ -581,10 +582,10 @@ fn get_module_names() {
 #[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
-	let call = Call::Module3(module3::Call::<Runtime>::fail());
+	let call = Call::Module3(module3::Call::<Runtime>::fail {});
 	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
 	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
-	assert_eq!(Some(&module3::Call::<Runtime>::fail()), subcall);
+	assert_eq!(Some(&module3::Call::<Runtime>::fail {}), subcall);
 	assert_eq!(None, subcall_none);
 
 	let from = Call::from(subcall.unwrap().clone());
@@ -593,355 +594,145 @@ fn call_subtype_conversion() {
 
 #[test]
 fn test_metadata() {
-	use frame_metadata::*;
-	let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
-		modules: DecodeDifferent::Encode(&[
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("System"),
-				storage: None,
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("noop"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[
-						EventMetadata {
-							name: DecodeDifferent::Encode("ExtrinsicSuccess"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						EventMetadata {
-							name: DecodeDifferent::Encode("ExtrinsicFailed"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						EventMetadata {
-							name: DecodeDifferent::Encode("Ignore"),
-							arguments: DecodeDifferent::Encode(&["BlockNumber"]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-					]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 30,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_1"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance1Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 31,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module2"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 32,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_2"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance2Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 33,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("NestedModule3"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 34,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module3"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("fail"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("aux_1"),
-							arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
-								name: DecodeDifferent::Encode("_data"),
-								ty: DecodeDifferent::Encode("Compact<u32>"),
-							}]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("aux_2"),
-							arguments: DecodeDifferent::Encode(&[
-								FunctionArgumentMetadata {
-									name: DecodeDifferent::Encode("_data"),
-									ty: DecodeDifferent::Encode("i32"),
-								},
-								FunctionArgumentMetadata {
-									name: DecodeDifferent::Encode("_data2"),
-									ty: DecodeDifferent::Encode("Compact<u32>"),
-								},
-							]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("aux_3"),
-							arguments: DecodeDifferent::Encode(&[
-								FunctionArgumentMetadata {
-									name: DecodeDifferent::Encode("_data"),
-									ty: DecodeDifferent::Encode("i32"),
-								},
-								FunctionArgumentMetadata {
-									name: DecodeDifferent::Encode("_data2"),
-									ty: DecodeDifferent::Encode("String"),
-								},
-							]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("aux_4"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-						FunctionMetadata {
-							name: DecodeDifferent::Encode("operational"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						},
-					]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 35,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_3"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance3Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: None,
-				event: None,
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 6,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_4"),
-				storage: None,
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: None,
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 3,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_5"),
-				storage: None,
-				calls: None,
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 4,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_6"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance6Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 1,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_7"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance7Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 2,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_8"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance8Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 12,
-			},
-			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module1_9"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-					prefix: DecodeDifferent::Encode("Instance9Module"),
-					entries: DecodeDifferent::Encode(&[]),
-				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| {
-					&[EventMetadata {
-						name: DecodeDifferent::Encode("A"),
-						arguments: DecodeDifferent::Encode(&["AccountId"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}]
-				}))),
-				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				index: 13,
-			},
-		]),
-		extrinsic: ExtrinsicMetadata {
-			version: 4,
-			signed_extensions: vec![DecodeDifferent::Encode("UnitSignedExtension")],
+	use frame_support::metadata::*;
+	use scale_info::meta_type;
+
+	let pallets = vec![
+		PalletMetadata {
+			name: "System",
+			storage: None,
+			calls: Some(meta_type::<system::Call<Runtime>>().into()),
+			event: Some(meta_type::<system::Event<Runtime>>().into()),
+			constants: vec![],
+			error: None,
+			index: 30,
 		},
+		PalletMetadata {
+			name: "Module1_1",
+			storage: Some(PalletStorageMetadata { prefix: "Instance1Module", entries: vec![] }),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance1>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance1>>().into()),
+			constants: vec![],
+			error: None,
+			index: 31,
+		},
+		PalletMetadata {
+			name: "Module2",
+			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
+			calls: Some(meta_type::<module2::Call<Runtime>>().into()),
+			event: Some(meta_type::<module2::Event>().into()),
+			constants: vec![],
+			error: None,
+			index: 32,
+		},
+		PalletMetadata {
+			name: "Module1_2",
+			storage: Some(PalletStorageMetadata { prefix: "Instance2Module", entries: vec![] }),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance2>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance2>>().into()),
+			constants: vec![],
+			error: None,
+			index: 33,
+		},
+		PalletMetadata {
+			name: "NestedModule3",
+			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
+			calls: Some(meta_type::<nested::module3::Call<Runtime>>().into()),
+			event: Some(meta_type::<nested::module3::Event>().into()),
+			constants: vec![],
+			error: None,
+			index: 34,
+		},
+		PalletMetadata {
+			name: "Module3",
+			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
+			calls: Some(meta_type::<module3::Call<Runtime>>().into()),
+			event: Some(meta_type::<module3::Event>().into()),
+			constants: vec![],
+			error: None,
+			index: 35,
+		},
+		PalletMetadata {
+			name: "Module1_3",
+			storage: Some(PalletStorageMetadata { prefix: "Instance3Module", entries: vec![] }),
+			calls: None,
+			event: None,
+			constants: vec![],
+			error: None,
+			index: 6,
+		},
+		PalletMetadata {
+			name: "Module1_4",
+			storage: None,
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance4>>().into()),
+			event: None,
+			constants: vec![],
+			error: None,
+			index: 3,
+		},
+		PalletMetadata {
+			name: "Module1_5",
+			storage: None,
+			calls: None,
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance5>>().into()),
+			constants: vec![],
+			error: None,
+			index: 4,
+		},
+		PalletMetadata {
+			name: "Module1_6",
+			storage: Some(PalletStorageMetadata { prefix: "Instance6Module", entries: vec![] }),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance6>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance6>>().into()),
+			constants: vec![],
+			error: None,
+			index: 1,
+		},
+		PalletMetadata {
+			name: "Module1_7",
+			storage: Some(PalletStorageMetadata { prefix: "Instance7Module", entries: vec![] }),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance7>>().into()),
+			event: Some(PalletEventMetadata {
+				ty: meta_type::<module1::Event<Runtime, module1::Instance7>>(),
+			}),
+			constants: vec![],
+			error: None,
+			index: 2,
+		},
+		PalletMetadata {
+			name: "Module1_8",
+			storage: Some(PalletStorageMetadata { prefix: "Instance8Module", entries: vec![] }),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance8>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance8>>().into()),
+			constants: vec![],
+			error: None,
+			index: 12,
+		},
+		PalletMetadata {
+			name: "Module1_9",
+			storage: Some(PalletStorageMetadata { prefix: "Instance9Module", entries: vec![] }),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance9>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance9>>().into()),
+			constants: vec![],
+			error: None,
+			index: 13,
+		},
+	];
+
+	let extrinsic = ExtrinsicMetadata {
+		ty: meta_type::<UncheckedExtrinsic>(),
+		version: 4,
+		signed_extensions: vec![SignedExtensionMetadata {
+			identifier: "UnitSignedExtension",
+			ty: meta_type::<()>(),
+			additional_signed: meta_type::<()>(),
+		}],
 	};
-	pretty_assertions::assert_eq!(Runtime::metadata().1, RuntimeMetadata::V13(expected_metadata));
+
+	let expected_metadata: RuntimeMetadataPrefixed =
+		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
+	let actual_metadata = Runtime::metadata();
+	pretty_assertions::assert_eq!(actual_metadata, expected_metadata);
 }
 
 #[test]

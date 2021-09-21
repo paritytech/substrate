@@ -25,9 +25,9 @@
 /// The configuration trait
 pub trait Config: 'static {
 	/// The runtime origin type.
-	type Origin: codec::Codec + codec::EncodeLike + Default;
+	type Origin: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
 	/// The block number type.
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
 	/// The information about the pallet setup in the runtime.
 	type PalletInfo: frame_support::traits::PalletInfo;
 	/// The db weights.

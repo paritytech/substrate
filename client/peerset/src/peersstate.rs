@@ -167,7 +167,7 @@ impl PeersState {
 	/// Returns an object that grants access to the reputation value of a peer.
 	pub fn peer_reputation(&mut self, peer_id: PeerId) -> Reputation {
 		if !self.nodes.contains_key(&peer_id) {
-			self.nodes.insert(peer_id.clone(), Node::new(self.sets.len()));
+			self.nodes.insert(peer_id, Node::new(self.sets.len()));
 		}
 
 		let entry = match self.nodes.entry(peer_id) {
@@ -256,7 +256,7 @@ impl PeersState {
 				}
 				Some(to_try)
 			})
-			.map(|(peer_id, _)| peer_id.clone());
+			.map(|(peer_id, _)| *peer_id);
 
 		outcome.map(move |peer_id| NotConnectedPeer {
 			state: self,
@@ -275,7 +275,7 @@ impl PeersState {
 	/// Has no effect if the node was already in the group.
 	pub fn add_no_slot_node(&mut self, set: usize, peer_id: PeerId) {
 		// Reminder: `HashSet::insert` returns false if the node was already in the set
-		if !self.sets[set].no_slot_nodes.insert(peer_id.clone()) {
+		if !self.sets[set].no_slot_nodes.insert(peer_id) {
 			return
 		}
 

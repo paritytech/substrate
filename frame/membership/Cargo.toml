@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.0", default-features = false }
 
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
@@ -29,6 +30,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"log/std",
 	"sp-core/std",
 	"sp-io/std",

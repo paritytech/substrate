@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
 pwasm-utils = { version = "0.18.2", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -27,8 +28,9 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-rand = { version = "0.8", optional = true, default-features = false }
-rand_pcg = { version = "0.3", optional = true }
+libsecp256k1 = { version = "0.3.5", optional = true, default-features = false, features = ["hmac"] }
+rand = { version = "0.7.3", optional = true, default-features = false }
+rand_pcg = { version = "0.2", optional = true }
 
 # Substrate Dependencies
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
@@ -59,6 +61,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-io/std",
@@ -73,9 +76,11 @@ std = [
 	"pallet-contracts-proc-macro/full",
 	"log/std",
 	"rand/std",
+	"libsecp256k1/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
+	"libsecp256k1",
 	"rand",
 	"rand_pcg",
 	"unstable-interface",
