@@ -398,10 +398,6 @@ impl<T: Config> List<T> {
 		let mut heavier_node = Node::<T>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
-		ensure!(
-			heavier_node.next.as_ref() != Some(lighter_id),
-			pallet::Error::AlreadyHigherPosition
-		);
 
 		// this is the most expensive check, so we do it last
 		ensure!(weight_of(&heavier_id) > weight_of(&lighter_id), pallet::Error::NotHeavier);

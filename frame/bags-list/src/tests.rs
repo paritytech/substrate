@@ -341,23 +341,27 @@ mod pallet {
 	}
 
 	#[test]
-	fn put_in_front_of_exits_early_if_heavier_is_already_higher() {
-		ExtBuilder::default().add_ids(vec![(710, 15), (711, 16)]).build_and_execute(|| {
+	fn put_in_front_of_exits_early_if_heavier_is_equal_weight_to_lighter() {
+		use mock::StakingMock;
+
+		ExtBuilder::default().add_ids(vec![(5, 15), (6, 15)]).build_and_execute(|| {
 			//	note insertion order ^^^^^^
 
 			// given
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![710, 711]), (1_000, vec![2, 3, 4])]
+				vec![(10, vec![1]), (20, vec![5, 6]), (1_000, vec![2, 3, 4])]
 			);
 
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+			StakingMock::set_vote_weight_of(&5, 15);
+			StakingMock::set_vote_weight_of(&6, 15);
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&5), 15);
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&6), 15);
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(0), 711, 710),
-				crate::pallet::Error::<Runtime>::AlreadyHigherPosition
+				BagsList::put_in_front_of(Origin::signed(0), 5, 6),
+				crate::pallet::Error::<Runtime>::NotHeavier
 			);
 		});
 	}
