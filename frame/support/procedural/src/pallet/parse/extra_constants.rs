@@ -28,6 +28,7 @@ mod keyword {
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(pallet);
+	syn::custom_keyword!(constant_name);
 }
 
 /// Definition of extra constants typically `impl<T: Config> Pallet<T> { ... }`
@@ -52,12 +53,36 @@ pub struct ExtraConstantDef {
 	pub doc: Vec<syn::Lit>,
 }
 
+/// Attributes for functions in extra_constants impl block.
+/// Parse for `#[pallet::constant_name(ConstantName)]`
+pub struct ExtraConstAttr {
+	constant_name: syn::Ident,
+}
+
+impl syn::parse::Parse for ExtraConstAttr {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		input.parse::<syn::Token![#]>()?;
+		let content;
+		syn::bracketed!(content in input);
+		content.parse::<keyword::pallet>()?;
+		content.parse::<syn::Token![::]>()?;
+		content.parse::<keyword::constant_name>()?;
+
+		let constant_name;
+		syn::parenthesized!(constant_name in content);
+		Ok(ExtraConstAttr { constant_name: constant_name.parse::<syn::Ident>()? })
+	}
+}
+
 impl ExtraConstantsDef {
 	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"))
+			return Err(syn::Error::new(
+				item.span(),
+				"Invalid pallet::extra_constants, expected item impl",
+			))
 		};
 
 		let mut instances = vec![];
@@ -94,6 +119,20 @@ impl ExtraConstantsDef {
 				return Err(syn::Error::new(method.sig.generics.where_clause.span(), msg))
 			}
 
+			// parse constant_name
+			let mut call_var_attrs: Vec<ExtraConstAttr> = helper::take_item_pallet_attrs(method)?;
+
+			// if call_var_attrs.len() > 1 {
+			// 	let msg = "Invalid attribute in pallet::constant_name, only one attribute is expected";
+			// 	return Err(syn::Error::new(call_var_attrs[1].constant_name.span(), msg))
+			// }
+
+			// let constant_name = if call_var_attrs.len() == 1 {
+			// 	call_var_attrs.pop().unwrap().constant_name
+			// } else {
+			// 	method.sig.ident.clone()
+			// };
+
 			let type_ = match &method.sig.output {
 				syn::ReturnType::Default => {
 					let msg = "Invalid pallet::extra_constants, method must have a return type";
@@ -104,6 +143,7 @@ impl ExtraConstantsDef {
 
 			extra_constants.push(ExtraConstantDef {
 				ident: method.sig.ident.clone(),
+				// ident: constant_name,
 				type_,
 				doc: get_doc_literals(&method.attrs),
 			});
