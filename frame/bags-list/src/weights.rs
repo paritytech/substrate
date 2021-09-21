@@ -47,6 +47,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn rebag_non_terminal() -> Weight;
 	fn rebag_terminal() -> Weight;
+	fn put_in_front_of() -> Weight;
 }
 
 /// Weights for pallet_bags_list using the Substrate node and recommended hardware.
@@ -70,6 +71,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
+	fn put_in_front_of() -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -91,5 +95,8 @@ impl WeightInfo for () {
 		(73_305_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn put_in_front_of() -> Weight {
+		0
 	}
 }

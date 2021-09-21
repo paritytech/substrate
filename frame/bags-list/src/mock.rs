@@ -21,28 +21,34 @@ use super::*;
 use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
+use std::{cell::RefCell, collections::HashMap};
 
 pub type AccountId = u32;
 pub type Balance = u32;
 
+thread_local! {
+	static NEXT_VOTE_WEIGHT_MAP: RefCell<HashMap<AccountId, VoteWeight>> = RefCell::new(Default::default());
+}
+
 parameter_types! {
+	// Set the vote weight for any id who's weight has _not_ been set with `set_vote_weight_of`.
 	pub static NextVoteWeight: VoteWeight = 0;
 }
 
 pub struct StakingMock;
 impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
 	fn vote_weight(id: &AccountId) -> VoteWeight {
-		match id {
-			710 => 15,
-			711 => 16,
-			712 => 2_000, // special cases used for migrate test
-			_ => NextVoteWeight::get(),
-		}
+		NEXT_VOTE_WEIGHT_MAP.with(|m| {
+			m.borrow_mut()
+				.get(id)
+				.map(|weight| weight.clone())
+				.unwrap_or(NextVoteWeight::get())
+		})
 	}
+
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(_: &AccountId, weight: VoteWeight) {
-		// we don't really keep a mapping, just set weight for everyone.
-		NextVoteWeight::set(weight)
+	fn set_vote_weight_of(id: &AccountId, weight: VoteWeight) {
+		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(id.clone(), weight));
 	}
 }
 
@@ -115,6 +121,11 @@ impl ExtBuilder {
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+		// special cases used for `migrate` and `put_in_front_of` tests.
+		StakingMock::set_vote_weight_of(&710, 15);
+		StakingMock::set_vote_weight_of(&711, 16);
+		StakingMock::set_vote_weight_of(&712, 2_000);
 
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {

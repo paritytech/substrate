@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_ok, assert_storage_noop, traits::IntegrityTest};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::IntegrityTest};
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
@@ -195,6 +195,216 @@ mod pallet {
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 10).is_ok()));
 		})
+	}
+
+	#[test]
+	fn put_in_front_of_with_two_node_bag() {
+		ExtBuilder::default().add_ids(vec![(710, 15), (711, 16)]).build_and_execute(|| {
+			// given
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (20, vec![710, 711]), (1_000, vec![2, 3, 4])]
+			);
+
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+			// when
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (20, vec![711, 710]), (1_000, vec![2, 3, 4])]
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_with_non_terminal_nodes() {
+		ExtBuilder::default()
+			.add_ids(vec![(11, 20), (710, 15), (711, 16), (12, 20)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![11, 710, 711, 12]), (1_000, vec![2, 3, 4])]
+				);
+
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+
+				// then
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![11, 711, 710, 12]), (1_000, vec![2, 3, 4])]
+				);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_with_lighter_as_head() {
+		ExtBuilder::default()
+			.add_ids(vec![(710, 15), (711, 16), (12, 20)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![710, 711, 12]), (1_000, vec![2, 3, 4])]
+				);
+
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+
+				// then
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![711, 710, 12]), (1_000, vec![2, 3, 4])]
+				);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_with_heavier_as_tail() {
+		ExtBuilder::default()
+			.add_ids(vec![(11, 20), (710, 15), (711, 16)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![11, 710, 711]), (1_000, vec![2, 3, 4])]
+				);
+
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+
+				// then
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![11, 711, 710]), (1_000, vec![2, 3, 4])]
+				);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_with_heavier_and_lighter_terminal_multiple_middle_nodes() {
+		ExtBuilder::default()
+			.add_ids(vec![(710, 15), (11, 20), (12, 20), (711, 16)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![710, 11, 12, 711]), (1_000, vec![2, 3, 4])]
+				);
+
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+				assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+
+				// then
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (20, vec![711, 710, 11, 12]), (1_000, vec![2, 3, 4])]
+				);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_exits_early_if_heavier_is_less_than_lighter() {
+		ExtBuilder::default().add_ids(vec![(711, 16), (710, 15)]).build_and_execute(|| {
+			// given
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (20, vec![711, 710]), (1_000, vec![2, 3, 4])]
+			);
+
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(0), 711, 710),
+				crate::pallet::Error::<Runtime>::NotHeavier
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_exits_early_if_heavier_is_already_higher() {
+		ExtBuilder::default().add_ids(vec![(710, 15), (711, 16)]).build_and_execute(|| {
+			//	note insertion order ^^^^^^
+
+			// given
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (20, vec![710, 711]), (1_000, vec![2, 3, 4])]
+			);
+
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
+			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(0), 711, 710),
+				crate::pallet::Error::<Runtime>::AlreadyHigherPosition
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_exits_early_if_nodes_not_found() {
+		// `heavier` not found
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			assert!(!ListNodes::<Runtime>::contains_key(5));
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(0), 4, 5),
+				crate::pallet::Error::<Runtime>::IdNotFound
+			);
+		});
+
+		// `lighter` not found
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			assert!(!ListNodes::<Runtime>::contains_key(5));
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(0), 5, 4),
+				crate::pallet::Error::<Runtime>::IdNotFound
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_exits_early_if_nodes_not_in_same_bag() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(0), 1, 4),
+				crate::pallet::Error::<Runtime>::NotInSameBag
+			);
+		});
 	}
 }
 
