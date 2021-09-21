@@ -1,18 +1,19 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+// This file is part of Substrate.
 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use sp_std::{cmp, prelude::*};
 
@@ -125,7 +126,9 @@ mod tests {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
-		let _ = SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
+		let _ =
+			SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref())
+				.unwrap();
 
 		let msg = keccak_256(b"This is the first message");
 		let sig1 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
@@ -143,11 +146,8 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
-		let commitment: TestCommitment = Commitment {
-			payload: "Hello World!".into(),
-			block_number: 5,
-			validator_set_id: 0,
-		};
+		let commitment: TestCommitment =
+			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
 
 		// when
 		let encoded = codec::Encode::encode(&commitment);
@@ -157,18 +157,17 @@ mod tests {
 		assert_eq!(decoded, Ok(commitment));
 		assert_eq!(
 			encoded,
-			hex_literal::hex!("3048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000")
+			hex_literal::hex!(
+				"3048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000"
+			)
 		);
 	}
 
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
-		let commitment: TestCommitment = Commitment {
-			payload: "Hello World!".into(),
-			block_number: 5,
-			validator_set_id: 0,
-		};
+		let commitment: TestCommitment =
+			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
@@ -192,11 +191,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
-		let commitment: TestCommitment = Commitment {
-			payload: "Hello World!".into(),
-			block_number: 5,
-			validator_set_id: 0,
-		};
+		let commitment: TestCommitment =
+			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
@@ -215,12 +211,11 @@ mod tests {
 
 	#[test]
 	fn commitment_ordering() {
-		fn commitment(block_number: u128, validator_set_id: crate::ValidatorSetId) -> TestCommitment {
-			Commitment {
-				payload: "Hello World!".into(),
-				block_number,
-				validator_set_id,
-			}
+		fn commitment(
+			block_number: u128,
+			validator_set_id: crate::ValidatorSetId,
+		) -> TestCommitment {
+			Commitment { payload: "Hello World!".into(), block_number, validator_set_id }
 		}
 
 		// given
@@ -239,11 +234,8 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
-		let commitment: TestCommitment = Commitment {
-			payload: "Hello World!".into(),
-			block_number: 5,
-			validator_set_id: 0,
-		};
+		let commitment: TestCommitment =
+			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
