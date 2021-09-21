@@ -22,7 +22,7 @@ use crate::traits::{
 	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
 	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
-use codec::{CompactAs, Encode};
+use codec::{CompactAs, Encode, MaxEncodedLen};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_debug_derive::RuntimeDebug;
 use sp_std::{
@@ -425,7 +425,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen)]
 		pub struct $name($type);
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
