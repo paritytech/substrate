@@ -20,13 +20,16 @@
 
 #![warn(missing_docs)]
 
-use beefy_gadget::notification::BeefySignedCommitmentStream;
+use std::sync::Arc;
+
+use sp_runtime::traits::Block as BlockT;
+
 use futures::{FutureExt, SinkExt, StreamExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
-use sp_runtime::traits::Block as BlockT;
-use std::sync::Arc;
+
+use beefy_gadget::notification::BeefySignedCommitmentStream;
 
 mod notification;
 

@@ -1,4 +1,6 @@
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -36,8 +38,8 @@ use sp_runtime::{
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, VersionedCommitment, VoteMessage,
-	BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet,
+	VersionedCommitment, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
@@ -187,7 +189,11 @@ where
 	///
 	/// Note that for a non-authority node there will be no keystore, and we will
 	/// return an error and don't check. The error can usually be ignored.
-	fn verify_validator_set(&self, block: &NumberFor<B>, mut active: ValidatorSet<Public>) -> Result<(), error::Error> {
+	fn verify_validator_set(
+		&self,
+		block: &NumberFor<B>,
+		mut active: ValidatorSet<Public>,
+	) -> Result<(), error::Error> {
 		let active: BTreeSet<Public> = active.validators.drain(..).collect();
 
 		let store: BTreeSet<Public> = self.key_store.public_keys()?.drain(..).collect();
@@ -240,7 +246,9 @@ where
 		}
 
 		if self.should_vote_on(*notification.header.number()) {
-			let authority_id = if let Some(id) = self.key_store.authority_id(self.rounds.validators().as_slice()) {
+			let authority_id = if let Some(id) =
+				self.key_store.authority_id(self.rounds.validators().as_slice())
+			{
 				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
 				id
 			} else {
@@ -248,12 +256,13 @@ where
 				return;
 			};
 
-			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&notification.header) {
-				hash
-			} else {
-				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
-				return;
-			};
+			let mmr_root =
+				if let Some(hash) = find_mmr_root_digest::<B, Public>(&notification.header) {
+					hash
+				} else {
+					warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
+					return;
+				};
 
 			let commitment = Commitment {
 				payload: mmr_root,
@@ -277,11 +286,7 @@ where
 				BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
 			);
 
-			let message = VoteMessage {
-				commitment,
-				id: authority_id,
-				signature,
-			};
+			let message = VoteMessage { commitment, id: authority_id, signature };
 
 			let encoded_message = message.encode();
 
@@ -294,9 +299,7 @@ where
 				(message.id, message.signature),
 			);
 
-			self.gossip_engine
-				.lock()
-				.gossip_message(topic::<B>(), encoded_message, false);
+			self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
 		}
 	}
 
@@ -351,7 +354,10 @@ where
 			|notification| async move {
 				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut &notification.message[..]).ok()
+				VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(
+					&mut &notification.message[..],
+				)
+				.ok()
 			},
 		));
 

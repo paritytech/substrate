@@ -1,4 +1,6 @@
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -62,10 +64,7 @@ where
 	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
 {
 	pub(crate) fn new(validator_set: ValidatorSet<Public>) -> Self {
-		Rounds {
-			rounds: BTreeMap::new(),
-			validator_set,
-		}
+		Rounds { rounds: BTreeMap::new(), validator_set }
 	}
 }
 
@@ -108,9 +107,13 @@ where
 				.validators
 				.iter()
 				.map(|authority_id| {
-					signatures
-						.iter()
-						.find_map(|(id, sig)| if id == authority_id { Some(sig.clone()) } else { None })
+					signatures.iter().find_map(|(id, sig)| {
+						if id == authority_id {
+							Some(sig.clone())
+						} else {
+							None
+						}
+					})
 				})
 				.collect(),
 		)

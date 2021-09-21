@@ -1,4 +1,6 @@
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -43,7 +45,8 @@ pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 pub fn beefy_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg = sc_network::config::NonDefaultSetConfig::new(BEEFY_PROTOCOL_NAME.into(), 1024 * 1024);
+	let mut cfg =
+		sc_network::config::NonDefaultSetConfig::new(BEEFY_PROTOCOL_NAME.into(), 1024 * 1024);
 	cfg.allow_non_reserved(25, 25);
 	cfg
 }
@@ -65,7 +68,12 @@ impl<B, BE, T> Client<B, BE> for T
 where
 	B: Block,
 	BE: Backend<B>,
-	T: BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync,
+	T: BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ Finalizer<B, BE>
+		+ ProvideRuntimeApi<B>
+		+ Send
+		+ Sync,
 {
 	// empty
 }
@@ -117,21 +125,22 @@ where
 	} = beefy_params;
 
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine = GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+	let gossip_engine =
+		GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
 
-	let metrics = prometheus_registry
-		.as_ref()
-		.map(metrics::Metrics::register)
-		.and_then(|result| match result {
-			Ok(metrics) => {
-				debug!(target: "beefy", "🥩 Registered metrics");
-				Some(metrics)
-			}
-			Err(err) => {
-				debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
-				None
-			}
-		});
+	let metrics =
+		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
+			|result| match result {
+				Ok(metrics) => {
+					debug!(target: "beefy", "🥩 Registered metrics");
+					Some(metrics)
+				}
+				Err(err) => {
+					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					None
+				}
+			},
+		);
 
 	let worker_params = worker::WorkerParams {
 		client,

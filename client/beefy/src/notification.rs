@@ -1,4 +1,6 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +24,8 @@ use sp_runtime::traits::{Block, NumberFor};
 use parking_lot::Mutex;
 
 /// Stream of signed commitments returned when subscribing.
-pub type SignedCommitment<Block> = beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash>;
+pub type SignedCommitment<Block> =
+	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash>;
 
 /// Stream of signed commitments returned when subscribing.
 type SignedCommitmentStream<Block> = TracingUnboundedReceiver<SignedCommitment<Block>>;

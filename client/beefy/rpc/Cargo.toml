@@ -15,12 +15,12 @@ jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 
-codec = { version = "2.0.0", package = "parity-scale-codec", features = ["derive"] }
+codec = { version = "2.3.0", package = "parity-scale-codec", features = ["derive"] }
 
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { versin = "4.0.0-dev", path = "../../../primitives/runtime" }
 
-beefy-gadget = { path = "../." }
-beefy-primitives = { path = "../../../primitives/beefy" }
+beefy-gadget = { version = "4.0.0-dev", path = "../." }
+beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
