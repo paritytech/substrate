@@ -243,10 +243,10 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create_snapshot_internal {
-		// number of votes in snapshot. Fixed to maximum.
-		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
-		// number of targets in snapshot. Fixed to maximum.
-		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);

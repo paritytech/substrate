@@ -50,7 +50,7 @@ pub trait WeightInfo {
 	fn on_initialize_open_unsigned() -> Weight;
 	fn finalize_signed_phase_accept_solution() -> Weight;
 	fn finalize_signed_phase_reject_solution() -> Weight;
-	fn create_snapshot_internal() -> Weight;
+	fn create_snapshot_internal(v: u32, t: u32) -> Weight;
 	fn elect_queued(a: u32, d: u32, ) -> Weight;
 	fn submit(c: u32, ) -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
@@ -102,7 +102,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ElectionProviderMultiPhase SnapshotMetadata (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase DesiredTargets (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
-	fn create_snapshot_internal() -> Weight {
+	fn create_snapshot_internal(v: u32, t: u32) -> Weight {
 		(9_132_480_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -217,7 +217,7 @@ impl WeightInfo for () {
 	// Storage: ElectionProviderMultiPhase SnapshotMetadata (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase DesiredTargets (r:0 w:1)
 	// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
-	fn create_snapshot_internal() -> Weight {
+	fn create_snapshot_internal(v: u32, t: u32) -> Weight {
 		(9_132_480_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
