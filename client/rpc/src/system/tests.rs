@@ -24,9 +24,9 @@ use jsonrpsee::{
 };
 use sc_network::{self, config::Role, PeerId};
 use sc_rpc_api::system::helpers::PeerInfo;
+use sc_utils::mpsc::tracing_unbounded;
 use serde_json::value::to_raw_value;
 use sp_core::H256;
-use sc_utils::mpsc::tracing_unbounded;
 use std::{
 	env,
 	io::{BufRead, BufReader, Write},
@@ -236,10 +236,12 @@ async fn system_local_listen_addresses_works() {
 
 #[tokio::test]
 async fn system_peers() {
-	use jsonrpsee::types::v2::Response;
 	let peer_id = PeerId::random();
-	let req = api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true }).system_peers();
-	let res = executor::block_on(req).unwrap();
+	let peer_info = api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true })
+		.call("system_peers", None)
+		.await
+		.unwrap();
+	let peer_info: Response<Vec<PeerInfo<H256, u64>>> = serde_json::from_str(&peer_info).unwrap();
 
 	assert_eq!(
 		peer_info.result,
@@ -256,8 +258,7 @@ async fn system_peers() {
 async fn system_network_state() {
 	use sc_network::network_state::NetworkState;
 	let network_state = api(None).call("system_unstable_networkState", None).await.unwrap();
-	let network_state: Response<NetworkState> =
-		serde_json::from_str(&network_state).unwrap();
+	let network_state: Response<NetworkState> = serde_json::from_str(&network_state).unwrap();
 	assert_eq!(
 		network_state.result,
 		NetworkState {
@@ -329,8 +330,7 @@ async fn system_network_remove_reserved() {
 #[tokio::test]
 async fn system_network_reserved_peers() {
 	let reserved_peers = api(None).call("system_reservedPeers", None).await.unwrap();
-	let reserved_peers: Response<Vec<String>> =
-		serde_json::from_str(&reserved_peers).unwrap();
+	let reserved_peers: Response<Vec<String>> = serde_json::from_str(&reserved_peers).unwrap();
 	assert_eq!(
 		reserved_peers.result,
 		vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()],
