@@ -10687,6 +10687,7 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
+ "jsonrpsee-ws-client",
  "log 0.4.14",
  "parity-scale-codec",
  "remote-externalities",
@@ -10696,9 +10697,12 @@ dependencies = [
  "sc-service",
  "serde",
  "sp-core",
+ "sp-externalities",
+ "sp-io",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
+ "sp-version",
  "structopt",
 ]
 
