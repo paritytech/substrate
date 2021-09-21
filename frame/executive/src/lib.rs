@@ -775,10 +775,12 @@ mod tests {
 
 	parameter_types! {
 		pub const TransactionByteFee: Balance = 0;
+		pub const WeightTipRatio: Balance = 1;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightTipRatio = WeightTipRatio;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
