@@ -97,7 +97,7 @@ pub fn pre_migrate<P: GetStorageVersion, N: AsRef<str>>(old_pallet_name: N, new_
 		|key| Ok(key.to_vec()),
 	);
 
-	// Ensure nothing except the storage_version_key is stored in the new prefix.
+	// Ensure nothing except maybe the storage_version_key is stored in the new prefix.
 	assert!(new_pallet_prefix_iter.all(|key| key == storage_version_key));
 
 	assert!(<P as GetStorageVersion>::on_chain_storage_version() < 4);
