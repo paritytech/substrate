@@ -25,7 +25,8 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	traits::{
-		DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet, OneSessionHandler,
+		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
+		OneSessionHandler,
 	},
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,
@@ -101,6 +102,8 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 	}
 }
 
+const UNDER_CONSTRUCTION_SEGMENT_LENGTH: u32 = 256;
+
 type MaybeRandomness = Option<schnorrkel::Randomness>;
 
 #[frame_support::pallet]
@@ -173,18 +176,6 @@ pub mod pallet {
 		/// Max number of authorities allowed
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
-
-		/// Randomness under construction.
-		///
-		/// We make a tradeoff between storage accesses and list length.
-		/// We store the under-construction randomness in segments of up to
-		/// `MaxSegmentLength`.
-		///
-		/// Once a segment reaches this length, we begin the next one.
-		/// We reset all segments and return to `0` at the beginning of every
-		/// epoch.
-		#[pallet::constant]
-		type MaxSegmentLength: Get<u32>;
 	}
 
 	#[pallet::error]
@@ -259,7 +250,7 @@ pub mod pallet {
 	///
 	/// We make a tradeoff between storage accesses and list length.
 	/// We store the under-construction randomness in segments of up to
-	/// `MaxSegmentLength`.
+	/// `UNDER_CONSTRUCTION_SEGMENT_LENGTH`.
 	///
 	/// Once a segment reaches this length, we begin the next one.
 	/// We reset all segments and return to `0` at the beginning of every
@@ -273,7 +264,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		u32,
-		BoundedVec<schnorrkel::Randomness, T::MaxSegmentLength>,
+		BoundedVec<schnorrkel::Randomness, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>,
 		ValueQuery,
 	>;
 
@@ -656,8 +647,10 @@ impl<T: Config> Pallet<T> {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
 			let bounded_randomness =
-				BoundedVec::<_, T::MaxSegmentLength>::try_from(vec![randomness.clone()])
-					.expect("T::MaxSegmentLength >= 1");
+				BoundedVec::<_, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>::try_from(vec![
+					randomness.clone(),
+				])
+				.expect("UNDER_CONSTRUCTION_SEGMENT_LENGTH >= 1");
 			UnderConstruction::<T>::insert(&segment_idx, bounded_randomness);
 			SegmentIndex::<T>::put(&segment_idx);
 		}
@@ -764,7 +757,7 @@ impl<T: Config> Pallet<T> {
 		let segment_idx: u32 = SegmentIndex::<T>::mutate(|s| sp_std::mem::replace(s, 0));
 
 		// overestimate to the segment being full.
-		let rho_size = (segment_idx.saturating_add(1) * T::MaxSegmentLength::get()) as usize;
+		let rho_size = (segment_idx.saturating_add(1) * UNDER_CONSTRUCTION_SEGMENT_LENGTH) as usize;
 
 		let next_randomness = compute_randomness(
 			this_randomness,

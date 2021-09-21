@@ -254,9 +254,7 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
-
 	type MaxAuthorities = MaxAuthorities;
-	type MaxSegmentLength = MaxSegmentLength;
 }
 
 pub fn go_to_block(n: u64, s: u64) {
