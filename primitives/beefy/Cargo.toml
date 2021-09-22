@@ -6,7 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
-codec = { version = "2.3.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
+codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 sp-api = { version = "4.0.0-dev", path = "../api", default-features = false }

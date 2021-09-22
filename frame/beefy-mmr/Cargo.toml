@@ -8,7 +8,7 @@ description = "BEEFY + MMR runtime utilities"
 
 [dependencies]
 hex = { version = "0.4", optional = true }
-codec = { version = "2.3.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
+codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 libsecp256k1 = { version = "0.7.0", default-features = false }
 log = { version = "0.4.13", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }

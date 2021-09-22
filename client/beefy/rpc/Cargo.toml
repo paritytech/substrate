@@ -15,7 +15,7 @@ jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 
-codec = { version = "2.3.0", package = "parity-scale-codec", features = ["derive"] }
+codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
 
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 
