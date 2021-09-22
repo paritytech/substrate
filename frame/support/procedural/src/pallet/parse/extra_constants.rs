@@ -124,7 +124,7 @@ impl ExtraConstantsDef {
 			let type_ = match &method.sig.output {
 				syn::ReturnType::Default => {
 					let msg = "Invalid pallet::extra_constants, method must have a return type";
-					return Err(syn::Error::new(method.span(), msg));
+					return Err(syn::Error::new(method.span(), msg))
 				}
 				syn::ReturnType::Type(_, type_) => *type_.clone(),
 			};
