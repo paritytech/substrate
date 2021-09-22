@@ -292,6 +292,12 @@ impl<T: PartialOrd, S> PartialOrd for WeakBoundedVec<T, S> {
 	}
 }
 
+impl<T: Ord, S> Ord for WeakBoundedVec<T, S> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(&self.0, &other.0)
+	}
+}
+
 // NOTE: we could also implement this as:
 // impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T,
 // S1> to allow comparison of bounded vectors with different bounds.
