@@ -620,7 +620,7 @@ where
 			DispatchClass::Operational => {
 				// A reasonable tip value to frontrun an `Operational` extrinsic.
 				// This value should be kept high enough to allow `Operational` extrinsics
-				// from getting in even during congested period, but at the same time low
+				// to get in even during congested period, but at the same time low
 				// enough to prevent a possible spam attack by sending invalid operational
 				// extrinsics which push away regular transactions from the pool.
 				//
