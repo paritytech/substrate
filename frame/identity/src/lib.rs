@@ -983,7 +983,7 @@ impl<T: Config> Pallet<T> {
 	/// Check if the account has corresponding identity information by the identity field.
 	pub fn has_identity(who: &T::AccountId, fields: u64) -> bool {
 		if let Some(info) = IdentityOf::<T>::get(who).map(|registration| registration.info) {
-			(info.fields().0.bits() & fields) == 1
+			(info.fields().0.bits() & fields) == fields
 		} else {
 			false
 		}
