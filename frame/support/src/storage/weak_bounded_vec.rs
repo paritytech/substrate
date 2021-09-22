@@ -27,7 +27,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{cmp::Ordering, convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -283,6 +283,12 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 		// `WeakBoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
 		// `Compact` form, and same implementation as `Vec<T>` can be used.
 		<Vec<T> as codec::DecodeLength>::len(self_encoded)
+	}
+}
+
+impl<T: PartialOrd, S> PartialOrd for WeakBoundedVec<T, S> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		PartialOrd::partial_cmp(&self.0, &other.0)
 	}
 }
 
