@@ -542,6 +542,15 @@
 			"website": "https://polkafoundry.com"
 		},
 		{
+			"prefix": 100,
+			"network": "ibtida",
+			"displayName": "Anmol Network Ibtida testnet",
+			"symbols": ["tANML"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://anmol.network/"
+		},
+		{
 			"prefix": 101,
 			"network": "origintrail-parachain",
 			"displayName": "OriginTrail Parachain",
@@ -568,15 +577,6 @@
 			"standardAccount": "*25519",
 			"website": "https://integritee.network"
     },
-		{
-			"prefix": 128,
-			"network": "ibtida",
-			"displayName": "Anmol Network Ibtida testnet",
-			"symbols": ["tANML"],
-			"decimals": [18],
-			"standardAccount": "*25519",
-			"website": "https://anmol.network/"
-		},
 		{
 			"prefix": 136,
 			"network": "altair",
