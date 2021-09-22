@@ -360,9 +360,7 @@ where
 				next.push(a);
 			},
 			// Last item = root.
-			(Some(a), None) => {
-				return Ok(a)
-			},
+			(Some(a), None) => return Ok(a),
 			// Finish up, no more items.
 			_ => {
 				#[cfg(feature = "debug")]
