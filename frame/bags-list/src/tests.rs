@@ -298,7 +298,7 @@ mod pallet {
 	#[test]
 	fn put_in_front_of_with_heavier_and_lighter_terminal_multiple_middle_nodes() {
 		ExtBuilder::default()
-			.add_ids(vec![(710, 15), (11, 20), (12, 20), (711, 16)])
+			.add_ids(vec![(710, 15), (11, 20), (12, 20), (711, 15)])
 			.build_and_execute(|| {
 				// given
 				assert_eq!(
@@ -321,7 +321,24 @@ mod pallet {
 	}
 
 	#[test]
-	fn put_in_front_of_exits_early_if_heavier_is_less_than_lighter() {
+	fn heavier_is_head_lighter_is_not_terminal() {
+		ExtBuilder::default().add_ids(vec![(5, 1_000)]).build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
+
+			StakingMock::set_vote_weight_of(&4, 1_000);
+			StakingMock::set_vote_weight_of(&2, 999);
+
+			// when
+			BagsList::put_in_front_of(Origin::signed(0), 2, 4).unwrap();
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4, 5])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_errors_if_heavier_is_less_than_lighter() {
 		ExtBuilder::default().add_ids(vec![(711, 16), (710, 15)]).build_and_execute(|| {
 			// given
 			assert_eq!(
@@ -341,7 +358,7 @@ mod pallet {
 	}
 
 	#[test]
-	fn put_in_front_of_exits_early_if_heavier_is_equal_weight_to_lighter() {
+	fn put_in_front_of_errors_if_heavier_is_equal_weight_to_lighter() {
 		use mock::StakingMock;
 
 		ExtBuilder::default().add_ids(vec![(5, 15), (6, 15)]).build_and_execute(|| {
@@ -367,7 +384,7 @@ mod pallet {
 	}
 
 	#[test]
-	fn put_in_front_of_exits_early_if_nodes_not_found() {
+	fn put_in_front_of_errors_if_nodes_not_found() {
 		// `heavier` not found
 		ExtBuilder::default().build_and_execute(|| {
 			// given
@@ -398,7 +415,7 @@ mod pallet {
 	}
 
 	#[test]
-	fn put_in_front_of_exits_early_if_nodes_not_in_same_bag() {
+	fn put_in_front_of_errors_if_nodes_not_in_same_bag() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
