@@ -14,7 +14,7 @@ thiserror = "1.0"
 wasm-timer = "0.2.5"
 
 codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
-prometheus = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/substrate", branch = "master" }
+prometheus = { version = "0.9.0", package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" }
 
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }

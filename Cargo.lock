@@ -516,7 +516,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "strum 0.21.0",
- "substrate-prometheus-endpoint 0.9.0 (git+https://github.com/paritytech/substrate?branch=master)",
+ "substrate-prometheus-endpoint",
  "thiserror",
  "wasm-timer",
 ]
@@ -7517,7 +7517,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-tracing",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
 
@@ -7542,7 +7542,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
 
@@ -7650,7 +7650,7 @@ dependencies = [
  "sp-storage",
  "sp-test-primitives",
  "sp-trie",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "thiserror",
 ]
@@ -7703,7 +7703,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-test-primitives",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "thiserror",
 ]
 
@@ -7740,7 +7740,7 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "sp-tracing",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
 ]
@@ -7790,7 +7790,7 @@ dependencies = [
  "sp-timestamp",
  "sp-tracing",
  "sp-version",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
 ]
@@ -7867,7 +7867,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tokio",
@@ -7894,7 +7894,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -8062,7 +8062,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-tracing",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
  "tokio",
@@ -8190,7 +8190,7 @@ dependencies = [
  "sp-runtime",
  "sp-test-primitives",
  "sp-tracing",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -8213,7 +8213,7 @@ dependencies = [
  "quickcheck",
  "sc-network",
  "sp-runtime",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tracing",
 ]
@@ -8298,7 +8298,7 @@ name = "sc-proposer-metrics"
 version = "0.9.0"
 dependencies = [
  "log 0.4.14",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -8374,7 +8374,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "log 0.4.14",
  "serde_json",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "tokio",
 ]
 
@@ -8448,7 +8448,7 @@ dependencies = [
  "sp-transaction-storage-proof",
  "sp-trie",
  "sp-version",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -8610,7 +8610,7 @@ dependencies = [
  "sp-runtime",
  "sp-tracing",
  "sp-transaction-pool",
- "substrate-prometheus-endpoint 0.9.0",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
@@ -10054,20 +10054,6 @@ dependencies = [
 [[package]]
 name = "substrate-prometheus-endpoint"
 version = "0.9.0"
-dependencies = [
- "async-std",
- "derive_more",
- "futures-util",
- "hyper 0.14.11",
- "log 0.4.14",
- "prometheus",
- "tokio",
-]
-
-[[package]]
-name = "substrate-prometheus-endpoint"
-version = "0.9.0"
-source = "git+https://github.com/paritytech/substrate?branch=master#50c84cb8f92b6446b4a7b3043684b116aaea6866"
 dependencies = [
  "async-std",
  "derive_more",
