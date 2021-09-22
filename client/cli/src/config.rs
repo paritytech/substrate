@@ -541,6 +541,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			block_production: Default::default(),
 		})
 	}
 

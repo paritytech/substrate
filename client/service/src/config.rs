@@ -141,6 +141,8 @@ pub struct Configuration {
 	pub base_path: Option<BasePath>,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
+	/// Specify the block production to use (e.g. Babe, Aura)
+	pub block_production: Option<String>,
 }
 
 /// Type for tasks spawned by the executor.

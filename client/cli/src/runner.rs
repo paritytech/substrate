@@ -166,6 +166,33 @@ impl<C: SubstrateCli> Runner<C> {
 		Ok(res?)
 	}
 
+	// Like `run_node_until_exit`, but a signalling future is passed alongside the task manager
+	// and is used to signal an early-exit of the node.
+	pub fn run_node_until_signal<F, SF, E>(
+		mut self,
+		initialize: impl FnOnce(Configuration) -> F,
+	) -> std::result::Result<(), E>
+	where
+		F: Future<Output = std::result::Result<(TaskManager, SF), E>>,
+		SF: Future<Output = ()> + Unpin + Send,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
+	{
+		self.print_node_infos();
+		let (mut task_manager, signal_future) =
+			self.tokio_runtime.block_on(initialize(self.config))?;
+		let res = self.tokio_runtime.block_on(main(
+			async {
+				select!(
+					result = task_manager.future().fuse() => result,
+					_ = signal_future.fuse() => Ok(())
+				)
+			}
+			.fuse(),
+		));
+		self.tokio_runtime.block_on(task_manager.clean_shutdown());
+		Ok(res?)
+	}
+
 	/// A helper function that runs a command with the configuration of this node.
 	pub fn sync_run<E>(
 		self,
@@ -189,6 +216,39 @@ impl<C: SubstrateCli> Runner<C> {
 	{
 		let (future, task_manager) = runner(self.config)?;
 		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
+	}
+
+	/// A helper function that runs a future with tokio and stops if the process receives
+	/// the signal `SIGTERM` or `SIGINT`.
+	pub fn async_run_ref<F, E>(
+		mut self,
+		runner: impl FnOnce(&mut Configuration) -> std::result::Result<(F, TaskManager), E>,
+	) -> std::result::Result<Self, E>
+	where
+		F: Future<Output = std::result::Result<(), E>>,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
+	{
+		let (future, task_manager) = runner(&mut self.config)?;
+		self.run_until_exit_ref::<_, E>(future, task_manager)?;
+		Ok(self)
+	}
+
+	fn run_until_exit_ref<F, E>(
+		&mut self,
+		future: F,
+		task_manager: TaskManager,
+	) -> std::result::Result<(), E>
+	where
+		F: Future<Output = std::result::Result<(), E>> + future::Future,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
+	{
+		let f = future.fuse();
+		pin_mut!(f);
+	
+		self.tokio_runtime.block_on(main(f))?;
+		self.tokio_runtime.block_on(task_manager.clean_shutdown());
+	
+		Ok(())
 	}
 
 	/// Get an immutable reference to the node Configuration

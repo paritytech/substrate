@@ -21,6 +21,7 @@ use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{ChainSpec, Result, Role, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+use futures::FutureExt;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -76,12 +77,32 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_exit(|config| async move {
-				match config.role {
-					Role::Light => service::new_light(config),
-					_ => service::new_full(config),
+			use std::sync::Arc;
+			use std::cell::RefCell;
+			let clean_shutdown = Arc::new(RefCell::new(false));
+			let clean_copy = clean_shutdown.clone();
+			runner.async_run_ref(|config| {
+				let mut config = config;
+				config.block_production = Some("Babe".to_owned());
+				service::new_full(config).map(|v| (
+					v.1.inspect(|()| { clean_copy.replace(true); }).map(Ok),
+					v.0
+				)).map_err(sc_cli::Error::Service)
+			}).and_then(|runner| {
+				if *clean_shutdown.borrow() {
+					log::debug!("shut down cleanly because of block production change");
+					runner.async_run(|config| {
+						let mut config = config;
+						config.block_production = Some("Aura".to_owned());
+
+						// Cannot restart Prometheus.
+						config.prometheus_config = None;
+						service::new_full(&mut config).map(|v| (v.1.map(Ok), v.0))
+							.map_err(sc_cli::Error::Service)
+					})
+				} else {
+					Ok(())
 				}
-				.map_err(sc_cli::Error::Service)
 			})
 		},
 		Some(Subcommand::Inspect(cmd)) => {
@@ -111,21 +132,21 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, .. } =
-					new_partial(&config)?;
+					new_partial(&config, None)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
 		Some(Subcommand::ExportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
+				let PartialComponents { client, task_manager, .. } = new_partial(&config, None)?;
 				Ok((cmd.run(client, config.database), task_manager))
 			})
 		},
 		Some(Subcommand::ExportState(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
+				let PartialComponents { client, task_manager, .. } = new_partial(&config, None)?;
 				Ok((cmd.run(client, config.chain_spec), task_manager))
 			})
 		},
@@ -133,7 +154,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, .. } =
-					new_partial(&config)?;
+					new_partial(&config, None)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
@@ -144,7 +165,7 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Revert(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config, None)?;
 				Ok((cmd.run(client, backend), task_manager))
 			})
 		},

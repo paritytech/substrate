@@ -119,6 +119,7 @@ pub fn default_config(
 		keep_blocks: KeepBlocks::All,
 		state_pruning: Default::default(),
 		transaction_storage: TransactionStorageMode::BlockBody,
+		block_production: None,
 	}
 }
 

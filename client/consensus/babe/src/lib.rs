@@ -982,13 +982,13 @@ impl<Block: BlockT> BabeLink<Block> {
 
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
-	client: Arc<Client>,
-	select_chain: SelectChain,
-	create_inherent_data_providers: CIDP,
-	config: Config,
-	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	can_author_with: CAW,
-	telemetry: Option<TelemetryHandle>,
+	pub client: Arc<Client>,
+	pub select_chain: SelectChain,
+	pub create_inherent_data_providers: CIDP,
+	pub config: Config,
+	pub epoch_changes: SharedEpochChanges<Block, Epoch>,
+	pub can_author_with: CAW,
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block, Client, SelectChain, CAW, CIDP> BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
@@ -1771,5 +1771,24 @@ where
 		client,
 	};
 
+	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+}
+
+pub fn import_queue_with_verifier<Block: BlockT, Inner, V>(
+	verifier: V,
+	block_import: Inner,
+	justification_import: Option<BoxJustificationImport<Block>>,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
+	registry: Option<&Registry>,
+) -> ClientResult<impl sc_consensus::ImportQueue<Block>>
+where
+	Inner: BlockImport<
+			Block,
+			Error = ConsensusError,
+		> + Send
+		+ Sync
+		+ 'static,
+	V: Verifier<Block> + 'static,
+{
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
 }

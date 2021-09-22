@@ -21,7 +21,7 @@
 use grandpa_primitives::AuthorityId as GrandpaId;
 use hex_literal::hex;
 use node_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
+	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, AuraConfig, BabeConfig,
 	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
 	ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, SocietyConfig, StakerStatus,
 	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, MAX_NOMINATIONS,
@@ -33,6 +33,7 @@ use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_babe::AuthorityId as BabeId;
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -45,6 +46,11 @@ pub use node_runtime::GenesisConfig;
 type AccountPublic = <Signature as Verify>::Signer;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+
+/// Generate an Aura authority key.
+pub fn authority_keys_from_seed_aura(s: &str) -> (AuraId, GrandpaId) {
+	(get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
+}
 
 /// Node `ChainSpec` extensions.
 ///
@@ -87,7 +93,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	//
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
-	let initial_authorities: Vec<(
+	let initial_babe_authorities: Vec<(
 		AccountId,
 		AccountId,
 		GrandpaId,
@@ -178,7 +184,14 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
 
-	testnet_genesis(initial_authorities, vec![], root_key, Some(endowed_accounts))
+	testnet_genesis(
+		// Initial Aura authorities
+		vec![authority_keys_from_seed_aura("Alice"), authority_keys_from_seed_aura("Bob")],
+		initial_babe_authorities,
+		vec![],
+		root_key,
+		Some(endowed_accounts)
+	)
 }
 
 /// Staging testnet config.
@@ -216,7 +229,7 @@ where
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn authority_keys_from_seed(
+pub fn authority_keys_from_seed_babe(
 	seed: &str,
 ) -> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
 	(
@@ -231,7 +244,8 @@ pub fn authority_keys_from_seed(
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<(
+	initial_aura_authorities: Vec<(AuraId, GrandpaId)>,
+	initial_babe_authorities: Vec<(
 		AccountId,
 		AccountId,
 		GrandpaId,
@@ -260,7 +274,7 @@ pub fn testnet_genesis(
 		]
 	});
 	// endow all authorities and nominators.
-	initial_authorities
+	initial_babe_authorities
 		.iter()
 		.map(|x| &x.0)
 		.chain(initial_nominators.iter())
@@ -272,14 +286,14 @@ pub fn testnet_genesis(
 
 	// stakers: all validators and nominators.
 	let mut rng = rand::thread_rng();
-	let stakers = initial_authorities
+	let stakers = initial_babe_authorities
 		.iter()
 		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
 		.chain(initial_nominators.iter().map(|x| {
 			use rand::{seq::SliceRandom, Rng};
-			let limit = (MAX_NOMINATIONS as usize).min(initial_authorities.len());
+			let limit = (MAX_NOMINATIONS as usize).min(initial_babe_authorities.len());
 			let count = rng.gen::<usize>() % limit;
-			let nominations = initial_authorities
+			let nominations = initial_babe_authorities
 				.as_slice()
 				.choose_multiple(&mut rng, count)
 				.into_iter()
@@ -304,7 +318,7 @@ pub fn testnet_genesis(
 		},
 		indices: IndicesConfig { indices: vec![] },
 		session: SessionConfig {
-			keys: initial_authorities
+			keys: initial_babe_authorities
 				.iter()
 				.map(|x| {
 					(
@@ -316,9 +330,9 @@ pub fn testnet_genesis(
 				.collect::<Vec<_>>(),
 		},
 		staking: StakingConfig {
-			validator_count: initial_authorities.len() as u32,
-			minimum_validator_count: initial_authorities.len() as u32,
-			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			validator_count: initial_babe_authorities.len() as u32,
+			minimum_validator_count: initial_babe_authorities.len() as u32,
+			invulnerables: initial_babe_authorities.iter().map(|x| x.0.clone()).collect(),
 			slash_reward_fraction: Perbill::from_percent(10),
 			stakers,
 			..Default::default()
@@ -342,6 +356,9 @@ pub fn testnet_genesis(
 			phantom: Default::default(),
 		},
 		sudo: SudoConfig { key: root_key },
+		aura: AuraConfig {
+			authorities: initial_aura_authorities.iter().map(|x| (x.0.clone())).collect(),
+		},
 		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
@@ -368,7 +385,10 @@ pub fn testnet_genesis(
 
 fn development_config_genesis() -> GenesisConfig {
 	testnet_genesis(
-		vec![authority_keys_from_seed("Alice")],
+		// Initial Aura authorities
+		vec![authority_keys_from_seed_aura("Alice"), authority_keys_from_seed_aura("Bob")],
+		// Initial Babe authorities
+		vec![authority_keys_from_seed_babe("Alice")],
 		vec![],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		None,
@@ -392,7 +412,11 @@ pub fn development_config() -> ChainSpec {
 
 fn local_testnet_genesis() -> GenesisConfig {
 	testnet_genesis(
-		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+		// Initial Aura authorities
+		vec![authority_keys_from_seed_aura("Alice"), authority_keys_from_seed_aura("Bob")],
+		// Initial Babe authorities
+		vec![authority_keys_from_seed_babe("Alice"), authority_keys_from_seed_babe("Bob")],
+		// Initial Babe authorities
 		vec![],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		None,
@@ -423,7 +447,10 @@ pub(crate) mod tests {
 
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
 		testnet_genesis(
-			vec![authority_keys_from_seed("Alice")],
+			// Initial Aura authorities
+			vec![authority_keys_from_seed_aura("Alice"), authority_keys_from_seed_aura("Bob")],
+			// Initial Babe authorities
+			vec![authority_keys_from_seed_babe("Alice")],
 			vec![],
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			None,
