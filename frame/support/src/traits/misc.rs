@@ -17,9 +17,10 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use crate::dispatch::Parameter;
+use crate::{dispatch::Parameter, TypeInfo};
+use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
-use sp_std::prelude::*;
+use sp_std::vec::Vec;
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -383,13 +384,15 @@ impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for 
 ///
 /// The encoding is the encoding of `T` prepended with the compact encoding of its size in bytes.
 /// Thus the encoded value can be decoded as a `Vec<u8>`.
-#[derive(Debug, Eq, PartialEq, Default, Clone)]
+#[derive(Debug, Eq, PartialEq, Default, Clone, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct BytesCodecWrapper<T>(pub T);
+pub struct WrapperOpaque<T>(pub T);
 
-impl<T: codec::Encode> codec::Encode for BytesCodecWrapper<T> {
+impl<T: Encode> EncodeLike for WrapperOpaque<T> {}
+
+impl<T: Encode> Encode for WrapperOpaque<T> {
 	fn size_hint(&self) -> usize {
-		// Compact<u32> usually takes less than 4 bytes
+		// Compact<u32> usually takes at most 4 bytes
 		self.0.size_hint().saturating_add(4)
 	}
 
@@ -406,17 +409,17 @@ impl<T: codec::Encode> codec::Encode for BytesCodecWrapper<T> {
 	}
 }
 
-impl<T: codec::Decode> codec::Decode for BytesCodecWrapper<T> {
-	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+impl<T: Decode> Decode for WrapperOpaque<T> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
 	}
 
-	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
+	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
 		<Vec<u8>>::skip(input)
 	}
 }
 
-impl<T> From<T> for BytesCodecWrapper<T> {
+impl<T> From<T> for WrapperOpaque<T> {
 	fn from(t: T) -> Self {
 		Self(t)
 	}

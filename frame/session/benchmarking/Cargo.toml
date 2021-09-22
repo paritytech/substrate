@@ -29,6 +29,7 @@ rand = { version = "0.7.2", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = [
 	"derive",
 ] }
+scale-info = "1.0"
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
