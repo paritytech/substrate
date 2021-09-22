@@ -91,59 +91,61 @@ fn should_return_storage() {
 	);
 }
 
-// #[test]
-// fn should_return_child_storage() {
-// 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-// 	let client = Arc::new(
-// 		substrate_test_runtime_client::TestClientBuilder::new()
-// 			.add_child_storage(&child_info, "key", vec![42_u8])
-// 			.build(),
-// 	);
-// 	let genesis_hash = client.genesis_hash();
-// 	let (_client, child) =
-// 		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
-// 	let child_key = prefixed_storage_key();
-// 	let key = StorageKey(b"key".to_vec());
+#[test]
+fn should_return_child_storage() {
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let client = Arc::new(
+		substrate_test_runtime_client::TestClientBuilder::new()
+			.add_child_storage(&child_info, "key", vec![42_u8])
+			.build(),
+	);
+	let genesis_hash = client.genesis_hash();
+	let (_client, child) =
+		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
+	let child_key = prefixed_storage_key();
+	let key = StorageKey(b"key".to_vec());
 
-// 	assert_matches!(
-// 		executor::block_on(child.storage(
-// 			child_key.clone(),
-// 			key.clone(),
-// 			Some(genesis_hash).into(),
-// 		)),
-// 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
-// 	);
-// 	assert_matches!(
-// 		executor::block_on(child.storage_hash(
-// 			child_key.clone(),
-// 			key.clone(),
-// 			Some(genesis_hash).into(),
-// 		))
-// 		.map(|x| x.is_some()),
-// 		Ok(true)
-// 	);
-// 	assert_matches!(
-// 		executor::block_on(child.storage_size(child_key.clone(), key.clone(), None)),
-// 		Ok(Some(1))
-// 	);
-// }
+	assert_matches!(
+		executor::block_on(child.storage(
+			child_key.clone(),
+			key.clone(),
+			Some(genesis_hash).into(),
+		)),
+		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
+	);
+	assert_matches!(
+		executor::block_on(child.storage_hash(
+			child_key.clone(),
+			key.clone(),
+			Some(genesis_hash).into(),
+		))
+		.map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_matches!(
+		executor::block_on(child.storage_size(child_key.clone(), key.clone(), None)),
+		Ok(Some(1))
+	);
+}
 
-// #[test]
-// fn should_call_contract() {
-// 	let client = Arc::new(substrate_test_runtime_client::new());
-// 	let genesis_hash = client.genesis_hash();
-// 	let (client, _child) =
-// 		new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)), DenyUnsafe::No, None);
+#[test]
+fn should_call_contract() {
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let genesis_hash = client.genesis_hash();
+	let (client, _child) =
+		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-// 	assert_matches!(
-// 		executor::block_on(client.call(
-// 			"balanceOf".into(),
-// 			Bytes(vec![1, 2, 3]),
-// 			Some(genesis_hash).into()
-// 		)),
-// 		Err(Error::Client(_))
-// 	)
-// }
+    use jsonrpsee::types::{ Error, CallError };
+
+	assert_matches!(
+		executor::block_on(client.call(
+			"balanceOf".into(),
+			Bytes(vec![1, 2, 3]),
+			Some(genesis_hash).into()
+		)),
+		Err(Error::Call(CallError::Failed(_)))
+	)
+}
 
 // #[test]
 // fn should_notify_about_storage_changes() {
@@ -153,7 +155,7 @@ fn should_return_storage() {
 // 		let mut client = Arc::new(substrate_test_runtime_client::new());
 // 		let (api, _child) = new_full(
 // 			client.clone(),
-// 			SubscriptionManager::new(Arc::new(TaskExecutor)),
+// 			SubscriptionTaskExecutor::new(TaskExecutor),
 // 			DenyUnsafe::No,
 // 			None,
 // 		);
@@ -189,7 +191,7 @@ fn should_return_storage() {
 // 		let mut client = Arc::new(substrate_test_runtime_client::new());
 // 		let (api, _child) = new_full(
 // 			client.clone(),
-// 			SubscriptionManager::new(Arc::new(TaskExecutor)),
+// 			SubscriptionTaskExecutor::new(TaskExecutor),
 // 			DenyUnsafe::No,
 // 			None,
 // 		);
@@ -224,235 +226,237 @@ fn should_return_storage() {
 // 	assert!(executor::block_on(transport.next()).is_none());
 // }
 
-// #[test]
-// fn should_query_storage() {
-// 	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
-// 		let (api, _child) = new_full(
-// 			client.clone(),
-// 			SubscriptionManager::new(Arc::new(TaskExecutor)),
-// 			DenyUnsafe::No,
-// 			None,
-// 		);
+#[test]
+fn should_query_storage() {
+	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionTaskExecutor::new(TaskExecutor),
+			DenyUnsafe::No,
+			None,
+		);
 
-// 		let mut add_block = |nonce| {
-// 			let mut builder = client.new_block(Default::default()).unwrap();
-// 			// fake change: None -> None -> None
-// 			builder.push_storage_change(vec![1], None).unwrap();
-// 			// fake change: None -> Some(value) -> Some(value)
-// 			builder.push_storage_change(vec![2], Some(vec![2])).unwrap();
-// 			// actual change: None -> Some(value) -> None
-// 			builder
-// 				.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
-// 				.unwrap();
-// 			// actual change: None -> Some(value)
-// 			builder
-// 				.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
-// 				.unwrap();
-// 			// actual change: Some(value1) -> Some(value2)
-// 			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
-// 			let block = builder.build().unwrap().block;
-// 			let hash = block.header.hash();
-// 			executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
-// 			hash
-// 		};
-// 		let block1_hash = add_block(0);
-// 		let block2_hash = add_block(1);
-// 		let genesis_hash = client.genesis_hash();
+		let mut add_block = |nonce| {
+			let mut builder = client.new_block(Default::default()).unwrap();
+			// fake change: None -> None -> None
+			builder.push_storage_change(vec![1], None).unwrap();
+			// fake change: None -> Some(value) -> Some(value)
+			builder.push_storage_change(vec![2], Some(vec![2])).unwrap();
+			// actual change: None -> Some(value) -> None
+			builder
+				.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
+				.unwrap();
+			// actual change: None -> Some(value)
+			builder
+				.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
+				.unwrap();
+			// actual change: Some(value1) -> Some(value2)
+			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
+			let block = builder.build().unwrap().block;
+			let hash = block.header.hash();
+			executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+			hash
+		};
+		let block1_hash = add_block(0);
+		let block2_hash = add_block(1);
+		let genesis_hash = client.genesis_hash();
 
-// 		if has_changes_trie_config {
-// 			assert_eq!(
-// 				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
-// 				Some((0, BlockId::Hash(block1_hash))),
-// 			);
-// 		}
+		if has_changes_trie_config {
+			assert_eq!(
+				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
+				Some((0, BlockId::Hash(block1_hash))),
+			);
+		}
 
-// 		let mut expected = vec![
-// 			StorageChangeSet {
-// 				block: genesis_hash,
-// 				changes: vec![
-// 					(StorageKey(vec![1]), None),
-// 					(StorageKey(vec![2]), None),
-// 					(StorageKey(vec![3]), None),
-// 					(StorageKey(vec![4]), None),
-// 					(StorageKey(vec![5]), None),
-// 				],
-// 			},
-// 			StorageChangeSet {
-// 				block: block1_hash,
-// 				changes: vec![
-// 					(StorageKey(vec![2]), Some(StorageData(vec![2]))),
-// 					(StorageKey(vec![3]), Some(StorageData(vec![3]))),
-// 					(StorageKey(vec![5]), Some(StorageData(vec![0]))),
-// 				],
-// 			},
-// 		];
+		let mut expected = vec![
+			StorageChangeSet {
+				block: genesis_hash,
+				changes: vec![
+					(StorageKey(vec![1]), None),
+					(StorageKey(vec![2]), None),
+					(StorageKey(vec![3]), None),
+					(StorageKey(vec![4]), None),
+					(StorageKey(vec![5]), None),
+				],
+			},
+			StorageChangeSet {
+				block: block1_hash,
+				changes: vec![
+					(StorageKey(vec![2]), Some(StorageData(vec![2]))),
+					(StorageKey(vec![3]), Some(StorageData(vec![3]))),
+					(StorageKey(vec![5]), Some(StorageData(vec![0]))),
+				],
+			},
+		];
 
-// 		// Query changes only up to block1
-// 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
-// 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
+		// Query changes only up to block1
+		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
-// 		assert_eq!(executor::block_on(result).unwrap(), expected);
+		assert_eq!(executor::block_on(result).unwrap(), expected);
 
-// 		// Query all changes
-// 		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
+		// Query all changes
+		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
 
-// 		expected.push(StorageChangeSet {
-// 			block: block2_hash,
-// 			changes: vec![
-// 				(StorageKey(vec![3]), None),
-// 				(StorageKey(vec![4]), Some(StorageData(vec![4]))),
-// 				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
-// 			],
-// 		});
-// 		assert_eq!(executor::block_on(result).unwrap(), expected);
+		expected.push(StorageChangeSet {
+			block: block2_hash,
+			changes: vec![
+				(StorageKey(vec![3]), None),
+				(StorageKey(vec![4]), Some(StorageData(vec![4]))),
+				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
+			],
+		});
+		assert_eq!(executor::block_on(result).unwrap(), expected);
 
-// 		// Query changes up to block2.
-// 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
+		// Query changes up to block2.
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
-// 		assert_eq!(executor::block_on(result).unwrap(), expected);
+		assert_eq!(executor::block_on(result).unwrap(), expected);
 
-// 		// Inverted range.
-// 		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
+		// Inverted range.
+		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
-// 		assert_eq!(
-// 			executor::block_on(result).map_err(|e| e.to_string()),
-// 			Err(Error::InvalidBlockRange {
-// 				from: format!("1 ({:?})", block1_hash),
-// 				to: format!("0 ({:?})", genesis_hash),
-// 				details: "from number > to number".to_owned(),
-// 			})
-// 			.map_err(|e| e.to_string())
-// 		);
+        use jsonrpsee::types::{ Error as RpcError, CallError as RpcCallError };
 
-// 		let random_hash1 = H256::random();
-// 		let random_hash2 = H256::random();
+        assert_eq!(
+			executor::block_on(result).map_err(|e| e.to_string()),
+			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
+				from: format!("1 ({:?})", block1_hash),
+				to: format!("0 ({:?})", genesis_hash),
+				details: "from number > to number".to_owned(),
+			}.into())))
+			.map_err(|e| e.to_string())
+		);
 
-// 		// Invalid second hash.
-// 		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
+		let random_hash1 = H256::random();
+		let random_hash2 = H256::random();
 
-// 		assert_eq!(
-// 			executor::block_on(result).map_err(|e| e.to_string()),
-// 			Err(Error::InvalidBlockRange {
-// 				from: format!("{:?}", genesis_hash),
-// 				to: format!("{:?}", Some(random_hash1)),
-// 				details: format!(
-// 					"UnknownBlock: Header was not found in the database: {:?}",
-// 					random_hash1
-// 				),
-// 			})
-// 			.map_err(|e| e.to_string())
-// 		);
+		// Invalid second hash.
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
 
-// 		// Invalid first hash with Some other hash.
-// 		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
+		assert_eq!(
+			executor::block_on(result).map_err(|e| e.to_string()),
+			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
+				from: format!("{:?}", genesis_hash),
+				to: format!("{:?}", Some(random_hash1)),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
+			}.into())))
+			.map_err(|e| e.to_string())
+		);
 
-// 		assert_eq!(
-// 			executor::block_on(result).map_err(|e| e.to_string()),
-// 			Err(Error::InvalidBlockRange {
-// 				from: format!("{:?}", random_hash1),
-// 				to: format!("{:?}", Some(genesis_hash)),
-// 				details: format!(
-// 					"UnknownBlock: Header was not found in the database: {:?}",
-// 					random_hash1
-// 				),
-// 			})
-// 			.map_err(|e| e.to_string()),
-// 		);
+		// Invalid first hash with Some other hash.
+		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
 
-// 		// Invalid first hash with None.
-// 		let result = api.query_storage(keys.clone(), random_hash1, None);
+		assert_eq!(
+			executor::block_on(result).map_err(|e| e.to_string()),
+			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1),
+				to: format!("{:?}", Some(genesis_hash)),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
+			}.into())))
+			.map_err(|e| e.to_string()),
+		);
 
-// 		assert_eq!(
-// 			executor::block_on(result).map_err(|e| e.to_string()),
-// 			Err(Error::InvalidBlockRange {
-// 				from: format!("{:?}", random_hash1),
-// 				to: format!("{:?}", Some(block2_hash)), // Best block hash.
-// 				details: format!(
-// 					"UnknownBlock: Header was not found in the database: {:?}",
-// 					random_hash1
-// 				),
-// 			})
-// 			.map_err(|e| e.to_string()),
-// 		);
+		// Invalid first hash with None.
+		let result = api.query_storage(keys.clone(), random_hash1, None);
 
-// 		// Both hashes invalid.
-// 		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
+		assert_eq!(
+			executor::block_on(result).map_err(|e| e.to_string()),
+			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1),
+				to: format!("{:?}", Some(block2_hash)), // Best block hash.
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
+			}.into())))
+			.map_err(|e| e.to_string()),
+		);
 
-// 		assert_eq!(
-// 			executor::block_on(result).map_err(|e| e.to_string()),
-// 			Err(Error::InvalidBlockRange {
-// 				from: format!("{:?}", random_hash1), // First hash not found.
-// 				to: format!("{:?}", Some(random_hash2)),
-// 				details: format!(
-// 					"UnknownBlock: Header was not found in the database: {:?}",
-// 					random_hash1
-// 				),
-// 			})
-// 			.map_err(|e| e.to_string()),
-// 		);
+		// Both hashes invalid.
+		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
 
-// 		// single block range
-// 		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
+		assert_eq!(
+			executor::block_on(result).map_err(|e| e.to_string()),
+			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1), // First hash not found.
+				to: format!("{:?}", Some(random_hash2)),
+				details: format!(
+					"UnknownBlock: Header was not found in the database: {:?}",
+					random_hash1
+				),
+			}.into())))
+			.map_err(|e| e.to_string()),
+		);
 
-// 		assert_eq!(
-// 			executor::block_on(result).unwrap(),
-// 			vec![StorageChangeSet {
-// 				block: block1_hash,
-// 				changes: vec![
-// 					(StorageKey(vec![1_u8]), None),
-// 					(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
-// 					(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
-// 					(StorageKey(vec![4_u8]), None),
-// 					(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
-// 				]
-// 			}]
-// 		);
-// 	}
+		// single block range
+		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
 
-// 	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
-// 	run_tests(
-// 		Arc::new(
-// 			TestClientBuilder::new()
-// 				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-// 				.build(),
-// 		),
-// 		true,
-// 	);
-// }
+		assert_eq!(
+			executor::block_on(result).unwrap(),
+			vec![StorageChangeSet {
+				block: block1_hash,
+				changes: vec![
+					(StorageKey(vec![1_u8]), None),
+					(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
+					(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
+					(StorageKey(vec![4_u8]), None),
+					(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
+				]
+			}]
+		);
+	}
 
-// #[test]
-// fn should_split_ranges() {
-// 	assert_eq!(split_range(1, None), (0..1, None));
-// 	assert_eq!(split_range(100, None), (0..100, None));
-// 	assert_eq!(split_range(1, Some(0)), (0..1, None));
-// 	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
-// 	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
-// }
+	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
+	run_tests(
+		Arc::new(
+			TestClientBuilder::new()
+				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+				.build(),
+		),
+		true,
+	);
+}
 
-// #[test]
-// fn should_return_runtime_version() {
-// 	let client = Arc::new(substrate_test_runtime_client::new());
-// 	let (api, _child) = new_full(
-// 		client.clone(),
-// 		SubscriptionManager::new(Arc::new(TaskExecutor)),
-// 		DenyUnsafe::No,
-// 		None,
-// 	);
+#[test]
+fn should_split_ranges() {
+	assert_eq!(split_range(1, None), (0..1, None));
+	assert_eq!(split_range(100, None), (0..100, None));
+	assert_eq!(split_range(1, Some(0)), (0..1, None));
+	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
+	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
+}
 
-// 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-// 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
-// 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",5],\
-// 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
-// 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-// 		\"transactionVersion\":1}";
+#[test]
+fn should_return_runtime_version() {
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) = new_full(
+		client.clone(),
+		SubscriptionTaskExecutor::new(TaskExecutor),
+		DenyUnsafe::No,
+		None,
+	);
 
-// 	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
-// 	let serialized = serde_json::to_string(&runtime_version).unwrap();
-// 	assert_eq!(serialized, result);
+	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",5],\
+		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
+		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
+		\"transactionVersion\":1}";
 
-// 	let deserialized: RuntimeVersion = serde_json::from_str(result).unwrap();
-// 	assert_eq!(deserialized, runtime_version);
-// }
+	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
+	let serialized = serde_json::to_string(&runtime_version).unwrap();
+	assert_eq!(serialized, result);
+
+	let deserialized: RuntimeVersion = serde_json::from_str(result).unwrap();
+	assert_eq!(deserialized, runtime_version);
+}
 
 // #[test]
 // fn should_notify_on_runtime_version_initially() {
@@ -462,7 +466,7 @@ fn should_return_storage() {
 // 		let client = Arc::new(substrate_test_runtime_client::new());
 // 		let (api, _child) = new_full(
 // 			client.clone(),
-// 			SubscriptionManager::new(Arc::new(TaskExecutor)),
+// 			SubscriptionTaskExecutor::new(TaskExecutor),
 // 			DenyUnsafe::No,
 // 			None,
 // 		);
@@ -478,10 +482,10 @@ fn should_return_storage() {
 // 	assert!(executor::block_on(transport.next()).is_none());
 // }
 
-// #[test]
-// fn should_deserialize_storage_key() {
-// 	let k = "\"0x7f864e18e3dd8b58386310d2fe0919eef27c6e558564b7f67f22d99d20f587b\"";
-// 	let k: StorageKey = serde_json::from_str(k).unwrap();
+#[test]
+fn should_deserialize_storage_key() {
+	let k = "\"0x7f864e18e3dd8b58386310d2fe0919eef27c6e558564b7f67f22d99d20f587b\"";
+	let k: StorageKey = serde_json::from_str(k).unwrap();
 
-// 	assert_eq!(k.0.len(), 32);
-// }
+	assert_eq!(k.0.len(), 32);
+}

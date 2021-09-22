@@ -37,7 +37,6 @@ lazy_static::lazy_static! {
 /// Executor for use in testing
 #[derive(Clone,Copy)]
 pub struct TaskExecutor;
-
 impl Spawn for TaskExecutor {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
 		EXECUTOR.spawn_ok(future);
@@ -48,7 +47,6 @@ impl Spawn for TaskExecutor {
 		Ok(())
 	}
 }
-
 impl SpawnNamed for TaskExecutor {
     fn spawn_blocking(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
         EXECUTOR.spawn_ok(future);
