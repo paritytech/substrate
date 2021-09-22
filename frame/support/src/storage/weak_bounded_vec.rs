@@ -105,10 +105,7 @@ impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
 		S::get() as usize
 	}
 
-	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
-	/// respected. The additional scope can be used to indicate where a potential overflow is
-	/// happening.
-	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+	fn check_bound_and_log(t: &Vec<T>, scope: Option<&'static str>) {
 		if t.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
@@ -116,6 +113,13 @@ impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
 				scope.unwrap_or("UNKNOWN"),
 			);
 		}
+	}
+
+	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
+	/// respected. The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+		Self::check_bound_and_log(&t, scope);
 
 		Self::unchecked_from(t)
 	}
@@ -125,15 +129,19 @@ impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
 	/// The additional scope can be used to indicate where a potential overflow is
 	/// happening.
 	pub fn force_push(&mut self, element: T, scope: Option<&'static str>) {
-		if self.len() > Self::bound() {
-			log::warn!(
-				target: crate::LOG_TARGET,
-				"length of a bounded vector in scope {} is not respected.",
-				scope.unwrap_or("UNKNOWN"),
-			);
-		}
+		Self::check_bound_and_log(self, scope);
 
 		self.0.push(element);
+	}
+
+	/// Exactly the same semantics as [`Vec::insert`], this function unlike `try_insert`
+	/// does no check, but only logs warnings if the bound is not being respected.
+	/// The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	pub fn force_insert(&mut self, index: usize, element: T, scope: Option<&'static str>) {
+		Self::check_bound_and_log(self, scope);
+
+		self.0.insert(index, element);
 	}
 
 	/// Consumes self and mutates self via the given `mutate` function.
