@@ -275,6 +275,7 @@ fn node_config<
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
 		disable_log_reloading: false,
+		block_production: None,
 	}
 }
 

@@ -463,9 +463,9 @@ where
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
+pub struct SpawnTasksParams<'a, 'b, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
-	pub config: Configuration,
+	pub config: &'b mut Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
 	pub client: Arc<TCl>,
 	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
@@ -658,11 +658,11 @@ where
 			client.clone(),
 			network.clone(),
 			transaction_pool.clone(),
-			config.informant_output_format,
+			config.informant_output_format.clone(),
 		),
 	);
 
-	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
+	task_manager.keep_alive((rpc, rpc_handlers.clone()));
 
 	Ok(rpc_handlers)
 }

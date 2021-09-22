@@ -56,6 +56,7 @@ use sp_core::{
 	u32_trait::{_1, _2, _3, _4, _5},
 	OpaqueMetadata,
 };
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -343,6 +344,11 @@ impl pallet_scheduler::Config for Runtime {
 	type ScheduleOrigin = EnsureRoot<AccountId>;
 	type MaxScheduledPerBlock = MaxScheduledPerBlock;
 	type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
+}
+
+impl pallet_aura::Config for Runtime {
+	type AuthorityId = AuraId;
+	type DisabledValidators = ();
 }
 
 parameter_types! {
@@ -1246,6 +1252,7 @@ construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Utility: pallet_utility::{Pallet, Call, Event},
+		Aura: pallet_aura::{Pallet, Config<T>},
 		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
@@ -1479,6 +1486,16 @@ impl_runtime_apis! {
 				equivocation_proof,
 				key_owner_proof,
 			)
+		}
+	}
+
+	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
+		fn slot_duration() -> sp_consensus_aura::SlotDuration {
+			sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
+		}
+
+		fn authorities() -> Vec<AuraId> {
+			Aura::authorities()
 		}
 	}
 
