@@ -198,44 +198,49 @@ async fn author_should_return_pending_extrinsics() {
 
 #[tokio::test]
 async fn author_should_remove_extrinsics() {
-	env_logger::init();
 	const METH: &'static str = "author_removeExtrinsic";
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();
 
+	// Submit three extrinsics, then remove two of them (will cause the third to be removed as well, having a higher nonce)
 	let (xt1, xt1_bytes) = {
 		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
 		let xt_hex = to_hex(&xt_bytes, true);
 		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
 	};
-	api.call("author_submitExtrinsic", Some(xt1)).await.unwrap();
+	let xt1_out = api.call("author_submitExtrinsic", Some(xt1)).await.unwrap();
+	let xt1_hash: Response<H256> = serde_json::from_str(&xt1_out).unwrap();
+	let xt1_hash = xt1_hash.result;
 
 	let (xt2, xt2_bytes) = {
 		let xt_bytes = uxt(AccountKeyring::Alice, 1).encode();
 		let xt_hex = to_hex(&xt_bytes, true);
 		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
 	};
-	api.call("author_submitExtrinsic", Some(xt2)).await.unwrap();
+	let xt2_out = api.call("author_submitExtrinsic", Some(xt2)).await.unwrap();
+	let xt2_hash: Response<H256> = serde_json::from_str(&xt2_out).unwrap();
+	let xt2_hash = xt2_hash.result;
 
 	let (xt3, xt3_bytes) = {
 		let xt_bytes = uxt(AccountKeyring::Bob, 0).encode();
 		let xt_hex = to_hex(&xt_bytes, true);
 		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
 	};
-	let ex3_out = api.call("author_submitExtrinsic", Some(xt3)).await.unwrap();
-	let ex3_hash: Response<Bytes> = serde_json::from_str(&ex3_out).unwrap();
-	let ex3_hash = ex3_hash.result;
+	let xt3_out = api.call("author_submitExtrinsic", Some(xt3)).await.unwrap();
+	let xt3_hash: Response<H256> = serde_json::from_str(&xt3_out).unwrap();
+	let xt3_hash = xt3_hash.result;
 	assert_eq!(setup.pool.status().ready, 3);
-	log::debug!(target: "test", "ex3 hash: {:?}, hash: {:?}", &ex3_out, ex3_hash);
 
-	// Now remove all three
-	let removed = api.call_with(METH, vec![
-		hash::ExtrinsicOrHash::Hash(ex3_hash),
+	// Now remove all three.
+	// Notice how we need an extra `Vec` wrapping the `Vec` we want to submit as params.
+	let removed = api.call_with(METH, vec![vec![
+		hash::ExtrinsicOrHash::Hash(xt3_hash),
 		// Removing this one will also remove xt2
 		hash::ExtrinsicOrHash::Extrinsic(xt1_bytes.into())
-	]).await.unwrap();
-	log::debug!(target: "test", "removed={:?}", removed);
-	// TODO: the params are not parsed properly; run with `RUST_LOG=trace` for details.
+	]]).await.unwrap();
+
+	let removed: Response<Vec<H256>> = serde_json::from_str(&removed).unwrap();
+	assert_eq!(removed.result, vec![xt1_hash, xt2_hash, xt3_hash]);
 }
 
 // #[test]
