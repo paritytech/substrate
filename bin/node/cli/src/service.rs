@@ -95,8 +95,70 @@ where
 	}
 }
 
+pub struct BailingBlockImport<Client, Inner> {
+	client: Arc<Client>,
+	inner: Inner,
+	signal_shutdown: Option<Arc<exit_future::Signal>>,
+}
+
+impl<Client, Inner: Clone> Clone for BailingBlockImport<Client, Inner> {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			client: self.client.clone(),
+			signal_shutdown: self.signal_shutdown.clone(),
+		}
+	}
+}
+
+impl<Client, Inner> BailingBlockImport<Client, Inner> {
+	fn new(inner: Inner, client: Arc<Client>, signal_shutdown: Option<exit_future::Signal>) -> Self {
+		Self { inner, client, signal_shutdown: signal_shutdown.map(|s| Arc::new(s)) }
+	}
+}
+
+use sc_consensus::{BlockImport, ImportResult, BlockCheckParams};
+use sp_consensus::Error as ConsensusError;
+use sp_blockchain::ProvideCache;
+use sp_blockchain::HeaderMetadata;
+use std::collections::HashMap;
+#[async_trait::async_trait]
+impl<Block, Client, Inner> BlockImport<Block> for BailingBlockImport<Client, Inner>
+where
+	Block: BlockT,
+	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner::Error: Into<ConsensusError>,
+	Client: HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ AuxStore
+		+ ProvideRuntimeApi<Block>
+		+ ProvideCache<Block>
+		+ Send
+		+ Sync,
+	Client::Api: BabeApi<Block> + ApiExt<Block>,
+{
+	type Error = ConsensusError;
+	type Transaction = sp_api::TransactionFor<Client, Block>;
+
+	async fn import_block(
+		&mut self,
+		mut block: BlockImportParams<Block, Self::Transaction>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.import_block(block, new_cache).await.map_err(Into::into)
+	}
+
+	async fn check_block(
+		&mut self,
+		block: BlockCheckParams<Block>,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.check_block(block).await.map_err(Into::into)
+	}
+}
+
+type FullBabeBlockImport = sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>;
 pub type BabeImportSetup = (
-	sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+	BailingBlockImport<FullClient, FullBabeBlockImport>,
 	grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
 	sc_consensus_babe::BabeLink<Block>,
 );
@@ -171,11 +233,13 @@ pub fn new_partial(
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
-	let (block_import, babe_link) = sc_consensus_babe::block_import(
+	let (babe_block_import, babe_link) = sc_consensus_babe::block_import(
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
 		client.clone(),
 	)?;
+
+	let block_import = BailingBlockImport::new(babe_block_import, client.clone(), signal_shutdown);
 
 	let slot_duration = babe_link.config().slot_duration();
 	let babe_verifier = sc_consensus_babe::BabeVerifier {
@@ -201,11 +265,8 @@ pub fn new_partial(
 		client: client.clone(),
 	};
 
-	let bailing_verifier =
-		BailingVerifier::new(babe_verifier, client.clone(), signal_shutdown.unwrap());
-
 	let import_queue = sc_consensus_babe::import_queue_with_verifier(
-		bailing_verifier,
+		babe_verifier,
 		block_import.clone(),
 		Some(Box::new(justification_import)),
 		&task_manager.spawn_essential_handle(),
@@ -420,7 +481,7 @@ pub struct NewFullBase {
 pub fn new_full_base(
 	mut config: &mut Configuration,
 	with_startup_data: impl FnOnce(
-		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+		&BailingBlockImport<FullClient, FullBabeBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
 	),
 	signal_shutdown: exit_future::Signal,
