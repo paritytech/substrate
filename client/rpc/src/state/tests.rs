@@ -28,7 +28,9 @@ use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
 use sp_io::hashing::blake2_256;
 use sp_runtime::generic::BlockId;
 use std::sync::Arc;
+use serde_json::value::to_raw_value;
 use substrate_test_runtime_client::{prelude::*, runtime};
+use crate::testing::timeout_secs;
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -91,8 +93,8 @@ fn should_return_storage() {
 	);
 }
 
-#[test]
-fn should_return_child_storage() {
+#[tokio::test]
+async fn should_return_child_storage() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	let client = Arc::new(
 		substrate_test_runtime_client::TestClientBuilder::new()
@@ -106,30 +108,30 @@ fn should_return_child_storage() {
 	let key = StorageKey(b"key".to_vec());
 
 	assert_matches!(
-		executor::block_on(child.storage(
+		child.storage(
 			child_key.clone(),
 			key.clone(),
 			Some(genesis_hash).into(),
-		)),
+		).await,
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		executor::block_on(child.storage_hash(
+		child.storage_hash(
 			child_key.clone(),
 			key.clone(),
 			Some(genesis_hash).into(),
-		))
+		).await
 		.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		executor::block_on(child.storage_size(child_key.clone(), key.clone(), None)),
+		child.storage_size(child_key.clone(), key.clone(), None).await,
 		Ok(Some(1))
 	);
 }
 
-#[test]
-fn should_call_contract() {
+#[tokio::test]
+async fn should_call_contract() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let genesis_hash = client.genesis_hash();
 	let (client, _child) =
@@ -138,93 +140,88 @@ fn should_call_contract() {
     use jsonrpsee::types::{ Error, CallError };
 
 	assert_matches!(
-		executor::block_on(client.call(
+		client.call(
 			"balanceOf".into(),
 			Bytes(vec![1, 2, 3]),
 			Some(genesis_hash).into()
-		)),
+		).await,
 		Err(Error::Call(CallError::Failed(_)))
 	)
 }
 
-// #[test]
-// fn should_notify_about_storage_changes() {
-// 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
+#[tokio::test]
+async fn should_notify_about_storage_changes() {
+    let mut client = Arc::new(substrate_test_runtime_client::new());
+    let (api, _child) = new_full(
+        client.clone(),
+        SubscriptionTaskExecutor::new(TaskExecutor),
+        DenyUnsafe::No,
+        None,
+    );
 
-// 	{
-// 		let mut client = Arc::new(substrate_test_runtime_client::new());
-// 		let (api, _child) = new_full(
-// 			client.clone(),
-// 			SubscriptionTaskExecutor::new(TaskExecutor),
-// 			DenyUnsafe::No,
-// 			None,
-// 		);
+    let api_rpc = api.into_rpc();
+    let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
 
-// 		api.subscribe_storage(Default::default(), subscriber, None.into());
+    // Cause a change:
+    let mut builder = client.new_block(Default::default()).unwrap();
+    builder
+        .push_transfer(runtime::Transfer {
+            from: AccountKeyring::Alice.into(),
+            to: AccountKeyring::Ferdie.into(),
+            amount: 42,
+            nonce: 0,
+        })
+        .unwrap();
+    let block = builder.build().unwrap().block;
+    client.import(BlockOrigin::Own, block).await.unwrap();
 
-// 		// assert id assigned
-// 		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
+    // We should get a message back on our subscription about the storage change:
+    let msg = timeout_secs(5, sub_rx.next()).await;
+    assert_matches!(msg, Ok(Some(_)));
 
-// 		let mut builder = client.new_block(Default::default()).unwrap();
-// 		builder
-// 			.push_transfer(runtime::Transfer {
-// 				from: AccountKeyring::Alice.into(),
-// 				to: AccountKeyring::Ferdie.into(),
-// 				amount: 42,
-// 				nonce: 0,
-// 			})
-// 			.unwrap();
-// 		let block = builder.build().unwrap().block;
-// 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
-// 	}
+    // TODO (jsdw): The channel remains open here, so waiting for another message will time out.
+    // Previously the channel returned None.
+    assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+}
 
-// 	// Check notification sent to transport
-// 	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
-// 	assert!(executor::block_on(transport.next()).is_none());
-// }
+#[tokio::test]
+async fn should_send_initial_storage_changes_and_notifications() {
+    let mut client = Arc::new(substrate_test_runtime_client::new());
+    let (api, _child) = new_full(
+        client.clone(),
+        SubscriptionTaskExecutor::new(TaskExecutor),
+        DenyUnsafe::No,
+        None,
+    );
 
-// #[test]
-// fn should_send_initial_storage_changes_and_notifications() {
-// 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
+    let alice_balance_key =
+        blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
-// 	{
-// 		let mut client = Arc::new(substrate_test_runtime_client::new());
-// 		let (api, _child) = new_full(
-// 			client.clone(),
-// 			SubscriptionTaskExecutor::new(TaskExecutor),
-// 			DenyUnsafe::No,
-// 			None,
-// 		);
+    let api_rpc = api.into_rpc();
+    let (_sub_id, mut sub_rx) = api_rpc.test_subscription(
+        "state_subscribeStorage",
+        Some(to_raw_value(&[StorageKey(alice_balance_key.to_vec())]).unwrap()),
+    ).await;
 
-// 		let alice_balance_key =
-// 			blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+    let mut builder = client.new_block(Default::default()).unwrap();
+    builder
+        .push_transfer(runtime::Transfer {
+            from: AccountKeyring::Alice.into(),
+            to: AccountKeyring::Ferdie.into(),
+            amount: 42,
+            nonce: 0,
+        })
+        .unwrap();
+    let block = builder.build().unwrap().block;
+    client.import(BlockOrigin::Own, block).await.unwrap();
 
-// 		api.subscribe_storage(
-// 			Default::default(),
-// 			subscriber,
-// 			Some(vec![StorageKey(alice_balance_key.to_vec())]).into(),
-// 		);
+	// Check for the correct number of notifications
+	let msgs = timeout_secs(5, (&mut sub_rx).take(2).collect::<Vec<_>>()).await;
+    assert_matches!(msgs, Ok(_));
 
-// 		// assert id assigned
-// 		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
-
-// 		let mut builder = client.new_block(Default::default()).unwrap();
-// 		builder
-// 			.push_transfer(runtime::Transfer {
-// 				from: AccountKeyring::Alice.into(),
-// 				to: AccountKeyring::Ferdie.into(),
-// 				amount: 42,
-// 				nonce: 0,
-// 			})
-// 			.unwrap();
-// 		let block = builder.build().unwrap().block;
-// 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
-// 	}
-
-// 	// Check for the correct number of notifications
-// 	executor::block_on((&mut transport).take(2).collect::<Vec<_>>());
-// 	assert!(executor::block_on(transport.next()).is_none());
-// }
+    // No more messages to follow
+    assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(None));
+}
 
 #[test]
 fn should_query_storage() {
@@ -458,29 +455,26 @@ fn should_return_runtime_version() {
 	assert_eq!(deserialized, runtime_version);
 }
 
-// #[test]
-// fn should_notify_on_runtime_version_initially() {
-// 	let (subscriber, id, mut transport) = Subscriber::new_test("test");
+#[tokio::test]
+async fn should_notify_on_runtime_version_initially() {
+    let client = Arc::new(substrate_test_runtime_client::new());
+    let (api, _child) = new_full(
+        client.clone(),
+        SubscriptionTaskExecutor::new(TaskExecutor),
+        DenyUnsafe::No,
+        None,
+    );
 
-// 	{
-// 		let client = Arc::new(substrate_test_runtime_client::new());
-// 		let (api, _child) = new_full(
-// 			client.clone(),
-// 			SubscriptionTaskExecutor::new(TaskExecutor),
-// 			DenyUnsafe::No,
-// 			None,
-// 		);
+    let api_rpc = api.into_rpc();
+    let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeRuntimeVersion", None).await;
 
-// 		api.subscribe_runtime_version(Default::default(), subscriber);
+	// assert initial version sent.
+    assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
 
-// 		// assert id assigned
-// 		assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
-// 	}
-
-// 	// assert initial version sent.
-// 	executor::block_on((&mut transport).take(1).collect::<Vec<_>>());
-// 	assert!(executor::block_on(transport.next()).is_none());
-// }
+    // TODO (jsdw): The channel remains open here, so waiting for another message will time out.
+    // Previously the channel returned None.
+    assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+}
 
 #[test]
 fn should_deserialize_storage_key() {

@@ -23,7 +23,7 @@ use futures::{
 	task::{FutureObj, Spawn, SpawnError},
 };
 use sp_core::traits::SpawnNamed;
-use std::sync::Arc;
+use std::future::Future;
 
 // Executor shared by all tests.
 //
@@ -55,4 +55,9 @@ impl SpawnNamed for TaskExecutor {
     fn spawn(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
         EXECUTOR.spawn_ok(future);
     }
+}
+
+/// Wrap a future in a timeout a little more concisely
+pub(crate) fn timeout_secs<I, F: Future<Output=I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
+    tokio::time::timeout(tokio::time::Duration::from_secs(s), f)
 }
