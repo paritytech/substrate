@@ -18,7 +18,7 @@
 //! Testing utilities.
 
 use crate::{
-	codec::{Codec, Decode, Encode},
+	codec::{Codec, Decode, Encode, MaxEncodedLen},
 	generic,
 	scale_info::TypeInfo,
 	traits::{
@@ -59,6 +59,7 @@ use std::{
 	Deserialize,
 	PartialOrd,
 	Ord,
+	MaxEncodedLen,
 	TypeInfo,
 )]
 pub struct UintAuthorityId(pub u64);
