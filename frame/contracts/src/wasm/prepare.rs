@@ -279,8 +279,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	///
 	/// This accomplishes two tasks:
 	///
-	/// - checks any imported function against defined host functions set, incl.
-	///   their signatures.
+	/// - checks any imported function against defined host functions set, incl. their signatures.
 	/// - if there is a memory import, returns it's descriptor
 	/// `import_fn_banlist`: list of function names that are disallowed to be imported
 	fn scan_imports<C: ImportSatisfyCheck>(

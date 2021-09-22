@@ -15,8 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{parse::helper::get_doc_literals, Def};
+use crate::pallet::Def;
+use frame_support_procedural_tools::get_doc_literals;
 
+///
 /// * Generate default rust doc
 pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 	let config = &def.config;

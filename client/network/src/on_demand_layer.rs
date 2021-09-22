@@ -27,9 +27,9 @@ use sc_client_api::{
 	RemoteChangesRequest, RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest,
 	StorageProof,
 };
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::Error as ClientError;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	collections::HashMap,
 	pin::Pin,
@@ -135,7 +135,7 @@ where
 		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemand");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
-		OnDemand { checker, requests_queue, requests_send }
+		Self { checker, requests_queue, requests_send }
 	}
 
 	/// Get checker reference.

@@ -29,7 +29,8 @@ use serde::Serialize;
 
 use crate::BenchmarkCmd;
 use frame_benchmarking::{
-	Analysis, AnalysisChoice, BenchmarkBatch, BenchmarkResults, BenchmarkSelector, RegressionModel,
+	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
+	RegressionModel,
 };
 use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
@@ -106,7 +107,7 @@ fn io_error(s: &str) -> std::io::Error {
 }
 
 // This function takes a list of `BenchmarkBatch` and organizes them by pallet into a `HashMap`.
-// So this: `[(p1, b1), (p1, b2), (p1, b3), (p2, b1), (p2, b2)]`
+// So this: `[(p1, b1), (p1, b2), (p2, b1), (p1, b3), (p2, b2)]`
 // Becomes:
 //
 // ```
@@ -114,7 +115,7 @@ fn io_error(s: &str) -> std::io::Error {
 // p2 -> [b1, b2]
 // ```
 fn map_results(
-	batches: &[BenchmarkBatch],
+	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
@@ -123,34 +124,19 @@ fn map_results(
 		return Err(io_error("empty batches"))
 	}
 
-	let mut all_benchmarks = HashMap::new();
-	let mut pallet_benchmarks = Vec::new();
+	let mut all_benchmarks = HashMap::<_, Vec<BenchmarkData>>::new();
 
-	let mut batches_iter = batches.iter().peekable();
-	while let Some(batch) = batches_iter.next() {
+	for batch in batches {
 		// Skip if there are no results
-		if batch.results.is_empty() {
+		if batch.time_results.is_empty() {
 			continue
 		}
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
 		let benchmark_data = get_benchmark_data(batch, storage_info, analysis_choice);
+		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
-
-		// Check if this is the end of the iterator
-		if let Some(next) = batches_iter.peek() {
-			// Next pallet is different than current pallet, save and create new data.
-			let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
-			let next_instance = String::from_utf8(next.instance.clone()).unwrap();
-			if next_pallet != pallet_string || next_instance != instance_string {
-				all_benchmarks.insert((pallet_string, instance_string), pallet_benchmarks.clone());
-				pallet_benchmarks = Vec::new();
-			}
-		} else {
-			// This is the end of the iterator, so push the final data.
-			all_benchmarks.insert((pallet_string, instance_string), pallet_benchmarks.clone());
-		}
 	}
 	Ok(all_benchmarks)
 }
@@ -166,7 +152,7 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128>
 
 // Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(
-	batch: &BenchmarkBatch,
+	batch: &BenchmarkBatchSplitResults,
 	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
@@ -180,14 +166,15 @@ fn get_benchmark_data(
 		AnalysisChoice::Max => Analysis::max,
 	};
 
-	let extrinsic_time = analysis_function(&batch.results, BenchmarkSelector::ExtrinsicTime)
+	let extrinsic_time = analysis_function(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 		.expect("analysis function should return an extrinsic time for valid inputs");
-	let reads = analysis_function(&batch.results, BenchmarkSelector::Reads)
+	let reads = analysis_function(&batch.db_results, BenchmarkSelector::Reads)
 		.expect("analysis function should return the number of reads for valid inputs");
-	let writes = analysis_function(&batch.results, BenchmarkSelector::Writes)
+	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
 
-	// Analysis data may include components that are not used, this filters out anything whose value is zero.
+	// Analysis data may include components that are not used, this filters out anything whose value
+	// is zero.
 	let mut used_components = Vec::new();
 	let mut used_extrinsic_time = Vec::new();
 	let mut used_reads = Vec::new();
@@ -238,7 +225,7 @@ fn get_benchmark_data(
 		});
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
-	let components = batch.results[0]
+	let components = batch.time_results[0]
 		.components
 		.iter()
 		.map(|(name, _)| -> Component {
@@ -249,7 +236,7 @@ fn get_benchmark_data(
 		.collect::<Vec<_>>();
 
 	// We add additional comments showing which storage items were touched.
-	add_storage_comments(&mut comments, &batch.results, storage_info);
+	add_storage_comments(&mut comments, &batch.db_results, storage_info);
 
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
@@ -266,7 +253,7 @@ fn get_benchmark_data(
 
 // Create weight file from benchmark data and Handlebars template.
 pub fn write_results(
-	batches: &[BenchmarkBatch],
+	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	path: &PathBuf,
 	cmd: &BenchmarkCmd,
@@ -355,15 +342,36 @@ pub fn write_results(
 // This function looks at the keys touched during the benchmark, and the storage info we collected
 // from the pallets, and creates comments with information about the storage keys touched during
 // each benchmark.
-fn add_storage_comments(
+pub(crate) fn add_storage_comments(
 	comments: &mut Vec<String>,
-	results: &[BenchmarkResults],
+	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
 ) {
-	let storage_info_map = storage_info
+	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
 		.collect::<HashMap<_, _>>();
+
+	// Special hack to show `Skipped Metadata`
+	let skip_storage_info = StorageInfo {
+		pallet_name: b"Skipped".to_vec(),
+		storage_name: b"Metadata".to_vec(),
+		prefix: b"Skipped Metadata".to_vec(),
+		max_values: None,
+		max_size: None,
+	};
+	storage_info_map.insert(skip_storage_info.prefix.clone(), &skip_storage_info);
+
+	// Special hack to show `Benchmark Override`
+	let benchmark_override = StorageInfo {
+		pallet_name: b"Benchmark".to_vec(),
+		storage_name: b"Override".to_vec(),
+		prefix: b"Benchmark Override".to_vec(),
+		max_values: None,
+		max_size: None,
+	};
+	storage_info_map.insert(benchmark_override.prefix.clone(), &benchmark_override);
+
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
 
@@ -489,7 +497,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use frame_benchmarking::{BenchmarkBatch, BenchmarkParameter, BenchmarkResults};
+	use frame_benchmarking::{BenchmarkBatchSplitResults, BenchmarkParameter, BenchmarkResult};
 
 	fn test_data(
 		pallet: &[u8],
@@ -497,10 +505,10 @@ mod test {
 		param: BenchmarkParameter,
 		base: u32,
 		slope: u32,
-	) -> BenchmarkBatch {
+	) -> BenchmarkBatchSplitResults {
 		let mut results = Vec::new();
 		for i in 0..5 {
-			results.push(BenchmarkResults {
+			results.push(BenchmarkResult {
 				components: vec![(param, i), (BenchmarkParameter::z, 0)],
 				extrinsic_time: (base + slope * i).into(),
 				storage_root_time: (base + slope * i).into(),
@@ -513,11 +521,12 @@ mod test {
 			})
 		}
 
-		return BenchmarkBatch {
+		return BenchmarkBatchSplitResults {
 			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
 			instance: b"instance".to_vec(),
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
-			results,
+			time_results: results.clone(),
+			db_results: results,
 		}
 	}
 

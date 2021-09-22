@@ -17,6 +17,7 @@
 
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
+use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
@@ -26,13 +27,13 @@ use sp_std::vec::Vec;
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
 /// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
 }
@@ -72,8 +73,8 @@ impl StorageProof {
 	}
 
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
-	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
-	/// proofs due to deduplication of trie nodes.
+	/// covering all keys. The merged proof output may be smaller than the aggregate size of the
+	/// input proofs due to deduplication of trie nodes.
 	pub fn merge<I>(proofs: I) -> Self
 	where
 		I: IntoIterator<Item = Self>,

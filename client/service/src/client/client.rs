@@ -61,6 +61,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
@@ -82,7 +83,6 @@ use sp_state_machine::{
 	ChangesTrieConfigurationRange, ChangesTrieRootsStorage, ChangesTrieStorage, DBValue,
 };
 use sp_trie::StorageProof;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	marker::PhantomData,
@@ -96,7 +96,7 @@ use std::{
 use {
 	super::call_executor::LocalCallExecutor,
 	sc_client_api::in_mem,
-	sc_executor::RuntimeInfo,
+	sc_executor::RuntimeVersionOf,
 	sp_core::traits::{CodeExecutor, SpawnNamed},
 };
 
@@ -169,7 +169,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	Client<in_mem::Backend<Block>, LocalCallExecutor<Block, in_mem::Backend<Block>, E>, Block, RA>,
 >
 where
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 	S: BuildStorage,
 	Block: BlockT,
 {
@@ -227,7 +227,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	config: ClientConfig<Block>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
-	E: CodeExecutor + RuntimeInfo,
+	E: CodeExecutor + RuntimeVersionOf,
 	S: BuildStorage,
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
@@ -827,8 +827,8 @@ where
 
 						let state_root = operation.op.reset_storage(storage)?;
 						if state_root != *import_headers.post().state_root() {
-							// State root mismatch when importing state. This should not happen in safe fast sync mode,
-							// but may happen in unsafe mode.
+							// State root mismatch when importing state. This should not happen in
+							// safe fast sync mode, but may happen in unsafe mode.
 							warn!("Error imporing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot)
 						}

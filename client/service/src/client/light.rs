@@ -21,7 +21,7 @@
 use std::sync::Arc;
 
 use prometheus_endpoint::Registry;
-use sc_executor::RuntimeInfo;
+use sc_executor::RuntimeVersionOf;
 use sc_telemetry::TelemetryHandle;
 use sp_blockchain::Result as ClientResult;
 use sp_core::traits::{CodeExecutor, SpawnNamed};
@@ -59,7 +59,7 @@ pub fn new_light<B, S, RA, E>(
 where
 	B: BlockT,
 	S: BlockchainStorage<B> + 'static,
-	E: CodeExecutor + RuntimeInfo + Clone + 'static,
+	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 {
 	let local_executor = LocalCallExecutor::new(
 		backend.clone(),

@@ -25,9 +25,10 @@ use syn::{
 	Expr, ExprLit, FieldValue, ItemConst, Lit,
 };
 
-/// This macro accepts a `const` item that has a struct initializer expression of `RuntimeVersion`-like type.
-/// The macro will pass through this declaration and append an item declaration that will
-/// lead to emitting a wasm custom section with the contents of `RuntimeVersion`.
+/// This macro accepts a `const` item that has a struct initializer expression of
+/// `RuntimeVersion`-like type. The macro will pass through this declaration and append an item
+/// declaration that will lead to emitting a wasm custom section with the contents of
+/// `RuntimeVersion`.
 pub fn decl_runtime_version_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let item = parse_macro_input!(input as ItemConst);
 	decl_runtime_version_impl_inner(item)
@@ -125,8 +126,8 @@ impl ParseRuntimeVersion {
 			// Intentionally ignored
 			//
 			// The definition will pass through for the declaration, however, it won't get into
-			// the "runtime_version" custom section. `impl_runtime_apis` is responsible for generating
-			// a custom section with the supported runtime apis descriptor.
+			// the "runtime_version" custom section. `impl_runtime_apis` is responsible for
+			// generating a custom section with the supported runtime apis descriptor.
 		} else {
 			return Err(Error::new(field_name.span(), "unknown field"))
 		}

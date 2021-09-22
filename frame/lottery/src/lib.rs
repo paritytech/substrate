@@ -76,7 +76,7 @@ type BalanceOf<T> =
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
-#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Price per entry.
 	price: Balance,
@@ -170,7 +170,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// A lottery has been started!
 		LotteryStarted,
@@ -266,9 +265,9 @@ pub mod pallet {
 							*lottery = None;
 							return T::WeightInfo::on_initialize_end()
 						}
-						// We choose not need to kill Participants and Tickets to avoid a large number
-						// of writes at one time. Instead, data persists between lotteries, but is not used
-						// if it is not relevant.
+						// We choose not need to kill Participants and Tickets to avoid a large
+						// number of writes at one time. Instead, data persists between lotteries,
+						// but is not used if it is not relevant.
 					}
 				}
 				return T::DbWeight::get().reads(1)

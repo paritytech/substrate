@@ -74,7 +74,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -192,9 +192,6 @@ parameter_types! {
 }
 
 impl onchain::Config for Test {
-	type AccountId = <Self as frame_system::Config>::AccountId;
-	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
-	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -219,6 +216,7 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 }
 
 impl pallet_offences::Config for Test {

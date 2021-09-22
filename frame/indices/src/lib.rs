@@ -48,8 +48,8 @@ pub mod pallet {
 	/// The module's config trait.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Type used for storing an account's index; implies the maximum number of accounts the system
-		/// can hold.
+		/// Type used for storing an account's index; implies the maximum number of accounts the
+		/// system can hold.
 		type AccountIndex: Parameter
 			+ Member
 			+ MaybeSerializeDeserialize
@@ -223,7 +223,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Freeze an index so it will always point to the sender account. This consumes the deposit.
+		/// Freeze an index so it will always point to the sender account. This consumes the
+		/// deposit.
 		///
 		/// The dispatch origin for this call must be _Signed_ and the signing account must have a
 		/// non-frozen account `index`.
@@ -259,7 +260,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", T::AccountIndex = "AccountIndex")]
 	pub enum Event<T: Config> {
 		/// A account index was assigned. \[index, who\]
 		IndexAssigned(T::AccountId, T::AccountIndex),

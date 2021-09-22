@@ -51,7 +51,7 @@ impl IsFatalError for InherentError {
 
 /// Holds a chunk of data retrieved from storage along with
 /// a proof that the data was stored at that location in the trie.
-#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+#[derive(Encode, Decode, Clone, PartialEq, Debug, scale_info::TypeInfo)]
 pub struct TransactionStorageProof {
 	/// Data chunk that is proved to exist.
 	pub chunk: Vec<u8>,
@@ -164,8 +164,9 @@ pub mod registration {
 		}
 
 		let proof = match client.block_indexed_body(number)? {
-			Some(transactions) => Some(build_proof(parent.as_ref(), transactions)?),
-			None => {
+			Some(transactions) if !transactions.is_empty() =>
+				Some(build_proof(parent.as_ref(), transactions)?),
+			Some(_) | None => {
 				// Nothing was indexed in that block.
 				None
 			},

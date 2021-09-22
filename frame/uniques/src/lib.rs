@@ -190,11 +190,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(
-		T::AccountId = "AccountId",
-		T::ClassId = "ClassId",
-		T::InstanceId = "InstanceId"
-	)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An asset class was created. \[ class, creator, owner \]
 		Created(T::ClassId, T::AccountId, T::AccountId),
@@ -202,9 +197,9 @@ pub mod pallet {
 		ForceCreated(T::ClassId, T::AccountId),
 		/// An asset `class` was destroyed. \[ class \]
 		Destroyed(T::ClassId),
-		/// An asset `instace` was issued. \[ class, instance, owner \]
+		/// An asset `instance` was issued. \[ class, instance, owner \]
 		Issued(T::ClassId, T::InstanceId, T::AccountId),
-		/// An asset `instace` was transferred. \[ class, instance, from, to \]
+		/// An asset `instance` was transferred. \[ class, instance, from, to \]
 		Transferred(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
 		/// An asset `instance` was destroyed. \[ class, instance, owner \]
 		Burned(T::ClassId, T::InstanceId, T::AccountId),
@@ -413,7 +408,8 @@ pub mod pallet {
 
 				Self::deposit_event(Event::Destroyed(class));
 
-				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
+				// NOTE: could use postinfo to reflect the actual number of
+				// accounts/sufficient/approvals
 				Ok(())
 			})
 		}

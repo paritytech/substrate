@@ -81,8 +81,9 @@ impl<L: TrieConfiguration> fmt::Display for Error<L> {
 			Error::TrieError(e) => write!(f, "Trie error: {}", e),
 			Error::IncompleteProof => write!(f, "Incomplete proof"),
 			Error::ExtraneousChildNode => write!(f, "Child node content with no root in proof"),
-			Error::ExtraneousChildProof(root) =>
-				write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref()),
+			Error::ExtraneousChildProof(root) => {
+				write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref())
+			},
 			Error::RootMismatch(root, expected) => write!(
 				f,
 				"Verification error, root is {:x?}, expected: {:x?}",
@@ -160,8 +161,9 @@ where
 	}
 
 	let mut previous_extracted_child_trie = None;
+	let mut nodes_iter = nodes_iter.peekable();
 	for child_root in child_tries.into_iter() {
-		if previous_extracted_child_trie.is_none() {
+		if previous_extracted_child_trie.is_none() && nodes_iter.peek().is_some() {
 			let (top_root, _) =
 				trie_db::decode_compact_from_iter::<L, _, _, _>(db, &mut nodes_iter)?;
 			previous_extracted_child_trie = Some(top_root);

@@ -167,7 +167,8 @@ pub struct ExecutionStrategiesParams {
 	)]
 	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
-	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
+	/// The means of execution used when calling into the runtime while not syncing, importing or
+	/// constructing blocks.
 	#[structopt(
 		long = "execution-other",
 		value_name = "STRATEGY",

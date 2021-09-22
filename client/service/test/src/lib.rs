@@ -18,8 +18,7 @@
 
 //! Service integration test utils.
 
-use futures::{FutureExt as _, TryFutureExt as _};
-use futures01::{Future, Poll, Stream};
+use futures::{task::Poll, Future, TryFutureExt as _};
 use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
@@ -29,16 +28,16 @@ use sc_network::{
 };
 use sc_service::{
 	client::Client,
-	config::{BasePath, DatabaseConfig, KeystoreConfig},
+	config::{BasePath, DatabaseSource, KeystoreConfig},
 	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
-	SpawnTaskHandle, TaskExecutor, TaskManager, TransactionStorageMode,
+	SpawnTaskHandle, TaskManager, TransactionStorageMode,
 };
 use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use std::{iter, net::Ipv4Addr, pin::Pin, sync::Arc, time::Duration};
+use std::{iter, net::Ipv4Addr, pin::Pin, sync::Arc, task::Context, time::Duration};
 use tempfile::TempDir;
-use tokio::{prelude::FutureExt, runtime::Runtime, timer::Interval};
+use tokio::{runtime::Runtime, time};
 
 #[cfg(test)]
 mod client;
@@ -56,8 +55,18 @@ struct TestNet<G, E, F, L, U> {
 	nodes: usize,
 }
 
+impl<G, E, F, L, U> Drop for TestNet<G, E, F, L, U> {
+	fn drop(&mut self) {
+		// Drop the nodes before dropping the runtime, as the runtime otherwise waits for all
+		// futures to be ended and we run into a dead lock.
+		self.full_nodes.drain(..);
+		self.light_nodes.drain(..);
+		self.authority_nodes.drain(..);
+	}
+}
+
 pub trait TestNetNode:
-	Clone + Future<Item = (), Error = sc_service::Error> + Send + 'static
+	Clone + Future<Output = Result<(), sc_service::Error>> + Send + 'static
 {
 	type Block: BlockT;
 	type Backend: Backend<Self::Block>;
@@ -109,11 +118,10 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future
 	for TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 {
-	type Item = ();
-	type Error = sc_service::Error;
+	type Output = Result<(), sc_service::Error>;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		futures::compat::Compat::new(&mut self.task_manager.lock().future()).poll()
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		Pin::new(&mut self.task_manager.lock().future()).poll(cx)
 	}
 }
 
@@ -161,33 +169,36 @@ where
 	{
 		let full_nodes = self.full_nodes.clone();
 		let light_nodes = self.light_nodes.clone();
-		let interval = Interval::new_interval(Duration::from_millis(100))
-			.map_err(|_| ())
-			.for_each(move |_| {
+		let future = async move {
+			let mut interval = time::interval(Duration::from_millis(100));
+
+			loop {
+				interval.tick().await;
+
 				let full_ready = full_nodes
 					.iter()
 					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service));
 
 				if !full_ready {
-					return Ok(())
+					continue
 				}
 
 				let light_ready = light_nodes
 					.iter()
 					.all(|&(ref id, ref service, _)| light_predicate(*id, service));
 
-				if !light_ready {
-					Ok(())
-				} else {
-					Err(())
+				if light_ready {
+					return
 				}
-			})
-			.timeout(MAX_WAIT_TIME);
+			}
+		};
 
-		match self.runtime.block_on(interval) {
-			Ok(()) => unreachable!("interval always fails; qed"),
-			Err(ref err) if err.is_inner() => (),
-			Err(_) => panic!("Waited for too long"),
+		if self
+			.runtime
+			.block_on(async move { time::timeout(MAX_WAIT_TIME, future).await })
+			.is_err()
+		{
+			panic!("Waited for too long");
 		}
 	}
 }
@@ -199,7 +210,7 @@ fn node_config<
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Role,
-	task_executor: TaskExecutor,
+	tokio_handle: tokio::runtime::Handle,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -221,22 +232,19 @@ fn node_config<
 			.collect(),
 	);
 
-	network_config.transport = TransportConfig::Normal {
-		enable_mdns: false,
-		allow_private_ipv4: true,
-		wasm_external_transport: None,
-	};
+	network_config.transport =
+		TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),
 		impl_version: String::from("0.1"),
 		role,
-		task_executor,
+		tokio_handle,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
-		database: DatabaseConfig::RocksDb { path: root.join("db"), cache_size: 128 },
+		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),
@@ -250,13 +258,11 @@ fn node_config<
 		rpc_ipc: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
-		rpc_http_threads: None,
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
-		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
@@ -310,22 +316,14 @@ where
 		light: impl Iterator<Item = impl FnOnce(Configuration) -> Result<L, Error>>,
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>,
 	) {
-		let executor = self.runtime.executor();
-		let task_executor: TaskExecutor = {
-			let executor = executor.clone();
-			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
-				executor.spawn(fut.unit_error().compat());
-				async {}
-			})
-			.into()
-		};
+		let handle = self.runtime.handle().clone();
 
 		for (key, authority) in authorities {
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Role::Authority,
-				task_executor.clone(),
+				handle.clone(),
 				Some(key),
 				self.base_port,
 				&temp,
@@ -334,7 +332,7 @@ where
 			let (service, user_data) =
 				authority(node_config).expect("Error creating test node service");
 
-			executor.spawn(service.clone().map_err(|_| ()));
+			handle.spawn(service.clone().map_err(|_| ()));
 			let addr = addr
 				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
@@ -346,7 +344,7 @@ where
 				self.nodes,
 				&self.chain_spec,
 				Role::Full,
-				task_executor.clone(),
+				handle.clone(),
 				None,
 				self.base_port,
 				&temp,
@@ -354,7 +352,7 @@ where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 
-			executor.spawn(service.clone().map_err(|_| ()));
+			handle.spawn(service.clone().map_err(|_| ()));
 			let addr = addr
 				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
@@ -366,7 +364,7 @@ where
 				self.nodes,
 				&self.chain_spec,
 				Role::Light,
-				task_executor.clone(),
+				handle.clone(),
 				None,
 				self.base_port,
 				&temp,
@@ -374,7 +372,7 @@ where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = light(node_config).expect("Error creating test node service");
 
-			executor.spawn(service.clone().map_err(|_| ()));
+			handle.spawn(service.clone().map_err(|_| ()));
 			let addr = addr
 				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
 			self.light_nodes.push((self.nodes, service, addr));
@@ -410,7 +408,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");
-		let runtime = {
+		{
 			let mut network = TestNet::new(
 				&temp,
 				spec.clone(),
@@ -448,11 +446,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 					connected == expected_light_connections
 				},
 			);
-
-			network.runtime
 		};
-
-		runtime.shutdown_now().wait().expect("Error shutting down runtime");
 
 		temp.close().expect("Error removing temp dir");
 	}
