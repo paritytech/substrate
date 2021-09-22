@@ -76,6 +76,15 @@ impl<T, S> WeakBoundedVec<T, S> {
 		self.0.remove(index)
 	}
 
+	/// Exactly the same semantics as [`Vec::truncate`].
+	///
+	/// # Panics
+	///
+	/// Panics if `index` is out of bounds.
+	pub fn truncate(&mut self, index: usize) {
+		self.0.truncate(index)
+	}
+
 	/// Exactly the same semantics as [`Vec::swap_remove`].
 	///
 	/// # Panics
