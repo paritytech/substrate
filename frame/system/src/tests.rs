@@ -162,7 +162,7 @@ fn deposit_event_should_work() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: SysEvent::CodeUpdated.into(),
+				event: WrapperOpaque(SysEvent::CodeUpdated.into()),
 				topics: vec![],
 			}]
 		);
@@ -181,31 +181,30 @@ fn deposit_event_should_work() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: SysEvent::NewAccount(32).into(),
+					event: WrapperOpaque(SysEvent::NewAccount(32).into()),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::KilledAccount(42).into(),
+					event: WrapperOpaque(SysEvent::KilledAccount(42).into()),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(Default::default()).into(),
+					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(Default::default()).into()),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: SysEvent::ExtrinsicFailed(
+					event: WrapperOpaque(SysEvent::ExtrinsicFailed(
 						DispatchError::BadOrigin.into(),
 						Default::default()
-					)
-					.into(),
+					).into()),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3).into(),
+					event: WrapperOpaque(SysEvent::NewAccount(3).into()),
 					topics: vec![]
 				},
 			]
@@ -234,38 +233,38 @@ fn deposit_event_uses_actual_weight() {
 			vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
+					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(DispatchInfo {
 						weight: 300,
 						..Default::default()
-					},)
-					.into(),
+					})
+					.into()),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
+					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(DispatchInfo {
 						weight: 1000,
 						..Default::default()
-					},)
-					.into(),
+					})
+					.into()),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
+					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(DispatchInfo {
 						weight: 1000,
 						..Default::default()
-					},)
-					.into(),
+					})
+					.into()),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(3),
-					event: SysEvent::ExtrinsicFailed(
+					event: WrapperOpaque(SysEvent::ExtrinsicFailed(
 						DispatchError::BadOrigin.into(),
 						DispatchInfo { weight: 999, ..Default::default() },
 					)
-					.into(),
+					.into()),
 					topics: vec![]
 				},
 			]
@@ -296,17 +295,17 @@ fn deposit_event_topics() {
 			vec![
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(1).into(),
+					event: WrapperOpaque(SysEvent::NewAccount(1).into()),
 					topics: topics[0..3].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(2).into(),
+					event: WrapperOpaque(SysEvent::NewAccount(2).into()),
 					topics: topics[0..1].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3).into(),
+					event: WrapperOpaque(SysEvent::NewAccount(3).into()),
 					topics: topics[1..2].to_vec(),
 				}
 			]
@@ -425,7 +424,7 @@ fn set_code_with_real_wasm_blob() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: SysEvent::CodeUpdated.into(),
+				event: WrapperOpaque(SysEvent::CodeUpdated.into()),
 				topics: vec![],
 			}],
 		);
