@@ -595,15 +595,14 @@ where
 	/// Operational dispatchables get an additional `priority` increase, roughly matching
 	/// a tip with amount equal to the cost required to include transaction that consumes
 	/// half of the block weight.
-	fn get_priority(
-		info: &DispatchInfoOf<T::Call>,
-		tip: BalanceOf<T>,
-	) -> TransactionPriority {
+	fn get_priority(info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> TransactionPriority {
 		let max_block = T::BlockWeights::get().max_block;
 		let bounded_weight = info.weight.max(1).min(max_block);
 		let weight_tip_ratio = T::WeightTipRatio::get();
-		let per_weight = |val| FixedU128::saturating_from_rational(val, bounded_weight)
-			.saturating_mul_int(weight_tip_ratio);
+		let per_weight = |val| {
+			FixedU128::saturating_from_rational(val, bounded_weight)
+				.saturating_mul_int(weight_tip_ratio)
+		};
 
 		let tip_per_weight = per_weight(tip);
 
@@ -613,8 +612,8 @@ where
 				tip_per_weight
 			},
 			DispatchClass::Mandatory => {
-				// Mandatory extrinsics should be prohibited (e.g. by the [`CheckWeight`] extensions),
-				// but just to be safe let's return the same priority as `Normal` here.
+				// Mandatory extrinsics should be prohibited (e.g. by the [`CheckWeight`]
+				// extensions), but just to be safe let's return the same priority as `Normal` here.
 				tip_per_weight
 			},
 			DispatchClass::Operational => {
@@ -630,10 +629,10 @@ where
 				let reasonable_tip = T::WeightToFee::calc(&half_block);
 				let reasonable_tip_per_weight = per_weight(reasonable_tip);
 
-				tip_per_weight
-					.saturating_add(reasonable_tip_per_weight)
+				tip_per_weight.saturating_add(reasonable_tip_per_weight)
 			},
-		}.saturated_into::<TransactionPriority>()
+		}
+		.saturated_into::<TransactionPriority>()
 	}
 }
 
@@ -1385,57 +1384,47 @@ mod tests {
 			});
 	}
 
-
 	#[test]
 	fn should_alter_operational_priority() {
 		let tip = 5;
 		let len = 10;
 
-		ExtBuilder::default()
-			.balance_factor(100)
-			.build()
-			.execute_with(|| {
-				let normal = DispatchInfo {
-					weight: 100,
-					class: DispatchClass::Normal,
-					pays_fee: Pays::Yes,
-				};
-				let priority = ChargeTransactionPayment::<Runtime>(tip)
-					.validate(&2, CALL, &normal, len)
-					.unwrap()
-					.priority;
+		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+			let normal =
+				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let priority = ChargeTransactionPayment::<Runtime>(tip)
+				.validate(&2, CALL, &normal, len)
+				.unwrap()
+				.priority;
 
-				assert_eq!(priority, 10);
+			assert_eq!(priority, 10);
 
-				let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
-					.validate(&2, CALL, &normal, len)
-					.unwrap()
-					.priority;
+			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
+				.validate(&2, CALL, &normal, len)
+				.unwrap()
+				.priority;
 
-				assert_eq!(priority, 20);
-			});
+			assert_eq!(priority, 20);
+		});
 
-		ExtBuilder::default()
-			.balance_factor(100)
-			.build()
-			.execute_with(|| {
-				let op = DispatchInfo {
-					weight: 100,
-					class: DispatchClass::Operational,
-					pays_fee: Pays::Yes,
-				};
-				let priority = ChargeTransactionPayment::<Runtime>(tip)
-					.validate(&2, CALL, &op, len)
-					.unwrap()
-					.priority;
-				assert_eq!(priority, 1054);
+		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+			let op = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+			};
+			let priority = ChargeTransactionPayment::<Runtime>(tip)
+				.validate(&2, CALL, &op, len)
+				.unwrap()
+				.priority;
+			assert_eq!(priority, 1054);
 
-				let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
-					.validate(&2, CALL, &op, len)
-					.unwrap()
-					.priority;
-				assert_eq!(priority, 1064);
-			});
+			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
+				.validate(&2, CALL, &op, len)
+				.unwrap()
+				.priority;
+			assert_eq!(priority, 1064);
+		});
 	}
 
 	#[test]

@@ -24,9 +24,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
-	transaction_validity::{
-		InvalidTransaction, TransactionValidity, TransactionValidityError,
-	},
+	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
 
@@ -355,10 +353,7 @@ mod tests {
 			};
 			let len = 0_usize;
 
-			assert_eq!(
-				CheckWeight::<Test>::do_validate(&okay, len),
-				Ok(Default::default())
-			);
+			assert_eq!(CheckWeight::<Test>::do_validate(&okay, len), Ok(Default::default()));
 			assert_err!(
 				CheckWeight::<Test>::do_validate(&max, len),
 				InvalidTransaction::ExhaustsResources
