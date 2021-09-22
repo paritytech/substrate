@@ -1,97 +1,95 @@
-// // This file is part of Substrate.
+// This file is part of Substrate.
 
-// // Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
-// // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
-// // This program is free software: you can redistribute it and/or modify
-// // it under the terms of the GNU General Public License as published by
-// // the Free Software Foundation, either version 3 of the License, or
-// // (at your option) any later version.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 
-// // This program is distributed in the hope that it will be useful,
-// // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// // GNU General Public License for more details.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 
-// // You should have received a copy of the GNU General Public License
-// // along with this program. If not, see <https://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// use self::error::Error;
-// use super::{state_full::split_range, *};
-// use crate::testing::TaskExecutor;
-// use assert_matches::assert_matches;
-// use futures::{executor, StreamExt};
-// use sc_block_builder::BlockBuilderProvider;
-// use sc_rpc_api::DenyUnsafe;
-// use sp_consensus::BlockOrigin;
-// use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
-// use sp_io::hashing::blake2_256;
-// use sp_runtime::generic::BlockId;
-// use std::sync::Arc;
-// use substrate_test_runtime_client::{prelude::*, runtime};
+use self::error::Error;
+use super::{state_full::split_range, *};
+use crate::testing::TaskExecutor;
+use assert_matches::assert_matches;
+use futures::{executor, StreamExt};
+use sc_block_builder::BlockBuilderProvider;
+use sc_rpc_api::DenyUnsafe;
+use sp_consensus::BlockOrigin;
+use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
+use sp_io::hashing::blake2_256;
+use sp_runtime::generic::BlockId;
+use std::sync::Arc;
+use substrate_test_runtime_client::{prelude::*, runtime};
 
-// const STORAGE_KEY: &[u8] = b"child";
+const STORAGE_KEY: &[u8] = b"child";
 
-// fn prefixed_storage_key() -> PrefixedStorageKey {
-// 	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
-// 	child_info.prefixed_storage_key()
-// }
+fn prefixed_storage_key() -> PrefixedStorageKey {
+	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	child_info.prefixed_storage_key()
+}
 
-// #[test]
-// fn should_return_storage() {
-// 	const KEY: &[u8] = b":mock";
-// 	const VALUE: &[u8] = b"hello world";
-// 	const CHILD_VALUE: &[u8] = b"hello world !";
+#[test]
+fn should_return_storage() {
+	const KEY: &[u8] = b":mock";
+	const VALUE: &[u8] = b"hello world";
+	const CHILD_VALUE: &[u8] = b"hello world !";
 
-// 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-// 	let client = TestClientBuilder::new()
-// 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
-// 		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
-// 		// similar to a map with two keys
-// 		.add_extra_storage(b":map:acc1".to_vec(), vec![1, 2])
-// 		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3])
-// 		.build();
-// 	let genesis_hash = client.genesis_hash();
-// 	let (client, child) = new_full(
-// 		Arc::new(client),
-// 		SubscriptionManager::new(Arc::new(TaskExecutor)),
-// 		DenyUnsafe::No,
-// 		None,
-// 	);
-// 	let key = StorageKey(KEY.to_vec());
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let client = TestClientBuilder::new()
+		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
+		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
+		// similar to a map with two keys
+		.add_extra_storage(b":map:acc1".to_vec(), vec![1, 2])
+		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3])
+		.build();
+	let genesis_hash = client.genesis_hash();
+	let (client, child) = new_full(
+		Arc::new(client),
+		SubscriptionTaskExecutor::new(TaskExecutor),
+		DenyUnsafe::No,
+		None,
+	);
+	let key = StorageKey(KEY.to_vec());
 
-// 	assert_eq!(
-// 		executor::block_on(client.storage(key.clone(), Some(genesis_hash).into()))
-// 			.map(|x| x.map(|x| x.0.len()))
-// 			.unwrap()
-// 			.unwrap() as usize,
-// 		VALUE.len(),
-// 	);
-// 	assert_matches!(
-// 		executor::block_on(client.storage_hash(key.clone(), Some(genesis_hash).into()))
-// 			.map(|x| x.is_some()),
-// 		Ok(true)
-// 	);
-// 	assert_eq!(
-// 		executor::block_on(client.storage_size(key.clone(), None)).unwrap().unwrap() as usize,
-// 		VALUE.len(),
-// 	);
-// 	assert_eq!(
-// 		executor::block_on(client.storage_size(StorageKey(b":map".to_vec()), None))
-// 			.unwrap()
-// 			.unwrap() as usize,
-// 		2 + 3,
-// 	);
-// 	assert_eq!(
-// 		executor::block_on(
-// 			child
-// 				.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
-// 				.map(|x| x.map(|x| x.unwrap().0.len()))
-// 		)
-// 		.unwrap() as usize,
-// 		CHILD_VALUE.len(),
-// 	);
-// }
+	assert_eq!(
+		executor::block_on(client.storage(key.clone(), Some(genesis_hash).into()))
+			.map(|x| x.map(|x| x.0.len()))
+			.unwrap()
+			.unwrap() as usize,
+		VALUE.len(),
+	);
+	assert_matches!(
+		executor::block_on(client.storage_hash(key.clone(), Some(genesis_hash).into()))
+			.map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_eq!(
+		executor::block_on(client.storage_size(key.clone(), None)).unwrap().unwrap() as usize,
+		VALUE.len(),
+	);
+	assert_eq!(
+		executor::block_on(client.storage_size(StorageKey(b":map".to_vec()), None))
+			.unwrap()
+			.unwrap() as usize,
+		2 + 3,
+	);
+	assert_eq!(
+		executor::block_on(child.storage(prefixed_storage_key(), key, Some(genesis_hash).into()))
+            .map(|x| x.map(|x| x.0.len()))
+		    .unwrap()
+            .unwrap() as usize,
+		CHILD_VALUE.len(),
+	);
+}
 
 // #[test]
 // fn should_return_child_storage() {
