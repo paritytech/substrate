@@ -4395,7 +4395,6 @@ dependencies = [
  "futures 0.3.16",
  "hex-literal",
  "jsonrpc-core",
- "libp2p-wasm-ext",
  "log 0.4.14",
  "nix",
  "node-executor",
