@@ -260,24 +260,26 @@ async fn author_should_insert_key() {
 	assert!(pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec())));
 }
 
-// #[test]
-// fn should_rotate_keys() {
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
+#[tokio::test]
+async fn author_should_rotate_keys() {
+	let setup = TestSetup::default();
+	let api = setup.author().into_rpc();
 
-// 	let new_public_keys = p.rotate_keys().expect("Rotates the keys");
+	let new_pubkeys = {
+		let json = api.call("author_rotateKeys", None).await.unwrap();
+		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
 
-// 	let session_keys =
-// 		SessionKeys::decode(&mut &new_public_keys[..]).expect("SessionKeys decode successfully");
+	let session_keys = SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
+	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let sr25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
+	assert!(ed25519_pubkeys
+		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
+	assert!(sr25519_pubkeys
+		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
 
-// 	let ed25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-// 	let sr25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
-
-// 	assert!(ed25519_public_keys
-// 		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
-// 	assert!(sr25519_public_keys
-// 		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
-// }
+}
 
 // #[test]
 // fn test_has_session_keys() {
