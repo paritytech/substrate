@@ -301,6 +301,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
+	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
@@ -316,7 +317,6 @@ use sp_staking::{
 	SessionIndex,
 };
 use sp_std::{
-	collections::btree_map::BTreeMap,
 	convert::{From, TryFrom},
 	prelude::*,
 };
@@ -369,12 +369,28 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
-pub struct EraRewardPoints<AccountId: Ord> {
+/// `Limit` bounds the number of points earned by a given validator
+#[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(Limit: Get<u32>))]
+pub struct EraRewardPoints<AccountId, Limit>
+where
+	AccountId: Ord + MaxEncodedLen,
+	Limit: Get<u32>,
+{
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
-	individual: BTreeMap<AccountId, RewardPoint>,
+	individual: BoundedBTreeMap<AccountId, RewardPoint, Limit>,
+}
+
+impl<AccountId, Limit> Default for EraRewardPoints<AccountId, Limit>
+where
+	AccountId: Ord + MaxEncodedLen,
+	Limit: Get<u32>,
+{
+	fn default() -> Self {
+		Self { total: RewardPoint::default(), individual: BoundedBTreeMap::default() }
+	}
 }
 
 /// Indicates the initial status of the staker.
@@ -620,20 +636,14 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 
 /// A snapshot of the stake backing a single validator in the system.
 /// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`
-#[derive(
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Clone,
-	Encode,
-	Decode,
-	Default,
-	RuntimeDebug,
-	TypeInfo,
-	MaxEncodedLen,
-)]
-pub struct Exposure<AccountId, Balance: HasCompact, Limit: Get<u32>> {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(Limit: Get<u32>, Balance: HasCompact))]
+pub struct Exposure<AccountId, Balance, Limit>
+where
+	AccountId: MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen,
+	Limit: Get<u32>,
+{
 	/// The total balance backing this validator.
 	#[codec(compact)]
 	pub total: Balance,
@@ -644,18 +654,55 @@ pub struct Exposure<AccountId, Balance: HasCompact, Limit: Get<u32>> {
 	pub others: WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>,
 }
 
+// NOTE: maybe use derivative to avoid this
+impl<AccountId, Balance, Limit> Default for Exposure<AccountId, Balance, Limit>
+where
+	AccountId: MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen + Default,
+	Limit: Get<u32>,
+{
+	fn default() -> Self {
+		Self {
+			total: Balance::default(),
+			own: Balance::default(),
+			others: WeakBoundedVec::default(),
+		}
+	}
+}
+
+impl<AccountId, Balance, Limit> Clone for Exposure<AccountId, Balance, Limit>
+where
+	AccountId: MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen + Clone,
+	Limit: Get<u32>,
+	WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>: Clone,
+{
+	fn clone(&self) -> Self {
+		Self { total: self.total.clone(), own: self.own.clone(), others: self.others.clone() }
+	}
+}
+
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
-#[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo)]
-pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
+/// `SlahedLimit` bounds the number of slashed accounts
+/// `ReportersLimit` bounds the number of reporters
+#[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(SlashedLimit: Get<u32>, ReportersLimit: Get<u32>))]
+pub struct UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
+where
+	AccountId: MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen,
+	SlashedLimit: Get<u32>,
+	ReportersLimit: Get<u32>,
+{
 	/// The stash ID of the offending validator.
 	validator: AccountId,
 	/// The validator's own slash.
 	own: Balance,
 	/// All other slashed stakers and amounts.
-	others: Vec<(AccountId, Balance)>,
+	others: WeakBoundedVec<(AccountId, Balance), SlashedLimit>,
 	/// Reporters of the offence; bounty payout recipients.
-	reporters: Vec<AccountId>,
+	reporters: WeakBoundedVec<AccountId, ReportersLimit>,
 	/// The amount of payout.
 	payout: Balance,
 }
@@ -754,7 +801,7 @@ impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'sta
 }
 
 /// Mode of era-forcing.
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.

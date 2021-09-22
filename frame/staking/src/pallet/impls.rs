@@ -28,6 +28,7 @@ use frame_support::{
 		OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
+	WeakBoundedVec,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_session::historical;
@@ -44,7 +45,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
 	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	SessionInterface, StakingLedger, ValidatorPrefs, MAX_UNLOCKING_CHUNKS,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -206,7 +207,7 @@ impl<T: Config> Pallet<T> {
 		ledger: &StakingLedger<
 			T::AccountId,
 			BalanceOf<T>,
-			T::MaxUnlockingChunks,
+			ConstU32<MAX_UNLOCKING_CHUNKS>,
 			T::MaxErasForRewards,
 		>,
 	) {
@@ -340,7 +341,7 @@ impl<T: Config> Pallet<T> {
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::<T>::mutate(|bonded| {
-			bonded.push((active_era, start_session));
+			bonded.force_push((active_era, start_session), None);
 
 			if active_era > bonding_duration {
 				let first_kept = active_era - bonding_duration;
@@ -548,10 +549,18 @@ impl<T: Config> Pallet<T> {
 						total = total.saturating_add(stake);
 					});
 
+				let others = WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::force_from(
+					others,
+					Some(
+						"Warning: The number of nominators is bigger than expected. \
+						A runtime configuration adjustment may be needed.",
+					),
+				);
+
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxNominatorRewardedPerValidator>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -1231,7 +1240,13 @@ where
 					let rw = upper_bound + nominators_len * upper_bound;
 					add_db_reads_writes(rw, rw);
 				}
-				unapplied.reporters = details.reporters.clone();
+				unapplied.reporters = WeakBoundedVec::<_, T::MaxNbOfReporters>::force_from(
+					details.reporters,
+					Some(
+						"Warning: Number of reporters is bigger than expected. \
+						A runtime parameter adjustment may be needed.",
+					),
+				);
 				if slash_defer_duration == 0 {
 					// Apply right away.
 					slashing::apply_slash::<T>(unapplied);

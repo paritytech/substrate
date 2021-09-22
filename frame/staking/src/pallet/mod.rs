@@ -50,6 +50,7 @@ use crate::{
 	ValidatorPrefs,
 };
 
+pub const MAX_UNLOCKING_CHUNKS: u32 = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
@@ -155,13 +156,17 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNbOfInvulnerables: Get<u32>;
 
-		/// Maximum number of unlocking chunks
-		#[pallet::constant]
-		type MaxUnlockingChunks: Get<u32>;
-
 		/// Maximum number of eras for which the stakers behind a validator have claimed rewards.
 		#[pallet::constant]
 		type MaxErasForRewards: Get<u32>;
+
+		/// Maximum number of validators.
+		#[pallet::constant]
+		type MaxNbOfValidators: Get<u32>;
+
+		/// Maximum number of reporters for slashing.
+		#[pallet::constant]
+		type MaxNbOfReporters: Get<u32>;
 
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
@@ -235,7 +240,12 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks, T::MaxErasForRewards>,
+		StakingLedger<
+			T::AccountId,
+			BalanceOf<T>,
+			ConstU32<MAX_UNLOCKING_CHUNKS>,
+			T::MaxErasForRewards,
+		>,
 	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
@@ -374,8 +384,13 @@ pub mod pallet {
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_reward_points)]
-	pub type ErasRewardPoints<T: Config> =
-		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
+	pub type ErasRewardPoints<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		EraIndex,
+		EraRewardPoints<T::AccountId, T::MaxNbOfValidators>,
+		ValueQuery,
+	>;
 
 	/// The total amount staked for the last `HISTORY_DEPTH` eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
@@ -408,7 +423,15 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		EraIndex,
-		WeakBoundedVec<UnappliedSlash<T::AccountId, BalanceOf<T>>, T::MaxUnappliedSlashes>,
+		WeakBoundedVec<
+			UnappliedSlash<
+				T::AccountId,
+				BalanceOf<T>,
+				T::MaxNominatorRewardedPerValidator,
+				T::MaxNbOfReporters,
+			>,
+			T::MaxUnappliedSlashes,
+		>,
 		ValueQuery,
 	>;
 
@@ -418,7 +441,7 @@ pub mod pallet {
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
 	pub(crate) type BondedEras<T: Config> =
-		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
+		StorageValue<_, WeakBoundedVec<(EraIndex, SessionIndex), T::BondingDuration>, ValueQuery>;
 
 	/// All slashing events on validators, mapped by era to the highest slash proportion
 	/// and slash value of the era.
@@ -782,7 +805,7 @@ pub mod pallet {
 				stash,
 				total: value,
 				active: value,
-				unlocking: BoundedVec::<_, T::MaxUnlockingChunks>::default(),
+				unlocking: BoundedVec::<_, ConstU32<MAX_UNLOCKING_CHUNKS>>::default(),
 				claimed_rewards,
 			};
 			Self::update_ledger(&controller, &item);
@@ -847,7 +870,7 @@ pub mod pallet {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
+		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
@@ -1381,10 +1404,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
-		/// - Bounded by `MaxUnlockingChunks`.
+		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get()))]
+		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,

@@ -57,13 +57,14 @@ use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
 	traits::{Currency, Imbalance, OnUnbalanced},
+	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchResult, RuntimeDebug,
 };
-use sp_std::vec::Vec;
+use sp_std::{ops::Deref, vec::Vec};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.
@@ -220,7 +221,7 @@ impl<'a, T: 'a + Config> Clone for SlashParams<'a, T> {
 		Self {
 			stash: &self.stash.clone(),
 			slash: self.slash.clone(),
-			exposure: self.exposure.clone(),
+			exposure: &self.exposure.clone(),
 			slash_era: self.slash_era.clone(),
 			window_start: self.window_start.clone(),
 			now: self.now.clone(),
@@ -237,7 +238,14 @@ impl<'a, T: 'a + Config> Clone for SlashParams<'a, T> {
 /// to be set at a higher level, if any.
 pub(crate) fn compute_slash<T: Config>(
 	params: SlashParams<T>,
-) -> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>> {
+) -> Option<
+	UnappliedSlash<
+		T::AccountId,
+		BalanceOf<T>,
+		T::MaxNominatorRewardedPerValidator,
+		T::MaxNbOfReporters,
+	>,
+> {
 	let SlashParams { stash, slash, exposure, slash_era, window_start, now, reward_proportion } =
 		params.clone();
 
@@ -301,14 +309,14 @@ pub(crate) fn compute_slash<T: Config>(
 		}
 	}
 
-	let mut nominators_slashed = Vec::new();
+	let mut nominators_slashed = WeakBoundedVec::default();
 	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut nominators_slashed);
 
 	Some(UnappliedSlash {
 		validator: stash.clone(),
 		own: val_slashed,
 		others: nominators_slashed,
-		reporters: Vec::new(),
+		reporters: WeakBoundedVec::default(),
 		payout: reward_payout,
 	})
 }
@@ -345,7 +353,10 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 fn slash_nominators<T: Config>(
 	params: SlashParams<T>,
 	prior_slash_p: Perbill,
-	nominators_slashed: &mut Vec<(T::AccountId, BalanceOf<T>)>,
+	nominators_slashed: &mut WeakBoundedVec<
+		(T::AccountId, BalanceOf<T>),
+		T::MaxNominatorRewardedPerValidator,
+	>,
 ) -> BalanceOf<T> {
 	let SlashParams { stash: _, slash, exposure, slash_era, window_start, now, reward_proportion } =
 		params;
@@ -353,7 +364,7 @@ fn slash_nominators<T: Config>(
 	let mut reward_payout = Zero::zero();
 
 	nominators_slashed.reserve(exposure.others.len());
-	for nominator in &exposure.others {
+	for nominator in exposure.others.into_iter() {
 		let stash = &nominator.who;
 		let mut nom_slashed = Zero::zero();
 
@@ -604,7 +615,14 @@ pub fn do_slash<T: Config>(
 }
 
 /// Apply a previously-unapplied slash.
-pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) {
+pub(crate) fn apply_slash<T: Config>(
+	unapplied_slash: UnappliedSlash<
+		T::AccountId,
+		BalanceOf<T>,
+		T::MaxNominatorRewardedPerValidator,
+		T::MaxNbOfReporters,
+	>,
+) {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
 
@@ -615,7 +633,7 @@ pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountI
 		&mut slashed_imbalance,
 	);
 
-	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
+	for &(ref nominator, nominator_slash) in unapplied_slash.others.deref() {
 		do_slash::<T>(&nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
 	}
 
