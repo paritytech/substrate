@@ -412,7 +412,7 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
-	pub const WeightTipRatio: Balance = MAXIMUM_BLOCK_WEIGHT as Balance / 1 * DOLLARS;
+	pub const WeightTipRatio: Balance = MAXIMUM_BLOCK_WEIGHT as Balance / DOLLARS;
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
 	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(1, 100_000);
 	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 1_000_000_000u128);
