@@ -183,6 +183,7 @@ async fn should_notify_about_storage_changes() {
     client.import(BlockOrigin::Own, block).await.unwrap();
 
     // We should get a message back on our subscription about the storage change:
+    // TODO (jsdw): previously we got back 2 messages here.
     let msg = timeout_secs(5, sub_rx.next()).await;
     assert_matches!(msg, Ok(Some(_)));
 
