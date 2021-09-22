@@ -36,7 +36,7 @@ impl RoundTracker {
 	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		// this needs to handle equivocations in the future
 		if self.votes.contains(&vote) {
-			return false;
+			return false
 		}
 
 		self.votes.push(vote);

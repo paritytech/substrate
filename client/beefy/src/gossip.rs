@@ -160,17 +160,17 @@ where
 				let known_votes = self.known_votes.read();
 
 				if !GossipValidator::<B>::is_live(&known_votes, &round) {
-					return ValidationResult::Discard;
+					return ValidationResult::Discard
 				}
 
 				if GossipValidator::<B>::is_known(&known_votes, &round, &msg_hash) {
-					return ValidationResult::ProcessAndKeep(self.topic);
+					return ValidationResult::ProcessAndKeep(self.topic)
 				}
 			}
 
 			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
 				GossipValidator::<B>::add_known(&mut *self.known_votes.write(), &round, msg_hash);
-				return ValidationResult::ProcessAndKeep(self.topic);
+				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {
 				// TODO: report peer
 				debug!(target: "beefy", "🥩 Bad signature on message: {:?}, from: {:?}", msg, sender);
@@ -217,7 +217,7 @@ where
 		let known_votes = self.known_votes.read();
 		Box::new(move |_who, intent, _topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
-				return do_rebroadcast;
+				return do_rebroadcast
 			}
 
 			let msg = match VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(

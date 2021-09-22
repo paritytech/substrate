@@ -49,9 +49,10 @@ pub struct Commitment<TBlockNumber, TPayload> {
 
 	/// BEEFY validator set supposed to sign this commitment.
 	///
-	/// Validator set is changing once per epoch. The Light Client must be provided by details about
-	/// the validator set whenever it's importing first commitment with a new `validator_set_id`.
-	/// Validator set data MUST be verifiable, for instance using [payload] information.
+	/// Validator set is changing once per epoch. The Light Client must be provided by details
+	/// about the validator set whenever it's importing first commitment with a new
+	/// `validator_set_id`. Validator set data MUST be verifiable, for instance using [payload]
+	/// information.
 	pub validator_set_id: ValidatorSetId,
 }
 

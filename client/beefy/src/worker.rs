@@ -150,7 +150,7 @@ where
 			block
 		} else {
 			debug!(target: "beefy", "🥩 Missing best BEEFY block - won't vote for: {:?}", number);
-			return false;
+			return false
 		};
 
 		let target = vote_target(self.best_grandpa_block, best_beefy_block, self.min_block_delta);
@@ -219,8 +219,8 @@ where
 			// TODO: (adoerr) Enacting a new authority set will also implicitly 'conclude'
 			// the currently active BEEFY voting round by starting a new one. This is
 			// temporary and needs to be replaced by proper round life cycle handling.
-			if active.id != self.rounds.validator_set_id()
-				|| (active.id == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
+			if active.id != self.rounds.validator_set_id() ||
+				(active.id == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
 			{
 				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
 				metric_set!(self, beefy_validator_set_id, active.id);
@@ -239,8 +239,8 @@ where
 
 				self.best_beefy_block = Some(*notification.header.number());
 
-				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we have a
-				// signed commitment for the block. Remove once the above TODO is done.
+				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
+				// have a signed commitment for the block. Remove once the above TODO is done.
 				metric_set!(self, beefy_best_block, *notification.header.number());
 			}
 		}
@@ -253,7 +253,7 @@ where
 				id
 			} else {
 				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
-				return;
+				return
 			};
 
 			let mmr_root =
@@ -261,7 +261,7 @@ where
 					hash
 				} else {
 					warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
-					return;
+					return
 				};
 
 			let commitment = Commitment {
@@ -275,8 +275,8 @@ where
 				Ok(sig) => sig,
 				Err(err) => {
 					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
-					return;
-				}
+					return
+				},
 			};
 
 			trace!(

@@ -141,9 +141,9 @@ pub mod pallet {
 
 		/// Retrieve a list of current parachain heads.
 		///
-		/// The trait is implemented for `paras` module, but since not all chains might have parachains,
-		/// and we want to keep the MMR leaf structure uniform, it's possible to use `()` as well to
-		/// simply put dummy data to the leaf.
+		/// The trait is implemented for `paras` module, but since not all chains might have
+		/// parachains, and we want to keep the MMR leaf structure uniform, it's possible to use
+		/// `()` as well to simply put dummy data to the leaf.
 		type ParachainHeads: ParachainHeadsProvider;
 	}
 
@@ -196,8 +196,9 @@ where
 	/// NOTE this does not include parathreads - only parachains are part of the merkle tree.
 	///
 	/// NOTE This is an initial and inefficient implementation, which re-constructs
-	/// the merkle tree every block. Instead we should update the merkle root in [Self::on_initialize]
-	/// call of this pallet and update the merkle tree efficiently (use on-chain storage to persist inner nodes).
+	/// the merkle tree every block. Instead we should update the merkle root in
+	/// [Self::on_initialize] call of this pallet and update the merkle tree efficiently (use
+	/// on-chain storage to persist inner nodes).
 	fn parachain_heads_merkle_root() -> MerkleRootOf<T> {
 		let mut para_heads = T::ParachainHeads::parachain_heads();
 		para_heads.sort();
@@ -211,14 +212,14 @@ where
 	/// constructed from uncompressed secp256k1 public keys converted to Ethereum addresses
 	/// of the next BEEFY authority set.
 	///
-	/// This function will use a storage-cached entry in case the set didn't change, or compute and cache
-	/// new one in case it did.
+	/// This function will use a storage-cached entry in case the set didn't change, or compute and
+	/// cache new one in case it did.
 	fn update_beefy_next_authority_set() -> BeefyNextAuthoritySet<MerkleRootOf<T>> {
 		let id = pallet_beefy::Pallet::<T>::validator_set_id() + 1;
 		let current_next = Self::beefy_next_authorities();
 		// avoid computing the merkle tree if validator set id didn't change.
 		if id == current_next.id {
-			return current_next;
+			return current_next
 		}
 
 		let beefy_addresses = pallet_beefy::Pallet::<T>::next_authorities()

@@ -134,11 +134,11 @@ where
 				Ok(metrics) => {
 					debug!(target: "beefy", "🥩 Registered metrics");
 					Some(metrics)
-				}
+				},
 				Err(err) => {
 					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
 					None
-				}
+				},
 			},
 		);
 

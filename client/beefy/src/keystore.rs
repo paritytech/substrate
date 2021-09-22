@@ -87,8 +87,8 @@ impl BeefyKeystore {
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported (i.e. found
-	/// in the keystore).
+	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported
+	/// (i.e. found in the keystore).
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 

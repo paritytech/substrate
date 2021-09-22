@@ -51,7 +51,9 @@ pub struct SignedCommitmentWitness<TBlockNumber, TPayload, TMerkleRoot> {
 	pub signatures_merkle_root: TMerkleRoot,
 }
 
-impl<TBlockNumber, TPayload, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TPayload, TMerkleRoot> {
+impl<TBlockNumber, TPayload, TMerkleRoot>
+	SignedCommitmentWitness<TBlockNumber, TPayload, TMerkleRoot>
+{
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
 	/// This takes a [SignedCommitment], which contains full signatures
@@ -71,14 +73,7 @@ impl<TBlockNumber, TPayload, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, 
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
 		let signatures_merkle_root = merkelize(&signatures);
 
-		(
-			Self {
-				commitment,
-				signed_by,
-				signatures_merkle_root,
-			},
-			signatures,
-		)
+		(Self { commitment, signed_by, signatures_merkle_root }, signatures)
 	}
 }
 
@@ -95,14 +90,17 @@ mod tests {
 
 	type TestCommitment = Commitment<u128, String>;
 	type TestSignedCommitment = SignedCommitment<u128, String>;
-	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, String, Vec<Option<Signature>>>;
+	type TestSignedCommitmentWitness =
+		SignedCommitmentWitness<u128, String, Vec<Option<Signature>>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
-		let _ = SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
+		let _ =
+			SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref())
+				.unwrap();
 
 		let msg = keccak_256(b"This is the first message");
 		let sig1 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
@@ -118,18 +116,12 @@ mod tests {
 	}
 
 	fn signed_commitment() -> TestSignedCommitment {
-		let commitment: TestCommitment = Commitment {
-			payload: "Hello World!".into(),
-			block_number: 5,
-			validator_set_id: 0,
-		};
+		let commitment: TestCommitment =
+			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
-		SignedCommitment {
-			commitment,
-			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-		}
+		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)] }
 	}
 
 	#[test]
@@ -138,7 +130,8 @@ mod tests {
 		let signed = signed_commitment();
 
 		// when
-		let (witness, signatures) = TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
+		let (witness, signatures) =
+			TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
 
 		// then
 		assert_eq!(witness.signatures_merkle_root, signatures);

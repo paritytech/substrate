@@ -20,7 +20,9 @@
 
 use std::vec;
 
-use frame_support::{construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities};
+use frame_support::{
+	construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities,
+};
 use sp_core::H256;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,

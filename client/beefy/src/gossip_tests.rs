@@ -22,7 +22,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 use beefy_primitives::{crypto::Signature, Commitment, MmrRootHash, VoteMessage, KEY_TYPE};
 
-use crate::{keystore::tests::Keyring, keystore::BeefyKeystore};
+use crate::keystore::{tests::Keyring, BeefyKeystore};
 
 use super::*;
 
