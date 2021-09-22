@@ -51,12 +51,14 @@ pub struct ExtraConstantDef {
 	pub type_: syn::Type,
 	/// The doc associated
 	pub doc: Vec<syn::Lit>,
+	/// Optional MetaData Name
+	pub metadata_name: Option<syn::Ident>,
 }
 
 /// Attributes for functions in extra_constants impl block.
 /// Parse for `#[pallet::constant_name(ConstantName)]`
 pub struct ExtraConstAttr {
-	constant_name: syn::Ident,
+	metadata_name: syn::Ident,
 }
 
 impl syn::parse::Parse for ExtraConstAttr {
@@ -68,9 +70,9 @@ impl syn::parse::Parse for ExtraConstAttr {
 		content.parse::<syn::Token![::]>()?;
 		content.parse::<keyword::constant_name>()?;
 
-		let constant_name;
-		syn::parenthesized!(constant_name in content);
-		Ok(ExtraConstAttr { constant_name: constant_name.parse::<syn::Ident>()? })
+		let metadata_name;
+		syn::parenthesized!(metadata_name in content);
+		Ok(ExtraConstAttr { metadata_name: metadata_name.parse::<syn::Ident>()? })
 	}
 }
 
@@ -119,33 +121,33 @@ impl ExtraConstantsDef {
 				return Err(syn::Error::new(method.sig.generics.where_clause.span(), msg))
 			}
 
-			// parse constant_name
-			let mut call_var_attrs: Vec<ExtraConstAttr> = helper::take_item_pallet_attrs(method)?;
-
-			// if call_var_attrs.len() > 1 {
-			// 	let msg = "Invalid attribute in pallet::constant_name, only one attribute is expected";
-			// 	return Err(syn::Error::new(call_var_attrs[1].constant_name.span(), msg))
-			// }
-
-			// let constant_name = if call_var_attrs.len() == 1 {
-			// 	call_var_attrs.pop().unwrap().constant_name
-			// } else {
-			// 	method.sig.ident.clone()
-			// };
-
 			let type_ = match &method.sig.output {
 				syn::ReturnType::Default => {
 					let msg = "Invalid pallet::extra_constants, method must have a return type";
-					return Err(syn::Error::new(method.span(), msg))
-				},
+					return Err(syn::Error::new(method.span(), msg));
+				}
 				syn::ReturnType::Type(_, type_) => *type_.clone(),
+			};
+
+			// parse metadata_name
+			let mut extra_constant_attrs: Vec<ExtraConstAttr> = helper::take_item_pallet_attrs(method)?;
+
+			if extra_constant_attrs.len() > 1 {
+				let msg = "Invalid attribute in pallet::constant_name, only one attribute is expected";
+				return Err(syn::Error::new(extra_constant_attrs[1].metadata_name.span(), msg))
+			}
+
+			let metadata_name = if extra_constant_attrs.len() == 1 {
+				Some(extra_constant_attrs.pop().unwrap().metadata_name)
+			} else {
+				None
 			};
 
 			extra_constants.push(ExtraConstantDef {
 				ident: method.sig.ident.clone(),
-				// ident: constant_name,
 				type_,
 				doc: get_doc_literals(&method.attrs),
+				metadata_name,
 			});
 		}
 
