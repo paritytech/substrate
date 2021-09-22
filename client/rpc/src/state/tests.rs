@@ -39,8 +39,8 @@ fn prefixed_storage_key() -> PrefixedStorageKey {
 	child_info.prefixed_storage_key()
 }
 
-#[test]
-fn should_return_storage() {
+#[tokio::test]
+async fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
 	const CHILD_VALUE: &[u8] = b"hello world !";
@@ -63,29 +63,36 @@ fn should_return_storage() {
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
-		executor::block_on(client.storage(key.clone(), Some(genesis_hash).into()))
+		client.storage(key.clone(), Some(genesis_hash).into())
+            .await
 			.map(|x| x.map(|x| x.0.len()))
 			.unwrap()
 			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		executor::block_on(client.storage_hash(key.clone(), Some(genesis_hash).into()))
+		client.storage_hash(key.clone(), Some(genesis_hash).into())
+            .await
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_eq!(
-		executor::block_on(client.storage_size(key.clone(), None)).unwrap().unwrap() as usize,
+		client.storage_size(key.clone(), None)
+            .await
+            .unwrap()
+            .unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_eq!(
-		executor::block_on(client.storage_size(StorageKey(b":map".to_vec()), None))
+		client.storage_size(StorageKey(b":map".to_vec()), None)
+            .await
 			.unwrap()
 			.unwrap() as usize,
 		2 + 3,
 	);
 	assert_eq!(
-		executor::block_on(child.storage(prefixed_storage_key(), key, Some(genesis_hash).into()))
+		child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
+            .await
             .map(|x| x.map(|x| x.0.len()))
 		    .unwrap()
             .unwrap() as usize,
@@ -223,9 +230,9 @@ async fn should_send_initial_storage_changes_and_notifications() {
     assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(None));
 }
 
-#[test]
-fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+#[tokio::test]
+async fn should_query_storage() {
+	async fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionTaskExecutor::new(TaskExecutor),
@@ -290,7 +297,7 @@ fn should_query_storage() {
 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
-		assert_eq!(executor::block_on(result).unwrap(), expected);
+		assert_eq!(result.await.unwrap(), expected);
 
 		// Query all changes
 		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
@@ -303,12 +310,12 @@ fn should_query_storage() {
 				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
 			],
 		});
-		assert_eq!(executor::block_on(result).unwrap(), expected);
+		assert_eq!(result.await.unwrap(), expected);
 
 		// Query changes up to block2.
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
-		assert_eq!(executor::block_on(result).unwrap(), expected);
+		assert_eq!(result.await.unwrap(), expected);
 
 		// Inverted range.
 		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
@@ -316,7 +323,7 @@ fn should_query_storage() {
         use jsonrpsee::types::{ Error as RpcError, CallError as RpcCallError };
 
         assert_eq!(
-			executor::block_on(result).map_err(|e| e.to_string()),
+			result.await.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
@@ -332,7 +339,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
 
 		assert_eq!(
-			executor::block_on(result).map_err(|e| e.to_string()),
+			result.await.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
 				from: format!("{:?}", genesis_hash),
 				to: format!("{:?}", Some(random_hash1)),
@@ -348,7 +355,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
 
 		assert_eq!(
-			executor::block_on(result).map_err(|e| e.to_string()),
+			result.await.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(genesis_hash)),
@@ -364,7 +371,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, None);
 
 		assert_eq!(
-			executor::block_on(result).map_err(|e| e.to_string()),
+			result.await.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(block2_hash)), // Best block hash.
@@ -380,7 +387,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
 
 		assert_eq!(
-			executor::block_on(result).map_err(|e| e.to_string()),
+			result.await.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1), // First hash not found.
 				to: format!("{:?}", Some(random_hash2)),
@@ -396,7 +403,7 @@ fn should_query_storage() {
 		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
 
 		assert_eq!(
-			executor::block_on(result).unwrap(),
+			result.await.unwrap(),
 			vec![StorageChangeSet {
 				block: block1_hash,
 				changes: vec![
@@ -410,7 +417,7 @@ fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
+	run_tests(Arc::new(substrate_test_runtime_client::new()), false).await;
 	run_tests(
 		Arc::new(
 			TestClientBuilder::new()
@@ -418,7 +425,7 @@ fn should_query_storage() {
 				.build(),
 		),
 		true,
-	);
+	).await;
 }
 
 #[test]
@@ -430,8 +437,8 @@ fn should_split_ranges() {
 	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
 }
 
-#[test]
-fn should_return_runtime_version() {
+#[tokio::test]
+async fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let (api, _child) = new_full(
 		client.clone(),
@@ -447,7 +454,7 @@ fn should_return_runtime_version() {
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
 		\"transactionVersion\":1}";
 
-	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
+	let runtime_version = api.runtime_version(None.into()).await.unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
 	assert_eq!(serialized, result);
 
