@@ -243,69 +243,43 @@ async fn author_should_remove_extrinsics() {
 	assert_eq!(removed.result, vec![xt1_hash, xt2_hash, xt3_hash]);
 }
 
-// #[test]
-// fn should_remove_extrinsics() {
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
+#[tokio::test]
+async fn author_should_insert_key() {
+	let setup = TestSetup::default();
+	let api = setup.author().into_rpc();
+	let suri = "//Alice";
+	let keypair  = ed25519::Pair::from_string(suri, None).expect("generates keypair");
+	let params: (String, String, Bytes) = (
+		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		suri.to_string(),
+		keypair.public().0.to_vec().into(),
+	);
+	api.call_with("author_insertKey", params).await.unwrap();
+	let pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 
-// 	let ex1 = uxt(AccountKeyring::Alice, 0);
-// 	executor::block_on(p.submit_extrinsic(ex1.encode().into())).unwrap();
-// 	let ex2 = uxt(AccountKeyring::Alice, 1);
-// 	executor::block_on(p.submit_extrinsic(ex2.encode().into())).unwrap();
-// 	let ex3 = uxt(AccountKeyring::Bob, 0);
-// 	let hash3 = executor::block_on(p.submit_extrinsic(ex3.encode().into())).unwrap();
-// 	assert_eq!(setup.pool.status().ready, 3);
+	assert!(pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec())));
+}
 
-// 	// now remove all 3
-// 	let removed = p
-// 		.remove_extrinsic(vec![
-// 			hash::ExtrinsicOrHash::Hash(hash3),
-// 			// Removing this one will also remove ex2
-// 			hash::ExtrinsicOrHash::Extrinsic(ex1.encode().into()),
-// 		])
-// 		.unwrap();
+#[tokio::test]
+async fn author_should_rotate_keys() {
+	let setup = TestSetup::default();
+	let api = setup.author().into_rpc();
 
-// 	assert_eq!(removed.len(), 3);
-// }
+	let new_pubkeys = {
+		let json = api.call("author_rotateKeys", None).await.unwrap();
+		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
 
-// #[test]
-// fn should_insert_key() {
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
+	let session_keys = SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
+	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let sr25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
+	assert!(ed25519_pubkeys
+		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
+	assert!(sr25519_pubkeys
+		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
 
-// 	let suri = "//Alice";
-// 	let key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
-// 	p.insert_key(
-// 		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
-// 		suri.to_string(),
-// 		key_pair.public().0.to_vec().into(),
-// 	)
-// 	.expect("Insert key");
-
-// 	let public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-
-// 	assert!(public_keys
-// 		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
-// }
-
-// #[test]
-// fn should_rotate_keys() {
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
-
-// 	let new_public_keys = p.rotate_keys().expect("Rotates the keys");
-
-// 	let session_keys =
-// 		SessionKeys::decode(&mut &new_public_keys[..]).expect("SessionKeys decode successfully");
-
-// 	let ed25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-// 	let sr25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
-
-// 	assert!(ed25519_public_keys
-// 		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
-// 	assert!(sr25519_public_keys
-// 		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
-// }
+}
 
 // #[test]
 // fn test_has_session_keys() {
