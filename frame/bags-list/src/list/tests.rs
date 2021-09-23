@@ -381,7 +381,6 @@ mod list {
 			StakingMock::set_vote_weight_of(&11, 15);
 			assert!(!ListBags::<Runtime>::contains_key(15));
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
-			//      10 & 11 our not in reachable via iteration ^^^^^
 
 			let weight_fn = Box::new(<Runtime as Config>::VoteWeightProvider::vote_weight);
 
