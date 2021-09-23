@@ -245,7 +245,7 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	type DestroyWitness;
 
 	/// Provide the appropriate witness data needed to destroy an asset.
-	fn get_destroy_witness(id: Self::AssetId) -> Option<Self::DestroyWitness>;
+	fn get_destroy_witness(id: &Self::AssetId) -> Option<Self::DestroyWitness>;
 
 	/// Destroy an existing fungible asset.
 	/// * `id`: The `AssetId` to be destroyed.
