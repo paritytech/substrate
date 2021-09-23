@@ -395,58 +395,75 @@ impl<T: Config> List<T> {
 		use frame_support::ensure;
 
 		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
-		let mut heavier_node = Node::<T>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
+		let heavier_node = Node::<T>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
 		ensure!(weight_of(&heavier_id) > weight_of(&lighter_id), pallet::Error::NotHeavier);
 
-		// we need to write the bag to storage if its head and/or tail is updated.
-		if lighter_node.is_terminal() || heavier_node.is_terminal() {
-			let mut bag = Bag::<T>::get(lighter_node.bag_upper).ok_or_else(|| {
+		// remove the heavier node from this list. Note that this removes the node from storage and
+		// decrements the node counter.
+		Self::remove(&heavier_id);
+
+		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
+		// was removed.
+		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+
+		Self::insert_at(lighter_node, heavier_node)?;
+
+		// since `insert_at` was successful, increment the counter, which got decremented by
+		// `Self::remove`.
+		crate::CounterForListNodes::<T>::mutate(|prev_count| {
+			*prev_count = prev_count.saturating_add(1)
+		});
+
+		Ok(())
+	}
+
+	/// Insert `node` directly in front of `at`.
+	fn insert_at(mut at: Node<T>, mut node: Node<T>) -> Result<(), crate::pallet::Error<T>> {
+		use crate::pallet;
+
+		// connect `heavier_node` to its new `prev`.
+		node.prev = at.prev.clone();
+		if let Some(mut prev) = at.prev() {
+			prev.next = Some(node.id().clone());
+			prev.put()
+		}
+
+		// connect `node` and `at`.
+		node.next = Some(at.id().clone());
+		at.prev = Some(node.id().clone());
+
+		if at.is_terminal() || node.is_terminal() {
+			// `at` is the tail and/or `node` is the head, so we make sure the bag is updated. Note,
+			// since `node` is always in front of `at` we know that 1) there is always at least 2
+			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
+			// tail.
+			let mut bag = Bag::<T>::get(at.bag_upper).ok_or_else(|| {
 				debug_assert!(false, "bag that should exist cannot be found");
 				crate::log!(warn, "bag that should exist cannot be found");
 				pallet::Error::BagNotFound
 			})?;
-			debug_assert!(bag.iter().count() > 1);
 
-			if bag.head.as_ref() == Some(lighter_id) {
-				debug_assert!(lighter_node.next.is_some(), "lighter node must have next if head");
-				bag.head = Some(heavier_id.clone());
+			if node.prev == None {
+				bag.head = Some(node.id().clone())
 			}
 
-			// re-assign bag tail if lighter is the tail
-			if bag.tail.as_ref() == Some(heavier_id) {
-				debug_assert!(heavier_node.prev.is_some(), "heavier node must have prev if tail");
-				bag.tail = heavier_node.prev.clone();
+			if at.next == None {
+				bag.tail = Some(at.id().clone())
 			}
 
-			// within this block we know the bag must have been updated, so we update storage.
+			debug_assert!(at.prev.is_some(), "`at` cannot be the head");
+			debug_assert!(node.next.is_some(), "`node` cannot be the tail");
+
 			bag.put()
-		}
-
-		// cut heavier out of the list, updating its neighbors.
-		heavier_node.excise();
-
-		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node` was
-		// excised.
-		let mut lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
-
-		// connect `heavier_node` to its new `prev`.
-		if let Some(mut prev) = lighter_node.prev() {
-			prev.next = Some(heavier_id.clone());
-			prev.put()
-		}
-		heavier_node.prev = lighter_node.prev;
-
-		// connect `heavier_node` and `lighter`.
-		heavier_node.next = Some(lighter_id.clone());
-		lighter_node.prev = Some(heavier_id.clone());
+		};
 
 		// write the updated nodes to storage.
-		lighter_node.put();
-		heavier_node.put();
+		at.put();
+		node.put();
 
 		Ok(())
 	}

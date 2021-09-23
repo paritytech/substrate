@@ -376,10 +376,7 @@ mod list {
 	}
 
 	#[test]
-	#[cfg_attr(
-		debug_assertions,
-		should_panic = "bag that should exist cannot be found"
-	)]
+	#[cfg_attr(debug_assertions, should_panic = "bag that should exist cannot be found")]
 	fn put_in_front_of_exits_early_if_bag_not_found() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let node_710_no_bag =
