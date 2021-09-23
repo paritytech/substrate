@@ -478,4 +478,44 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), credit));
 		Ok(credit)
 	}
+
+	pub(super) fn do_destroy(
+		id: T::AssetId,
+		witness: DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> DispatchResultWithPostInfo {
+		Asset::<T, I>::try_mutate_exists(id, |maybe_details| {
+			let mut details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = maybe_check_owner {
+				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+			}
+			ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
+			ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
+			ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
+
+			for (who, v) in Account::<T, I>::drain_prefix(id) {
+				Self::dead_account(id, &who, &mut details, v.sufficient);
+			}
+			debug_assert_eq!(details.accounts, 0);
+			debug_assert_eq!(details.sufficients, 0);
+
+			let metadata = Metadata::<T, I>::take(&id);
+			T::Currency::unreserve(
+				&details.owner,
+				details.deposit.saturating_add(metadata.deposit),
+			);
+
+			for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
+				T::Currency::unreserve(&owner, approval.deposit);
+			}
+			Self::deposit_event(Event::Destroyed(id));
+
+			Ok(Some(T::WeightInfo::destroy(
+				details.accounts.saturating_sub(details.sufficients),
+				details.sufficients,
+				details.approvals,
+			))
+			.into())
+		})
+	}
 }
