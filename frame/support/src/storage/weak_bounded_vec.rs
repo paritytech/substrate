@@ -22,9 +22,9 @@ use crate::{
 	storage::{StorageDecodeLength, StorageTryAppend},
 	traits::Get,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{alloc::vec::Drain, Decode, Encode, MaxEncodedLen};
 use core::{
-	ops::{Deref, Index, IndexMut},
+	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
 use sp_std::{cmp::Ordering, convert::TryFrom, fmt, marker::PhantomData, prelude::*};
@@ -74,6 +74,14 @@ impl<T, S> WeakBoundedVec<T, S> {
 	/// Panics if `index` is out of bounds.
 	pub fn remove(&mut self, index: usize) -> T {
 		self.0.remove(index)
+	}
+
+	/// Exactly the same semantics as [`Vec::drain`].
+	pub fn drain<R>(&mut self, range: R) -> Drain<'_, T>
+	where
+		R: RangeBounds<usize>,
+	{
+		self.0.drain(range)
 	}
 
 	/// Exactly the same semantics as [`Vec::truncate`].

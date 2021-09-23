@@ -28,7 +28,9 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{
+	convert::TryFrom, fmt, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain,
+};
 
 /// A bounded vector.
 ///
@@ -113,6 +115,14 @@ impl<T, S> BoundedVec<T, S> {
 	/// Panics if `index` is out of bounds.
 	pub fn remove(&mut self, index: usize) -> T {
 		self.0.remove(index)
+	}
+
+	/// Exactly the same semantics as [`Vec::drain`].
+	pub fn drain<R>(&mut self, range: R) -> Drain<'_, T>
+	where
+		R: RangeBounds<usize>,
+	{
+		self.0.drain(range)
 	}
 
 	/// Exactly the same semantics as [`Vec::swap_remove`].
