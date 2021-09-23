@@ -231,7 +231,12 @@ impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<Acc
 /// Trait for providing the ability to create new fungible assets.
 pub trait Create<AccountId>: Inspect<AccountId> {
 	/// Create a new fungible asset.
-	fn create(id: Self::AssetId, admin: AccountId, min_balance: Self::Balance) -> DispatchResult;
+	fn create(
+		id: Self::AssetId,
+		admin: AccountId,
+		is_sufficient: bool,
+		min_balance: Self::Balance,
+	) -> DispatchResult;
 }
 
 /// Trait for providing the ability to destroy existing fungible assets.
