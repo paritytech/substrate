@@ -7745,6 +7745,7 @@ dependencies = [
 name = "sc-rpc-api"
 version = "0.10.0-dev"
 dependencies = [
+ "anyhow",
  "futures 0.3.16",
  "jsonrpsee",
  "log",

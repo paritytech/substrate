@@ -202,7 +202,8 @@ async fn author_should_remove_extrinsics() {
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();
 
-	// Submit three extrinsics, then remove two of them (will cause the third to be removed as well, having a higher nonce)
+	// Submit three extrinsics, then remove two of them (will cause the third to be removed as well,
+	// having a higher nonce)
 	let (xt1, xt1_bytes) = {
 		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
 		let xt_hex = to_hex(&xt_bytes, true);
@@ -233,11 +234,17 @@ async fn author_should_remove_extrinsics() {
 
 	// Now remove all three.
 	// Notice how we need an extra `Vec` wrapping the `Vec` we want to submit as params.
-	let removed = api.call_with(METH, vec![vec![
-		hash::ExtrinsicOrHash::Hash(xt3_hash),
-		// Removing this one will also remove xt2
-		hash::ExtrinsicOrHash::Extrinsic(xt1_bytes.into())
-	]]).await.unwrap();
+	let removed = api
+		.call_with(
+			METH,
+			vec![vec![
+				hash::ExtrinsicOrHash::Hash(xt3_hash),
+				// Removing this one will also remove xt2
+				hash::ExtrinsicOrHash::Extrinsic(xt1_bytes.into()),
+			]],
+		)
+		.await
+		.unwrap();
 
 	let removed: Response<Vec<H256>> = serde_json::from_str(&removed).unwrap();
 	assert_eq!(removed.result, vec![xt1_hash, xt2_hash, xt3_hash]);
@@ -248,7 +255,7 @@ async fn author_should_insert_key() {
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();
 	let suri = "//Alice";
-	let keypair  = ed25519::Pair::from_string(suri, None).expect("generates keypair");
+	let keypair = ed25519::Pair::from_string(suri, None).expect("generates keypair");
 	let params: (String, String, Bytes) = (
 		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
@@ -257,7 +264,9 @@ async fn author_should_insert_key() {
 	api.call_with("author_insertKey", params).await.unwrap();
 	let pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 
-	assert!(pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec())));
+	assert!(
+		pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec()))
+	);
 }
 
 #[tokio::test]
@@ -271,30 +280,29 @@ async fn author_should_rotate_keys() {
 		response.result
 	};
 
-	let session_keys = SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
+	let session_keys =
+		SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
 	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 	let sr25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
 	assert!(ed25519_pubkeys
 		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
 	assert!(sr25519_pubkeys
 		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
-
 }
 
 #[tokio::test]
 async fn author_has_session_keys() {
-	env_logger::init();
-	let api = TestSetup::into_rpc();
 	// Setup
+	let api = TestSetup::into_rpc();
 
-	// valid session key
+	// Add a valid session key
 	let pubkeys = {
 		let json = api.call("author_rotateKeys", None).await.expect("Rotates the keys");
 		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
 		response.result
 	};
 
-	// A session key in a different keystore
+	// Add a session key in a different keystore
 	let non_existent_pubkeys = {
 		let api2 = TestSetup::default().author().into_rpc();
 		let json = api2.call("author_rotateKeys", None).await.expect("Rotates the keys");
@@ -311,58 +319,25 @@ async fn author_has_session_keys() {
 	assert!(existing, "Existing key is in the session keys");
 
 	let inexistent = {
-		let json = api.call_with("author_hasSessionKeys", vec![non_existent_pubkeys]).await.unwrap();
+		let json = api
+			.call_with("author_hasSessionKeys", vec![non_existent_pubkeys])
+			.await
+			.unwrap();
 		let response: Response<bool> = serde_json::from_str(&json).unwrap();
 		response.result
 	};
 	assert_eq!(inexistent, false, "Inexistent key is not in the session keys");
 
 	let invalid = {
-		// This crashes with a stack overflow and `(signal: 6, SIGABRT: process abort signal)`
-		let json = api.call_with("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])]).await.unwrap();
+		let json = api
+			.call_with("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])])
+			.await
+			.unwrap();
 		let response: RpcError = serde_json::from_str(&json).unwrap();
 		response.error.message.to_string()
-
-		// Tried a bunch of different ways of passing the params, these all crash:
-		// let json = api.call_with("author_hasSessionKeys", vec!["0x01"]).await.unwrap();
-		// let json = api.call_with("author_hasSessionKeys", (vec!["0x01"])).await.unwrap();
-		// let bytes = Bytes::from(vec![1,2]);
-		// let json = api.call_with("author_hasSessionKeys", vec![bytes]).await.unwrap();
-
-		// let bytes = Bytes::from(vec![1,2]);
-		// let bytes = to_raw_value(&[to_hex(&bytes, true)]).unwrap();
-		// api.call("author_hasSessionKeys", Some(bytes)).await.unwrap()
-
-		// The problem is, I believe, in the error handling code, I've tracked it down
-		// to `.ok_or_else(|| Error::InvalidSessionKeys)?;` in `has_session_keys()`
 	};
-	assert_eq!(invalid, "todo bla bla?");
-
-
+	assert_eq!(invalid, "Session keys are not encoded correctly");
 }
-
-// #[test]
-// fn test_has_session_keys() {
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
-
-// 	let non_existent_public_keys =
-// 		TestSetup::default().author().rotate_keys().expect("Rotates the keys");
-
-// 	let public_keys = p.rotate_keys().expect("Rotates the keys");
-// 	let test_vectors = vec![
-// 		(public_keys, Ok(true)),
-// 		(vec![1, 2, 3].into(), Err(Error::InvalidSessionKeys)),
-// 		(non_existent_public_keys, Ok(false)),
-// 	];
-
-// 	for (keys, result) in test_vectors {
-// 		assert_eq!(
-// 			result.map_err(|e| mem::discriminant(&e)),
-// 			p.has_session_keys(keys).map_err(|e| mem::discriminant(&e)),
-// 		);
-// 	}
-// }
 
 // #[test]
 // fn test_has_key() {

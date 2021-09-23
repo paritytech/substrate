@@ -88,6 +88,12 @@ const UNSUPPORTED_KEY_TYPE: i32 = POOL_INVALID_TX + 7;
 /// The transaction was not included to the pool since it is unactionable,
 /// it is not propagable and the local node does not author blocks.
 const POOL_UNACTIONABLE: i32 = POOL_INVALID_TX + 8;
+/// Transaction does not provide any tags, so the pool can't identify it.
+const POOL_NO_TAGS: i32 = POOL_INVALID_TX + 9;
+/// Invalid block ID.
+const POOL_INVALID_BLOCK_ID: i32 = POOL_INVALID_TX + 10;
+/// The pool is not accepting future transactions.
+const POOL_FUTURE_TX: i32 = POOL_INVALID_TX + 11;
 
 impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
@@ -154,6 +160,23 @@ impl From<Error> for JsonRpseeError {
 					 the local node does not author blocks"
 				).ok(),
 			}.into(),
+			Error::Pool(PoolError::NoTagsProvided) => CallError::Custom {
+				code: (POOL_NO_TAGS),
+				message: "No tags provided".into(),
+				data: to_json_raw_value(
+					&"Transaction does not provide any tags, so the pool can't identify it"
+				).ok(),
+			}.into(),
+			Error::Pool(PoolError::InvalidBlockId(_)) => CallError::Custom {
+				code: (POOL_INVALID_BLOCK_ID),
+				message: "The provided block ID is not valid".into(),
+				data: None,
+			}.into(),
+			Error::Pool(PoolError::RejectedFutureTransaction) => CallError::Custom {
+				code: (POOL_FUTURE_TX),
+				message: "The pool is not accepting future transactions".into(),
+				data: None,
+			}.into(),
 			Error::UnsupportedKeyType => CallError::Custom {
 				code: UNSUPPORTED_KEY_TYPE,
 				message: "Unknown key type crypto" .into(),
@@ -163,7 +186,9 @@ impl From<Error> for JsonRpseeError {
 				).ok(),
 			}.into(),
 			Error::UnsafeRpcCalled(e) => e.into(),
-			e => e.into(),
+			Error::Client(e) => CallError::Failed(anyhow::anyhow!(e)).into(),
+			Error::BadSeedPhrase | Error::BadKeyType => CallError::InvalidParams(e.into()).into(),
+			Error::InvalidSessionKeys | Error::KeyStoreUnavailable => CallError::Failed(e.into()).into(),
 		}
 	}
 }

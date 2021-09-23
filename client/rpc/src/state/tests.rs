@@ -18,19 +18,18 @@
 
 use self::error::Error;
 use super::{state_full::split_range, *};
-use crate::testing::TaskExecutor;
+use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use futures::{executor, StreamExt};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
+use serde_json::value::to_raw_value;
 use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
 use sp_io::hashing::blake2_256;
 use sp_runtime::generic::BlockId;
 use std::sync::Arc;
-use serde_json::value::to_raw_value;
 use substrate_test_runtime_client::{prelude::*, runtime};
-use crate::testing::timeout_secs;
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -63,39 +62,36 @@ async fn should_return_storage() {
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
-		client.storage(key.clone(), Some(genesis_hash).into())
-            .await
+		client
+			.storage(key.clone(), Some(genesis_hash).into())
+			.await
 			.map(|x| x.map(|x| x.0.len()))
 			.unwrap()
 			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		client.storage_hash(key.clone(), Some(genesis_hash).into())
-            .await
+		client
+			.storage_hash(key.clone(), Some(genesis_hash).into())
+			.await
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_eq!(
-		client.storage_size(key.clone(), None)
-            .await
-            .unwrap()
-            .unwrap() as usize,
+		client.storage_size(key.clone(), None).await.unwrap().unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_eq!(
-		client.storage_size(StorageKey(b":map".to_vec()), None)
-            .await
-			.unwrap()
-			.unwrap() as usize,
+		client.storage_size(StorageKey(b":map".to_vec()), None).await.unwrap().unwrap() as usize,
 		2 + 3,
 	);
 	assert_eq!(
-		child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
-            .await
-            .map(|x| x.map(|x| x.0.len()))
-		    .unwrap()
-            .unwrap() as usize,
+		child
+			.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
+			.await
+			.map(|x| x.map(|x| x.0.len()))
+			.unwrap()
+			.unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
 }
@@ -123,18 +119,13 @@ async fn should_return_child_storage() {
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		child.storage_hash(
-			child_key.clone(),
-			key.clone(),
-			Some(genesis_hash).into(),
-		).await
-		.map(|x| x.is_some()),
+		child
+			.storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into(),)
+			.await
+			.map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_matches!(
-		child.storage_size(child_key.clone(), key.clone(), None).await,
-		Ok(Some(1))
-	);
+	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None).await, Ok(Some(1)));
 }
 
 #[tokio::test]
@@ -144,91 +135,83 @@ async fn should_call_contract() {
 	let (client, _child) =
 		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-    use jsonrpsee::types::{ Error, CallError };
+	use jsonrpsee::types::{CallError, Error};
 
 	assert_matches!(
-		client.call(
-			"balanceOf".into(),
-			Bytes(vec![1, 2, 3]),
-			Some(genesis_hash).into()
-		).await,
+		client
+			.call("balanceOf".into(), Bytes(vec![1, 2, 3]), Some(genesis_hash).into())
+			.await,
 		Err(Error::Call(CallError::Failed(_)))
 	)
 }
 
 #[tokio::test]
 async fn should_notify_about_storage_changes() {
-    let mut client = Arc::new(substrate_test_runtime_client::new());
-    let (api, _child) = new_full(
-        client.clone(),
-        SubscriptionTaskExecutor::new(TaskExecutor),
-        DenyUnsafe::No,
-        None,
-    );
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) =
+		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-    let api_rpc = api.into_rpc();
-    let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
+	let api_rpc = api.into_rpc();
+	let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
 
-    // Cause a change:
-    let mut builder = client.new_block(Default::default()).unwrap();
-    builder
-        .push_transfer(runtime::Transfer {
-            from: AccountKeyring::Alice.into(),
-            to: AccountKeyring::Ferdie.into(),
-            amount: 42,
-            nonce: 0,
-        })
-        .unwrap();
-    let block = builder.build().unwrap().block;
-    client.import(BlockOrigin::Own, block).await.unwrap();
+	// Cause a change:
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder
+		.push_transfer(runtime::Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 42,
+			nonce: 0,
+		})
+		.unwrap();
+	let block = builder.build().unwrap().block;
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
-    // We should get a message back on our subscription about the storage change:
-    // TODO (jsdw): previously we got back 2 messages here.
-    let msg = timeout_secs(5, sub_rx.next()).await;
-    assert_matches!(msg, Ok(Some(_)));
+	// We should get a message back on our subscription about the storage change:
+	// TODO (jsdw): previously we got back 2 messages here.
+	let msg = timeout_secs(5, sub_rx.next()).await;
+	assert_matches!(msg, Ok(Some(_)));
 
-    // TODO (jsdw): The channel remains open here, so waiting for another message will time out.
-    // Previously the channel returned None.
-    assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
+	// Previously the channel returned None.
+	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 
 #[tokio::test]
 async fn should_send_initial_storage_changes_and_notifications() {
-    let mut client = Arc::new(substrate_test_runtime_client::new());
-    let (api, _child) = new_full(
-        client.clone(),
-        SubscriptionTaskExecutor::new(TaskExecutor),
-        DenyUnsafe::No,
-        None,
-    );
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) =
+		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-    let alice_balance_key =
-        blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+	let alice_balance_key =
+		blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
-    let api_rpc = api.into_rpc();
-    let (_sub_id, mut sub_rx) = api_rpc.test_subscription(
-        "state_subscribeStorage",
-        Some(to_raw_value(&[StorageKey(alice_balance_key.to_vec())]).unwrap()),
-    ).await;
+	let api_rpc = api.into_rpc();
+	let (_sub_id, mut sub_rx) = api_rpc
+		.test_subscription(
+			"state_subscribeStorage",
+			Some(to_raw_value(&[StorageKey(alice_balance_key.to_vec())]).unwrap()),
+		)
+		.await;
 
-    let mut builder = client.new_block(Default::default()).unwrap();
-    builder
-        .push_transfer(runtime::Transfer {
-            from: AccountKeyring::Alice.into(),
-            to: AccountKeyring::Ferdie.into(),
-            amount: 42,
-            nonce: 0,
-        })
-        .unwrap();
-    let block = builder.build().unwrap().block;
-    client.import(BlockOrigin::Own, block).await.unwrap();
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder
+		.push_transfer(runtime::Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 42,
+			nonce: 0,
+		})
+		.unwrap();
+	let block = builder.build().unwrap().block;
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// Check for the correct number of notifications
 	let msgs = timeout_secs(5, (&mut sub_rx).take(2).collect::<Vec<_>>()).await;
-    assert_matches!(msgs, Ok(_));
+	assert_matches!(msgs, Ok(_));
 
-    // No more messages to follow
-    assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(None));
+	// No more messages to follow
+	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(None));
 }
 
 #[tokio::test]
@@ -321,15 +304,18 @@ async fn should_query_storage() {
 		// Inverted range.
 		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
-        use jsonrpsee::types::{ Error as RpcError, CallError as RpcCallError };
+		use jsonrpsee::types::{CallError as RpcCallError, Error as RpcError};
 
-        assert_eq!(
+		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
-				from: format!("1 ({:?})", block1_hash),
-				to: format!("0 ({:?})", genesis_hash),
-				details: "from number > to number".to_owned(),
-			}.into())))
+			Err(RpcError::Call(RpcCallError::Failed(
+				Error::InvalidBlockRange {
+					from: format!("1 ({:?})", block1_hash),
+					to: format!("0 ({:?})", genesis_hash),
+					details: "from number > to number".to_owned(),
+				}
+				.into()
+			)))
 			.map_err(|e| e.to_string())
 		);
 
@@ -341,14 +327,17 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
-				from: format!("{:?}", genesis_hash),
-				to: format!("{:?}", Some(random_hash1)),
-				details: format!(
-					"UnknownBlock: Header was not found in the database: {:?}",
-					random_hash1
-				),
-			}.into())))
+			Err(RpcError::Call(RpcCallError::Failed(
+				Error::InvalidBlockRange {
+					from: format!("{:?}", genesis_hash),
+					to: format!("{:?}", Some(random_hash1)),
+					details: format!(
+						"UnknownBlock: Header was not found in the database: {:?}",
+						random_hash1
+					),
+				}
+				.into()
+			)))
 			.map_err(|e| e.to_string())
 		);
 
@@ -357,14 +346,17 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
-				from: format!("{:?}", random_hash1),
-				to: format!("{:?}", Some(genesis_hash)),
-				details: format!(
-					"UnknownBlock: Header was not found in the database: {:?}",
-					random_hash1
-				),
-			}.into())))
+			Err(RpcError::Call(RpcCallError::Failed(
+				Error::InvalidBlockRange {
+					from: format!("{:?}", random_hash1),
+					to: format!("{:?}", Some(genesis_hash)),
+					details: format!(
+						"UnknownBlock: Header was not found in the database: {:?}",
+						random_hash1
+					),
+				}
+				.into()
+			)))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -373,14 +365,17 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
-				from: format!("{:?}", random_hash1),
-				to: format!("{:?}", Some(block2_hash)), // Best block hash.
-				details: format!(
-					"UnknownBlock: Header was not found in the database: {:?}",
-					random_hash1
-				),
-			}.into())))
+			Err(RpcError::Call(RpcCallError::Failed(
+				Error::InvalidBlockRange {
+					from: format!("{:?}", random_hash1),
+					to: format!("{:?}", Some(block2_hash)), // Best block hash.
+					details: format!(
+						"UnknownBlock: Header was not found in the database: {:?}",
+						random_hash1
+					),
+				}
+				.into()
+			)))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -389,14 +384,17 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(Error::InvalidBlockRange {
-				from: format!("{:?}", random_hash1), // First hash not found.
-				to: format!("{:?}", Some(random_hash2)),
-				details: format!(
-					"UnknownBlock: Header was not found in the database: {:?}",
-					random_hash1
-				),
-			}.into())))
+			Err(RpcError::Call(RpcCallError::Failed(
+				Error::InvalidBlockRange {
+					from: format!("{:?}", random_hash1), // First hash not found.
+					to: format!("{:?}", Some(random_hash2)),
+					details: format!(
+						"UnknownBlock: Header was not found in the database: {:?}",
+						random_hash1
+					),
+				}
+				.into()
+			)))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -426,7 +424,8 @@ async fn should_query_storage() {
 				.build(),
 		),
 		true,
-	).await;
+	)
+	.await;
 }
 
 #[test]
@@ -441,12 +440,8 @@ fn should_split_ranges() {
 #[tokio::test]
 async fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) = new_full(
-		client.clone(),
-		SubscriptionTaskExecutor::new(TaskExecutor),
-		DenyUnsafe::No,
-		None,
-	);
+	let (api, _child) =
+		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
@@ -465,23 +460,20 @@ async fn should_return_runtime_version() {
 
 #[tokio::test]
 async fn should_notify_on_runtime_version_initially() {
-    let client = Arc::new(substrate_test_runtime_client::new());
-    let (api, _child) = new_full(
-        client.clone(),
-        SubscriptionTaskExecutor::new(TaskExecutor),
-        DenyUnsafe::No,
-        None,
-    );
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) =
+		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-    let api_rpc = api.into_rpc();
-    let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeRuntimeVersion", None).await;
+	let api_rpc = api.into_rpc();
+	let (_sub_id, mut sub_rx) =
+		api_rpc.test_subscription("state_subscribeRuntimeVersion", None).await;
 
 	// assert initial version sent.
-    assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
+	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
 
-    // TODO (jsdw): The channel remains open here, so waiting for another message will time out.
-    // Previously the channel returned None.
-    assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
+	// Previously the channel returned None.
+	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 
 #[test]

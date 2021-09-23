@@ -28,7 +28,7 @@ use crate::SubscriptionTaskExecutor;
 use codec::{Decode, Encode};
 use futures::StreamExt;
 use jsonrpsee::{
-	types::{async_trait, error::Error as JsonRpseeError, RpcResult},
+	types::{async_trait, error::Error as JsonRpseeError, v2::RpcError, CallError, RpcResult},
 	SubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;

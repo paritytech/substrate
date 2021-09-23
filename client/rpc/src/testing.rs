@@ -35,7 +35,7 @@ lazy_static::lazy_static! {
 }
 
 /// Executor for use in testing
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 pub struct TaskExecutor;
 impl Spawn for TaskExecutor {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
@@ -48,16 +48,16 @@ impl Spawn for TaskExecutor {
 	}
 }
 impl SpawnNamed for TaskExecutor {
-    fn spawn_blocking(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-        EXECUTOR.spawn_ok(future);
-    }
+	fn spawn_blocking(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		EXECUTOR.spawn_ok(future);
+	}
 
-    fn spawn(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-        EXECUTOR.spawn_ok(future);
-    }
+	fn spawn(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		EXECUTOR.spawn_ok(future);
+	}
 }
 
 /// Wrap a future in a timeout a little more concisely
-pub(crate) fn timeout_secs<I, F: Future<Output=I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
-    tokio::time::timeout(tokio::time::Duration::from_secs(s), f)
+pub(crate) fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
+	tokio::time::timeout(tokio::time::Duration::from_secs(s), f)
 }
