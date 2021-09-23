@@ -78,8 +78,7 @@ pub trait ProvideInherent {
 	/// # Warning
 	///
 	/// This check is not guaranteed to be run by all full nodes and cannot be relied upon for
-	/// ensuring correct block import. Run security relevant checks in the extrinsic returned by
-	/// [`Self::create_inherent`] as much as possible.
+	/// ensuring that the block is correct.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}
