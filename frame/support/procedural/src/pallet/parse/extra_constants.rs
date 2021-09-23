@@ -137,11 +137,7 @@ impl ExtraConstantsDef {
 				return Err(syn::Error::new(extra_constant_attrs[1].metadata_name.span(), msg))
 			}
 
-			let metadata_name = if extra_constant_attrs.len() == 1 {
-				Some(extra_constant_attrs.pop().unwrap().metadata_name)
-			} else {
-				None
-			};
+			let metadata_name = extra_constant_attrs.pop().map(|attr| attr.metadata_name);
 
 			extra_constants.push(ExtraConstantDef {
 				ident: method.sig.ident.clone(),
