@@ -78,12 +78,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 	let consts = config_consts.chain(extra_consts).map(|const_| {
 		let const_type = &const_.type_;
 		let ident = &const_.ident;
-		let metadata_name = &const_.metadata_name;
-		let ident_str = if let Some(metadata_ident) = metadata_name {
-			format!("{}", metadata_ident)
-		} else {
-			format!("{}", ident)
-		};
+		let ident_str = format!("{}", const_.metadata_name.unwrap_or(const_.ident));
 
 		let doc = const_.doc.clone().into_iter();
 		let default_byte_impl = &const_.default_byte_impl;
