@@ -42,7 +42,7 @@ A Pull Request (PR) needs to be reviewed and approved by project maintainers unl
 . PRs must be tagged with their release importance via the `C1-C9` labels.
 . PRs must be tagged with their audit requirements via the `D1-D9` labels.
 . PRs that must be backported to a stable branch must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E0-patchthis`].
-. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`]. See the https://github.com/paritytech/substrate/blob/master/utils/frame/try-runtime/cli/src/lib.rs#L18[Migration Best Practices" here] for more info about how to test runtime migrations.
+. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`]. See the https://github.com/paritytech/substrate/blob/master/utils/frame/try-runtime/cli/src/lib.rs#L18[Migration Best Practices here] for more info about how to test runtime migrations.
 . PRs that introduce irreversible database migrations must be tagged with https://github.com/paritytech/substrate/labels/E2-databasemigration[`E2-databasemigration`].
 . PRs that add host functions must be tagged with with https://github.com/paritytech/substrate/labels/E4-newhostfunctions[`E4-newhostfunctions`].
 . PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/E5-breaksapi[`E5-breaksapi`].
