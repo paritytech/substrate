@@ -198,53 +198,53 @@ mod pallet {
 	}
 
 	#[test]
-	fn put_in_front_of_two_node_bag() {
-		ExtBuilder::default().add_ids(vec![(710, 15), (711, 16)]).build_and_execute(|| {
+	fn put_in_front_of_two_node_bag_heavier_is_tail() {
+		ExtBuilder::default().add_ids(vec![(10, 15), (11, 16)]).build_and_execute(|| {
 			// given
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![710, 711]), (1_000, vec![2, 3, 4])]
+				vec![(10, vec![1]), (20, vec![10, 11]), (1_000, vec![2, 3, 4])]
 			);
 
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+			StakingMock::set_vote_weight_of(&10, 15);
+			StakingMock::set_vote_weight_of(&11, 16);
 
 			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 10, 11));
 
 			// then
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![711, 710]), (1_000, vec![2, 3, 4])]
+				vec![(10, vec![1]), (20, vec![11, 10]), (1_000, vec![2, 3, 4])]
 			);
 		});
 	}
 
 	#[test]
 	fn put_in_front_of_two_node_bag_heavier_is_head() {
-		ExtBuilder::default().add_ids(vec![(711, 16), (710, 15)]).build_and_execute(|| {
+		ExtBuilder::default().add_ids(vec![(11, 16), (10, 15)]).build_and_execute(|| {
 			// given
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![711, 710]), (1_000, vec![2, 3, 4])]
+				vec![(10, vec![1]), (20, vec![11, 10]), (1_000, vec![2, 3, 4])]
 			);
 
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+			StakingMock::set_vote_weight_of(&11, 16);
+			StakingMock::set_vote_weight_of(&10, 15);
 
 			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 710, 711));
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 10, 11));
 
 			// then
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![711, 710]), (1_000, vec![2, 3, 4])]
+				vec![(10, vec![1]), (20, vec![11, 10]), (1_000, vec![2, 3, 4])]
 			);
 		});
 	}
 
 	#[test]
-	fn put_in_front_of_head_and_tail_non_terminal_nodes() {
+	fn put_in_front_of_non_terminal_nodes_heavier_behind() {
 		ExtBuilder::default().add_ids(vec![(5, 1_000)]).build_and_execute(|| {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
@@ -258,6 +258,31 @@ mod pallet {
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5])]);
 		});
+	}
+
+	#[test]
+	fn put_in_front_of_non_terminal_nodes_heavier_in_front() {
+		ExtBuilder::default()
+			.add_ids(vec![(5, 1_000), (6, 1_000)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5, 6])]
+				);
+
+				StakingMock::set_vote_weight_of(&5, 999);
+				StakingMock::set_vote_weight_of(&3, 1_000);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(0), 5, 3));
+
+				// then
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5, 6])]
+				);
+			});
 	}
 
 	#[test]
@@ -364,19 +389,16 @@ mod pallet {
 
 	#[test]
 	fn put_in_front_of_errors_if_heavier_is_less_than_lighter() {
-		ExtBuilder::default().add_ids(vec![(711, 16), (710, 15)]).build_and_execute(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![711, 710]), (1_000, vec![2, 3, 4])]
-			);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&710), 15);
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&711), 16);
+			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_vote_weight_of(&2, 1_000);
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(0), 711, 710),
+				BagsList::put_in_front_of(Origin::signed(0), 2, 3),
 				crate::pallet::Error::<Runtime>::NotHeavier
 			);
 		});

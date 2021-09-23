@@ -119,14 +119,19 @@ impl ExtBuilder {
 		self
 	}
 
-	pub(crate) fn build(self) -> sp_io::TestExternalities {
-		sp_tracing::try_init_simple();
-		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-
-		// special cases used for `migrate` and `put_in_front_of` tests.
+	/// Set vote weights of some Id's used for special case
+	pub(crate) fn add_aux_data(mut self) -> Self {
 		StakingMock::set_vote_weight_of(&710, 15);
 		StakingMock::set_vote_weight_of(&711, 16);
 		StakingMock::set_vote_weight_of(&712, 2_000);
+		self.ids.extend([(710, 15), (711, 16), (712, 2_000)].iter());
+
+		self
+	}
+
+	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
+		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {

@@ -455,9 +455,6 @@ impl<T: Config> List<T> {
 				bag.tail = Some(at.id().clone())
 			}
 
-			debug_assert!(at.prev.is_some(), "`at` cannot be the head");
-			debug_assert!(node.next.is_some(), "`node` cannot be the tail");
-
 			bag.put()
 		};
 

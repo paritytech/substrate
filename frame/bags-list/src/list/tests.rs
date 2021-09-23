@@ -109,42 +109,34 @@ fn remove_last_node_in_bags_cleans_bag() {
 
 #[test]
 fn migrate_works() {
-	ExtBuilder::default()
-		.add_ids(vec![(710, 15), (711, 16), (712, 2_000)])
-		.build_and_execute(|| {
-			// given
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![
-					(10, vec![1]),
-					(20, vec![710, 711]),
-					(1_000, vec![2, 3, 4]),
-					(2_000, vec![712])
-				]
-			);
-			let old_thresholds = <Runtime as Config>::BagThresholds::get();
-			assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
+	ExtBuilder::default().add_aux_data().build_and_execute(|| {
+		// given
+		assert_eq!(
+			List::<Runtime>::get_bags(),
+			vec![(10, vec![1]), (20, vec![710, 711]), (1_000, vec![2, 3, 4]), (2_000, vec![712])]
+		);
+		let old_thresholds = <Runtime as Config>::BagThresholds::get();
+		assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
 
-			// when the new thresholds adds `15` and removes `2_000`
-			const NEW_THRESHOLDS: &'static [VoteWeight] =
-				&[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
-			BagThresholds::set(NEW_THRESHOLDS);
-			// and we call
-			List::<Runtime>::migrate(old_thresholds);
+		// when the new thresholds adds `15` and removes `2_000`
+		const NEW_THRESHOLDS: &'static [VoteWeight] = &[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
+		BagThresholds::set(NEW_THRESHOLDS);
+		// and we call
+		List::<Runtime>::migrate(old_thresholds);
 
-			// then
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![
-					(10, vec![1]),
-					(15, vec![710]), // nodes in range 11 ..= 15 move from bag 20 to bag 15
-					(20, vec![711]),
-					(1_000, vec![2, 3, 4]),
-					// nodes in range 1_001 ..= 2_000 move from bag 2_000 to bag 10_000
-					(10_000, vec![712]),
-				]
-			);
-		});
+		// then
+		assert_eq!(
+			List::<Runtime>::get_bags(),
+			vec![
+				(10, vec![1]),
+				(15, vec![710]), // nodes in range 11 ..= 15 move from bag 20 to bag 15
+				(20, vec![711]),
+				(1_000, vec![2, 3, 4]),
+				// nodes in range 1_001 ..= 2_000 move from bag 2_000 to bag 10_000
+				(10_000, vec![712]),
+			]
+		);
+	});
 }
 
 mod list {
@@ -379,23 +371,23 @@ mod list {
 	#[cfg_attr(debug_assertions, should_panic = "bag that should exist cannot be found")]
 	fn put_in_front_of_exits_early_if_bag_not_found() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			let node_710_no_bag =
-				Node::<Runtime> { id: 710, prev: None, next: None, bag_upper: 15 };
-			let node_711_no_bag =
-				Node::<Runtime> { id: 711, prev: None, next: None, bag_upper: 15 };
+			let node_10_no_bag = Node::<Runtime> { id: 10, prev: None, next: None, bag_upper: 15 };
+			let node_11_no_bag = Node::<Runtime> { id: 11, prev: None, next: None, bag_upper: 15 };
 
 			// given
-			ListNodes::<Runtime>::insert(710, node_710_no_bag);
-			ListNodes::<Runtime>::insert(711, node_711_no_bag);
+			ListNodes::<Runtime>::insert(10, node_10_no_bag);
+			ListNodes::<Runtime>::insert(11, node_11_no_bag);
+			StakingMock::set_vote_weight_of(&10, 14);
+			StakingMock::set_vote_weight_of(&11, 15);
 			assert!(!ListBags::<Runtime>::contains_key(15));
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
-			//      710 & 711 our not in reachable via iteration ^^^^^
+			//      10 & 11 our not in reachable via iteration ^^^^^
 
 			let weight_fn = Box::new(<Runtime as Config>::VoteWeightProvider::vote_weight);
 
 			// then
 			assert_storage_noop!(assert_eq!(
-				List::<Runtime>::put_in_front_of(&710, &711, weight_fn).unwrap_err(),
+				List::<Runtime>::put_in_front_of(&10, &11, weight_fn).unwrap_err(),
 				crate::pallet::Error::<Runtime>::BagNotFound
 			));
 		});
