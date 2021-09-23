@@ -339,35 +339,55 @@ async fn author_has_session_keys() {
 	assert_eq!(invalid, "Session keys are not encoded correctly");
 }
 
-// #[test]
-// fn test_has_key() {
-// 	let setup = TestSetup::default();
-// 	let p = setup.author();
+#[tokio::test]
+async fn author_has_key() {
+	let api = TestSetup::into_rpc();
+	let suri = "//Alice";
+	let alice_keypair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
+	let params = (
+		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		suri.to_string(),
+		Bytes::from(alice_keypair.public().0.to_vec()),
+	);
 
-// 	let suri = "//Alice";
-// 	let alice_key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
-// 	p.insert_key(
-// 		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
-// 		suri.to_string(),
-// 		alice_key_pair.public().0.to_vec().into(),
-// 	)
-// 	.expect("Insert key");
-// 	let bob_key_pair = ed25519::Pair::from_string("//Bob", None).expect("Generates keypair");
+	let json = api.call_with("author_insertKey", params).await.unwrap();
+	serde_json::from_str::<Response<()>>(&json).expect("insertKey works");
 
-// 	let test_vectors = vec![
-// 		(alice_key_pair.public().to_raw_vec().into(), ED25519, Ok(true)),
-// 		(alice_key_pair.public().to_raw_vec().into(), SR25519, Ok(false)),
-// 		(bob_key_pair.public().to_raw_vec().into(), ED25519, Ok(false)),
-// 	];
+	let bob_keypair = ed25519::Pair::from_string("//Bob", None).expect("Generates keypair");
 
-// 	for (key, key_type, result) in test_vectors {
-// 		assert_eq!(
-// 			result.map_err(|e| mem::discriminant(&e)),
-// 			p.has_key(
-// 				key,
-// 				String::from_utf8(key_type.0.to_vec()).expect("Keytype is a valid string"),
-// 			)
-// 			.map_err(|e| mem::discriminant(&e)),
-// 		);
-// 	}
-// }
+	// Alice's ED25519 key is there
+	let has_alice_ed = {
+		let params = (
+			Bytes::from(alice_keypair.public().to_raw_vec()),
+			String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		);
+		let json = api.call_with("author_hasKey", params).await.unwrap();
+		let response: Response<bool> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+	assert!(has_alice_ed);
+
+	// Alice's SR25519 key is not there
+	let has_alice_sr = {
+		let params = (
+			Bytes::from(alice_keypair.public().to_raw_vec()),
+			String::from_utf8(SR25519.0.to_vec()).expect("Keytype is a valid string"),
+		);
+		let json = api.call_with("author_hasKey", params).await.unwrap();
+		let response: Response<bool> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+	assert!(!has_alice_sr);
+
+	// Bob's ED25519 key is not there
+	let has_bob_ed = {
+		let params = (
+			Bytes::from(bob_keypair.public().to_raw_vec()),
+			String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		);
+		let json = api.call_with("author_hasKey", params).await.unwrap();
+		let response: Response<bool> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+	assert!(!has_bob_ed);
+}
