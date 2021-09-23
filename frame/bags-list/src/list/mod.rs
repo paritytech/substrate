@@ -409,11 +409,10 @@ impl<T: Config> List<T> {
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
 		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		Self::insert_at_unchecked(lighter_node, heavier_node);
 
-		Self::insert_at(lighter_node, heavier_node)?;
-
-		// since `insert_at` was successful, increment the counter, which got decremented by
-		// `Self::remove`.
+		// Increment the counter, which got decremented by `Self::remove`, since we just re-inserted
+		// `heavier_node`.
 		crate::CounterForListNodes::<T>::mutate(|prev_count| {
 			*prev_count = prev_count.saturating_add(1)
 		});
@@ -422,9 +421,10 @@ impl<T: Config> List<T> {
 	}
 
 	/// Insert `node` directly in front of `at`.
-	fn insert_at(mut at: Node<T>, mut node: Node<T>) -> Result<(), crate::pallet::Error<T>> {
-		use crate::pallet;
-
+	///
+	/// WARNING: we do not check that `node` or `at` are valid. This will panic if `at.bag_upper` is
+	/// not a bag that already exists in storage.
+	fn insert_at_unchecked(mut at: Node<T>, mut node: Node<T>) {
 		// connect `heavier_node` to its new `prev`.
 		node.prev = at.prev.clone();
 		if let Some(mut prev) = at.prev() {
@@ -441,11 +441,8 @@ impl<T: Config> List<T> {
 			// since `node` is always in front of `at` we know that 1) there is always at least 2
 			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
 			// tail.
-			let mut bag = Bag::<T>::get(at.bag_upper).ok_or_else(|| {
-				debug_assert!(false, "bag that should exist cannot be found");
-				crate::log!(warn, "bag that should exist cannot be found");
-				pallet::Error::BagNotFound
-			})?;
+			let mut bag =
+				Bag::<T>::get(at.bag_upper).expect("given nodes must always have a valid. qed.");
 
 			if node.prev == None {
 				bag.head = Some(node.id().clone())
@@ -461,8 +458,6 @@ impl<T: Config> List<T> {
 		// write the updated nodes to storage.
 		at.put();
 		node.put();
-
-		Ok(())
 	}
 
 	/// Sanity check the list.

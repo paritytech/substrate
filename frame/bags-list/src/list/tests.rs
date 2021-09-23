@@ -368,8 +368,8 @@ mod list {
 	}
 
 	#[test]
-	#[cfg_attr(debug_assertions, should_panic = "bag that should exist cannot be found")]
-	fn put_in_front_of_exits_early_if_bag_not_found() {
+	#[should_panic = "given nodes must always have a valid. qed."]
+	fn put_in_front_of_panics_if_bag_not_found() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let node_10_no_bag = Node::<Runtime> { id: 10, prev: None, next: None, bag_upper: 15 };
 			let node_11_no_bag = Node::<Runtime> { id: 11, prev: None, next: None, bag_upper: 15 };
