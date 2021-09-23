@@ -57,7 +57,7 @@ pub trait ProvideInherent {
 	///
 	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
-	/// NOTE: If inherent is required then the runtime asserts that the block contains at least
+	/// NOTE: If the inherent is required then the runtime asserts that the block contains at least
 	/// one inherent for which:
 	/// * type is [`Self::Call`],
 	/// * [`Self::is_inherent`] returns true.
@@ -74,8 +74,6 @@ pub trait ProvideInherent {
 	///
 	/// This is intended to allow for checks that cannot be done within the runtime such as, e.g.,
 	/// the timestamp.
-	///
-	/// NOTE: A block can contain multiple inherents.
 	///
 	/// # Warning
 	///
