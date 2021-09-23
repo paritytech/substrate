@@ -23,7 +23,7 @@ use frame_support::{dispatch::Weight, traits::Get};
 use sp_npos_elections::StakedAssignment;
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	traits::{SaturatedConversion, Saturating},
+	traits::{SaturatedConversion, Saturating, Zero},
 };
 
 // TODO: unify naming: everything should be
@@ -224,7 +224,7 @@ impl<T: super::Config> BaseMiner<T> {
 		}
 
 		// convert each page to a compact struct
-		let solution_pages: Vec<SolutionOf<T>> = paged_assignments
+		let mut solution_pages: Vec<SolutionOf<T>> = paged_assignments
 			.into_iter()
 			.enumerate()
 			.map(|(page_index, assignment_page)| {
@@ -247,16 +247,19 @@ impl<T: super::Config> BaseMiner<T> {
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
-		// finally, wrap everything up.
+		// now do the weight and length trim.
+		// TODO: we should not always do this.
+		let _trim_length_weight =
+			Self::maybe_trim_weight_and_len(&mut solution_pages, &voter_pages)?;
+		log!(debug, "trimmed {} voters due to length/weight restriction.", _trim_length_weight);
+
+		// finally, wrap everything up. Assign a fake score here, since we might need to re-compute
+		// it.
 		let round = crate::Pallet::<T>::round();
 		let mut paged = PagedRawSolution { round, solution_pages, score: Default::default() };
 
-		let _trim_length_weight =
-			Self::maybe_trim_weight_and_len(&mut paged.solution_pages, &voter_pages)?;
-		log!(debug, "trimmed {} voters due to length/weight restriction.", _trim_length_weight);
-
-		// OPTIMIZATION: we do trimming inside `compute_score`, and once later pre_dispatch. I think
-		// it is fine, but maybe we can improve it.
+		// OPTIMIZATION: we do feasibility_check inside `compute_score`, and once later
+		// pre_dispatch. I think it is fine, but maybe we can improve it.
 		let score = Self::compute_score(&paged).map_err::<MinerError, _>(Into::into)?;
 		paged.score = score.clone();
 
@@ -392,10 +395,11 @@ impl<T: super::Config> BaseMiner<T> {
 	/// Start from the least significant page. Assume only this page is going to be trimmed. call
 	/// `page.sort()` on this page. This will make sure in each field (`votes1`, `votes2`, etc.) of
 	/// that page, the voters are sorted by descending stake. Then, we compare the last item of each
-	/// field. This is the process of removing the single least staked voter. We repeat this until
-	/// satisfied, for both weight and length, until satisfied. If a full page is removed, but the
-	/// bound is not satisfied, we need to make sure that we sort the next least valuable page, and
-	/// repeat the same process.
+	/// field. This is the process of removing the single least staked voter.
+	///
+	/// We repeat this until satisfied, for both weight and length. If a full page is removed, but
+	/// the bound is not satisfied, we need to make sure that we sort the next least valuable page,
+	/// and repeat the same process.
 	///
 	/// NOTE: this is a public function to be used by the `OffchainWorkerMiner` or any similar one,
 	/// based on the submission strategy. The length and weight bounds of a call are dependent on
@@ -440,13 +444,15 @@ impl<T: super::Config> BaseMiner<T> {
 
 			let next_active_targets = winner_count_of(solution_pages);
 			if next_active_targets < desired_targets {
-				log!(warn, "trimming has cause a solution to have less targets than desired, this will fail feasibility");
+				log!(warn, "trimming has cause a solution to have less targets than desired, this might fail feasibility");
 			}
 
 			let weight = <T as super::Config>::WeightInfo::submit_unsigned(
 				all_voters_count,
 				all_targets_count,
-				voter_count_of(solution_pages), // TODO: we should NOT recompute this.
+				// NOTE: we could not re-compute this all the time and instead assume that in each
+				// round, it is the previous value minus one.
+				voter_count_of(solution_pages),
 				next_active_targets,
 			);
 			let needs_weight_trim = weight > weight_limit;
@@ -478,6 +484,10 @@ impl<T: super::Config> BaseMiner<T> {
 				});
 			};
 
+		let is_empty = |solution_pages: &Vec<SolutionOf<T>>| {
+			solution_pages.iter().all(|page| page.voter_count().is_zero())
+		};
+
 		if needs_any_trim(solution_pages) {
 			sort_current_trimming_page(current_trimming_page, solution_pages)
 		}
@@ -488,19 +498,27 @@ impl<T: super::Config> BaseMiner<T> {
 		// which we accept for code simplicity.
 
 		let mut removed = 0;
-		while needs_any_trim(solution_pages) {
-			if solution_pages
-				.get_mut(current_trimming_page)
-				.and_then(|page| {
+		while needs_any_trim(solution_pages) && !is_empty(solution_pages) {
+			if let Some(removed_idx) =
+				solution_pages.get_mut(current_trimming_page).and_then(|page| {
 					let stake_of_fn = current_trimming_page_stake_of(current_trimming_page);
 					page.remove_weakest_sorted(&stake_of_fn)
-				})
-				.is_some()
-			{
+				}) {
+				log!(
+					trace,
+					"removed voter at index {:?} of (un-pagified) page {} as the weakest due to weight/length limits.",
+					removed_idx,
+					current_trimming_page
+				);
 				// we removed one person, continue.
 				removed.saturating_inc();
 			} else {
 				// this page cannot support remove anymore. Try and go to the next page.
+				log!(
+					debug,
+					"page {} seems to be fully empty now, moving to the next one",
+					current_trimming_page
+				);
 				let next_page = current_trimming_page.saturating_add(1);
 				if voter_pages.len() > next_page {
 					current_trimming_page = next_page;
@@ -725,18 +743,175 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	}
 }
 
+// This will only focus on testing the internals of `maybe_trim_weight_and_len_works`.
 #[cfg(test)]
-mod base_miner_maybe_trim_weight_and_len_works {
+mod trim_weight_length {
 	use super::*;
 	use crate::{mock::*, verifier::Verifier};
 	use sp_npos_elections::Support;
 	use sp_runtime::PerU16;
 
-	// This will only focus on testing the internals of `maybe_trim_weight_and_len_works`.
 	#[test]
-	fn maybe_trim_weight_and_len_works_internal() {
+	fn trim_weight_basic() {
+		// This is just demonstration to show the normal election result with new votes, without any
+		// trimming.
+		ExtBuilder::default().build_and_execute(|| {
+			let mut current_voters = Voters::get();
+			current_voters.iter_mut().for_each(|(who, stake, ..)| *stake = *who);
+			Voters::set(current_voters);
+
+			roll_to_snapshot_created();
+			ensure_voters(3, 12);
+
+			let solution = mine_full_solution().unwrap();
+
+			// 4 of these will be trimmed.
+			assert_eq!(
+				solution.solution_pages.iter().map(|page| page.voter_count()).sum::<usize>(),
+				8
+			);
+
+			load_solution_for_verification(solution);
+			let supports = roll_to_full_verification();
+
+			// NOTE: this test is a bit funny because our msp snapshot page actually contains voters
+			// with less stake than lsp.. but that's not relevant here.
+			assert_eq!(
+				supports,
+				vec![
+					// supports from 30, 40, both will be removed.
+					vec![
+						(30, Support { total: 30, voters: vec![(30, 30)] }),
+						(40, Support { total: 40, voters: vec![(40, 40)] })
+					],
+					// supports from 5, 6, 7. 5 and 6 will be removed.
+					vec![
+						(30, Support { total: 11, voters: vec![(7, 7), (5, 2), (6, 2)] }),
+						(40, Support { total: 7, voters: vec![(5, 3), (6, 4)] })
+					],
+					// all will stay
+					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
+				]
+			);
+		});
+
+		// now we get to the real test...
+		ExtBuilder::default().miner_weight(4).build_and_execute(|| {
+			// first, replace the stake of all voters with their account id.
+			let mut current_voters = Voters::get();
+			current_voters.iter_mut().for_each(|(who, stake, ..)| *stake = *who);
+			Voters::set(current_voters);
+
+			// with 1 weight unit per voter, this can only support 4 voters, despite having 12 in
+			// the snapshot.
+			roll_to_snapshot_created();
+			ensure_voters(3, 12);
+
+			let solution = mine_full_solution().unwrap();
+			assert_eq!(
+				solution.solution_pages.iter().map(|page| page.voter_count()).sum::<usize>(),
+				4
+			);
+
+			load_solution_for_verification(solution);
+			let supports = roll_to_full_verification();
+
+			assert_eq!(
+				supports,
+				vec![
+					vec![],
+					vec![(30, Support { total: 7, voters: vec![(7, 7)] })],
+					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn trim_weight_partial_solution() {
+		// This is just demonstration to show the normal election result with new votes, without any
+		// trimming.
+		ExtBuilder::default().build_and_execute(|| {
+			let mut current_voters = Voters::get();
+			current_voters.iter_mut().for_each(|(who, stake, ..)| *stake = *who);
+			Voters::set(current_voters);
+
+			roll_to_snapshot_created();
+			ensure_voters(3, 12);
+
+			let solution = mine_solution(2).unwrap();
+
+			// 3 of these will be trimmed.
+			assert_eq!(
+				solution.solution_pages.iter().map(|page| page.voter_count()).sum::<usize>(),
+				7
+			);
+
+			load_solution_for_verification(solution);
+			let supports = roll_to_full_verification();
+
+			assert_eq!(
+				supports,
+				vec![
+					vec![],
+					// 5, 6, 7 will be removed later.
+					vec![
+						(10, Support { total: 10, voters: vec![(8, 8), (5, 2)] }),
+						(30, Support { total: 16, voters: vec![(6, 6), (7, 7), (5, 3)] })
+					],
+					vec![
+						(10, Support { total: 5, voters: vec![(1, 1), (4, 4)] }),
+						(30, Support { total: 2, voters: vec![(2, 2)] })
+					]
+				]
+			);
+		});
+
+		// now we get to the real test...
+		ExtBuilder::default().miner_weight(4).build_and_execute(|| {
+			// first, replace the stake of all voters with their account id.
+			let mut current_voters = Voters::get();
+			current_voters.iter_mut().for_each(|(who, stake, ..)| *stake = *who);
+			Voters::set(current_voters);
+
+			roll_to_snapshot_created();
+			ensure_voters(3, 12);
+
+			let solution = mine_solution(2).unwrap();
+			assert_eq!(
+				solution.solution_pages.iter().map(|page| page.voter_count()).sum::<usize>(),
+				4
+			);
+
+			load_solution_for_verification(solution);
+			let supports = roll_to_full_verification();
+
+			assert_eq!(
+				supports,
+				vec![
+					vec![],
+					vec![(10, Support { total: 8, voters: vec![(8, 8)] })],
+					vec![
+						(10, Support { total: 5, voters: vec![(1, 1), (4, 4)] }),
+						(30, Support { total: 2, voters: vec![(2, 2)] })
+					]
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn trim_weight_drain() {
 		todo!()
 	}
+
+	#[test]
+	fn trim_weight_too_much_makes_solution_invalid() {
+		todo!()
+	}
+
+	#[test]
+	fn trim_length() {}
 }
 
 #[cfg(test)]
@@ -782,12 +957,8 @@ mod base_miner {
 		ExtBuilder::default().pages(1).voter_per_page(8).build_and_execute(|| {
 			roll_to_snapshot_created();
 
-			// 1 pages of 8 voters
-			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 1);
-			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 8);
-			// 1 page of 4 targets
-			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
-			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+			ensure_voters(1, 8);
+			ensure_targets(1, 4);
 
 			assert_eq!(
 				Snapshot::<Runtime>::voters(0)
@@ -833,11 +1004,9 @@ mod base_miner {
 			roll_to_snapshot_created();
 
 			// 2 pages of 8 voters
-			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 2);
-			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 8);
+			ensure_voters(2, 8);
 			// 1 page of 4 targets
-			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
-			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+			ensure_targets(1, 4);
 
 			// voters in pages. note the reverse page index.
 			assert_eq!(
@@ -915,12 +1084,8 @@ mod base_miner {
 		ExtBuilder::default().pages(3).voter_per_page(4).build_and_execute(|| {
 			roll_to_snapshot_created();
 
-			// 3 pages of 12 voters
-			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
-			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 12);
-			// 1 page of 4 targets
-			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
-			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+			ensure_voters(3, 12);
+			ensure_targets(1, 4);
 
 			// voters in pages. note the reverse page index.
 			assert_eq!(
@@ -1005,12 +1170,8 @@ mod base_miner {
 		ExtBuilder::default().pages(2).voter_per_page(4).build_and_execute(|| {
 			roll_to_snapshot_created();
 
-			// 2 pages of 8 voters
-			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 2);
-			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 8);
-			// 1 page of 4 targets
-			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
-			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+			ensure_voters(2, 8);
+			ensure_targets(1, 4);
 
 			// these folks should be ignored safely.
 			assert_eq!(
@@ -1075,12 +1236,8 @@ mod base_miner {
 		ExtBuilder::default().pages(3).voter_per_page(4).build_and_execute(|| {
 			roll_to_snapshot_created();
 
-			// 2 pages of 8 voters
-			assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
-			assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 12);
-			// 1 page of 4 targets
-			assert_eq!(crate::Snapshot::<Runtime>::target_pages(), 1);
-			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
+			ensure_voters(3, 12);
+			ensure_targets(1, 4);
 
 			assert_eq!(
 				Snapshot::<Runtime>::voters(0)
@@ -1199,9 +1356,7 @@ mod base_miner {
 				}
 				roll_to_snapshot_created();
 
-				// 3 pages of 18 voters
-				assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), 3);
-				assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), 17);
+				ensure_voters(3, 17);
 
 				// now we let the miner mine something for us..
 				let paged = mine_full_solution().unwrap();

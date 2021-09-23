@@ -353,13 +353,20 @@ impl crate::verifier::Config for Runtime {
 	type MaxBackingCountPerTarget = MaxBackingCountPerTarget;
 }
 
+pub struct MockUnsignedWeightInfo;
+impl crate::unsigned::WeightInfo for MockUnsignedWeightInfo {
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		a as Weight
+	}
+}
+
 impl crate::unsigned::Config for Runtime {
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
-	type WeightInfo = ();
+	type WeightInfo = MockUnsignedWeightInfo;
 }
 
 impl crate::Config for Runtime {
@@ -713,6 +720,18 @@ pub fn mine_full_solution() -> Result<PagedRawSolution<Runtime>, MinerError> {
 /// Same as [`mine_full_solution`] but with custom pages.
 pub fn mine_solution(pages: PageIndex) -> Result<PagedRawSolution<Runtime>, MinerError> {
 	BaseMiner::<Runtime>::mine_solution(pages, false)
+}
+
+/// Assert that `count` voters exist across `pages` number of pages.
+pub fn ensure_voters(pages: PageIndex, count: usize) {
+	assert_eq!(crate::Snapshot::<Runtime>::voter_pages(), pages);
+	assert_eq!(crate::Snapshot::<Runtime>::voters_iter_flattened().count(), count);
+}
+
+/// Assert that `count` targets exist across `pages` number of pages.
+pub fn ensure_targets(pages: PageIndex, count: usize) {
+	assert_eq!(crate::Snapshot::<Runtime>::target_pages(), pages);
+	assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), count);
 }
 
 #[test]
