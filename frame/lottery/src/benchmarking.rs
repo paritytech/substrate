@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable};
+use frame_support::traits::{EnsureOrigin, OnInitialize};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Zero};
 
@@ -73,15 +73,9 @@ benchmarks! {
 	set_calls {
 		let n in 0 .. T::MaxCalls::get() as u32;
 		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
-
-		let call = Call::<T>::set_calls { calls }.encode();
 		let origin = T::ManagerOrigin::successful_origin();
 		assert!(CallIndices::<T>::get().is_empty());
-	}: {
-		<Call<T> as Decode>::decode(&mut &*call)
-			.expect("call is encoded above, encoding must be correct")
-			.dispatch_bypass_filter(origin)?
-	}
+	}: _<T::Origin>(origin, calls)
 	verify {
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
@@ -92,18 +86,8 @@ benchmarks! {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
-		let call = Call::<T>::start_lottery {
-			price,
-			length: end,
-			delay: payout,
-			repeat: true
-		}.encode();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: {
-		<Call<T> as Decode>::decode(&mut &*call)
-			.expect("call is encoded above, encoding must be correct")
-			.dispatch_bypass_filter(origin)?
-	}
+	}: _<T::Origin>(origin, price, end, payout, true)
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
@@ -111,13 +95,8 @@ benchmarks! {
 	stop_repeat {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
-		let call = Call::<T>::stop_repeat { }.encode();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: {
-		<Call<T> as Decode>::decode(&mut &*call)
-			.expect("call is encoded above, encoding must be correct")
-			.dispatch_bypass_filter(origin)?
-	}
+	}: _<T::Origin>(origin)
 	verify {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}
