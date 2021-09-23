@@ -1,12 +1,13 @@
 name: Run tests
-on:
-  pull_request:
-    branches:
-      - dev-cere
-    types:
-      - opened
-      - synchronize
-      - edited
+# Revert before merge
+on: workflow_dispatch
+#  pull_request:
+#    branches:
+#      - dev-cere
+#    types:
+#      - opened
+#      - synchronize
+#      - edited
 
 jobs:
   run-tests:
