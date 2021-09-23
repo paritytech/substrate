@@ -44,6 +44,7 @@ pub type AssignmentOf<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
 
 #[derive(
+	scale_info::TypeInfo,
 	codec::Encode,
 	codec::Decode,
 	frame_support::RuntimeDebugNoBound,
@@ -51,6 +52,8 @@ pub type AssignmentOf<T> =
 	frame_support::EqNoBound,
 	frame_support::PartialEqNoBound,
 )]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
 pub struct PagedRawSolution<T: Config> {
 	pub solution_pages: Vec<SolutionOf<T>>, // TODO: at least use the bounded vec.
 	pub score: ElectionScore,
@@ -108,7 +111,9 @@ pub type RoundTargetSnapshotPage<T> = Vec<<T as frame_system::Config>::AccountId
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, Default)]
+#[derive(
+	PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, Default, scale_info::TypeInfo,
+)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -119,7 +124,7 @@ pub struct SolutionOrSnapshotSize {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, scale_info::TypeInfo)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -138,7 +143,7 @@ impl Default for ElectionCompute {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, scale_info::TypeInfo)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,

@@ -32,7 +32,7 @@ use sp_npos_elections::ElectionScore;
 use std::fmt::Debug;
 
 /// Errors that can happen in the feasibility check.
-#[derive(Debug, Eq, PartialEq, codec::Encode, codec::Decode, Clone)]
+#[derive(Debug, Eq, PartialEq, codec::Encode, codec::Decode, scale_info::TypeInfo, Clone)]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,

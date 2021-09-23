@@ -92,6 +92,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -172,7 +173,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// Moved an account from one bag to another. \[who, from, to\].
 		Rebagged(T::AccountId, VoteWeight, VoteWeight),
@@ -188,7 +188,7 @@ pub mod pallet {
 		///
 		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
 		/// it is a noop and fees are still collected from `origin`.
-		#[pallet::weight(T::WeightInfo::rebag())]
+		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
@@ -285,8 +285,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Ok(())
 	}
 
-	fn clear() {
-		List::<T>::clear()
+	fn clear(maybe_count: Option<u32>) -> u32 {
+		List::<T>::clear(maybe_count)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

@@ -137,7 +137,7 @@ mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned(paged_solution, _) = call {
+			if let Call::submit_unsigned { paged_solution, .. } = call {
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => return InvalidTransaction::Call.into(),
@@ -170,8 +170,8 @@ mod pallet {
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::submit_unsigned(solution, _) = call {
-				Self::validate_unsigned_checks(solution.as_ref())
+			if let Call::submit_unsigned { paged_solution, .. } = call {
+				Self::validate_unsigned_checks(paged_solution.as_ref())
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
@@ -302,7 +302,10 @@ mod validate_unsigned {
 
 				// this is just worse
 				let attempt = fake_unsigned_solution([20, 0, 0]);
-				let call = super::Call::submit_unsigned(Box::new(attempt), witness());
+				let call = super::Call::submit_unsigned {
+					paged_solution: Box::new(attempt),
+					witness: witness(),
+				};
 				assert_eq!(
 					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
 					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
@@ -311,7 +314,10 @@ mod validate_unsigned {
 				// this is better, but not enough better.
 				let insufficient_improvement = 55 * 105 / 100;
 				let attempt = fake_unsigned_solution([insufficient_improvement, 0, 0]);
-				let call = super::Call::submit_unsigned(Box::new(attempt), witness());
+				let call = super::Call::submit_unsigned {
+					paged_solution: Box::new(attempt),
+					witness: witness(),
+				};
 				assert_eq!(
 					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
 					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
@@ -319,7 +325,10 @@ mod validate_unsigned {
 
 				let sufficient_improvement = 55 * 115 / 100;
 				let attempt = fake_unsigned_solution([sufficient_improvement, 0, 0]);
-				let call = super::Call::submit_unsigned(Box::new(attempt), witness());
+				let call = super::Call::submit_unsigned {
+					paged_solution: Box::new(attempt),
+					witness: witness(),
+				};
 				assert!(UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).is_ok());
 			})
 	}
@@ -352,7 +361,10 @@ mod validate_unsigned {
 		ExtBuilder::default().build_and_execute(|| {
 			let solution = fake_unsigned_solution([5, 0, 0]);
 
-			let call = super::Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = super::Call::submit_unsigned {
+				paged_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -424,7 +436,10 @@ mod validate_unsigned {
 				assert!(MultiBlock::current_phase().is_unsigned());
 
 				let solution = fake_unsigned_solution([5, 0, 0]);
-				let call = super::Call::submit_unsigned(Box::new(solution.clone()), witness());
+				let call = super::Call::submit_unsigned {
+					paged_solution: Box::new(solution.clone()),
+					witness: witness(),
+				};
 
 				assert_eq!(
 					<UnsignedPallet as ValidateUnsigned>::validate_unsigned(

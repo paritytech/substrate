@@ -114,7 +114,7 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::Decode;
+use codec::{Decode, MaxEncodedLen};
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{self, DispatchError, DispatchResult},
@@ -367,7 +367,7 @@ pub trait Config: frame_system::Config {
 	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// A stable ID for a validator.
-	type ValidatorId: Member + Parameter;
+	type ValidatorId: Member + Parameter + MaxEncodedLen;
 
 	/// A conversion from account ID to validator ID.
 	///

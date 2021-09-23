@@ -215,7 +215,8 @@ benchmarks! {
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
 		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
-		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+		let controller_lookup: <T::Lookup as StaticLookup>::Source
+			= T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		whitelist_account!(stash);
@@ -240,7 +241,8 @@ benchmarks! {
 
 		let stash = scenario.origin_stash1.clone();
 		let controller = scenario.origin_controller1.clone();
-		let original_bonded: BalanceOf<T> = Ledger::<T>::get(&controller).map(|l| l.active).ok_or("ledger not created after")?;
+		let original_bonded: BalanceOf<T>
+			= Ledger::<T>::get(&controller).map(|l| l.active).ok_or("ledger not created after")?;
 
 		T::Currency::deposit_into_existing(&stash, max_additional).unwrap();
 

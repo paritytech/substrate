@@ -824,10 +824,23 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// .. and grab whatever we have left from nominators.
-		let nominators_quota = max_allowed_len.saturating_sub(validators_taken as usize);
-		let mut all_nominators = Vec::with_capacity(nominators_quota);
+		let nominators_quota = (max_allowed_len as u32).saturating_sub(validators_taken);
+
+		// track the count of nominators added to `all_voters
 		let mut nominators_taken = 0u32;
-		for nominator in T::SortedListProvider::iter().take(nominators_quota) {
+		// track every nominator iterated over, but not necessarily added to `all_voters`
+		let mut nominators_seen = 0u32;
+
+		let mut nominators_iter = T::SortedListProvider::iter();
+		while nominators_taken < nominators_quota && nominators_seen < nominators_quota * 2 {
+			let nominator = match nominators_iter.next() {
+				Some(nominator) => {
+					nominators_seen.saturating_inc();
+					nominator
+				},
+				None => break,
+			};
+
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
@@ -837,7 +850,7 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_nominators.push((nominator.clone(), Self::weight_of(&nominator), targets));
+					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets));
 					nominators_taken.saturating_inc();
 				}
 			} else {
@@ -848,13 +861,10 @@ impl<T: Config> Pallet<T> {
 		match remaining {
 			0 => LastIteratedNominator::<T>::kill(),
 			_ => {
-				LastIteratedNominator::<T>::put(all_nominators.last().map(|(x, _, _)| x).cloned());
+				LastIteratedNominator::<T>::put(all_voters.last().map(|(x, _, _)| x).cloned());
 			},
 		};
 
-		// all_nominators should have never re-allocated
-		debug_assert!(all_nominators.capacity() >= all_nominators.len());
-		all_voters.extend(all_nominators);
 		// all_voters should have never re-allocated.
 		debug_assert_eq!(all_voters.capacity(), all_voters.len());
 
@@ -1111,7 +1121,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Nominators<T>>::remove_all(None);
 		<CounterForNominators<T>>::kill();
 		<CounterForValidators<T>>::kill();
-		T::SortedListProvider::clear();
+		let _ = T::SortedListProvider::clear(None);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1419,18 +1429,20 @@ pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
 
+	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
-
 	fn iter_from(
 		start: &T::AccountId,
 	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
-		Ok(Box::new(
-			Nominators::<T>::iter_from(Nominators::<T>::hashed_key_for(start)).map(|(n, _)| n),
-		))
+		if Nominators::<T>::contains_key(start) {
+			let start_key = Nominators::<T>::hashed_key_for(start);
+			Ok(Box::new(Nominators::<T>::iter_from(start_key).map(|(n, _)| n)))
+		} else {
+			Err(())
+		}
 	}
-
 	fn count() -> u32 {
 		CounterForNominators::<T>::get()
 	}
@@ -1457,8 +1469,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	fn clear() {
-		Nominators::<T>::remove_all(None);
-		CounterForNominators::<T>::kill();
+	fn clear(maybe_count: Option<u32>) -> u32 {
+		Nominators::<T>::remove_all(maybe_count);
+		if let Some(count) = maybe_count {
+			CounterForNominators::<T>::mutate(|noms| *noms - count);
+			count
+		} else {
+			CounterForNominators::<T>::take()
+		}
 	}
 }

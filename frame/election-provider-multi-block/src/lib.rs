@@ -199,6 +199,8 @@ use sp_npos_elections::{NposSolution, VoteWeight};
 use sp_runtime::{traits::Bounded, PerThing, SaturatedConversion};
 use verifier::Verifier;
 
+// TODO: integrate type-info and #[pallet::generate_storage_info]
+
 #[cfg(test)]
 mod mock;
 #[macro_use]
@@ -360,7 +362,8 @@ pub mod pallet {
 			+ Clone
 			+ sp_std::fmt::Debug
 			+ Ord
-			+ NposSolution;
+			+ NposSolution
+			+ scale_info::TypeInfo;
 
 		type Fallback: ElectionProvider<
 			Self::AccountId,

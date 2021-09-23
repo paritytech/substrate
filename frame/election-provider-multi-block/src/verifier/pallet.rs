@@ -205,7 +205,7 @@ mod pallet {
 	#[pallet::storage]
 	type VerifyingSolutionScore<T: Config> = StorageValue<_, ElectionScore>;
 
-	#[derive(Encode, Decode, Clone, Copy)]
+	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy)]
 	enum ValidSolution {
 		X,
 		Y,

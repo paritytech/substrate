@@ -30,10 +30,6 @@ pub mod v8 {
 			StorageVersion::<T>::get() == crate::Releases::V7_0_0,
 			"must upgrade linearly"
 		);
-		frame_support::ensure!(
-			T::SortedListProvider::iter().count() == 0,
-			"voter list already exists"
-		);
 		crate::log!(info, "👜 staking bags-list migration passes PRE migrate checks ✅",);
 		Ok(())
 	}

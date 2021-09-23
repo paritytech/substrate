@@ -564,7 +564,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
@@ -1410,6 +1409,9 @@ pub mod pallet {
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
+			if T::SortedListProvider::contains(&ledger.stash) {
+				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			}
 
 			if T::SortedListProvider::contains(&ledger.stash) {
 				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));

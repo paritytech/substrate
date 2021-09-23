@@ -566,7 +566,8 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 			.map_err(|de| MinerError::UnsignedChecksFailed(de))?;
 
 		let call: super::Call<T> =
-			super::Call::<T>::submit_unsigned(Box::new(paged_solution), witness).into();
+			super::Call::<T>::submit_unsigned { paged_solution: Box::new(paged_solution), witness }
+				.into();
 
 		Ok(call)
 	}
@@ -614,11 +615,11 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 		let call = Self::restore_solution()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				if let super::Call::submit_unsigned(solution, _) = &call {
+				if let super::Call::submit_unsigned { paged_solution, .. } = &call {
 					// prevent errors arising from state changes in a forkful chain.
 					// TODO: once we have snapshot hash here, we can avoid needing to do the
 					// feasibility_check again.
-					BaseMiner::<T>::full_checks(solution, "restored")?;
+					BaseMiner::<T>::full_checks(paged_solution, "restored")?;
 					Ok(call)
 				} else {
 					Err(MinerError::SolutionCallInvalid)
@@ -1543,7 +1544,7 @@ mod offchain_worker_miner {
 			let call = extrinsic.call;
 			assert!(matches!(
 				call,
-				crate::mock::Call::UnsignedPallet(crate::unsigned::Call::submit_unsigned(..))
+				crate::mock::Call::UnsignedPallet(crate::unsigned::Call::submit_unsigned { .. })
 			));
 		})
 	}

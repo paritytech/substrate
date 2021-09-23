@@ -25,14 +25,15 @@
 //! interface.
 
 use crate::Config;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{VoteWeight, VoteWeightProvider};
 use frame_support::{traits::Get, DefaultNoBound};
+use scale_info::TypeInfo;
 use sp_std::{
-	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	marker::PhantomData,
+	prelude::*,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -76,17 +77,24 @@ pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
-	/// Remove all data associated with the list from storage.
-	pub(crate) fn clear() {
-		crate::CounterForListNodes::<T>::kill();
-		crate::ListBags::<T>::remove_all(None);
-		crate::ListNodes::<T>::remove_all(None);
+	/// Remove all data associated with the list from storage. Parameter `items` is the number of
+	/// items to clear from the list. WARNING: `None` will clear all items and should generally not
+	/// be used in production as it could lead to an infinite number of storage accesses.
+	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
+		crate::ListBags::<T>::remove_all(maybe_count);
+		crate::ListNodes::<T>::remove_all(maybe_count);
+		if let Some(count) = maybe_count {
+			crate::CounterForListNodes::<T>::mutate(|items| *items - count);
+			count
+		} else {
+			crate::CounterForListNodes::<T>::take()
+		}
 	}
 
 	/// Regenerate all of the data from the given ids.
 	///
-	/// This is expensive and should only ever be performed during a migration, or when
-	/// the data needs to be generated from scratch again.
+	/// WARNING: this is expensive and should only ever be performed when the list needs to be
+	/// generated from scratch. Care needs to be taken to ensure
 	///
 	/// This may or may not need to be called at genesis as well, based on the configuration of the
 	/// pallet using this `List`.
@@ -96,7 +104,7 @@ impl<T: Config> List<T> {
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		Self::clear();
+		Self::clear(None);
 		Self::insert_many(all, weight_of)
 	}
 
@@ -493,9 +501,10 @@ impl<T: Config> List<T> {
 /// desirable to ensure that there is some element of first-come, first-serve to the list's
 /// iteration so that there's no incentive to churn ids positioning to improve the chances of
 /// appearing within the ids set.
-#[derive(DefaultNoBound, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone))]
-#[cfg_attr(test, derive(PartialEq))]
+#[derive(DefaultNoBound, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Bag<T: Config> {
 	head: Option<T::AccountId>,
 	tail: Option<T::AccountId>,
@@ -695,7 +704,9 @@ impl<T: Config> Bag<T> {
 }
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config> {
 	id: T::AccountId,
