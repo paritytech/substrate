@@ -479,6 +479,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(credit)
 	}
 
+	pub(super) fn do_force_create(
+		id: T::AssetId,
+		owner: T::AccountId,
+		is_sufficient: bool,
+		min_balance: T::Balance,
+	) -> DispatchResult {
+		ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
+		ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
+
+		Asset::<T, I>::insert(
+			id,
+			AssetDetails {
+				owner: owner.clone(),
+				issuer: owner.clone(),
+				admin: owner.clone(),
+				freezer: owner.clone(),
+				supply: Zero::zero(),
+				deposit: Zero::zero(),
+				min_balance,
+				is_sufficient,
+				accounts: 0,
+				sufficients: 0,
+				approvals: 0,
+				is_frozen: false,
+			},
+		);
+		Self::deposit_event(Event::ForceCreated(id, owner));
+		Ok(())
+	}
+
 	pub(super) fn do_destroy(
 		id: T::AssetId,
 		witness: DestroyWitness,
