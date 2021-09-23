@@ -488,8 +488,8 @@ pub mod pallet {
 		//
 		// The parenthesized value of the `#[pallet::weight(..)]` attribute can be any type that
 		// implements a set of traits, namely [`WeighData`], [`ClassifyDispatch`], and 
-		// [`PaysFee`]. The former conveys the weight (a numeric representation of pure execution
-		// time and difficulty) of the transaction and the latter demonstrates the 
+		// [`PaysFee`]. The former conveys the weight (a numeric representation of pure
+		// execution time and difficulty) of the transaction and the latter demonstrates the
 		// [`DispatchClass`] of the call. A higher weight means a larger transaction (less of 
 		// which can be placed in a single block).
 		//
