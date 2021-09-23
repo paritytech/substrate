@@ -70,6 +70,11 @@ mod pallet {
 		/// to submit the worker's solution.
 		type OffchainRepeat: Get<Self::BlockNumber>;
 
+		/// The solver used in hte offchain worker miner
+		type OffchainSolver: frame_election_provider_support::NposSolver<
+			AccountId = Self::AccountId,
+		>;
+
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		type MinerTxPriority: Get<TransactionPriority>;
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of

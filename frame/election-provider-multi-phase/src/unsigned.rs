@@ -63,11 +63,12 @@ pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<
 
 /// Error type of the pallet's [`crate::Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
+
 /// Error type for operations related to the OCW npos solution miner.
 #[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
 pub enum MinerError<T: Config> {
 	/// An internal error in the NPoS elections crate.
-	NposElections(sp_npos_elections::Error),
+	NposElections(sp_npos_elections::Error), // TODO: remove this
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable,
 	/// Submitting a transaction to the pool failed.

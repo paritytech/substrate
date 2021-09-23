@@ -267,8 +267,6 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmerg
 pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(verifier::FeasibilityError),
-	/// An error in the miner (offchain) sub-system.
-	Miner(unsigned::miner::MinerError),
 	/// An error in the fallback.
 	Fallback(FallbackErrorOf<T>),
 	/// An error in the onchain seq-phragmen implementation
@@ -295,12 +293,6 @@ impl<T: Config> From<onchain::Error> for ElectionError<T> {
 impl<T: Config> From<verifier::FeasibilityError> for ElectionError<T> {
 	fn from(e: verifier::FeasibilityError) -> Self {
 		ElectionError::Feasibility(e)
-	}
-}
-
-impl<T: Config> From<unsigned::miner::MinerError> for ElectionError<T> {
-	fn from(e: unsigned::miner::MinerError) -> Self {
-		ElectionError::Miner(e)
 	}
 }
 

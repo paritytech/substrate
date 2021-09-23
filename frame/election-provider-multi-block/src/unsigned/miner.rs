@@ -18,7 +18,7 @@
 use super::WeightInfo;
 use crate::{helpers, log, types::*, verifier, Snapshot};
 use codec::{Decode, Encode};
-use frame_election_provider_support::{ExtendedBalance, Support, VoteWeight};
+use frame_election_provider_support::{ExtendedBalance, NposSolver, Support, VoteWeight};
 use frame_support::{dispatch::Weight, traits::Get};
 use sp_npos_elections::StakedAssignment;
 use sp_runtime::{
@@ -48,13 +48,20 @@ pub enum SnapshotType {
 	DesiredTargets,
 }
 
-/// TODO: ideally the errors of the offchain miner would go into its own thing?
+// TODO: ideally the errors of the offchain miner would go into its own thing?
+
+/// Error type of the pallet's [`crate::Config::Solver`].
+pub type OffchainSolverErrorOf<T> = <<T as super::Config>::OffchainSolver as NposSolver>::Error;
 
 /// The errors related to the [`BaseMiner`] and [`OffchainMiner`].
-#[derive(Debug, Eq, PartialEq)]
-pub enum MinerError {
+#[derive(
+	frame_support::DebugNoBound, frame_support::EqNoBound, frame_support::PartialEqNoBound,
+)]
+pub enum MinerError<T: super::Config> {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
+	/// An internal error in the generic solver.
+	Solver(OffchainSolverErrorOf<T>),
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable(SnapshotType),
 	/// The snapshot-independent checks failed for the mined solution.
@@ -79,13 +86,13 @@ pub enum MinerError {
 	TooManyWinnersRemoved,
 }
 
-impl From<sp_npos_elections::Error> for MinerError {
+impl<T: super::Config> From<sp_npos_elections::Error> for MinerError<T> {
 	fn from(e: sp_npos_elections::Error) -> Self {
 		MinerError::NposElections(e)
 	}
 }
 
-impl From<crate::verifier::FeasibilityError> for MinerError {
+impl<T: super::Config> From<crate::verifier::FeasibilityError> for MinerError<T> {
 	fn from(e: verifier::FeasibilityError) -> Self {
 		MinerError::Feasibility(e)
 	}
@@ -94,11 +101,18 @@ impl From<crate::verifier::FeasibilityError> for MinerError {
 /// A base miner that is only capable of mining a new solution and checking it against the state of
 /// this pallet for feasibility, and trimming its length/weight.
 ///
-/// The type of solver is hardcoded for now, `seq-phragmen`. TODO: turn it a configurable,
-/// extensible trait.
-pub struct BaseMiner<T: super::Config>(sp_std::marker::PhantomData<T>);
+/// The type of solver is generic and can be provided, as long as it has the same error and account
+/// id type as the [`crate::Config::OffchainSolver`]. The default is whatever is fed to
+/// [`crate::unsigned::Config::OffchainSolver`].
+pub struct BaseMiner<T: super::Config, Solver = <T as super::Config>::OffchainSolver>(
+	sp_std::marker::PhantomData<(T, Solver)>,
+);
 
-impl<T: super::Config> BaseMiner<T> {
+impl<
+		T: super::Config,
+		Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSolverErrorOf<T>>,
+	> BaseMiner<T, Solver>
+{
 	/// Mine a new npos solution, with the given number of pages.
 	///
 	/// This miner is only capable of mining a solution that either uses all of the pages of the
@@ -106,7 +120,7 @@ impl<T: super::Config> BaseMiner<T> {
 	pub fn mine_solution(
 		mut pages: PageIndex,
 		do_reduce: bool,
-	) -> Result<PagedRawSolution<T>, MinerError> {
+	) -> Result<PagedRawSolution<T>, MinerError<T>> {
 		pages = pages.min(T::Pages::get());
 
 		// read the appropriate snapshot pages.
@@ -147,13 +161,8 @@ impl<T: super::Config> BaseMiner<T> {
 		let all_voters = voter_pages.iter().flatten().cloned().collect::<Vec<_>>();
 
 		let ElectionResult { winners: _, assignments } =
-			sp_npos_elections::seq_phragmen::<_, SolutionAccuracyOf<T>>(
-				desired_targets as usize,
-				all_targets.clone(),
-				all_voters.clone(),
-				None,
-			)
-			.map_err::<MinerError, _>(Into::into)?;
+			Solver::solve(desired_targets as usize, all_targets.clone(), all_voters.clone())
+				.map_err(|e| MinerError::Solver(e))?;
 
 		// reduce and trim supports. We don't trim length and weight here, since those are dependent
 		// on the final form of the solution ([`PagedRawSolution`]), thus we do it later.
@@ -175,7 +184,7 @@ impl<T: super::Config> BaseMiner<T> {
 			// 1. convert to staked and reduce
 			let (reduced_count, staked) = {
 				let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
-					.map_err::<MinerError, _>(Into::into)?;
+					.map_err::<MinerError<T>, _>(Into::into)?;
 
 				// first, reduce the solution if requested. This will already remove a lot of
 				// "redundant" and reduce the chance for the need of any further trimming.
@@ -196,7 +205,7 @@ impl<T: super::Config> BaseMiner<T> {
 				// now recreated the staked assignments
 				let staked = supports_to_staked_assignment(supports_invalid_score);
 				let assignments = assignment_staked_to_ratio_normalized(staked)
-					.map_err::<MinerError, _>(Into::into)?;
+					.map_err::<MinerError<T>, _>(Into::into)?;
 				(pre_score, trimmed, assignments)
 			};
 
@@ -243,7 +252,7 @@ impl<T: super::Config> BaseMiner<T> {
 					&voter_index_fn,
 					&target_index_fn,
 				)
-				.map_err::<MinerError, _>(Into::into)
+				.map_err::<MinerError<T>, _>(Into::into)
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
@@ -260,7 +269,7 @@ impl<T: super::Config> BaseMiner<T> {
 
 		// OPTIMIZATION: we do feasibility_check inside `compute_score`, and once later
 		// pre_dispatch. I think it is fine, but maybe we can improve it.
-		let score = Self::compute_score(&paged).map_err::<MinerError, _>(Into::into)?;
+		let score = Self::compute_score(&paged).map_err::<MinerError<T>, _>(Into::into)?;
 		paged.score = score.clone();
 
 		log!(
@@ -277,7 +286,7 @@ impl<T: super::Config> BaseMiner<T> {
 	pub fn mine_checked_solution(
 		pages: PageIndex,
 		reduce: bool,
-	) -> Result<PagedRawSolution<T>, MinerError> {
+	) -> Result<PagedRawSolution<T>, MinerError<T>> {
 		let paged_solution = Self::mine_solution(pages, reduce)?;
 		let _ = Self::full_checks(&paged_solution, "mined")?;
 		Ok(paged_solution)
@@ -290,7 +299,7 @@ impl<T: super::Config> BaseMiner<T> {
 	pub fn full_checks(
 		paged_solution: &PagedRawSolution<T>,
 		solution_type: &str,
-	) -> Result<(), MinerError> {
+	) -> Result<(), MinerError<T>> {
 		crate::Pallet::<T>::snapshot_independent_checks(paged_solution)
 			.map_err(|de| MinerError::SnapshotIndependentChecksFailed(de))
 			.and_then(|_| Self::check_feasibility(&paged_solution, solution_type).map(|_| ()))
@@ -301,7 +310,7 @@ impl<T: super::Config> BaseMiner<T> {
 	pub fn check_feasibility(
 		paged_solution: &PagedRawSolution<T>,
 		solution_type: &str,
-	) -> Result<Vec<Supports<T::AccountId>>, MinerError> {
+	) -> Result<Vec<Supports<T::AccountId>>, MinerError<T>> {
 		// check every solution page for feasibility.
 		paged_solution
 			.solution_pages
@@ -327,7 +336,7 @@ impl<T: super::Config> BaseMiner<T> {
 	/// Take the given raw paged solution and compute its score. This will replicate what the chain
 	/// would do as closely as possible, and expects all the corresponding snapshot data to be
 	/// available.
-	fn compute_score(paged_solution: &PagedRawSolution<T>) -> Result<ElectionScore, MinerError> {
+	fn compute_score(paged_solution: &PagedRawSolution<T>) -> Result<ElectionScore, MinerError<T>> {
 		use crate::Verifier;
 		use sp_npos_elections::EvaluateSupport;
 		use sp_std::collections::btree_map::BTreeMap;
@@ -408,7 +417,7 @@ impl<T: super::Config> BaseMiner<T> {
 	pub fn maybe_trim_weight_and_len(
 		solution_pages: &mut Vec<SolutionOf<T>>,
 		voter_pages: &Vec<Vec<VoterOf<T>>>,
-	) -> Result<u32, MinerError> {
+	) -> Result<u32, MinerError<T>> {
 		debug_assert_eq!(solution_pages.len(), voter_pages.len());
 		let size_limit = T::MinerMaxLength::get();
 		let weight_limit = T::MinerMaxWeight::get();
@@ -552,7 +561,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Get a checked solution from the base miner, ensure unsigned-specific checks also pass, then
 	/// return an submittable call.
-	fn mine_checked_call() -> Result<super::Call<T>, MinerError> {
+	fn mine_checked_call() -> Result<super::Call<T>, MinerError<T>> {
 		let iters = Self::get_balancing_iters();
 		// we always do reduce in the offchain worker miner.
 		let reduce = true;
@@ -561,7 +570,8 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 		// NOTE: the `BaseMiner` will already run `feasibility` and a `snapshot_independent_checks`
 		// on this, now we just run the `unsigned_specific` ones.
-		let paged_solution = BaseMiner::<T>::mine_checked_solution(Self::MINING_PAGES, reduce)?;
+		let paged_solution =
+			BaseMiner::<T, T::OffchainSolver>::mine_checked_solution(Self::MINING_PAGES, reduce)?;
 		let _ = super::Pallet::<T>::unsigned_specific_checks(&paged_solution)
 			.map_err(|de| MinerError::UnsignedChecksFailed(de))?;
 
@@ -574,14 +584,14 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Mine a new checked solution, cache it, and submit it back to the chain as an unsigned
 	/// transaction.
-	pub fn mine_check_save_submit() -> Result<(), MinerError> {
+	pub fn mine_check_save_submit() -> Result<(), MinerError<T>> {
 		log!(debug, "miner attempting to compute an unsigned solution.");
 		let call = Self::mine_checked_call()?;
 		Self::save_solution(&call)?;
 		Self::submit_call(call)
 	}
 
-	fn submit_call(call: super::Call<T>) -> Result<(), MinerError> {
+	fn submit_call(call: super::Call<T>) -> Result<(), MinerError<T>> {
 		log!(debug, "miner submitting a solution as an unsigned transaction");
 		frame_system::offchain::SubmitTransaction::<T, super::Call<T>>::submit_unsigned_transaction(
 			call.into(),
@@ -609,7 +619,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way,
 	/// submit if our call's score is greater than that of the cached solution.
-	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
+	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError<T>> {
 		log!(debug, "miner attempting to restore or compute an unsigned solution.");
 
 		let call = Self::restore_solution()
@@ -619,13 +629,13 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 					// prevent errors arising from state changes in a forkful chain.
 					// TODO: once we have snapshot hash here, we can avoid needing to do the
 					// feasibility_check again.
-					BaseMiner::<T>::full_checks(paged_solution, "restored")?;
+					BaseMiner::<T, T::OffchainSolver>::full_checks(paged_solution, "restored")?;
 					Ok(call)
 				} else {
 					Err(MinerError::SolutionCallInvalid)
 				}
 			})
-			.or_else::<MinerError, _>(|error| {
+			.or_else::<MinerError<T>, _>(|error| {
 				log!(debug, "restoring solution failed due to {:?}", error);
 				match error {
 					MinerError::NoStoredSolution => {
@@ -668,7 +678,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If
 	/// `Ok()` is returned, `now` is written in storage and will be used in further calls as the
 	/// baseline.
-	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
+	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError<T>> {
 		let threshold = T::OffchainRepeat::get();
 		let last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
 
@@ -703,7 +713,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	}
 
 	/// Save a given call into OCW storage.
-	fn save_solution(call: &super::Call<T>) -> Result<(), MinerError> {
+	fn save_solution(call: &super::Call<T>) -> Result<(), MinerError<T>> {
 		log!(debug, "saving a call to the offchain storage.");
 		let storage = StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL);
 		match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
@@ -721,7 +731,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	}
 
 	/// Get a saved solution from OCW storage if it exists.
-	fn restore_solution() -> Result<super::Call<T>, MinerError> {
+	fn restore_solution() -> Result<super::Call<T>, MinerError<T>> {
 		StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL)
 			.get()
 			.ok()

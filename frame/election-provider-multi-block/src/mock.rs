@@ -366,6 +366,8 @@ impl crate::unsigned::Config for Runtime {
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
+	type OffchainSolver =
+		frame_election_provider_support::SequentialPhragmen<Self::AccountId, Perbill>;
 	type WeightInfo = MockUnsignedWeightInfo;
 }
 
@@ -713,12 +715,12 @@ pub fn ensure_full_snapshot() {
 /// changes.
 ///
 /// For testing, we never want to do reduce.
-pub fn mine_full_solution() -> Result<PagedRawSolution<Runtime>, MinerError> {
+pub fn mine_full_solution() -> Result<PagedRawSolution<Runtime>, MinerError<Runtime>> {
 	BaseMiner::<Runtime>::mine_solution(Pages::get(), false)
 }
 
 /// Same as [`mine_full_solution`] but with custom pages.
-pub fn mine_solution(pages: PageIndex) -> Result<PagedRawSolution<Runtime>, MinerError> {
+pub fn mine_solution(pages: PageIndex) -> Result<PagedRawSolution<Runtime>, MinerError<Runtime>> {
 	BaseMiner::<Runtime>::mine_solution(pages, false)
 }
 
