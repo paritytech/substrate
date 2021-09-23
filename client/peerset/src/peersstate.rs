@@ -130,12 +130,18 @@ enum MembershipState {
 impl MembershipState {
 	/// Returns `true` for [`MembershipState::In`] and [`MembershipState::Out`].
 	fn is_connected(self) -> bool {
-		matches!(self, Self::In | Self::Out)
+		match self {
+			Self::In | Self::Out => true,
+			Self::NotMember | Self::NotConnected { .. } => false,
+		}
 	}
 
 	/// Returns `true` for [`MembershipState::NotConnected`].
 	fn is_not_connected(self) -> bool {
-		matches!(self, Self::NotConnected { .. })
+		match self {
+			Self::NotConnected { .. } => true,
+			Self::In | Self::Out | Self::NotMember => false,
+		}
 	}
 }
 
@@ -318,7 +324,7 @@ impl<'a> Peer<'a> {
 	pub fn into_connected(self) -> Option<ConnectedPeer<'a>> {
 		match self {
 			Self::Connected(peer) => Some(peer),
-			_ => None,
+			Self::NotConnected(..) | Self::Unknown(..) => None,
 		}
 	}
 
@@ -328,7 +334,7 @@ impl<'a> Peer<'a> {
 	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
 		match self {
 			Self::NotConnected(peer) => Some(peer),
-			_ => None,
+			Self::Connected(..) | Self::Unknown(..) => None,
 		}
 	}
 
@@ -338,7 +344,7 @@ impl<'a> Peer<'a> {
 	pub fn into_unknown(self) -> Option<UnknownPeer<'a>> {
 		match self {
 			Self::Unknown(peer) => Some(peer),
-			_ => None,
+			Self::Connected(..) | Self::NotConnected(..) => None,
 		}
 	}
 }
