@@ -24,9 +24,12 @@ pub use sp_inherents::{
 	CheckInherentsResult, InherentData, InherentIdentifier, IsFatalError, MakeFatalError,
 };
 
-/// A pallet that provides or verifies an inherent extrinsic.
+/// A pallet that provides or verifies an inherent extrinsic will implement this trait.
 ///
-/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
+/// The pallet may provide an inherent, verify an inherent, or both provide and verify.
+///
+/// Briefly, inherent extrinsics ("inherents") are extrinsics that are added to a block by the block
+/// producer. See [`sp_inherents`] for more documentation on inherents.
 pub trait ProvideInherent {
 	/// The call type of the pallet.
 	type Call;
@@ -93,6 +96,6 @@ pub trait ProvideInherent {
 	/// In FRAME, inherents are enforced to be executed before other extrinsics. For this reason,
 	/// pallets with unsigned transactions **must ensure** that no unsigned transaction call
 	/// is an inherent call, when implementing `ValidateUnsigned::validate_unsigned`.
-	/// Otherwise block producers can produce invalid blocks by including them after non inherent.
+	/// Otherwise block producers can produce invalid blocks by including them after non-inherents.
 	fn is_inherent(call: &Self::Call) -> bool;
 }
