@@ -68,7 +68,7 @@ pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
 #[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
 pub enum MinerError<T: Config> {
 	/// An internal error in the NPoS elections crate.
-	NposElections(sp_npos_elections::Error), // TODO: remove this
+	NposElections(sp_npos_elections::Error),
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable,
 	/// Submitting a transaction to the pool failed.

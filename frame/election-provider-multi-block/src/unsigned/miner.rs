@@ -48,12 +48,10 @@ pub enum SnapshotType {
 	DesiredTargets,
 }
 
-// TODO: ideally the errors of the offchain miner would go into its own thing?
-
 /// Error type of the pallet's [`crate::Config::Solver`].
 pub type OffchainSolverErrorOf<T> = <<T as super::Config>::OffchainSolver as NposSolver>::Error;
 
-/// The errors related to the [`BaseMiner`] and [`OffchainMiner`].
+/// The errors related to the [`BaseMiner`].
 #[derive(
 	frame_support::DebugNoBound, frame_support::EqNoBound, frame_support::PartialEqNoBound,
 )]
@@ -70,16 +68,6 @@ pub enum MinerError<T: super::Config> {
 	UnsignedChecksFailed(sp_runtime::DispatchError),
 	/// The solution generated from the miner is not feasible.
 	Feasibility(verifier::FeasibilityError),
-	/// Something went wrong fetching the lock.
-	Lock(&'static str),
-	/// Submitting a transaction to the pool failed.
-	PoolSubmissionFailed,
-	/// Cannot restore a solution that was not stored.
-	NoStoredSolution,
-	/// Cached solution is not a `submit_unsigned` call.
-	SolutionCallInvalid,
-	/// Failed to store a solution.
-	FailedToStoreSolution,
 	/// Some page index has been invalid.
 	InvalidPage,
 	/// Too many winners were removed during trimming.
@@ -95,6 +83,31 @@ impl<T: super::Config> From<sp_npos_elections::Error> for MinerError<T> {
 impl<T: super::Config> From<crate::verifier::FeasibilityError> for MinerError<T> {
 	fn from(e: verifier::FeasibilityError) -> Self {
 		MinerError::Feasibility(e)
+	}
+}
+
+/// The errors related to the [`OffchainMiner`].
+#[derive(
+	frame_support::DebugNoBound, frame_support::EqNoBound, frame_support::PartialEqNoBound,
+)]
+pub enum OffchainMinerError<T: super::Config> {
+	/// An error in the base miner.
+	BaseMiner(MinerError<T>),
+	/// Something went wrong fetching the lock.
+	Lock(&'static str),
+	/// Submitting a transaction to the pool failed.
+	PoolSubmissionFailed,
+	/// Cannot restore a solution that was not stored.
+	NoStoredSolution,
+	/// Cached solution is not a `submit_unsigned` call.
+	SolutionCallInvalid,
+	/// Failed to store a solution.
+	FailedToStoreSolution,
+}
+
+impl<T: super::Config> From<MinerError<T>> for OffchainMinerError<T> {
+	fn from(e: MinerError<T>) -> Self {
+		OffchainMinerError::BaseMiner(e)
 	}
 }
 
@@ -561,19 +574,23 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Get a checked solution from the base miner, ensure unsigned-specific checks also pass, then
 	/// return an submittable call.
-	fn mine_checked_call() -> Result<super::Call<T>, MinerError<T>> {
+	fn mine_checked_call() -> Result<super::Call<T>, OffchainMinerError<T>> {
 		let iters = Self::get_balancing_iters();
 		// we always do reduce in the offchain worker miner.
 		let reduce = true;
-		let witness = crate::Snapshot::<T>::metadata()
-			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Metadata))?;
+		let witness = crate::Snapshot::<T>::metadata().ok_or::<OffchainMinerError<T>>(
+			MinerError::SnapshotUnAvailable(SnapshotType::Metadata).into(),
+		)?;
 
 		// NOTE: the `BaseMiner` will already run `feasibility` and a `snapshot_independent_checks`
 		// on this, now we just run the `unsigned_specific` ones.
 		let paged_solution =
-			BaseMiner::<T, T::OffchainSolver>::mine_checked_solution(Self::MINING_PAGES, reduce)?;
+			BaseMiner::<T, T::OffchainSolver>::mine_checked_solution(Self::MINING_PAGES, reduce)
+				.map_err::<OffchainMinerError<T>, _>(Into::into)?;
 		let _ = super::Pallet::<T>::unsigned_specific_checks(&paged_solution)
-			.map_err(|de| MinerError::UnsignedChecksFailed(de))?;
+			.map_err::<OffchainMinerError<T>, _>(|de| {
+				MinerError::UnsignedChecksFailed(de).into()
+			})?;
 
 		let call: super::Call<T> =
 			super::Call::<T>::submit_unsigned { paged_solution: Box::new(paged_solution), witness }
@@ -584,19 +601,19 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Mine a new checked solution, cache it, and submit it back to the chain as an unsigned
 	/// transaction.
-	pub fn mine_check_save_submit() -> Result<(), MinerError<T>> {
+	pub fn mine_check_save_submit() -> Result<(), OffchainMinerError<T>> {
 		log!(debug, "miner attempting to compute an unsigned solution.");
 		let call = Self::mine_checked_call()?;
 		Self::save_solution(&call)?;
 		Self::submit_call(call)
 	}
 
-	fn submit_call(call: super::Call<T>) -> Result<(), MinerError<T>> {
+	fn submit_call(call: super::Call<T>) -> Result<(), OffchainMinerError<T>> {
 		log!(debug, "miner submitting a solution as an unsigned transaction");
 		frame_system::offchain::SubmitTransaction::<T, super::Call<T>>::submit_unsigned_transaction(
 			call.into(),
 		)
-		.map_err(|_| MinerError::PoolSubmissionFailed)
+		.map_err(|_| OffchainMinerError::PoolSubmissionFailed)
 	}
 
 	/// Get a random number of iterations to run the balancing in the OCW.
@@ -619,7 +636,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way,
 	/// submit if our call's score is greater than that of the cached solution.
-	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError<T>> {
+	pub fn restore_or_compute_then_maybe_submit() -> Result<(), OffchainMinerError<T>> {
 		log!(debug, "miner attempting to restore or compute an unsigned solution.");
 
 		let call = Self::restore_solution()
@@ -629,25 +646,28 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 					// prevent errors arising from state changes in a forkful chain.
 					// TODO: once we have snapshot hash here, we can avoid needing to do the
 					// feasibility_check again.
-					BaseMiner::<T, T::OffchainSolver>::full_checks(paged_solution, "restored")?;
+					BaseMiner::<T, T::OffchainSolver>::full_checks(paged_solution, "restored")
+						.map_err::<OffchainMinerError<T>, _>(Into::into)?;
 					Ok(call)
 				} else {
-					Err(MinerError::SolutionCallInvalid)
+					Err(OffchainMinerError::SolutionCallInvalid)
 				}
 			})
-			.or_else::<MinerError<T>, _>(|error| {
+			.or_else::<OffchainMinerError<T>, _>(|error| {
 				log!(debug, "restoring solution failed due to {:?}", error);
 				match error {
-					MinerError::NoStoredSolution => {
+					OffchainMinerError::NoStoredSolution => {
 						log!(trace, "mining a new solution.");
 						// IFF, not present regenerate.
 						let call = Self::mine_checked_call()?;
 						Self::save_solution(&call)?;
 						Ok(call)
 					},
-					MinerError::Feasibility(_) |
-					MinerError::SnapshotIndependentChecksFailed(_) |
-					MinerError::UnsignedChecksFailed(_) => {
+					OffchainMinerError::BaseMiner(MinerError::Feasibility(_)) |
+					OffchainMinerError::BaseMiner(MinerError::SnapshotIndependentChecksFailed(
+						_,
+					)) |
+					OffchainMinerError::BaseMiner(MinerError::UnsignedChecksFailed(_)) => {
 						// note that failing `Feasibility` can only mean that the solution was
 						// computed over a snapshot that has changed due to a fork.
 						log!(trace, "wiping infeasible solution.");
@@ -678,7 +698,9 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If
 	/// `Ok()` is returned, `now` is written in storage and will be used in further calls as the
 	/// baseline.
-	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError<T>> {
+	pub fn ensure_offchain_repeat_frequency(
+		now: T::BlockNumber,
+	) -> Result<(), OffchainMinerError<T>> {
 		let threshold = T::OffchainRepeat::get();
 		let last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
 
@@ -705,38 +727,39 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 			// all good
 			Ok(_) => Ok(()),
 			// failed to write.
-			Err(MutateStorageError::ConcurrentModification(_)) =>
-				Err(MinerError::Lock("failed to write to offchain db (concurrent modification).")),
+			Err(MutateStorageError::ConcurrentModification(_)) => Err(OffchainMinerError::Lock(
+				"failed to write to offchain db (concurrent modification).",
+			)),
 			// fork etc.
-			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(MinerError::Lock(why)),
+			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(OffchainMinerError::Lock(why)),
 		}
 	}
 
 	/// Save a given call into OCW storage.
-	fn save_solution(call: &super::Call<T>) -> Result<(), MinerError<T>> {
+	fn save_solution(call: &super::Call<T>) -> Result<(), OffchainMinerError<T>> {
 		log!(debug, "saving a call to the offchain storage.");
 		let storage = StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL);
 		match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 			Ok(_) => Ok(()),
 			Err(MutateStorageError::ConcurrentModification(_)) =>
-				Err(MinerError::FailedToStoreSolution),
+				Err(OffchainMinerError::FailedToStoreSolution),
 			Err(MutateStorageError::ValueFunctionFailed(_)) => {
 				// this branch should be unreachable according to the definition of
 				// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
 				// pass it returns an error. however, for safety in case the definition changes, we
 				// do not optimize the branch away or panic.
-				Err(MinerError::FailedToStoreSolution)
+				Err(OffchainMinerError::FailedToStoreSolution)
 			},
 		}
 	}
 
 	/// Get a saved solution from OCW storage if it exists.
-	fn restore_solution() -> Result<super::Call<T>, MinerError<T>> {
+	fn restore_solution() -> Result<super::Call<T>, OffchainMinerError<T>> {
 		StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL)
 			.get()
 			.ok()
 			.flatten()
-			.ok_or(MinerError::NoStoredSolution)
+			.ok_or(OffchainMinerError::NoStoredSolution)
 	}
 
 	/// Clear a saved solution from OCW storage.
@@ -1443,7 +1466,7 @@ mod offchain_worker_miner {
 			// next block: rejected.
 			assert_noop!(
 				OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(26),
-				MinerError::Lock("recently executed.")
+				OffchainMinerError::Lock("recently executed.")
 			);
 
 			// allowed after `OFFCHAIN_REPEAT`
