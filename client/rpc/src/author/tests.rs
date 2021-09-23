@@ -281,6 +281,66 @@ async fn author_should_rotate_keys() {
 
 }
 
+#[tokio::test]
+async fn author_has_session_keys() {
+	env_logger::init();
+	let api = TestSetup::into_rpc();
+	// Setup
+
+	// valid session key
+	let pubkeys = {
+		let json = api.call("author_rotateKeys", None).await.expect("Rotates the keys");
+		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+
+	// A session key in a different keystore
+	let non_existent_pubkeys = {
+		let api2 = TestSetup::default().author().into_rpc();
+		let json = api2.call("author_rotateKeys", None).await.expect("Rotates the keys");
+		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+
+	// Then…
+	let existing = {
+		let json = api.call_with("author_hasSessionKeys", vec![pubkeys]).await.unwrap();
+		let response: Response<bool> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+	assert!(existing, "Existing key is in the session keys");
+
+	let inexistent = {
+		let json = api.call_with("author_hasSessionKeys", vec![non_existent_pubkeys]).await.unwrap();
+		let response: Response<bool> = serde_json::from_str(&json).unwrap();
+		response.result
+	};
+	assert_eq!(inexistent, false, "Inexistent key is not in the session keys");
+
+	let invalid = {
+		// This crashes with a stack overflow and `(signal: 6, SIGABRT: process abort signal)`
+		let json = api.call_with("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])]).await.unwrap();
+		let response: RpcError = serde_json::from_str(&json).unwrap();
+		response.error.message.to_string()
+
+		// Tried a bunch of different ways of passing the params, these all crash:
+		// let json = api.call_with("author_hasSessionKeys", vec!["0x01"]).await.unwrap();
+		// let json = api.call_with("author_hasSessionKeys", (vec!["0x01"])).await.unwrap();
+		// let bytes = Bytes::from(vec![1,2]);
+		// let json = api.call_with("author_hasSessionKeys", vec![bytes]).await.unwrap();
+
+		// let bytes = Bytes::from(vec![1,2]);
+		// let bytes = to_raw_value(&[to_hex(&bytes, true)]).unwrap();
+		// api.call("author_hasSessionKeys", Some(bytes)).await.unwrap()
+
+		// The problem is, I believe, in the error handling code, I've tracked it down
+		// to `.ok_or_else(|| Error::InvalidSessionKeys)?;` in `has_session_keys()`
+	};
+	assert_eq!(invalid, "todo bla bla?");
+
+
+}
+
 // #[test]
 // fn test_has_session_keys() {
 // 	let setup = TestSetup::default();
