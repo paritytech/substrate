@@ -390,15 +390,16 @@ fn deploy_contract() -> AccountId {
     pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
 
     let call_data_items = vec![
-		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "/dns4/node-0.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
-		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "/dns4/node-3.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
-	];
+        ["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "/dns4/node-0.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network", "1"],
+        ["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "/dns4/node-3.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network", "1"],
+    ];
 
     for call_data_item in call_data_items {
         let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
         call_data_item[0].encode_to(&mut call_data);
         call_data_item[1].encode_to(&mut call_data);
         call_data_item[2].encode_to(&mut call_data);
+        call_data_item[3].encode_to(&mut call_data);
 
         let results = Contracts::call(
             Origin::signed(alice.clone()),
