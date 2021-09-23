@@ -17,8 +17,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
-// NOTE: needed to silence warnings about generated code in `decl_runtime_apis`
-#![allow(clippy::too_many_arguments, clippy::unnecessary_mut_passed)]
 
 //! Primitives for BEEFY protocol.
 //!

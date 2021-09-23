@@ -98,7 +98,6 @@ where
 
 		let mut live = self.known_votes.write();
 
-		#[allow(clippy::map_entry)]
 		if !live.contains_key(&round) {
 			live.insert(round, Default::default());
 		}
@@ -199,7 +198,6 @@ where
 		})
 	}
 
-	#[allow(clippy::type_complexity)]
 	fn message_allowed<'a>(
 		&'a self,
 	) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {

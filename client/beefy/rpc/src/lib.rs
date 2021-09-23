@@ -34,7 +34,6 @@ use beefy_gadget::notification::BeefySignedCommitmentStream;
 mod notification;
 
 /// Provides RPC methods for interacting with BEEFY.
-#[allow(clippy::needless_return)]
 #[rpc]
 pub trait BeefyApi<Notification, Hash> {
 	/// RPC Metadata

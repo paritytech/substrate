@@ -15,9 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// construct_runtime requires this
-#![allow(clippy::from_over_into)]
-
 use std::vec;
 
 use frame_support::{
