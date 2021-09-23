@@ -371,6 +371,7 @@ pub struct ActiveEraInfo {
 /// This points will be used to reward validators and their respective nominators.
 /// `Limit` bounds the number of points earned by a given validator
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>))]
 pub struct EraRewardPoints<AccountId, Limit>
 where
@@ -446,7 +447,7 @@ impl Default for ValidatorPrefs {
 }
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct UnlockChunk<Balance: HasCompact> {
 	/// Amount of funds to be unlocked.
 	#[codec(compact)]
@@ -462,6 +463,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 #[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(UnlockingLimit: Get<u32>, RewardsLimit: Get<u32>))]
+#[scale_info(skip_type_params(UnlockingLimit, RewardsLimit))]
 pub struct StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
 	Balance: HasCompact,
@@ -609,10 +611,17 @@ where
 }
 
 /// A record of the nominations made by a specific account.
+/// `Limit` bounds the number of `targets`
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct Nominations<AccountId> {
+#[scale_info(skip_type_params(Limit))]
+#[codec(mel_bound(Limit: Get<u32>))]
+pub struct Nominations<AccountId, Limit>
+where
+	AccountId: MaxEncodedLen,
+	Limit: Get<u32>,
+{
 	/// The targets of nomination.
-	pub targets: Vec<AccountId>,
+	pub targets: BoundedVec<AccountId, Limit>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
@@ -625,7 +634,9 @@ pub struct Nominations<AccountId> {
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
 	pub who: AccountId,
@@ -637,6 +648,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 /// A snapshot of the stake backing a single validator in the system.
 /// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`
 #[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>, Balance: HasCompact))]
 pub struct Exposure<AccountId, Balance, Limit>
 where
@@ -688,6 +700,7 @@ where
 /// `ReportersLimit` bounds the number of reporters
 #[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(SlashedLimit: Get<u32>, ReportersLimit: Get<u32>))]
+#[scale_info(skip_type_params(SlashedLimit, ReportersLimit))]
 pub struct UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
 where
 	AccountId: MaxEncodedLen,
@@ -825,7 +838,7 @@ impl Default for Forcing {
 // A value placed in storage that represents the current version of the Staking storage. This value
 // is used by the `on_runtime_upgrade` logic to determine whether we run storage migration logic.
 // This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
 	V1_0_0Ancient,
 	V2_0_0,

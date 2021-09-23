@@ -96,7 +96,8 @@ pub mod pallet {
 		>;
 
 		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
+		#[pallet::constant]
+		type MaxNominations: Get<SessionIndex>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -168,6 +169,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNbOfReporters: Get<u32>;
 
+		/// Maximum number of slashing spans that is stored.
+		#[pallet::constant]
+		type MaxPriorSlashingSpans: Get<u32>;
+
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
@@ -182,7 +187,7 @@ pub mod pallet {
 		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		#[allow(non_snake_case)]
 		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
+			T::MaxNominations::get()
 		}
 	}
 
@@ -278,7 +283,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
+		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId, T::MaxNominations>>;
 
 	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
@@ -462,8 +467,12 @@ pub mod pallet {
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
-	pub(crate) type SlashingSpans<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
+	pub(crate) type SlashingSpans<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		slashing::SlashingSpans<T::MaxPriorSlashingSpans>,
+	>;
 
 	/// Records information about the maximum slash of a stash within a slashing span,
 	/// as well as how much reward has been paid out.
@@ -682,6 +691,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Too many invulnerables are passed, a runtime configuration adjustment may be needed
 		TooManyInvulnerables,
+		/// Too many Rewards Eras are passed, a runtime configuration adjustment may be needed
+		TooManyRewardsEras,
 	}
 
 	#[pallet::hooks]
@@ -1026,7 +1037,7 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
+		/// which is capped at CompactAssignments::LIMIT (T::MaxNominations).
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
@@ -1054,9 +1065,8 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.to_vec());
 
 			let targets = targets
 				.into_iter()
@@ -1071,6 +1081,9 @@ pub mod pallet {
 					})
 				})
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
+
+			let targets = BoundedVec::<_, T::MaxNominations>::try_from(targets)
+				.map_err(|_| Error::<T>::TooManyTargets)?;
 
 			let nominations = Nominations {
 				targets,

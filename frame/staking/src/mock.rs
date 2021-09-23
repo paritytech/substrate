@@ -247,6 +247,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub const MaxNominations: u32 = 16;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -262,7 +263,6 @@ impl onchain::Config for Test {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -283,6 +283,7 @@ impl crate::pallet::pallet::Config for Test {
 	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
+	type MaxNominations = MaxNominations;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

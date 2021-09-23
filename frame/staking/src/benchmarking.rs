@@ -354,17 +354,17 @@ benchmarks! {
 	kick {
 		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
 		// we'll assume that `k` is under 128 for the purposes of determining the slope.
-		// each nominator should have `T::MAX_NOMINATIONS` validators nominated, and our validator
+		// each nominator should have `T::MaxNominations` validators nominated, and our validator
 		// should be somewhere in there.
 		let k in 1 .. 128;
 
-		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
-		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators_with_seed::<T>(T::MAX_NOMINATIONS - 1, 100, 415)?;
+		// these are the other validators; there are `T::MaxNominations - 1` of them, so
+		// there are a total of `T::MaxNominations` validators in the system.
+		let rest_of_validators = create_validators_with_seed::<T>(T::MaxNominations::get() - 1, 100, 415)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
-			T::MAX_NOMINATIONS - 1,
+			T::MaxNominations::get() - 1,
 			100,
 			Default::default(),
 		)?;
@@ -379,7 +379,7 @@ benchmarks! {
 		for i in 0 .. k {
 			// create a nominator stash.
 			let (n_stash, n_controller) = create_stash_controller::<T>(
-				T::MAX_NOMINATIONS + i,
+				T::MaxNominations::get() + i,
 				100,
 				Default::default(),
 			)?;
@@ -414,9 +414,9 @@ benchmarks! {
 		}
 	}
 
-	// Worst case scenario, T::MAX_NOMINATIONS
+	// Worst case scenario, T::MaxNominations
 	nominate {
-		let n in 1 .. T::MAX_NOMINATIONS;
+		let n in 1 .. T::MaxNominations::get();
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -427,7 +427,7 @@ benchmarks! {
 		// we are just doing an insert into the origin position.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
-			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
+			SEED + T::MaxNominations::get() + 1, // make sure the account does not conflict with others
 			origin_weight,
 			Default::default(),
 		).unwrap();
@@ -714,7 +714,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MAX_NOMINATIONS as usize,
+			<T as Config>::MaxNominations::get() as usize,
 			false,
 			None,
 		)?;
@@ -732,7 +732,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MAX_NOMINATIONS as usize,
+			<T as Config>::MaxNominations::get() as usize,
 			false,
 			None,
 		)?;
@@ -806,7 +806,7 @@ benchmarks! {
 		let s in 1 .. 20;
 
 		let validators = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MAX_NOMINATIONS as usize, false, None
+			v, n, T::MaxNominations::get() as usize, false, None
 		)?
 		.into_iter()
 		.map(|v| T::Lookup::lookup(v).unwrap())
@@ -829,7 +829,7 @@ benchmarks! {
 		let n = MAX_NOMINATORS;
 
 		let _ = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MAX_NOMINATIONS as usize, false, None
+			v, n, T::MaxNominations::get() as usize, false, None
 		)?;
 	}: {
 		let targets = <Staking<T>>::get_npos_targets();
@@ -897,7 +897,7 @@ mod tests {
 			create_validators_with_nominators_for_era::<Test>(
 				v,
 				n,
-				<Test as Config>::MAX_NOMINATIONS as usize,
+				<Test as Config>::MaxNominations::get() as usize,
 				false,
 				None,
 			)

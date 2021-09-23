@@ -118,7 +118,10 @@ impl<T: Config> Pallet<T> {
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) => Err(Error::<T>::AlreadyClaimed
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
-			Err(pos) => ledger.claimed_rewards.insert(pos, era),
+			Err(pos) => ledger
+				.claimed_rewards
+				.try_insert(pos, era)
+				.map_err(|_| Error::<T>::TooManyRewardsEras)?,
 		}
 
 		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
@@ -724,7 +727,11 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets));
+					all_voters.push((
+						nominator.clone(),
+						Self::weight_of(&nominator),
+						targets.to_vec(),
+					));
 					nominators_taken.saturating_inc();
 				}
 			} else {
@@ -776,7 +783,10 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
 	/// to `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+	pub fn do_add_nominator(
+		who: &T::AccountId,
+		nominations: Nominations<T::AccountId, T::MaxNominations>,
+	) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update the counter.
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
@@ -859,7 +869,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MaxNominations::get();
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
