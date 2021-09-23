@@ -422,8 +422,10 @@ impl<T: Config> List<T> {
 
 	/// Insert `node` directly in front of `at`.
 	///
-	/// WARNING: we do not check that `node` or `at` are valid. This will panic if `at.bag_upper` is
-	/// not a bag that already exists in storage.
+	/// WARNINGS:
+	/// - we do not check that `node` or `at` are valid.
+	/// - this will panic if `at.bag_upper` is not a bag that already exists in storage.
+	/// - this does not update [`crate::CounterForListNodes`].
 	fn insert_at_unchecked(mut at: Node<T>, mut node: Node<T>) {
 		// connect `heavier_node` to its new `prev`.
 		node.prev = at.prev.clone();

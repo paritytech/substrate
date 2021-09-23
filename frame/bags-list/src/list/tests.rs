@@ -391,6 +391,102 @@ mod list {
 			));
 		});
 	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_only_node() {
+		// Note that `insert_at_unchecked` tests should fail post checks because it does not
+		// increment the node counter.
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 =
+				Node::<Runtime> { id: 42, prev: Some(1), next: Some(2), bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_1 = crate::ListNodes::<Runtime>::get(&1).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_1, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![42, 1]), (1_000, vec![2, 3, 4])]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_head() {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 = Node::<Runtime> { id: 42, prev: Some(4), next: None, bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_2 = crate::ListNodes::<Runtime>::get(&2).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_2, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![42, 2, 3, 4])]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_non_terminal() {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 = Node::<Runtime> { id: 42, prev: None, next: Some(2), bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_3 = crate::ListNodes::<Runtime>::get(&3).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_3, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 42, 3, 4])]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_tail() {
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 =
+				Node::<Runtime> { id: 42, prev: Some(42), next: Some(42), bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_4 = crate::ListNodes::<Runtime>::get(&4).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_4, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 42, 4])]
+			);
+		})
+	}
 }
 
 mod bags {
