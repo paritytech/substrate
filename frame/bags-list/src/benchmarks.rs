@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::list::List;
-use frame_benchmarking::{account, whitelisted_caller};
+use frame_benchmarking::{account, whitelist_account, whitelisted_caller};
 use frame_election_provider_support::VoteWeightProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
@@ -164,8 +164,8 @@ frame_benchmarking::benchmarks! {
 			vec![lighter.clone(), heavier_prev.clone(), heavier.clone(), heavier_next.clone()]
 		);
 
-		let caller = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller), lighter.clone(), heavier.clone())
+		whitelist_account!(heavier);
+	}: _(SystemOrigin::Signed(heavier.clone()), lighter.clone())
 	verify {
 		assert_eq!(
 			List::<T>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),

@@ -211,23 +211,20 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Move `heavier` directly in front of `lighter`.
+		/// Move the caller's Id directly in front of `lighter`.
 		///
-		/// The dispatch origin for this call must be _Signed_ and can be called by anyone.
+		/// The dispatch origin for this call must be _Signed_ and can only be called by the Id of
+		/// the account going in front of `lighter`.
 		///
 		/// Only works if
 		/// - both nodes are within the same bag,
-		/// - and `heavier` has a greater `VoteWeight` than `lighter`.
+		/// - and `origin` has a greater `VoteWeight` than `lighter`.
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
-		pub fn put_in_front_of(
-			origin: OriginFor<T>,
-			heavier: T::AccountId,
-			lighter: T::AccountId,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
+		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
+			let heavier = ensure_signed(origin)?;
 			List::<T>::put_in_front_of(
-				&heavier,
 				&lighter,
+				&heavier,
 				Box::new(T::VoteWeightProvider::vote_weight),
 			)
 			.map_err(Into::into)
