@@ -29,25 +29,24 @@ use std::{
 	io::Read,
 	path::PathBuf,
 	process::{Command, Stdio},
-	thread,
-	time::Duration,
 };
 
 pub mod common;
 
-#[test]
-fn temp_base_path_works() {
+#[tokio::test]
+async fn temp_base_path_works() {
+	// Test depends on log output so set RUST_LOG:
 	let mut cmd = Command::new(cargo_bin("substrate"));
-
 	let mut cmd = cmd
 		.args(&["--dev", "--tmp"])
+		.env("RUST_LOG", "info")
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.spawn()
 		.unwrap();
 
 	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(30));
+	common::wait_n_blocks(3, 30).await.unwrap();
 	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process
@@ -58,8 +57,7 @@ fn temp_base_path_works() {
 	let mut stderr = String::new();
 	cmd.stderr.unwrap().read_to_string(&mut stderr).unwrap();
 	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-	let db_path =
-		PathBuf::from(re.captures(stderr.as_str()).unwrap().get(1).unwrap().as_str().to_string());
+	let db_path = PathBuf::from(re.captures(stderr.as_str()).unwrap().get(1).unwrap().as_str());
 
 	assert!(!db_path.exists());
 }
