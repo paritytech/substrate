@@ -170,7 +170,7 @@ impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I>
 		id: T::AssetId,
 		witness: Self::DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
-	) -> DispatchResultWithPostInfo {
+	) -> Result<Self::DestroyWitness, DispatchError> {
 		Self::do_destroy(id, witness, maybe_check_owner)
 	}
 }

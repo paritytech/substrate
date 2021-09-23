@@ -513,7 +513,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: T::AssetId,
 		witness: DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
-	) -> DispatchResultWithPostInfo {
+	) -> Result<DestroyWitness, DispatchError> {
 		Asset::<T, I>::try_mutate_exists(id, |maybe_details| {
 			let mut details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = maybe_check_owner {
@@ -540,12 +540,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 			Self::deposit_event(Event::Destroyed(id));
 
-			Ok(Some(T::WeightInfo::destroy(
-				details.accounts.saturating_sub(details.sufficients),
-				details.sufficients,
-				details.approvals,
-			))
-			.into())
+			Ok(DestroyWitness {
+				accounts: details.accounts,
+				sufficients: details.sufficients,
+				approvals: details.approvals,
+			})
 		})
 	}
 }

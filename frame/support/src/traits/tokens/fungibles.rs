@@ -21,7 +21,7 @@ use super::{
 	misc::{AssetId, Balance},
 	*,
 };
-use crate::dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo};
+use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
 
 mod balanced;
@@ -254,9 +254,12 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// * `maybe_check_owner`: An optional account id that can be used to authorize the destroy
 	///   command. If not provided, we will not do any authorization checks before destroying the
 	///   asset.
+	///
+	/// If successful, this function will return the actual witness data from the destroyed asset.
+	/// This may be different than the witness data provided, and can be used to refund weight.
 	fn destroy(
 		id: Self::AssetId,
 		witness: Self::DestroyWitness,
 		maybe_check_owner: Option<AccountId>,
-	) -> DispatchResultWithPostInfo;
+	) -> Result<Self::DestroyWitness, DispatchError>;
 }

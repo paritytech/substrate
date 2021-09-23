@@ -473,7 +473,13 @@ pub mod pallet {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			Self::do_destroy(id, witness, maybe_check_owner)
+			let details = Self::do_destroy(id, witness, maybe_check_owner)?;
+			Ok(Some(T::WeightInfo::destroy(
+				details.accounts.saturating_sub(details.sufficients),
+				details.sufficients,
+				details.approvals,
+			))
+			.into())
 		}
 
 		/// Mint assets of a particular class.
