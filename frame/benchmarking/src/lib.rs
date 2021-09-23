@@ -498,7 +498,7 @@ macro_rules! benchmarks_iter {
 #[doc(hidden)]
 macro_rules! to_origin {
 	(
-		 $origin:expr
+		$origin:expr
 	) => {
 		$origin.into()
 	};
@@ -704,7 +704,7 @@ macro_rules! benchmark_backend {
 // Every variant must implement [`BenchmarkingSetup`].
 //
 // ```nocompile
-//
+// 
 // struct Transfer;
 // impl BenchmarkingSetup for Transfer { ... }
 //
