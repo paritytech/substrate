@@ -18,26 +18,26 @@
 //! Inspect and Mutate traits for Asset approvals
 
 use crate::dispatch::DispatchResult;
-pub trait Inspect<AssetId, AccountId, Balance> {
+pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	// Check the amount approved by an owner to be spent by a delegate
-	fn allowance(asset: AssetId, owner: &AccountId, delegate: &AccountId) -> Balance;
+	fn allowance(asset: Self::AssetId, owner: &AccountId, delegate: &AccountId) -> Self::Balance;
 }
 
-pub trait Mutate<AssetId, AccountId, Balance> {
+pub trait Mutate<AccountId>: Inspect<AccountId> {
 	// Aprove a delegate account to spend an amount of tokens owned by an owner
 	fn approve(
-		asset: AssetId,
+		asset: Self::AssetId,
 		owner: &AccountId,
 		delegate: &AccountId,
-		amount: Balance,
+		amount: Self::Balance,
 	) -> DispatchResult;
 
 	// Transfer from a delegate account an amount approved by the owner of the asset
 	fn transfer_from(
-		asset: AssetId,
+		asset: Self::AssetId,
 		owner: &AccountId,
 		delegate: &AccountId,
 		dest: &AccountId,
-		amount: Balance,
+		amount: Self::Balance,
 	) -> DispatchResult;
 }

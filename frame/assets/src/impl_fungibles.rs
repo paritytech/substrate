@@ -148,7 +148,9 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<T::AssetId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
 	fn name(asset: T::AssetId) -> Vec<u8> {
 		Metadata::<T, I>::get(asset).name.to_vec()
 	}
@@ -162,8 +164,8 @@ impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<T::AssetId> for Pall
 	}
 }
 
-impl<T: Config<I>, I: 'static>
-	fungibles::metadata::Mutate<T::AssetId, <T as SystemConfig>::AccountId> for Pallet<T, I>
+impl<T: Config<I>, I: 'static> fungibles::metadata::Mutate<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
 {
 	fn set(
 		asset: T::AssetId,
@@ -176,8 +178,7 @@ impl<T: Config<I>, I: 'static>
 	}
 }
 
-impl<T: Config<I>, I: 'static>
-	fungibles::approvals::Inspect<T::AssetId, <T as SystemConfig>::AccountId, T::Balance>
+impl<T: Config<I>, I: 'static> fungibles::approvals::Inspect<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
 	// Check the amount approved to be spent by an owner to a delegate
@@ -192,8 +193,7 @@ impl<T: Config<I>, I: 'static>
 	}
 }
 
-impl<T: Config<I>, I: 'static>
-	fungibles::approvals::Mutate<T::AssetId, <T as SystemConfig>::AccountId, T::Balance>
+impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
 	fn approve(
