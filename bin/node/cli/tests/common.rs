@@ -100,13 +100,13 @@ pub async fn wait_n_blocks_from(n: usize, url: &str) {
 }
 
 /// Run the node for a while (3 blocks)
-pub fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
+pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
 	let mut cmd = cmd.args(args).arg("-d").arg(base_path).spawn().unwrap();
 
 	// Let it produce some blocks.
-	tokio_test::block_on(wait_n_blocks(3, 30)).unwrap();
+	wait_n_blocks(3, 30).await.unwrap();
 
 	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 
