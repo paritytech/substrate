@@ -62,7 +62,8 @@ async fn database_role_subdir_migration() {
 			"44445",
 			"--no-prometheus",
 		],
-	).await;
+	)
+	.await;
 
 	// check if the database dir had been migrated
 	assert!(!path.join("db_version").exists());

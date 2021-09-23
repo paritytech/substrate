@@ -27,7 +27,6 @@ use std::{
 	convert::TryInto,
 	path::Path,
 	process::{Child, Command, ExitStatus},
-	thread,
 	time::Duration,
 };
 use tokio::time::timeout;
@@ -121,7 +120,10 @@ pub fn run_node_assert_fail(base_path: &Path, args: &[&str]) {
 
 	let mut cmd = cmd.args(args).arg("-d").arg(base_path).spawn().unwrap();
 
-	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(10));
-	assert!(cmd.try_wait().unwrap().is_some(), "the process should not be running anymore");
+	// Let it produce some blocks, but it should die within 10 seconds.
+	assert_ne!(
+		wait_timeout::ChildExt::wait_timeout(&mut cmd, Duration::from_secs(10)).unwrap(),
+		None,
+		"the process should not be running anymore"
+	);
 }
