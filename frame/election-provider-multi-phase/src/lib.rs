@@ -1317,8 +1317,10 @@ impl<T: Config> Pallet<T> {
 		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
 
 		// ..therefore we only measure the weight of this and add it.
+		let internal_weight =
+			T::WeightInfo::create_snapshot_internal(voters.len() as u32, targets.len() as u32);
 		Self::create_snapshot_internal(targets, voters, desired_targets);
-		Self::register_weight(T::WeightInfo::create_snapshot_internal());
+		Self::register_weight(internal_weight);
 		Ok(())
 	}
 

@@ -22,24 +22,27 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../treasury" }
-
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
+	"sp-core/std",
+	"sp-io/std",
 	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-treasury/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
