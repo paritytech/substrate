@@ -95,10 +95,11 @@ where
 	}
 }
 
+use std::sync::Mutex;
 pub struct BailingBlockImport<Client, Inner> {
 	client: Arc<Client>,
 	inner: Inner,
-	signal_shutdown: Option<Arc<exit_future::Signal>>,
+	signal_shutdown: Arc<Mutex<Option<exit_future::Signal>>>,
 }
 
 impl<Client, Inner: Clone> Clone for BailingBlockImport<Client, Inner> {
@@ -113,7 +114,11 @@ impl<Client, Inner: Clone> Clone for BailingBlockImport<Client, Inner> {
 
 impl<Client, Inner> BailingBlockImport<Client, Inner> {
 	fn new(inner: Inner, client: Arc<Client>, signal_shutdown: Option<exit_future::Signal>) -> Self {
-		Self { inner, client, signal_shutdown: signal_shutdown.map(|s| Arc::new(s)) }
+		Self {
+			inner,
+			client,
+			signal_shutdown: Arc::new(Mutex::new(signal_shutdown))
+		}
 	}
 }
 
@@ -145,7 +150,26 @@ where
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block, new_cache).await.map_err(Into::into)
+		use sp_runtime::DigestItem::{Other, RuntimeEnvironmentUpdated};
+		use sp_api::HeaderT;
+		let was_upgraded = block.header.digest().log(
+			|d| match d {
+				RuntimeEnvironmentUpdated => Some(&()),
+				Other(_) => Some(&()),
+				_ => None,
+			}
+		).is_some();
+
+		let res = self.inner.import_block(block, new_cache).await.map_err(Into::into);
+
+		if was_upgraded {
+			let res = self.signal_shutdown.try_lock().map(|mut o| {
+				o.take().map(|s| s.fire());
+				o
+			});
+			assert!(res.is_ok(), "shutdown signal lock failed");
+		}
+		res
 	}
 
 	async fn check_block(
