@@ -497,16 +497,8 @@ macro_rules! benchmarks_iter {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! to_origin {
-	(
-		$origin:expr
-	) => {
-		$origin.into()
-	};
-	(
-		$origin:expr, $origin_type:ty
-	) => {
-		<T::Origin as From<$origin_type>>::from($origin)
-	};
+	($origin:expr) => { $origin.into() };
+	($origin:expr, $origin_type:ty) => { <T::Origin as From<$origin_type>>::from($origin) };
 }
 
 #[macro_export]
