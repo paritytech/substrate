@@ -39,11 +39,13 @@ pub mod common;
 async fn running_the_node_works_and_can_be_interrupted() {
 	async fn run_command_and_kill(signal: Signal) {
 		let base_path = tempdir().expect("could not create a temp dir");
-		let mut cmd = Command::new(cargo_bin("substrate"))
-			.args(&["--dev", "-d"])
-			.arg(base_path.path())
-			.spawn()
-			.unwrap();
+		let mut cmd = common::KillChildOnDrop(
+			Command::new(cargo_bin("substrate"))
+				.args(&["--dev", "-d"])
+				.arg(base_path.path())
+				.spawn()
+				.unwrap(),
+		);
 
 		common::wait_n_blocks(3, 30).await.unwrap();
 		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
@@ -60,28 +62,6 @@ async fn running_the_node_works_and_can_be_interrupted() {
 	run_command_and_kill(SIGTERM).await;
 }
 
-struct KillChildOnDrop(Child);
-
-impl Drop for KillChildOnDrop {
-	fn drop(&mut self) {
-		let _ = self.0.kill();
-	}
-}
-
-impl Deref for KillChildOnDrop {
-	type Target = Child;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl DerefMut for KillChildOnDrop {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
 #[tokio::test]
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	fn start_node() -> Child {
@@ -91,8 +71,8 @@ async fn running_two_nodes_with_the_same_ws_port_should_work() {
 			.unwrap()
 	}
 
-	let mut first_node = KillChildOnDrop(start_node());
-	let mut second_node = KillChildOnDrop(start_node());
+	let mut first_node = common::KillChildOnDrop(start_node());
+	let mut second_node = common::KillChildOnDrop(start_node());
 
 	let _ = common::wait_n_blocks(3, 30).await;
 

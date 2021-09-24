@@ -37,25 +37,26 @@ pub mod common;
 async fn temp_base_path_works() {
 	// Test depends on log output so set RUST_LOG:
 	let mut cmd = Command::new(cargo_bin("substrate"));
-	let mut cmd = cmd
-		.args(&["--dev", "--tmp"])
-		.env("RUST_LOG", "info")
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.unwrap();
+	let mut child = common::KillChildOnDrop(
+		cmd.args(&["--dev", "--tmp"])
+			.env("RUST_LOG", "info")
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.unwrap(),
+	);
 
 	// Let it produce some blocks.
 	common::wait_n_blocks(3, 30).await.unwrap();
-	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
+	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process
-	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut cmd, 40).map(|x| x.success()).unwrap_or_default());
+	kill(Pid::from_raw(child.id().try_into().unwrap()), SIGINT).unwrap();
+	assert!(common::wait_for(&mut child, 40).map(|x| x.success()).unwrap_or_default());
 
 	// Ensure the database has been deleted
 	let mut stderr = String::new();
-	cmd.stderr.unwrap().read_to_string(&mut stderr).unwrap();
+	child.stderr.as_mut().unwrap().read_to_string(&mut stderr).unwrap();
 	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
 	let db_path = PathBuf::from(re.captures(stderr.as_str()).unwrap().get(1).unwrap().as_str());
 
