@@ -220,6 +220,37 @@ where
 		weight
 	}
 
+	/// Execute given block, but don't do any of the [`final_checks`].
+	///
+	/// Should only be used for testing.
+	#[cfg(feature = "try-runtime")]
+	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight {
+		Self::initialize_block(block.header());
+		Self::initial_checks(&block);
+
+		let (header, extrinsics) = block.deconstruct();
+
+		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+
+		// do some of the checks that would normally happen in `final_checks`, but definitely skip
+		// the state root check.
+		{
+			let new_header = <frame_system::Pallet<System>>::finalize();
+			let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+			for (header_item, computed_item) in items_zip {
+				header_item.check_equal(&computed_item);
+				assert!(header_item == computed_item, "Digest item must match that calculated.");
+			}
+
+			assert!(
+				header.extrinsics_root() == new_header.extrinsics_root(),
+				"Transaction trie root must be valid.",
+			);
+		}
+
+		frame_system::Pallet::<System>::block_weight().total()
+	}
+
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
@@ -229,7 +260,7 @@ where
 			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
 			as
 			OnRuntimeUpgrade
-		>::pre_upgrade()?;
+		>::pre_upgrade().unwrap();
 
 		let weight = Self::execute_on_runtime_upgrade();
 
@@ -237,7 +268,7 @@ where
 			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
 			as
 			OnRuntimeUpgrade
-		>::post_upgrade()?;
+		>::post_upgrade().unwrap();
 
 		Ok(weight)
 	}

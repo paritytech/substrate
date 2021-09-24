@@ -17,6 +17,7 @@
 
 //! Staking FRAME Pallet.
 
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
@@ -38,7 +39,7 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
+	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
 	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
@@ -139,6 +140,11 @@ pub mod pallet {
 		/// claim their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
+
+		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
+		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
+		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
+		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -492,6 +498,13 @@ pub mod pallet {
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+				log!(
+					trace,
+					"inserting genesis staker: {:?} => {:?} => {:?}",
+					stash,
+					balance,
+					status
+				);
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
 					"Stash does not have enough balance to bond."
@@ -514,6 +527,13 @@ pub mod pallet {
 					_ => Ok(()),
 				});
 			}
+
+			// all voters are reported to the `SortedListProvider`.
+			assert_eq!(
+				T::SortedListProvider::count(),
+				CounterForNominators::<T>::get(),
+				"not all genesis stakers were inserted into sorted list provider, something is wrong."
+			);
 		}
 	}
 
@@ -763,8 +783,15 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
+				// update this staker in the sorted list, if they exist in it.
+				if T::SortedListProvider::contains(&stash) {
+					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
+					debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+				}
+
+				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 			}
 			Ok(())
 		}
@@ -823,7 +850,14 @@ pub mod pallet {
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
+
+				// update this staker in the sorted list, if they exist in it.
+				if T::SortedListProvider::contains(&ledger.stash) {
+					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				}
+
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1319,7 +1353,12 @@ pub mod pallet {
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
+
+			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
+			if T::SortedListProvider::contains(&ledger.stash) {
+				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)
@@ -1492,8 +1531,6 @@ pub mod pallet {
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
-		// TODO: Maybe we can deprecate `chill` in the future.
-		// https://github.com/paritytech/substrate/issues/9111
 		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.

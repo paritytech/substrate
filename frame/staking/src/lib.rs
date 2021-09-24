@@ -100,6 +100,13 @@
 //!
 //! An account can become a nominator via the [`nominate`](Call::nominate) call.
 //!
+//! #### Voting
+//!
+//! Staking is closely related to elections; actual validators are chosen from among all potential
+//! validators via election by the potential validators and nominators. To reduce use of the phrase
+//! "potential validators and nominators", we often use the term **voters**, who are simply
+//! the union of potential validators and nominators.
+//!
 //! #### Rewards and Slash
 //!
 //! The **reward and slashing** procedure is the core of the Staking pallet, attempting to _embrace
@@ -264,15 +271,15 @@
 //! - [Session](../pallet_session/index.html): Used to manage sessions. Also, a list of new
 //!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
-#![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-#[cfg(test)]
-mod mock;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
+
+#[cfg(test)]
+pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
@@ -420,6 +427,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
+#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -727,11 +735,12 @@ enum Releases {
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
+	V8_0_0, // populate `SortedListProvider`.
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V7_0_0
+		Releases::V8_0_0
 	}
 }
 
