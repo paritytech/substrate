@@ -85,7 +85,7 @@ impl BlockAttributes {
 
 	/// Decodes attributes, encoded with the `encode_to_be_u32()` call.
 	pub fn from_be_u32(encoded: u32) -> Result<Self, Error> {
-		BlockAttributes::from_bits(encoded.to_be_bytes()[0])
+		Self::from_bits(encoded.to_be_bytes()[0])
 			.ok_or_else(|| Error::from("Invalid BlockAttributes"))
 	}
 }
@@ -143,10 +143,10 @@ pub struct RemoteReadResponse {
 /// Announcement summary used for debug logging.
 #[derive(Debug)]
 pub struct AnnouncementSummary<H: HeaderT> {
-	block_hash: H::Hash,
-	number: H::Number,
-	parent_hash: H::Hash,
-	state: Option<BlockState>,
+	pub block_hash: H::Hash,
+	pub number: H::Number,
+	pub parent_hash: H::Hash,
+	pub state: Option<BlockState>,
 }
 
 impl<H: HeaderT> generic::BlockAnnounce<H> {
@@ -187,12 +187,12 @@ pub mod generic {
 	impl Roles {
 		/// Does this role represents a client that holds full chain data locally?
 		pub fn is_full(&self) -> bool {
-			self.intersects(Roles::FULL | Roles::AUTHORITY)
+			self.intersects(Self::FULL | Self::AUTHORITY)
 		}
 
 		/// Does this role represents a client that does not participates in the consensus?
 		pub fn is_authority(&self) -> bool {
-			*self == Roles::AUTHORITY
+			*self == Self::AUTHORITY
 		}
 
 		/// Does this role represents a client that does not hold full chain data locally?
@@ -204,9 +204,9 @@ pub mod generic {
 	impl<'a> From<&'a crate::config::Role> for Roles {
 		fn from(roles: &'a crate::config::Role) -> Self {
 			match roles {
-				crate::config::Role::Full => Roles::FULL,
-				crate::config::Role::Light => Roles::LIGHT,
-				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
+				crate::config::Role::Full => Self::FULL,
+				crate::config::Role::Light => Self::LIGHT,
+				crate::config::Role::Authority { .. } => Self::AUTHORITY,
 			}
 		}
 	}
@@ -368,7 +368,7 @@ pub mod generic {
 				genesis_hash,
 			} = compact;
 
-			Ok(Status {
+			Ok(Self {
 				version,
 				min_supported_version,
 				roles,
@@ -438,7 +438,7 @@ pub mod generic {
 			let header = H::decode(input)?;
 			let state = BlockState::decode(input).ok();
 			let data = Vec::decode(input).ok();
-			Ok(BlockAnnounce { header, state, data })
+			Ok(Self { header, state, data })
 		}
 	}
 
