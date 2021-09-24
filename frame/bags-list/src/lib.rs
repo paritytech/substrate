@@ -59,8 +59,8 @@ use sp_std::prelude::*;
 mod benchmarks;
 
 mod list;
-#[cfg(test)]
-mod mock;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;

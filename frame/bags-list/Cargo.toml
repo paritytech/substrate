@@ -63,4 +63,10 @@ runtime-benchmarks = [
 	"sp-tracing",
 	"frame-election-provider-support/runtime-benchmarks",
 ]
+fuzz = [
+  "sp-core",
+	"sp-io",
+  "pallet-balances",
+	"sp-tracing",
+]
 
