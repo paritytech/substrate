@@ -258,7 +258,8 @@ async fn should_notify_about_storage_changes() {
 	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// We should get a message back on our subscription about the storage change:
-	// NOTE: previous versions of the subscription code used to return an empty value for the "initial" storage change here
+	// NOTE: previous versions of the subscription code used to return an empty value for the
+	// "initial" storage change here
 	let msg = timeout_secs(1, sub_rx.next()).await;
 	assert_matches!(&msg, Ok(Some(json)) => {
 		serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")
