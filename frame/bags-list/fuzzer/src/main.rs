@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! # Running
 //! Running this fuzzer can be done with `cargo hfuzz run bags-list`. `honggfuzz` CLI options can
 //! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
@@ -9,14 +26,12 @@
 //! # More information
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
-//!
-//! //! MacOS users notethat https://github.com/rust-fuzz/honggfuzz-rs/issues/56 may preclude you from running this locally.
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use honggfuzz::fuzz;
 use pallet_bags_list::mock::{AccountId, BagsList, ExtBuilder};
 
-const ID_RANGE: AccountId = 10_000;
+const ID_RANGE: AccountId = 50_000;
 const OPTIONS: AccountId = 3;
 
 fn main() {
@@ -43,6 +58,8 @@ fn main() {
 					assert!(BagsList::contains(&id));
 				},
 				_ => {
+					// only `2` should ever get us here, but we must use a wildcard to make the
+					// compiler happy.
 					BagsList::on_remove(&id);
 					assert!(!BagsList::contains(&id));
 				},

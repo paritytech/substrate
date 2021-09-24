@@ -19,4 +19,4 @@ frame-election-provider-support = { version = "4.0.0-dev", path = "../../electio
 
 [[bin]]
 name = "bags-list"
-path = "main.rs"
+path = "src/main.rs"
