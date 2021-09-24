@@ -266,13 +266,13 @@ async fn should_notify_about_storage_changes() {
 	};
 
 	// We should get a message back on our subscription about the storage change:
-	// TODO (jsdw): previously we got back 2 messages here.
-	// TODO (dp): I agree that we differ here. I think `master` always includes the initial value of
-	// the storage?
+	// NOTE: previous versions of the subscription code used to return an empty value for the
+	// "initial" storage change here
 	let msg = timeout_secs(1, sub_rx.next()).await;
 	assert_matches!(&msg, Ok(Some(json)) => {
 		serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")
 	});
+
 	let err = timeout_secs(1, sub_rx.next()).await;
 	assert_matches!(&err, Ok(Some(json)) => {
 		serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&json).expect("The right kind of response")
@@ -281,39 +281,52 @@ async fn should_notify_about_storage_changes() {
 
 #[tokio::test]
 async fn should_send_initial_storage_changes_and_notifications() {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) =
-		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
+	let mut sub_rx = {
+		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionTaskExecutor::new(TaskExecutor),
+			DenyUnsafe::No,
+			None,
+		);
 
-	let alice_balance_key =
-		blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key =
+			blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
-	let api_rpc = api.into_rpc();
-	let (_sub_id, mut sub_rx) = api_rpc
-		.test_subscription(
-			"state_subscribeStorage",
-			Some(to_raw_value(&[StorageKey(alice_balance_key.to_vec())]).unwrap()),
-		)
-		.await;
+		let api_rpc = api.into_rpc();
+		let (_sub_id, sub_rx) = api_rpc
+			.test_subscription(
+				"state_subscribeStorage",
+				Some(to_raw_value(&[vec![StorageKey(alice_balance_key.to_vec())]]).unwrap()),
+			)
+			.await;
 
-	let mut builder = client.new_block(Default::default()).unwrap();
-	builder
-		.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		})
-		.unwrap();
-	let block = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, block).await.unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
+		builder
+			.push_transfer(runtime::Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
+		let block = builder.build().unwrap().block;
+		client.import(BlockOrigin::Own, block).await.unwrap();
+
+		sub_rx
+	};
 
 	// Check for the correct number of notifications
 	let msgs = timeout_secs(5, (&mut sub_rx).take(2).collect::<Vec<_>>()).await;
-	assert_matches!(msgs, Ok(_));
+	assert_matches!(&msgs, Ok(json_vals) => {
+		let vals: Vec<_> = json_vals.iter().map(|json| serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")).collect();
+	});
 
 	// No more messages to follow
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(None));
+	let err = timeout_secs(1, sub_rx.next()).await;
+	assert_matches!(&err, Ok(Some(json)) => {
+		serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&json).expect("The right kind of response")
+	});
 }
 
 #[tokio::test]
@@ -573,11 +586,7 @@ async fn should_notify_on_runtime_version_initially() {
 	// assert initial version sent.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
 
-	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
-	// Previously the channel returned None.
-	// TODO (dp): I think this is a valid concern; our version swallows the `None` (in the
-	// `take_while` call I guess?). I guess this test does what is says on the tin though: check
-	// that we get the current runtime version when subscribing.
+	// TODO(niklasad1): make sure we get subscription closed here.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 
