@@ -21,6 +21,7 @@ use super::{state_full::split_range, *};
 use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use futures::{executor, StreamExt};
+use jsonrpsee::types::v2::SubscriptionResponse;
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use serde_json::value::to_raw_value;
@@ -97,6 +98,50 @@ async fn should_return_storage() {
 }
 
 #[tokio::test]
+async fn should_return_storage_entries() {
+	const KEY1: &[u8] = b":mock";
+	const KEY2: &[u8] = b":turtle";
+	const VALUE: &[u8] = b"hello world";
+	const CHILD_VALUE1: &[u8] = b"hello world !";
+	const CHILD_VALUE2: &[u8] = b"hello world    !";
+
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let client = TestClientBuilder::new()
+		.add_extra_storage(KEY1.to_vec(), VALUE.to_vec())
+		.add_extra_child_storage(&child_info, KEY1.to_vec(), CHILD_VALUE1.to_vec())
+		.add_extra_child_storage(&child_info, KEY2.to_vec(), CHILD_VALUE2.to_vec())
+		.build();
+	let genesis_hash = client.genesis_hash();
+	let (_client, child) = new_full(
+		Arc::new(client),
+		SubscriptionTaskExecutor::new(TaskExecutor),
+		DenyUnsafe::No,
+		None,
+	);
+
+	let keys = &[StorageKey(KEY1.to_vec()), StorageKey(KEY2.to_vec())];
+	assert_eq!(
+		child
+			.storage_entries(prefixed_storage_key(), keys.to_vec(), Some(genesis_hash).into())
+			.await
+			.map(|x| x.into_iter().map(|x| x.map(|x| x.0.len()).unwrap()).sum::<usize>())
+			.unwrap(),
+		CHILD_VALUE1.len() + CHILD_VALUE2.len()
+	);
+
+	// should fail if not all keys exist.
+	let mut failing_keys = vec![StorageKey(b":soup".to_vec())];
+	failing_keys.extend_from_slice(keys);
+	assert_matches!(
+		child
+			.storage_entries(prefixed_storage_key(), failing_keys, Some(genesis_hash).into())
+			.await
+			.map(|x| x.iter().all(|x| x.is_some())),
+		Ok(false)
+	);
+}
+
+#[tokio::test]
 async fn should_return_child_storage() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	let client = Arc::new(
@@ -126,6 +171,51 @@ async fn should_return_child_storage() {
 		Ok(true)
 	);
 	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None).await, Ok(Some(1)));
+}
+
+#[tokio::test]
+async fn should_return_child_storage_entries() {
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let client = Arc::new(
+		substrate_test_runtime_client::TestClientBuilder::new()
+			.add_child_storage(&child_info, "key1", vec![42_u8])
+			.add_child_storage(&child_info, "key2", vec![43_u8, 44])
+			.build(),
+	);
+	let genesis_hash = client.genesis_hash();
+	let (_client, child) =
+		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
+	let child_key = prefixed_storage_key();
+	let keys = vec![StorageKey(b"key1".to_vec()), StorageKey(b"key2".to_vec())];
+
+	let res = child
+		.storage_entries(child_key.clone(), keys.clone(), Some(genesis_hash).into())
+		.await
+		.unwrap();
+
+	assert_matches!(
+		res[0],
+		Some(StorageData(ref d))
+			if d[0] == 42 && d.len() == 1
+	);
+	assert_matches!(
+		res[1],
+		Some(StorageData(ref d))
+			if d[0] == 43 && d[1] == 44 && d.len() == 2
+	);
+	assert_matches!(
+		executor::block_on(child.storage_hash(
+			child_key.clone(),
+			keys[0].clone(),
+			Some(genesis_hash).into()
+		))
+		.map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_matches!(
+		child.storage_size(child_key.clone(), keys[0].clone(), None).await,
+		Ok(Some(1))
+	);
 }
 
 #[tokio::test]
@@ -169,8 +259,12 @@ async fn should_notify_about_storage_changes() {
 
 	// We should get a message back on our subscription about the storage change:
 	// TODO (jsdw): previously we got back 2 messages here.
+	// TODO (dp): I agree that we differ here. I think `master` always includes the initial value of
+	// the storage?
 	let msg = timeout_secs(5, sub_rx.next()).await;
-	assert_matches!(msg, Ok(Some(_)));
+	assert_matches!(&msg, Ok(Some(json)) => {
+		serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")
+	});
 
 	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
 	// Previously the channel returned None.
@@ -462,7 +556,7 @@ async fn should_return_runtime_version() {
 async fn should_notify_on_runtime_version_initially() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let (api, _child) =
-		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
+		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
 	let api_rpc = api.into_rpc();
 	let (_sub_id, mut sub_rx) =
@@ -473,6 +567,9 @@ async fn should_notify_on_runtime_version_initially() {
 
 	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
 	// Previously the channel returned None.
+	// TODO (dp): I think this is a valid concern; our version swallows the `None` (in the
+	// `take_while` call I guess?). I guess this test does what is says on the tin though: check
+	// that we get the current runtime version when subscribing.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 
