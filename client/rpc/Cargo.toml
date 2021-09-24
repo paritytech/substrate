@@ -42,6 +42,7 @@ jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884e
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 
 [dev-dependencies]
+env_logger = "0.9"
 assert_matches = "1.3.0"
 lazy_static = "1.4.0"
 sc-network = { version = "0.10.0-dev", path = "../network" }
@@ -49,6 +50,7 @@ sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+tokio = "1"
 
 [features]
 test-helpers = ["lazy_static"]

@@ -28,7 +28,7 @@ use crate::SubscriptionTaskExecutor;
 use codec::{Decode, Encode};
 use futures::StreamExt;
 use jsonrpsee::{
-	types::{async_trait, error::Error as JsonRpseeError, RpcResult},
+	types::{async_trait, error::Error as JsonRpseeError, v2::RpcError, CallError, RpcResult},
 	SubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
@@ -73,6 +73,13 @@ impl<P, Client> Author<P, Client> {
 		Author { client, pool, keystore, deny_unsafe, executor }
 	}
 }
+
+/// Currently we treat all RPC transactions as externals.
+///
+/// Possibly in the future we could allow opt-in for special treatment
+/// of such transactions, so that the block authors can inject
+/// some unique transactions via RPC and have them included in the pool.
+const TX_SOURCE: TransactionSource = TransactionSource::External;
 
 #[async_trait]
 impl<P, Client> AuthorApiServer<TxHash<P>, BlockHash<P>> for Author<P, Client>
@@ -207,10 +214,3 @@ where
 		Ok(())
 	}
 }
-
-/// Currently we treat all RPC transactions as externals.
-///
-/// Possibly in the future we could allow opt-in for special treatment
-/// of such transactions, so that the block authors can inject
-/// some unique transactions via RPC and have them included in the pool.
-const TX_SOURCE: TransactionSource = TransactionSource::External;

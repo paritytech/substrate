@@ -22,7 +22,7 @@
 
 #![warn(missing_docs)]
 
-use sp_core::traits::SpawnNamed;
+use sp_core::{testing::TaskExecutor, traits::SpawnNamed};
 use std::sync::Arc;
 
 pub use sc_rpc_api::DenyUnsafe;
@@ -49,5 +49,12 @@ impl SubscriptionTaskExecutor {
 	/// Execute task on executor.
 	pub fn execute(&self, fut: futures::future::BoxFuture<'static, ()>) {
 		let _ = self.0.spawn("substrate-rpc-subscriber", fut);
+	}
+}
+
+impl Default for SubscriptionTaskExecutor {
+	fn default() -> Self {
+		let spawn = TaskExecutor::default();
+		Self::new(spawn)
 	}
 }

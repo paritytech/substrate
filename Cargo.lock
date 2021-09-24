@@ -7707,6 +7707,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
+ "env_logger 0.9.0",
  "futures 0.3.16",
  "hash-db",
  "jsonrpsee",
@@ -7737,12 +7738,14 @@ dependencies = [
  "sp-session",
  "sp-version",
  "substrate-test-runtime-client",
+ "tokio",
 ]
 
 [[package]]
 name = "sc-rpc-api"
 version = "0.10.0-dev"
 dependencies = [
+ "anyhow",
  "futures 0.3.16",
  "jsonrpsee",
  "log",
