@@ -55,11 +55,19 @@ pub use tracing::trace;
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! warn {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
-	($($arg:tt)+) => {
-		()
+	($message:expr, $( $arg:expr, )*) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -68,11 +76,12 @@ macro_rules! warn {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! debug {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
-	};
-	($($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -1579,7 +1588,8 @@ mod tests {
 		let mut seed = [0; 16];
 		for i in 0..50u32 {
 			let mut child_infos = Vec::new();
-			&seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
+			let seed_partial = &mut seed[0..4];
+			seed_partial.copy_from_slice(&i.to_be_bytes()[..]);
 			let mut rand = SmallRng::from_seed(seed);
 
 			let nb_child_trie = rand.next_u32() as usize % 25;
