@@ -18,16 +18,18 @@
 //! Storage types to build abstraction on storage, they implements storage traits such as
 //! StorageMap and others.
 
-use crate::metadata::{StorageEntryModifier, StorageEntryType};
+use crate::metadata::{StorageEntryMetadata, StorageEntryModifier};
 use codec::FullCodec;
 use sp_std::prelude::*;
 
+mod counted_map;
 mod double_map;
 mod key;
 mod map;
 mod nmap;
 mod value;
 
+pub use counted_map::{CountedStorageMap, CountedStorageMapInstance};
 pub use double_map::StorageDoubleMap;
 pub use key::{
 	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
@@ -103,13 +105,10 @@ where
 	}
 }
 
-/// Provide metadata for a storage entry.
+/// Build the metadata of a storage.
 ///
-/// Implemented by each of the storage entry kinds: value, map, doublemap and nmap.
-pub trait StorageEntryMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-
-	fn ty() -> StorageEntryType;
-	fn default() -> Vec<u8>;
+/// Implemented by each of the storage types: value, map, countedmap, doublemap and nmap.
+pub trait StorageEntryMetadataBuilder {
+	/// Build into `entries` the storage metadata entries of a storage given some `docs`.
+	fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
 }

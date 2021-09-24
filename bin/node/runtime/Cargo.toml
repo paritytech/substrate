@@ -55,6 +55,7 @@ pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../..
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authorship" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../../frame/babe" }
+pallet-bags-list = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bags-list" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
 pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
@@ -110,6 +111,7 @@ std = [
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",
 	"pallet-babe/std",
+	"pallet-bags-list/std",
 	"pallet-balances/std",
 	"pallet-bounties/std",
 	"sp-block-builder/std",
@@ -179,6 +181,7 @@ runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
+	"pallet-bags-list/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-bounties/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",

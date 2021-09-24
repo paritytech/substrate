@@ -1293,8 +1293,8 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap, StorageNMap,
-				StorageValue, ValueQuery,
+				CountedStorageMap, Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap,
+				StorageNMap, StorageValue, ValueQuery,
 			},
 		},
 		traits::{
@@ -1673,6 +1673,8 @@ pub mod pallet_prelude {
 /// * [`pallet_prelude::StorageValue`] expect `Value` and optionally `QueryKind` and `OnEmpty`,
 /// * [`pallet_prelude::StorageMap`] expect `Hasher`, `Key`, `Value` and optionally `QueryKind`
 ///   and `OnEmpty`,
+/// * [`pallet_prelude::CountedStorageMap`] expect `Hasher`, `Key`, `Value` and optionally
+///   `QueryKind` and `OnEmpty`,
 /// * [`pallet_prelude::StorageDoubleMap`] expect `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value`
 ///   and optionally `QueryKind` and `OnEmpty`.
 ///
@@ -1684,13 +1686,16 @@ pub mod pallet_prelude {
 /// E.g. if runtime names the pallet "MyExample" then the storage `type Foo<T> = ...` use the
 /// prefix: `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
-/// specific name to use for the prefix.
+/// For the `CountedStorageMap` variant, the Prefix also implements
+/// `CountedStorageMapInstance`. It associate a `CounterPrefix`, which is implemented same as
+/// above, but the storage prefix is prepend with `"CounterFor"`.
+/// E.g. if runtime names the pallet "MyExample" then the storage
+/// `type Foo<T> = CountedStorageaMap<...>` will store its counter at the prefix:
+/// `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
 ///
 /// E.g:
 /// ```ignore
 /// #[pallet::storage]
-/// #[pallet::storage_prefix = "OtherName"]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
 /// In this case the final prefix used by the map is
@@ -1699,9 +1704,13 @@ pub mod pallet_prelude {
 /// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows to define a
 /// getter function on `Pallet`.
 ///
+/// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allow to define the storage
+/// prefix to use, see how `Prefix` generic is implemented above.
+///
 /// E.g:
 /// ```ignore
 /// #[pallet::storage]
+/// #[pallet::storage_prefix = "foo"]
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
@@ -1738,6 +1747,8 @@ pub mod pallet_prelude {
 /// `_GeneratedPrefixForStorage$NameOfStorage`, and implements
 /// [`StorageInstance`](traits::StorageInstance) on it using the pallet and storage name. It
 /// then uses it as the first generic of the aliased type.
+/// For `CountedStorageMap`, `CountedStorageMapInstance` is implemented, and another similar
+/// struct is generated.
 ///
 /// For named generic, the macro will reorder the generics, and remove the names.
 ///

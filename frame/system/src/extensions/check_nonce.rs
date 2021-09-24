@@ -34,7 +34,7 @@ use sp_std::vec;
 /// extension sets some kind of priority upon validating transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct CheckNonce<T: Config>(#[codec(compact)] T::Index);
+pub struct CheckNonce<T: Config>(#[codec(compact)] pub T::Index);
 
 impl<T: Config> CheckNonce<T> {
 	/// utility constructor. Used only in client/factory code.

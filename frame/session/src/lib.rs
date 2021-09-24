@@ -114,7 +114,6 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::Decode;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
 	ConsensusEngineId, KeyTypeId, Perbill, Permill, RuntimeAppPublic,
@@ -127,6 +126,7 @@ use sp_std::{
 };
 
 use frame_support::{
+	codec::{Decode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{
@@ -377,7 +377,7 @@ pub mod pallet {
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
+		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen;
 
 		/// A conversion from account ID to validator ID.
 		///
