@@ -258,16 +258,12 @@ async fn should_notify_about_storage_changes() {
 	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// We should get a message back on our subscription about the storage change:
-	// TODO (jsdw): previously we got back 2 messages here.
-	// TODO (dp): I agree that we differ here. I think `master` always includes the initial value of
-	// the storage?
-	let msg = timeout_secs(5, sub_rx.next()).await;
+	// NOTE: previous versions of the subscription code used to return an empty value for the "initial" storage change here
+	let msg = timeout_secs(1, sub_rx.next()).await;
 	assert_matches!(&msg, Ok(Some(json)) => {
 		serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")
 	});
 
-	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
-	// Previously the channel returned None.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 
@@ -565,11 +561,6 @@ async fn should_notify_on_runtime_version_initially() {
 	// assert initial version sent.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
 
-	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
-	// Previously the channel returned None.
-	// TODO (dp): I think this is a valid concern; our version swallows the `None` (in the
-	// `take_while` call I guess?). I guess this test does what is says on the tin though: check
-	// that we get the current runtime version when subscribing.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 
