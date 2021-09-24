@@ -479,6 +479,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(credit)
 	}
 
+	/// Create a new asset without taking a deposit.
+	///
+	/// * `id`: The `AssetId` you want the new asset to have. Must not already be in use.
+	/// * `owner`: The owner, issuer, admin, and freezer of this asset upon creation.
+	/// * `is_sufficient`: Whether this asset needs users to have an existential deposit to hold
+	///   this asset.
+	/// * `min_balance`: The minimum balance a user is allowed to have of this asset before they are
+	///   considered dust and cleaned up.
 	pub(super) fn do_force_create(
 		id: T::AssetId,
 		owner: T::AccountId,
@@ -509,6 +517,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Destroy an existing asset.
+	///
+	/// * `id`: The asset you want to destroy.
+	/// * `witness`: Witness data needed about the current state of the asset, used to confirm
+	///   complexity of the operation.
+	/// * `maybe_check_owner`: An optional check before destroying the asset, if the provided
+	///   account is the owner of that asset. Can be used for authorization checks.
 	pub(super) fn do_destroy(
 		id: T::AssetId,
 		witness: DestroyWitness,
