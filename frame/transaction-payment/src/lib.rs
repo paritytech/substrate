@@ -264,16 +264,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransactionByteFee: Get<BalanceOf<Self>>;
 
-		/// The scaling factor for `priority` calculations.
+		/// A virtual (not payed) tip added to `Operational` extrinsics to boost their `priority`.
 		///
-		/// The priority is calculated by (integer) dividing the `tip` being payed and the amount of
-		/// `weight` the transaction consumes. Depending on the real-world values of both
-		/// `Balance` and `Weight` this division might end up in undesirable range.
-		/// To accomodated that, this additional scaling factor will be included in computations,
-		/// i.e. `tip * WeightTipRatio / weight`.
-		/// Recommended value for this constant is `MAXIMUM_BLOCK_WEIGHT / AVERAGE_TIP_AMOUNT`.
+		/// This value is simply included to a tip component in regular `priority` calculations.
+		/// It means that a `Normal` transaction can front-run a similarly-sized `Operational`
+		/// extrinsic (with no tip), by including a tip value greater than this.
 		#[pallet::constant]
-		type WeightTipRatio: Get<BalanceOf<Self>>;
+		type OperationalVirtualTip: Get<BalanceOf<Self>>;
 
 		/// Convert a weight value into a deductible fee based on the currency type.
 		type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
@@ -583,53 +580,63 @@ where
 		.map(|i| (fee, i))
 	}
 
-	/// Get an appropriate priority for a transaction with the given `DispatchInfo` and fee to be
-	/// paid (with `tip`).
+	/// Get an appropriate priority for a transaction with the given `DispatchInfo`, encoded length
+	/// and user-included tip.
 	///
-	/// Values returned by the function depend on the following:
-	/// 1. The average per-weight-unit tip to be payed.
-	/// 2. The dispatch class of the transaction.
+	/// The priority is based on the amount of `tip` the user is willing to pay per unit of either
+	/// `weight` or `length`, depending which one is more limitting. For `Operational` extrinsics
+	/// we add a "virtual tip" to the calculations.
 	///
-	/// For Normal (and Mandatory) dispatchables we simply take the amount of `tip` payed
-	/// for every weight unit, scaled up by `T::WeightTipRatio`.
-	/// Operational dispatchables get an additional `priority` increase, roughly matching
-	/// a tip with amount equal to the cost required to include transaction that consumes
-	/// half of the block weight.
-	fn get_priority(info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> TransactionPriority {
-		let max_block = T::BlockWeights::get().max_block;
-		let bounded_weight = info.weight.max(1).min(max_block);
-		let weight_tip_ratio = T::WeightTipRatio::get();
-		let per_weight = |val| {
-			FixedU128::saturating_from_rational(val, bounded_weight)
-				.saturating_mul_int(weight_tip_ratio)
-		};
+	/// The formula should simply be `tip / bounded_{weight|length}`, but since we are using
+	/// integer division, we have no guarantees it's going to give results in any reasonable
+	/// range (might simply end up being zero). Hence we use a scaling factor:
+	/// `tip * (max_block_{weight|length} / bounded_{weight|length})`, since given current
+	/// state of-the-art blockchains, number of per-block transactions is expected to be in a
+	/// range reasonable enough to not saturate the `Balance` type while multiplying by the tip.
+	fn get_priority(info: &DispatchInfoOf<T::Call>, len: usize, tip: BalanceOf<T>) -> TransactionPriority {
+		// Calculate how many such extrinsics we could fit into an empty block and take
+		// the limitting factor.
+		let max_block_weight = T::BlockWeights::get().max_block;
+		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		let tip_per_weight = per_weight(tip);
+		let bounded_weight = info.weight.max(1).min(max_block_weight);
+		let bounded_length = (len as u64).max(1).min(max_block_length);
+
+		let max_tx_per_block_weight = max_block_weight / bounded_weight;
+		let max_tx_per_block_length = max_block_length / bounded_length;
+		// Given our current knowledge this value is going to be in a reasonable range - i.e.
+		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the balance
+		// type. We still use saturating ops obviously, but the point is to end up with some
+		// `priority` distribution instead of having all transactions saturate the priority.
+		let max_tx_per_block =
+			max_tx_per_block_length.min(max_tx_per_block_weight).saturated_into::<BalanceOf<T>>();
+		let max_reward = |val: BalanceOf<T>| val.saturating_mul(max_tx_per_block);
+
+		// To distribute no-tip transactions a little bit, we set the minimal tip as `1`.
+		// This means that given two transactions without a tip, smaller one will be preferred.
+		let tip = tip.max(1.saturated_into());
+		let scaled_tip = max_reward(tip);
 
 		match info.class {
 			DispatchClass::Normal => {
 				// For normal class we simply take the `tip_per_weight`.
-				tip_per_weight
+				scaled_tip
 			},
 			DispatchClass::Mandatory => {
 				// Mandatory extrinsics should be prohibited (e.g. by the [`CheckWeight`]
 				// extensions), but just to be safe let's return the same priority as `Normal` here.
-				tip_per_weight
+				scaled_tip
 			},
 			DispatchClass::Operational => {
-				// A reasonable tip value to frontrun an `Operational` extrinsic.
+				// A "virtual tip" value added to an `Operational` extrinsic.
 				// This value should be kept high enough to allow `Operational` extrinsics
-				// to get in even during congested period, but at the same time low
+				// to get in even during congestion period, but at the same time low
 				// enough to prevent a possible spam attack by sending invalid operational
 				// extrinsics which push away regular transactions from the pool.
-				//
-				// We assume that the reasonable tip is equal to the cost of transaction
-				// which fills up half of the block weight.
-				let half_block = max_block / 2;
-				let reasonable_tip = T::WeightToFee::calc(&half_block);
-				let reasonable_tip_per_weight = per_weight(reasonable_tip);
+				let virtual_tip = T::OperationalVirtualTip::get();
+				let scaled_virtual_tip = max_reward(virtual_tip);
 
-				tip_per_weight.saturating_add(reasonable_tip_per_weight)
+				scaled_tip.saturating_add(scaled_virtual_tip)
 			},
 		}
 		.saturated_into::<TransactionPriority>()
@@ -677,7 +684,7 @@ where
 	) -> TransactionValidity {
 		let (_fee, _) = self.withdraw_fee(who, call, info, len)?;
 		let tip = self.0;
-		Ok(ValidTransaction { priority: Self::get_priority(info, tip), ..Default::default() })
+		Ok(ValidTransaction { priority: Self::get_priority(info, len, tip), ..Default::default() })
 	}
 
 	fn pre_dispatch(
@@ -790,7 +797,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
-		pub static WeightTipRatio: u64 = 1024 / 5;
+		pub static OperationalVirtualTip: u64 = 5 * 5;
 	}
 
 	impl frame_system::Config for Runtime {
@@ -870,7 +877,7 @@ mod tests {
 	impl Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type TransactionByteFee = TransactionByteFee;
-		type WeightTipRatio = WeightTipRatio;
+		type OperationalVirtualTip = OperationalVirtualTip;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
 	}
@@ -1397,14 +1404,14 @@ mod tests {
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 10);
+			assert_eq!(priority, 50);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 20);
+			assert_eq!(priority, 100);
 		});
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
@@ -1417,13 +1424,43 @@ mod tests {
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 1054);
+			assert_eq!(priority, 300);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 1064);
+			assert_eq!(priority, 350);
+		});
+	}
+
+	#[test]
+	fn no_tip_has_some_priority() {
+		let tip = 0;
+		let len = 10;
+
+		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+			let normal =
+				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let priority = ChargeTransactionPayment::<Runtime>(tip)
+				.validate(&2, CALL, &normal, len)
+				.unwrap()
+				.priority;
+
+			assert_eq!(priority, 50);
+		});
+
+		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+			let op = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+			};
+			let priority = ChargeTransactionPayment::<Runtime>(tip)
+				.validate(&2, CALL, &op, len)
+				.unwrap()
+				.priority;
+			assert_eq!(priority, 300);
 		});
 	}
 

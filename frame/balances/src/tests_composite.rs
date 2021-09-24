@@ -76,12 +76,12 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
-	pub const WeightTipRatio: u64 = 1;
+	pub const OperationalVirtualTip: u64 = 1;
 }
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
-	type WeightTipRatio = WeightTipRatio;
+	type OperationalVirtualTip = OperationalVirtualTip;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }

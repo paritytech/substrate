@@ -257,13 +257,13 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub const TransactionByteFee: Balance = 1;
-	pub WeightTipRatio: Balance = BlockWeights::get().max_block as Balance / ExistentialDeposit::get();
+	pub OperationalVirtualTip: Balance = ExistentialDeposit::get();
 }
 
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type TransactionByteFee = TransactionByteFee;
-	type WeightTipRatio = WeightTipRatio;
+	type OperationalVirtualTip = OperationalVirtualTip;
 	type WeightToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate = ();
 }
