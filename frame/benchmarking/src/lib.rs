@@ -331,30 +331,38 @@ macro_rules! benchmarks_iter {
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
-		$crate::benchmarks_iter! {
-			{ $( $instance: $instance_bound )? }
-			{ $( $where_clause )* }
-			( $( $names )* )
-			( $( $names_extra )* )
-			( $( $names_skip_meta )* )
-			$name {
-				$( $code )*
-				let __benchmarked_call_encoded = $crate::frame_support::codec::Encode::encode(
-					&<Call<T $(, $instance )?>>::$dispatch($( $arg ),*)
-				);
-			}: {
-				let call_decoded = <
-					Call<T $(, $instance )?>
-					as $crate::frame_support::codec::Decode
-				>::decode(&mut &__benchmarked_call_encoded[..])
-					.expect("call is encoded above, encoding must be correct");
+		$crate::paste::paste! {
+			$crate::benchmarks_iter! {
+				{ $( $instance: $instance_bound )? }
+				{ $( $where_clause )* }
+				( $( $names )* )
+				( $( $names_extra )* )
+				( $( $names_skip_meta )* )
+				$name {
+					$( $code )*
+					let __call = Call::<
+						T
+						$( , $instance )?
+					>:: [< new_call_variant_ $dispatch >] (
+						$($arg),*
+					);
+					let __benchmarked_call_encoded = $crate::frame_support::codec::Encode::encode(
+						&__call
+					);
+				}: {
+					let call_decoded = <
+						Call<T $(, $instance )?>
+						as $crate::frame_support::codec::Decode
+					>::decode(&mut &__benchmarked_call_encoded[..])
+						.expect("call is encoded above, encoding must be correct");
 
-				<
-					Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
-				>::dispatch_bypass_filter(call_decoded, $origin.into())?;
+					<
+						Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
+					>::dispatch_bypass_filter(call_decoded, $origin.into())?;
+				}
+				verify $postcode
+				$( $rest )*
 			}
-			verify $postcode
-			$( $rest )*
 		}
 	};
 	// iteration arm:

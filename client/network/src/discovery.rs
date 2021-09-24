@@ -733,7 +733,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = DiscoveryOut::Discovered(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 						},
-						KademliaEvent::PendingRoutablePeer { .. } => {
+						KademliaEvent::PendingRoutablePeer { .. } |
+						KademliaEvent::InboundRequestServed { .. } => {
 							// We are not interested in this event at the moment.
 						},
 						KademliaEvent::OutboundQueryCompleted {
@@ -844,8 +845,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							),
 						},
 						// We never start any other type of query.
-						e => {
-							debug!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
+						KademliaEvent::OutboundQueryCompleted { result: e, .. } => {
+							warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 						},
 					},
 					NetworkBehaviourAction::DialAddress { address } =>
