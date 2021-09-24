@@ -125,6 +125,11 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.drain(range)
 	}
 
+	/// Exactly the same semantics as [`Vec::last_mut`].
+	pub fn last_mut(&mut self) -> Option<&mut T> {
+		self.0.last_mut()
+	}
+
 	/// Exactly the same semantics as [`Vec::swap_remove`].
 	///
 	/// # Panics
