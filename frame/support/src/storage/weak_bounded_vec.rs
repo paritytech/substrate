@@ -84,6 +84,14 @@ impl<T, S> WeakBoundedVec<T, S> {
 		self.0.drain(range)
 	}
 
+	/// Exactly the same semantics as [`Vec::sort_by`].
+	pub fn sort_by<F>(&mut self, compare: F)
+	where
+		F: FnMut(&T, &T) -> Ordering,
+	{
+		self.0.sort_by(compare);
+	}
+
 	/// Exactly the same semantics as [`Vec::truncate`].
 	///
 	/// # Panics
