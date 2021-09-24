@@ -117,6 +117,11 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.remove(index)
 	}
 
+	/// Exactly the same semantics as [`Vec::pop`].
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
+
 	/// Exactly the same semantics as [`Vec::drain`].
 	pub fn drain<R>(&mut self, range: R) -> Drain<'_, T>
 	where
