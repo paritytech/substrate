@@ -24,10 +24,7 @@ use super::*;
 use frame_benchmarking::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
 };
-use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
-	traits::OnInitialize,
-};
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Elections;
