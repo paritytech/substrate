@@ -101,7 +101,7 @@ pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
 	[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
 
 #[derive(Default)]
-pub(crate) struct ExtBuilder {
+pub struct ExtBuilder {
 	ids: Vec<(AccountId, VoteWeight)>,
 }
 
@@ -126,7 +126,7 @@ impl ExtBuilder {
 		ext
 	}
 
-	pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
 			List::<Runtime>::sanity_check().expect("Sanity check post condition failed")

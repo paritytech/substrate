@@ -36,6 +36,9 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core", optional = tr
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", optional = true, default-features = false }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true, default-features = false }
 
+# Optional imports for fuzz
+# pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true }
+
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core"}
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
@@ -62,5 +65,11 @@ runtime-benchmarks = [
 	"pallet-balances",
 	"sp-tracing",
 	"frame-election-provider-support/runtime-benchmarks",
+]
+fuzz = [
+  "sp-core",
+	"sp-io",
+  "pallet-balances",
+	"sp-tracing",
 ]
 
