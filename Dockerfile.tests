@@ -1,5 +1,5 @@
 # ===== FIRST STAGE ======
-ARG DDC_SMART_CONTRACT_VERSION=v1.1.0
+ARG DDC_SMART_CONTRACT_VERSION=2.2.3
 ARG ECR_REGISTRY
 FROM phusion/baseimage:0.11 as builder
 LABEL maintainer="team@cere.network"

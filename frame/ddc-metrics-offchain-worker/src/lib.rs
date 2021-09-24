@@ -48,6 +48,7 @@ pub struct DDCNode {
     p2p_id: String,
     p2p_addr: String,
     url: String,
+    permissions: u64,
 }
 
 struct Metric {
