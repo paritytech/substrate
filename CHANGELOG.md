@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [*.*.*]
 ### Changed
 
+## [2.5.1]
+
+### Fixed
+
+- DDC Metrics OCW compatibility with DDC SC
+
 ## [2.5.0]
 
 ### Changed
