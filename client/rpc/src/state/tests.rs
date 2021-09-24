@@ -21,7 +21,7 @@ use super::{state_full::split_range, *};
 use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use futures::{executor, StreamExt};
-use jsonrpsee::types::v2::SubscriptionResponse;
+use jsonrpsee::types::{error::SubscriptionClosedError, v2::SubscriptionResponse};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use serde_json::value::to_raw_value;
@@ -237,38 +237,46 @@ async fn should_call_contract() {
 
 #[tokio::test]
 async fn should_notify_about_storage_changes() {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) =
-		new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
+	let mut sub_rx = {
+		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionTaskExecutor::new(TaskExecutor),
+			DenyUnsafe::No,
+			None,
+		);
 
-	let api_rpc = api.into_rpc();
-	let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
+		let api_rpc = api.into_rpc();
+		let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
 
-	// Cause a change:
-	let mut builder = client.new_block(Default::default()).unwrap();
-	builder
-		.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		})
-		.unwrap();
-	let block = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, block).await.unwrap();
+		// Cause a change:
+		let mut builder = client.new_block(Default::default()).unwrap();
+		builder
+			.push_transfer(runtime::Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
+		let block = builder.build().unwrap().block;
+		client.import(BlockOrigin::Own, block).await.unwrap();
+
+		sub_rx
+	};
 
 	// We should get a message back on our subscription about the storage change:
 	// TODO (jsdw): previously we got back 2 messages here.
 	// TODO (dp): I agree that we differ here. I think `master` always includes the initial value of
 	// the storage?
-	let msg = timeout_secs(5, sub_rx.next()).await;
+	let msg = timeout_secs(1, sub_rx.next()).await;
 	assert_matches!(&msg, Ok(Some(json)) => {
 		serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")
 	});
-
-	// TODO (jsdw): The channel remains open here, so waiting for another message will time out.
-	// Previously the channel returned None.
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	let err = timeout_secs(1, sub_rx.next()).await;
+	assert_matches!(&err, Ok(Some(json)) => {
+		serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&json).expect("The right kind of response")
+	});
 }
 
 #[tokio::test]
