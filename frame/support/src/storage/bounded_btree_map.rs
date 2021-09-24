@@ -20,7 +20,11 @@
 use crate::{storage::StorageDecodeLength, traits::Get};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, fmt, marker::PhantomData,
+	borrow::Borrow,
+	collections::btree_map::{BTreeMap, Entry},
+	convert::TryFrom,
+	fmt,
+	marker::PhantomData,
 	ops::Deref,
 };
 
@@ -150,6 +154,15 @@ where
 		Q: Ord + ?Sized,
 	{
 		self.0.remove_entry(key)
+	}
+
+	/// Exactly the same semantics as [`BTreeMap::entry`]
+	/// Gets the given key's corresponding entry in the map for in-place manipulation.
+	pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
+	where
+		K: Ord,
+	{
+		self.0.entry(key)
 	}
 }
 
