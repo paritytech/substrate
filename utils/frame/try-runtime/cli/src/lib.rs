@@ -29,9 +29,9 @@
 //!
 //! Some resources about the above:
 //!
-//! 1. https://substrate.dev/docs/en/knowledgebase/integrate/try-runtime
-//! 2. https://www.crowdcast.io/e/substrate-seminar/41
-//! 3. https://substrate.dev/docs/en/knowledgebase/advanced/executor
+//! 1. <https://substrate.dev/docs/en/knowledgebase/integrate/try-runtime>
+//! 2. <https://www.crowdcast.io/e/substrate-seminar/41>
+//! 3. <https://substrate.dev/docs/en/knowledgebase/advanced/executor>
 //!
 //! ---
 //!
@@ -116,6 +116,44 @@
 //! - set `--rpc-cors all` to ensure ws connections can come through.
 //!
 //! Note that *none* of the try-runtime operations need unsafe RPCs.
+//!
+//! ## Migration Best Practices
+//!
+//! One of the main use-cases of try-runtime is using it for testing storage migrations. The
+//! following points makes sure you can *effectively* test your migrations with try-runtime.
+//!
+//! #### Adding pre/post hooks
+//!
+//! One of the gems that come only in the `try-runtime` feature flag is the `pre_upgrade` and
+//! `post_upgrade` hooks for [`OnRuntimeUpgrade`]. This trait is implemented either inside the
+//! pallet, or manually in a runtime, to define a migration. In both cases, these functions can be
+//! added, given the right flag:
+//!
+//! ```ignore
+//! #[cfg(feature = try-runtime)]
+//! fn pre_upgrade() -> Result<(), &'static str> {}
+//!
+//! #[cfg(feature = try-runtime)]
+//! fn post_upgrade() -> Result<(), &'static str> {}
+//! ```
+//!
+//! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
+//!
+//! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
+//! and after the migration. If any data needs to be temporarily stored between the pre/post
+//! migration hooks, [`OnRuntimeUpgradeHelpersExt`] can help with that.
+//!
+//! #### Logging
+//!
+//! It is super helpful to make sure your migration code uses logging (always with a `runtime` log
+//! target prefix, e.g. `runtime::balance`) and state exactly at which stage it is, and what it is
+//! doing.
+//!
+//! #### Guarding migrations
+//!
+//! Always make sure that any migration code is guarded either by [`StorageVersion`], or by some
+//! custom storage item, so that it is NEVER executed twice, even if the code lives in two
+//! consecutive runtimes.
 //!
 //! ## Examples
 //!
