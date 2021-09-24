@@ -16,6 +16,7 @@
 // limitations under the License.
 
 #[rustversion::attr(not(stable), ignore)]
+#[cfg(not(feature = "disable-ui-tests"))]
 #[test]
 fn decl_storage_ui() {
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.

@@ -172,7 +172,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark(value.encode()))
+	Call::System(frame_system::Call::remark { remark: value.encode() })
 }
 
 fn record(event: Event) -> EventRecord<Event, H256> {
@@ -229,8 +229,11 @@ fn close_works() {
 #[test]
 fn proposal_weight_limit_works_on_approve() {
 	new_test_ext().execute_with(|| {
-		let proposal =
-			Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
+		let proposal = Call::Collective(crate::Call::set_members {
+			new_members: vec![1, 2, 3],
+			prime: None,
+			old_count: MaxMembers::get(),
+		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		let hash = BlakeTwo256::hash_of(&proposal);
@@ -256,8 +259,11 @@ fn proposal_weight_limit_works_on_approve() {
 #[test]
 fn proposal_weight_limit_ignored_on_disapprove() {
 	new_test_ext().execute_with(|| {
-		let proposal =
-			Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
+		let proposal = Call::Collective(crate::Call::set_members {
+			new_members: vec![1, 2, 3],
+			prime: None,
+			old_count: MaxMembers::get(),
+		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		let hash = BlakeTwo256::hash_of(&proposal);
@@ -561,8 +567,11 @@ fn limit_active_proposals() {
 #[test]
 fn correct_validate_and_get_proposal() {
 	new_test_ext().execute_with(|| {
-		let proposal =
-			Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
+		let proposal = Call::Collective(crate::Call::set_members {
+			new_members: vec![1, 2, 3],
+			prime: None,
+			old_count: MaxMembers::get(),
+		});
 		let length = proposal.encode().len() as u32;
 		assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length));
 
@@ -782,7 +791,7 @@ fn motions_reproposing_disapproved_works() {
 #[test]
 fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = Call::Democracy(mock_democracy::Call::external_propose_majority());
+		let proposal = Call::Democracy(mock_democracy::Call::external_propose_majority {});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		let hash: H256 = proposal.blake2_256().into();

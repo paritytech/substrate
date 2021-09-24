@@ -24,6 +24,7 @@ pub mod genesismap;
 pub mod system;
 
 use codec::{Decode, Encode, Error, Input};
+use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
@@ -415,7 +416,7 @@ cfg_if! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, TypeInfo)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -483,7 +484,7 @@ impl frame_support::traits::OriginTrait for Origin {
 	}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct Event;
 
 impl From<frame_system::Event<Runtime>> for Event {
@@ -573,6 +574,7 @@ impl pallet_timestamp::Config for Runtime {
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
 	pub const ExpectedBlockTime: u64 = 10_000;
+	pub const MaxAuthorities: u32 = 10;
 }
 
 impl pallet_babe::Config for Runtime {
@@ -595,8 +597,9 @@ impl pallet_babe::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
-
 	type WeightInfo = ();
+
+	type MaxAuthorities = MaxAuthorities;
 }
 
 /// Adds one to the given input and returns the final result.

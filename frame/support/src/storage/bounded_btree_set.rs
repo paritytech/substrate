@@ -20,7 +20,7 @@
 use crate::{storage::StorageDecodeLength, traits::Get};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, fmt, marker::PhantomData,
+	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, marker::PhantomData,
 	ops::Deref,
 };
 
@@ -157,12 +157,12 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<T, S> fmt::Debug for BoundedBTreeSet<T, S>
+impl<T, S> std::fmt::Debug for BoundedBTreeSet<T, S>
 where
-	BTreeSet<T>: fmt::Debug,
+	BTreeSet<T>: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedBTreeSet").field(&self.0).field(&Self::bound()).finish()
 	}
 }
