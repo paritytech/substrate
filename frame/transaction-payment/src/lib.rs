@@ -595,7 +595,11 @@ where
 	/// `tip * (max_block_{weight|length} / bounded_{weight|length})`, since given current
 	/// state of-the-art blockchains, number of per-block transactions is expected to be in a
 	/// range reasonable enough to not saturate the `Balance` type while multiplying by the tip.
-	fn get_priority(info: &DispatchInfoOf<T::Call>, len: usize, tip: BalanceOf<T>) -> TransactionPriority {
+	fn get_priority(
+		info: &DispatchInfoOf<T::Call>,
+		len: usize,
+		tip: BalanceOf<T>,
+	) -> TransactionPriority {
 		// Calculate how many such extrinsics we could fit into an empty block and take
 		// the limitting factor.
 		let max_block_weight = T::BlockWeights::get().max_block;
@@ -607,11 +611,12 @@ where
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;
 		// Given our current knowledge this value is going to be in a reasonable range - i.e.
-		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the balance
-		// type. We still use saturating ops obviously, but the point is to end up with some
+		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the
+		// balance type. We still use saturating ops obviously, but the point is to end up with some
 		// `priority` distribution instead of having all transactions saturate the priority.
-		let max_tx_per_block =
-			max_tx_per_block_length.min(max_tx_per_block_weight).saturated_into::<BalanceOf<T>>();
+		let max_tx_per_block = max_tx_per_block_length
+			.min(max_tx_per_block_weight)
+			.saturated_into::<BalanceOf<T>>();
 		let max_reward = |val: BalanceOf<T>| val.saturating_mul(max_tx_per_block);
 
 		// To distribute no-tip transactions a little bit, we set the minimal tip as `1`.
