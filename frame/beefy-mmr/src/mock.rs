@@ -19,7 +19,8 @@ use std::vec;
 
 use beefy_primitives::mmr::MmrLeafVersion;
 use frame_support::{
-	construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities,
+	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
+	BasicExternalities,
 };
 use sp_core::{Hasher, H256};
 use sp_runtime::{
