@@ -1447,7 +1447,7 @@ mod tests {
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 50);
+			assert_eq!(priority, 10);
 		});
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
@@ -1460,7 +1460,7 @@ mod tests {
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 300);
+			assert_eq!(priority, 260);
 		});
 	}
 
