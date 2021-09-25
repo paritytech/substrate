@@ -220,12 +220,12 @@ impl<T, S> Default for WeakBoundedVec<T, S> {
 }
 
 #[cfg(feature = "std")]
-impl<T, S> fmt::Debug for WeakBoundedVec<T, S>
+impl<T, S> std::fmt::Debug for WeakBoundedVec<T, S>
 where
-	T: fmt::Debug,
+	T: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("WeakBoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
