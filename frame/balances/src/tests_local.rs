@@ -85,10 +85,7 @@ impl pallet_transaction_payment::Config for Test {
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
-parameter_types! {
-	pub const MaxLocks: u32 = 50;
-	pub const MaxReserves: u32 = 2;
-}
+
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
@@ -96,8 +93,8 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
 		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
-	type MaxLocks = MaxLocks;
-	type MaxReserves = MaxReserves;
+	const MAX_LOCKS: u32 = 50;
+	const MAX_RESERVES: u32 = 2;
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }

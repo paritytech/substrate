@@ -18,7 +18,7 @@
 //! The lockable currency trait and some associated types.
 
 use super::{super::misc::WithdrawReasons, Currency};
-use crate::{dispatch::DispatchResult, traits::misc::Get};
+use crate::{dispatch::DispatchResult};
 
 /// An identifier for a lock. Used for disambiguating different locks so that
 /// they can be individually replaced or removed.
@@ -30,7 +30,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	type Moment;
 
 	/// The maximum number of locks a user should have on their account.
-	type MaxLocks: Get<u32>;
+	const MAX_LOCKS: u32;
 
 	/// Create a new balance lock on account `who`.
 	///

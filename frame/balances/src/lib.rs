@@ -229,12 +229,12 @@ pub mod pallet {
 
 		/// The maximum number of locks that should exist on an account.
 		/// Not strictly enforced, but used for weight estimation.
-		#[pallet::constant]
-		type MaxLocks: Get<u32>;
+		//#[pallet::constant]
+		const MAX_LOCKS: u32;
 
 		/// The maximum number of named reserves that can exist on an account.
-		#[pallet::constant]
-		type MaxReserves: Get<u32>;
+		//#[pallet::constant]
+		const MAX_RESERVES: u32;
 
 		/// The id type for named reserves.
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
@@ -495,7 +495,7 @@ pub mod pallet {
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist
 		DeadAccount,
-		/// Number of named reserves exceed MaxReserves
+		/// Number of named reserves exceed MAX_RESERVES
 		TooManyReserves,
 	}
 
@@ -526,7 +526,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
+		WeakBoundedVec<BalanceLock<T::Balance>, { T::MAX_LOCKS }>,
 		ValueQuery,
 		GetDefault,
 		ConstU32<300_000>,
@@ -539,7 +539,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<ReserveData<T::ReserveIdentifier, T::Balance>, T::MaxReserves>,
+		BoundedVec<ReserveData<T::ReserveIdentifier, T::Balance>, { T::MAX_RESERVES }>,
 		ValueQuery,
 	>;
 
@@ -942,12 +942,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		let bounded_locks = WeakBoundedVec::<_, T::MaxLocks>::force_from(
+		let bounded_locks = WeakBoundedVec::<_, { T::MAX_LOCKS }>::force_from(
 			locks.to_vec(),
 			Some("Balances Update Locks"),
 		);
 
-		if locks.len() as u32 > T::MaxLocks::get() {
+		if locks.len() as u32 > T::MAX_LOCKS {
 			log::warn!(
 				target: "runtime::balances",
 				"Warning: A user has more currency locks than expected. \
@@ -2081,7 +2081,7 @@ where
 {
 	type Moment = T::BlockNumber;
 
-	type MaxLocks = T::MaxLocks;
+	const MAX_LOCKS: u32 = T::MAX_LOCKS;
 
 	// Set a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
