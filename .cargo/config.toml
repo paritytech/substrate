@@ -1,0 +1,7 @@
+[target.'cfg(feature = "cargo-clippy")']
+rustflags = [
+  "-Aclippy::all",
+  "-Dclippy::correctness",
+  "-Aclippy::if-same-then-else",
+  "-Aclippy::clone-double-ref"
+]
