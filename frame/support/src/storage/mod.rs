@@ -1224,8 +1224,8 @@ mod private {
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T, S> Sealed for BoundedVec<T, S> {}
-	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
+	impl<T, const S: u32> Sealed for BoundedVec<T, S> {}
+	impl<T, const S: u32> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 
@@ -1714,22 +1714,19 @@ mod test {
 		});
 	}
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
+	const SEVEN: u32 = 7;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, SEVEN>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, SEVEN>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, SEVEN>>
 	}
 
 	#[test]
 	fn try_append_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: WeakBoundedVec<u32, SEVEN> = vec![1, 2, 3].try_into().unwrap();
 			Foo::put(bounded);
 			assert_ok!(Foo::try_append(4));
 			assert_ok!(Foo::try_append(5));
@@ -1740,7 +1737,7 @@ mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, SEVEN> = vec![1, 2, 3].try_into().unwrap();
 			FooMap::insert(1, bounded);
 
 			assert_ok!(FooMap::try_append(1, 4));
@@ -1755,17 +1752,17 @@ mod test {
 			assert_ok!(FooMap::try_append(2, 4));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+				BoundedVec::<u32, SEVEN>::try_from(vec![4]).unwrap(),
 			);
 			assert_ok!(FooMap::try_append(2, 5));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
+				BoundedVec::<u32, SEVEN>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, SEVEN> = vec![1, 2, 3].try_into().unwrap();
 			FooDoubleMap::insert(1, 1, bounded);
 
 			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
@@ -1780,12 +1777,12 @@ mod test {
 			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+				BoundedVec::<u32, SEVEN>::try_from(vec![4]).unwrap(),
 			);
 			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
+				BoundedVec::<u32, SEVEN>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 	}

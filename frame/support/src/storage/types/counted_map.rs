@@ -462,7 +462,6 @@ mod test {
 		hash::*,
 		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
-		traits::ConstU32,
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -947,7 +946,7 @@ mod test {
 
 	#[test]
 	fn try_append_decode_len_works() {
-		type B = CountedStorageMap<Prefix, Twox64Concat, u16, BoundedVec<u32, ConstU32<3u32>>>;
+		type B = CountedStorageMap<Prefix, Twox64Concat, u16, BoundedVec<u32, 3u32>>;
 
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(B::decode_len(0), None);
