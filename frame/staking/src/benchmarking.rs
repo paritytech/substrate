@@ -41,7 +41,7 @@ use sp_runtime::traits::{Bounded, One};
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
-const MAX_VALIDATORS: u32 = 1000;
+const MAX_VALIDATORS: u32 = 100;
 const MAX_NOMINATORS: u32 = 1000;
 const MAX_SLASHES: u32 = 1000;
 
