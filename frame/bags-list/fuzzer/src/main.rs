@@ -77,7 +77,11 @@ fn main() {
 					BagsList::on_update(&id, vote_weight);
 					assert!(BagsList::contains(&id));
 				},
+<<<<<<< HEAD
 				Action::Remove => {
+=======
+				_ => {
+>>>>>>> 7d43123e716a112d8ef9f0b421a2ae5b947623d3
 					// only `2` should ever get us here, but we must use a wildcard to make the
 					// compiler happy.
 					BagsList::on_remove(&id);

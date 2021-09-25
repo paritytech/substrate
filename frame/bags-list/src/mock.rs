@@ -107,6 +107,7 @@ pub struct ExtBuilder {
 
 impl ExtBuilder {
 	/// Add some AccountIds to insert into `List`.
+	#[cfg(not(feature = "fuzz"))]
 	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
 		self.ids = ids;
 		self
@@ -133,11 +134,13 @@ impl ExtBuilder {
 		})
 	}
 
+	#[cfg(not(feature = "fuzz"))]
 	pub(crate) fn build_and_execute_no_post_check(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
 }
 
+#[cfg(not(feature = "fuzz"))]
 pub(crate) mod test_utils {
 	use super::*;
 	use list::Bag;
