@@ -257,7 +257,7 @@ cargo-deny:
     when:                          always
     paths:
       - deny.log
-  # FIXME: Temorarily allow to fail.
+  # FIXME: Temporarily allow to fail.
   allow_failure:                   true
 
 cargo-fmt:
@@ -273,7 +273,7 @@ cargo-clippy:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    - ./.maintain/clippy.sh
+    - SKIP_WASM_BUILD=1 cargo +nightly clippy
   allow_failure:                   true
 
 cargo-check-benches:
