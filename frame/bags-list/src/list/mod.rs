@@ -391,8 +391,8 @@ impl<T: Config> List<T> {
 	///
 	/// * there are no duplicate ids,
 	/// * length of this list is in sync with `CounterForListNodes`,
-	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
-	///   are checked per *any* update to `List`.
+	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
+	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
@@ -414,7 +414,6 @@ impl<T: Config> List<T> {
 			let thresholds = T::BagThresholds::get().iter().copied();
 			let thresholds: Vec<u64> = if thresholds.clone().last() == Some(VoteWeight::MAX) {
 				// in the event that they included it, we don't need to make any changes
-				// Box::new(thresholds.collect()
 				thresholds.collect()
 			} else {
 				// otherwise, insert it here.
