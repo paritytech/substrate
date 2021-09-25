@@ -129,7 +129,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<u64, u128>;
+	type FullIdentification = pallet_staking::Exposure<u64, u128, MaxNominatorRewardedPerValidator>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
@@ -191,6 +191,13 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
 	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
+	pub const MaxNominations: u32 = 16;
+	pub const MaxUnappliedSlashes: u32 = 1_000;
+	pub const MaxNbOfInvulnerables: u32 = 10;
+	pub const MaxErasForRewards: u32 = 10_000;
+	pub const MaxNbOfReporters: u32 = 1_000;
+	pub const MaxPriorSlashingSpans: u32 = 1_000;
+	pub const MaxNbOfValidators: u32 = 4_000;
 }
 
 impl onchain::Config for Test {
@@ -199,7 +206,6 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -214,6 +220,13 @@ impl pallet_staking::Config for Test {
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxNominations = MaxNominations;
+	type MaxUnappliedSlashes = MaxUnappliedSlashes;
+	type MaxNbOfInvulnerables = MaxNbOfInvulnerables;
+	type MaxErasForRewards = MaxErasForRewards;
+	type MaxNbOfReporters = MaxNbOfReporters;
+	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
+	type MaxNbOfValidators = MaxNbOfValidators;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;

@@ -80,6 +80,7 @@
 //! ```rust
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
+//! # use frame_support::pallet_prelude::ConstU32;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;

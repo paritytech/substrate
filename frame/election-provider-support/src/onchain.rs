@@ -101,6 +101,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 
