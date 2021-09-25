@@ -30,26 +30,46 @@
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use honggfuzz::fuzz;
 use pallet_bags_list::mock::{AccountId, BagsList, ExtBuilder};
+use std::convert::From;
 
 const ID_RANGE: AccountId = 50_000;
-const OPTIONS: AccountId = 3;
+
+/// Actions of a `SortedListProvider` that we fuzz.
+enum Action {
+	Insert,
+	Update,
+	Remove,
+}
+
+impl From<u32> for Action {
+    fn from(v: u32) -> Self {
+		let num_variants = Self::Remove as u32 + 1;
+        match v % num_variants {
+            _x if _x == Action::Insert as u32 => Action::Insert,
+            _x if _x == Action::Update as u32 => Action::Update,
+            _x if _x == Action::Remove as u32 => Action::Remove,
+			_ => unreachable!()
+        }
+    }
+}
 
 fn main() {
 	ExtBuilder::default().build_and_execute(|| loop {
-		fuzz!(|data: (AccountId, VoteWeight)| {
-			let (account_id_seed, vote_weight) = data;
+		fuzz!(|data: (AccountId, VoteWeight, u32)| {
+			let (account_id_seed, vote_weight, action_seed) = data;
 
 			let id = account_id_seed % ID_RANGE;
+			let action = Action::from(action_seed);
 
-			match account_id_seed % OPTIONS {
-				0 => {
+			match action {
+				Action::Insert => {
 					if BagsList::on_insert(id.clone(), vote_weight).is_err() {
 						// this was a duplicate id, which is ok. We can just update it.
 						BagsList::on_update(&id, vote_weight);
 					}
 					assert!(BagsList::contains(&id));
 				},
-				1 => {
+				Action::Update => {
 					if !BagsList::contains(&id) {
 						// we must insert before updating.
 						assert!(BagsList::on_insert(id.clone(), vote_weight).is_ok());
@@ -57,7 +77,7 @@ fn main() {
 					BagsList::on_update(&id, vote_weight);
 					assert!(BagsList::contains(&id));
 				},
-				_ => {
+				Action::Remove => {
 					// only `2` should ever get us here, but we must use a wildcard to make the
 					// compiler happy.
 					BagsList::on_remove(&id);
