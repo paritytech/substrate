@@ -779,7 +779,7 @@ impl<T: Config> Node<T> {
 		let terminal_check =
 			expected_bag.head.as_ref() == Some(id) || expected_bag.tail.as_ref() == Some(id);
 		frame_support::ensure!(
-			non_terminal_check || terminal_check
+			non_terminal_check || terminal_check,
 			"a terminal node is neither its bag head or tail"
 		);
 
