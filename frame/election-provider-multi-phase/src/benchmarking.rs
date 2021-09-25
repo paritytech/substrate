@@ -156,7 +156,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		info,
 		"setting up with voters = {} [degree = {}], targets = {}",
 		v,
-		T::DataProvider::MAXIMUM_VOTES_PER_VOTER,
+		T::DataProvider::MaximumVotesPerVoter::get(),
 		t
 	);
 
@@ -169,8 +169,8 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	assert!(targets.len() > T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
-	targets.truncate(T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
+	assert!(targets.len() > T::DataProvider::MaximumVotesPerVoter::get() as usize);
+	targets.truncate(T::DataProvider::MaximumVotesPerVoter::get() as usize);
 
 	// fill voters.
 	(0..v).for_each(|i| {

@@ -97,7 +97,7 @@ pub mod pallet {
 
 		/// Maximum number of nominations per nominator.
 		#[pallet::constant]
-		type MaxNominations: Get<SessionIndex>;
+		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -556,7 +556,7 @@ pub mod pallet {
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			let invulnerables = BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(
-				self.invulnerables,
+				self.invulnerables.clone(),
 			)
 			.expect("Too many invulnerables passed, a runtime parameters adjustment may be needed");
 			Invulnerables::<T>::put(&invulnerables);
@@ -927,7 +927,7 @@ pub mod pallet {
 				ledger
 					.unlocking
 					.try_push(UnlockChunk { value, era })
-					.map_err(|_| Error::<T>::NoMoreChunks);
+					.map_err(|_| Error::<T>::NoMoreChunks)?;
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 

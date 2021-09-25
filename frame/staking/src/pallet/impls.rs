@@ -869,7 +869,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MaxNominations::get();
+	type MaximumVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
@@ -1251,7 +1251,7 @@ where
 					add_db_reads_writes(rw, rw);
 				}
 				unapplied.reporters = WeakBoundedVec::<_, T::MaxNbOfReporters>::force_from(
-					details.reporters,
+					details.reporters.clone(),
 					Some(
 						"Warning: Number of reporters is bigger than expected. \
 						A runtime parameter adjustment may be needed.",
@@ -1271,7 +1271,13 @@ where
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
-						for_later.push(unapplied)
+						for_later.force_push(
+							unapplied,
+							Some(
+								"Warning: More unapplied stashes than expected. \
+							A runtime parameter adjustment may be needed.",
+							),
+						)
 					});
 					add_db_reads_writes(1, 1);
 				}
