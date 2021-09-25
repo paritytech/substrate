@@ -32,7 +32,7 @@ use honggfuzz::fuzz;
 use pallet_bags_list::mock::{AccountId, BagsList, ExtBuilder};
 use std::convert::From;
 
-const ID_RANGE: AccountId = 50_000;
+const ID_RANGE: AccountId = 25_000;
 
 /// Actions of a `SortedListProvider` that we fuzz.
 enum Action {
