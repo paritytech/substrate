@@ -304,7 +304,8 @@ use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get},
 	weights::Weight,
-	BoundedVec, WeakBoundedVec,
+	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -317,7 +318,9 @@ use sp_staking::{
 	SessionIndex,
 };
 use sp_std::{
+	cmp::Ordering,
 	convert::{From, TryFrom},
+	fmt,
 	prelude::*,
 };
 pub use weights::WeightInfo;
@@ -370,28 +373,18 @@ pub struct ActiveEraInfo {
 ///
 /// This points will be used to reward validators and their respective nominators.
 /// `Limit` bounds the number of points earned by a given validator
-#[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(PartialEq, Encode, Decode, DefaultNoBound, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>))]
 pub struct EraRewardPoints<AccountId, Limit>
 where
-	AccountId: Ord + MaxEncodedLen,
+	AccountId: Ord + MaxEncodedLen + Default,
 	Limit: Get<u32>,
 {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
 	individual: BoundedBTreeMap<AccountId, RewardPoint, Limit>,
-}
-
-impl<AccountId, Limit> Default for EraRewardPoints<AccountId, Limit>
-where
-	AccountId: Ord + MaxEncodedLen,
-	Limit: Get<u32>,
-{
-	fn default() -> Self {
-		Self { total: RewardPoint::default(), individual: BoundedBTreeMap::default() }
-	}
 }
 
 /// Indicates the initial status of the staker.
@@ -460,17 +453,15 @@ pub struct UnlockChunk<Balance: HasCompact> {
 /// The ledger of a (bonded) stash.
 /// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`
 /// `RewardsLimit` is the size limit of the `WeakBoundedVec` representing `claimed_rewards`
-#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(UnlockingLimit: Get<u32>, RewardsLimit: Get<u32>))]
 #[scale_info(skip_type_params(UnlockingLimit, RewardsLimit))]
 pub struct StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
-	Balance: HasCompact,
+	Balance: HasCompact + MaxEncodedLen,
 	UnlockingLimit: Get<u32>,
 	RewardsLimit: Get<u32>,
 	AccountId: MaxEncodedLen,
-	Balance: MaxEncodedLen,
 {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
@@ -488,6 +479,45 @@ where
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: WeakBoundedVec<EraIndex, RewardsLimit>,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<AccountId, Balance, UnlockingLimit, RewardsLimit> Default
+	for StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
+where
+	Balance: HasCompact + MaxEncodedLen + Default,
+	AccountId: MaxEncodedLen + Default,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
+{
+	fn default() -> Self {
+		Self {
+			stash: AccountId::default(),
+			total: Balance::default(),
+			active: Balance::default(),
+			unlocking: BoundedVec::default(),
+			claimed_rewards: WeakBoundedVec::default(),
+		}
+	}
+}
+
+impl<AccountId, Balance, UnlockingLimit, RewardsLimit> Clone
+	for StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
+where
+	Balance: HasCompact + MaxEncodedLen + Clone,
+	AccountId: MaxEncodedLen + Clone,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
+{
+	fn clone(&self) -> Self {
+		Self {
+			stash: self.stash.clone(),
+			total: self.total.clone(),
+			active: self.active.clone(),
+			unlocking: self.unlocking.clone(),
+			claimed_rewards: self.claimed_rewards.clone(),
+		}
+	}
 }
 
 impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
@@ -647,13 +677,23 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 
 /// A snapshot of the stake backing a single validator in the system.
 /// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`
-#[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	CloneNoBound,
+	DefaultNoBound,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>, Balance: HasCompact))]
 pub struct Exposure<AccountId, Balance, Limit>
 where
-	AccountId: MaxEncodedLen,
-	Balance: HasCompact + MaxEncodedLen,
+	AccountId: MaxEncodedLen + Eq + Default + Clone + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + fmt::Debug,
 	Limit: Get<u32>,
 {
 	/// The total balance backing this validator.
@@ -666,39 +706,40 @@ where
 	pub others: WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>,
 }
 
-// NOTE: maybe use derivative to avoid this
-impl<AccountId, Balance, Limit> Default for Exposure<AccountId, Balance, Limit>
+impl<AccountId, Balance, Limit> PartialOrd for Exposure<AccountId, Balance, Limit>
 where
-	AccountId: MaxEncodedLen,
-	Balance: HasCompact + MaxEncodedLen + Default,
+	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
 	Limit: Get<u32>,
 {
-	fn default() -> Self {
-		Self {
-			total: Balance::default(),
-			own: Balance::default(),
-			others: WeakBoundedVec::default(),
-		}
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
 	}
 }
 
-impl<AccountId, Balance, Limit> Clone for Exposure<AccountId, Balance, Limit>
+impl<AccountId, Balance, Limit> Ord for Exposure<AccountId, Balance, Limit>
 where
-	AccountId: MaxEncodedLen,
-	Balance: HasCompact + MaxEncodedLen + Clone,
+	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
 	Limit: Get<u32>,
-	WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>: Clone,
 {
-	fn clone(&self) -> Self {
-		Self { total: self.total.clone(), own: self.own.clone(), others: self.others.clone() }
+	fn cmp(&self, other: &Self) -> Ordering {
+		let mut result = Ord::cmp(&self.total, &other.total);
+		if result == Ordering::Equal {
+			result = Ord::cmp(&self.own, &other.own);
+			if result == Ordering::Equal {
+				return Ord::cmp(&self.others, &other.others)
+			}
+		}
+		return result
 	}
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
-/// `SlahedLimit` bounds the number of slashed accounts
+/// `SlashedLimit` bounds the number of slashed accounts
 /// `ReportersLimit` bounds the number of reporters
-#[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(SlashedLimit: Get<u32>, ReportersLimit: Get<u32>))]
 #[scale_info(skip_type_params(SlashedLimit, ReportersLimit))]
 pub struct UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
@@ -718,6 +759,25 @@ where
 	reporters: WeakBoundedVec<AccountId, ReportersLimit>,
 	/// The amount of payout.
 	payout: Balance,
+}
+
+impl<AccountId, Balance, SlashedLimit, ReportersLimit> Default
+	for UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
+where
+	Balance: HasCompact + MaxEncodedLen + Default,
+	AccountId: MaxEncodedLen + Default,
+	SlashedLimit: Get<u32>,
+	ReportersLimit: Get<u32>,
+{
+	fn default() -> Self {
+		Self {
+			validator: AccountId::default(),
+			own: Balance::default(),
+			others: WeakBoundedVec::default(),
+			reporters: WeakBoundedVec::default(),
+			payout: Balance::default(),
+		}
+	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.

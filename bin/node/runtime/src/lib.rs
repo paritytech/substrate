@@ -474,7 +474,8 @@ impl pallet_session::Config for Runtime {
 }
 
 impl pallet_session::historical::Config for Runtime {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
+	type FullIdentification =
+		pallet_staking::Exposure<AccountId, Balance, MaxNominatorRewardedPerValidator>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
 
@@ -496,6 +497,13 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub OffchainRepeat: BlockNumber = 5;
+	pub const MaxNominations: u32 = MAX_NOMINATIONS;
+	pub const MaxUnappliedSlashes: u32 = 1_000;
+	pub const MaxNbOfInvulnerables: u32 = 10;
+	pub const MaxErasForRewards: u32 = 10_000;
+	pub const MaxNbOfReporters: u32 = 1_000;
+	pub const MaxPriorSlashingSpans: u32 = 1_000;
+	pub const MaxNbOfValidators: u32 = 4_000;
 }
 
 use frame_election_provider_support::onchain;
@@ -505,7 +513,6 @@ impl onchain::Config for Runtime {
 }
 
 impl pallet_staking::Config for Runtime {
-	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
@@ -532,6 +539,13 @@ impl pallet_staking::Config for Runtime {
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
+	type MaxNominations = MaxNominations;
+	type MaxUnappliedSlashes = MaxUnappliedSlashes;
+	type MaxNbOfInvulnerables = MaxNbOfInvulnerables;
+	type MaxErasForRewards = MaxErasForRewards;
+	type MaxNbOfReporters = MaxNbOfReporters;
+	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
+	type MaxNbOfValidators = MaxNbOfValidators;
 }
 
 parameter_types! {

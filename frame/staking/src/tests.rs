@@ -4187,7 +4187,7 @@ fn chill_other_works() {
 			);
 
 			// Change the minimum bond... but no limits.
-			assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
+			assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None));
 
 			// Still can't chill these users
 			assert_noop!(
@@ -4204,7 +4204,6 @@ fn chill_other_works() {
 				Origin::root(),
 				1_500,
 				2_000,
-				Some(10),
 				Some(10),
 				None
 			));
@@ -4225,7 +4224,6 @@ fn chill_other_works() {
 				1_500,
 				2_000,
 				None,
-				None,
 				Some(Percent::from_percent(0))
 			));
 
@@ -4244,7 +4242,6 @@ fn chill_other_works() {
 				Origin::root(),
 				1_500,
 				2_000,
-				Some(10),
 				Some(10),
 				Some(Percent::from_percent(75))
 			));
@@ -4288,7 +4285,6 @@ fn capped_stakers_works() {
 			Origin::root(),
 			10,
 			10,
-			Some(max),
 			Some(max),
 			Some(Percent::from_percent(0))
 		));
@@ -4353,7 +4349,7 @@ fn capped_stakers_works() {
 		));
 
 		// No problem when we set to `None` again
-		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
+		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 	})

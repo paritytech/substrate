@@ -653,7 +653,7 @@ impl<T: Config> Pallet<T> {
 	pub fn add_era_stakers(
 		current_era: EraIndex,
 		controller: T::AccountId,
-		exposure: Exposure<T::AccountId, BalanceOf<T>>,
+		exposure: Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
@@ -938,6 +938,10 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		)
 	}
 
+	/// # Panic
+	///
+	/// Panics if `targets` size is bigger than T::MaxNominations.
+	/// Or if it cannot convert `weight` into a `BalanceOf`
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
 		use sp_std::convert::TryFrom;
@@ -951,10 +955,13 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
-				claimed_rewards: vec![],
+				unlocking: BoundedVec::default(),
+				claimed_rewards: WeakBoundedVec::default(),
 			},
 		);
+
+		let targets = BoundedVec::<_, T::MaxNominations>::try_from(targets)
+			.expect("targets Vec length too large, benchmark needs reconfiguring");
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -968,8 +975,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
-				claimed_rewards: vec![],
+				unlocking: BoundedVec::default(),
+				claimed_rewards: WeakBoundedVec::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -989,6 +996,10 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		let _ = T::SortedListProvider::clear(None);
 	}
 
+	/// # Panic
+	///
+	/// Panics if `voters` 3rd element is larger than T::MaxNominations.
+	/// Or if the 2nd element cannot be converted into a `BalanceOf`
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
@@ -1007,8 +1018,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
-					claimed_rewards: vec![],
+					unlocking: BoundedVec::default(),
+					claimed_rewards: WeakBoundedVec::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1028,14 +1039,13 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
-					claimed_rewards: vec![],
+					unlocking: BoundedVec::default(),
+					claimed_rewards: WeakBoundedVec::default(),
 				},
 			);
-			Self::do_add_nominator(
-				&v,
-				Nominations { targets: t, submitted_in: 0, suppressed: false },
-			);
+			let targets = BoundedVec::<_, T::MaxNominations>::try_from(t)
+				.expect("targets vec too large, benchmark needs reconfiguring.");
+			Self::do_add_nominator(&v, Nominations { targets, submitted_in: 0, suppressed: false });
 		});
 	}
 }

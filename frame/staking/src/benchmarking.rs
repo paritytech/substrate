@@ -31,7 +31,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub use frame_benchmarking::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
@@ -115,10 +115,12 @@ pub fn create_validator_with_nominators<T: Config>(
 	assert_ne!(CounterForNominators::<T>::get(), 0);
 
 	// Give Era Points
-	let reward = EraRewardPoints::<T::AccountId> {
-		total: points_total,
-		individual: points_individual.into_iter().collect(),
-	};
+	let individual = BoundedBTreeMap::<_, _, T::MaxNbOfValidators>::try_from(
+		points_individual.into_iter().collect::<BTreeMap<_, _>>(),
+	)
+	.map_err(|_| "Something weird, this means T:MaxNbOfValidators is zero")?;
+	let reward =
+		EraRewardPoints::<T::AccountId, T::MaxNbOfValidators> { total: points_total, individual };
 
 	let current_era = CurrentEra::<T>::get().unwrap();
 	ErasRewardPoints::<T>::insert(current_era, reward);
@@ -536,8 +538,11 @@ benchmarks! {
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
 		for _ in 0 .. MAX_SLASHES {
-			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
+			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator,
+				T::MaxNbOfReporters>::default());
 		}
+		let unapplied_slashes = WeakBoundedVec::<_, T::MaxUnappliedSlashes>::try_from(unapplied_slashes)
+			.expect("MAX_SLASHES should be <= MaxUnappliedSlashes, runtime benchmarks need adjustment");
 		UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
 
 		let slash_indices: Vec<u32> = (0 .. s).collect();
@@ -650,7 +655,8 @@ benchmarks! {
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone())
+				.expect("Size is smaller than MAX_UNLOCKING_CHUNKS, qed");
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
@@ -668,11 +674,11 @@ benchmarks! {
 		HistoryDepth::<T>::put(e);
 		CurrentEra::<T>::put(e);
 		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::default());
+			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::default());
 			<ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
-			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
+			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
 			ErasStartSessionIndex::<T>::insert(i, i);
 		}
@@ -752,9 +758,13 @@ benchmarks! {
 		}
 
 		// Give Era Points
-		let reward = EraRewardPoints::<T::AccountId> {
+		let individual = BoundedBTreeMap::<_, _, T::MaxNbOfValidators>::try_from(
+			points_individual.into_iter().collect::<BTreeMap<_, _>>(),
+		)
+		.map_err(|_| "Too many validators, some runtime benchmarks may need adjustment")?;
+		let reward = EraRewardPoints {
 			total: points_total,
-			individual: points_individual.into_iter().collect(),
+			individual,
 		};
 
 		ErasRewardPoints::<T>::insert(current_era, reward);
@@ -780,7 +790,8 @@ benchmarks! {
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone())
+				.expect("Size is smaller than MAX_UNLOCKING_CHUNKS, qed");
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
@@ -843,13 +854,11 @@ benchmarks! {
 		BalanceOf::<T>::max_value(),
 		BalanceOf::<T>::max_value(),
 		Some(u32::MAX),
-		Some(u32::MAX),
 		Some(Percent::max_value())
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
-		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
 	}
 
@@ -870,7 +879,6 @@ benchmarks! {
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
 			BalanceOf::<T>::max_value(),
-			Some(0),
 			Some(0),
 			Some(Percent::from_percent(0))
 		)?;

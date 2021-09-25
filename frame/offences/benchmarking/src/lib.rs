@@ -21,10 +21,13 @@
 
 mod mock;
 
-use sp_std::{prelude::*, vec};
+use sp_std::{convert::TryFrom, prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite};
-use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::{
+	traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification},
+	WeakBoundedVec,
+};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
@@ -147,8 +150,10 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		nominator_stashes.push(nominator_stash.clone());
 	}
 
-	let exposure =
-		Exposure { total: amount.clone() * n.into(), own: amount, others: individual_exposures };
+	let others =
+		WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::try_from(individual_exposures)
+			.expect("nominators too big, runtime benchmarks may need adjustment");
+	let exposure = Exposure { total: amount.clone() * n.into(), own: amount, others };
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
 
@@ -253,7 +258,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -331,7 +336,7 @@ benchmarks! {
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -366,7 +371,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1

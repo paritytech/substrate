@@ -271,12 +271,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CounterForValidators<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// The maximum validator count before we stop allowing new validators to join.
-	///
-	/// When this value is not set, no limits are enforced.
-	#[pallet::storage]
-	pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
-
 	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 	///
 	/// When updating this storage item, you must also update the `CounterForNominators`.
@@ -289,7 +283,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CounterForNominators<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// The maximum nominator count before we stop allowing new validators to join.
+	/// The maximum nominator count before we stop allowing new nominators to join.
 	///
 	/// When this value is not set, no limits are enforced.
 	#[pallet::storage]
@@ -555,10 +549,11 @@ pub mod pallet {
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
-			let invulnerables = BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(
-				self.invulnerables.clone(),
-			)
-			.expect("Too many invulnerables passed, a runtime parameters adjustment may be needed");
+			let invulnerables =
+				BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(self.invulnerables.clone())
+					.expect(
+					"Too many invulnerables passed, a runtime parameters adjustment may be needed",
+				);
 			Invulnerables::<T>::put(&invulnerables);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
@@ -1016,12 +1011,10 @@ pub mod pallet {
 				// If this error is reached, we need to adjust the `MinValidatorBond` and start
 				// calling `chill_other`. Until then, we explicitly block new validators to protect
 				// the runtime.
-				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
-					ensure!(
-						CounterForValidators::<T>::get() < max_validators,
-						Error::<T>::TooManyValidators
-					);
-				}
+				ensure!(
+					CounterForValidators::<T>::get() < T::MaxNbOfValidators::get(),
+					Error::<T>::TooManyValidators
+				);
 			}
 
 			Self::do_remove_nominator(stash);
@@ -1580,14 +1573,12 @@ pub mod pallet {
 			min_nominator_bond: BalanceOf<T>,
 			min_validator_bond: BalanceOf<T>,
 			max_nominator_count: Option<u32>,
-			max_validator_count: Option<u32>,
 			threshold: Option<Percent>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			MinNominatorBond::<T>::set(min_nominator_bond);
 			MinValidatorBond::<T>::set(min_validator_bond);
 			MaxNominatorsCount::<T>::set(max_nominator_count);
-			MaxValidatorsCount::<T>::set(max_validator_count);
 			ChillThreshold::<T>::set(threshold);
 			Ok(())
 		}
@@ -1642,8 +1633,7 @@ pub mod pallet {
 					);
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
-					let max_validator_count =
-						MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+					let max_validator_count = T::MaxNbOfValidators::get();
 					let current_validator_count = CounterForValidators::<T>::get();
 					ensure!(
 						threshold * max_validator_count < current_validator_count,

@@ -145,7 +145,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Staking MinValidatorBond (r:1 w:0)
 	// Storage: Staking Validators (r:1 w:1)
-	// Storage: Staking MaxValidatorsCount (r:1 w:0)
 	// Storage: Staking Nominators (r:1 w:1)
 	// Storage: Staking CounterForNominators (r:1 w:1)
 	// Storage: BagsList ListNodes (r:2 w:2)
@@ -154,7 +153,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking CounterForValidators (r:1 w:1)
 	fn validate() -> Weight {
 		(69_092_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(11 as Weight))
+			.saturating_add(T::DbWeight::get().reads(10 as Weight))
 			.saturating_add(T::DbWeight::get().writes(8 as Weight))
 	}
 	// Storage: Staking Ledger (r:1 w:0)
@@ -419,13 +418,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 	}
 	// Storage: Staking MinValidatorBond (r:0 w:1)
-	// Storage: Staking MaxValidatorsCount (r:0 w:1)
 	// Storage: Staking ChillThreshold (r:0 w:1)
 	// Storage: Staking MaxNominatorsCount (r:0 w:1)
 	// Storage: Staking MinNominatorBond (r:0 w:1)
 	fn set_staking_limits() -> Weight {
 		(6_353_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Staking ChillThreshold (r:1 w:0)
@@ -513,7 +511,6 @@ impl WeightInfo for () {
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Staking MinValidatorBond (r:1 w:0)
 	// Storage: Staking Validators (r:1 w:1)
-	// Storage: Staking MaxValidatorsCount (r:1 w:0)
 	// Storage: Staking Nominators (r:1 w:1)
 	// Storage: Staking CounterForNominators (r:1 w:1)
 	// Storage: BagsList ListNodes (r:2 w:2)
@@ -522,7 +519,7 @@ impl WeightInfo for () {
 	// Storage: Staking CounterForValidators (r:1 w:1)
 	fn validate() -> Weight {
 		(69_092_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(11 as Weight))
+			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
 	}
 	// Storage: Staking Ledger (r:1 w:0)
@@ -787,13 +784,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 	}
 	// Storage: Staking MinValidatorBond (r:0 w:1)
-	// Storage: Staking MaxValidatorsCount (r:0 w:1)
 	// Storage: Staking ChillThreshold (r:0 w:1)
 	// Storage: Staking MaxNominatorsCount (r:0 w:1)
 	// Storage: Staking MinNominatorBond (r:0 w:1)
 	fn set_staking_limits() -> Weight {
 		(6_353_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Staking ChillThreshold (r:1 w:0)

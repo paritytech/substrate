@@ -23,10 +23,12 @@ use sp_std::{
 	borrow::Borrow,
 	collections::btree_map::{BTreeMap, Entry},
 	convert::TryFrom,
-	fmt,
 	marker::PhantomData,
 	ops::Deref,
 };
+
+#[cfg(feature = "std")]
+use sp_std::fmt;
 
 /// A bounded map based on a B-Tree.
 ///

@@ -51,7 +51,7 @@
 
 use crate::{
 	BalanceOf, Config, EraIndex, Error, Exposure, Get, NegativeImbalanceOf, Pallet, Perbill,
-	SessionInterface, Store, UnappliedSlash,
+	SessionInterface, Store, UnappliedSlash, Vec,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{

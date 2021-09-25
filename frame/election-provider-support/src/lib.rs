@@ -161,7 +161,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::{pallet_prelude::ConstU32, traits::Get};
+use frame_support::traits::Get;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -170,6 +170,9 @@ pub use sp_npos_elections::{
 	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
 	VoteWeight,
 };
+
+#[cfg(feature = "std")]
+use frame_support::pallet_prelude::ConstU32;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {
