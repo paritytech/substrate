@@ -27,7 +27,7 @@ use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
-use sp_std::{cmp::Ordering, convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{cmp::Ordering, convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///

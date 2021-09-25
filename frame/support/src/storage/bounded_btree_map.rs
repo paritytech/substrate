@@ -27,9 +27,6 @@ use sp_std::{
 	ops::Deref,
 };
 
-#[cfg(feature = "std")]
-use sp_std::fmt;
-
 /// A bounded map based on a B-Tree.
 ///
 /// B-Trees represent a fundamental compromise between cache-efficiency and actually minimizing

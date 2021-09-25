@@ -29,7 +29,7 @@ use core::{
 	slice::{IterMut, SliceIndex},
 };
 use sp_std::{
-	convert::TryFrom, fmt, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain,
+	convert::TryFrom, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain,
 };
 
 /// A bounded vector.

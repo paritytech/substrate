@@ -57,7 +57,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{Currency, Imbalance, OnUnbalanced},
-	WeakBoundedVec,
+	CloneNoBound, WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -207,6 +207,7 @@ impl<Balance> SpanRecord<Balance> {
 }
 
 /// Parameters for performing a slash.
+#[derive(CloneNoBound)]
 pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The stash account being slashed.
 	pub(crate) stash: &'a T::AccountId,
@@ -224,20 +225,6 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The maximum percentage of a slash that ever gets paid out.
 	/// This is f_inf in the paper.
 	pub(crate) reward_proportion: Perbill,
-}
-
-impl<'a, T: 'a + Config> Clone for SlashParams<'a, T> {
-	fn clone(&self) -> Self {
-		Self {
-			stash: self.stash,
-			slash: self.slash.clone(),
-			exposure: self.exposure,
-			slash_era: self.slash_era.clone(),
-			window_start: self.window_start.clone(),
-			now: self.now.clone(),
-			reward_proportion: self.reward_proportion.clone(),
-		}
-	}
 }
 
 /// Computes a slash of a validator and nominators. It returns an unapplied
