@@ -70,12 +70,11 @@ fn main() {
 					assert!(BagsList::contains(&id));
 				},
 				Action::Update => {
-					if !BagsList::contains(&id) {
-						// we must insert before updating.
-						assert!(BagsList::on_insert(id.clone(), vote_weight).is_ok());
-					}
+					let already_contains = BagsList::contains(&id);
 					BagsList::on_update(&id, vote_weight);
-					assert!(BagsList::contains(&id));
+					if already_contains {
+						assert!(BagsList::contains(&id));
+					}
 				},
 				Action::Remove => {
 					BagsList::on_remove(&id);
