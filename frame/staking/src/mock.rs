@@ -256,7 +256,7 @@ parameter_types! {
 	pub const MaxErasForRewards: u32 = 10_000;
 	pub const MaxNbOfReporters: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
-	pub const MaxNbOfValidators: u32 = 4_000;
+	pub const MaxNbOfValidators: u32 = 100;
 }
 
 impl pallet_bags_list::Config for Test {

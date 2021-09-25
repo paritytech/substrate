@@ -4335,10 +4335,8 @@ fn chill_other_works() {
 				Staking::chill_other(Origin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
-			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 3),
-				Error::<Test>::CannotChillOther
-			);
+			// But validator will succeed because MaxNbOfValidators is always set
+			assert_ok!(Staking::chill_other(Origin::signed(1337), 3));
 
 			// Add threshold and limits
 			assert_ok!(Staking::set_staking_limits(
@@ -4349,17 +4347,15 @@ fn chill_other_works() {
 				Some(Percent::from_percent(75))
 			));
 
-			// 16 people total because tests start with 2 active one
+			// 16 nominators and 17 validators left (test starts with 1 nominator and 3 validator)
 			assert_eq!(CounterForNominators::<Test>::get(), 15 + initial_nominators);
-			assert_eq!(CounterForValidators::<Test>::get(), 15 + initial_validators);
+			assert_eq!(CounterForValidators::<Test>::get(), 14 + initial_validators); // 1 was chilled
 
-			// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting
-			// with 16)
+			// Nominators can now be chilled down to 7 people, so we try to remove 9 of them
+			// (starting with 16)
 			for i in 6..15 {
 				let b = 4 * i + 1;
-				let d = 4 * i + 3;
 				assert_ok!(Staking::chill_other(Origin::signed(1337), b));
-				assert_ok!(Staking::chill_other(Origin::signed(1337), d));
 			}
 
 			// chill a nominator. Limit is not reached, not chill-able
@@ -4368,9 +4364,27 @@ fn chill_other_works() {
 				Staking::chill_other(Origin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
-			// chill a validator. Limit is reached, chill-able.
-			assert_eq!(CounterForValidators::<Test>::get(), 9);
-			assert_ok!(Staking::chill_other(Origin::signed(1337), 3));
+
+			// Max number of validators is set externally to 100, so need to change threshold
+			assert_ok!(Staking::set_staking_limits(
+				Origin::root(),
+				1_500,
+				2_000,
+				Some(10),
+				Some(Percent::from_percent(7))
+			));
+
+			for i in 6..15 {
+				let d = 4 * i + 3;
+				assert_ok!(Staking::chill_other(Origin::signed(1337), d));
+			}
+
+			// chill a validator. Limit is not reached, not chill-able
+			assert_eq!(CounterForValidators::<Test>::get(), 8);
+			assert_noop!(
+				Staking::chill_other(Origin::signed(1337), 3),
+				Error::<Test>::CannotChillOther
+			);
 		})
 }
 
@@ -4383,18 +4397,17 @@ fn capped_stakers_works() {
 		assert_eq!(nominator_count, 1);
 
 		// Change the maximums
-		let max = 10;
 		assert_ok!(Staking::set_staking_limits(
 			Origin::root(),
 			10,
 			10,
-			Some(max),
+			Some(10),
 			Some(Percent::from_percent(0))
 		));
 
 		// can create `max - validator_count` validators
 		let mut some_existing_validator = AccountId::default();
-		for i in 0..max - validator_count {
+		for i in 0..<Test as Config>::MaxNbOfValidators::get() - validator_count {
 			let (_, controller) = testing_utils::create_stash_controller::<Test>(
 				i + 10_000_000,
 				100,
@@ -4420,7 +4433,7 @@ fn capped_stakers_works() {
 
 		// same with nominators
 		let mut some_existing_nominator = AccountId::default();
-		for i in 0..max - nominator_count {
+		for i in 0..10 - nominator_count {
 			let (_, controller) = testing_utils::create_stash_controller::<Test>(
 				i + 20_000_000,
 				100,
@@ -4454,7 +4467,11 @@ fn capped_stakers_works() {
 		// No problem when we set to `None` again
 		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
-		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
+		// But fail validators given limit is set externally
+		assert_noop!(
+			Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()),
+			Error::<Test>::TooManyValidators
+		);
 	})
 }
 

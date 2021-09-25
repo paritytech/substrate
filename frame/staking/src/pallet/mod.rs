@@ -1596,8 +1596,8 @@ pub mod pallet {
 		/// must be met:
 		/// * A `ChillThreshold` must be set and checked which defines how close to the max
 		///   nominators or validators we must reach before users can start chilling one-another.
-		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
-		///   how close we are to the threshold.
+		/// * A `MaxNominatorCount` must be set which is used to determine how close we are to the
+		///   threshold.
 		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
 		///   if this is a person that should be chilled because they have not met the threshold
 		///   bond required.
@@ -1614,8 +1614,7 @@ pub mod pallet {
 			// In order for one user to chill another user, the following conditions must be met:
 			// * A `ChillThreshold` is set which defines how close to the max nominators or
 			//   validators we must reach before users can start chilling one-another.
-			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
-			//   we are to the threshold.
+			// * A `MaxNominatorCount` which is used to determine how close we are to the threshold.
 			// * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
 			//   determine this is a person that should be chilled because they have not met the
 			//   threshold bond required.
