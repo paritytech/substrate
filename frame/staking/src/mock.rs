@@ -35,7 +35,10 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
-use std::{cell::RefCell, collections::HashSet};
+use std::{
+	cell::RefCell,
+	collections::{BTreeMap, HashSet},
+};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -193,7 +196,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentification = crate::Exposure<AccountId, Balance, MaxNominatorRewardedPerValidator>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 impl pallet_authorship::Config for Test {
@@ -248,6 +251,12 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub const MaxNominations: u32 = 16;
+	pub const MaxUnappliedSlashes: u32 = 1_000;
+	pub const MaxNbOfInvulnerables: u32 = 10;
+	pub const MaxErasForRewards: u32 = 10_000;
+	pub const MaxNbOfReporters: u32 = 1_000;
+	pub const MaxPriorSlashingSpans: u32 = 1_000;
+	pub const MaxNbOfValidators: u32 = 4_000;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -284,6 +293,12 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
 	type MaxNominations = MaxNominations;
+	type MaxUnappliedSlashes = MaxUnappliedSlashes;
+	type MaxNbOfInvulnerables = MaxNbOfInvulnerables;
+	type MaxErasForRewards = MaxErasForRewards;
+	type MaxNbOfReporters = MaxNbOfReporters;
+	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
+	type MaxNbOfValidators = MaxNbOfValidators;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

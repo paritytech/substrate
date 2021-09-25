@@ -373,12 +373,14 @@ pub struct ActiveEraInfo {
 ///
 /// This points will be used to reward validators and their respective nominators.
 /// `Limit` bounds the number of points earned by a given validator
-#[derive(PartialEq, Encode, Decode, DefaultNoBound, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	PartialEqNoBound, Encode, Decode, DefaultNoBound, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>))]
 pub struct EraRewardPoints<AccountId, Limit>
 where
-	AccountId: Ord + MaxEncodedLen + Default,
+	AccountId: Ord + MaxEncodedLen + Default + PartialEq + fmt::Debug,
 	Limit: Get<u32>,
 {
 	/// Total number of points. Equals the sum of reward points for each validator.
@@ -453,15 +455,25 @@ pub struct UnlockChunk<Balance: HasCompact> {
 /// The ledger of a (bonded) stash.
 /// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`
 /// `RewardsLimit` is the size limit of the `WeakBoundedVec` representing `claimed_rewards`
-#[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(DefaultNoBound))]
 #[codec(mel_bound(UnlockingLimit: Get<u32>, RewardsLimit: Get<u32>))]
 #[scale_info(skip_type_params(UnlockingLimit, RewardsLimit))]
 pub struct StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
-	Balance: HasCompact + MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
+	AccountId: MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
 	UnlockingLimit: Get<u32>,
 	RewardsLimit: Get<u32>,
-	AccountId: MaxEncodedLen,
 {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
@@ -481,53 +493,15 @@ where
 	pub claimed_rewards: WeakBoundedVec<EraIndex, RewardsLimit>,
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-impl<AccountId, Balance, UnlockingLimit, RewardsLimit> Default
-	for StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
-where
-	Balance: HasCompact + MaxEncodedLen + Default,
-	AccountId: MaxEncodedLen + Default,
-	UnlockingLimit: Get<u32>,
-	RewardsLimit: Get<u32>,
-{
-	fn default() -> Self {
-		Self {
-			stash: AccountId::default(),
-			total: Balance::default(),
-			active: Balance::default(),
-			unlocking: BoundedVec::default(),
-			claimed_rewards: WeakBoundedVec::default(),
-		}
-	}
-}
-
-impl<AccountId, Balance, UnlockingLimit, RewardsLimit> Clone
-	for StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
-where
-	Balance: HasCompact + MaxEncodedLen + Clone,
-	AccountId: MaxEncodedLen + Clone,
-	UnlockingLimit: Get<u32>,
-	RewardsLimit: Get<u32>,
-{
-	fn clone(&self) -> Self {
-		Self {
-			stash: self.stash.clone(),
-			total: self.total.clone(),
-			active: self.active.clone(),
-			unlocking: self.unlocking.clone(),
-			claimed_rewards: self.claimed_rewards.clone(),
-		}
-	}
-}
-
 impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
 	StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
-	Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned,
+	Balance:
+		HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Clone + Default + Eq + fmt::Debug,
+	AccountId: MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
+	Balance: MaxEncodedLen + Clone + Default,
 	UnlockingLimit: Get<u32>,
 	RewardsLimit: Get<u32>,
-	AccountId: MaxEncodedLen,
-	Balance: MaxEncodedLen,
 {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -581,17 +555,7 @@ where
 
 		self
 	}
-}
 
-impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
-	StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
-where
-	Balance: AtLeast32BitUnsigned + Saturating + Copy,
-	UnlockingLimit: Get<u32>,
-	RewardsLimit: Get<u32>,
-	AccountId: MaxEncodedLen,
-	Balance: MaxEncodedLen,
-{
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
 	/// active funds. Returns the amount of funds actually slashed.

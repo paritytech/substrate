@@ -66,6 +66,9 @@ use sp_runtime::{
 };
 use sp_std::{convert::TryFrom, ops::Deref};
 
+#[cfg(test)]
+use frame_support::pallet_prelude::ConstU32;
+
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.
 const REWARD_F1: Perbill = Perbill::from_percent(50);
@@ -702,11 +705,11 @@ mod tests {
 
 	#[test]
 	fn single_slashing_span() {
-		let spans = SlashingSpans {
+		let spans = SlashingSpans::<ConstU32<10>> {
 			span_index: 0,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: Vec::new(),
+			prior: WeakBoundedVec::default(),
 		};
 
 		assert_eq!(
@@ -721,7 +724,7 @@ mod tests {
 			span_index: 10,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: vec![10, 9, 8, 10],
+			prior: WeakBoundedVec::<_, ConstU32<10>>::try_from(vec![10, 9, 8, 10]).expect("10>3"),
 		};
 
 		assert_eq!(
@@ -742,7 +745,7 @@ mod tests {
 			span_index: 10,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: vec![10, 9, 8, 10],
+			prior: WeakBoundedVec::<_, ConstU32<10>>::try_from(vec![10, 9, 8, 10]).expect("10>3"),
 		};
 
 		assert_eq!(spans.prune(981), Some((6, 8)));
@@ -792,7 +795,7 @@ mod tests {
 			span_index: 10,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: vec![10, 9, 8, 10],
+			prior: WeakBoundedVec::<_, ConstU32<10>>::try_from(vec![10, 9, 8, 10]).expect("10>4"),
 		};
 		assert_eq!(spans.prune(2000), Some((6, 10)));
 		assert_eq!(
@@ -803,11 +806,11 @@ mod tests {
 
 	#[test]
 	fn ending_span() {
-		let mut spans = SlashingSpans {
+		let mut spans = SlashingSpans::<ConstU32<10>> {
 			span_index: 1,
 			last_start: 10,
 			last_nonzero_slash: 0,
-			prior: Vec::new(),
+			prior: WeakBoundedVec::default(),
 		};
 
 		assert!(spans.end_span(10));
