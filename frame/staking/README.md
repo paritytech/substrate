@@ -134,7 +134,7 @@ The Staking module contains many public storage items and (im)mutable functions.
 
 ```rust
 use frame_support::pallet_prelude::*;
-use frame_system::ensure_signed;
+use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 use pallet_staking::{self as staking};
 
 #[frame_support::pallet]
@@ -146,15 +146,15 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
   #[pallet::config]
-	pub trait Config: staking::Config {}
+	pub trait Config: frame_system::Config + staking::Config {}
 
   #[pallet::call]
 	impl<T: Config> Pallet<T> {
     /// Reward a validator.
-    #[weight = 0]
-    pub fn reward_myself(origin) -> dispatch::DispatchResult {
+    #[pallet::weight(0)]
+    pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
       let reported = ensure_signed(origin)?;
-      <staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
+      <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
       Ok(())
     }
   }
