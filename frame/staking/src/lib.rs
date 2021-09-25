@@ -478,7 +478,9 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 	}
 
 	/// Re-bond funds that were scheduled for unlocking.
-	fn rebond(mut self, value: Balance) -> Self {
+	///
+	/// Returns the updated ledger, and the amount actually rebonded.
+	fn rebond(mut self, value: Balance) -> (Self, Balance) {
 		let mut unlocking_balance: Balance = Zero::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -499,7 +501,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 		}
 
-		self
+		(self, unlocking_balance)
 	}
 }
 
