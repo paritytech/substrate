@@ -773,10 +773,13 @@ impl<T: Config> Node<T> {
 			"node does not exist in the expected bag"
 		);
 
+		let non_terminal_check = !self.is_terminal() &&
+			expected_bag.head.as_ref() != Some(id) &&
+			expected_bag.tail.as_ref() != Some(id);
+		let terminal_check =
+			expected_bag.head.as_ref() == Some(id) || expected_bag.tail.as_ref() == Some(id);
 		frame_support::ensure!(
-			!self.is_terminal() ||
-				expected_bag.head.as_ref() == Some(id) ||
-				expected_bag.tail.as_ref() == Some(id),
+			non_terminal_check || terminal_check
 			"a terminal node is neither its bag head or tail"
 		);
 
