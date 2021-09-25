@@ -18,9 +18,7 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
-use crate::{
-	storage::{StorageDecodeLength, StorageTryAppend},
-};
+use crate::storage::{StorageDecodeLength, StorageTryAppend};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},

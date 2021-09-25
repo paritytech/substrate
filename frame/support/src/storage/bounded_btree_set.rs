@@ -17,12 +17,9 @@
 
 //! Traits, types and structs to support a bounded `BTreeSet`.
 
-use crate::{storage::StorageDecodeLength};
+use crate::storage::StorageDecodeLength;
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_std::{
-	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom,
-	ops::Deref,
-};
+use sp_std::{borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, ops::Deref};
 
 /// A bounded set based on a B-Tree.
 ///
@@ -51,8 +48,7 @@ where
 	}
 }
 
-impl<T, const S: u32> BoundedBTreeSet<T, S>
-{
+impl<T, const S: u32> BoundedBTreeSet<T, S> {
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
 		S as usize
@@ -255,9 +251,7 @@ where
 	type Error = ();
 
 	fn try_from(value: BTreeSet<T>) -> Result<Self, Self::Error> {
-		(value.len() <= Self::bound())
-			.then(move || BoundedBTreeSet(value))
-			.ok_or(())
+		(value.len() <= Self::bound()).then(move || BoundedBTreeSet(value)).ok_or(())
 	}
 }
 
@@ -272,7 +266,10 @@ impl<T, const S: u32> codec::DecodeLength for BoundedBTreeSet<T, S> {
 
 impl<T, const S: u32> StorageDecodeLength for BoundedBTreeSet<T, S> {}
 
-impl<T, const S: u32> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where BTreeSet<T>: Encode {}
+impl<T, const S: u32> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where
+	BTreeSet<T>: Encode
+{
+}
 
 #[cfg(test)]
 pub mod test {

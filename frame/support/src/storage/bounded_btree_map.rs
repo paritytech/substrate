@@ -17,12 +17,9 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
-use crate::{storage::StorageDecodeLength};
+use crate::storage::StorageDecodeLength;
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom,
-	ops::Deref,
-};
+use sp_std::{borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, ops::Deref};
 
 /// A bounded map based on a B-Tree.
 ///
@@ -53,8 +50,7 @@ where
 	}
 }
 
-impl<K, V, const S: u32> BoundedBTreeMap<K, V, S>
-{
+impl<K, V, const S: u32> BoundedBTreeMap<K, V, S> {
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
 		S as usize
@@ -272,9 +268,7 @@ where
 	type Error = ();
 
 	fn try_from(value: BTreeMap<K, V>) -> Result<Self, Self::Error> {
-		(value.len() <= Self::bound())
-			.then(move || BoundedBTreeMap(value))
-			.ok_or(())
+		(value.len() <= Self::bound()).then(move || BoundedBTreeMap(value)).ok_or(())
 	}
 }
 
@@ -321,7 +315,7 @@ pub mod test {
 	fn boundedmap_from_keys<K, const S: u32>(keys: &[K]) -> BoundedBTreeMap<K, (), S>
 	where
 		K: Ord + Copy,
-		{
+	{
 		map_from_keys(keys).try_into().unwrap()
 	}
 
