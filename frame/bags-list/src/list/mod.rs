@@ -409,13 +409,9 @@ impl<T: Config> List<T> {
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
 		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
+		// in storage and update the node counter.
 		Self::insert_at_unchecked(lighter_node, heavier_node);
-
-		// Increment the counter, which got decremented by `Self::remove`, since we just re-inserted
-		// `heavier_node`.
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_add(1)
-		});
 
 		Ok(())
 	}
@@ -423,11 +419,11 @@ impl<T: Config> List<T> {
 	/// Insert `node` directly in front of `at`.
 	///
 	/// WARNINGS:
-	/// - we do not check that `node` or `at` are valid.
+	/// - this is a naive function in that it does not check if `node` belongs to the same bag as
+	/// `at`. It is expected that the call site will check preconditions.
 	/// - this will panic if `at.bag_upper` is not a bag that already exists in storage.
-	/// - this does not update [`crate::CounterForListNodes`].
 	fn insert_at_unchecked(mut at: Node<T>, mut node: Node<T>) {
-		// connect `heavier_node` to its new `prev`.
+		// connect `node` to its new `prev`.
 		node.prev = at.prev.clone();
 		if let Some(mut prev) = at.prev() {
 			prev.next = Some(node.id().clone());
@@ -460,6 +456,11 @@ impl<T: Config> List<T> {
 		// write the updated nodes to storage.
 		at.put();
 		node.put();
+
+		// account for `node` being added to the list.
+		crate::CounterForListNodes::<T>::mutate(|prev_count| {
+			*prev_count = prev_count.saturating_add(1)
+		});
 	}
 
 	/// Sanity check the list.
