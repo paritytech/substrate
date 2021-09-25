@@ -272,6 +272,8 @@ cargo-clippy:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
+  variables:
+      RUSTFLAGS:                     ""
   script:
     - SKIP_WASM_BUILD=1 cargo +nightly clippy
   allow_failure:                   true
