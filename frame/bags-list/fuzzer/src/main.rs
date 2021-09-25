@@ -42,15 +42,15 @@ enum Action {
 }
 
 impl From<u32> for Action {
-    fn from(v: u32) -> Self {
+	fn from(v: u32) -> Self {
 		let num_variants = Self::Remove as u32 + 1;
-        match v % num_variants {
-            _x if _x == Action::Insert as u32 => Action::Insert,
-            _x if _x == Action::Update as u32 => Action::Update,
-            _x if _x == Action::Remove as u32 => Action::Remove,
-			_ => unreachable!()
-        }
-    }
+		match v % num_variants {
+			_x if _x == Action::Insert as u32 => Action::Insert,
+			_x if _x == Action::Update as u32 => Action::Update,
+			_x if _x == Action::Remove as u32 => Action::Remove,
+			_ => unreachable!(),
+		}
+	}
 }
 
 fn main() {
