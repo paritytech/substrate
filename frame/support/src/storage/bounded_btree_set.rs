@@ -17,10 +17,10 @@
 
 //! Traits, types and structs to support a bounded `BTreeSet`.
 
-use crate::{storage::StorageDecodeLength, traits::Get};
+use crate::{storage::StorageDecodeLength};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, marker::PhantomData,
+	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom,
 	ops::Deref,
 };
 
@@ -32,19 +32,18 @@ use sp_std::{
 /// Unlike a standard `BTreeSet`, there is an enforced upper limit to the number of items in the
 /// set. All internal operations ensure this bound is respected.
 #[derive(Encode)]
-pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
+pub struct BoundedBTreeSet<T, const S: u32>(BTreeSet<T>);
 
-impl<T, S> Decode for BoundedBTreeSet<T, S>
+impl<T, const S: u32> Decode for BoundedBTreeSet<T, S>
 where
 	T: Decode + Ord,
-	S: Get<u32>,
 {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = BTreeSet::<T>::decode(input)?;
-		if inner.len() > S::get() as usize {
+		if inner.len() > S as usize {
 			return Err("BoundedBTreeSet exceeds its limit".into())
 		}
-		Ok(Self(inner, PhantomData))
+		Ok(Self(inner))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -52,26 +51,23 @@ where
 	}
 }
 
-impl<T, S> BoundedBTreeSet<T, S>
-where
-	S: Get<u32>,
+impl<T, const S: u32> BoundedBTreeSet<T, S>
 {
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
-		S::get() as usize
+		S as usize
 	}
 }
 
-impl<T, S> BoundedBTreeSet<T, S>
+impl<T, const S: u32> BoundedBTreeSet<T, S>
 where
 	T: Ord,
-	S: Get<u32>,
 {
 	/// Create a new `BoundedBTreeSet`.
 	///
 	/// Does not allocate.
 	pub fn new() -> Self {
-		BoundedBTreeSet(BTreeSet::new(), PhantomData)
+		BoundedBTreeSet(BTreeSet::new())
 	}
 
 	/// Consume self, and return the inner `BTreeSet`.
@@ -137,37 +133,35 @@ where
 	}
 }
 
-impl<T, S> Default for BoundedBTreeSet<T, S>
+impl<T, const S: u32> Default for BoundedBTreeSet<T, S>
 where
 	T: Ord,
-	S: Get<u32>,
 {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
-impl<T, S> Clone for BoundedBTreeSet<T, S>
+impl<T, const S: u32> Clone for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: Clone,
 {
 	fn clone(&self) -> Self {
-		BoundedBTreeSet(self.0.clone(), PhantomData)
+		BoundedBTreeSet(self.0.clone())
 	}
 }
 
 #[cfg(feature = "std")]
-impl<T, S> std::fmt::Debug for BoundedBTreeSet<T, S>
+impl<T, const S: u32> std::fmt::Debug for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: std::fmt::Debug,
-	S: Get<u32>,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedBTreeSet").field(&self.0).field(&Self::bound()).finish()
 	}
 }
 
-impl<T, S> PartialEq for BoundedBTreeSet<T, S>
+impl<T, const S: u32> PartialEq for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: PartialEq,
 {
@@ -176,9 +170,9 @@ where
 	}
 }
 
-impl<T, S> Eq for BoundedBTreeSet<T, S> where BTreeSet<T>: Eq {}
+impl<T, const S: u32> Eq for BoundedBTreeSet<T, S> where BTreeSet<T>: Eq {}
 
-impl<T, S> PartialEq<BTreeSet<T>> for BoundedBTreeSet<T, S>
+impl<T, const S: u32> PartialEq<BTreeSet<T>> for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: PartialEq,
 {
@@ -187,7 +181,7 @@ where
 	}
 }
 
-impl<T, S> PartialOrd for BoundedBTreeSet<T, S>
+impl<T, const S: u32> PartialOrd for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: PartialOrd,
 {
@@ -196,7 +190,7 @@ where
 	}
 }
 
-impl<T, S> Ord for BoundedBTreeSet<T, S>
+impl<T, const S: u32> Ord for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: Ord,
 {
@@ -205,7 +199,7 @@ where
 	}
 }
 
-impl<T, S> IntoIterator for BoundedBTreeSet<T, S> {
+impl<T, const S: u32> IntoIterator for BoundedBTreeSet<T, S> {
 	type Item = T;
 	type IntoIter = sp_std::collections::btree_set::IntoIter<T>;
 
@@ -214,19 +208,18 @@ impl<T, S> IntoIterator for BoundedBTreeSet<T, S> {
 	}
 }
 
-impl<T, S> MaxEncodedLen for BoundedBTreeSet<T, S>
+impl<T, const S: u32> MaxEncodedLen for BoundedBTreeSet<T, S>
 where
 	T: MaxEncodedLen,
-	S: Get<u32>,
 {
 	fn max_encoded_len() -> usize {
 		Self::bound()
 			.saturating_mul(T::max_encoded_len())
-			.saturating_add(codec::Compact(S::get()).encoded_size())
+			.saturating_add(codec::Compact(S).encoded_size())
 	}
 }
 
-impl<T, S> Deref for BoundedBTreeSet<T, S>
+impl<T, const S: u32> Deref for BoundedBTreeSet<T, S>
 where
 	T: Ord,
 {
@@ -237,7 +230,7 @@ where
 	}
 }
 
-impl<T, S> AsRef<BTreeSet<T>> for BoundedBTreeSet<T, S>
+impl<T, const S: u32> AsRef<BTreeSet<T>> for BoundedBTreeSet<T, S>
 where
 	T: Ord,
 {
@@ -246,7 +239,7 @@ where
 	}
 }
 
-impl<T, S> From<BoundedBTreeSet<T, S>> for BTreeSet<T>
+impl<T, const S: u32> From<BoundedBTreeSet<T, S>> for BTreeSet<T>
 where
 	T: Ord,
 {
@@ -255,21 +248,20 @@ where
 	}
 }
 
-impl<T, S> TryFrom<BTreeSet<T>> for BoundedBTreeSet<T, S>
+impl<T, const S: u32> TryFrom<BTreeSet<T>> for BoundedBTreeSet<T, S>
 where
 	T: Ord,
-	S: Get<u32>,
 {
 	type Error = ();
 
 	fn try_from(value: BTreeSet<T>) -> Result<Self, Self::Error> {
 		(value.len() <= Self::bound())
-			.then(move || BoundedBTreeSet(value, PhantomData))
+			.then(move || BoundedBTreeSet(value))
 			.ok_or(())
 	}
 }
 
-impl<T, S> codec::DecodeLength for BoundedBTreeSet<T, S> {
+impl<T, const S: u32> codec::DecodeLength for BoundedBTreeSet<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedBTreeSet<T, S>` is stored just a `BTreeSet<T>`, which is stored as a
 		// `Compact<u32>` with its length followed by an iteration of its items. We can just use
@@ -278,9 +270,9 @@ impl<T, S> codec::DecodeLength for BoundedBTreeSet<T, S> {
 	}
 }
 
-impl<T, S> StorageDecodeLength for BoundedBTreeSet<T, S> {}
+impl<T, const S: u32> StorageDecodeLength for BoundedBTreeSet<T, S> {}
 
-impl<T, S> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where BTreeSet<T>: Encode {}
+impl<T, const S: u32> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where BTreeSet<T>: Encode {}
 
 #[cfg(test)]
 pub mod test {
@@ -289,16 +281,14 @@ pub mod test {
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
+	const SEVEN: u32 = 7;
+	const FOUR: u32 = 4;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, SEVEN>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, SEVEN>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeSet<u32, Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeSet<u32, SEVEN>>
 	}
 
 	fn map_from_keys<T>(keys: &[T]) -> BTreeSet<T>
@@ -308,10 +298,9 @@ pub mod test {
 		keys.iter().copied().collect()
 	}
 
-	fn boundedmap_from_keys<T, S>(keys: &[T]) -> BoundedBTreeSet<T, S>
+	fn boundedmap_from_keys<T, const S: u32>(keys: &[T]) -> BoundedBTreeSet<T, S>
 	where
 		T: Ord + Copy,
-		S: Get<u32>,
 	{
 		map_from_keys(keys).try_into().unwrap()
 	}
@@ -319,13 +308,13 @@ pub mod test {
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -333,7 +322,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -344,7 +333,7 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded = boundedmap_from_keys::<u32, Four>(&[1, 2, 3]);
+		let mut bounded = boundedmap_from_keys::<u32, FOUR>(&[1, 2, 3]);
 		bounded.try_insert(0).unwrap();
 		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
 
@@ -354,7 +343,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+		let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -363,7 +352,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3, 4, 5, 6]);
 		let bounded = bounded
 			.try_mutate(|v| {
 				v.insert(7);
@@ -379,7 +368,7 @@ pub mod test {
 
 	#[test]
 	fn btree_map_eq_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
 	}
 
@@ -387,7 +376,7 @@ pub mod test {
 	fn too_big_fail_to_decode() {
 		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
 		assert_eq!(
-			BoundedBTreeSet::<u32, Four>::decode(&mut &v.encode()[..]),
+			BoundedBTreeSet::<u32, FOUR>::decode(&mut &v.encode()[..]),
 			Err("BoundedBTreeSet exceeds its limit".into()),
 		);
 	}
@@ -417,7 +406,7 @@ pub mod test {
 			}
 		}
 
-		let mut set = BoundedBTreeSet::<Unequal, Four>::new();
+		let mut set = BoundedBTreeSet::<Unequal, FOUR>::new();
 
 		// when the set is full
 

@@ -1226,8 +1226,8 @@ mod private {
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
 	impl<T, const S: u32> Sealed for BoundedVec<T, S> {}
 	impl<T, const S: u32> Sealed for WeakBoundedVec<T, S> {}
-	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
-	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+	impl<K, V, const S: u32> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
+	impl<T, const S: u32> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 
 	macro_rules! impl_sealed_for_tuple {
 		($($elem:ident),+) => {

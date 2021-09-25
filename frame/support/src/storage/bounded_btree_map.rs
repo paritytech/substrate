@@ -17,10 +17,10 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
-use crate::{storage::StorageDecodeLength, traits::Get};
+use crate::{storage::StorageDecodeLength};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
+	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom,
 	ops::Deref,
 };
 
@@ -33,20 +33,19 @@ use sp_std::{
 /// map. All internal operations ensure this bound is respected.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedBTreeMap<K, V, S>(BTreeMap<K, V>, PhantomData<S>);
+pub struct BoundedBTreeMap<K, V, const S: u32>(BTreeMap<K, V>);
 
-impl<K, V, S> Decode for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> Decode for BoundedBTreeMap<K, V, S>
 where
 	K: Decode + Ord,
 	V: Decode,
-	S: Get<u32>,
 {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = BTreeMap::<K, V>::decode(input)?;
-		if inner.len() > S::get() as usize {
+		if inner.len() > S as usize {
 			return Err("BoundedBTreeMap exceeds its limit".into())
 		}
-		Ok(Self(inner, PhantomData))
+		Ok(Self(inner))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -54,26 +53,23 @@ where
 	}
 }
 
-impl<K, V, S> BoundedBTreeMap<K, V, S>
-where
-	S: Get<u32>,
+impl<K, V, const S: u32> BoundedBTreeMap<K, V, S>
 {
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
-		S::get() as usize
+		S as usize
 	}
 }
 
-impl<K, V, S> BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> BoundedBTreeMap<K, V, S>
 where
 	K: Ord,
-	S: Get<u32>,
 {
 	/// Create a new `BoundedBTreeMap`.
 	///
 	/// Does not allocate.
 	pub fn new() -> Self {
-		BoundedBTreeMap(BTreeMap::new(), PhantomData)
+		BoundedBTreeMap(BTreeMap::new())
 	}
 
 	/// Consume self, and return the inner `BTreeMap`.
@@ -153,37 +149,35 @@ where
 	}
 }
 
-impl<K, V, S> Default for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> Default for BoundedBTreeMap<K, V, S>
 where
 	K: Ord,
-	S: Get<u32>,
 {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
-impl<K, V, S> Clone for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> Clone for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: Clone,
 {
 	fn clone(&self) -> Self {
-		BoundedBTreeMap(self.0.clone(), PhantomData)
+		BoundedBTreeMap(self.0.clone())
 	}
 }
 
 #[cfg(feature = "std")]
-impl<K, V, S> std::fmt::Debug for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> std::fmt::Debug for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: std::fmt::Debug,
-	S: Get<u32>,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedBTreeMap").field(&self.0).field(&Self::bound()).finish()
 	}
 }
 
-impl<K, V, S> PartialEq for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> PartialEq for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: PartialEq,
 {
@@ -192,9 +186,9 @@ where
 	}
 }
 
-impl<K, V, S> Eq for BoundedBTreeMap<K, V, S> where BTreeMap<K, V>: Eq {}
+impl<K, V, const S: u32> Eq for BoundedBTreeMap<K, V, S> where BTreeMap<K, V>: Eq {}
 
-impl<K, V, S> PartialEq<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> PartialEq<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: PartialEq,
 {
@@ -203,7 +197,7 @@ where
 	}
 }
 
-impl<K, V, S> PartialOrd for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> PartialOrd for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: PartialOrd,
 {
@@ -212,7 +206,7 @@ where
 	}
 }
 
-impl<K, V, S> Ord for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> Ord for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: Ord,
 {
@@ -221,7 +215,7 @@ where
 	}
 }
 
-impl<K, V, S> IntoIterator for BoundedBTreeMap<K, V, S> {
+impl<K, V, const S: u32> IntoIterator for BoundedBTreeMap<K, V, S> {
 	type Item = (K, V);
 	type IntoIter = sp_std::collections::btree_map::IntoIter<K, V>;
 
@@ -230,20 +224,19 @@ impl<K, V, S> IntoIterator for BoundedBTreeMap<K, V, S> {
 	}
 }
 
-impl<K, V, S> MaxEncodedLen for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> MaxEncodedLen for BoundedBTreeMap<K, V, S>
 where
 	K: MaxEncodedLen,
 	V: MaxEncodedLen,
-	S: Get<u32>,
 {
 	fn max_encoded_len() -> usize {
 		Self::bound()
 			.saturating_mul(K::max_encoded_len().saturating_add(V::max_encoded_len()))
-			.saturating_add(codec::Compact(S::get()).encoded_size())
+			.saturating_add(codec::Compact(S).encoded_size())
 	}
 }
 
-impl<K, V, S> Deref for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> Deref for BoundedBTreeMap<K, V, S>
 where
 	K: Ord,
 {
@@ -254,7 +247,7 @@ where
 	}
 }
 
-impl<K, V, S> AsRef<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> AsRef<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
 where
 	K: Ord,
 {
@@ -263,7 +256,7 @@ where
 	}
 }
 
-impl<K, V, S> From<BoundedBTreeMap<K, V, S>> for BTreeMap<K, V>
+impl<K, V, const S: u32> From<BoundedBTreeMap<K, V, S>> for BTreeMap<K, V>
 where
 	K: Ord,
 {
@@ -272,21 +265,20 @@ where
 	}
 }
 
-impl<K, V, S> TryFrom<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
+impl<K, V, const S: u32> TryFrom<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
 where
 	K: Ord,
-	S: Get<u32>,
 {
 	type Error = ();
 
 	fn try_from(value: BTreeMap<K, V>) -> Result<Self, Self::Error> {
 		(value.len() <= Self::bound())
-			.then(move || BoundedBTreeMap(value, PhantomData))
+			.then(move || BoundedBTreeMap(value))
 			.ok_or(())
 	}
 }
 
-impl<K, V, S> codec::DecodeLength for BoundedBTreeMap<K, V, S> {
+impl<K, V, const S: u32> codec::DecodeLength for BoundedBTreeMap<K, V, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedBTreeMap<K, V, S>` is stored just a `BTreeMap<K, V>`, which is stored as a
 		// `Compact<u32>` with its length followed by an iteration of its items. We can just use
@@ -295,9 +287,9 @@ impl<K, V, S> codec::DecodeLength for BoundedBTreeMap<K, V, S> {
 	}
 }
 
-impl<K, V, S> StorageDecodeLength for BoundedBTreeMap<K, V, S> {}
+impl<K, V, const S: u32> StorageDecodeLength for BoundedBTreeMap<K, V, S> {}
 
-impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> where
+impl<K, V, const S: u32> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> where
 	BTreeMap<K, V>: Encode
 {
 }
@@ -309,16 +301,14 @@ pub mod test {
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
+	const SEVEN: u32 = 7;
+	const FOUR: u32 = 4;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeMap<u32, (), Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), SEVEN>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeMap<u32, (), SEVEN>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeMap<u32, (), Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeMap<u32, (), SEVEN>>
 	}
 
 	fn map_from_keys<K>(keys: &[K]) -> BTreeMap<K, ()>
@@ -328,24 +318,23 @@ pub mod test {
 		keys.iter().copied().zip(std::iter::repeat(())).collect()
 	}
 
-	fn boundedmap_from_keys<K, S>(keys: &[K]) -> BoundedBTreeMap<K, (), S>
+	fn boundedmap_from_keys<K, const S: u32>(keys: &[K]) -> BoundedBTreeMap<K, (), S>
 	where
 		K: Ord + Copy,
-		S: Get<u32>,
-	{
+		{
 		map_from_keys(keys).try_into().unwrap()
 	}
 
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -353,7 +342,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -364,7 +353,7 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded = boundedmap_from_keys::<u32, Four>(&[1, 2, 3]);
+		let mut bounded = boundedmap_from_keys::<u32, FOUR>(&[1, 2, 3]);
 		bounded.try_insert(0, ()).unwrap();
 		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
 
@@ -374,7 +363,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+		let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3]);
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -383,7 +372,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3, 4, 5, 6]);
 		let bounded = bounded
 			.try_mutate(|v| {
 				v.insert(7, ());
@@ -399,7 +388,7 @@ pub mod test {
 
 	#[test]
 	fn btree_map_eq_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, SEVEN>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
 	}
 
@@ -407,7 +396,7 @@ pub mod test {
 	fn too_big_fail_to_decode() {
 		let v: Vec<(u32, u32)> = vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5)];
 		assert_eq!(
-			BoundedBTreeMap::<u32, u32, Four>::decode(&mut &v.encode()[..]),
+			BoundedBTreeMap::<u32, u32, FOUR>::decode(&mut &v.encode()[..]),
 			Err("BoundedBTreeMap exceeds its limit".into()),
 		);
 	}
@@ -437,7 +426,7 @@ pub mod test {
 			}
 		}
 
-		let mut map = BoundedBTreeMap::<Unequal, u32, Four>::new();
+		let mut map = BoundedBTreeMap::<Unequal, u32, FOUR>::new();
 
 		// when the set is full
 
