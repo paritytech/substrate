@@ -13,7 +13,7 @@ error: `Pallet` does not have #[pallet::inherent] defined, perhaps you should re
 31 | | }
    | |_- in this macro invocation
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `pallet::__substrate_inherent_check::is_inherent_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_inherent_part.rs:28:11
@@ -33,7 +33,7 @@ error[E0433]: failed to resolve: use of undeclared crate or module `system`
 31 | | }
    | |_^ not found in `system`
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider importing this enum
    |
 1  | use frame_system::RawOrigin;
@@ -51,7 +51,7 @@ error[E0433]: failed to resolve: use of undeclared crate or module `system`
 31 | | }
    | |_^ not found in `system`
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider importing one of these items
    |
 1  | use crate::pallet::Pallet;
