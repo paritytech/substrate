@@ -532,7 +532,9 @@ where
 	}
 
 	/// Re-bond funds that were scheduled for unlocking.
-	fn rebond(mut self, value: Balance) -> Self {
+	///
+	/// Returns the updated ledger, and the amount actually rebonded.
+	fn rebond(mut self, value: Balance) -> (Self, Balance) {
 		let mut unlocking_balance: Balance = Zero::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -553,7 +555,7 @@ where
 			}
 		}
 
-		self
+		(self, unlocking_balance)
 	}
 
 	/// Slash the validator for a given amount of balance. This can grow the value
