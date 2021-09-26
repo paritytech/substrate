@@ -872,7 +872,10 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		a4.hash(),
 		block_on(longest_chain_select.finality_target(a4.hash(), Some(4))).unwrap()
 	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a5.hash(), Some(4))).unwrap());
+	assert_eq!(
+		a5.hash(),
+		block_on(longest_chain_select.finality_target(a5.hash(), Some(4))).unwrap()
+	);
 	assert_eq!(
 		b4.hash(),
 		block_on(longest_chain_select.finality_target(b2.hash(), Some(4))).unwrap()
