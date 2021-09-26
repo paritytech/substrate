@@ -385,7 +385,11 @@ fn report_equivocation_current_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(2, validator),
-				pallet_staking::Exposure { total: 10_000, own: 10_000, others: WeakBoundedVec::default() },
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: WeakBoundedVec::default()
+				},
 			);
 		}
 	});
@@ -417,7 +421,11 @@ fn report_equivocation_old_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(2, validator),
-				pallet_staking::Exposure { total: 10_000, own: 10_000, others: WeakBoundedVec::default() },
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: WeakBoundedVec::default()
+				},
 			);
 		}
 
@@ -464,7 +472,11 @@ fn report_equivocation_old_set_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(3, validator),
-				pallet_staking::Exposure { total: 10_000, own: 10_000, others: WeakBoundedVec::default() },
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: WeakBoundedVec::default()
+				},
 			);
 		}
 	});

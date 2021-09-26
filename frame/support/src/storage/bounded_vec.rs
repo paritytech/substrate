@@ -28,9 +28,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::{IterMut, SliceIndex},
 };
-use sp_std::{
-	convert::TryFrom, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain,
-};
+use sp_std::{convert::TryFrom, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain};
 
 /// A bounded vector.
 ///

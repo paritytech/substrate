@@ -533,7 +533,7 @@ fn report_equivocation_old_session_works() {
 		assert_eq!(
 			Staking::eras_stakers(3, offending_validator_id),
 			pallet_staking::Exposure { total: 0, own: 0, others: WeakBoundedVec::default() },
-		);
+		);Ï
 	})
 }
 
