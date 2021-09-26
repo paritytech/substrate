@@ -802,10 +802,7 @@ pub mod pallet {
 
 			let claimed_rewards = WeakBoundedVec::<_, T::MaxErasForRewards>::force_from(
 				(last_reward_era..current_era).collect(),
-				Some(
-					"Warning: The size of the claimed rewards is bigger than expected. \
-  					A runtime configuration adjustment may be needed.",
-				),
+				Some("StakingLedger.claimed_rewards"),
 			);
 			let item = StakingLedger {
 				stash,
