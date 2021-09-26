@@ -252,7 +252,7 @@ parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub const MaxNominations: u32 = 16;
 	pub const MaxUnappliedSlashes: u32 = 1_000;
-	pub const MaxInvulnerablesCount: u32 = 10;
+	pub const MaxInvulnerablesCount: u32 = 100;
 	pub const MaxErasForRewards: u32 = 10_000;
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
