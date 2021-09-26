@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use futures::{future, StreamExt};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
@@ -218,7 +218,13 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 	let extrinsics_per_account = 2000;
 	let accounts = create_accounts(account_num);
 
-	c.bench_function("txpool", move |b| {
+	let mut group = c.benchmark_group("Transaction pool");
+
+	group.sample_size(10);
+	group.throughput(Throughput::Elements(account_num as u64 * extrinsics_per_account as u64));
+
+	let mut counter = 0;
+	group.bench_function("txpool", move |b| {
 		b.iter_batched(
 			|| {
 				let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
@@ -233,6 +239,9 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 				runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
 					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client, false)
 				})));
+
+				println!("Finished {}", counter);
+				counter += 1;
 			},
 			BatchSize::SmallInput,
 		)
