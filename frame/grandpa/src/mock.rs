@@ -129,7 +129,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<u64, u128, MaxNominatorRewardedPerValidator>;
+	type FullIdentification = pallet_staking::Exposure<u64, u128, MaxIndividualExposures>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
@@ -189,6 +189,7 @@ parameter_types! {
 	pub const AttestationPeriod: u64 = 100;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxIndividualExposures: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
 	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
 	pub const MaxNominations: u32 = 16;
@@ -221,6 +222,7 @@ impl pallet_staking::Config for Test {
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxIndividualExposures = MaxIndividualExposures;
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;
 	type MaxInvulnerablesCount = MaxInvulnerablesCount;
