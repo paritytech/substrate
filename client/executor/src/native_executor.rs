@@ -101,8 +101,6 @@ pub struct WasmExecutor {
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	/// WASM runtime cache.
 	cache: Arc<RuntimeCache>,
-	/// The size of the instances cache.
-	max_runtime_instances: usize,
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
 	/// compiled artifacts.
 	cache_path: Option<PathBuf>,
@@ -138,7 +136,6 @@ impl WasmExecutor {
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
 			cache: Arc::new(RuntimeCache::new(max_runtime_instances, cache_path.clone())),
-			max_runtime_instances,
 			cache_path,
 		}
 	}

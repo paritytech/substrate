@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use frame_support::traits::UnfilteredDispatchable;
+use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
 use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};
 use sp_runtime::{
@@ -46,7 +46,9 @@ pub fn create_heartbeat<T: Config>(
 	for _ in 0..k {
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
-	Keys::<T>::put(keys.clone());
+	let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys.clone())
+		.map_err(|()| "More than the maximum number of keys provided")?;
+	Keys::<T>::put(bounded_keys);
 
 	let network_state = OpaqueNetworkState {
 		peer_id: OpaquePeerId::default(),
