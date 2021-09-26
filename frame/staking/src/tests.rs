@@ -1580,8 +1580,11 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 1 + 3 }],
-				claimed_rewards: vec![],
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 900, era: 1 + 3 }
+				])
+				.expect("MaxUnlockingChunks>1"),
+				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
 
@@ -1593,8 +1596,11 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 200,
-				unlocking: vec![UnlockChunk { value: 800, era: 1 + 3 }],
-				claimed_rewards: vec![],
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(
+					vec![UnlockChunk { value: 800, era: 1 + 3 }]
+				)
+				.expect("MaxUnlockingChunks>1"),
+				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
 		// Event emitted should be correct
@@ -1608,8 +1614,8 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
-				claimed_rewards: vec![],
+				unlocking: BoundedVec::default(),
+				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
 		// Event emitted should be correct, only 800
