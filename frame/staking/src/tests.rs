@@ -1289,7 +1289,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 fn too_many_unbond_calls_should_not_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		// locked at era 0 until 3
-		for _ in 0..MAX_UNLOCKING_CHUNKS - 1 {
+		for _ in 0..<Test as Config>::MaxUnlockingChunks::get() - 1 {
 			assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		}
 

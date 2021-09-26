@@ -50,7 +50,6 @@ use crate::{
 	ValidatorPrefs,
 };
 
-pub const MAX_UNLOCKING_CHUNKS: u32 = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
@@ -166,6 +165,12 @@ pub mod pallet {
 		/// Maximum number of slashing spans that is stored.
 		type MaxPriorSlashingSpans: Get<u32>;
 
+		/// Note that there is a limitation to the number of fund-chunks that can be scheduled to be
+		/// unlocked in the future via [`unbond`](Call::unbond). In case this maximum
+		/// (`MaxUnlockingChunks`) is reached, the bonded account _must_ first wait until a
+		/// successful call to `withdraw_unbonded` to remove some of the chunks.
+		type MaxUnlockingChunks: Get<u32>;
+
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
@@ -238,12 +243,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		StakingLedger<
-			T::AccountId,
-			BalanceOf<T>,
-			ConstU32<MAX_UNLOCKING_CHUNKS>,
-			T::MaxErasForRewards,
-		>,
+		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks, T::MaxErasForRewards>,
 	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
@@ -801,7 +801,7 @@ pub mod pallet {
 				stash,
 				total: value,
 				active: value,
-				unlocking: BoundedVec::<_, ConstU32<MAX_UNLOCKING_CHUNKS>>::default(),
+				unlocking: BoundedVec::<_, T::MaxUnlockingChunks>::default(),
 				claimed_rewards,
 			};
 			Self::update_ledger(&controller, &item);
@@ -866,7 +866,7 @@ pub mod pallet {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
+		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
@@ -1400,10 +1400,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
-		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS))]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get()))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,

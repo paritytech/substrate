@@ -45,7 +45,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
 	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs, MAX_UNLOCKING_CHUNKS,
+	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -210,7 +210,7 @@ impl<T: Config> Pallet<T> {
 		ledger: &StakingLedger<
 			T::AccountId,
 			BalanceOf<T>,
-			ConstU32<MAX_UNLOCKING_CHUNKS>,
+			T::MaxUnlockingChunks,
 			T::MaxErasForRewards,
 		>,
 	) {

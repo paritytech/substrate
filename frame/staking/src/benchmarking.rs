@@ -621,7 +621,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. <T as Config>::MaxUnlockingChunks::get() as u32;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -656,7 +656,7 @@ benchmarks! {
 
 		for _ in 0 .. l {
 			staking_ledger.unlocking.try_push(unlock_chunk.clone())
-				.expect("Size is smaller than MAX_UNLOCKING_CHUNKS, qed");
+				.expect("Size is smaller than MaxUnlockingChunks, qed");
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
@@ -782,7 +782,7 @@ benchmarks! {
 
 	#[extra]
 	do_slash {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. <T as Config>::MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -791,7 +791,7 @@ benchmarks! {
 		};
 		for _ in 0 .. l {
 			staking_ledger.unlocking.try_push(unlock_chunk.clone())
-				.expect("Size is smaller than MAX_UNLOCKING_CHUNKS, qed");
+				.expect("Size is smaller than MaxUnlockingChunks, qed");
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
