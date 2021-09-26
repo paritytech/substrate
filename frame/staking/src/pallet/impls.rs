@@ -937,8 +937,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	/// # Panic
 	///
-	/// Panics if `targets` size is bigger than T::MaxNominations.
-	/// Or if it cannot convert `weight` into a `BalanceOf`
+	/// Panics if `targets` size is bigger than T::MaxNominations, or if it cannot convert `weight`
+	/// into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
 		use sp_std::convert::TryFrom;
@@ -995,8 +995,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	/// # Panic
 	///
-	/// Panics if `voters` 3rd element is larger than T::MaxNominations.
-	/// Or if the 2nd element cannot be converted into a `BalanceOf`
+	/// Panics if `voters` 3rd element is larger than T::MaxNominations, or if the 2nd element
+	/// cannot be converted into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
@@ -1275,13 +1275,7 @@ where
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
-						for_later.force_push(
-							unapplied,
-							Some(
-								"Warning: More unapplied stashes than expected. \
-							A runtime parameter adjustment may be needed.",
-							),
-						)
+						for_later.force_push(unapplied, Some("UnappliedStashes.unapplied"))
 					});
 					add_db_reads_writes(1, 1);
 				}
