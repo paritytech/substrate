@@ -1221,11 +1221,10 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 1000,
-					era: 2 + 3
-				}])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 1000, era: 2 + 3 }
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			}),
 		);
@@ -1238,11 +1237,10 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 1000,
-					era: 2 + 3
-				}])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 1000, era: 2 + 3 }
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			}),
 		);
@@ -1258,11 +1256,10 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 1000,
-					era: 2 + 3
-				}])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 1000, era: 2 + 3 }
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			}),
 		);
@@ -1355,11 +1352,10 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 900,
-					era: 2 + 3
-				}])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 900, era: 2 + 3 }
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1385,11 +1381,10 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 900,
-					era: 5
-				}])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 900, era: 5 }
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1402,11 +1397,10 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 400,
-					era: 5
-				}])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 400, era: 5 }
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1434,12 +1428,12 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
 					UnlockChunk { value: 300, era: 5 },
 					UnlockChunk { value: 300, era: 5 },
 					UnlockChunk { value: 300, era: 5 },
 				])
-				.expect("32>3"),
+				.expect("MaxUnlockingChunks>3"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1452,11 +1446,11 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
 					UnlockChunk { value: 300, era: 5 },
 					UnlockChunk { value: 100, era: 5 },
 				])
-				.expect("32>2"),
+				.expect("MaxUnlockingChunks>2"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1498,11 +1492,10 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-					value: 400,
-					era: 2 + 3
-				},])
-				.expect("32>1"),
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 400, era: 2 + 3 },
+				])
+				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1517,11 +1510,11 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 300,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 				])
-				.expect("32>2"),
+				.expect("MaxUnlockingChunks>2"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1536,12 +1529,12 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 					UnlockChunk { value: 200, era: 4 + 3 },
 				])
-				.expect("32>3"),
+				.expect("MaxUnlockingChunks>3"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1554,11 +1547,11 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 500,
-				unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 100, era: 3 + 3 },
 				])
-				.expect("32>2"),
+				.expect("MaxUnlockingChunks>2"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
 		);
@@ -1840,11 +1833,10 @@ fn bond_with_no_staked_value() {
 					stash: 1,
 					active: 0,
 					total: 5,
-					unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-						value: 5,
-						era: 3
-					}])
-					.expect("32>1"),
+					unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(
+						vec![UnlockChunk { value: 5, era: 3 }]
+					)
+					.expect("MaxUnlockingChunks>1"),
 					claimed_rewards: WeakBoundedVec::default(),
 				})
 			);
@@ -2138,10 +2130,11 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints {
-				individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
-					vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect::<BTreeMap<_, _>>()
-				)
-				.expect("MaxValidatorsCount should be > 1"),
+				individual:
+					BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
+						vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect::<BTreeMap<_, _>>()
+					)
+					.expect("MaxValidatorsCount should be > 1"),
 				total: 26,
 			},
 		);
@@ -2161,10 +2154,11 @@ fn add_reward_points_fns_works() {
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints {
-				individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
-					vec![(11, 4), (21, 2)].into_iter().collect::<BTreeMap<_, _>>()
-				)
-				.expect("MaxValidatorsCount>1"),
+				individual:
+					BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
+						vec![(11, 4), (21, 2)].into_iter().collect::<BTreeMap<_, _>>()
+					)
+					.expect("MaxValidatorsCount>1"),
 				total: 6
 			},
 		);
@@ -3790,11 +3784,10 @@ fn cannot_rebond_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-						value: 10 * 1000,
-						era: 3
-					}])
-					.expect("32>1"),
+					unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(
+						vec![UnlockChunk { value: 10 * 1000, era: 3 }]
+					)
+					.expect("MaxUnlockingChunks>1"),
 					claimed_rewards: WeakBoundedVec::default(),
 				}
 			);
@@ -3831,11 +3824,10 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: BoundedVec::<_, ConstU32<32>>::try_from(vec![UnlockChunk {
-						value: 10 * 1000,
-						era: 3
-					}])
-					.expect("32>1"),
+					unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(
+						vec![UnlockChunk { value: 10 * 1000, era: 3 }]
+					)
+					.expect("MaxUnlockingChunks>1"),
 					claimed_rewards: WeakBoundedVec::default(),
 				}
 			);

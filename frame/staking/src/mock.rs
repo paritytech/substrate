@@ -257,6 +257,7 @@ parameter_types! {
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 100;
+	pub const MaxUnlockingChunks: u32 = 32;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -299,6 +300,7 @@ impl crate::pallet::pallet::Config for Test {
 	type MaxReportersCount = MaxReportersCount;
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
 	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxUnlockingChunks = MaxUnlockingChunks;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

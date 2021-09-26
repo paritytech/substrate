@@ -157,6 +157,7 @@ parameter_types! {
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 4_000;
+	pub const MaxUnlockingChunks: u32 = 32;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -189,6 +190,7 @@ impl pallet_staking::Config for Test {
 	type MaxReportersCount = MaxReportersCount;
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
 	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
