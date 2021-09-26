@@ -1596,9 +1596,9 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 200,
-				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(
-					vec![UnlockChunk { value: 800, era: 1 + 3 }]
-				)
+				unlocking: BoundedVec::<_, <Test as Config>::MaxUnlockingChunks>::try_from(vec![
+					UnlockChunk { value: 800, era: 1 + 3 }
+				])
 				.expect("MaxUnlockingChunks>1"),
 				claimed_rewards: WeakBoundedVec::default(),
 			})
