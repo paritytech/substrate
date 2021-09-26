@@ -115,12 +115,12 @@ pub fn create_validator_with_nominators<T: Config>(
 	assert_ne!(CounterForNominators::<T>::get(), 0);
 
 	// Give Era Points
-	let individual = BoundedBTreeMap::<_, _, T::MaxNbOfValidators>::try_from(
+	let individual = BoundedBTreeMap::<_, _, T::MaxValidatorsCount>::try_from(
 		points_individual.into_iter().collect::<BTreeMap<_, _>>(),
 	)
-	.map_err(|_| "Something weird, this means T:MaxNbOfValidators is zero")?;
+	.map_err(|_| "Something weird, this means T:MaxValidatorsCount is zero")?;
 	let reward =
-		EraRewardPoints::<T::AccountId, T::MaxNbOfValidators> { total: points_total, individual };
+		EraRewardPoints::<T::AccountId, T::MaxValidatorsCount> { total: points_total, individual };
 
 	let current_era = CurrentEra::<T>::get().unwrap();
 	ErasRewardPoints::<T>::insert(current_era, reward);
@@ -539,7 +539,7 @@ benchmarks! {
 		let era = EraIndex::one();
 		for _ in 0 .. MAX_SLASHES {
 			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator,
-				T::MaxNbOfReporters>::default());
+				T::MaxReportersCount>::default());
 		}
 		let unapplied_slashes = WeakBoundedVec::<_, T::MaxUnappliedSlashes>::try_from(unapplied_slashes)
 			.expect("MAX_SLASHES should be <= MaxUnappliedSlashes, runtime benchmarks need adjustment");
@@ -758,7 +758,7 @@ benchmarks! {
 		}
 
 		// Give Era Points
-		let individual = BoundedBTreeMap::<_, _, T::MaxNbOfValidators>::try_from(
+		let individual = BoundedBTreeMap::<_, _, T::MaxValidatorsCount>::try_from(
 			points_individual.into_iter().collect::<BTreeMap<_, _>>(),
 		)
 		.map_err(|_| "Too many validators, some runtime benchmarks may need adjustment")?;

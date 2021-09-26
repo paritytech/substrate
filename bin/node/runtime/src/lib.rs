@@ -500,11 +500,11 @@ parameter_types! {
 	pub OffchainRepeat: BlockNumber = 5;
 	pub const MaxNominations: u32 = MAX_NOMINATIONS;
 	pub const MaxUnappliedSlashes: u32 = 1_000;
-	pub const MaxNbOfInvulnerables: u32 = 10;
+	pub const MaxInvulnerablesCount: u32 = 10;
 	pub const MaxErasForRewards: u32 = 10_000;
-	pub const MaxNbOfReporters: u32 = 1_000;
+	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
-	pub const MaxNbOfValidators: u32 = 4_000;
+	pub const MaxValidatorsCount: u32 = 4_000;
 }
 
 use frame_election_provider_support::onchain;
@@ -542,11 +542,11 @@ impl pallet_staking::Config for Runtime {
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;
-	type MaxNbOfInvulnerables = MaxNbOfInvulnerables;
+	type MaxInvulnerablesCount = MaxInvulnerablesCount;
 	type MaxErasForRewards = MaxErasForRewards;
-	type MaxNbOfReporters = MaxNbOfReporters;
+	type MaxReportersCount = MaxReportersCount;
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
-	type MaxNbOfValidators = MaxNbOfValidators;
+	type MaxValidatorsCount = MaxValidatorsCount;
 }
 
 parameter_types! {

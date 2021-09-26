@@ -155,7 +155,7 @@ pub mod pallet {
 		/// The maximum number of invulnerables, we expect no more than four invulnerables and
 		/// restricted to testnets.
 		#[pallet::constant]
-		type MaxNbOfInvulnerables: Get<u32>;
+		type MaxInvulnerablesCount: Get<u32>;
 
 		/// Maximum number of eras for which the stakers behind a validator have claimed rewards.
 		#[pallet::constant]
@@ -163,11 +163,11 @@ pub mod pallet {
 
 		/// Maximum number of validators.
 		#[pallet::constant]
-		type MaxNbOfValidators: Get<u32>;
+		type MaxValidatorsCount: Get<u32>;
 
 		/// Maximum number of reporters for slashing.
 		#[pallet::constant]
-		type MaxNbOfReporters: Get<u32>;
+		type MaxReportersCount: Get<u32>;
 
 		/// Maximum number of slashing spans that is stored.
 		#[pallet::constant]
@@ -223,7 +223,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
 	pub type Invulnerables<T: Config> =
-		StorageValue<_, BoundedVec<T::AccountId, T::MaxNbOfInvulnerables>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxInvulnerablesCount>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
@@ -387,7 +387,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		EraIndex,
-		EraRewardPoints<T::AccountId, T::MaxNbOfValidators>,
+		EraRewardPoints<T::AccountId, T::MaxValidatorsCount>,
 		ValueQuery,
 	>;
 
@@ -427,7 +427,7 @@ pub mod pallet {
 				T::AccountId,
 				BalanceOf<T>,
 				T::MaxNominatorRewardedPerValidator,
-				T::MaxNbOfReporters,
+				T::MaxReportersCount,
 			>,
 			T::MaxUnappliedSlashes,
 		>,
@@ -550,7 +550,7 @@ pub mod pallet {
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			let invulnerables =
-				BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(self.invulnerables.clone())
+				BoundedVec::<_, T::MaxInvulnerablesCount>::try_from(self.invulnerables.clone())
 					.expect(
 					"Too many invulnerables passed, a runtime parameters adjustment may be needed",
 				);
@@ -1012,7 +1012,7 @@ pub mod pallet {
 				// calling `chill_other`. Until then, we explicitly block new validators to protect
 				// the runtime.
 				ensure!(
-					CounterForValidators::<T>::get() < T::MaxNbOfValidators::get(),
+					CounterForValidators::<T>::get() < T::MaxValidatorsCount::get(),
 					Error::<T>::TooManyValidators
 				);
 			}
@@ -1281,7 +1281,7 @@ pub mod pallet {
 			invulnerables: Vec<T::AccountId>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			let invulnerables = BoundedVec::<_, T::MaxNbOfInvulnerables>::try_from(invulnerables)
+			let invulnerables = BoundedVec::<_, T::MaxInvulnerablesCount>::try_from(invulnerables)
 				.map_err(|_| Error::<T>::TooManyInvulnerables)?;
 			<Invulnerables<T>>::put(invulnerables);
 			Ok(())
@@ -1632,7 +1632,7 @@ pub mod pallet {
 					);
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
-					let max_validator_count = T::MaxNbOfValidators::get();
+					let max_validator_count = T::MaxValidatorsCount::get();
 					let current_validator_count = CounterForValidators::<T>::get();
 					ensure!(
 						threshold * max_validator_count < current_validator_count,

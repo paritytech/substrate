@@ -241,7 +241,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&100), init_balance_100);
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		let individual = BoundedBTreeMap::<_, _, <Test as Config>::MaxNbOfValidators>::try_from(
+		let individual = BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
 			vec![(11, 100), (21, 50)].into_iter().collect::<BTreeMap<_, _>>(),
 		)
 		.expect("Test configuration needs amendment");
@@ -2071,10 +2071,10 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			};
 		let reward = EraRewardPoints {
 			total: 1,
-			individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxNbOfValidators>::try_from(
+			individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
 				vec![(11, 1)].into_iter().collect::<BTreeMap<_, _>>(),
 			)
-			.expect("MaxNbOfValidators>0"),
+			.expect("MaxValidatorsCount>0"),
 		};
 
 		// Check reward
@@ -2138,10 +2138,10 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints {
-				individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxNbOfValidators>::try_from(
+				individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
 					vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect::<BTreeMap<_, _>>()
 				)
-				.expect("MaxNbOfValidators should be > 1"),
+				.expect("MaxValidatorsCount should be > 1"),
 				total: 26,
 			},
 		);
@@ -2161,10 +2161,10 @@ fn add_reward_points_fns_works() {
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints {
-				individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxNbOfValidators>::try_from(
+				individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
 					vec![(11, 4), (21, 2)].into_iter().collect::<BTreeMap<_, _>>()
 				)
-				.expect("MaxNbOfValidators>1"),
+				.expect("MaxValidatorsCount>1"),
 				total: 6
 			},
 		);
@@ -4335,7 +4335,7 @@ fn chill_other_works() {
 				Staking::chill_other(Origin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
-			// But validator will succeed because MaxNbOfValidators is always set
+			// But validator will succeed because MaxValidatorsCount is always set
 			assert_ok!(Staking::chill_other(Origin::signed(1337), 3));
 
 			// Add threshold and limits
@@ -4407,7 +4407,7 @@ fn capped_stakers_works() {
 
 		// can create `max - validator_count` validators
 		let mut some_existing_validator = AccountId::default();
-		for i in 0..<Test as Config>::MaxNbOfValidators::get() - validator_count {
+		for i in 0..<Test as Config>::MaxValidatorsCount::get() - validator_count {
 			let (_, controller) = testing_utils::create_stash_controller::<Test>(
 				i + 10_000_000,
 				100,

@@ -252,11 +252,11 @@ parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub const MaxNominations: u32 = 16;
 	pub const MaxUnappliedSlashes: u32 = 1_000;
-	pub const MaxNbOfInvulnerables: u32 = 10;
+	pub const MaxInvulnerablesCount: u32 = 10;
 	pub const MaxErasForRewards: u32 = 10_000;
-	pub const MaxNbOfReporters: u32 = 1_000;
+	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
-	pub const MaxNbOfValidators: u32 = 100;
+	pub const MaxValidatorsCount: u32 = 100;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -294,11 +294,11 @@ impl crate::pallet::pallet::Config for Test {
 	type SortedListProvider = BagsList;
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;
-	type MaxNbOfInvulnerables = MaxNbOfInvulnerables;
+	type MaxInvulnerablesCount = MaxInvulnerablesCount;
 	type MaxErasForRewards = MaxErasForRewards;
-	type MaxNbOfReporters = MaxNbOfReporters;
+	type MaxReportersCount = MaxReportersCount;
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
-	type MaxNbOfValidators = MaxNbOfValidators;
+	type MaxValidatorsCount = MaxValidatorsCount;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

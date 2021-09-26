@@ -1260,7 +1260,7 @@ where
 					let rw = upper_bound + nominators_len * upper_bound;
 					add_db_reads_writes(rw, rw);
 				}
-				unapplied.reporters = WeakBoundedVec::<_, T::MaxNbOfReporters>::force_from(
+				unapplied.reporters = WeakBoundedVec::<_, T::MaxReportersCount>::force_from(
 					details.reporters.clone(),
 					Some(
 						"Warning: Number of reporters is bigger than expected. \

@@ -243,7 +243,7 @@ pub(crate) fn compute_slash<T: Config>(
 		T::AccountId,
 		BalanceOf<T>,
 		T::MaxNominatorRewardedPerValidator,
-		T::MaxNbOfReporters,
+		T::MaxReportersCount,
 	>,
 > {
 	let SlashParams { stash, slash, exposure, slash_era, window_start, now, reward_proportion } =
@@ -624,7 +624,7 @@ pub(crate) fn apply_slash<T: Config>(
 		T::AccountId,
 		BalanceOf<T>,
 		T::MaxNominatorRewardedPerValidator,
-		T::MaxNbOfReporters,
+		T::MaxReportersCount,
 	>,
 ) {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
