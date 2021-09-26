@@ -372,7 +372,7 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-/// `Limit` bounds the number of points earned by a given validator
+/// `Limit` bounds the number of points earned by a given validator.
 #[derive(
 	PartialEqNoBound, Encode, Decode, DefaultNoBound, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
 )]
@@ -453,8 +453,8 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-/// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`
-/// `RewardsLimit` is the size limit of the `WeakBoundedVec` representing `claimed_rewards`
+/// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`.
+/// `RewardsLimit` is the size limit of the `WeakBoundedVec` representing `claimed_rewards`.
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
@@ -605,7 +605,7 @@ where
 }
 
 /// A record of the nominations made by a specific account.
-/// `Limit` bounds the number of `targets`
+/// `Limit` bounds the number of `targets`.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>))]
@@ -640,7 +640,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-/// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`
+/// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`.
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
@@ -701,8 +701,8 @@ where
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
-/// `SlashedLimit` bounds the number of slashed accounts
-/// `ReportersLimit` bounds the number of reporters
+/// `SlashedLimit` bounds the number of slashed accounts.
+/// `ReportersLimit` bounds the number of reporters.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(SlashedLimit: Get<u32>, ReportersLimit: Get<u32>))]
 #[scale_info(skip_type_params(SlashedLimit, ReportersLimit))]

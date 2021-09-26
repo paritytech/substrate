@@ -146,7 +146,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
-		/// The maximum number of unapplied slashes to be stored in `UnappliedSlashes`
+		/// The maximum number of unapplied slashes to be stored in `UnappliedSlashes`.
 		type MaxUnappliedSlashes: Get<u32>;
 
 		/// The maximum number of invulnerables, we expect no more than four invulnerables and
@@ -677,9 +677,9 @@ pub mod pallet {
 		/// There are too many validators in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyValidators,
-		/// Too many invulnerables are passed, a runtime configuration adjustment may be needed
+		/// Too many invulnerables are passed, a runtime configuration adjustment may be needed.
 		TooManyInvulnerables,
-		/// Too many Rewards Eras are passed, a runtime configuration adjustment may be needed
+		/// Too many Rewards Eras are passed, a runtime configuration adjustment may be needed.
 		TooManyRewardsEras,
 	}
 

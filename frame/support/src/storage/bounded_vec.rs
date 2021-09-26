@@ -135,7 +135,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.last_mut()
 	}
 
-	/// Exactly the same semantics as [`Vec::iter_mut`]
+	/// Exactly the same semantics as [`Vec::iter_mut`].
 	pub fn iter_mut(&mut self) -> IterMut<'_, T> {
 		self.0.iter_mut()
 	}

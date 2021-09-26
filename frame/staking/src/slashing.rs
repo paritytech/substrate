@@ -92,7 +92,7 @@ impl SlashingSpan {
 }
 
 /// An encoding of all of a nominator's slashing spans.
-/// `Limit` bounds the size of the prior slashing spans vector
+/// `Limit` bounds the size of the prior slashing spans vector.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>))]
@@ -134,14 +134,7 @@ impl<Limit: Get<u32>> SlashingSpans<Limit> {
 		}
 
 		let last_length = next_start - self.last_start;
-		self.prior.force_insert(
-			0,
-			last_length,
-			Some(
-				"Warning: Size of the the prior slashing spans bigger than expected. \
-				A runtime adjustment may be needed.",
-			),
-		);
+		self.prior.force_insert(0, last_length, Some("SlashingSpans.prior"));
 		self.last_start = next_start;
 		self.span_index += 1;
 		true

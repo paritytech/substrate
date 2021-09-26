@@ -155,7 +155,7 @@ where
 		self.0.remove_entry(key)
 	}
 
-	/// Exactly the same semantics as [`BTreeMap::entry`]
+	/// Exactly the same semantics as [`BTreeMap::entry`].
 	/// Gets the given key's corresponding entry in the map for in-place manipulation.
 	pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
 	where
