@@ -306,8 +306,7 @@ pub fn create_wasm_runtime_with_code(
 			//
 			// We drop the cache_path here to silence warnings that cache_path is not used if
 			// compiling without the `wasmtime` flag.
-			#[allow(clippy::drop_copy)]
-			drop(cache_path);
+			let _ = cache_path;
 
 			sc_executor_wasmi::create_runtime(
 				blob,
