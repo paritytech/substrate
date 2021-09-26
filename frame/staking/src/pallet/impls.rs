@@ -554,10 +554,7 @@ impl<T: Config> Pallet<T> {
 
 				let others = WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::force_from(
 					others,
-					Some(
-						"Warning: The number of nominators is bigger than expected. \
-						A runtime configuration adjustment may be needed.",
-					),
+					Some("exposure.others"),
 				);
 
 				let exposure = Exposure { own, others, total };
@@ -1262,10 +1259,7 @@ where
 				}
 				unapplied.reporters = WeakBoundedVec::<_, T::MaxReportersCount>::force_from(
 					details.reporters.clone(),
-					Some(
-						"Warning: Number of reporters is bigger than expected. \
-						A runtime parameter adjustment may be needed.",
-					),
+					Some("unapplied.reporters"),
 				);
 				if slash_defer_duration == 0 {
 					// Apply right away.
