@@ -651,7 +651,7 @@ mod max_weight {
 		fn elect_queued(a: u32, d: u32) -> Weight {
 			unreachable!()
 		}
-		fn create_snapshot_internal() -> Weight {
+		fn create_snapshot_internal(v: u32, t: u32) -> Weight {
 			unreachable!()
 		}
 		fn on_initialize_nothing() -> Weight {

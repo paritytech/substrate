@@ -163,6 +163,7 @@ struct ClientSpec<E> {
 	// Never used, left only for backward compatibility.
 	consensus_engine: (),
 	#[serde(skip_serializing)]
+	#[allow(unused)]
 	genesis: serde::de::IgnoredAny,
 	/// Mapping from `block_hash` to `wasm_code`.
 	///
