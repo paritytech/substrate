@@ -640,7 +640,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-/// `Limit` is the size limit of `others` bounded by `MaxNominatorRewardedPerValidator`.
+/// `Limit` is the size limit of `others`.
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
@@ -767,7 +767,7 @@ where
 		FullIdentification = Exposure<
 			<T as frame_system::Config>::AccountId,
 			BalanceOf<T>,
-			T::MaxNominatorRewardedPerValidator,
+			T::MaxIndividualExposures,
 		>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
@@ -898,14 +898,12 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config>
-	Convert<
-		T::AccountId,
-		Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>>,
-	> for ExposureOf<T>
+	Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>>>
+	for ExposureOf<T>
 {
 	fn convert(
 		validator: T::AccountId,
-	) -> Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>> {
+	) -> Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>> {
 		<Pallet<T>>::active_era()
 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
 	}

@@ -538,7 +538,7 @@ benchmarks! {
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
 		for _ in 0 .. MAX_SLASHES {
-			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator,
+			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures,
 				T::MaxReportersCount>::default());
 		}
 		let unapplied_slashes = WeakBoundedVec::<_, T::MaxUnappliedSlashes>::try_from(unapplied_slashes)

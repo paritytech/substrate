@@ -196,7 +196,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance, MaxNominatorRewardedPerValidator>;
+	type FullIdentification = crate::Exposure<AccountId, Balance, MaxIndividualExposures>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 impl pallet_authorship::Config for Test {
@@ -228,6 +228,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxIndividualExposures: u32 = 64;
 }
 
 thread_local! {
@@ -288,6 +289,7 @@ impl crate::pallet::pallet::Config for Test {
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxIndividualExposures = MaxIndividualExposures;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();

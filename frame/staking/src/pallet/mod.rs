@@ -146,6 +146,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
+		/// The maximum number of exposure of a certain validator at a given era.
+		type MaxIndividualExposures: Get<u32>;
+
 		/// The maximum number of unapplied slashes to be stored in `UnappliedSlashes`.
 		type MaxUnappliedSlashes: Get<u32>;
 
@@ -320,7 +323,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 		ValueQuery,
 	>;
 
@@ -419,7 +422,7 @@ pub mod pallet {
 			UnappliedSlash<
 				T::AccountId,
 				BalanceOf<T>,
-				T::MaxNominatorRewardedPerValidator,
+				T::MaxIndividualExposures,
 				T::MaxReportersCount,
 			>,
 			T::MaxUnappliedSlashes,

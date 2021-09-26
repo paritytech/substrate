@@ -210,8 +210,7 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The proportion of the slash.
 	pub(crate) slash: Perbill,
 	/// The exposure of the stash and all nominators.
-	pub(crate) exposure:
-		&'a Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 	/// The era where the offence occurred.
 	pub(crate) slash_era: EraIndex,
 	/// The first era in the current bonding period.
@@ -232,12 +231,7 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 pub(crate) fn compute_slash<T: Config>(
 	params: SlashParams<T>,
 ) -> Option<
-	UnappliedSlash<
-		T::AccountId,
-		BalanceOf<T>,
-		T::MaxNominatorRewardedPerValidator,
-		T::MaxReportersCount,
-	>,
+	UnappliedSlash<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures, T::MaxReportersCount>,
 > {
 	let SlashParams { stash, slash, exposure, slash_era, window_start, now, reward_proportion } =
 		params.clone();
@@ -348,7 +342,7 @@ fn slash_nominators<T: Config>(
 	prior_slash_p: Perbill,
 	nominators_slashed: &mut WeakBoundedVec<
 		(T::AccountId, BalanceOf<T>),
-		T::MaxNominatorRewardedPerValidator,
+		T::MaxIndividualExposures,
 	>,
 ) -> BalanceOf<T> {
 	let SlashParams { stash: _, slash, exposure, slash_era, window_start, now, reward_proportion } =
@@ -401,8 +395,10 @@ fn slash_nominators<T: Config>(
 		slashed_nominators.push((stash.clone(), nom_slashed));
 	}
 
-	*nominators_slashed = WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::try_from(slashed_nominators)
-		.expect("slashed_nominators has a size of exposure.others which is MaxNominatorRewardedPerValidator");
+	*nominators_slashed = WeakBoundedVec::<_, T::MaxIndividualExposures>::try_from(
+		slashed_nominators,
+	)
+	.expect("slashed_nominators has a size of exposure.others which is MaxIndividualExposures");
 
 	reward_payout
 }
@@ -616,7 +612,7 @@ pub(crate) fn apply_slash<T: Config>(
 	unapplied_slash: UnappliedSlash<
 		T::AccountId,
 		BalanceOf<T>,
-		T::MaxNominatorRewardedPerValidator,
+		T::MaxIndividualExposures,
 		T::MaxReportersCount,
 	>,
 ) {

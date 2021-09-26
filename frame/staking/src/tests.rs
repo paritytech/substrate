@@ -149,7 +149,7 @@ fn basic_setup_works() {
 			Exposure {
 				total: 1125,
 				own: 1000,
-				others: WeakBoundedVec::<_, <Test as Config>::MaxNominatorRewardedPerValidator>::try_from(
+				others: WeakBoundedVec::<_, <Test as Config>::MaxIndividualExposures>::try_from(
 					vec![IndividualExposure { who: 101, value: 125 }]
 				)
 				.expect("Please adjust testing parameters"),
@@ -160,8 +160,8 @@ fn basic_setup_works() {
 			Exposure {
 				total: 1375,
 				own: 1000,
-				others: WeakBoundedVec::<_, <Test as Config>::MaxNominatorRewardedPerValidator>::try_from(
-					vec![IndividualExposure { who: 101, value: 375}]
+				others: WeakBoundedVec::<_, <Test as Config>::MaxIndividualExposures>::try_from(
+					vec![IndividualExposure { who: 101, value: 375 }]
 				)
 				.expect("Please adjust testing parameters"),
 			},
@@ -544,7 +544,7 @@ fn nominating_and_rewards_should_work() {
 			assert_eq!(Balances::total_balance(&20), initial_balance_20 + total_payout_0 / 2);
 			initial_balance_20 = Balances::total_balance(&20);
 
-			let mut others = WeakBoundedVec::<_, MaxNominatorRewardedPerValidator>::try_from(vec![
+			let mut others = WeakBoundedVec::<_, MaxIndividualExposures>::try_from(vec![
 				IndividualExposure { who: 1, value: 400 },
 				IndividualExposure { who: 3, value: 400 },
 			])
@@ -556,7 +556,7 @@ fn nominating_and_rewards_should_work() {
 				Exposure { total: 1000 + 800, own: 1000, others },
 			);
 
-			others = WeakBoundedVec::<_, MaxNominatorRewardedPerValidator>::try_from(vec![
+			others = WeakBoundedVec::<_, MaxIndividualExposures>::try_from(vec![
 				IndividualExposure { who: 1, value: 600 },
 				IndividualExposure { who: 3, value: 600 },
 			])
@@ -2055,12 +2055,11 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Set staker
 		let _ = Balances::make_free_balance_be(&11, stake);
 
-		let exposure =
-			Exposure::<AccountId, Balance, <Test as Config>::MaxNominatorRewardedPerValidator> {
-				total: stake,
-				own: stake,
-				others: WeakBoundedVec::default(),
-			};
+		let exposure = Exposure::<AccountId, Balance, <Test as Config>::MaxIndividualExposures> {
+			total: stake,
+			own: stake,
+			others: WeakBoundedVec::default(),
+		};
 		let reward = EraRewardPoints {
 			total: 1,
 			individual: BoundedBTreeMap::<_, _, <Test as Config>::MaxValidatorsCount>::try_from(
@@ -2091,8 +2090,10 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			Exposure {
 				total: stake,
 				own: 1,
-				others: WeakBoundedVec::<_, <Test as Config>::MaxNominatorRewardedPerValidator>::try_from(
-					vec![IndividualExposure { who: 2, value: stake - 1 }]).expect("MaxNominatorRewardedPerValidator>0"),
+				others: WeakBoundedVec::<_, <Test as Config>::MaxIndividualExposures>::try_from(
+					vec![IndividualExposure { who: 2, value: stake - 1 }],
+				)
+				.expect("MaxIndividualExposures>0"),
 			},
 		);
 

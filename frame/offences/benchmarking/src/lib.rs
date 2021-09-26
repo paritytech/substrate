@@ -150,9 +150,8 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		nominator_stashes.push(nominator_stash.clone());
 	}
 
-	let others =
-		WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::try_from(individual_exposures)
-			.expect("nominators too big, runtime benchmarks may need adjustment");
+	let others = WeakBoundedVec::<_, T::MaxIndividualExposures>::try_from(individual_exposures)
+		.map_err(|_| "nominators too big, runtime benchmarks may need adjustment")?;
 	let exposure = Exposure { total: amount.clone() * n.into(), own: amount, others };
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);

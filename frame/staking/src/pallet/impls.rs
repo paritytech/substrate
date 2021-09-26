@@ -40,7 +40,7 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, convert::TryFrom, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
@@ -398,7 +398,7 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		exposures: Vec<(
 			T::AccountId,
-			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 		)>,
 	) -> Vec<T::AccountId> {
 		// Increment or set current era.
@@ -477,7 +477,7 @@ impl<T: Config> Pallet<T> {
 	pub fn store_stakers_info(
 		exposures: Vec<(
 			T::AccountId,
-			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 		)>,
 		new_planned_era: EraIndex,
 	) -> Vec<T::AccountId> {
@@ -489,12 +489,21 @@ impl<T: Config> Pallet<T> {
 			total_stake = total_stake.saturating_add(exposure.total);
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
-			let mut exposure_clipped = exposure;
+			let mut others = exposure.others.to_vec();
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
-			if exposure_clipped.others.len() > clipped_max_len {
-				exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
-				exposure_clipped.others.truncate(clipped_max_len);
+			if others.len() > clipped_max_len {
+				others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
+				others.truncate(clipped_max_len);
 			}
+
+			let others = WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::try_from(others)
+				.expect("Vec was clipped, so this has to work, qed");
+			let exposure_clipped =
+				Exposure::<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator> {
+					total: exposure.total,
+					own: exposure.own,
+					others,
+				};
 			<ErasStakersClipped<T>>::insert(&new_planned_era, &stash, exposure_clipped);
 		});
 
@@ -523,10 +532,7 @@ impl<T: Config> Pallet<T> {
 	/// [`Exposure`].
 	fn collect_exposures(
 		supports: Supports<T::AccountId>,
-	) -> Vec<(
-		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
-	)> {
+	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -552,7 +558,7 @@ impl<T: Config> Pallet<T> {
 						total = total.saturating_add(stake);
 					});
 
-				let others = WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::force_from(
+				let others = WeakBoundedVec::<_, T::MaxIndividualExposures>::force_from(
 					others,
 					Some("exposure.others"),
 				);
@@ -560,7 +566,7 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxNominatorRewardedPerValidator>)>>()
+			.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxIndividualExposures>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -650,7 +656,7 @@ impl<T: Config> Pallet<T> {
 	pub fn add_era_stakers(
 		current_era: EraIndex,
 		controller: T::AccountId,
-		exposure: Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		exposure: Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
@@ -941,7 +947,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	/// into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
-		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -1003,7 +1008,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
-		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
@@ -1076,17 +1080,13 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 impl<T: Config>
 	historical::SessionManager<
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 	> for Pallet<T>
 {
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<
-		Vec<(
-			T::AccountId,
-			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
-		)>,
-	> {
+	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>)>>
+	{
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
@@ -1103,12 +1103,8 @@ impl<T: Config>
 	}
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<
-		Vec<(
-			T::AccountId,
-			Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
-		)>,
-	> {
+	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>)>>
+	{
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
 				let current_era = Self::current_era()
@@ -1159,7 +1155,7 @@ where
 		FullIdentification = Exposure<
 			<T as frame_system::Config>::AccountId,
 			BalanceOf<T>,
-			T::MaxNominatorRewardedPerValidator,
+			T::MaxIndividualExposures,
 		>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,

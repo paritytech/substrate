@@ -475,8 +475,7 @@ impl pallet_session::Config for Runtime {
 }
 
 impl pallet_session::historical::Config for Runtime {
-	type FullIdentification =
-		pallet_staking::Exposure<AccountId, Balance, MaxNominatorRewardedPerValidator>;
+	type FullIdentification = pallet_staking::Exposure<AccountId, Balance, MaxIndividualExposures>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
 
@@ -498,6 +497,7 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub OffchainRepeat: BlockNumber = 5;
+	pub const MaxIndividualExposures: u32 = 256;
 	pub const MaxNominations: u32 = MAX_NOMINATIONS;
 	pub const MaxUnappliedSlashes: u32 = 1_000;
 	pub const MaxInvulnerablesCount: u32 = 10;
@@ -541,6 +541,7 @@ impl pallet_staking::Config for Runtime {
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
+	type MaxIndividualExposures = MaxIndividualExposures;
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;
 	type MaxInvulnerablesCount = MaxInvulnerablesCount;
