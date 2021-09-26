@@ -96,7 +96,6 @@ pub mod pallet {
 		>;
 
 		/// Maximum number of nominations per nominator.
-		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
@@ -149,28 +148,22 @@ pub mod pallet {
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
 		/// The maximum number of unapplied slashes to be stored in `UnappliedSlashes`
-		#[pallet::constant]
 		type MaxUnappliedSlashes: Get<u32>;
 
 		/// The maximum number of invulnerables, we expect no more than four invulnerables and
 		/// restricted to testnets.
-		#[pallet::constant]
 		type MaxInvulnerablesCount: Get<u32>;
 
 		/// Maximum number of eras for which the stakers behind a validator have claimed rewards.
-		#[pallet::constant]
 		type MaxErasForRewards: Get<u32>;
 
 		/// Maximum number of validators.
-		#[pallet::constant]
 		type MaxValidatorsCount: Get<u32>;
 
 		/// Maximum number of reporters for slashing.
-		#[pallet::constant]
 		type MaxReportersCount: Get<u32>;
 
 		/// Maximum number of slashing spans that is stored.
-		#[pallet::constant]
 		type MaxPriorSlashingSpans: Get<u32>;
 
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
