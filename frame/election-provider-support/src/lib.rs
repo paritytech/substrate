@@ -80,7 +80,6 @@
 //! ```rust
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
-//! # use frame_support::pallet_prelude::ConstU32;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -100,7 +99,7 @@
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//!         type MaximumVotesPerVoter = ConstU32<1>;
+//!         type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<1>;
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
@@ -171,9 +170,6 @@ pub use sp_npos_elections::{
 	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
 	VoteWeight,
 };
-
-#[cfg(feature = "std")]
-use frame_support::pallet_prelude::ConstU32;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {
@@ -253,7 +249,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-	type MaximumVotesPerVoter = ConstU32<0>;
+	type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<0>;
 	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}

@@ -101,7 +101,6 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 
@@ -161,7 +160,7 @@ mod tests {
 
 		pub struct DataProvider;
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			type MaximumVotesPerVoter = ConstU32<2>;
+			type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<2>;
 			fn voters(
 				_: Option<usize>,
 			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
