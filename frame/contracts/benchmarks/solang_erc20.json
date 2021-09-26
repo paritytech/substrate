@@ -1,0 +1,581 @@
+{
+  "contract": {
+    "authors": [
+      "unknown"
+    ],
+    "name": "ERC20PresetFixedSupply",
+    "version": "0.0.1"
+  },
+  "metadataVersion": "0.1.0",
+  "source": {
+    "compiler": "solang 0.1.7",
+    "hash": "0x9c55e342566e89c741eb641eec3af796836da750fc930c55bccc0604a47ef700",
+    "language": "Solidity 0.1.7"
+  },
+  "spec": {
+    "constructors": [
+      {
+        "args": [
+          {
+            "name": "name",
+            "type": {
+              "display_name": [
+                "String"
+              ],
+              "type": 2
+            }
+          },
+          {
+            "name": "symbol",
+            "type": {
+              "display_name": [
+                "String"
+              ],
+              "type": 2
+            }
+          },
+          {
+            "name": "initialSupply",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          },
+          {
+            "name": "owner",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "name": "new",
+        "selector": "0xa6f1f5e1"
+      }
+    ],
+    "events": [
+      {
+        "args": [
+          {
+            "indexed": true,
+            "name": "owner",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "indexed": true,
+            "name": "spender",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "indexed": false,
+            "name": "value",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "name": "Approval"
+      },
+      {
+        "args": [
+          {
+            "indexed": true,
+            "name": "from",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "indexed": true,
+            "name": "to",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "indexed": false,
+            "name": "value",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "name": "Transfer"
+      }
+    ],
+    "messages": [
+      {
+        "args": [
+          {
+            "name": "account",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "amount",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "burnFrom",
+        "payable": false,
+        "return_type": null,
+        "selector": "0x0f1354f3"
+      },
+      {
+        "args": [
+          {
+            "name": "account",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": false,
+        "name": "balanceOf",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "u256"
+          ],
+          "type": 1
+        },
+        "selector": "0x6c7f1542"
+      },
+      {
+        "args": [],
+        "docs": [
+          ""
+        ],
+        "mutates": false,
+        "name": "totalSupply",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "u256"
+          ],
+          "type": 1
+        },
+        "selector": "0x18160ddd"
+      },
+      {
+        "args": [],
+        "docs": [
+          ""
+        ],
+        "mutates": false,
+        "name": "decimals",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "u8"
+          ],
+          "type": 3
+        },
+        "selector": "0x313ce567"
+      },
+      {
+        "args": [
+          {
+            "name": "owner",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "spender",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": false,
+        "name": "allowance",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "u256"
+          ],
+          "type": 1
+        },
+        "selector": "0xf2a9a8c7"
+      },
+      {
+        "args": [],
+        "docs": [
+          ""
+        ],
+        "mutates": false,
+        "name": "name",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "String"
+          ],
+          "type": 2
+        },
+        "selector": "0x06fdde03"
+      },
+      {
+        "args": [
+          {
+            "name": "spender",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "subtractedValue",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "decreaseAllowance",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "bool"
+          ],
+          "type": 6
+        },
+        "selector": "0x4b76697b"
+      },
+      {
+        "args": [
+          {
+            "name": "sender",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "amount",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "transferFrom",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "bool"
+          ],
+          "type": 6
+        },
+        "selector": "0x2fb840f5"
+      },
+      {
+        "args": [],
+        "docs": [
+          ""
+        ],
+        "mutates": false,
+        "name": "symbol",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "String"
+          ],
+          "type": 2
+        },
+        "selector": "0x95d89b41"
+      },
+      {
+        "args": [
+          {
+            "name": "spender",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "addedValue",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "increaseAllowance",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "bool"
+          ],
+          "type": 6
+        },
+        "selector": "0xb936c899"
+      },
+      {
+        "args": [
+          {
+            "name": "recipient",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "amount",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "transfer",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "bool"
+          ],
+          "type": 6
+        },
+        "selector": "0x6a467394"
+      },
+      {
+        "args": [
+          {
+            "name": "spender",
+            "type": {
+              "display_name": [
+                "AccountId"
+              ],
+              "type": 5
+            }
+          },
+          {
+            "name": "amount",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "approve",
+        "payable": false,
+        "return_type": {
+          "display_name": [
+            "bool"
+          ],
+          "type": 6
+        },
+        "selector": "0x47144421"
+      },
+      {
+        "args": [
+          {
+            "name": "amount",
+            "type": {
+              "display_name": [
+                "u256"
+              ],
+              "type": 1
+            }
+          }
+        ],
+        "docs": [
+          ""
+        ],
+        "mutates": true,
+        "name": "burn",
+        "payable": false,
+        "return_type": null,
+        "selector": "0x42966c68"
+      }
+    ]
+  },
+  "storage": {
+    "struct": {
+      "fields": [
+        {
+          "layout": {
+            "cell": {
+              "key": "0x0000000000000000000000000000000000000000000000000000000000000002",
+              "ty": 1
+            }
+          },
+          "name": "_totalSupply"
+        },
+        {
+          "layout": {
+            "cell": {
+              "key": "0x0000000000000000000000000000000000000000000000000000000000000003",
+              "ty": 2
+            }
+          },
+          "name": "_name"
+        },
+        {
+          "layout": {
+            "cell": {
+              "key": "0x0000000000000000000000000000000000000000000000000000000000000004",
+              "ty": 2
+            }
+          },
+          "name": "_symbol"
+        }
+      ]
+    }
+  },
+  "types": [
+    {
+      "def": {
+        "primitive": "u256"
+      }
+    },
+    {
+      "def": {
+        "primitive": "str"
+      }
+    },
+    {
+      "def": {
+        "primitive": "u8"
+      }
+    },
+    {
+      "def": {
+        "array": {
+          "len": 32,
+          "type": 3
+        }
+      }
+    },
+    {
+      "def": {
+        "composite": {
+          "fields": [
+            {
+              "type": 4
+            }
+          ]
+        }
+      },
+      "path": [
+        "AccountId"
+      ]
+    },
+    {
+      "def": {
+        "primitive": "bool"
+      }
+    }
+  ]
+}

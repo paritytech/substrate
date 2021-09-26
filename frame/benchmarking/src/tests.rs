@@ -41,6 +41,7 @@ mod pallet_test {
 	pub trait Config: frame_system::Config {
 		type LowerBound: Get<u32>;
 		type UpperBound: Get<u32>;
+		type MaybeItem: Get<Option<u32>>;
 	}
 
 	#[pallet::storage]
@@ -112,11 +113,13 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const LowerBound: u32 = 1;
 	pub const UpperBound: u32 = 100;
+	pub const MaybeItem: Option<u32> = None;
 }
 
 impl pallet_test::Config for Test {
 	type LowerBound = LowerBound;
 	type UpperBound = UpperBound;
+	type MaybeItem = MaybeItem;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -217,6 +220,13 @@ mod benchmarks {
 					..Default::default()
 				}
 			))?;
+		}
+
+		skip_benchmark {
+			let value = T::MaybeItem::get().ok_or(BenchmarkError::Skip)?;
+		}: {
+			// This should never be reached.
+			assert!(value > 100);
 		}
 	}
 
@@ -334,6 +344,11 @@ mod benchmarks {
 			assert_err!(Pallet::<Test>::test_benchmark_bad_verify(), "You forgot to sort!");
 			assert_ok!(Pallet::<Test>::test_benchmark_no_components());
 			assert_ok!(Pallet::<Test>::test_benchmark_variable_components());
+			assert!(matches!(
+				Pallet::<Test>::test_benchmark_override_benchmark(),
+				Err(BenchmarkError::Override(_)),
+			));
+			assert_eq!(Pallet::<Test>::test_benchmark_skip_benchmark(), Err(BenchmarkError::Skip),);
 		});
 	}
 }

@@ -13,6 +13,7 @@ in
 with nixpkgs; pkgs.mkShell {
   buildInputs = [
     clang
+    openssl.dev
     pkg-config
     rust-nightly
   ] ++ lib.optionals stdenv.isDarwin [
