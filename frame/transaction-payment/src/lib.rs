@@ -264,13 +264,29 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransactionByteFee: Get<BalanceOf<Self>>;
 
-		/// A virtual (not payed) tip added to `Operational` extrinsics to boost their `priority`.
+		/// A fee mulitplier for `Operational` extrinsics to compute "virtual tip" to boost their
+		/// `priority`
 		///
-		/// This value is simply included to a tip component in regular `priority` calculations.
+		/// This value is multipled by the `final_fee` to obtain a "virtual tip" that is later
+		/// added to a tip component in regular `priority` calculations.
 		/// It means that a `Normal` transaction can front-run a similarly-sized `Operational`
-		/// extrinsic (with no tip), by including a tip value greater than this.
+		/// extrinsic (with no tip), by including a tip value greater than the virtual tip.
+		///
+		/// ```rust,ignore
+		/// // For `Normal`
+		/// let priority = priority_calc(tip);
+		///
+		/// // For `Operational`
+		/// let virtual_tip = (inclusion_fee + tip) * OperationalFeeMultiplier;
+		/// let priority = priority_calc(tip + virtual_tip);
+		/// ```
+		///
+		/// Note that since we use `final_fee` the multiplier applies also to the regular `tip`
+		/// sent with the transaction. So not only the transaction get's a priority bump based
+		/// on the `inclusion_fee` but also we amplify the impact of tips applied to `Operational`
+		/// transactions.
 		#[pallet::constant]
-		type OperationalVirtualTip: Get<BalanceOf<Self>>;
+		type OperationalFeeMultiplier: Get<u8>;
 
 		/// Convert a weight value into a deductible fee based on the currency type.
 		type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
@@ -595,10 +611,11 @@ where
 	/// `tip * (max_block_{weight|length} / bounded_{weight|length})`, since given current
 	/// state of-the-art blockchains, number of per-block transactions is expected to be in a
 	/// range reasonable enough to not saturate the `Balance` type while multiplying by the tip.
-	fn get_priority(
+	pub fn get_priority(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 		tip: BalanceOf<T>,
+		final_fee: BalanceOf<T>,
 	) -> TransactionPriority {
 		// Calculate how many such extrinsics we could fit into an empty block and take
 		// the limitting factor.
@@ -640,7 +657,8 @@ where
 				// to get in even during congestion period, but at the same time low
 				// enough to prevent a possible spam attack by sending invalid operational
 				// extrinsics which push away regular transactions from the pool.
-				let virtual_tip = T::OperationalVirtualTip::get();
+				let fee_multiplier = T::OperationalFeeMultiplier::get().saturated_into();
+				let virtual_tip = final_fee.saturating_mul(fee_multiplier);
 				let scaled_virtual_tip = max_reward(virtual_tip);
 
 				scaled_tip.saturating_add(scaled_virtual_tip)
@@ -689,9 +707,9 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		let (_fee, _) = self.withdraw_fee(who, call, info, len)?;
+		let (final_fee, _) = self.withdraw_fee(who, call, info, len)?;
 		let tip = self.0;
-		Ok(ValidTransaction { priority: Self::get_priority(info, len, tip), ..Default::default() })
+		Ok(ValidTransaction { priority: Self::get_priority(info, len, tip, final_fee), ..Default::default() })
 	}
 
 	fn pre_dispatch(
@@ -804,7 +822,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
-		pub static OperationalVirtualTip: u64 = 5 * 5;
+		pub static OperationalFeeMultiplier: u8 = 5;
 	}
 
 	impl frame_system::Config for Runtime {
@@ -884,7 +902,7 @@ mod tests {
 	impl Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type TransactionByteFee = TransactionByteFee;
-		type OperationalVirtualTip = OperationalVirtualTip;
+		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
 	}

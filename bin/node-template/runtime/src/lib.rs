@@ -258,13 +258,13 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub const TransactionByteFee: Balance = 1;
-	pub OperationalVirtualTip: Balance = ExistentialDeposit::get();
+	pub OperationalFeeMultiplier: u8 = 5;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type TransactionByteFee = TransactionByteFee;
-	type OperationalVirtualTip = OperationalVirtualTip;
+	type OperationalFeeMultiplier = OperationalFeeMultiplierBalance;
 	type WeightToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate = ();
 }
