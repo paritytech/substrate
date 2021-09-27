@@ -427,7 +427,7 @@ macro_rules! parameter_types {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
-				$crate::hashing_proc_macro::twox_128(
+				$crate::hashing_proc_macro::twox_128!(
 					concat!(":", stringify!($name), ":").as_bytes()
 				)
 			}
