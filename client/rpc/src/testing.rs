@@ -23,7 +23,7 @@ use futures::{
 	task::{FutureObj, Spawn, SpawnError},
 };
 use jsonrpsee::types::{
-	v2::{Response as RpcResponse, SubscriptionResponse},
+	v2::{Response as RpcResponse, RpcError, SubscriptionResponse},
 	DeserializeOwned,
 };
 use sp_core::traits::SpawnNamed;
@@ -74,4 +74,8 @@ pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {
 pub(crate) fn deser_sub<T: DeserializeOwned>(raw: String) -> T {
 	let out: SubscriptionResponse<T> = serde_json::from_str(&raw).unwrap();
 	out.params.result
+}
+
+pub(crate) fn deser_error<'a>(raw: &'a str) -> RpcError<'a> {
+	serde_json::from_str(&raw).unwrap()
 }

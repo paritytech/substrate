@@ -18,7 +18,7 @@
 
 use super::*;
 
-use assert_matches::assert_matches;
+use crate::testing::{deser_call, deser_error};
 use codec::Encode;
 use jsonrpsee::{
 	types::v2::{Response, RpcError, SubscriptionResponse},
@@ -37,7 +37,7 @@ use sp_core::{
 	H256,
 };
 use sp_keystore::testing::KeyStore;
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
 	runtime::{Block, Extrinsic, SessionKeys, Transfer},
@@ -89,21 +89,19 @@ impl TestSetup {
 
 #[tokio::test]
 async fn author_submit_transaction_should_not_cause_error() {
-	env_logger::init();
+	let _ = env_logger::try_init();
 	let author = TestSetup::default().author();
 	let api = author.into_rpc();
 	let xt: Bytes = uxt(AccountKeyring::Alice, 1).encode().into();
 	let extrinsic_hash: H256 = blake2_256(&xt).into();
-	let params = to_raw_value(&[xt.clone()]).unwrap();
-	let json = api.call("author_submitExtrinsic", Some(params)).await.unwrap();
-	let response: Response<H256> = serde_json::from_str(&json).unwrap();
+	let response: H256 =
+		deser_call(api.call_with("author_submitExtrinsic", [xt.clone()]).await.unwrap());
 
-	assert_eq!(response.result, extrinsic_hash,);
+	assert_eq!(response, extrinsic_hash);
 
+	let response = api.call_with("author_submitExtrinsic", [xt]).await.unwrap();
 	// Can't submit the same extrinsic twice
-	let params_again = to_raw_value(&[xt]).unwrap();
-	let json = api.call("author_submitExtrinsic", Some(params_again)).await.unwrap();
-	let response: RpcError = serde_json::from_str(&json).unwrap();
+	let response = deser_error(&response);
 
 	assert!(response.error.message.contains("Already imported"));
 }
@@ -203,38 +201,21 @@ async fn author_should_remove_extrinsics() {
 
 	// Submit three extrinsics, then remove two of them (will cause the third to be removed as well,
 	// having a higher nonce)
-	let (xt1, xt1_bytes) = {
-		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
-		let xt_hex = to_hex(&xt_bytes, true);
-		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
-	};
-	let xt1_out = api.call("author_submitExtrinsic", Some(xt1)).await.unwrap();
-	let xt1_hash: Response<H256> = serde_json::from_str(&xt1_out).unwrap();
-	let xt1_hash = xt1_hash.result;
+	let xt1_bytes = uxt(AccountKeyring::Alice, 0).encode();
+	let xt1 = to_hex(&xt1_bytes, true);
+	let xt1_hash: H256 = deser_call(api.call_with("author_submitExtrinsic", [xt1]).await.unwrap());
 
-	let (xt2, xt2_bytes) = {
-		let xt_bytes = uxt(AccountKeyring::Alice, 1).encode();
-		let xt_hex = to_hex(&xt_bytes, true);
-		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
-	};
-	let xt2_out = api.call("author_submitExtrinsic", Some(xt2)).await.unwrap();
-	let xt2_hash: Response<H256> = serde_json::from_str(&xt2_out).unwrap();
-	let xt2_hash = xt2_hash.result;
+	let xt2 = to_hex(&uxt(AccountKeyring::Alice, 1).encode(), true);
+	let xt2_hash: H256 = deser_call(api.call_with("author_submitExtrinsic", [xt2]).await.unwrap());
 
-	let (xt3, xt3_bytes) = {
-		let xt_bytes = uxt(AccountKeyring::Bob, 0).encode();
-		let xt_hex = to_hex(&xt_bytes, true);
-		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes)
-	};
-	let xt3_out = api.call("author_submitExtrinsic", Some(xt3)).await.unwrap();
-	let xt3_hash: Response<H256> = serde_json::from_str(&xt3_out).unwrap();
-	let xt3_hash = xt3_hash.result;
+	let xt3 = to_hex(&uxt(AccountKeyring::Bob, 0).encode(), true);
+	let xt3_hash: H256 = deser_call(api.call_with("author_submitExtrinsic", [xt3]).await.unwrap());
 	assert_eq!(setup.pool.status().ready, 3);
 
 	// Now remove all three.
 	// Notice how we need an extra `Vec` wrapping the `Vec` we want to submit as params.
-	let removed = api
-		.call_with(
+	let removed: Vec<H256> = deser_call(
+		api.call_with(
 			METH,
 			vec![vec![
 				hash::ExtrinsicOrHash::Hash(xt3_hash),
@@ -243,10 +224,10 @@ async fn author_should_remove_extrinsics() {
 			]],
 		)
 		.await
-		.unwrap();
+		.unwrap(),
+	);
 
-	let removed: Response<Vec<H256>> = serde_json::from_str(&removed).unwrap();
-	assert_eq!(removed.result, vec![xt1_hash, xt2_hash, xt3_hash]);
+	assert_eq!(removed, vec![xt1_hash, xt2_hash, xt3_hash]);
 }
 
 #[tokio::test]
@@ -273,12 +254,7 @@ async fn author_should_rotate_keys() {
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();
 
-	let new_pubkeys = {
-		let json = api.call("author_rotateKeys", None).await.unwrap();
-		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
-		response.result
-	};
-
+	let new_pubkeys: Bytes = deser_call(api.call("author_rotateKeys", None).await.unwrap());
 	let session_keys =
 		SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
 	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
@@ -295,36 +271,25 @@ async fn author_has_session_keys() {
 	let api = TestSetup::into_rpc();
 
 	// Add a valid session key
-	let pubkeys = {
-		let json = api.call("author_rotateKeys", None).await.expect("Rotates the keys");
-		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
-		response.result
-	};
+	let pubkeys: Bytes =
+		deser_call(api.call("author_rotateKeys", None).await.expect("Rotates the keys"));
 
 	// Add a session key in a different keystore
-	let non_existent_pubkeys = {
+	let non_existent_pubkeys: Bytes = {
 		let api2 = TestSetup::default().author().into_rpc();
-		let json = api2.call("author_rotateKeys", None).await.expect("Rotates the keys");
-		let response: Response<Bytes> = serde_json::from_str(&json).unwrap();
-		response.result
+		deser_call(api2.call("author_rotateKeys", None).await.expect("Rotates the keys"))
 	};
 
 	// Then…
-	let existing = {
-		let json = api.call_with("author_hasSessionKeys", vec![pubkeys]).await.unwrap();
-		let response: Response<bool> = serde_json::from_str(&json).unwrap();
-		response.result
-	};
+	let existing: bool =
+		deser_call(api.call_with("author_hasSessionKeys", vec![pubkeys]).await.unwrap());
 	assert!(existing, "Existing key is in the session keys");
 
-	let inexistent = {
-		let json = api
-			.call_with("author_hasSessionKeys", vec![non_existent_pubkeys])
+	let inexistent: bool = deser_call(
+		api.call_with("author_hasSessionKeys", vec![non_existent_pubkeys])
 			.await
-			.unwrap();
-		let response: Response<bool> = serde_json::from_str(&json).unwrap();
-		response.result
-	};
+			.unwrap(),
+	);
 	assert_eq!(inexistent, false, "Inexistent key is not in the session keys");
 
 	let invalid = {
@@ -332,7 +297,7 @@ async fn author_has_session_keys() {
 			.call_with("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])])
 			.await
 			.unwrap();
-		let response: RpcError = serde_json::from_str(&json).unwrap();
+		let response: RpcError = deser_error(&json);
 		response.error.message.to_string()
 	};
 	assert_eq!(invalid, "Session keys are not encoded correctly");

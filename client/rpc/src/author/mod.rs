@@ -203,10 +203,19 @@ where
 			};
 
 			stream
-				.for_each(|item| {
-					let _ = sink.send(&item);
-					futures::future::ready(())
+				.take_while(|item| {
+					futures::future::ready(sink.send(&item).map_or_else(
+						|e| {
+							log::error!(
+								"subscription author_watchExtrinsic failed: {:?}; closing",
+								e
+							);
+							false
+						},
+						|_| true,
+					))
 				})
+				.for_each(|_| futures::future::ready(()))
 				.await;
 		};
 
