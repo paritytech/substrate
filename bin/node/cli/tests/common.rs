@@ -58,17 +58,17 @@ pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
 	}
 }
 
-pub async fn wait_n_blocks(n: usize, timeout_secs: u64) -> Result<(), tokio::time::error::Elapsed> {
-	timeout(Duration::from_secs(timeout_secs), wait_n_blocks_from(n, LOCALHOST_WS)).await
+pub async fn wait_n_finalized_blocks(n: usize, timeout_secs: u64) -> Result<(), tokio::time::error::Elapsed> {
+	timeout(Duration::from_secs(timeout_secs), wait_n_finalized_blocks_from(n, LOCALHOST_WS)).await
 }
 
 /// Wait for at least n blocks to be produced
 ///
 /// Eg. to wait for 3 blocks or a timeout of 30 seconds:
 /// ```
-/// timeout(Duration::from_secs(30), wait_n_blocks("ws://127.0.0.1:9944/", 3)).await;
+/// timeout(Duration::from_secs(30), wait_n_finalized_blocks("ws://127.0.0.1:9944/", 3)).await;
 /// ```
-pub async fn wait_n_blocks_from(n: usize, url: &str) {
+pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
 	let mut built_blocks = std::collections::HashSet::new();
 	let mut interval = tokio::time::interval(Duration::from_secs(2));
 
@@ -105,7 +105,7 @@ pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	let mut child = KillChildOnDrop(cmd.args(args).arg("-d").arg(base_path).spawn().unwrap());
 
 	// Let it produce some blocks.
-	let _ = wait_n_blocks(3, 30).await;
+	let _ = wait_n_finalized_blocks(3, 30).await;
 
 	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 
