@@ -337,9 +337,6 @@ async fn system_network_reserved_peers() {
 	);
 }
 
-// TODO: (dp) This hangs. Likely have to make this a normal test and execute the RPC calls manually
-// on an executor.
-#[ignore]
 #[test]
 fn test_add_reset_log_filter() {
 	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
@@ -353,11 +350,11 @@ fn test_add_reset_log_filter() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {
 				let filter = to_raw_value(&"test_after_add").unwrap();
-				let fut = async move { api(None).call("system_addLogFilter", Some(filter)).await };
+				let fut = async move { api(None).call_with("system_addLogFilter", [filter]).await };
 				futures::executor::block_on(fut).expect("`system_add_log_filter` failed");
 			} else if line.contains("add_trace") {
 				let filter = to_raw_value(&"test_before_add=trace").unwrap();
-				let fut = async move { api(None).call("system_addLogFilter", Some(filter)).await };
+				let fut = async move { api(None).call_with("system_addLogFilter", [filter]).await };
 				futures::executor::block_on(fut).expect("`system_add_log_filter (trace)` failed");
 			} else if line.contains("reset") {
 				let fut = async move { api(None).call("system_resetLogFilter", None).await };
@@ -370,27 +367,6 @@ fn test_add_reset_log_filter() {
 			log::debug!(target: "test_after_add", "{}", EXPECTED_AFTER_ADD);
 		}
 	}
-
-	// Call this test again to enter the log generation / filter reload block
-	let test_executable = env::current_exe().expect("Unable to get current executable!");
-	let mut child_process = Command::new(test_executable)
-		.env("TEST_LOG_FILTER", "1")
-		.args(&["--nocapture", "test_add_reset_log_filter"])
-		.stdin(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.unwrap();
-
-	let child_stderr = child_process.stderr.take().expect("Could not get child stderr");
-	let mut child_out = BufReader::new(child_stderr);
-	let mut child_in = child_process.stdin.take().expect("Could not get child stdin");
-
-	let mut read_line = || {
-		let mut line = String::new();
-		child_out.read_line(&mut line).expect("Reading a line");
-		println!("[main test, readline] Read '{:?}'", line);
-		line
-	};
 
 	// Call this test again to enter the log generation / filter reload block
 	let test_executable = env::current_exe().expect("Unable to get current executable!");
