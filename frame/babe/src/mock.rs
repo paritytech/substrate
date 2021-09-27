@@ -231,7 +231,6 @@ parameter_types! {
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
 	pub const MaxAuthorities: u32 = 10;
-	pub const MaxSegmentLength: u32 = 256;
 }
 
 impl Config for Test {

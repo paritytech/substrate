@@ -143,6 +143,7 @@ use codec::HasCompact;
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
+	pallet_prelude::DispatchResultWithPostInfo,
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
 		BalanceStatus::Reserved,
@@ -437,29 +438,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-
-			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
-			ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
-
-			Asset::<T, I>::insert(
-				id,
-				AssetDetails {
-					owner: owner.clone(),
-					issuer: owner.clone(),
-					admin: owner.clone(),
-					freezer: owner.clone(),
-					supply: Zero::zero(),
-					deposit: Zero::zero(),
-					min_balance,
-					is_sufficient,
-					accounts: 0,
-					sufficients: 0,
-					approvals: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::ForceCreated(id, owner));
-			Ok(())
+			Self::do_force_create(id, owner, is_sufficient, min_balance)
 		}
 
 		/// Destroy a class of fungible assets.
@@ -494,39 +473,13 @@ pub mod pallet {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			Asset::<T, I>::try_mutate_exists(id, |maybe_details| {
-				let mut details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-				if let Some(check_owner) = maybe_check_owner {
-					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-				}
-				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
-				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
-				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
-
-				for (who, v) in Account::<T, I>::drain_prefix(id) {
-					Self::dead_account(id, &who, &mut details, v.sufficient);
-				}
-				debug_assert_eq!(details.accounts, 0);
-				debug_assert_eq!(details.sufficients, 0);
-
-				let metadata = Metadata::<T, I>::take(&id);
-				T::Currency::unreserve(
-					&details.owner,
-					details.deposit.saturating_add(metadata.deposit),
-				);
-
-				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
-					T::Currency::unreserve(&owner, approval.deposit);
-				}
-				Self::deposit_event(Event::Destroyed(id));
-
-				Ok(Some(T::WeightInfo::destroy(
-					details.accounts.saturating_sub(details.sufficients),
-					details.sufficients,
-					details.approvals,
-				))
-				.into())
-			})
+			let details = Self::do_destroy(id, witness, maybe_check_owner)?;
+			Ok(Some(T::WeightInfo::destroy(
+				details.accounts.saturating_sub(details.sufficients),
+				details.sufficients,
+				details.approvals,
+			))
+			.into())
 		}
 
 		/// Mint assets of a particular class.
