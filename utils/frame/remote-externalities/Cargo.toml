@@ -17,11 +17,11 @@ jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = 
     "tokio1",
 ] }
 jsonrpsee-proc-macros = "0.3.0"
-# jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1" }
-# # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", default-features = false, features = [
+# jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "7cd7f36a2f05842f58af817638ac8fd34f6ac2a8" }
+# # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "7cd7f36a2f05842f58af817638ac8fd34f6ac2a8", default-features = false, features = [
 # #     "tokio02",
 # # ] }
-# jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1" }
+# jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", rev = "7cd7f36a2f05842f58af817638ac8fd34f6ac2a8" }
 
 env_logger = "0.9"
 log = "0.4.11"

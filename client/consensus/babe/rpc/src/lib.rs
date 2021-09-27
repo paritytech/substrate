@@ -263,7 +263,9 @@ mod tests {
 
 	// 	io.extend_with(BabeApiRemoveMe::to_delegate(handler));
 	// 	let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
-	// 	let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
+	// 	let response =
+	// r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":
+	// [0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 	// 	assert_eq!(Some(response.into()), io.handle_request_sync(request));
 	// }

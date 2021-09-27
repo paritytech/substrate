@@ -285,7 +285,8 @@ mod tests {
 	// 	let (io, _) = setup_io_handler(EmptyVoterState);
 
 	// 	let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
-	// 	let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
+	// 	let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not
+	// ready"},"id":1}"#;
 
 	// 	let meta = sc_rpc::Metadata::default();
 	// 	assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
@@ -303,10 +304,11 @@ mod tests {
 	// 			\"round\":1,\"thresholdWeight\":67,\"totalWeight\":100\
 	// 		}],\
 	// 		\"best\":{\
-	// 			\"precommits\":{\"currentWeight\":0,\"missing\":[\"5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT\",\"5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]},\
-	// 			\"prevotes\":{\"currentWeight\":50,\"missing\":[\"5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]},\
-	// 			\"round\":2,\"thresholdWeight\":67,\"totalWeight\":100\
-	// 		},\
+	// 			\"precommits\":{\"currentWeight\":0,\"missing\":[\"
+	// 5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT\",\"
+	// 5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]},\ 			\"prevotes\":{\"currentWeight\":50,\"
+	// missing\":[\"5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]},\ 			\"round\":2,\"
+	// thresholdWeight\":67,\"totalWeight\":100\ 		},\
 	// 		\"setId\":1\
 	// 	},\"id\":1}";
 
@@ -338,8 +340,8 @@ mod tests {
 
 	// 	// Unsubscribe
 	// 	let unsub_req = format!(
-	// 		"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
-	// 		sub_id
+	// 		"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\
+	// ":1}}", 		sub_id
 	// 	);
 	// 	assert_eq!(
 	// 		io.handle_request_sync(&unsub_req, meta.clone()),
@@ -349,8 +351,8 @@ mod tests {
 	// 	// Unsubscribe again and fail
 	// 	assert_eq!(
 	// 		io.handle_request_sync(&unsub_req, meta),
-	// 		Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
-	// 	);
+	// 		Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription
+	// id.\"},\"id\":1}".into()), 	);
 	// }
 
 	// #[test]
@@ -371,8 +373,8 @@ mod tests {
 	// 			r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
 	// 			meta.clone()
 	// 		),
-	// 		Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
-	// 	);
+	// 		Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription
+	// id.\"},\"id\":1}".into()) 	);
 	// }
 
 	// fn create_justification() -> GrandpaJustification<Block> {

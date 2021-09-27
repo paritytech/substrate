@@ -247,7 +247,7 @@ async fn should_notify_about_storage_changes() {
 		);
 
 		let api_rpc = api.into_rpc();
-		let (_sub_id, mut sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
+		let (_sub_id, sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
 
 		// Cause a change:
 		let mut builder = client.new_block(Default::default()).unwrap();
@@ -319,7 +319,9 @@ async fn should_send_initial_storage_changes_and_notifications() {
 	// Check for the correct number of notifications
 	let msgs = timeout_secs(5, (&mut sub_rx).take(2).collect::<Vec<_>>()).await;
 	assert_matches!(&msgs, Ok(json_vals) => {
-		let vals: Vec<_> = json_vals.iter().map(|json| serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")).collect();
+		for json in json_vals {
+			assert!(serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).is_ok());
+		}
 	});
 
 	// No more messages to follow
@@ -575,18 +577,23 @@ async fn should_return_runtime_version() {
 
 #[tokio::test]
 async fn should_notify_on_runtime_version_initially() {
-	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) =
-		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
+	let mut sub_rx = {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let (api, _child) =
+			new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-	let api_rpc = api.into_rpc();
-	let (_sub_id, mut sub_rx) =
-		api_rpc.test_subscription("state_subscribeRuntimeVersion", None).await;
+		let api_rpc = api.into_rpc();
+		let (_sub_id, sub_rx) =
+			api_rpc.test_subscription("state_subscribeRuntimeVersion", None).await;
+
+		sub_rx
+	};
 
 	// assert initial version sent.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
 
-	// TODO(niklasad1): make sure we get subscription closed here.
+	// TODO(niklasad1): the subscription never closes here, might be that we use take_while
+	// and if no other new version is seen the subscription runs forever..?!.
 	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
 }
 

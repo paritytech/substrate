@@ -32,7 +32,7 @@ use super::{
 };
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, FutureExt, StreamExt};
+use futures::{future, stream, FutureExt, StreamExt};
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
@@ -453,32 +453,33 @@ where
 		let executor = self.executor.clone();
 		let client = self.client.clone();
 
-		let mut previous_version = client
-			.runtime_version_at(&BlockId::hash(client.info().best_hash))
-			.expect("best hash is valid; qed");
+		let version = self
+			.block_or_best(None)
+			.and_then(|block| {
+				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
+			})
+			.map_err(|e| Error::Client(Box::new(e)))?;
+		let mut previous_version = version.clone();
 
-		let _ = sink.send(&previous_version);
 		// A stream of all best blocks.
-		let rt_version_stream =
-			client.import_notification_stream().filter(|n| future::ready(n.is_new_best));
+		let stream = client.import_notification_stream().filter(|n| future::ready(n.is_new_best));
 		let fut = async move {
-			rt_version_stream
-				.filter_map(move |n| {
-					let version = client.runtime_version_at(&BlockId::hash(n.hash));
-					match version {
-						Ok(v) =>
-							if previous_version != v {
-								previous_version = v.clone();
-								future::ready(Some(v))
-							} else {
-								future::ready(None)
-							},
-						Err(e) => {
-							log::error!("Could not fetch current runtime version. Error={:?}", e);
-							future::ready(None)
-						},
-					}
-				})
+			let stream = stream.filter_map(move |n| {
+				let version = client
+					.runtime_version_at(&BlockId::hash(n.hash))
+					.map_err(|e| Error::Client(Box::new(e)));
+
+				match version {
+					Ok(version) if version != previous_version => {
+						previous_version = version.clone();
+						future::ready(Some(version))
+					},
+					_ => future::ready(None),
+				}
+			});
+
+			futures::stream::once(future::ready(version))
+				.chain(stream)
 				.take_while(|version| {
 					future::ready(sink.send(&version).map_or_else(
 						|e| {
@@ -490,6 +491,7 @@ where
 				})
 				.for_each(|_| future::ready(()))
 				.await;
+			()
 		}
 		.boxed();
 		executor.execute(fut);
@@ -509,44 +511,34 @@ where
 			.storage_changes_notification_stream(keys.as_ref().map(|keys| &**keys), None)
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
-		let block = client.info().best_hash;
-		let changes: Vec<(StorageKey, Option<StorageData>)> = keys
-			.map(|keys| {
-				keys.into_iter()
-					.map(|storage_key| {
-						let v = client.storage(&BlockId::Hash(block), &storage_key).ok().flatten();
-						(storage_key, v)
+		// initial values
+		let initial = stream::iter(
+			keys.map(|keys| {
+				let block = self.client.info().best_hash;
+				let changes = keys
+					.into_iter()
+					.map(|key| {
+						let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
+						(key, v)
 					})
-					.collect()
+					.collect();
+				vec![StorageChangeSet { block, changes }]
 			})
-			.unwrap_or_default();
-		if !changes.is_empty() {
-			sink.send(&StorageChangeSet { block, changes })
-				.map_err(|e| Error::Client(Box::new(e)))?;
-		}
+			.unwrap_or_default(),
+		);
 
 		let fut = async move {
-			stream
-				.filter_map(|(block, changes)| async move {
-					let changes: Vec<_> = changes
-						.iter()
-						.filter_map(|(o_sk, k, v)| {
-							// Note: the first `Option<&StorageKey>` seems to be the parent key,
-							// so it's set only for storage events stemming from child storage,
-							// `None` otherwise. This RPC only returns non-child storage.
-							if o_sk.is_none() {
-								Some((k.clone(), v.cloned()))
-							} else {
-								None
-							}
-						})
-						.collect();
-					if changes.is_empty() {
-						None
-					} else {
-						Some(StorageChangeSet { block, changes })
-					}
-				})
+			let stream = stream.map(|(block, changes)| StorageChangeSet {
+				block,
+				changes: changes
+					.iter()
+					.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
+					.collect(),
+			});
+
+			initial
+				.chain(stream)
+				.filter(|storage| future::ready(!storage.changes.is_empty()))
 				.take_while(|storage| {
 					future::ready(sink.send(&storage).map_or_else(
 						|e| {

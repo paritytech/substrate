@@ -195,7 +195,9 @@ where
 }
 
 /// Instantiate all Light RPC extensions.
-pub fn create_light<C, P, F>(deps: LightDeps<C, F, P>) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
+pub fn create_light<C, P, F>(
+	deps: LightDeps<C, F, P>,
+) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: sp_blockchain::HeaderBackend<Block> + Send + Sync + 'static,
 	F: sc_client_api::light::Fetcher<Block> + 'static,
