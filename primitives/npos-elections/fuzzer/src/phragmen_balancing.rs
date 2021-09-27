@@ -24,7 +24,7 @@ use honggfuzz::fuzz;
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, seq_phragmen, to_supports,
-	to_without_backing, EvaluateSupport, VoteWeight,
+	EvaluateSupport, VoteWeight,
 };
 use sp_runtime::Perbill;
 
@@ -58,8 +58,7 @@ fn main() {
 					&stake_of,
 				)
 				.unwrap();
-				let winners = to_without_backing(unbalanced.winners.clone());
-				let score = to_supports(winners.as_ref(), staked.as_ref()).unwrap().evaluate();
+				let score = to_supports(staked.as_ref()).evaluate();
 
 				if score[0] == 0 {
 					// such cases cannot be improved by balancing.
@@ -83,8 +82,7 @@ fn main() {
 						&stake_of,
 					)
 					.unwrap();
-					let winners = to_without_backing(balanced.winners);
-					to_supports(winners.as_ref(), staked.as_ref()).unwrap().evaluate()
+					to_supports(staked.as_ref()).evaluate()
 				};
 
 				let enhance = is_score_better(balanced_score, unbalanced_score, Perbill::zero());

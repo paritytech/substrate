@@ -14,7 +14,7 @@ sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-finality-grandpa = { version = "0.14.1", features = ["derive-codec"] }
+finality-grandpa = { version = "0.14.4", features = ["derive-codec"] }
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
