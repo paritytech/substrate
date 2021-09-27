@@ -207,6 +207,7 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
 	"utils/frame/generate-bags/node-runtime",
+	"utils/hashing-proc-macro",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]

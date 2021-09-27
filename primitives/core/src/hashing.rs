@@ -166,3 +166,40 @@ pub fn sha2_256(data: &[u8]) -> [u8; 32] {
 	output.copy_from_slice(&hasher.finalize());
 	output
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn blake2() {
+		assert_eq!(
+			hashing_proc_macro::blake2b_32!(b"test"),
+			&blake2_256(b"test")[..],
+		);
+		assert_eq!(
+			hashing_proc_macro::blake2b_64!(b""),
+			&blake2_512(b"")[..],
+		);
+	}
+
+	#[test]
+	fn twox() {
+		assert_eq!(
+			hashing_proc_macro::twox_128!(b"test"),
+			&twox_128(b"test")[..],
+		);
+		assert_eq!(
+			hashing_proc_macro::twox_64!(b""),
+			&twox_64(b"")[..],
+		);
+	}
+
+	#[test]
+	fn twox_concats() {
+		assert_eq!(
+			hashing_proc_macro::twox_128!(b"test", b"123", b"45", b"", b"67890"),
+			&super::twox_128(&b"test1234567890"[..]),
+		);
+	}
+}
