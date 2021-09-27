@@ -552,10 +552,10 @@ benchmarks! {
 	}
 
 	payout_stakers_dead_controller {
-		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let n in 1 .. T::MaxRewardableIndividualExposures::get() as u32;
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
-			T::MaxNominatorRewardedPerValidator::get() as u32,
+			T::MaxRewardableIndividualExposures::get() as u32,
 			true,
 			RewardDestination::Controller,
 		)?;
@@ -585,10 +585,10 @@ benchmarks! {
 	}
 
 	payout_stakers_alive_staked {
-		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let n in 1 .. T::MaxRewardableIndividualExposures::get() as u32;
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
-			T::MaxNominatorRewardedPerValidator::get() as u32,
+			T::MaxRewardableIndividualExposures::get() as u32,
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -929,7 +929,7 @@ mod tests {
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxRewardableIndividualExposures::get() as u32,
 				false,
 				RewardDestination::Staked,
 			)
@@ -954,7 +954,7 @@ mod tests {
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxRewardableIndividualExposures::get() as u32,
 				false,
 				RewardDestination::Staked,
 			)

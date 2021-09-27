@@ -188,7 +188,7 @@ parameter_types! {
 	pub const SlashDeferDuration: EraIndex = 0;
 	pub const AttestationPeriod: u64 = 100;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxRewardableIndividualExposures: u32 = 64;
 	pub const MaxIndividualExposures: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
 	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
@@ -221,7 +221,7 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxRewardableIndividualExposures = MaxRewardableIndividualExposures;
 	type MaxIndividualExposures = MaxIndividualExposures;
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;

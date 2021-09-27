@@ -198,7 +198,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
+		debug_assert!(nominator_payout_count <= T::MaxRewardableIndividualExposures::get());
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
@@ -490,16 +490,16 @@ impl<T: Config> Pallet<T> {
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
 			let mut others = exposure.others.to_vec();
-			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
+			let clipped_max_len = T::MaxRewardableIndividualExposures::get() as usize;
 			if others.len() > clipped_max_len {
 				others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
 				others.truncate(clipped_max_len);
 			}
 
-			let others = WeakBoundedVec::<_, T::MaxNominatorRewardedPerValidator>::try_from(others)
+			let others = WeakBoundedVec::<_, T::MaxRewardableIndividualExposures>::try_from(others)
 				.expect("Vec was clipped, so this has to work, qed");
 			let exposure_clipped =
-				Exposure::<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator> {
+				Exposure::<T::AccountId, BalanceOf<T>, T::MaxRewardableIndividualExposures> {
 					total: exposure.total,
 					own: exposure.own,
 					others,

@@ -141,10 +141,10 @@ pub mod pallet {
 
 		/// The maximum number of nominators rewarded for each validator.
 		///
-		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can
+		/// For each validator only the `$MaxRewardableIndividualExposures` biggest stakers can
 		/// claim their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
-		type MaxNominatorRewardedPerValidator: Get<u32>;
+		type MaxRewardableIndividualExposures: Get<u32>;
 
 		/// The maximum number of exposure of a certain validator at a given era.
 		type MaxIndividualExposures: Get<u32>;
@@ -330,7 +330,7 @@ pub mod pallet {
 	/// Clipped Exposure of validator at era.
 	///
 	/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
-	/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+	/// `T::MaxRewardableIndividualExposures` biggest stakers.
 	/// (Note: the field `total` and `own` of the exposure remains unchanged).
 	/// This is used to limit the i/o cost for the nominator payout.
 	///
@@ -346,7 +346,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>, T::MaxNominatorRewardedPerValidator>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxRewardableIndividualExposures>,
 		ValueQuery,
 	>;
 
@@ -1367,14 +1367,14 @@ pub mod pallet {
 		/// Pay out all the stakers behind a single validator for a single era.
 		///
 		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
-		///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
+		///   `T::MaxRewardableIndividualExposures`, will also receive their rewards.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
 		/// # <weight>
-		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Time complexity: at most O(MaxRewardableIndividualExposures).
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
@@ -1386,7 +1386,7 @@ pub mod pallet {
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
-			T::MaxNominatorRewardedPerValidator::get()
+			T::MaxRewardableIndividualExposures::get()
 		))]
 		pub fn payout_stakers(
 			origin: OriginFor<T>,

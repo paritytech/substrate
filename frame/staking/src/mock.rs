@@ -227,7 +227,7 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxRewardableIndividualExposures: u32 = 64;
 	pub const MaxIndividualExposures: u32 = 64;
 }
 
@@ -288,7 +288,7 @@ impl crate::pallet::pallet::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxRewardableIndividualExposures = MaxRewardableIndividualExposures;
 	type MaxIndividualExposures = MaxIndividualExposures;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;

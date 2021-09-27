@@ -114,7 +114,7 @@
 //!
 //! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 //! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-//! validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
+//! validator as well as its nominators. Only the [`Config::MaxRewardableIndividualExposures`]
 //! biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 //! nominator's account.
 //!
