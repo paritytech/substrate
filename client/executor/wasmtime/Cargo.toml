@@ -33,3 +33,6 @@ wasmtime = { version = "0.27.0", default-features = false, features = [
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 wat = "1.0"
+
+[features]
+jitdump = ["wasmtime/jitdump"]

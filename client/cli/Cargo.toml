@@ -52,3 +52,4 @@ tempfile = "3.1.0"
 wasmtime = [
 	"sc-service/wasmtime",
 ]
+wasmtime-jitdump = ["sc-service/wasmtime-jitdump"]
