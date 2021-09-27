@@ -1518,6 +1518,65 @@ fn rebond_is_fifo() {
 }
 
 #[test]
+fn rebond_emits_right_value_in_event() {
+	// When a user calls rebond with more than can be rebonded, things succeed,
+	// and the rebond event emits the actual value rebonded.
+	ExtBuilder::default().nominate(false).build_and_execute(|| {
+		// Set payee to controller. avoids confusion
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+
+		// Give account 11 some large free balance greater than total
+		let _ = Balances::make_free_balance_be(&11, 1000000);
+
+		// confirm that 10 is a normal validator and gets paid at the end of the era.
+		mock::start_active_era(1);
+
+		// Unbond almost all of the funds in stash.
+		Staking::unbond(Origin::signed(10), 900).unwrap();
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000,
+				active: 100,
+				unlocking: vec![UnlockChunk { value: 900, era: 1 + 3 }],
+				claimed_rewards: vec![],
+			})
+		);
+
+		// Re-bond less than the total
+		Staking::rebond(Origin::signed(10), 100).unwrap();
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000,
+				active: 200,
+				unlocking: vec![UnlockChunk { value: 800, era: 1 + 3 }],
+				claimed_rewards: vec![],
+			})
+		);
+		// Event emitted should be correct
+		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 100));
+
+		// Re-bond way more than available
+		Staking::rebond(Origin::signed(10), 100_000).unwrap();
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000,
+				active: 1000,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			})
+		);
+		// Event emitted should be correct, only 800
+		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 800));
+	});
+}
+
+#[test]
 fn reward_to_stake_works() {
 	ExtBuilder::default()
 		.nominate(false)

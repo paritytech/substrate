@@ -98,27 +98,38 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	};
 
-	// Depending on the flag `generate_storage_info` we use partial or full storage info from
-	// storage.
-	let (storage_info_span, storage_info_trait, storage_info_method) =
-		if let Some(span) = def.pallet_struct.generate_storage_info {
-			(
-				span,
-				quote::quote_spanned!(span => StorageInfoTrait),
-				quote::quote_spanned!(span => storage_info),
-			)
-		} else {
-			let span = def.pallet_struct.attr_span;
-			(
-				span,
-				quote::quote_spanned!(span => PartialStorageInfoTrait),
-				quote::quote_spanned!(span => partial_storage_info),
-			)
-		};
+	let storage_info_span =
+		def.pallet_struct.generate_storage_info.unwrap_or(def.pallet_struct.attr_span);
 
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
 	let storage_cfg_attrs =
 		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
+
+	// Depending on the flag `generate_storage_info` and the storage attribute `unbounded`, we use
+	// partial or full storage info from storage.
+	let storage_info_traits = &def
+		.storages
+		.iter()
+		.map(|storage| {
+			if storage.unbounded || def.pallet_struct.generate_storage_info.is_none() {
+				quote::quote_spanned!(storage_info_span => PartialStorageInfoTrait)
+			} else {
+				quote::quote_spanned!(storage_info_span => StorageInfoTrait)
+			}
+		})
+		.collect::<Vec<_>>();
+
+	let storage_info_methods = &def
+		.storages
+		.iter()
+		.map(|storage| {
+			if storage.unbounded || def.pallet_struct.generate_storage_info.is_none() {
+				quote::quote_spanned!(storage_info_span => partial_storage_info)
+			} else {
+				quote::quote_spanned!(storage_info_span => storage_info)
+			}
+		})
+		.collect::<Vec<_>>();
 
 	let storage_info = quote::quote_spanned!(storage_info_span =>
 		impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
@@ -136,8 +147,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 					{
 						let mut storage_info = <
 							#storage_names<#type_use_gen>
-							as #frame_support::traits::#storage_info_trait
-						>::#storage_info_method();
+							as #frame_support::traits::#storage_info_traits
+						>::#storage_info_methods();
 						res.append(&mut storage_info);
 					}
 				)*

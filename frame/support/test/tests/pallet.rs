@@ -329,6 +329,10 @@ pub mod pallet {
 	pub type SomeCountedStorageMap<T> =
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type Unbounded<T> = StorageValue<Value = Vec<u8>>;
+
 	#[pallet::genesis_config]
 	#[derive(Default)]
 	pub struct GenesisConfig {
@@ -917,6 +921,10 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		let k = [twox_128(b"Example"), twox_128(b"CounterForRenamedCountedMap")].concat();
 		assert_eq!(unhashed::get::<u32>(&k), Some(1u32));
+
+		pallet::Unbounded::<Runtime>::put(vec![1, 2]);
+		let k = [twox_128(b"Example"), twox_128(b"Unbounded")].concat();
+		assert_eq!(unhashed::get::<Vec<u8>>(&k), Some(vec![1, 2]));
 	})
 }
 
@@ -1170,6 +1178,13 @@ fn metadata() {
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
+					StorageEntryMetadata {
+						name: "Unbounded",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<Vec<u8>>()),
+						default: vec![0],
+						docs: vec![],
+					},
 				],
 			}),
 			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
@@ -1410,6 +1425,13 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"CounterForRenamedCountedMap").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Unbounded".to_vec(),
+				prefix: prefix(b"Example", b"Unbounded").to_vec(),
+				max_values: Some(1),
+				max_size: None,
 			},
 		],
 	);
