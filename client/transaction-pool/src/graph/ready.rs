@@ -31,7 +31,7 @@ use sp_runtime::{traits::Member, transaction_validity::TransactionTag as Tag};
 use super::{
 	base_pool::Transaction,
 	future::WaitingTransaction,
-	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
+	tracked_map::{self, TrackedMap},
 };
 
 /// An in-pool transaction reference.
@@ -158,7 +158,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// - transactions that are longer in the queue go first
 	pub fn get(&self) -> impl Iterator<Item = Arc<Transaction<Hash, Ex>>> {
 		BestIterator {
-			all: self.ready.clone(),
+			all: self.ready.clone_map(),
 			best: self.best.clone(),
 			awaiting: Default::default(),
 		}
@@ -479,7 +479,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 /// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
-	all: ReadOnlyTrackedMap<Hash, ReadyTx<Hash, Ex>>,
+	all: HashMap<Hash, ReadyTx<Hash, Ex>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
@@ -506,8 +506,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 			let best = self.best.iter().next_back()?.clone();
 			let best = self.best.take(&best)?;
 
-			let next = self.all.read().get(&best.transaction.hash).cloned();
-			let ready = match next {
+			let ready = match self.all.remove(&best.transaction.hash) {
 				Some(ready) => ready,
 				// The transaction is not in all, maybe it was removed in the meantime?
 				None => continue,
@@ -522,7 +521,6 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				// then get from the pool
 				} else {
 					self.all
-						.read()
 						.get(hash)
 						.map(|next| (next.requires_offset + 1, next.transaction.clone()))
 				};
