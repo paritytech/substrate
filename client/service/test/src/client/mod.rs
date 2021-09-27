@@ -882,8 +882,8 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(0)));
 	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(0)));
 	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(0)));
-	assert_eq!(c3.hash(), finality_target(c3.hash().clone(), Some(0)));
-	assert_eq!(d2.hash(), finality_target(d2.hash().clone(), Some(0)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(0)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(0)));
 }
 
 #[test]
