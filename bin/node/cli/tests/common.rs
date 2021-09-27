@@ -106,7 +106,7 @@ pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	let mut child = KillChildOnDrop(cmd.args(args).arg("-d").arg(base_path).spawn().unwrap());
 
 	// Let it produce some blocks.
-	wait_n_blocks(3, 30).await;
+	let _ = wait_n_blocks(3, 30).await;
 
 	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 

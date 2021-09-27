@@ -25,10 +25,8 @@ use nix::{
 	},
 	unistd::Pid,
 };
-use sc_service::Deref;
 use std::{
 	convert::TryInto,
-	ops::DerefMut,
 	process::{Child, Command},
 };
 use tempfile::tempdir;
