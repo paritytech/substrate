@@ -175,6 +175,19 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
+// TODO(niklasad1): rustc can't deduce this trait bound https://github.com/rust-lang/rust/issues/48214
+#[cfg(feature = "std")]
+impl<'a> serde::Deserialize<'a> for Extrinsic {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'a>,
+	{
+		let r = sp_core::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 

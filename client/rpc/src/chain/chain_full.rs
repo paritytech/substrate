@@ -70,7 +70,7 @@ where
 		let client = self.client.clone();
 		let executor = self.executor.clone();
 
-		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeAllHead");
+		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeAllHeads");
 		executor.execute(Box::pin(fut));
 		Ok(())
 	}

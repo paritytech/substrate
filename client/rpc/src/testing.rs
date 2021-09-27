@@ -22,6 +22,10 @@ use futures::{
 	executor,
 	task::{FutureObj, Spawn, SpawnError},
 };
+use jsonrpsee::types::{
+	v2::{Response as RpcResponse, SubscriptionResponse},
+	DeserializeOwned,
+};
 use sp_core::traits::SpawnNamed;
 use std::future::Future;
 
@@ -60,4 +64,14 @@ impl SpawnNamed for TaskExecutor {
 /// Wrap a future in a timeout a little more concisely
 pub(crate) fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
 	tokio::time::timeout(tokio::time::Duration::from_secs(s), f)
+}
+
+pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {
+	let out: RpcResponse<T> = serde_json::from_str(&raw).unwrap();
+	out.result
+}
+
+pub(crate) fn deser_sub<T: DeserializeOwned>(raw: String) -> T {
+	let out: SubscriptionResponse<T> = serde_json::from_str(&raw).unwrap();
+	out.params.result
 }

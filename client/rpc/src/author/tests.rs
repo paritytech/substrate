@@ -20,7 +20,6 @@ use super::*;
 
 use assert_matches::assert_matches;
 use codec::Encode;
-use futures::executor;
 use jsonrpsee::{
 	types::v2::{Response, RpcError, SubscriptionResponse},
 	RpcModule,

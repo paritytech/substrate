@@ -6,7 +6,7 @@ use sc_client_api::BlockchainEvents;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-/// Helper to create suscriptions for `allHeads` and `newHeads`.
+/// Helper to create subscriptions for `allHeads` and `newHeads`.
 pub async fn subscribe_headers<Client, Block>(
 	client: Arc<Client>,
 	mut sink: SubscriptionSink,
@@ -45,7 +45,7 @@ pub async fn subscribe_headers<Client, Block>(
 		.await;
 }
 
-/// Helper to create suscriptions for `finalizedHeads`.
+/// Helper to create subscriptions for `finalizedHeads`.
 // NOTE(niklasad1): almost identical to `subscribe_headers` but requires different stream and
 // finalized head
 // (could work with generic stream and block_hash but would require cloning extra Arc's)
