@@ -92,7 +92,7 @@ impl<B: BlockT> Hash for SeenRequestsKey<B> {
 		self.max_blocks.hash(state);
 		self.direction.hash(state);
 		self.attributes.hash(state);
-
+		self.support_multiple_justifications.hash(state);
 		match self.from {
 			BlockId::Hash(h) => h.hash(state),
 			BlockId::Number(n) => n.hash(state),

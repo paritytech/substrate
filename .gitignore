@@ -21,7 +21,6 @@ rls*.log
 .local
 **/hfuzz_target/
 **/hfuzz_workspace/
-.cargo/
 .cargo-remote.toml
 *.bin
 *.iml
