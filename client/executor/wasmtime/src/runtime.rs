@@ -253,7 +253,9 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	#[cfg(feature = "jitdump")]
 	if std::env::var("WASMTIME_PROFILING_STRATEGY") == Ok("jitdump".to_owned()) {
-		config.profiler(wasmtime::ProfilingStrategy::JitDump).unwrap();
+		config.profiler(wasmtime::ProfilingStrategy::JitDump).map_err(|e| {
+			WasmError::Instantiation(format!("fail to set jitdump profiler: {}", e))
+		})?;
 	}
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
