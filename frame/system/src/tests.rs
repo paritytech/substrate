@@ -196,10 +196,13 @@ fn deposit_event_should_work() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: WrapperOpaque(SysEvent::ExtrinsicFailed(
-						DispatchError::BadOrigin.into(),
-						Default::default()
-					).into()),
+					event: WrapperOpaque(
+						SysEvent::ExtrinsicFailed(
+							DispatchError::BadOrigin.into(),
+							Default::default()
+						)
+						.into()
+					),
 					topics: vec![]
 				},
 				EventRecord {
@@ -233,38 +236,46 @@ fn deposit_event_uses_actual_weight() {
 			vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(DispatchInfo {
-						weight: 300,
-						..Default::default()
-					})
-					.into()),
+					event: WrapperOpaque(
+						SysEvent::ExtrinsicSuccess(DispatchInfo {
+							weight: 300,
+							..Default::default()
+						})
+						.into()
+					),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(DispatchInfo {
-						weight: 1000,
-						..Default::default()
-					})
-					.into()),
+					event: WrapperOpaque(
+						SysEvent::ExtrinsicSuccess(DispatchInfo {
+							weight: 1000,
+							..Default::default()
+						})
+						.into()
+					),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: WrapperOpaque(SysEvent::ExtrinsicSuccess(DispatchInfo {
-						weight: 1000,
-						..Default::default()
-					})
-					.into()),
+					event: WrapperOpaque(
+						SysEvent::ExtrinsicSuccess(DispatchInfo {
+							weight: 1000,
+							..Default::default()
+						})
+						.into()
+					),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(3),
-					event: WrapperOpaque(SysEvent::ExtrinsicFailed(
-						DispatchError::BadOrigin.into(),
-						DispatchInfo { weight: 999, ..Default::default() },
-					)
-					.into()),
+					event: WrapperOpaque(
+						SysEvent::ExtrinsicFailed(
+							DispatchError::BadOrigin.into(),
+							DispatchInfo { weight: 999, ..Default::default() },
+						)
+						.into()
+					),
 					topics: vec![]
 				},
 			]

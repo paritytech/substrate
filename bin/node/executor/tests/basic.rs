@@ -382,7 +382,8 @@ fn full_native_block_import_works() {
 					weight: timestamp_weight,
 					class: DispatchClass::Mandatory,
 					..Default::default()
-				})),
+				}))
+				.into(),
 				topics: vec![],
 			},
 			EventRecord {
@@ -391,12 +392,13 @@ fn full_native_block_import_works() {
 					alice().into(),
 					bob().into(),
 					69 * DOLLARS,
-				)),
+				))
+				.into(),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)).into(),
 				topics: vec![],
 			},
 			EventRecord {
@@ -404,7 +406,8 @@ fn full_native_block_import_works() {
 				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
 					weight: transfer_weight,
 					..Default::default()
-				})),
+				}))
+				.into(),
 				topics: vec![],
 			},
 		];
@@ -436,7 +439,8 @@ fn full_native_block_import_works() {
 					weight: timestamp_weight,
 					class: DispatchClass::Mandatory,
 					..Default::default()
-				})),
+				}))
+				.into(),
 				topics: vec![],
 			},
 			EventRecord {
@@ -445,12 +449,13 @@ fn full_native_block_import_works() {
 					bob().into(),
 					alice().into(),
 					5 * DOLLARS,
-				)),
+				))
+				.into(),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)).into(),
 				topics: vec![],
 			},
 			EventRecord {
@@ -458,7 +463,8 @@ fn full_native_block_import_works() {
 				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
 					weight: transfer_weight,
 					..Default::default()
-				})),
+				}))
+				.into(),
 				topics: vec![],
 			},
 			EventRecord {
@@ -467,12 +473,13 @@ fn full_native_block_import_works() {
 					alice().into(),
 					bob().into(),
 					15 * DOLLARS,
-				)),
+				))
+				.into(),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)).into(),
 				topics: vec![],
 			},
 			EventRecord {
@@ -480,7 +487,8 @@ fn full_native_block_import_works() {
 				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
 					weight: transfer_weight,
 					..Default::default()
-				})),
+				}))
+				.into(),
 				topics: vec![],
 			},
 		];

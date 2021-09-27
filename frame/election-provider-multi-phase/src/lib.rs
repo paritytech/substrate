@@ -1221,7 +1221,7 @@ impl<T: Config> Pallet<T> {
 		if <frame_system::Pallet<T>>::read_events_no_consensus()
 			.into_iter()
 			.filter_map(|event_record| {
-				let local_event = <T as Config>::Event::from(event_record.event);
+				let local_event = <T as Config>::Event::from(event_record.event.0);
 				local_event.try_into().ok()
 			})
 			.any(|event| matches!(event, Event::ElectionFinalized(_)))

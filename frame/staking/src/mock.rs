@@ -858,7 +858,7 @@ macro_rules! assert_session_era {
 pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
-		.map(|r| r.event)
+		.map(|r| r.event.0)
 		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
 		.collect()
 }

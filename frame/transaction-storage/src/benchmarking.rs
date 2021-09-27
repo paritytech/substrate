@@ -86,7 +86,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = System::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	assert_eq!(&event.0, &system_event);
 }
 
 pub fn run_to_block<T: Config>(n: T::BlockNumber) {

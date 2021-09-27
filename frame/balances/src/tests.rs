@@ -47,7 +47,7 @@ macro_rules! decl_tests {
 		}
 
 		fn events() -> Vec<Event> {
-			let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+			let evt = System::events().into_iter().map(|evt| evt.event.0).collect::<Vec<_>>();
 
 			System::reset_events();
 

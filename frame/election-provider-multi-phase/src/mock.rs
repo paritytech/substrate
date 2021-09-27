@@ -72,7 +72,7 @@ sp_npos_elections::generate_solution_type!(
 pub(crate) fn multi_phase_events() -> Vec<super::Event<Runtime>> {
 	System::events()
 		.into_iter()
-		.map(|r| r.event)
+		.map(|r| r.event.0)
 		.filter_map(|e| if let Event::MultiPhase(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>()
 }

@@ -221,7 +221,7 @@ fn make_offenders_im_online<T: Config>(
 fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expected: I) {
 	let events = System::<T>::events()
 		.into_iter()
-		.map(|frame_system::EventRecord { event, .. }| event)
+		.map(|frame_system::EventRecord { event, .. }| event.0)
 		.collect::<Vec<_>>();
 	let expected = expected.collect::<Vec<_>>();
 	let lengths = (events.len(), expected.len());

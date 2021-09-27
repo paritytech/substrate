@@ -176,7 +176,7 @@ fn make_proposal(value: u64) -> Call {
 }
 
 fn record(event: Event) -> EventRecord<Event, H256> {
-	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
+	EventRecord { phase: Phase::Initialization, event: event.into(), topics: vec![] }
 }
 
 #[test]

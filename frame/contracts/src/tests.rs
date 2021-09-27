@@ -446,17 +446,18 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())),
+					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())).into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed(ALICE, 1_000_000)),
+					event: Event::Balances(pallet_balances::Event::Endowed(ALICE, 1_000_000))
+						.into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount(addr.clone())).into(),
 					topics: vec![],
 				},
 				EventRecord {
@@ -464,7 +465,8 @@ fn instantiate_and_call_and_deposit_event() {
 					event: Event::Balances(pallet_balances::Event::Endowed(
 						addr.clone(),
 						subsistence * 100
-					)),
+					))
+					.into(),
 					topics: vec![],
 				},
 				EventRecord {
@@ -473,12 +475,13 @@ fn instantiate_and_call_and_deposit_event() {
 						ALICE,
 						addr.clone(),
 						subsistence * 100
-					)),
+					))
+					.into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored(code_hash.into())),
+					event: Event::Contracts(crate::Event::CodeStored(code_hash.into())).into(),
 					topics: vec![],
 				},
 				EventRecord {
@@ -486,12 +489,13 @@ fn instantiate_and_call_and_deposit_event() {
 					event: Event::Contracts(crate::Event::ContractEmitted(
 						addr.clone(),
 						vec![1, 2, 3, 4]
-					)),
+					))
+					.into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated(ALICE, addr.clone())),
+					event: Event::Contracts(crate::Event::Instantiated(ALICE, addr.clone())).into(),
 					topics: vec![],
 				},
 			]
@@ -750,7 +754,7 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::KilledAccount(addr.clone())),
+					event: Event::System(frame_system::Event::KilledAccount(addr.clone())).into(),
 					topics: vec![],
 				},
 				EventRecord {
@@ -759,17 +763,18 @@ fn self_destruct_works() {
 						addr.clone(),
 						DJANGO,
 						100_000,
-					)),
+					))
+					.into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeRemoved(code_hash)),
+					event: Event::Contracts(crate::Event::CodeRemoved(code_hash)).into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Terminated(addr.clone(), DJANGO)),
+					event: Event::Contracts(crate::Event::Terminated(addr.clone(), DJANGO)).into(),
 					topics: vec![],
 				},
 			],

@@ -180,7 +180,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn last_event() -> TipEvent<Test> {
 	System::events()
 		.into_iter()
-		.map(|r| r.event)
+		.map(|r| r.event.0)
 		.filter_map(|e| if let Event::Tips(inner) = e { Some(inner) } else { None })
 		.last()
 		.unwrap()

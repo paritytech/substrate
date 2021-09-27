@@ -1108,7 +1108,7 @@ mod tests {
 	fn events() -> Vec<Event<Test>> {
 		System::events()
 			.into_iter()
-			.filter_map(|meta| match meta.event {
+			.filter_map(|meta| match meta.event.0 {
 				MetaEvent::Contracts(contract_event) => Some(contract_event),
 				_ => None,
 			})
@@ -2081,7 +2081,8 @@ mod tests {
 				System::events(),
 				vec![EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+					event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash))
+						.into(),
 					topics: vec![],
 				},]
 			);
@@ -2136,12 +2137,13 @@ mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash))
+							.into(),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted),
+						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted).into(),
 						topics: vec![],
 					},
 					EventRecord {
@@ -2149,7 +2151,8 @@ mod tests {
 						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted(
 							1,
 							BadOrigin.into()
-						),),
+						))
+						.into(),
 						topics: vec![],
 					},
 				]

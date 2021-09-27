@@ -576,7 +576,7 @@ fn transactional_works() {
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()
 				.iter()
-				.map(|e| &e.event)
+				.map(|e| &e.event.0)
 				.collect::<Vec<_>>(),
 			vec![&Event::Example(pallet::Event::Something(0))],
 		);
@@ -828,7 +828,7 @@ fn pallet_expand_deposit_event() {
 			.dispatch_bypass_filter(None.into())
 			.unwrap();
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[0].event,
+			frame_system::Pallet::<Runtime>::events()[0].event.0,
 			Event::Example(pallet::Event::Something(3)),
 		);
 	})
@@ -931,15 +931,15 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
 
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[0].event,
+			frame_system::Pallet::<Runtime>::events()[0].event.0,
 			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[1].event,
+			frame_system::Pallet::<Runtime>::events()[1].event.0,
 			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[2].event,
+			frame_system::Pallet::<Runtime>::events()[2].event.0,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})

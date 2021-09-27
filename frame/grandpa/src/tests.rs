@@ -25,7 +25,7 @@ use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	traits::{Currency, OnFinalize, OneSessionHandler},
+	traits::{Currency, OnFinalize, OneSessionHandler, WrapperOpaque},
 	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};
@@ -57,7 +57,9 @@ fn authorities_change_logged() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
+				event: WrapperOpaque(
+					Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into()
+				),
 				topics: vec![],
 			},]
 		);
@@ -93,7 +95,9 @@ fn authorities_change_logged_after_delay() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
+				event: WrapperOpaque(
+					Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into()
+				),
 				topics: vec![],
 			},]
 		);
