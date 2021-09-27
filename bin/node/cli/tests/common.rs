@@ -38,24 +38,23 @@ static LOCALHOST_WS: &str = "ws://127.0.0.1:9944/";
 ///
 /// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
 pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
-	assert!(secs > 5);
-
 	let result =
-		wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(5)).map_err(|_| ())?;
+		wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(5.min(secs))).map_err(|_| ())?;
 	if let Some(exit_status) = result {
 		Ok(exit_status)
 	} else {
-		eprintln!("Child process taking over 5 seconds to exit gracefully");
-		let result = wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(secs - 5))
-			.map_err(|_| ())?;
-		if let Some(exit_status) = result {
-			Ok(exit_status)
-		} else {
-			eprintln!("Took too long to exit (> {} seconds). Killing...", secs);
-			let _ = child.kill();
-			child.wait().unwrap();
-			Err(())
+		if secs > 5 {
+			eprintln!("Child process taking over 5 seconds to exit gracefully");
+			let result = wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(secs - 5))
+				.map_err(|_| ())?;
+			if let Some(exit_status) = result {
+				return Ok(exit_status);
+			}
 		}
+		eprintln!("Took too long to exit (> {} seconds). Killing...", secs);
+		let _ = child.kill();
+		child.wait().unwrap();
+		Err(())
 	}
 }
 

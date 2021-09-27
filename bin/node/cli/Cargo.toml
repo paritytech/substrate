@@ -124,9 +124,7 @@ regex = "1"
 platforms = "1.1"
 async-std = { version = "1.6.5", features = ["attributes"] }
 soketto = "0.4.2"
-jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = [
-	"tokio1",
-] }
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = [ "tokio1" ] }
 tokio = { version = "1.10", features = ["macros", "time"] }
 wait-timeout = "0.2"
 
