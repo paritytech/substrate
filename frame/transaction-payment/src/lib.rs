@@ -709,7 +709,10 @@ where
 	) -> TransactionValidity {
 		let (final_fee, _) = self.withdraw_fee(who, call, info, len)?;
 		let tip = self.0;
-		Ok(ValidTransaction { priority: Self::get_priority(info, len, tip, final_fee), ..Default::default() })
+		Ok(ValidTransaction {
+			priority: Self::get_priority(info, len, tip, final_fee),
+			..Default::default()
+		})
 	}
 
 	fn pre_dispatch(
@@ -1449,13 +1452,13 @@ mod tests {
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 300);
+			assert_eq!(priority, 5800);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 350);
+			assert_eq!(priority, 6100);
 		});
 	}
 
@@ -1485,7 +1488,7 @@ mod tests {
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 260);
+			assert_eq!(priority, 5510);
 		});
 	}
 
