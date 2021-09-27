@@ -1474,6 +1474,7 @@ macro_rules! impl_opaque_keys {
 
 #[macro_export]
 #[cfg(not(feature = "std"))]
+#[doc(hidden)]
 macro_rules! impl_opaque_keys {
 	{
 		$( #[ $attr:meta ] )*

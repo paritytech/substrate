@@ -104,7 +104,7 @@ pub use crate::{
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
 use crate::{
-	exec::{Executable, Stack as ExecStack},
+	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{ContractInfo, DeletedContract, Storage},
 	wasm::PrefabWasmModule,
@@ -112,13 +112,14 @@ use crate::{
 };
 use frame_support::{
 	dispatch::Dispatchable,
+	ensure,
 	traits::{Contains, Currency, Get, Randomness, StorageVersion, Time},
 	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
-	Code, ContractAccessError, ContractExecResult, ContractInstantiateResult, GetStorageResult,
-	InstantiateReturnValue,
+	Code, ContractAccessError, ContractExecResult, ContractInstantiateResult, ExecReturnValue,
+	GetStorageResult, InstantiateReturnValue,
 };
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
@@ -272,18 +273,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = T::Schedule::get();
-			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-				origin,
-				dest,
-				&mut gas_meter,
-				&schedule,
-				value,
-				data,
-				None,
-			);
-			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
+			let output = Self::internal_call(origin, dest, value, gas_limit, data, None);
+			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -325,26 +316,19 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
-			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
-			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = T::Schedule::get();
-			let executable = PrefabWasmModule::from_code(code, &schedule)?;
-			let code_len = executable.code_len();
-			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
-			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			let salt_len = salt.len() as u32;
+			let output = Self::internal_instantiate(
 				origin,
-				executable,
-				&mut gas_meter,
-				&schedule,
 				endowment,
+				gas_limit,
+				Code::Upload(Bytes(code)),
 				data,
-				&salt,
+				salt,
 				None,
-			)
-			.map(|(_address, output)| output);
-			gas_meter.into_dispatch_result(
-				result,
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024),
+			);
+			output.gas_meter.into_dispatch_result(
+				output.result.map(|(_address, result)| result),
+				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
 			)
 		}
 
@@ -365,22 +349,20 @@ pub mod pallet {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
-			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = T::Schedule::get();
-			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
-			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			let salt_len = salt.len() as u32;
+			let output = Self::internal_instantiate(
 				origin,
-				executable,
-				&mut gas_meter,
-				&schedule,
 				endowment,
+				gas_limit,
+				Code::Existing(code_hash),
 				data,
-				&salt,
+				salt,
 				None,
+			);
+			output.gas_meter.into_dispatch_result(
+				output.result.map(|(_address, output)| output),
+				T::WeightInfo::instantiate(salt_len / 1024),
 			)
-			.map(|(_address, output)| output);
-			gas_meter
-				.into_dispatch_result(result, T::WeightInfo::instantiate(salt.len() as u32 / 1024))
 		}
 	}
 
@@ -535,6 +517,20 @@ pub mod pallet {
 	pub(crate) type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
 }
 
+/// Return type of the private [`Pallet::internal_call`] function.
+type InternalCallOutput<T> = InternalOutput<T, ExecReturnValue>;
+
+/// Return type of the private [`Pallet::internal_instantiate`] function.
+type InternalInstantiateOutput<T> = InternalOutput<T, (AccountIdOf<T>, ExecReturnValue)>;
+
+/// Return type of private helper functions.
+struct InternalOutput<T: Config, O> {
+	/// The gas meter that was used to execute the call.
+	gas_meter: GasMeter<T>,
+	/// The result of the call.
+	result: Result<O, ExecError>,
+}
+
 impl<T: Config> Pallet<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
@@ -556,25 +552,16 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
-		input_data: Vec<u8>,
+		data: Vec<u8>,
 		debug: bool,
 	) -> ContractExecResult {
-		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = T::Schedule::get();
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
-		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin,
-			dest,
-			&mut gas_meter,
-			&schedule,
-			value,
-			input_data,
-			debug_message.as_mut(),
-		);
+		let output =
+			Self::internal_call(origin, dest, value, gas_limit, data, debug_message.as_mut());
 		ContractExecResult {
-			result: result.map_err(|r| r.error),
-			gas_consumed: gas_meter.gas_consumed(),
-			gas_required: gas_meter.gas_required(),
+			result: output.result.map_err(|r| r.error),
+			gas_consumed: output.gas_meter.gas_consumed(),
+			gas_required: output.gas_meter.gas_required(),
 			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
@@ -601,38 +588,23 @@ where
 		salt: Vec<u8>,
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId> {
-		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = T::Schedule::get();
-		let executable = match code {
-			Code::Upload(Bytes(binary)) => PrefabWasmModule::from_code(binary, &schedule),
-			Code::Existing(hash) => PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter),
-		};
-		let executable = match executable {
-			Ok(executable) => executable,
-			Err(error) =>
-				return ContractInstantiateResult {
-					result: Err(error.into()),
-					gas_consumed: gas_meter.gas_consumed(),
-					gas_required: gas_meter.gas_required(),
-					debug_message: Vec::new(),
-				},
-		};
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
-		let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+		let output = Self::internal_instantiate(
 			origin,
-			executable,
-			&mut gas_meter,
-			&schedule,
 			endowment,
+			gas_limit,
+			code,
 			data,
-			&salt,
+			salt,
 			debug_message.as_mut(),
-		)
-		.and_then(|(account_id, result)| Ok(InstantiateReturnValue { result, account_id }));
+		);
 		ContractInstantiateResult {
-			result: result.map_err(|e| e.error),
-			gas_consumed: gas_meter.gas_consumed(),
-			gas_required: gas_meter.gas_required(),
+			result: output
+				.result
+				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
+				.map_err(|e| e.error),
+			gas_consumed: output.gas_meter.gas_consumed(),
+			gas_required: output.gas_meter.gas_required(),
 			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
@@ -708,5 +680,75 @@ where
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
 		self::wasm::reinstrument(module, schedule)
+	}
+
+	/// Internal function that does the actual call.
+	///
+	/// Called by dispatchables and public functions.
+	fn internal_call(
+		origin: T::AccountId,
+		dest: T::AccountId,
+		value: BalanceOf<T>,
+		gas_limit: Weight,
+		data: Vec<u8>,
+		debug_message: Option<&mut Vec<u8>>,
+	) -> InternalCallOutput<T> {
+		let mut gas_meter = GasMeter::new(gas_limit);
+		let schedule = T::Schedule::get();
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+			origin,
+			dest,
+			&mut gas_meter,
+			&schedule,
+			value,
+			data,
+			debug_message,
+		);
+		InternalCallOutput { gas_meter, result }
+	}
+
+	/// Internal function that does the actual instantiation.
+	///
+	/// Called by dispatchables and public functions.
+	fn internal_instantiate(
+		origin: T::AccountId,
+		endowment: BalanceOf<T>,
+		gas_limit: Weight,
+		code: Code<CodeHash<T>>,
+		data: Vec<u8>,
+		salt: Vec<u8>,
+		debug_message: Option<&mut Vec<u8>>,
+	) -> InternalInstantiateOutput<T> {
+		let mut gas_meter = GasMeter::new(gas_limit);
+		let schedule = T::Schedule::get();
+		let try_exec = || {
+			let executable = match code {
+				Code::Upload(Bytes(binary)) => {
+					ensure!(
+						binary.len() as u32 <= schedule.limits.code_len,
+						<Error<T>>::CodeTooLarge
+					);
+					let executable = PrefabWasmModule::from_code(binary, &schedule)?;
+					ensure!(
+						executable.code_len() <= schedule.limits.code_len,
+						<Error<T>>::CodeTooLarge
+					);
+					executable
+				},
+				Code::Existing(hash) =>
+					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?,
+			};
+			ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+				origin,
+				executable,
+				&mut gas_meter,
+				&schedule,
+				endowment,
+				data,
+				&salt,
+				debug_message,
+			)
+		};
+		InternalInstantiateOutput { result: try_exec(), gas_meter }
 	}
 }
