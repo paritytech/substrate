@@ -20,10 +20,7 @@
 use super::*;
 use crate as pallet_society;
 
-use frame_support::{
-	ord_parameter_types, parameter_types,
-	traits::{OnFinalize, OnInitialize},
-};
+use frame_support::{ord_parameter_types, parameter_types};
 use frame_support_test::TestRandomness;
 use frame_system::EnsureSignedBy;
 use sp_core::H256;

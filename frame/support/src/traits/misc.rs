@@ -424,3 +424,19 @@ impl<T> From<T> for WrapperOpaque<T> {
 		Self(t)
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn test_opaque_wrapper() {
+		let encoded = WrapperOpaque(3u32).encode();
+		assert_eq!(encoded, [codec::Compact(4u32).encode(), 3u32.to_le_bytes().to_vec()].concat());
+		let vec_u8 = <Vec<u8>>::decode(&mut &encoded[..]).unwrap();
+		let decoded_from_vec_u8 = u32::decode(&mut &vec_u8[..]).unwrap();
+		assert_eq!(decoded_from_vec_u8, 3u32);
+		let decoded = <WrapperOpaque<u32>>::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(decoded.0, 3u32);
+	}
+}
