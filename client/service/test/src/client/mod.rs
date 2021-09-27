@@ -1811,12 +1811,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	// NOTE: we need to build the client here instead of using the client
 	// provided by test_runtime_client otherwise we can't access the private
 	// `import_notification_sinks` and `finality_notification_sinks` fields.
-	let mut client = new_in_mem::<
-		_,
-		substrate_test_runtime_client::runtime::Block,
-		_,
-		substrate_test_runtime_client::runtime::RuntimeApi,
-	>(
+	let mut client = new_in_mem::<_, Block, _, RuntimeApi>(
 		substrate_test_runtime_client::new_native_executor(),
 		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 		None,
@@ -1834,8 +1829,8 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			in_mem::Backend<Block>,
 			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 		>,
-		substrate_test_runtime_client::runtime::Block,
-		substrate_test_runtime_client::runtime::RuntimeApi,
+		Block,
+		RuntimeApi,
 	>;
 
 	let import_notif1 = client.import_notification_stream();
