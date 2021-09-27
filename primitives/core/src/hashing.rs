@@ -173,8 +173,9 @@ mod test {
 
 	#[test]
 	fn blake2() {
-		assert_eq!(hashing_proc_macro::blake2b_32!(b"test"), &blake2_256(b"test")[..],);
-		assert_eq!(hashing_proc_macro::blake2b_64!(b""), &blake2_512(b"")[..],);
+		assert_eq!(hashing_proc_macro::blake2b_64!(b""), &blake2_64(b"")[..],);
+		assert_eq!(hashing_proc_macro::blake2b_256!(b"test"), &blake2_256(b"test")[..],);
+		assert_eq!(hashing_proc_macro::blake2b_512!(b""), &blake2_512(b"")[..],);
 	}
 
 	#[test]

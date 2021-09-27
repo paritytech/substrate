@@ -49,6 +49,8 @@ pub use sp_runtime::RuntimeDebug;
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
+pub use hashing_proc_macro;
+#[doc(hidden)]
 pub use sp_std;
 
 #[macro_use]
@@ -425,7 +427,7 @@ macro_rules! parameter_types {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
-				$crate::sp_io::hashing::twox_128(
+				$crate::hashing_proc_macro::twox_128(
 					concat!(":", stringify!($name), ":").as_bytes()
 				)
 			}

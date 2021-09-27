@@ -33,12 +33,17 @@ use impls::MultipleInputBytes;
 use proc_macro::TokenStream;
 
 #[proc_macro]
-pub fn blake2b_32(input: TokenStream) -> TokenStream {
+pub fn blake2b_64(input: TokenStream) -> TokenStream {
+	impls::blake2b(8, syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+}
+
+#[proc_macro]
+pub fn blake2b_256(input: TokenStream) -> TokenStream {
 	impls::blake2b(32, syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
 }
 
 #[proc_macro]
-pub fn blake2b_64(input: TokenStream) -> TokenStream {
+pub fn blake2b_512(input: TokenStream) -> TokenStream {
 	impls::blake2b(64, syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
 }
 
