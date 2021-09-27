@@ -17,7 +17,7 @@
 
 use syn::parse::{Parse, ParseStream};
 
-use proc_macro::{TokenStream, TokenTree, Literal};
+use proc_macro::{Literal, TokenStream, TokenTree};
 
 pub(super) fn blake2b(size: usize, bytes: Vec<u8>) -> TokenStream {
 	let result = blake2_rfc::blake2b::blake2b(size, &[], bytes.as_slice()).as_bytes().to_vec();
@@ -49,23 +49,23 @@ impl Parse for InputBytes {
 				let mut bytes = Vec::<u8>::new();
 				for expr in array.elems.iter() {
 					match expr {
-						syn::Expr::Lit(lit) => {
-							match &lit.lit {
-								syn::Lit::Int(b) => {
-									let v: u8 = b.base10_parse()?;
-									bytes.push(v)
-								},
-								syn::Lit::Byte(b) => bytes.push(b.value()),
-								_ => return Err(syn::Error::new(
+						syn::Expr::Lit(lit) => match &lit.lit {
+							syn::Lit::Int(b) => {
+								let v: u8 = b.base10_parse()?;
+								bytes.push(v)
+							},
+							syn::Lit::Byte(b) => bytes.push(b.value()),
+							_ =>
+								return Err(syn::Error::new(
 									input.span(),
 									"Expected array of u8 elements.".to_string(),
 								)),
-							}
 						},
-						_ => return Err(syn::Error::new(
-							input.span(),
-							"Expected array of u8 elements.".to_string(),
-						)),
+						_ =>
+							return Err(syn::Error::new(
+								input.span(),
+								"Expected array of u8 elements.".to_string(),
+							)),
 					}
 				}
 				return Ok(InputBytes(bytes))
@@ -78,7 +78,8 @@ impl Parse for InputBytes {
 
 impl Parse for MultipleInputBytes {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		let elts = syn::punctuated::Punctuated::<InputBytes, syn::token::Comma>::parse_terminated(input)?;
+		let elts =
+			syn::punctuated::Punctuated::<InputBytes, syn::token::Comma>::parse_terminated(input)?;
 		Ok(MultipleInputBytes(elts.into_iter().map(|elt| elt.0).collect()))
 	}
 }

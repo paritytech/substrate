@@ -19,18 +19,18 @@
 //!
 //! ```rust
 //! assert_eq!(
-//!		hashing_proc_macro::blake2b_32!(b"test"),
-//!		blake2_rfc::blake2b::blake2b(32, &[], b"test").as_bytes(),
-//!	);
-//!	// let _ = hashing_proc_macro::blake2b_32!([b"test"]);
-//!	let _ = hashing_proc_macro::blake2b_32!([1u8]);
-//!	let _ = hashing_proc_macro::blake2b_32!([1, 2, 3]);
+//! 		hashing_proc_macro::blake2b_32!(b"test"),
+//! 		blake2_rfc::blake2b::blake2b(32, &[], b"test").as_bytes(),
+//! 	);
+//! 	// let _ = hashing_proc_macro::blake2b_32!([b"test"]);
+//! 	let _ = hashing_proc_macro::blake2b_32!([1u8]);
+//! 	let _ = hashing_proc_macro::blake2b_32!([1, 2, 3]);
 //! ```
 
 mod impls;
 
-use proc_macro::TokenStream;
 use impls::MultipleInputBytes;
+use proc_macro::TokenStream;
 
 #[proc_macro]
 pub fn blake2b_32(input: TokenStream) -> TokenStream {
