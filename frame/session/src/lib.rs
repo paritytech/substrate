@@ -108,6 +108,7 @@
 
 #[cfg(feature = "historical")]
 pub mod historical;
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
